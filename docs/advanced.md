@@ -40,3 +40,11 @@ The monadic way is to use a special `iterator optional` called a `PROCESS MAYBE`
     @
 
 So all we have to do is return is a `$Done final_value`
+
+## Destructuring
+
+Silicon has it AND it lets you mix declaration when doing it.
+
+    @let first_name
+
+    first_name, @let last_name = {first_name = "Nate", last_name = "Hedglin}

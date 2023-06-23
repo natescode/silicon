@@ -1,4 +1,4 @@
-language: rust
+language: javascript
 
 sudo: required
 

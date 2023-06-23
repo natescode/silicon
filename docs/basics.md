@@ -54,9 +54,11 @@ Silicon uses the `@let` keyword.
 
     @mut name:str
 
-The `$` sigil may be used as well
+These are actuall expressions. Which allows for things like
 
-    $name:str
+    @if @let data = #getData
+        #db.save data
+    @
 
 ## Assignment
 
@@ -89,7 +91,7 @@ Used as expression
 
 ## Logic
 
-Silicon has no `==` and definitely not `===`. Only `@is` and `@not`
+Silicon has `==` and definitely not `===`. `@is` and `@not`
 
     $age = 32
 
@@ -98,6 +100,19 @@ Silicon has no `==` and definitely not `===`. Only `@is` and `@not`
     @else "we're aren't the same age"
     // => pipes if value to the `print`
     => #print
+
+Greater_than, less_than, greater_than_or_equal_to
+
+You can use >= <= != but words are prefered.
+
+`Silicon` generally uses `@is`, `@not`, `@above`, `@below`, `@least` and `@most` instead of `==`, `!=`, `>`, `<`, `>=` and `<=`, respectively.
+
+    a @is 3
+    a @not 3
+    a @above 3
+    a @below 3
+    a @least 3
+    a @most 3
 
 ## Loops
 
