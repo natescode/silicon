@@ -10,8 +10,16 @@ Silicon has 7 primitive data types
 - int
 - float
 - decimal
-- rune
+- ~~rune~~
 - string
+
+## Opaque
+
+## Atom
+
+Atoms only have one value, themselves. `$true` and `$false` are atoms.
+
+Declare an ATOM by using the `$` sigil. Since atom have one value, they're immutable!
 
 ## Numeric Types
 

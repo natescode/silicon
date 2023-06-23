@@ -1,6 +1,6 @@
-function main {
-    let greeting: String = "Hello"
-    let target: String = " world!"
+@main 
+    @let greeting = "Hello"
+    @let target = " world!"
 
-    print(greeting + target)
-}
+    #print greeting + target
+@

@@ -1,2 +1,2 @@
-import "./types/Apple"
-import "./types/Orange" as TestOrange
+@import "./types/Apple"
+@import "./types/Orange" @alias TestOrange
