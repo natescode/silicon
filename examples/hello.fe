@@ -1,0 +1,6 @@
+function main {
+    let greeting: String = "Hello"
+    let target: String = " world!"
+
+    print(greeting + target)
+}
