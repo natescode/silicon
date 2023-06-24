@@ -15,7 +15,16 @@ An Ohm PEG grammar for the Silicon programming language. This document is meant 
  */
 
 Silicon {
-    keyword = "@" *
+    keyword = "@" alnum+
+
+
+  identifierStart = letter | "_"
+                  | "\\" unicodeEscapeSequence -- escaped
+  identifierPart = identifierStart | unicodeCombiningMark
+                 | unicodeDigit | unicodeConnectorPunctuation
+                 | "\u200C" | "\u200D"
+
+
 }
 
 Arithmetic {

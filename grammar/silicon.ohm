@@ -1,0 +1,27 @@
+silicon {
+
+Function = "@fn"
+identifier = letter+ alnum?
+lineTerminator = "\n" | "\r" | "\u2028" | "\u2029"
+    
+VariableDeclaration = "@let" TypedIdentifier
+SiFunctionDeclaration = Function (identifier ":" identifier) TypedParameterList lineTerminator? comment? "@"
+
+TypedParameterList  =  ListOf<TypedParameter, ",">
+FormalParameterList =  ListOf<FormalParameter, ",">
+FunctionBody = any
+
+TypedIdentifier = (identifier | "_") (":" identifier)?
+TypedParameter   = (identifier | "_") ":" identifier
+FormalParameter = identifier
+
+idline = identifier lineTerminator
+
+sourceCharacter = any
+
+comment = multiLineComment | singleLineComment
+
+multiLineComment = "/*" (~"*/" sourceCharacter)* "*/"
+singleLineComment = "//" (~lineTerminator sourceCharacter)*
+
+}
