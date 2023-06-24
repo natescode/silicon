@@ -1,51 +1,49 @@
-silicon {
+si {
 
-Function = "@fn"
-identifier = letter+ alnum?
-lineTerminator = "\n" | "\r" | "\u2028" | "\u2029"
+ 	Program = SourceElement*
+    SourceElement = Declaration | Statement
     
-VariableDeclaration = "@let" TypedIdentifier
-SiFunctionDeclaration = Function (identifier ":" identifier) TypedParameterList lineTerminator? comment? "@"
+	Declaration = VariableDeclaration | SiFunctionDeclaration
+   
+    Number = integerLiteral
+  
+  integerLiteral = (decimalDigit | "_")+
+  decimalLiteral = decimalDigit? "." decimalDigit+
+  
+  stringLiteral =  "\"" doubleStringCharacter* "\""
+  
+  doubleStringCharacter = ~("\"" | "\\" | lineTerminator) sourceCharacter
+ 
+  sourceCharacter = any
 
-TypedParameterList  =  ListOf<TypedParameter, ",">
-FormalParameterList =  ListOf<FormalParameter, ",">
-FunctionBody = any
+  decimalDigit = "0".."9"
+  nonZeroDigit = "1".."9"
+  
+   
+   Statement
+    = SiFunctionDeclaration
 
-TypedIdentifier = (identifier | "_") (":" identifier)?
-TypedParameter   = (identifier | "_") ":" identifier
-FormalParameter = identifier
+	Function = "@fn"
+    identifier = letter+ alnum?
+    lineTerminator = "\n" | "\r" | "\u2028" | "\u2029"
+    
+    VariableDeclaration = "@let" TypedIdentifier
+    SiFunctionDeclaration = Function (identifier ":" identifier) TypedParameterList lineTerminator? comment? "@"
 
-idline = identifier lineTerminator
+    TypedParameterList  =  ListOf<TypedParameter, ",">
+    FormalParameterList =  ListOf<FormalParameter, ",">
+    FunctionBody = any
 
-sourceCharacter = any
+  TypedIdentifier = (identifier | "_") (":" identifier)?
+  TypedParameter   = (identifier | "_") ":" identifier
+  FormalParameter = identifier
+  
+  idline = identifier lineTerminator
+  
+  
+  comment = multiLineComment | singleLineComment
 
-comment = multiLineComment | singleLineComment
-
-multiLineComment = "/*" (~"*/" sourceCharacter)* "*/"
-singleLineComment = "//" (~lineTerminator sourceCharacter)*
-
-// progress add statements, expression, program root
-
-  Statement
-    = Block
-    | VariableStatement
-    // | EmptyStatement
-    // | ExpressionStatement
-    // | IfStatement
-    // | IterationStatement
-    // | ContinueStatement
-    // | BreakStatement
-    // | ReturnStatement
-    // | WithStatement
-    // | LabelledStatement
-    // | SwitchStatement
-    // | ThrowStatement
-    // | TryStatement
-    // | DebuggerStatement
-
-// TODO: how to properly say @ blocks require spaces? To avoid confusion with keywords
- Block = "@" space+ StatementList space+ "@"
-
-StatementList = Statement*
-
-}
+  multiLineComment = "/*" (~"*/" sourceCharacter)* "*/"
+  singleLineComment = "//" (~lineTerminator sourceCharacter)*
+  
+  }
