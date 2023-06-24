@@ -13,11 +13,11 @@
   - ✅ Variable Declaration
   - ✅ Variable Assignment
   - ✅ Variable Declaration Assignment
-- ❌ Functions
+- [ ] Functions
   - ✅ Basic Function Structure
   - ❌ Function with body
   - ❌ Named Function Declaration
   - ❌ Anonymous Function Declaration
   - Lambda function syntax
-- ❌ lineTerminator
-- ❌ semicolon insertion
+- [ ] lineTerminator
+- [ ] semicolon insertion
