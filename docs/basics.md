@@ -161,7 +161,7 @@ Add function
 
 With types
 
-    @fn add:num a:num b:num
+    @fn add:num a:num, b:num
         a + b
     @
 

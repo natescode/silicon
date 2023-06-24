@@ -12,5 +12,8 @@
   "license": "ISC",
   "dependencies": {
     "ohm-js": "^17.1.0"
+  },
+  "devDependencies": {
+    "@ohm-js/cli": "^2.0.0"
   }
 }

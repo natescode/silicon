@@ -24,4 +24,28 @@ comment = multiLineComment | singleLineComment
 multiLineComment = "/*" (~"*/" sourceCharacter)* "*/"
 singleLineComment = "//" (~lineTerminator sourceCharacter)*
 
+// progress add statements, expression, program root
+
+  Statement
+    = Block
+    | VariableStatement
+    // | EmptyStatement
+    // | ExpressionStatement
+    // | IfStatement
+    // | IterationStatement
+    // | ContinueStatement
+    // | BreakStatement
+    // | ReturnStatement
+    // | WithStatement
+    // | LabelledStatement
+    // | SwitchStatement
+    // | ThrowStatement
+    // | TryStatement
+    // | DebuggerStatement
+
+// TODO: how to properly say @ blocks require spaces? To avoid confusion with keywords
+ Block = "@" space+ StatementList space+ "@"
+
+StatementList = Statement*
+
 }
