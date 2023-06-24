@@ -4,8 +4,11 @@ si {
     SourceElement = Declaration | Statement
     
 	Declaration = VariableDeclaration | SiFunctionDeclaration
+    
+    Assignment = (identifier | VariableDeclaration) "=" literal
    
-    Number = integerLiteral
+    literal = number | stringLiteral
+    number = integerLiteral | decimalLiteral
   
   integerLiteral = (decimalDigit | "_")+
   decimalLiteral = decimalDigit? "." decimalDigit+
