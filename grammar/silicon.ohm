@@ -1,4 +1,4 @@
-si {
+silicon {
 
  	Program = SourceElement*
     SourceElement = Declaration | Statement
@@ -33,11 +33,14 @@ si {
     VariableDeclaration = "@let" TypedIdentifier
     SiFunctionDeclaration = Function (identifier ":" identifier) TypedParameterList lineTerminator? comment? "@"
 
+	TypeList = ListOf<TypeIdentifier,",">
     TypedParameterList  =  ListOf<TypedParameter, ",">
     FormalParameterList =  ListOf<FormalParameter, ",">
     FunctionBody = any
 
-  TypedIdentifier = (identifier | "_") (":" identifier)?
+  TypeIdentifier =  "'"? identifier
+  
+  TypedIdentifier = (identifier | "_") (":" TypeIdentifier)?
   TypedParameter   = (identifier | "_") ":" identifier
   FormalParameter = identifier
   
