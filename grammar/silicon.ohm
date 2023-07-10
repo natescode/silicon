@@ -1,23 +1,16 @@
 silicon {
 
- 	Program = SourceElement*
-  
-  SourceElement = Block | Declaration | Statement
+  Program = SourceElement*
+  SourceElement = AtBlock | Declaration
+  AtBlock = "@" "" SourceElement* "" "@"
 
-  Block = "{" SourceElement+ "}"
+  Declaration = VariableDeclaration | SiFunctionDeclaration | SiCFunctionDeclaration | comment | BinaryMathOperation
 
-  // TODO: support @ blocks
-  At_Block =  "@" lineTerminator Statement+ lineTerminator "@"
-    
-	Declaration = VariableDeclaration | SiFunctionDeclaration
-    
-    Assignment = (identifier | VariableDeclaration) "=" literal
-   
-    literal = number | stringLiteral
-    number = integerLiteral | decimalLiteral
-    captureLiteral = "$" + identifier 
-    caputerList = ListOf<captureLiteral, ","> // $i, $j, $k
-  
+  Assignment = (identifier | VariableDeclaration) "=" literal
+
+  literal = number | stringLiteral
+  number = integerLiteral+ | decimalLiteral+
+
   integerLiteral = (decimalDigit | "_")+
   decimalLiteral = decimalDigit? "." decimalDigit+
   
@@ -26,25 +19,31 @@ silicon {
   doubleStringCharacter = ~("\"" | "\\" | lineTerminator) sourceCharacter
  
   sourceCharacter = any
-
+  
   decimalDigit = "0".."9"
   nonZeroDigit = "1".."9"
   
+  binaryMathOperator = "+" | "-" | "*" | "/" | "^" | "%" 
+  
+  number_var = number | identifier
+  
+  BinaryMathOperation = number_var binaryMathOperator number_var (binaryMathOperator number_var)*
    
-   Statement
+  Statement
     = SiFunctionDeclaration
 
-	Function = "@fn"
-    identifier = letter+ alnum?
-    lineTerminator = "\n" | "\r" | "\u2028" | "\u2029"
-    
-    VariableDeclaration = "@let" TypedIdentifier
-    SiFunctionDeclaration = Function (identifier ":" identifier) TypedParameterList lineTerminator? comment? "@"
+  Function = "@fn"
+  identifier = letter+ alnum?
+  lineTerminator = "\n" | "\r" | "\u2028" | "\u2029"
 
-	TypeList = ListOf<TypeIdentifier,",">
-    TypedParameterList  =  ListOf<TypedParameter, ",">
-    FormalParameterList =  ListOf<FormalParameter, ",">
-    FunctionBody = any
+  VariableDeclaration = "@let" TypedIdentifier
+  SiFunctionDeclaration = Function ("'" identifier)? (identifier ":" identifier) TypedParameterList lineTerminator? Declaration? "@"
+  SiCFunctionDeclaration = Function ("'" identifier)? (identifier ":" identifier) TypedParameterList "{" Declaration? "}"
+
+  TypeList = ListOf<TypeIdentifier,",">
+  TypedParameterList  =  ListOf<TypedParameter, ",">
+  FormalParameterList =  ListOf<FormalParameter, ",">
+  FunctionBody = any
 
   TypeIdentifier =  "'"? identifier
   
@@ -55,9 +54,9 @@ silicon {
   idline = identifier lineTerminator
   
   
-  comment = multiLineComment | singleLineComment | docComment
+  comment = multiLineComment | singleLineComment
 
-  singleLineComment = "//" (~lineTerminator sourceCharacter)*
   multiLineComment = "/*" (~"*/" sourceCharacter)* "*/"
-  docComment = "///"  (~lineTerminator sourceCharacter)*
+  singleLineComment = "//" (~lineTerminator sourceCharacter)*
+  
   }
