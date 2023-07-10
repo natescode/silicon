@@ -1,7 +1,13 @@
 silicon {
 
  	Program = SourceElement*
-    SourceElement = Declaration | Statement
+  
+  SourceElement = Block | Declaration | Statement
+
+  Block = "{" SourceElement+ "}"
+
+  // TODO: support @ blocks
+  At_Block =  "@" lineTerminator Statement+ lineTerminator "@"
     
 	Declaration = VariableDeclaration | SiFunctionDeclaration
     
@@ -9,6 +15,8 @@ silicon {
    
     literal = number | stringLiteral
     number = integerLiteral | decimalLiteral
+    captureLiteral = "$" + identifier 
+    caputerList = ListOf<captureLiteral, ","> // $i, $j, $k
   
   integerLiteral = (decimalDigit | "_")+
   decimalLiteral = decimalDigit? "." decimalDigit+
@@ -47,9 +55,9 @@ silicon {
   idline = identifier lineTerminator
   
   
-  comment = multiLineComment | singleLineComment
+  comment = multiLineComment | singleLineComment | docComment
 
-  multiLineComment = "/*" (~"*/" sourceCharacter)* "*/"
   singleLineComment = "//" (~lineTerminator sourceCharacter)*
-  
+  multiLineComment = "/*" (~"*/" sourceCharacter)* "*/"
+  docComment = "///"  (~lineTerminator sourceCharacter)*
   }

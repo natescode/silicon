@@ -1,42 +1,124 @@
 # ADVANCED
 
+## Opaque and Pointer Types
+
+### Opaque
+
+The Opaque type is used for extern types like for interoping with C or environment provided APIs.
+
+### Pointers
+
+`->` _raw pointer_
+`@ptr` _raw pointer alias_
+`@fptr` _fat pointer_
+`@vptr` _vtable pointer_
+`@ref` _reference_
+`@extern` _extern type_ uses `@opaque` underneath because the size is not known, nor is it dynamic.
+
+## `this`, traits, interfaces
+
+Silicon is structurally typed _by default_ like `Go`. Silicon is a flexible language with _modes_ and _defaults_.
+
+### Interface
+
+Interfaces in Silicon are just like interfaces like `Go`, they're structurally typed and can be applied to types after the fact. There is no empty `interface{}` though. Silicon has real Generics and `Quasi Quotes`.
+
+`this` / `self` is just the first parameter.
+
+'=>' makes sense for lambda functions BUT I like the idea of '->' for pointers and '=>' for references or fat pointers. But I'll likely just use `@fptr` and `@vptr` instead for fat pointer and vtable pointers, respectively.
+
+    @type iText interface
+        toUpperCase: void, ->str
+    @
+    // takes a string pointer and returns void
+    /// ->str => void
+    @fn toUpperCase:void self:->str
+        #self.map index,val =>
+            @if val in 65..90
+            @then << 4
+            @else val
+    @
+
+    // function syntax
+    #toUpperCase "hello, world"
+
+    // method syntax
+    #"hello, world".toUpperCase // "HELLO, WORLD"
+
+### Traits
+
+Parameters and Types (including Interfaces) can be defined as _nominally typed_. The `$` Sigil shows this.
+
+Pretend we have a `char` type that is an alias for `byte`
+
+    @fn toUpperCase:$char
+
+    @let fakeChar:int`8` = 65
+    fakeChar.toUpperCase
+    // error. 'fakeChar' doesn't have nominal type '$char'
+
+Structural Interface
+
+    @type Reader @interface
+
+Nominal Interface
+
+     // potential syntax
+    @type Reader $@interface
+    @type $Reader @interface
+    @type Reader @trait
+
+## Modes
+
+Silicon has modes. It can by dynamically typed, statically typed, interpreted and compiled. It can be memory managed with various GC implementations, it can be manuall memory managed or managed with `locality` like OCaml or `borrower checker` like R\*st.
+
+## Custom Allocators & GC
+
+Silicon allows developens to create their own custom allocator, like Zig, as well as custom GC implementations that work natively.
+
+## Custom Keywords
+
+Silicon uses `@` prepended to all keywords for a very good reason. There will never be conflicts with new keywords added to the language. This also allows custom domain specific operator and keywords.
+
+TODO: finish example
+
+    @@define_keyword `foreach` iterator, $capture
+        @for
+    @@
+
+## Quasi-Quotes
+
+## Macros
+
 ## UFCS
 
-[Uniform Function Call Syntax](https://en.wikipedia.org/wiki/Uniform_Function_Call_Syntax) treats function as methods based on the first parameter type. `nim`, `rust` and `zig` do this as well.
+[Uniform Function Call Syntax](https://en.wikipedia.org/wiki/Uniform_Function_Call_Syntax) treats function as methods based on the first parameter type. `nim`, `rust` and `zig` do this as well. Silicon does not have a 'this' keyword, nor closures. At least for the time being. It adds too much complexity.
 
     @fn plusOne:int n:int
         n + 1
     @
 
-    @let age = 32
+    $age = 32
     #plusOne age // 33
-    #age.plusOne // 33
+    age.plusOne // 33
 
 ## Negative Indexing
 
-I hate that index 0 is the first item and -1 is the last. They should be either 0 and -0 or 1 and -1. Unfortunately, only floats have negative values. Using floats for indexs feels wrong. Instead, we can use enums!
+Silicon allows negative indexing into all iterables. There are also `head` and `tail` methods to get the index item starting from the beginning or the end.
 
-So one could have a function that has the relative index with another parameter for which end to read from
+```typescript
+    // function syntax
+    #head array 0
+    #tail array 0
 
-    @fn getItem:int array:[T], index:int, end:index
-        array[end index]
-    @
-
-    @enum index n:int {
-        HEAD n
-        TAIL n
-    }
-
-    array[@head 0] // first
-    array[@tail 0] // last
-
-    // with methods
-    array.head(0)
-    array.tail(0)
+    // method syntax
+    array.head 0
+    array.tail 0
+```
 
 ## Range / Series
 
-`..` defines a range or series. Ranges are _definite_. Series are _infinite_. Ranges have a final value to calculate to `0..100` is 0 to 100 (inclusive if possible). A step may be added via a middle value `0..2..100` will count by 2's. `0..3..100` will only go to 99. `0..2..` will count by 2's indefinitely. `[0..2..][50]` will return `100`.
+`..` defines a range or series. A `range` is _definite_ while a `series` is _infinite_. Ranges have a final value to calculate to `0..100` is 0 to 100 (inclusive if possible). A step may be added via a middle value `0..2..100` will count by 2's. `0..3..100` will only go to 99. `0..2..` will count by 2's indefinitely. `[0..2..][50]` will return `100`.
 
 a range / series of type T is define like so
 
