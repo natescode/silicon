@@ -2,9 +2,23 @@
 
 One of Silicon's biggest goals is to develop a simple but powerful type system that map well to WASM and Javascript.
 
+## Numeric
+
+Typically used as `num`
+
+```typescript
+type num = i32 | i64 | f32 | f64;
+```
+
+- `i32`
+- `i64`
+- `f32`
+- `f64`
+
 Silicon has 7 primitive data types
 
 - opaque
+- vec
 - atom
 - bool
 - int
@@ -14,6 +28,10 @@ Silicon has 7 primitive data types
 - string
 
 ## Opaque
+
+## Vec
+
+`vec` - v128 for WASM. For SIMD instructions.
 
 ## Atom
 

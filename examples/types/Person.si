@@ -1,4 +1,4 @@
-public type Person {
-    name: String,
-    age: U8
+export type Person {
+    name:String
+    age:U8
 }

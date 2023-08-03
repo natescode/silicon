@@ -1,4 +1,4 @@
-# Basics
+# Basics of Silicon<sup>tm</sup>
 
 ## Comments
 
@@ -11,6 +11,8 @@
     */
 
 ### Doc Comments
+
+Starts a line with `///`
 
 Doc comments are used for Sigil's built-in auto documentation feature.
 They can define function type signatures as well if the function doesn't have types.
@@ -26,17 +28,27 @@ Function type signatures use Haskell-like syntax with `->` BUT since function ar
 
 Versus
 
+with `@` blocks
+
 ```typescript
     @fn add:number a:number, b:number
         a + b
     @
 ```
 
+With `{}` blocks
+
+```typescript
+    @fn add:number a:number, b:number {
+        a + b
+    }
+```
+
 ## Parens
 
-Silicon does NOT require parenthesis anywhere. They are ONLY used for grouping.
+Silicon does NOT require parenthesis anywhere ~~but function calls and type constructors `:()`.~~
 
-`$()` is tuple syntax though.
+`$()` is tuple syntax ?
 
 ## Keywords
 
@@ -58,68 +70,113 @@ Silicon does
         // code
     @
 
+Which is actually closer to LISP syntax. AND there are no extra characters for using `@` for keywords then.
+
 ## Semicolons
 
 Semicolons are automatically and intelligently inserted
 
+## Types
+
+Silicon has a sound and robust but simple type system. There are 7 base types:
+
+`opaque` - for opaque external reference types
+
+`vec` - v128 for WASM. For SIMD instructions.
+
+`atom` - a type with only one value, itself. I.E `true` and `false` are built in atoms.
+
+`bool` - boolean `true` or `false`
+
+`int` - LEB128 variable sized integer, little-endian
+
+`float` - 32/64bit IEEE 754 floating point
+
+`string` - UTF-32 string but can be UTF-8 or UTF-16 as well
+
+## Reference Types
+
+`fn` -
+
+    In the case of funcref, which represents an opaque reference to a function, the only thing we can do from WebAssembly is to call it.
+
+    Since reference types cannot be stored to linear memory there’s another structure allowing us to store these types: tables. Tables are the storage structure of reference types, indexed by an integer starting at zero. But they have a few more constraints than reference types. They are module-global objects, can’t be stored into the stack, locals, nor can they be arguments, or return values of functions.
+
 ## Type inference
 
-Silicon does use type inference a lot BUT function signatures MUST be explicitly typed. Function signatures are interfaces which should be explicitly typed.
+Silicon does use type inference a lot BUT function return types MUST be explicitly typed. Function signatures are interfaces which should be explicitly typed because function have implicit returns.
 
-Function have implicit returns. `@let` `@if` `@for` etc are expressions.
+`@let` `@if` `@for` etc are expressions, when used so.
 
-Javascript
+Function parameters can be implicitly typed just like any other variable. This is because with implicit returns, it could be easy for a developer to not return a value somewhere
+and then the function signature changes from `int,int -> int` to `int,int-> int | void`.
 
-```javascript
-@const thing:string = isThing:bool => isThing
-    ? "Yes"
-    : "Nope, Sorry"
-```
+Javascript<sup>tm</sup>
 
-Silicon
+Silicon<sup>tm<sup>
 
-```typescript
+```ruby
     /// bool -> string
-    @fn thing isThing
+    @fn fooMessage:string isThing
         @if isThing
         @then "Yes"
         @else "Nope, sorry"
     @
 ```
 
-OR
+There is no separate lamda or anonymous syntax. Just use `_` for anonymous functions.
+
+<!-- OR
 
 ```typescript
     @let thing:string isThing:bool => @if isThing
     @then "Yes"
     @else "Nope, sorry"
-```
+``` -->
 
-Lamda syntax
+~~Lamda syntax~~
 
-```typescript
+<!-- ```typescript
     /// bool -> string
     @fn thing isThing =>
     @if isThing
     @then "Yes"
     @else "Nope, Sorry"
-```
+``` -->
 
 ## Declaration
 
-Silicon uses the `@let` keyword.
+Silicon<sup>tm</sup> uses the `@let` keyword.
 
     @let name:str
 
-`@mut` for mutable variables.
+### Mutability and Locality
 
-    @mut name:str
+_This will be covered more thoroughly in [Advanced](./advanced.md)_
 
-These are actuall expressions. Which allows for things like
+By default. All variable are immutable and local (on the stack).
 
-    @if @let data = #getData
-        #db.save data
+`@let` or `$` - local, immutable
+
+`@m` - local, mutable
+
+`@g` - global, immutable
+
+`@gm` - global, mutable
+
+    @m name:str
+
+These are actual expressions. Which allows for things like
+
+    @if $data = #getData
+         #save db, data
     @
+
+### Update
+
+Since I want to implement _locality_ like OCaml _but_ have `local` (stack allocation) to be the default instead. So a value can't escape its' region unless `global` was used.
+
+I'm not sure of the keywords `@local mut` versus `@global` maybe?
 
 ## Assignment
 
@@ -134,11 +191,25 @@ Atoms
 
 ~~Always start with `$`~~. Also know as `Symbol` which are completely unique unguessable values.
 
-    @let true = atom
+    @let true = atom()
+    @let false = atom()
+
     true
     false
 
     @let bool = true | false
+
+### Deconstructing Assignment
+
+We can also mix and match new declarations
+
+```silicon
+    @mut a:int
+
+    // a is assigned
+    // b is declared AND assigned
+    a, $b = #getResults
+```
 
 ## Conditionals
 
@@ -147,7 +218,7 @@ Atoms
 Silicon has if expressions
 
     @if true
-        #print "it is certain!"
+        print "it is certain!"
         "it is certain"!.print
     @
 
@@ -180,12 +251,14 @@ You can use `≥≤≠` but words are preferred.
 
 `Silicon` generally uses `@is`, `@not`, `@above`, `@below`, `@least` and `@most` instead of `==`, `!=`, `>`, `<`, `>=` and `<=`, respectively.
 
-    a @is 3
-    a @not 3
-    a @above 3
-    a @below 3
-    a @least 3
-    a @most 3
+    a @is 3 // a == 3
+    a @not 3 // a != 3
+    a @above 3 // a > 3
+    a @below 3 // a < 3
+    a @least 3 // a >= 3
+    a @most 3 // a <= 3
+    a @between 1 @and 5 // a > 1 && a < 5
+    a @in 1..5 // a >= 1 && a <= 5
 
 ## Loops
 
@@ -201,7 +274,7 @@ For loop 1 to 100. Print the numbers.
 // OR $ denotes passing a literal character to use as an identifier aka capture
 
     @loop $i, 1..100
-        #print i
+        print i
         i.print
     @
 
@@ -211,21 +284,21 @@ For loop with step 2 with range syntax
 
     // 1,3,5,7,9,11...
     @loop $1, 1..3..100
-        #print i
+        print i
     @
 
 ### WHILE
 
     @loop $1, i < 100
         i += 1
-        #print i
+        print i
     @
 
 ### DO WHILE
 
     @loop $i
         i += 1
-        #print i
+        print i
         @if i >= 100 @then @break
     @
 
@@ -246,7 +319,10 @@ With types
         a + b
     @
 
-    #add 10,20
+    #add 10,20 // 30
+    //add 10,20
+
+_\*I'm still debating on function call syntax if `()` are needed and if `#` sigil should be used_. I know sometimes function calls could be ambigous without parens BUT which bothers me but 90% of the time that is cleaner. PLUS to disambiguate, parens are simply used to group so there isn't any special semantics.
 
 ### Ambiguous function calls
 
@@ -254,6 +330,58 @@ We might see something like this in a C-like language
 
     fib(n - 1) + fib(n - 2)
 
-Silicon uses parenthesis like LISP
+Silicon uses parenthesis like LISP because the above could mean
 
-   (fib n - 1) + (fib n - 2)
+`fib(n-1 + fib(n-2))` or `fib(n) - 1 + fib(n) - 2` etc...
+
+Silicon can disambiguate with `()`
+
+```lisp
+(fib n - 1) + (fib n - 2)
+```
+
+Generally, this doesn't happen and removing parens in much easier to read.
+
+```c
+foo(bar(baz),baz(bar))
+```
+
+Versus
+
+```lisp
+(foo (bar baz), (baz bar))
+```
+
+With Pipes
+
+```lisp
+(bar -> baz, baz -> bar) -> foo
+```
+
+## Sum Types
+
+We can make new types by adding, substracting or multiplying types together
+
+```typescript
+type MessageOrFalse = string | false;
+
+let message: MessageOrFalse = "Hi there";
+let messag2: MessageOrFalse = false;
+```
+
+## Match
+
+`match` is like the super-saiyan version of `switch`.
+
+```silicon
+@fn fizzbuzzMessage n
+    @match n%3,n%5
+        0,0 => "Fizz Buzz"
+        0,_ => "Fizz"
+        _,0 => "Buzz"
+    @
+@
+
+#fizzBuzzMessage 15 // "Fizz Buzz"
+
+```

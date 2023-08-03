@@ -9,10 +9,15 @@ The Opaque type is used for extern types like for interoping with C or environme
 ### Pointers
 
 `->` _raw pointer_
+
 `@ptr` _raw pointer alias_
+
 `@fptr` _fat pointer_
+
 `@vptr` _vtable pointer_
+
 `@ref` _reference_
+
 `@extern` _extern type_ uses `@opaque` underneath because the size is not known, nor is it dynamic.
 
 ## `this`, traits, interfaces
@@ -27,23 +32,35 @@ Interfaces in Silicon are just like interfaces like `Go`, they're structurally t
 
 '=>' makes sense for lambda functions BUT I like the idea of '->' for pointers and '=>' for references or fat pointers. But I'll likely just use `@fptr` and `@vptr` instead for fat pointer and vtable pointers, respectively.
 
+```c
     @type iText interface
         toUpperCase: void, ->str
     @
+
     // takes a string pointer and returns void
     /// ->str => void
     @fn toUpperCase:void self:->str
-        #self.map index,val =>
-            @if val in 65..90
-            @then << 4
-            @else val
+        self.map(
+            @fn _ index,val
+                @if val in 65..90
+                @then << 4
+                @else val
+            @
+        )
     @
+```
 
+### Universal Function Call Syntax UFCS
+
+I've stopped using `#` for method calls. The syntax wasn't consistent or intuitive. Back to `C` as always.
+
+```c
     // function syntax
-    #toUpperCase "hello, world"
+    toUpperCase("hello, world")
 
     // method syntax
-    #"hello, world".toUpperCase // "HELLO, WORLD"
+    "hello, world".toUpperCase // "HELLO, WORLD"
+```
 
 ### Traits
 
@@ -79,6 +96,8 @@ Silicon allows developens to create their own custom allocator, like Zig, as wel
 ## Custom Keywords
 
 Silicon uses `@` prepended to all keywords for a very good reason. There will never be conflicts with new keywords added to the language. This also allows custom domain specific operator and keywords.
+
+The LSP can easily translate keywords to other languages which helps others learn in their native tongue.
 
 TODO: finish example
 
@@ -205,13 +224,21 @@ Classes are more complex. They're desiged to create reference types, something `
 
 Silicon's syntax is meant to be as familiar as possible for C devs **BUT** there are careful consideration taken for parsing. Using `*` for pointers can make syntax ambigous. So Silicon uses the less convient `->` **OR** `@ref` keyword (`@ref` is subtally different in that it wraps the type with an Optional). `->` can not but `null`. `@ref` can be `NONE`.
 
-    @class Person
+    @type Person @class
         name:str
         age:int
         bff:@ref Person
     @
 
-Silicon doesn't have a `new` keyword because that would be confusing. We aren't heap allocating. Instead we should call the class name as if it is a constructor function (which it is in C languages. Javascript does this but with `new`).
+~~Silicon doesn't have a `new` keyword because that would be confusing. We aren't heap allocating.~~
+
+Silicon has `@make` and `@free` to `new` and `delete` memory like C++.
+
+// TODO: think about how dynamic memory allocation will work and how to express is syntatically.
+
+Both `Rust` and `Go` use some type of `new` convention.
+
+`Person::new()` or `Person.new()` or `@new Person()`
 
 _\*I'm not 100% sure on the syntax yet_
 
@@ -245,3 +272,76 @@ Reference automatically dereference themselves, which is convient for most devel
 My idea of `modes` comes from Jonathan Goodwin's paper, _"A Framework for Gradual Memory Management"_. This has become very popular, especially since Crablang aka R\*st has become so popular.
 
 This won't be implemented until V2 but Silicon will start taking the `locality` approach that JaneStreet took with [Oxidizing OCaml](https://blog.janestreet.com/oxidizing-ocaml-locality/).
+
+## Generics
+
+Silicon will have true generics like `C#`.
+
+### Syntax
+
+Silicon's goal for syntax is to be similar to C but cleaner like Go i.e. no parens. One issue though is that `List<T>` syntax messed with LSPs because HTML uses `<>` as well. So I want a cleaner syntax. `List:T` or `List:(T)`
+
+C#
+
+```c#
+    var map = new Dict<int,string>();
+    var map = new Dict<Dict<int,bool>,string>();
+```
+
+Si
+
+Silicon will have type parameters passed much like functions but with `:`. So a type constructor is called `:()`,
+ideally I wouldn't have parenthesis at all. `:T,K` but may be needed to remove ambiguity with more complex types.
+Silicon put syntax consistency as a priority. I don't want 6 different ways to define a function like Javascript.
+
+<!-- ```javascript
+var proc = (a) => a;
+var proc = (a) => {
+  return a;
+};
+var proc = (a) => a;
+var proc = (a) => {
+  return a;
+};
+function proc(a) {
+  return a;
+}
+var proc = function (a) {
+  return a;
+};
+``` -->
+
+Colon `:` ✅ (Better / more liked)
+
+```c#
+    // #1
+    @let map:Dict:int,string = Dict:int,string()
+    @let map = Dict:(Dict:(int,bool),string)();
+    // #2
+    @let map:Dict:(int,string) = Dict:(int,string)()
+    // #3
+    @let map:Dict`int,string` = Dict`int,string`()
+
+```
+
+SiX Si+HTML
+
+```html
+<List:Button></List:Button> <List:(Button)></List:(Button)>
+```
+
+Backtic `` ` ``
+
+```c
+    @let map:Dict:int,string = Dict:int,string()
+
+    // with inference
+    @let map = Dict:int,string()
+```
+
+<!-- BUG fix only render a single backtic inside inline code block -->
+<!-- `` ` `` -->
+
+I think the `` ` `` is best because `<>`can be just replaced with`.` Or just another `:`
+
+BUT others agree `:` is cleaner. Plus then `` ` `` is free to be used for template strings.

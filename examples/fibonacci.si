@@ -1,9 +1,11 @@
 @fn fib:int n:int
-    @if 0 n <= 2 @then n @else
-    (#fib n - 1) + (#fib n - 2)
+    @if n <= 2 
+    @then n 
+    @else
+    fib(n - 1) + fib(n - 2)
 @
 
-#fib 10 // 55
+fib(10) // 55
 
 
 // using series calc syntax

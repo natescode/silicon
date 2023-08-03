@@ -16,4 +16,4 @@
   </a>
 </p>
 
-> Iron is a new programming language that emphasizes speed, safety, and usability. It is extremely easy to learn and extremely difficult to use incorrectly. It is built with Rust and works on any major platform.
+> Silicon is a new programming language that emphasizes speed, safety, and usability. It is extremely easy to learn and extremely difficult to use incorrectly. It is built with Silicon and works on any major platform via WASM / ZIG.
