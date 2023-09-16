@@ -15,17 +15,17 @@ type num = i32 | i64 | f32 | f64;
 - `f32`
 - `f64`
 
-Silicon has 7 primitive data types
+Silicon has 9 primitive data types
 
 - opaque
 - vec
 - atom
 - bool
-- int
+- int (LEB128)
 - float
 - decimal
-- ~~rune~~
 - string
+- rune
 
 ## Opaque
 
@@ -74,6 +74,8 @@ Silicon only has strings. If one _really_ needs a _"character"_ type, type guard
         // define a string with width 1
         @let char: str(width=1)
 
+Strings do not have `length`. Instead there are `width`,`bytes`,and `codepoints`
+
 ## String
 
 `str`
@@ -118,14 +120,8 @@ is required by expressions such as `if`, `while`, and `assert`.
 
 Silicon doesn't have these types. Optionals are used instead.
 
-## Atom
-
-`atom`
-
-Atoms are types with only one value, themselves. `true` and `false` are built-in atoms.
-
 ## Opaque
 
 `opaque`
 
-Opaque is a type that hide its underlying encoding. WASM has this for security purposes.
+Opaque is a type that hide its underlying encoding. WASM has this for security purposes and referencing types from C or other languages via FFI.

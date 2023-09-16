@@ -206,6 +206,12 @@ All expressions is `silicon` are `function`. That means `@for` is not only an ex
 ## Effects
 
 - `total`
+- `pure`
+- `impure`
+
+---
+
+- `total`
 - `exn`
 - `div`
 - `console`
@@ -219,4 +225,21 @@ fun divide : (int,int) -> exn int     // exn: may raise an exception (partial)
 fun turing : (tape) -> div int        // div: may not terminate (diverge)
 fun print  : (string) -> console ()   // console: may write to the console
 fun rand   : () -> ndet int           // ndet: non-deterministic
+fun io:    : () -> io                 //   io: all of the above
 ```
+
+### Silicon Effects
+
+Silicon only has 3 effect level: `pure` and `impure`. This keeps things simple. `total` just mean the function has no effects, sorta like _void_.
+
+### Total
+
+Total functions always terminate, never have exceptions and don't have side-effects.
+
+### Pure
+
+Pure functions have referential transparency but _can_ have exceptions and may not terminate. All pure functions need to handle their exceptions and timing out.
+
+### Impure
+
+The most evil, vile functions that can do anything and may wreak havoc on your codebase.
