@@ -20,10 +20,15 @@ They can define function type signatures as well if the function doesn't have ty
 Function type signatures use Haskell-like syntax with `->` BUT since function are not auto-curried (they can have multiple parameters) we can have a comma separated list of parameter.
 
 ```typescript
-    /// number, number -> number
+    /// number, number -> total:number
     @fn add a,b
         a + b
     @
+
+    // V@ syntax
+    @fn add a,b = {
+        a + b
+    }
 ```
 
 Versus
@@ -44,9 +49,17 @@ With `{}` blocks
     }
 ```
 
+With V2 syntax (more consistent)
+
+```typescript
+    @fn add a,b = {
+
+    }
+```
+
 ## Parens
 
-Silicon does NOT require parenthesis anywhere ~~but function calls and type constructors `:()`.~~
+Silicon does NOT require parenthesis anywhere
 
 `$()` is tuple syntax ?
 
@@ -54,13 +67,21 @@ Silicon does NOT require parenthesis anywhere ~~but function calls and type cons
 
 All keywords start with `@`. Identifiers aren't allowed to start with `@`.
 
+This also makes parsing Silicon inside of markup like `HTML` or `XML` easier (thanks C#).
+
+```
+@if allow_delete {
+    <button>delete<button>
+}
+```
+
 ## Code blocks
 
 While `{}` may be used. `@` blocks are preferred.
 
 instead of
 
-    @if true {
+    @if (true) {
         // code
     }
 
@@ -70,6 +91,12 @@ Silicon does
         // code
     @
 
+OR
+
+    @if true, {
+
+    }
+
 Which is actually closer to LISP syntax. AND there are no extra characters for using `@` for keywords then.
 
 ## Semicolons
@@ -77,6 +104,8 @@ Which is actually closer to LISP syntax. AND there are no extra characters for u
 Semicolons are automatically and intelligently inserted
 
 ## Types
+
+arbitrarily sized types like Zig?
 
 Silicon has a sound and robust but simple type system. There are 7 base types:
 
@@ -92,6 +121,8 @@ Silicon has a sound and robust but simple type system. There are 7 base types:
 
 `float` - 32/64bit IEEE 754 floating point
 
+`decimal` - 128bit fixed point number
+
 `string` - UTF-32 string but can be UTF-8 or UTF-16 as well
 
 ## Reference Types
@@ -104,7 +135,7 @@ Silicon has a sound and robust but simple type system. There are 7 base types:
 
 ## Type inference
 
-Silicon does use type inference a lot BUT function return types MUST be explicitly typed. Function signatures are interfaces which should be explicitly typed because function have implicit returns.
+Silicon does use true type inference. Variable types and function signatures, including effect types, are ALL inferred for you. This is a `HUGE` type savings for library devs playing _"type gymnastics"_.
 
 `@let` `@if` `@for` etc are expressions, when used so.
 
@@ -123,6 +154,15 @@ Silicon<sup>tm<sup>
         @else "Nope, sorry"
     @
 ```
+
+V2 Syntax
+
+    /// bool -> total string
+    @fn fooMessage isThing = {
+        @if isThing
+        @then "Yes"
+        @else "Nope, sorry"
+    }
 
 There is no separate lamda or anonymous syntax. Just use `_` for anonymous functions.
 

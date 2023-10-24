@@ -1,29 +1,18 @@
 si {
 
   Program = SourceElement*
-  SourceElement = AtBlock | C_Block | Declaration | MathExpr
-  
-  C_Block = "{" SourceElement* "}"
-  
-  Sigil =  "@" | "$" | "&" | "->" | "~" | "_" 
-  
+  SourceElement = AtBlock | Declaration
   AtBlock = "@" "" SourceElement* "" "@"
 
-  Declaration = VariableDeclaration | FunctionDef | comment | DEF | BinaryMathOperation
+  Declaration = VariableDeclaration | SiFunctionDeclaration | SiCFunctionDeclaration | comment | BinaryMathOperation
 
-  Keyword = "@fn" | "@type" | "@let"
-  DEF = Keyword TypedIdentifier TypedParameterList? ("=" "{" SourceElement* "}")?
-  
   Assignment = (identifier | VariableDeclaration) "=" literal
 
   literal = number | stringLiteral
   number = integerLiteral+ | decimalLiteral+
-  operator = "+" | "-" | "*" | "/"
-  // infix but really only used for maths
-  MathExpr = number (operator number)*
 
-  integerLiteral = decimalDigit+ ("_" decimalDigit+)*
-  decimalLiteral = integerLiteral? "." decimalDigit+
+  integerLiteral = (decimalDigit | "_")+
+  decimalLiteral = decimalDigit? "." decimalDigit+
   
   stringLiteral =  "\"" doubleStringCharacter* "\""
   
@@ -41,20 +30,15 @@ si {
   BinaryMathOperation = number_var binaryMathOperator number_var (binaryMathOperator number_var)*
    
   Statement
-    = FunctionDef | If_Expr | For_Expr
+    = SiFunctionDeclaration
 
-  // TODO: IF is just a built-in function
-  If_Expr = "@if" "true" "," (AtBlock | C_Block)
-  // TODO FOR is just a built-in function
-  For_Expr = "@for" "range" "," (AtBlock | C_Block)
   Function = "@fn"
   identifier = letter+ alnum?
   lineTerminator = "\n" | "\r" | "\u2028" | "\u2029"
 
-  VariableDeclaration = "@let" TypedIdentifier ("=" literal)?
-  FunctionDef = Function TypedIdentifier TypedParameterList ("=" (AtBlock | C_Block))?
-  //SiFunctionDeclaration = Function TypedIdentifier TypedParameterList ("=" "{" SourceElement* "}")?
-  //SiCFunctionDeclaration = Function ("'" identifier)? (identifier ":" identifier) TypedParameterList "{" Declaration? "}"
+  VariableDeclaration = "@let" TypedIdentifier
+  SiFunctionDeclaration = Function ("'" identifier)? (identifier ":" identifier) TypedParameterList lineTerminator? Declaration? "@"
+  SiCFunctionDeclaration = Function ("'" identifier)? (identifier ":" identifier) TypedParameterList "{" Declaration? "}"
 
   TypeList = ListOf<TypeIdentifier,",">
   TypedParameterList  =  ListOf<TypedParameter, ",">
@@ -64,7 +48,7 @@ si {
   TypeIdentifier =  "'"? identifier
   
   TypedIdentifier = (identifier | "_") (":" TypeIdentifier)?
-  TypedParameter   = (identifier | "_") (":" identifier)?
+  TypedParameter   = (identifier | "_") ":" identifier
   FormalParameter = identifier
   
   idline = identifier lineTerminator
