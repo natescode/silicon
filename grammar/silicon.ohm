@@ -1,7 +1,7 @@
 si {
 
   Program = SourceElement*
-  SourceElement = AtBlock | C_Block | Declaration | MathExpr
+  SourceElement = AtBlock | C_Block | Declaration | Expr
   
   C_Block = "{" SourceElement* "}"
   
@@ -9,14 +9,14 @@ si {
   
   AtBlock = "@" "" SourceElement* "" "@"
 
-  Declaration = VariableDeclaration | FunctionDef | comment | DEF | BinaryMathOperation
+  Declaration = comment | DEF | BinaryMathOperation
 
   Keyword = "@fn" | "@type" | "@let"
-  DEF = Keyword TypedIdentifier TypedParameterList? ("=" "{" SourceElement* "}")?
+  DEF = Keyword TypedIdentifier TypedParameterList? ("=" SourceElement*)?
   
   Assignment = (identifier | VariableDeclaration) "=" literal
 
-  literal = number | stringLiteral
+  literal = number | stringLiteral | integerLiteral | decimalLiteral | bool_literal
   number = integerLiteral+ | decimalLiteral+
   operator = "+" | "-" | "*" | "/"
   // infix but really only used for maths
@@ -39,23 +39,32 @@ si {
   number_var = number | identifier
   
   BinaryMathOperation = number_var binaryMathOperator number_var (binaryMathOperator number_var)*
-   
+  
+  bool_literal = "true" | "false"
+
+  Expr = MathExpr | Function_Call | If_Expr | literal
+
   Statement
-    = FunctionDef | If_Expr | For_Expr
+    = FunctionDef | If_Expr | For_Expr | Compare_Expr
 
   // TODO: IF is just a built-in function
-  If_Expr = "@if" "true" "," (AtBlock | C_Block)
+  If_Expr = "@if" identifier "," (AtBlock | C_Block)
   // TODO FOR is just a built-in function
   For_Expr = "@for" "range" "," (AtBlock | C_Block)
+  Compare_Expr = (identifier | literal) "==" (identifier | literal)
   Function = "@fn"
-  identifier = letter+ alnum?
+  // TODO: Decide if # sigil stays or not
+  // #add first,second
+  // #add #add first,second,third
+  // add(add(first),second)) ?? IDK LOLZ
+  Function_Call = "#" identifier TypedParameterList
+  //identifier = letter+ alnum?
+  identifier = letter+ ("_" letter+)*
   lineTerminator = "\n" | "\r" | "\u2028" | "\u2029"
 
   VariableDeclaration = "@let" TypedIdentifier ("=" literal)?
   FunctionDef = Function TypedIdentifier TypedParameterList ("=" (AtBlock | C_Block))?
-  //SiFunctionDeclaration = Function TypedIdentifier TypedParameterList ("=" "{" SourceElement* "}")?
-  //SiCFunctionDeclaration = Function ("'" identifier)? (identifier ":" identifier) TypedParameterList "{" Declaration? "}"
-
+ 
   TypeList = ListOf<TypeIdentifier,",">
   TypedParameterList  =  ListOf<TypedParameter, ",">
   FormalParameterList =  ListOf<FormalParameter, ",">
