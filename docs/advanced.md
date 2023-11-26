@@ -22,11 +22,11 @@ The Opaque type is used for extern types like for interoping with C or environme
 
 ## `this`, traits, interfaces
 
-Silicon is structurally typed _by default_ like `Go`. Silicon is a flexible language with _modes_ and _defaults_.
+~~Silicon is structurally typed _by default_ like `Go`. Silicon is a flexible language with _modes_ and _defaults_.~~
 
 ### Interface
 
-Interfaces in Silicon are just like interfaces like `Go`, they're structurally typed and can be applied to types after the fact. There is no empty `interface{}` though. Silicon has real Generics and `Quasi Quotes`.
+Interfaces in Silicon are just like traits like `Rust`, they're nominally typed and can be applied to types after the fact. Silicon has real Generics and `Quasi Quotes`.
 
 `this` / `self` is just the first parameter.
 

@@ -33,35 +33,57 @@ Function type signatures use Haskell-like syntax with `->` BUT since function ar
 
 Versus
 
-with `@` blocks
-
-```typescript
-    @fn add:number a:number, b:number
-        a + b
-    @
+```silicon
+@fn add:number a:number,b:number = {
+    a + b
+}
 ```
 
-With `{}` blocks
+## Function Definitions with pre-defined values
 
-```typescript
-    @fn add:number a:number, b:number {
-        a + b
-    }
+So instead of:
+
+```silicon
+@fn fib n = {
+    @if n <= 2
+    @then n
+}
 ```
 
-With V2 syntax (more consistent)
+We can do
 
-```typescript
-    @fn add a,b = {
+```silicon
+@fn fib 1 = 1
+@fn fib 2 = 2
+```
 
-    }
+Where we directly map the output value for a given input value.
+
+> **NOTE**: This is NOT function overloading. The function / method signature hasn't changed, nor are we adding any other implementations.
+
+Instead of:
+
+```silicon
+@fn foo n = {
+  @if n === null, {
+    return
+  }
+  // code
+}
+```
+
+We can do _something_ like this.
+
+```silicon
+@fn foo $NONE = {}
+@fn foo $NONE = $NOP
 ```
 
 ## Parens
 
 Silicon does NOT require parenthesis anywhere
 
-`$()` is tuple syntax ?
+_tuple syntax ?_
 
 ## Keywords
 
@@ -70,34 +92,29 @@ All keywords start with `@`. Identifiers aren't allowed to start with `@`.
 This also makes parsing Silicon inside of markup like `HTML` or `XML` easier (thanks C#).
 
 ```
-@if allow_delete {
+@if allow_delete, {
     <button>delete<button>
 }
 ```
 
 ## Code blocks
 
-While `{}` may be used. `@` blocks are preferred.
+While `{}` may be used.
 
 instead of
 
-    @if (true) {
-        // code
-    }
+```javascript
+// Javascript
+if (true) {
+  // code
+}
+```
 
 Silicon does
 
-    @if true
+    @if $true, = {
         // code
-    @
-
-OR
-
-    @if true, {
-
     }
-
-Which is actually closer to LISP syntax. AND there are no extra characters for using `@` for keywords then.
 
 ## Semicolons
 
@@ -105,15 +122,17 @@ Semicolons are automatically and intelligently inserted
 
 ## Types
 
-arbitrarily sized types like Zig?
+**Arbitrarily sized types like Zig?**
 
-Silicon has a sound and robust but simple type system. There are 7 base types:
+Silicon has a sound and robust type system that map well to WASM / JS.
+
+There are 7 base types:
 
 `opaque` - for opaque external reference types
 
 `vec` - v128 for WASM. For SIMD instructions.
 
-`atom` - a type with only one value, itself. I.E `true` and `false` are built in atoms.
+`atom` - a type with only one value, itself. I.E `$true` and `$false` are built in atoms.
 
 `bool` - boolean `true` or `false`
 
@@ -121,9 +140,9 @@ Silicon has a sound and robust but simple type system. There are 7 base types:
 
 `float` - 32/64bit IEEE 754 floating point
 
-`decimal` - 128bit fixed point number
+`decimal` - 128bit fixed point number (backed by `vec`)
 
-`string` - UTF-32 string but can be UTF-8 or UTF-16 as well
+`string` - UTF-16 string but can be UTF-8 or UTF-32 as well
 
 ## Reference Types
 
@@ -137,7 +156,7 @@ Silicon has a sound and robust but simple type system. There are 7 base types:
 
 Silicon does use true type inference. Variable types and function signatures, including effect types, are ALL inferred for you. This is a `HUGE` type savings for library devs playing _"type gymnastics"_.
 
-`@let` `@if` `@for` etc are expressions, when used so.
+`@let`, `@if`, `@for` and `@match` are expressions, when used so.
 
 Function parameters can be implicitly typed just like any other variable. This is because with implicit returns, it could be easy for a developer to not return a value somewhere
 and then the function signature changes from `int,int -> int` to `int,int-> int | void`.
@@ -147,42 +166,17 @@ Javascript<sup>tm</sup>
 Silicon<sup>tm<sup>
 
 ```ruby
-    /// bool -> string
-    @fn fooMessage:string isThing
-        @if isThing
-        @then "Yes"
-        @else "Nope, sorry"
-    @
-```
-
-V2 Syntax
-
     /// bool -> total string
     @fn fooMessage isThing = {
         @if isThing
-        @then "Yes"
-        @else "Nope, sorry"
+        $then "Yes"
+        $else "Nope, sorry"
     }
+```
 
-There is no separate lamda or anonymous syntax. Just use `_` for anonymous functions.
+~~There is no separate lamda or anonymous syntax. Just use `_` for anonymous functions.~~
 
-<!-- OR
-
-```typescript
-    @let thing:string isThing:bool => @if isThing
-    @then "Yes"
-    @else "Nope, sorry"
-``` -->
-
-~~Lamda syntax~~
-
-<!-- ```typescript
-    /// bool -> string
-    @fn thing isThing =>
-    @if isThing
-    @then "Yes"
-    @else "Nope, Sorry"
-``` -->
+Use `\param1,param2 => {/*body*/}` for lambda syntax.
 
 ## Declaration
 
@@ -194,7 +188,7 @@ Silicon<sup>tm</sup> uses the `@let` keyword.
 
 _This will be covered more thoroughly in [Advanced](./advanced.md)_
 
-By default. All variable are immutable and local (on the stack).
+By default. All variable are immutable and local (cannot escape their scope aka the stack).
 
 `@let` or `$` - local, immutable
 
@@ -227,17 +221,17 @@ I'm not sure of the keywords `@local mut` versus `@global` maybe?
     @let name:str = "Nathan"
     $name = "Nathan"
 
-Atoms
+### Atoms
 
-~~Always start with `$`~~. Also know as `Symbol` which are completely unique unguessable values.
+Always start with `$`. Also know as `Symbol` which are completely unique unguessable values.
 
     @let true = atom()
     @let false = atom()
 
-    true
-    false
+    $true
+    $false
 
-    @let bool = true | false
+    @let bool = $true | $false
 
 ### Deconstructing Assignment
 
@@ -248,7 +242,7 @@ We can also mix and match new declarations
 
     // a is assigned
     // b is declared AND assigned
-    a, $b = #getResults
+    a, $b := #getResults
 ```
 
 ## Conditionals
@@ -257,14 +251,14 @@ We can also mix and match new declarations
 
 Silicon has if expressions
 
-    @if true
+    @if $true, {
         print "it is certain!"
         "it is certain"!.print
-    @
+    }
 
 Used as expression
 
-    @let age = @if true @then 32
+    @let age = @if true @then 32 @else 0
 
 ## IF THEN ELSE
 
@@ -299,9 +293,11 @@ You can use `≥≤≠` but words are preferred.
     a @most 3 // a <= 3
     a @between 1 @and 5 // a > 1 && a < 5
     a @in 1..5 // a >= 1 && a <= 5
+    a @outside 1..5 // a < 1 && a > 5
 
 ## Loops
 
+// TODO: FLUSH this out. More ZIG / GO like?
 Silicon has one overloaded `@loop` construct. They are also expressions.
 
     // grammar
@@ -344,25 +340,24 @@ For loop with step 2 with range syntax
 
 ## FUNCTIONS
 
-Again parenthesis aren't needed. Functions use `@` blocks too. Remember, function signatures MUST have types. A `doc` comment can be used instead for the type definition.
+Again parenthesis aren't needed.
 
 Add function
 
     /// num,num -> num
-    @fn add a,b
+    @fn add a,b = {
         a + b
-    @
+    }
 
 With types
 
-    @fn add:num a:num, b:num
+    @fn add:num a:num, b:num = {
         a + b
-    @
+    }
 
     #add 10,20 // 30
-    //add 10,20
 
-_\*I'm still debating on function call syntax if `()` are needed and if `#` sigil should be used_. I know sometimes function calls could be ambigous without parens BUT which bothers me but 90% of the time that is cleaner. PLUS to disambiguate, parens are simply used to group so there isn't any special semantics.
+_\*I'm still debating on function call syntax if `()` are needed and if `#` sigil should be used_. I know sometimes function calls could be ambigous without parens BUT which bothers me but 90% of the time that is cleaner. PLUS to disambiguate, parens are simply used to group so there aren't any special semantics.
 
 ### Ambiguous function calls
 
@@ -398,9 +393,10 @@ With Pipes
 (bar -> baz, baz -> bar) -> foo
 ```
 
-## Sum Types
+## Algebraic Data Types
 
 We can make new types by adding, substracting or multiplying types together
+// TODO: read up on how OCaml would handle type inference here since `message` could easily be a `string` or `MessageOrFalse`.
 
 ```typescript
 type MessageOrFalse = string | false;
@@ -423,5 +419,39 @@ let messag2: MessageOrFalse = false;
 @
 
 #fizzBuzzMessage 15 // "Fizz Buzz"
+
+```
+
+### New Syntax?
+
+```silicon
+n <- 15
+
+@fn fizz_buzz_fn 0,0 = "Fizzbuzz"
+@fn fizz_buzz_fn 0,_ = "Buzz"
+@fn fizz_buzz_fn _,0 = "Fizz"
+
+@match [n%3,n%5], fizz_buzz_fn
+```
+
+Defining the function inline?
+
+```silicon
+@match [n%3,n%5]
+    @case 0,0 => "Fizzbuzz"
+    @case 0,_ => "Fizz"
+    @case _,0 => "Buzz"
+```
+
+The definiton of `@match`
+
+```silicon
+@fn match:@@KEYWORD values:Array:'T, case:fn
+```
+
+Usage
+
+```
+@match $value a $value b $case lambda $case lambda
 
 ```
