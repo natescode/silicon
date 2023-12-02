@@ -10,7 +10,7 @@ Silicon's syntax has changed a lot over time. I've decided to stick to a C-like 
 
 Silicon has two main grammar rules: `definition` and `execution` aka `def` and `exe`, respectively.
 
-### DEF grammar
+### DEF grammar `@` and `=`
 
 `@` precedes all keywords: built-in Silicon constructs. USER defined grammar of course are allowed. A name for the thing you're defining.
 
@@ -28,7 +28,7 @@ Silicon has two main grammar rules: `definition` and `execution` aka `def` and `
 $custom_def iden = // ... code ...
 ```
 
-### EXE grammar
+### EXE grammar `#` or `@`
 
 Grammar for function calls and expressions to evaluate.
 Once we've defined something. Let's use it!
@@ -37,9 +37,9 @@ Once we've defined something. Let's use it!
 - code blocks / quoted macros
 - expressions
 
-```typescript
-add 1,2
-person{age:45}
+```silicon
+#add 1,2
+#person{age:45}
 @if condition, then_block, else_block
 ```
 
@@ -53,7 +53,9 @@ Silicon uses a few sigils, hence the name for the toolchain. Sigils are just lit
 
 `$` - Precedes ALL atoms. Atoms are types with a single value.
 
-`#` - Precedes ALL compile-time code. `#{}` for a comptime block
+`#` - Precedes ALL run-time code that should be evaluated. `#{}` for a runtime code block.
+
+`##` - Precedes ALL compile-time code that should be evalutaed. `##{}` for a comptime block
 
 `_` - precedes ALL private data. // Maybe?
 

@@ -345,3 +345,18 @@ Backtic `` ` ``
 I think the `` ` `` is best because `<>`can be just replaced with`.` Or just another `:`
 
 BUT others agree `:` is cleaner. Plus then `` ` `` is free to be used for template strings.
+
+### SiX ML
+
+Silicon make HTML / XML a first class citizen. You can basically do JSX but for Silicon natively!
+
+// TODO: difference between generating HTML nodes / string vs execution?
+
+```
+    @fn add a,b = { a = b }
+
+    #add 1,2 // 3
+    #<add a={1} b={2} /> // 3
+```
+
+The `#` or some method call will probably still be required to execute the markup version of the `add` function since otherwise we'd simply be creating an HTML node.

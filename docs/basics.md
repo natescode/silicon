@@ -266,6 +266,13 @@ Used as expression
     @then value
     @else other_value
 
+## Operators
+
+Silicon has the usual operator `+`,`-`,`*` etc...
+
+Silicon does **NOT** have unary pre or post increment operator `++`.
+In fact, `++` is used for string concatenation `"Hello, " ++ "World!"`
+
 ## Logic
 
 Silicon has `==` and definitely not `===`. `@is` and `@not`
@@ -453,5 +460,20 @@ Usage
 
 ```
 @match $value a $value b $case lambda $case lambda
+
+```
+
+## Traits / Typeclasses / Interfaces
+
+```silicon
+    @type stringy:@trait 'Type = {
+        @fn to_string:string a:Type
+    }
+
+    @type stringy:@impl int = {
+        @fn to_string:string a:int = {
+            // ...code...
+        }
+    }
 
 ```
