@@ -217,6 +217,12 @@ Annotations
 - @@imm // TODO: mutability keywords?
 - @@wait (defer) // TODO:  implement
 
+Execution time annotation
+
+- @@compile (execute at compile time)
+- @@execute (compile and execute at runtime)
+- @@analyze (interpret and execute at runtime)
+
 ## Syntax / Symbols
 
 - `$` atoms
