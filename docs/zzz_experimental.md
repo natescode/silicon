@@ -180,41 +180,42 @@ How to disambiguate `{}` for key, value pairs and code blocks?
 
 ## Keywords
 
-Silicon only has 20 keywords (Go has 25). Thanks to named parameters many keywords aren't needed like `case` or `default` for switch case.
+Silicon only has 15 core keywords (Go has 25). Thanks to named parameters and pattern matching, many keywords aren't needed like `case` or `default` for switch case.
 
-- @let
-- @mut // TODO: mutability keywords?
-- @co // TODO: coroutines
-- @defer // TODO: implement
-- @select //TODO: coroutine select
-- @if
-- @match
-- @for
-- @while
-- @fn
-- @type
-- @impl
-- @mod
-- @import
-- @export
-- @continue
-- @fallthrough
-- @break
-- @return
-- @return_up
+1. @let
+1. @cor // TODO: coroutines
+1. @when (if)
+1. @loop
+1. @type
+1. @impl
+1. @skip (alternative to continue)
+1. @fall (fallthrough) \* may not be needed because of pattern matching
+1. @exit \* replaces 'break': return from current function / block.
+1. @yeet // non-local return? since Silicon doesn't have throw
+1. @dead // throw / panic? kick, konk, ends, croak, term (terminate) 
+1. @select //TODO: coroutine select
+1. @module
+1. @import
+1. @export
 
 AND
 
-- @and
-- @or
-- @not
-- @least
-- @most
-- @above
-- @below
-- @between
-- @within
-- @outside
+- @and &&
+- @or ||
+- @not !
+- @least >=
+- @most <=
+- @above >
+- @below <
+- @between start < x < end
+- @within  start <= x <= end
+- @outside x < val < x
+
+Annotations
+
+- @@mut // TODO: mutability keywords?
+- @@imm // TODO: mutability keywords?
+- @@wait (defer) // TODO:  implement
 
 ## Syntax / Symbols
 
@@ -796,3 +797,34 @@ Silicon does have IIFEs, kinda like JS. We can define an inline function then im
 Pipe syntax works too if we want the parameters to come first. Handy for pattern matching / switch case.
 
     1,2 |> (\a,b=>a+b) // 3
+
+## Prevent let + function literal
+
+I don't want the JS styled
+
+    @let add = @fn _ a,b = { a + b } // error: cannot assign anonymous function literal 
+
+    @let add2 = @fn add1 a,b = { a + b } // error: cannot assign named function literal
+
+I could simplify the language further by dropping the function keyword, `@fn`, all together. It feel a little bit too ML style. The grammar wouldn't change at all just `@fn` would be swapped with `@let`, that's it.
+
+Function keyword (I was going to do `@fun` for better alignment)
+
+    @fun add:int a:int,b:int = { a + b }
+
+Let keyword
+
+    @let add:int a:int,b:int = { a + b }
+
+Sometimes functions are not function?
+
+    @let x = { 1 + 2 }
+
+    // coverted to 
+    @let x = 3
+
+Lamda syntax? **NOPE**
+
+    \a,b = a + b
+
+
