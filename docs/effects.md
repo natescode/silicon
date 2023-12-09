@@ -81,3 +81,43 @@ __BUT__ this isn't completely true. There are still ways to call these functions
 @
 
 ```
+
+
+
+
+
+## Effects
+
+- `total`
+- `pure`
+- `impure`
+
+---
+
+- `total`
+- `exn`
+- `div`
+- `io`
+- `ndet`
+
+`@error` = exception
+`@hault` = divergent (never returns / terminates)
+`@rands` = random / non-determinitisc
+`@inout` = IO
+
+#### Sum types
+
+    @let pure = @error | @hault
+    @let total = {}
+    @impure = pure | @rands | @inout
+
+`pure` = `exn` + `div`
+
+```
+fun sqr    : (int) -> total int       // total: mathematical total function
+fun divide : (int,int) -> exn int     // exn: may raise an exception (partial)
+fun turing : (tape) -> div int        // div: may not terminate (diverge)
+fun print  : (string) -> console ()   // console: may write to the console
+fun rand   : () -> ndet int           // ndet: non-deterministic
+fun io:    : () -> io                 //   io: all of the above
+```

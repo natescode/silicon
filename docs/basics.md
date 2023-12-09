@@ -17,44 +17,37 @@ Starts a line with `///`
 Doc comments are used for Sigil's built-in auto documentation feature.
 They can define function type signatures as well if the function doesn't have types.
 
-Function type signatures use Haskell-like syntax with `->` BUT since function are not auto-curried (they can have multiple parameters) we can have a comma separated list of parameter.
-
-```typescript
-    /// number, number -> total:number
-    @fn add a,b
-        a + b
-    @
-
-    // V@ syntax
-    @fn add a,b = {
-        a + b
-    }
-```
-
-Versus
+Silicon functions have implicity returns. `@exit` can be used a the return keyword.
 
 ```silicon
-@fn add:number a:number,b:number = {
+/// number, number -> total:number
+@let add a,b = {
     a + b
 }
 ```
 
-## Function Definitions with pre-defined values
+## Partial Function Definitions
+
+_aka Pattern Matching_
 
 So instead of:
 
 ```silicon
-@fn fib n = {
+@let fib n = {
     @if n <= 2
-    @then n
+    $then n
+    $else (#fib n - 1) + (#fib n - 2);
 }
 ```
 
 We can do
 
 ```silicon
-@fn fib 1 = 1
-@fn fib 2 = 2
+@let fib 1 = 1;
+@let fib 2 = 2;
+@let fib n = {
+    (fib n - 1) + (fib n - 2)
+}
 ```
 
 Where we directly map the output value for a given input value.
@@ -64,9 +57,9 @@ Where we directly map the output value for a given input value.
 Instead of:
 
 ```silicon
-@fn foo n = {
-  @if n === null, {
-    return
+@let foo n = {
+  @if n @is null, {
+    @exit
   }
   // code
 }
@@ -75,15 +68,12 @@ Instead of:
 We can do _something_ like this.
 
 ```silicon
-@fn foo $NONE = {}
-@fn foo $NONE = $NOP
+@fn foo null = {}
 ```
 
 ## Parens
 
 Silicon does NOT require parenthesis anywhere
-
-_tuple syntax ?_
 
 ## Keywords
 
@@ -99,26 +89,11 @@ This also makes parsing Silicon inside of markup like `HTML` or `XML` easier (th
 
 ## Code blocks
 
-While `{}` may be used.
-
-instead of
-
-```javascript
-// Javascript
-if (true) {
-  // code
-}
-```
-
-Silicon does
-
-    @if $true, = {
-        // code
-    }
+`{}` is a code block.
 
 ## Semicolons
 
-Semicolons are automatically and intelligently inserted
+Semicolons are required but are auto-inserted by the LSP, not the compiler. 
 
 ## Types
 
@@ -167,16 +142,15 @@ Silicon<sup>tm<sup>
 
 ```ruby
     /// bool -> total string
-    @fn fooMessage isThing = {
+    @let fooMessage isThing = {
         @if isThing
         $then "Yes"
         $else "Nope, sorry"
     }
 ```
 
-~~There is no separate lamda or anonymous syntax. Just use `_` for anonymous functions.~~
+\* *There is no separate lamda or anonymous syntax. Just use `_` for anonymous functions.*
 
-Use `\param1,param2 => {/*body*/}` for lambda syntax.
 
 ## Declaration
 
@@ -189,6 +163,8 @@ Silicon<sup>tm</sup> uses the `@let` keyword.
 _This will be covered more thoroughly in [Advanced](./advanced.md)_
 
 By default. All variable are immutable and local (cannot escape their scope aka the stack).
+
+// TODO: revisit this. Most likely this modifiers will become annotations or type constructors i.e. `@let x:@mut(int)`
 
 `@let` or `$` - local, immutable
 
@@ -208,6 +184,8 @@ These are actual expressions. Which allows for things like
 
 ### Update
 
+// TODO: again, likely `@@global`
+
 Since I want to implement _locality_ like OCaml _but_ have `local` (stack allocation) to be the default instead. So a value can't escape its' region unless `global` was used.
 
 I'm not sure of the keywords `@local mut` versus `@global` maybe?
@@ -219,11 +197,11 @@ I'm not sure of the keywords `@local mut` versus `@global` maybe?
 ## Declaration and assignment
 
     @let name:str = "Nathan"
-    $name = "Nathan"
 
 ### Atoms
 
 Always start with `$`. Also know as `Symbol` which are completely unique unguessable values.
+Also used for named parameters / types constructors.
 
     @let true = atom()
     @let false = atom()
@@ -238,11 +216,11 @@ Always start with `$`. Also know as `Symbol` which are completely unique unguess
 We can also mix and match new declarations
 
 ```silicon
-    @mut a:int
+    @let a:mut(int)
 
     // a is assigned
     // b is declared AND assigned
-    a, $b := #getResults
+    a, @let b = #getResults
 ```
 
 ## Conditionals
@@ -258,33 +236,38 @@ Silicon has if expressions
 
 Used as expression
 
-    @let age = @if true @then 32 @else 0
+    @let age = @if true $then 32 $else 0
 
 ## IF THEN ELSE
 
     @if condition
-    @then value
-    @else other_value
+    $then value
+    $else other_value
 
 ## Operators
 
 Silicon has the usual operator `+`,`-`,`*` etc...
 
-Silicon does **NOT** have unary pre or post increment operator `++`.
+Silicon does **NOT** have unary pre or post increment operator `++`. 
+
+Yes, even `-1` doesn't exist. Silicon uses `0-1` or `1.neg` or `#neg 1` instead
 In fact, `++` is used for string concatenation `"Hello, " ++ "World!"`
 
 ## Logic
 
-Silicon has `==` and definitely not `===`. `@is` and `@not`
+Silicon has `==` and `===` which are `@eq` and `@is`, respectively. **NO** Si is nothing like Javascript.
 
-    $age = 32
+`==` built-in equality check
+`===` library / user-defined identity check (i.e compare custom data-structures)
+
+    @let age = 32
 
     @if age == 32
-    @if age @is 32
+    @if age @eq 32
 
-    @if age @is 32
-    @then "we're the same age!"
-    @else "we're aren't the same age".print
+    @if age @eq 32
+    $then "we're the same age!"
+    $else "we're aren't the same age".print
 
 @gt @lt @gte @lte
 
@@ -304,22 +287,12 @@ You can use `≥≤≠` but words are preferred.
 
 ## Loops
 
-// TODO: FLUSH this out. More ZIG / GO like?
-Silicon has one overloaded `@loop` construct. They are also expressions.
+Silicon has exactly one looping contruct, `@loop`
+// TODO: copy from zzz_experimental 
+Silicol has one overloaded `@loop` construct. They are also expressions.
 
     // grammar
     Loop = "@loop" capture (seriesExpr | boolExpr)
-
-### FOR
-
-For loop 1 to 100. Print the numbers.
-
-// OR $ denotes passing a literal character to use as an identifier aka capture
-
-    @loop $i, 1..100
-        print i
-        i.print
-    @
 
 ### FOR with step
 
@@ -339,11 +312,12 @@ For loop with step 2 with range syntax
 
 ### DO WHILE
 
-    @loop $i
+// new grammar with function?
+    @loop @fn i:mut = {
         i += 1
-        print i
-        @if i >= 100 @then @break
-    @
+        #print i
+        @if i >= 100 $then @exit
+    }
 
 ## FUNCTIONS
 
@@ -352,13 +326,13 @@ Again parenthesis aren't needed.
 Add function
 
     /// num,num -> num
-    @fn add a,b = {
+    @let add a,b = {
         a + b
     }
 
 With types
 
-    @fn add:num a:num, b:num = {
+    @let add:num a:num, b:num = {
         a + b
     }
 
@@ -412,57 +386,16 @@ let message: MessageOrFalse = "Hi there";
 let messag2: MessageOrFalse = false;
 ```
 
-## Match
-
-`match` is like the super-saiyan version of `switch`.
-
-```silicon
-@fn fizzbuzzMessage n
-    @match n%3,n%5
-        0,0 => "Fizz Buzz"
-        0,_ => "Fizz"
-        _,0 => "Buzz"
-    @
-@
-
-#fizzBuzzMessage 15 // "Fizz Buzz"
-
-```
-
 ### New Syntax?
 
 ```silicon
-n <- 15
+@let n = 15
 
 @fn fizz_buzz_fn 0,0 = "Fizzbuzz"
 @fn fizz_buzz_fn 0,_ = "Buzz"
 @fn fizz_buzz_fn _,0 = "Fizz"
 
-@match [n%3,n%5], fizz_buzz_fn
 ```
-
-Defining the function inline?
-
-```silicon
-@match [n%3,n%5]
-    @case 0,0 => "Fizzbuzz"
-    @case 0,_ => "Fizz"
-    @case _,0 => "Buzz"
-```
-
-The definiton of `@match`
-
-```silicon
-@fn match:@@KEYWORD values:Array:'T, case:fn
-```
-
-Usage
-
-```
-@match $value a $value b $case lambda $case lambda
-
-```
-
 ## Traits / Typeclasses / Interfaces
 
 ```silicon

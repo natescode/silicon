@@ -4,10 +4,12 @@ One of Silicon's biggest goals is to develop a simple but powerful type system t
 
 ## Numeric
 
-Typically used as `num`
+Typically used as `number`
 
 ```typescript
-type num = i32 | i64 | f32 | f64;
+type integer = i32 | i64 
+type float = f32 | f64;
+type number = integer | float
 ```
 
 - `i32`

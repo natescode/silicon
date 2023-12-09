@@ -178,66 +178,6 @@ How to disambiguate `{}` for key, value pairs and code blocks?
 
 ```
 
-## Keywords
-
-Silicon only has 15 core keywords (Go has 25). Thanks to named parameters and pattern matching, many keywords aren't needed like `case` or `default` for switch case.
-
-1. @let
-1. @cor // TODO: coroutines
-1. @when (if)
-1. @loop
-1. @type
-1. @impl
-1. @skip (alternative to continue)
-1. @fall (fallthrough) \* may not be needed because of pattern matching
-1. @exit \* replaces 'break': return from current function / block.
-1. @yeet // non-local return? since Silicon doesn't have throw
-1. @dead // throw / panic? kick, konk, ends, croak, term (terminate) 
-1. @select //TODO: coroutine select
-1. @module
-1. @import
-1. @export
-
-AND
-
-- @and &&
-- @or ||
-- @not !
-- @least >=
-- @most <=
-- @above >
-- @below <
-- @between start < x < end
-- @within  start <= x <= end
-- @outside x < val < x
-
-Annotations
-
-- @@mut // TODO: mutability keywords?
-- @@imm // TODO: mutability keywords?
-- @@wait (defer) // TODO:  implement
-
-Execution time annotation
-
-- @@compile (execute at compile time)
-- @@execute (compile and execute at runtime)
-- @@analyze (interpret and execute at runtime)
-
-## Syntax / Symbols
-
-- `$` atoms
-- `()` group expressions are expression / key-value pairs
-- `[]` list of values
-- `{}` statements
-- `@` keyword
-- `'T` Generic indentifier
-- `` `backtick` `` backticks for template strings
-- `_` throw away
-- `;` end of statement or expression
-- `.` field access OR namespace access
-- `,` separate lists
--
-
 ## Dispatch
 
 Silicon doesn't actually have methods. "WHAT?",¨¿Qué?","что?".
@@ -258,62 +198,9 @@ The following example has a `swap` function that takes a string and then swaps a
 
 There is only one swap function right? I can't have more than one, function overloading.
 
-## Type-Directed Name Resolution (TDNR)
-
-There was a [proposal to add TDNR to Haskell](https://web.archive.org/web/20160310052223/https://prime.haskell.org/wiki/TypeDirectedNameResolution). This is _REALLY_ interesting for Silicon because this would really sell the language and set it apart from being too FP or too OOP.
-
-_// bool would be inferred as type ':bool' here._
-
-_// int would be inferred as type ':int' here._
-
-```
-@mod int = (
-    @fn toString:string value:int
-)
-
-@mod bool = (
-    @fn toString:string value:bool
-)
-
-#toString x
-// ERROR: ambigous function call.
-// no function overloading.
-
-// fully-qualified name
-int::toString x // correct
-bool::toString x // correct
-
-// unqualified name resolution
-// if X is of type int then it'll resolve to int::toString
-// if X is of type bool then it'll resolve to bool::toString
-x.toString
-
-5.toString // "5"
-$true.toString // "true"
 
 
 
-
-```
-
-## Parens, Braces and Brackets
-
-|     |                                                        |
-| --- | ------------------------------------------------------ |
-| [ ] | encloses type parametern or type arguments             |
-| ( ) | groups expressions, parameter/arugment lists or tuples |
-| { } | sequence of statements or definitions                  |
-
-## Operators
-
-| Precedence | Operator                                        | Description                                      |
-| ---------- | ----------------------------------------------- | ------------------------------------------------ |
-| 1          | =                                               | Assignment                                       |
-| 2          | @or                                             | Boolean Or                                       |
-| 3          | @And                                            | Boolean And                                      |
-| 4          | @is, @not, @below, @most, @above, @least, @deep | Comparisons                                      |
-| 5          | + - @bor @bxor                                  | Addition, Substraction, Bitwise Or, Bitwaise XOr |
-| 6          | \* / @band                                      | Multiplication, Division, Bitwise And            |
 
 ## `if` to rule them all
 
@@ -442,80 +329,7 @@ Lamda syntax?
     // parameters are assumed with \\
     @let add = \\a+b
 
-## No Unary Operators
 
-> "What?! What about ...?"
-
-Silicon only has binary infix operators. This is a hard requirement that will never change in the Silicon language specification.
-
-Typical unary operators
-
-    -x
-    -1
-    ++x
-    x++
-    !x
-    &x
-    *x
-
-None are needed.
-
-| unary operator | alternative 1 | alternative 2     |
-| -------------- | ------------- | ----------------- |
-| -x             | x.neg         | 0 - x             |
-| -1             | 1.neg         | 0 - 1             |
-| ++x            | x += 1        | x.inc             |
-| x++            | x.post_inc    | @defer x += 1; x; |
-| !x             | @not x        | x.not             |
-| &x             | @val x        | x.val             |
-| \*x            | @ref x        | x.ref             |
-
-Instead of `&x++` we can do `x.val.pinc`
-
-Silicon prefers methods over operators.
-
-So no fancy Pratt parsing or Pika Parsing needed to handle prefix or postfix operators, they DON'T exist!
-
-_\*sigils aren't operators_
-
-## SI puts the SI in Simple.
-
-- no unary operators
-- no operator overloading
-- no inheritance
-- no function / method overloading
-- no modifier keywords (just annotations)
-- few keywords that are prepended with `@`
-- no garbage collector: reference counting / borrower checker (optional)
-- ONE looping construct `@loop` (for, while and do/while)
-- ONE condition construct `@when` (if and switch/case)
-
-## What SI DOES have
-
-- Traits (because they're awesome)
-- Annotations (for flexiblity)
-- UFCS (no real methods)
-- TDNR (fake overloading)
-- ADT (the best type of type)
-- SIMPLE and consistent syntax
-- coroutines: no locks, semaphores or runtime to schedule
-- Pattern matching
-- Full type inference!
-- Full lifetime inference!
-- Cross-Compilation!
-- C interop!
-- 100% Web API coverage
-- 100% Node API coverage
-
-## Annotations
-
-Again, inspired from the same blog. I already was thinking of the common
-syntax that Java has and works well with Silicon.
-
-```silicon
-@@annotation
-@let name:string = "Nathan";
-```
 
 ## Semicolons; Let's talk.
 
@@ -551,41 +365,7 @@ End of lines add `;` **UNLESS**:
     $then 1
     $else 0;
 
-## Keywords
 
-### 7 Letter annotations
-
-- compile (execute at compile time)
-- execute (execute at runtime)
-- analyze (interpret at runtime)
-
-### 6 Letter
-
-- module
-- import
-- export
-
-### 5 Letter
-
-- class
-- value (struct)
-- union
-- trait
-- alias
-
-### 4 letter
-
-- when/then/else
-- loop (while)
-- exit (return)
-- give (yield)
-
-### 3 letter
-
-- fun
-- let
-
-For Result type, `pass` and `fail`
 
 ## MISC
 
@@ -719,66 +499,7 @@ Instead of `defer list.deinit()` like in Zig. I'd love if it was automatic with 
 
 `@defer std::list` will automatically call `defer list.deinit`
 
-## Sigils
 
-The toolchain is named `sigil` because Silicon uses a handfull of special characters to add special meaning. Sigils are not operators. They don't _do_ anything other than distinguish the type of identifier or expression.
-
-- `@` prepended to all keywords.
-- `@@` prepended to all annotations.
-- `$` prepended to all atoms or named parameters.
-- `#` prepended to function calls. \* this may change.
-
-  @if true, {
-  "true"
-  }
-
-  @fn fib 1 = 1
-  @fn fib 2 = 2
-
-  @@memo
-  @fn fib n = {
-  (#fib n - 1) + (fib n - 2)
-  }
-
-  @type bool = $true | $false
-
-## Annotations `@@`
-
-Silicon doesn't have built-in modifiers like `public`,`private` etc. Both because it is not
-an OOP language and because modifiers would have to be _annotations_.
-
-Annotations do use a new **sigil** `@@`.
-
-    @@my_annotation
-    @let x = 42;
-
-Annotations provide a lot of flexibility in the language.
-
-## Identity & Equality
-
-Taken form [karlsruhe](https://soc.me/languages/equality-and-identity-part3)'s blog.
-
-### Defining Equality and Identity
-
- - **Equality** checks whether two things are equal, based on some library-defined definition of equality.
-
-- **Identity** checks whether two things are identical, based on a built-in definition of identity."
-
-Every language has a way to compare things. There are two types of comparison though: referential equality and value equality.
-
-`==` and `@eq` - checks whether two things are equal, based on some library-defined definition of equality.
-
-`===` and `@is` - checks whether two things are identical, based on a built-in definition of identity.
-
-`equality` = **language** definition.
-
-`identity` = **user / library** definition.
-
-So by default a type doesn't have `identity` defined i.e.
-
-> only available when the type is constrained appropriately 
-
-    @fn same[E : Identity](a: E, b: E) = { a === b }
 
 
 

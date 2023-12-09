@@ -14,7 +14,7 @@ This is the whole silicon project. Not required to exist. Any folder with a `pac
 
 Module is any folder that holds `.si` files. It _may_ contain a `module.si` file.
 
-Any module (folder) can be directly imported. Limiting what is exposed can be done within the `module.si` file. That file will be Silicon code (maybe JSON)
+Any module (folder) can be directly imported. Limiting what is exposed can be done within the `module.si` file. That file will be Silicon code.
 
 ## Component
 
