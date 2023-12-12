@@ -2,15 +2,22 @@
 
 ## Table of Contents
 
-### [Grammar](./grammar.md)
-
-### [Types](./types.md)
-
-### [Basics](./basics.md)
-
-### [Modules](./modules.md)
-
-### [Advanced](./advanced.md)
+- [grammar](./grammar.md)
+- [comments](./comments.md)
+- [sigils](./sigils.md)
+- [keywords](./keywords.md)
+- [identifiers](./identifiers)
+- [types](./types.md)
+- [operators](./operators.md)
+- [assignment](./assignment.md)
+- [equality & identity](./equality-identity.md)
+- [conditional](./conditional.md)
+- [loops](./loops.md)
+- [functions](./functions.md)
+- [methods](./tdnr.md)
+- [modules](./modules.md)
+- [concurrency](./concurrency.md)
+- [dialects](./dialects.md)
 
 ## Goals
 
@@ -43,14 +50,15 @@ mediocre at everything.
 - Operator overloading
 - Functionally Pure
 - Borrower Checker / compile-type memory safety\*\*
+
 ## SI puts the SI in Simple.
 
 - no unary operators
+- no operator precedence
 - no operator overloading
 - no inheritance
 - no function / method overloading
-- no modifier keywords (just annotations)
-- few keywords that are prepended with `@`
+- no modifiers (just annotations)
 - no garbage collector: reference counting / borrower checker (optional)
 - ONE looping construct `@loop` (for, while and do/while)
 - ONE condition construct `@when` (if and switch/case)

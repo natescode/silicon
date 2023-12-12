@@ -1,0 +1,75 @@
+Silicon {
+  Program   = SourceElement*
+
+  
+  SourceElement = 
+  				| STATEMENT ";"? --sourceStatement
+  				| DEF ";"? --sourceDef
+                | EXP ";"? --sourceExp
+ 
+  STATEMENT = Assign 
+  			| EXP "==" EXP --compare
+        
+  DEF = | TypedIdentifier Params ":=" EXP -- gopher
+  		|"@type" TypedIdentifier Params  --typeDef 
+  		| "@let" TypedIdentifier Params --letDef 
+        | "@func" TypedIdentifier Args --fnDef 
+        
+  EXP = KeywordExpression
+ 		| EXP ("+"| "-") EXP -- addExp
+        | EXP ("*" | "/") EXP -- multExp
+  		| EXP "<=" EXP -- lteEXP
+        | "#" Args ("|>" identifier)+ --pipeExp
+        | "#" (identifier | EXP) ("." identifier)+ --methodChainExp
+        | identifier ("." identifier)+ --namespace
+        | TypedIdentifier
+        | identifier
+        | num
+        | "\"" stringChar*  "\"" --stringLit
+        | "{" EXP "}" --block
+        | "(" (identifier "=" EXP)* ")" --mapLit
+        | "(" EXP* ")" -- parens
+        | "[" ListOf<EXP,","> "]" --arrayLit
+        | "#" identifier Args --fnCall
+        
+  KeywordExpression = 
+  					| "@name" TypedIdentifier Params --nameExp
+  					| "@when" Args -- whenExp 
+  					| "@loop" Args -- loopExp
+                    | "@func" Args -- funcExp
+                    | "@open" Args --import
+                    // I could do 'import' and 'export'
+                    // OR use 'open' because it is 4 characters
+                    // AND everything defaults to public unless it starts with _
+                    // OR uses the '@@private' annotation                 
+                    //| "@export" Args -- export
+                    | booleanLiteral --booleanLit
+                   
+             
+  stringChar = ~("\"" | "\\" | lineTerminator) any
+  lineTerminator = "\n" | "\r" | "\u2028" | "\u2029"
+  booleanLiteral = "@true" | "@false"
+  namespace = identifier ("::" identifier)+
+  num = digit+
+  identifier = letter+
+  TypedIdentifier = identifier+ #((":" identifier+)+)?
+  Args  = ListOf<EXP+, ",">
+  Params = ListOf<TypedIdentifier+,",">
+  Assign = (KeywordExpression_nameExp | identifier | DEF) "=" EXP --id
+  comment = multiLineComment | singleLineComment
+  sourceCharacter = any
+  multiLineComment = "/*" (~"*/" sourceCharacter)* "*/"
+  singleLineComment = "//" (~lineTerminator sourceCharacter)*
+  space := whitespace | lineTerminator | comment
+  unicodeSpaceSeparator = "\u2000".."\u200B" | "\u3000"
+  whitespace = "\t"
+             | "\x0B"    -- verticalTab
+             | "\x0C"    -- formFeed
+             | " "
+             | "\u00A0"  -- noBreakSpace
+             | "\uFEFF"  -- byteOrderMark
+             | unicodeSpaceSeparator
+  
+  
+}
+

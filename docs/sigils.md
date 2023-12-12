@@ -1,6 +1,6 @@
 ## Sigils
 
-The toolchain is named `sigil` because Silicon uses a handfull of special characters to add special meaning. Sigils are not operators. They don't _do_ anything other than distinguish the type of identifier or expression.
+The toolchain is named `sigil` because Silicon uses a handfull of special characters to add special meaning. Sigils are not operators. They don't _do_ anything other than distinguish the type of identifier or expression. Sigil only come before an identifier.
 
 - `@` prepended to all keywords.
 - `@@` prepended to all annotations.
@@ -20,3 +20,7 @@ The toolchain is named `sigil` because Silicon uses a handfull of special charac
   }
 
   @type bool = $true | $false
+
+## Misc
+
+- `_` alone indicated a discard value.

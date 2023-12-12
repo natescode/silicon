@@ -198,10 +198,6 @@ The following example has a `swap` function that takes a string and then swaps a
 
 There is only one swap function right? I can't have more than one, function overloading.
 
-
-
-
-
 ## `if` to rule them all
 
 No more`switch` ?! This is like Go's `for` .
@@ -329,8 +325,6 @@ Lamda syntax?
     // parameters are assumed with \\
     @let add = \\a+b
 
-
-
 ## Semicolons; Let's talk.
 
 I think most devs would agree that automatic semicolon insertion is table stakes for any new language.
@@ -364,8 +358,6 @@ End of lines add `;` **UNLESS**:
     @if true
     $then 1
     $else 0;
-
-
 
 ## MISC
 
@@ -467,7 +459,7 @@ Make it fit with function syntax?
 or
 
     x
-        .case @is null, 1
+        .case(\x => x.isNull, 1)
         .case @gte 5, 1
         .case @below 10, 3
 
@@ -493,43 +485,26 @@ Or pipe syntax
     x |> case null,value
       |> jump name, case "John", true
 
-## Defer
+## Defer / Drop Trait
 
-Instead of `defer list.deinit()` like in Zig. I'd love if it was automatic with the `defer` keyword.
+Silicon could have '@defer' like in Zig. I'd love if it were automatic though.
 
-`@defer std::list` will automatically call `defer list.deinit`
+Silicon will have traits so couldn't I implement a drop trait?
 
+`@defer std::list` will automatically call `defer list.deinit`. Rust has a drop trait so maybe that would be possible here too.
+or the constructor functions could put `defer list.deinit` into the parent scope (like Jane Street OCaml's `exclave` keyword).
 
+### IIFE
 
+    #{@fn_ a,b = {a + b}}
 
-
-## Lamda Syntax and Pattern Matching
-
-Silicon has one new grammar ! I know that's a 25% increase lol. I figured Silicon needed a less verbose version of function definitons for lambdas and patterning matching. Don't worry, it is still dead simple.
-
-    \param1,param2 => body
-
-Let's define a simple add function
-
-    \num1,num2 => num1 + num2
-
-Lambda syntax is the **ONLY** exception to the rule where `{}` are required for a code block, they are assumed.
-
-### IIFE 
-
-Silicon does have IIFEs, kinda like JS. We can define an inline function then immediately use it.
-
-    #(\a,b=>a+b) 1,2 // 3
-
-Pipe syntax works too if we want the parameters to come first. Handy for pattern matching / switch case.
-
-    1,2 |> (\a,b=>a+b) // 3
+    1,2 |> @fn_ a,b = {a + b} // 3
 
 ## Prevent let + function literal
 
 I don't want the JS styled
 
-    @let add = @fn _ a,b = { a + b } // error: cannot assign anonymous function literal 
+    @let add = @fn _ a,b = { a + b } // error: cannot assign anonymous function literal
 
     @let add2 = @fn add1 a,b = { a + b } // error: cannot assign named function literal
 
@@ -547,11 +522,85 @@ Sometimes functions are not function?
 
     @let x = { 1 + 2 }
 
-    // coverted to 
+    // coverted to
     @let x = 3
 
 Lamda syntax? **NOPE**
 
     \a,b = a + b
 
+## Return, Break, Yield
 
+Return from function scope
+Leave block scope
+Leave parent block scope
+leave parent function scope
+
+### Potential fixes / simplifications
+
+I could make silicon function scoped like 🤮.
+
+Make function scope = block scope as if it isn't special? They're just stacks.
+So `@exit` means leave block scope or function? Early returns would be difficult then.
+
+1. Break block scope `@exit`
+1. Break parent block scope (I could use labels? or set parent condition properly).
+1. Return from function scope `@give`
+1. Return from parent function scope (via monads not keyword) `@give #Done value`
+
+### Break block scope
+
+While this isn't needed 95% of the time, it is still needed.
+
+## Break parent block
+
+This can be done in a few ways
+
+- return / yield from function
+- set condition of inner loop to stop
+- labeled statements
+
+## Return from function
+
+This is generally needed but can be replaced in many cases with
+
+- function parameter pattern matching
+- implicit returns
+
+## Return from parent function
+
+This is something I want in Silicon but it doesn't necessarily have to be a keyword. In fact, a keyword may be worse
+as it would be similar to a goto and the caller wouldn't know if the callee forces the parent to return which is a bit too
+much abstraction.
+
+- return wrapped type (monad) to parent to indicate to return early
+- a special keyword
+
+```silicon
+    array.map @fn_ index,value = {
+        @if index == 10
+        $then {
+            (
+                value:index,
+                done:false
+            )
+        }
+        $else {
+            (
+                value:index,
+                done:true // tell the parent function (internal iterator) that we're done.
+            )
+        }
+    }
+```
+
+Parent function
+
+```silicon
+@fn map array, func = {
+    @let done = false;
+    @loop 0..array.len, @not done ,@fn index, value = {
+        #func index,value
+    }
+}
+```
