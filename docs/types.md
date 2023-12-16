@@ -4,12 +4,14 @@ One of Silicon's biggest goals is to develop a simple but powerful type system t
 
 ## Numeric
 
+Idiomatic Silicon uses sum types.
+
 Typically used as `number`
 
 ```typescript
-type integer = i32 | i64 
+type integer = i32 | i64;
 type float = f32 | f64;
-type number = integer | float
+type number = integer | float;
 ```
 
 - `i32`
@@ -17,7 +19,7 @@ type number = integer | float
 - `f32`
 - `f64`
 
-Silicon has 9 primitive data types
+Silicon has 8 primitive data types
 
 - opaque
 - vec
@@ -27,7 +29,7 @@ Silicon has 9 primitive data types
 - float
 - decimal
 - string
-- rune
+  ~~- rune~~
 
 ## Opaque
 
@@ -85,7 +87,7 @@ Strings do not have `length`. Instead there are `width`,`bytes`,and `codepoints`
 Silicon uses UTF-32 encoded strings. UTF-16 and UTF-8 are available as well.
 
     @let name = "Nathan" // UTF-32
-    @let name = UTF16"Nathan"
+    @let name = #UTF16 "Nathan"
 
 ### No Length?
 
@@ -109,11 +111,13 @@ Example string
 
 Emojis can get crazy with modifiers. `👩🏿‍🚀` This is a combination of (Woman) + (dark skin tone) + ZWJ + rocket.
 
-So `👩🏿‍🚀` is actually 4 codepoints, 16 bytes and 1 'character'.
+So `👩🏿‍🚀` is actually 4 codepoints, 16 bytes and 1 'character' (wide).
 
 ## Booleans
 
 `bool`
+
+`@type bool = $true | $false`
 
 Booleans can only be one of two different values: `true` or `false`. This type
 is required by expressions such as `if`, `while`, and `assert`.

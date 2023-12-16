@@ -2,7 +2,7 @@
 
 > "What?! What about ...?"
 
-Silicon only has binary infix operators. This is a hard requirement that will never change in the Silicon language specification.
+Silicon only has binary infix operators with no precedence. This is a hard requirement that will never change in the Silicon language specification.
 
 Typical unary operators
 

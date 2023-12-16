@@ -15,6 +15,7 @@
 - [loops](./loops.md)
 - [functions](./functions.md)
 - [methods](./tdnr.md)
+- [mutability](./mutability.md)
 - [modules](./modules.md)
 - [concurrency](./concurrency.md)
 - [dialects](./dialects.md)
@@ -27,7 +28,7 @@
 - interpreted for fast dev cycles
 - Algebraic Data Types
 - Pattern Matching
-- Type inference
+- 100% Type Inference (safety without type gymnastics)
 - Co-routines (no colored functions)
 - ARC (no GC)
 - 100% Web API compatability
@@ -57,11 +58,12 @@ mediocre at everything.
 - no operator precedence
 - no operator overloading
 - no inheritance
-- no function / method overloading
+- no function / method overloading (TDNR so kinda `@let x = 1; x.toString; @let y = $false; y.toString`)
 - no modifiers (just annotations)
 - no garbage collector: reference counting / borrower checker (optional)
-- ONE looping construct `@loop` (for, while and do/while)
-- ONE condition construct `@when` (if and switch/case)
+- ONE function syntax `@func` (named, anonymous, lambda)
+- ONE looping expression `@loop` (for, while and do/while)
+- ONE condition expression `@when` (if and switch/case)
 
 ## What SI DOES have
 
@@ -71,11 +73,26 @@ mediocre at everything.
 - TDNR (fake overloading)
 - ADT (the best type of type)
 - SIMPLE and consistent syntax
-- coroutines: no locks, semaphores or runtime to schedule
+- coroutines: no locks, mutexes / semaphores or runtime to schedule concurrent tasks
 - Pattern matching
 - Full type inference!
 - Full lifetime inference!
-- Cross-Compilation!
+- Large standard library (many native libraryes from C, C++ and Rust)
+  - Common integrations (SQL, websockets, graphql, ORMs, Kafka, Graphics etc)
+- Native dependency injection
+- Native testing (within the same file)
+- Great errors as values and error handling
+- Generics
+- Sinq (Silicon equivalent of C# LINQ)
+- Cross-platform!
+- Cross-compilation (thanks Zig cc!)
 - C interop!
 - 100% Web API coverage
 - 100% Node API coverage
+
+## Grammar
+
+Silicon's grammar is extremely regular and straight forward. That does make it simple but simple is simply (pun intended) a
+by product of using a few simple grammar rules everywhere for everything.
+
+My goal is to keep Silicon's grammar to around 100 lines of PEG grammar. It may grow but it should never be more than 150-200 LOC. 100-125 is more realistic.

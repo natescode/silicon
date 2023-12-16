@@ -1,6 +1,7 @@
 ## Loops
 
 Silicon has exactly one looping contruct, `@loop`
+
 // TODO: copy from zzz_experimental
 Silicol has one overloaded `@loop` construct. They are also expressions.
 
@@ -12,16 +13,16 @@ Silicol has one overloaded `@loop` construct. They are also expressions.
 For loop with step 2 with range syntax
 
     // 1,3,5,7,9,11...
-    @loop $1, 1..3..100
-        print i
-    @
+    @loop $1, 1..3..100, {
+        #print i
+    }
 
 ### WHILE
 
-    @loop $1, i < 100
+    @loop $1, i < 100, {
         i += 1
-        print i
-    @
+        #print i
+    }
 
 ### DO WHILE
 
