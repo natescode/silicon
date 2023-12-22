@@ -11,6 +11,6 @@ If we really need to mutate then
 
     @name age:mut = 32;
 
-Technically the full type is `:mut(int)` for mutable integer
+Technically the full type is `:mut:int` for mutable integer
 
     @name age:mut:int = 32;

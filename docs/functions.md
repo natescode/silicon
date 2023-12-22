@@ -1,29 +1,26 @@
 ## FUNCTIONS
 
-Again parenthesis aren't needed.
+Parenthesis and types are optional.
 
-Add function
+## Parenthesis
 
-    /// num,num -> num
-    @let add a,b = {
-        a + b
-    }
+Silicon grammar doesn't use parethesis for anything but grouping expression.
 
-With types
+## Types
 
-    @let add:num a:num, b:num = {
-        a + b
-    }
+ALL types in Silicon are inferred. They can be optionally included after the identifier with `:type` syntax.
 
-    #add 10,20 // 30
+## Implicit returns
 
-_\*I'm still debating on function call syntax if `()` are needed and if `#` sigil should be used_. I know sometimes function calls could be ambigous without parens BUT which bothers me but 90% of the time that is cleaner. PLUS to disambiguate, parens are simply used to group so there aren't any special semantics.
+Silicon has implicit returns. `Rust` is a modern example of this. You can still use the `@exit` keyword for explicit returns.
 
 ### Ambiguous function calls
 
 We might see something like this in a C-like language
 
+    ```c
     fib(n - 1) + fib(n - 2)
+    ```
 
 Silicon uses parenthesis like LISP because the above could mean
 
@@ -35,4 +32,4 @@ Silicon can disambiguate with `()`
 (fib n - 1) + (fib n - 2)
 ```
 
-Generally, this doesn't happen and removing parens in much easier to read.
+Generally, this doesn't happen and removing parens in much easier to read. The Si LSP will warn about ambigous expressions like this.

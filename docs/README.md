@@ -96,3 +96,31 @@ Silicon's grammar is extremely regular and straight forward. That does make it s
 by product of using a few simple grammar rules everywhere for everything.
 
 My goal is to keep Silicon's grammar to around 100 lines of PEG grammar. It may grow but it should never be more than 150-200 LOC. 100-125 is more realistic.
+
+## Key Features
+
+Silicon's goal is to only have the most expressive and versatile language features.
+
+Influences from: Ruby, Lua, Zig, Rust, LISP, ML
+
+1. Algebraic Data Types
+1. Function Definition Pattern Matching
+1. Lua Co-routines
+1. Ruby Blocks / non-local returns
+1. Hindley-Milner Type System / 100% Type Inference
+1. 100% Web API and Node API compatability
+1. Effectful Type System
+1. WASM output: fast, safe, cross-platform, interop, ecosystem
+1. UFCS
+1. Lua like Self-Embeddable as a Dynamically Typed Scripting Language
+1. No GC: ARC, Generational References, manual or Lifetimes
+
+### Other features
+
+1. Rust lifetimes
+1. Language Interop via WASM and Zig. Uses many proven Native Libraries.
+1. Zig CC Cross-Compilation
+1. LISP style macros / quotes?
+1. Forced DI of I/O Functions
+1. Very simple and regular grammar
+1. Easy and fast to parse
