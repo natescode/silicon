@@ -614,3 +614,13 @@ return early from `map`, `reduce` or `filter`. I learned that those are [interna
 Again, I'm still new to this concept and I've only used Ruby for DevOps stuff early in my career so I'll have to fire up a new Ruby project and play with it. What I've seen so far is _really_ impressive. Ruby blocks have cool features like being able to wrap code in a _block_ and it doesn't change anything semantically. Ruby is also able to use _ensure_ keyword to literally ensure that cleanup code is run, even if an exception is thrown! I'm not sure what the ML equivalent to that is though. I'm sure if exceptions are just values then using a monadic approach one could wrap the cleanup logic in a monad too.
 
 Either way, Ruby blocks seem really powerful, intuitive (code works the same after wrapping it in a block) and versatile. Exactly the kind of language feature that Silicon cares about. Even if, most of the uses for blocks can be emulated with other language features, especially ML language features like Monads, it is good to have some variety that take a different approach.
+
+## Parallellism
+
+This isn't really an experimental concept. This is more a technique one could use _after_ compiling `Silicon` to `wasm`. But since Silicon focuses on being a full-stack web dev language and having both Ecmascript and Node interop, then being single-threaded makes sense. Co-routines are really powerful, don't [color functions](https://journal.stuffwithstuff.com/2015/02/01/what-color-is-your-function/) and allow for shared mutability without resorting to complex locking technique, mutexes and semaphores.
+
+All that said, sometimes one _needs_ true parallelism or at least to run the same program in multiple instances to take full advantage of multiple CPU cores. Silicon can easily do this since it runs on WASM and we can just launch N Instances where N is the CPU / vthread count of the machine. I'll likely add some tooling, docs, support etc to help make this easier. Again, since we are really only thinking about web dev then a webserver really doesn't often need to do true parallelism in the sense of shared state. The only _"shared state"_ is the database. I think this solve the problem eloquently and simply.
+
+### Workers
+
+`Silicon` has 100% Ecmascript / Node API support. This means `workers` can also be used inside `Silicon` programs. _Though_ there _may_ be some restrictions due to the effect type system like only using `workers` in a special function. There may be a `:Parallel` effect type for just his type of code. It is encouraged to keep inside of a parent co-routine and separate from other I/O and other code. I'll have to flush out this technique more.
