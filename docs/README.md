@@ -103,16 +103,16 @@ Silicon's goal is to only have the most expressive and versatile language featur
 
 Influences from: Ruby, Lua, Zig, Rust, LISP, ML
 
-1. Algebraic Data Types
-1. Function Definition Pattern Matching
+1. ML Algebraic Data Types
+1. ML Function Definition Pattern Matching
 1. Lua Co-routines
-1. Ruby Blocks / non-local returns
-1. Hindley-Milner Type System / 100% Type Inference
-1. 100% Web API and Node API compatability
-1. Effectful Type System
+1. Ruby Blocks: non-local returns, thread safe etc..
+1. ML Hindley-Milner Type System: 100% Type Inference
+1. JS 100% Web API and Node API compatability
+1. ML Effectful Type System
 1. WASM output: fast, safe, cross-platform, interop, ecosystem
-1. UFCS
-1. Lua like Self-Embeddable as a Dynamically Typed Scripting Language
+1. UFCS (fake methods) & TDNR (fake overloading)
+1. Lua (self)Embeddable as a Dynamically Typed Scripting Language
 1. No GC: ARC, Generational References, manual or Lifetimes
 
 ### Other features

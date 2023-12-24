@@ -604,3 +604,13 @@ Parent function
     }
 }
 ```
+
+## Ruby Blocks
+
+This is the best way I can explain the feature. I _originally_ wanted simply `non-local returns` in the sense
+that when I was doing Advent of Code last year, 2022, in Javascript but with a functional style, I noticed that I couldn't
+return early from `map`, `reduce` or `filter`. I learned that those are [internal iterators](https://journal.stuffwithstuff.com/2013/01/13/iteration-inside-and-out/) and while they're quite powerful, they're really nerfed if they aren't coupled with _non-local returns_. I then learned from that same blog post that _Ruby_ of all languages has this feature **AND** that feature called [Ruby blocks](https://yehudakatz.com/2010/02/07/the-building-blocks-of-ruby/) can do _A LOT_ more than just that.
+
+Again, I'm still new to this concept and I've only used Ruby for DevOps stuff early in my career so I'll have to fire up a new Ruby project and play with it. What I've seen so far is _really_ impressive. Ruby blocks have cool features like being able to wrap code in a _block_ and it doesn't change anything semantically. Ruby is also able to use _ensure_ keyword to literally ensure that cleanup code is run, even if an exception is thrown! I'm not sure what the ML equivalent to that is though. I'm sure if exceptions are just values then using a monadic approach one could wrap the cleanup logic in a monad too.
+
+Either way, Ruby blocks seem really powerful, intuitive (code works the same after wrapping it in a block) and versatile. Exactly the kind of language feature that Silicon cares about. Even if, most of the uses for blocks can be emulated with other language features, especially ML language features like Monads, it is good to have some variety that take a different approach.
