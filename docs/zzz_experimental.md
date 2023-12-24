@@ -615,6 +615,36 @@ Again, I'm still new to this concept and I've only used Ruby for DevOps stuff ea
 
 Either way, Ruby blocks seem really powerful, intuitive (code works the same after wrapping it in a block) and versatile. Exactly the kind of language feature that Silicon cares about. Even if, most of the uses for blocks can be emulated with other language features, especially ML language features like Monads, it is good to have some variety that take a different approach.
 
+### Silicon Blocks / Lambdas
+
+Silicon will use a `\params = { }` syntax. Blocks are anonymous inline function without any context of their own. This is why `@return` and `@yield` work the same inside a block as they do outside one.
+
+**Add block**
+
+    \a,b = { a + b }
+
+Pass a block to a function
+
+    @fn binary_op a, b, block = {
+        #block a,b
+    }
+
+### Blocks vs Functions
+
+Hopefully, I wrote about this before somewhere else in the docs. I solved an issue with blocks vs function by treating them basically the same. Maybe they have a shared parent type which the type system can use to have functions and blocks to be interchangeable, generally anyways.
+
+`:function` - a function type
+`:lamda` - a lambda type
+`:block` - sum type that includes `function` and `lamda` types.
+
+Definition of a block type
+
+    @type block = function @or block
+
+### `ensure`
+
+One concern that I had with blocks / lambdas is if a block can return for the parent's scope (function) then the parent function cannot guarantee important cleanup code in run i.e. close a DB connection. Ruby is actually a pretty cool language that already though of this and uses the `ensure` keyword to literally _ensure_ code runs after executing a block (they yield a block which is weird to me). So `@ensure` will likely be a keyword.
+
 ## Parallellism
 
 This isn't really an experimental concept. This is more a technique one could use _after_ compiling `Silicon` to `wasm`. But since Silicon focuses on being a full-stack web dev language and having both Ecmascript and Node interop, then being single-threaded makes sense. Co-routines are really powerful, don't [color functions](https://journal.stuffwithstuff.com/2015/02/01/what-color-is-your-function/) and allow for shared mutability without resorting to complex locking technique, mutexes and semaphores.
