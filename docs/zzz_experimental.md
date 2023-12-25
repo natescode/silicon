@@ -629,9 +629,15 @@ Pass a block to a function
         #block a,b
     }
 
+Function declaration (all definitions but not value literals?) are statements and therefore cannot be aliased. No `@let add = @fn _ a,b = { a + b }` nonsense. Lambdas, however, MAY be aliased since they by default have no name and are expressions `@let add = \a,b = { a + b }`.
+
 ### Blocks vs Functions
 
-Hopefully, I wrote about this before somewhere else in the docs. I solved an issue with blocks vs function by treating them basically the same. Maybe they have a shared parent type which the type system can use to have functions and blocks to be interchangeable, generally anyways.
+functions are statements.
+lamdas are expressions.
+blocks are functions or lamdas (sum type of both).
+
+Hopefully, I wrote about this before somewhere else in the docs. I solved an issue, I don't remember the issue. with blocks vs function by treating them basically the same; they share a parent type. Maybe they have a shared parent type which the type system can use to have functions and blocks to be interchangeable, generally anyways.
 
 `:function` - a function type
 `:lamda` - a lambda type
@@ -645,12 +651,14 @@ Definition of a block type
 
 One concern that I had with blocks / lambdas is if a block can return for the parent's scope (function) then the parent function cannot guarantee important cleanup code in run i.e. close a DB connection. Ruby is actually a pretty cool language that already though of this and uses the `ensure` keyword to literally _ensure_ code runs after executing a block (they yield a block which is weird to me). So `@ensure` will likely be a keyword.
 
+Blocks can add safety and flexibilty to the language while also not semantically changing code this is or is not inside a lamda (Ruby block).
+
 ## Parallellism
 
 This isn't really an experimental concept. This is more a technique one could use _after_ compiling `Silicon` to `wasm`. But since Silicon focuses on being a full-stack web dev language and having both Ecmascript and Node interop, then being single-threaded makes sense. Co-routines are really powerful, don't [color functions](https://journal.stuffwithstuff.com/2015/02/01/what-color-is-your-function/) and allow for shared mutability without resorting to complex locking technique, mutexes and semaphores.
 
-All that said, sometimes one _needs_ true parallelism or at least to run the same program in multiple instances to take full advantage of multiple CPU cores. Silicon can easily do this since it runs on WASM and we can just launch N Instances where N is the CPU / vthread count of the machine. I'll likely add some tooling, docs, support etc to help make this easier. Again, since we are really only thinking about web dev then a webserver really doesn't often need to do true parallelism in the sense of shared state. The only _"shared state"_ is the database. I think this solve the problem eloquently and simply.
+All that said, sometimes one _needs_ true parallelism or at least to run the same program in multiple instances to take full advantage of multiple CPU cores. Silicon can easily do this since it runs on WASM and we can just launch N Instances where N is the CPU / vthread count of the machine. I'll likely add some tooling, docs, support etc to help make this easier. Again, since we are really only thinking about web dev then a webserver really doesn't often need to do true parallelism in the sense of shared state. The only _"shared state"_ is the database. I think this solve the problem eloquently and simply for the majority of use cases. See the following _Workers_ section for an alterative.
 
 ### Workers
 
-`Silicon` has 100% Ecmascript / Node API support. This means `workers` can also be used inside `Silicon` programs. _Though_ there _may_ be some restrictions due to the effect type system like only using `workers` in a special function. There may be a `:Parallel` effect type for just his type of code. It is encouraged to keep inside of a parent co-routine and separate from other I/O and other code. I'll have to flush out this technique more.
+`Silicon` has 100% Ecmascript / Node API support. This means `workers` can also be used inside `Silicon` programs. _Though_ there _may_ be some restrictions due to the effect type system like only using `workers` in a special function. There may be a `:Parallel` effect type for just this type of code. It is encouraged to keep inside of a parent co-routine and separate from other I/O and other code. I'll have to flush out this technique more.

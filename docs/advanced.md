@@ -177,6 +177,7 @@ C#
 Si
 
     @let ['T] genericAdd:T a:T,b:T = { a + b }
+    @let ['T] genericAdd:T a:T,b:T = { a + b }
 
 
 ### Multi-line strings

@@ -24,6 +24,7 @@
 - `**` power?
 - `+` add
 - `++` concat string? `@concat`
+- `\` lambda / block
 
 Maybe ?
 
