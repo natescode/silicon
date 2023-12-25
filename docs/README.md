@@ -111,16 +111,16 @@ Influences from: Ruby, Lua, Zig, Rust, LISP, ML
 1. JS 100% Web API and Node API compatability
 1. ML Effectful Type System
 1. WASM output: fast, safe, cross-platform, interop, ecosystem
-1. UFCS (fake methods) & TDNR (fake overloading)
 1. Lua (self)Embeddable as a Dynamically Typed Scripting Language
-1. No GC: ARC, Generational References, manual or Lifetimes
+1. No GC: ARC, Generational References, manual or Lifetimes, MAYBE a tracing GC for the backend.
 
 ### Other features
 
-1. Rust lifetimes
-1. Language Interop via WASM and Zig. Uses many proven Native Libraries.
-1. Zig CC Cross-Compilation
-1. LISP style macros / quotes?
-1. Forced DI of I/O Functions
 1. Very simple and regular grammar
 1. Easy and fast to parse
+1. Forced DI of I/O Functions
+1. UFCS (fake methods) & TDNR (fake overloading)
+1. LISP style macros / quotes?
+1. Language Interop via WASM and Zig. Uses many proven Native Libraries.
+1. Zig CC Cross-Compilation
+1. Rust lifetimes
