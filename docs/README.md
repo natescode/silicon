@@ -101,18 +101,18 @@ My goal is to keep Silicon's grammar to around 100 lines of PEG grammar. It may 
 
 Silicon's goal is to only have the most expressive and versatile language features.
 
-Influences from: Ruby, Lua, Zig, Rust, LISP, ML
+Influenced from: Ruby, Lua, Zig, Rust, LISP, ML
 
 1. ML Algebraic Data Types
 1. ML Function Definition Pattern Matching
-1. Lua Co-routines
-1. Ruby Blocks: non-local returns, thread safe etc..
 1. ML Hindley-Milner Type System: 100% Type Inference
-1. JS 100% Web API and Node API compatability
-1. ML Effectful Type System
-1. WASM output: fast, safe, cross-platform, interop, ecosystem
+1. ML Effectful Type System: total, exception, timeout/nohault, pure(previous two), IO, random, parallel 
+1. Lua Co-routines
 1. Lua (self)Embeddable as a Dynamically Typed Scripting Language
+1. Ruby Blocks: non-local returns, thread safe etc..
+1. WASM output: fast, safe, cross-platform, interop, ecosystem
 1. No GC: ARC, Generational References, manual or Lifetimes, MAYBE a tracing GC for the backend.
+1. JS 100% Web API and Node API compatability
 
 ### Other features
 
@@ -123,4 +123,4 @@ Influences from: Ruby, Lua, Zig, Rust, LISP, ML
 1. LISP style macros / quotes?
 1. Language Interop via WASM and Zig. Uses many proven Native Libraries.
 1. Zig CC Cross-Compilation
-1. Rust lifetimes
+1. Rust borrower checker / lifetimes BUT without writing the lifetimes
