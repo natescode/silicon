@@ -5,7 +5,7 @@
 - [ ] Comments
   - ✅ singe line
   - ✅ multiline
-  - documentation
+  - ✅ documentation
 - [ ] Identifier & Parameters
   - ✅ Typed Identifiers
   - ✅ Typed Parameters (List)
@@ -23,10 +23,13 @@
   - ✅ lineTerminator
 - [ ] Literals
   - ✅ integer literals
-  - ❌ float literals
-  - ❌ decimal literals
-  - ❌ dexadecimal literals
+  - ✅ float literals
+  - ✅ decimal literals
+  - ✅ hexadecimal literals
+  - ✅ digit separators
   - ❌ octal literals
-  - ❌ digit separators
 
-❌❌
+## LEGEND
+
+✅ - Implemented
+❌ - Not (yet) Implemented

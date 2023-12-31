@@ -2,8 +2,8 @@ Silicon {
   Program   = SourceElement*
 
   SourceElement = 
-  				| STATEMENT ";"? --sourceStatement
-                | EXP ";"? --sourceExp
+  				| STATEMENT --sourceStatement
+                | EXP ";" --sourceExp
  
   STATEMENT = singleLineComment | multiLineComment 
         
@@ -16,7 +16,7 @@ Silicon {
         | "\\" Args Assign --lambda
   		| EXP BinOp EXP --compare
   		| EXP OpKeyword EXP -- binOpKeywordExp
- 		| EXP ("+"| "-") EXP ";"? -- addExp
+ 		| EXP ("+"| "-") EXP  -- addExp
         | EXP ("*" | "/") EXP -- multExp
   		| EXP "<=" EXP -- lteEXP
        // | OpKeyword_not EXP --notEXP
@@ -25,9 +25,12 @@ Silicon {
         | identifier ("." identifier)+ --namespace
         | TypedIdentifier
         | identifier
-        | num
+        | "0b" bit+ ("_" bit+)* --bin
+        | "0x" hexDigit+ ("_" hexDigit+)* --hex
+        | digit+ ("_" digit+)* "." digit+ --float
+        | digit+ ("_" digit+)* --int
         | "\"" stringChar*  "\"" --stringLit
-        | "{" EXP* "}" --block
+        | "{" (EXP ";")* "}" --block
         | "(" (identifier "=" EXP)* ")" --mapLit
         | "(" EXP* ")" -- parens
         | "[" ListOf<EXP,","> "]" --arrayLit
@@ -66,13 +69,11 @@ Silicon {
                 | "@open" Args --import
                 | booleanLiteral --booleanLit
           
-                   
-             
+  bit = "0" | "1"
   stringChar = ~("\"" | "\\" | lineTerminator) any
   lineTerminator = "\n" | "\r" | "\u2028" | "\u2029"
   booleanLiteral = "@true" | "@false"
   namespace = identifier ("::" identifier)+
-  num = digit+
   identifier = "_" | letter+
   TypedIdentifier = identifier (":" identifier)?
   Args  = ListOf<EXP+, ",">
