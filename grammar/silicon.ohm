@@ -1,87 +1,95 @@
-si {
+Silicon {
+  Program   = SourceElement*
 
-  Program = SourceElement*
-  SourceElement = AtBlock | C_Block | Declaration | Expr
-  
-  C_Block = "{" SourceElement* "}"
-  
-  Sigil =  "@" | "$" | "&" | "->" | "~" | "_" 
-  
-  AtBlock = "@" "" SourceElement* "" "@"
-
-  Declaration = comment | DEF | BinaryMathOperation
-
-  Keyword = "@fn" | "@type" | "@let"
-  DEF = Keyword TypedIdentifier TypedParameterList? ("=" SourceElement*)?
-  
-  Assignment = (identifier | VariableDeclaration) "=" literal
-
-  literal = number | stringLiteral | integerLiteral | decimalLiteral | bool_literal
-  number = integerLiteral+ | decimalLiteral+
-  operator = "+" | "-" | "*" | "/"
-  // infix but really only used for maths
-  MathExpr = number (operator number)*
-
-  integerLiteral = decimalDigit+ ("_" decimalDigit+)*
-  decimalLiteral = integerLiteral? "." decimalDigit+
-  
-  stringLiteral =  "\"" doubleStringCharacter* "\""
-  
-  doubleStringCharacter = ~("\"" | "\\" | lineTerminator) sourceCharacter
+  SourceElement = 
+  				| STATEMENT ";"? --sourceStatement
+                | EXP ";"? --sourceExp
  
-  sourceCharacter = any
+  STATEMENT = singleLineComment | multiLineComment 
+        
+  EXP = 
+  		| "@type" TypedIdentifier (identifier+ (":" identifier+)?)? Assign?  --typeDef 
+  		| "@name" TypedIdentifier  (identifier+ (":" identifier+)?)? Assign? --letDef 
+        | "@func" TypedIdentifier Args Assign? --fnDef
+        | "@when" Args --whenDef
+        | "@open" Args --import
+        | "\\" Args Assign --lambda
+  		| EXP BinOp EXP --compare
+  		| EXP OpKeyword EXP -- binOpKeywordExp
+ 		| EXP ("+"| "-") EXP ";"? -- addExp
+        | EXP ("*" | "/") EXP -- multExp
+  		| EXP "<=" EXP -- lteEXP
+       // | OpKeyword_not EXP --notEXP
+        | "#" Args ("=>" identifier)+ --pipeExp
+        | "#" (identifier | EXP) ("." identifier)+ --methodChainExp
+        | identifier ("." identifier)+ --namespace
+        | TypedIdentifier
+        | identifier
+        | num
+        | "\"" stringChar*  "\"" --stringLit
+        | "{" EXP* "}" --block
+        | "(" (identifier "=" EXP)* ")" --mapLit
+        | "(" EXP* ")" -- parens
+        | "[" ListOf<EXP,","> "]" --arrayLit
+        | "#" identifier Args --fnCall
+       
+        
   
-  decimalDigit = "0".."9"
-  nonZeroDigit = "1".."9"
-  
-  binaryMathOperator = "+" | "-" | "*" | "/" | "^" | "%" 
-  
-  number_var = number | identifier
-  
-  BinaryMathOperation = number_var binaryMathOperator number_var (binaryMathOperator number_var)*
-  
-  bool_literal = "true" | "false"
-
-  Expr = MathExpr | Function_Call | If_Expr | literal
-
-  Statement
-    = FunctionDef | If_Expr | For_Expr | Compare_Expr
-
-  // TODO: IF is just a built-in function
-  If_Expr = "@if" identifier "," (AtBlock | C_Block)
-  // TODO FOR is just a built-in function
-  For_Expr = "@for" "range" "," (AtBlock | C_Block)
-  Compare_Expr = (identifier | literal) "==" (identifier | literal)
-  Function = "@fn"
-  // TODO: Decide if # sigil stays or not
-  // #add first,second
-  // #add #add first,second,third
-  // add(add(first),second)) ?? IDK LOLZ
-  Function_Call = "#" identifier TypedParameterList
-  //identifier = letter+ alnum?
-  identifier = letter+ ("_" letter+)*
+  BinOp =   	| "==" --equal
+  				| "===" --identical
+                | "<" --lt
+                | ">" --gt
+  				| "<=" --lte
+  				| ">=" --gte
+                | "!=" --notEqual
+                | "!===" --notIdentical
+  				//| "<>" --notequal
+               // | "<=>" --notidentical
+         
+  OpKeyword =   | "@eq" --eq
+  				| "@neq" --neq
+  				| OpKeyword_not? "@is" --is
+  				| "@and" --and
+  				| "@or" --or
+              	| "@not" --not
+              	| "@b_and" --band
+              	| "@b_or" --bor
+              	| "@b_xor" --bxor
+              	| "@b_not" --bnot
+              	| "@b_nand" --bnand
+              	| "@b_nor" --bnor
+              	| "@b_xnor" --bxnor
+                | "@name" TypedIdentifier Params --nameExp
+                | "@when" Args -- whenExp 
+                | "@loop" Args -- loopExp
+                | "@func" Args -- funcExp
+                | "@open" Args --import
+                | booleanLiteral --booleanLit
+          
+                   
+             
+  stringChar = ~("\"" | "\\" | lineTerminator) any
   lineTerminator = "\n" | "\r" | "\u2028" | "\u2029"
-
-  VariableDeclaration = "@let" TypedIdentifier ("=" literal)?
-  FunctionDef = Function TypedIdentifier TypedParameterList ("=" (AtBlock | C_Block))?
- 
-  TypeList = ListOf<TypeIdentifier,",">
-  TypedParameterList  =  ListOf<TypedParameter, ",">
-  FormalParameterList =  ListOf<FormalParameter, ",">
-  FunctionBody = any
-
-  TypeIdentifier =  "'"? identifier
-  
-  TypedIdentifier = (identifier | "_") (":" TypeIdentifier)?
-  TypedParameter   = (identifier | "_") (":" identifier)?
-  FormalParameter = identifier
-  
-  idline = identifier lineTerminator
-  
-  
+  booleanLiteral = "@true" | "@false"
+  namespace = identifier ("::" identifier)+
+  num = digit+
+  identifier = "_" | letter+
+  TypedIdentifier = identifier (":" identifier)?
+  Args  = ListOf<EXP+, ",">
+  Params = ListOf<TypedIdentifier+,",">
+  ParamArgs = Params | Args
+  Assign = "=" EXP --id
   comment = multiLineComment | singleLineComment
-
+  sourceCharacter = any
   multiLineComment = "/*" (~"*/" sourceCharacter)* "*/"
   singleLineComment = "//" (~lineTerminator sourceCharacter)*
-  
-  }
+  space := whitespace | lineTerminator | comment
+  unicodeSpaceSeparator = "\u2000".."\u200B" | "\u3000"
+  whitespace = "\t"
+             | "\x0B"    -- verticalTab
+             | "\x0C"    -- formFeed
+             | " "
+             | "\u00A0"  -- noBreakSpace
+             | "\uFEFF"  -- byteOrderMark
+             | unicodeSpaceSeparator
+}

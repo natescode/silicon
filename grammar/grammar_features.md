@@ -15,9 +15,18 @@
   - ✅ Variable Declaration Assignment
 - [ ] Functions
   - ✅ Basic Function Structure
-  - ❌ Function with body
-  - ❌ Named Function Declaration
-  - ❌ Anonymous Function Declaration
-  - Lambda function syntax
-- [ ] lineTerminator
-- [ ] semicolon insertion
+  - ✅ Function with body
+  - ✅ Named Function Declaration
+  - ✅ Anonymous Function Declaration
+  - ✅ Lambda function syntax
+- [ ] Terminators
+  - ✅ lineTerminator
+- [ ] Literals
+  - ✅ integer literals
+  - ❌ float literals
+  - ❌ decimal literals
+  - ❌ dexadecimal literals
+  - ❌ octal literals
+  - ❌ digit separators
+
+❌❌
