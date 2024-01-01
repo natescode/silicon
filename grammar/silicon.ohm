@@ -10,64 +10,66 @@ Silicon {
   EXP = 
   		| "@type" TypedIdentifier (identifier+ (":" identifier+)?)? Assign?  --typeDef 
   		| "@name" TypedIdentifier  (identifier+ (":" identifier+)?)? Assign? --letDef 
-        | "@func" TypedIdentifier Args Assign? --fnDef
-        | "@when" Args --whenDef
-        | "@open" Args --import
-        | "\\" Args Assign --lambda
+      | "@func" TypedIdentifier Args Assign? --fnDef
+      | "@when" Args --whenDef
+      | "@open" Args --import
+      | "\\" Args Assign --lambda
   		| EXP BinOp EXP --compare
   		| EXP OpKeyword EXP -- binOpKeywordExp
- 		| EXP ("+"| "-") EXP  -- addExp
-        | EXP ("*" | "/") EXP -- multExp
+ 		  | EXP ("+"| "-") EXP  -- addExp
+      | EXP ("*" | "/") EXP -- multExp
   		| EXP "<=" EXP -- lteEXP
-       // | OpKeyword_not EXP --notEXP
-        | "#" Args ("=>" identifier)+ --pipeExp
-        | "#" (identifier | EXP) ("." identifier)+ --methodChainExp
-        | identifier ("." identifier)+ --namespace
-        | TypedIdentifier
-        | identifier
-        | "0b" bit+ ("_" bit+)* --bin
-        | "0x" hexDigit+ ("_" hexDigit+)* --hex
-        | digit+ ("_" digit+)* "." digit+ --float
-        | digit+ ("_" digit+)* --int
-        | "\"" stringChar*  "\"" --stringLit
-        | "{" (EXP ";")* "}" --block
-        | "(" (identifier "=" EXP)* ")" --mapLit
-        | "(" EXP* ")" -- parens
-        | "[" ListOf<EXP,","> "]" --arrayLit
-        | "#" identifier Args --fnCall
+      // | OpKeyword_not EXP --notEXP
+      | "#" Args ("=>" identifier)+ --pipeExp
+      | "#" (identifier | EXP) ("." identifier)+ --methodChainExp
+      | identifier ("." identifier)+ --namespace
+      | TypedIdentifier
+      | identifier
+      | "0b" bit+ ("_" bit+)* --bin
+      | "0x" hexDigit+ ("_" hexDigit+)* --hex
+      | digit+ ("_" digit+)* "." digit+ --float
+      | digit+ ("_" digit+)* --int
+      | "\"" stringChar*  "\"" --stringLit
+      | "{" (EXP ";")* "}" --block
+      | "(" (identifier "=" EXP)* ")" --mapLit
+      | "(" EXP* ")" -- parens
+      | "[" ListOf<EXP,","> "]" --arrayLit
+      | "#" identifier Args --fnCall
        
         
   
-  BinOp =   	| "==" --equal
-  				| "===" --identical
-                | "<" --lt
-                | ">" --gt
-  				| "<=" --lte
-  				| ">=" --gte
-                | "!=" --notEqual
-                | "!===" --notIdentical
-  				//| "<>" --notequal
-               // | "<=>" --notidentical
+  BinOp =   	
+        | "==" --equal
+        | "===" --identical
+        | "<>" --notequal
+        | "<=>" --notidentical
+        | "<" --lt
+        | ">" --gt
+        | "<=" --lte
+        | ">=" --gte
+        // | "!=" --notEqual
+        // | "!===" --notIdentical
          
-  OpKeyword =   | "@eq" --eq
-  				| "@neq" --neq
-  				| OpKeyword_not? "@is" --is
-  				| "@and" --and
-  				| "@or" --or
-              	| "@not" --not
-              	| "@b_and" --band
-              	| "@b_or" --bor
-              	| "@b_xor" --bxor
-              	| "@b_not" --bnot
-              	| "@b_nand" --bnand
-              	| "@b_nor" --bnor
-              	| "@b_xnor" --bxnor
-                | "@name" TypedIdentifier Params --nameExp
-                | "@when" Args -- whenExp 
-                | "@loop" Args -- loopExp
-                | "@func" Args -- funcExp
-                | "@open" Args --import
-                | booleanLiteral --booleanLit
+  OpKeyword =   
+            | "@eq" --eq
+            | "@neq" --neq
+            | OpKeyword_not? "@is" --is
+            | "@and" --and
+            | "@or" --or
+            | "@not" --not
+            | "@b_and" --band
+            | "@b_or" --bor
+            | "@b_xor" --bxor
+            | "@b_not" --bnot
+            | "@b_nand" --bnand
+            | "@b_nor" --bnor
+            | "@b_xnor" --bxnor
+            | "@name" TypedIdentifier Params --nameExp
+            | "@when" Args -- whenExp 
+            | "@loop" Args -- loopExp
+            | "@func" Args -- funcExp
+            | "@open" Args --import
+            | booleanLiteral --booleanLit
           
   bit = "0" | "1"
   stringChar = ~("\"" | "\\" | lineTerminator) any
