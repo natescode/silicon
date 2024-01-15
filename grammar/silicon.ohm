@@ -1,19 +1,20 @@
 Silicon {
-	Program   = SourceElement*
-	SourceElement = 
-				| STATEMENT --sourceStatement
-				| EXP ";" --sourceExp
-	STATEMENT = singleLineComment | multiLineComment
-	EXP = 
+Program   = SourceElement*
+SourceElement = 
+		| STATEMENT --sourceStatement
+		| EXP ";" --sourceExp
+STATEMENT = 
+		| singleLineComment 
+		| multiLineComment
+EXP = 
 		| "@open" Args --import
 		| Keyword TypedIdentifier Args Assign? --DEF
 		| "\\" Args Assign --lambda
 		| "#" (identifier | EXP) ("." identifier)+ Args --methodChainExp
 		| "#" EXP ("=>" identifier)+ --pipeExp
 		| EXP BinOp EXP --compare
-		| EXP InfixFunc EXP -- binOpKeywordExp
-		| EXP (operator) EXP  -- binOpExp
-		| EXP "<=" EXP -- lteEXP
+		| EXP InfixFunc EXP --binOpKeywordExp
+		| EXP (operator) EXP  --binOpExp
 		| identifier ("." identifier)+ --namespace
 		| TypedIdentifier
 		| identifier
@@ -25,18 +26,19 @@ Silicon {
 		| "\"" stringChar*  "\"" --stringLit
 		| "{" (EXP ";")* "}" --block
 		| "(" (identifier "=" EXP)* ")" --mapLit
-		| "(" EXP* ")" -- parens
+		| "(" EXP* ")" --parens
 		| "[" ListOf<EXP,","> "]" --arrayLit
 		| "#" identifier Args --fnCall
-	Keyword = "@" identifier
-	BinOp =   	| "==" --equal
-				| "===" --identical
-				| "<>" --notEqual
-				| "<=>" --notIdentical
-				| "<" --lt
-				| ">" --gt
-				| "<=" --lte
-				| ">=" --gte
+Keyword = "@" identifier
+BinOp =   	
+		| "==" --equal
+		| "===" --identical
+		| "<>" --notEqual
+		| "<=>" --notIdentical
+		| "<" --lt
+		| ">" --gt
+		| "<=" --lte
+		| ">=" --gte
 InfixFunc = "##" identifier
 octDigit = "0".."7"
 bit = "0" | "1"
@@ -56,12 +58,12 @@ singleLineComment = "//" (~lineTerminator sourceCharacter)*
 space := whitespace | lineTerminator | comment
 unicodeSpaceSeparator = "\u2000".."\u200B" | "\u3000"
 whitespace = "\t"
-			| "\x0B"    -- verticalTab
-			| "\x0C"    -- formFeed
-			| " "
-			| "\u00A0"  -- noBreakSpace
-			| "\uFEFF"  -- byteOrderMark
-			| unicodeSpaceSeparator
+		| "\x0B"    -- verticalTab
+		| "\x0C"    -- formFeed
+		| " "
+		| "\u00A0"  -- noBreakSpace
+		| "\uFEFF"  -- byteOrderMark
+		| unicodeSpaceSeparator
 }
 // moved @when to standard library. Since Functions CAN replace it, albeit in a more verbose way
 // static import would be a macro so @@ not @
