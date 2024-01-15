@@ -5,11 +5,15 @@ SourceElement =
 				| STATEMENT --sourceStatement
 				| EXP ";" --sourceExp
 STATEMENT = singleLineComment | multiLineComment
+
+Keyword = "@" identifier
 		
 EXP = 
-		| "@type" TypedIdentifier (identifier+ (":" identifier+)?)? Assign?  --typeDef 
-		| "@name" TypedIdentifier  (identifier+ (":" identifier+)?)? Assign? --letDef 
-		| "@func" TypedIdentifier Args Assign? --fnDef
+		// covers @type defs, @func defs and @name/@let defs
+		// Anonymous Types and functions make sense
+		// Anonymous variable? @let = 3 * 3;
+		// @let _ = 3 * 3;
+		| Keyword TypedIdentifier? Args Assign? --Def
 		| "@when" Args --whenDef
 		| "@open" Args --import
 		| "\\" Args Assign --lambda
