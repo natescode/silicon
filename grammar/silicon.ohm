@@ -65,7 +65,3 @@ whitespace = "\t"
 		| "\uFEFF"  -- byteOrderMark
 		| unicodeSpaceSeparator
 }
-// moved @when to standard library. Since Functions CAN replace it, albeit in a more verbose way
-// static import would be a macro so @@ not @
-// could have dynamic import, with @ and use @import to differentiate it
-// @comp for comptime so I could use ## for infix function?
