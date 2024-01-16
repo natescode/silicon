@@ -6,6 +6,11 @@ Silicon {
 	STATEMENT = 
 			| singleLineComment 
 			| multiLineComment
+	comment = multiLineComment | singleLineComment
+	singleLineComment = "//" (~lineTerminator sourceCharacter)*
+	multiLineComment = "/*" (~"*/" sourceCharacter)* "*/"
+	lineTerminator = "\n" | "\r" | "\u2028" | "\u2029"
+	sourceCharacter = any
 	EXP =   
 			| LambdaLiteral
 			| Definition
@@ -20,27 +25,33 @@ Silicon {
 			| TypedIdentifier
 			| identifier
 			| Literal
-	PipeExp = "#" EXP ("=>" identifier)+ 
-	MethodChainExp = "#" (identifier | EXP) ("." identifier)+ Args 
-	Parens = "(" EXP* ")" 
+	LambdaLiteral = "\\" Args Assign
+	Args  = ListOf<EXP+, ",">
+	Assign = "=" EXP
+	Definition = Keyword TypedIdentifier Args Assign? 
+	TypedIdentifier = identifier (":" ListOf<(identifier | EXP),",">)*
+	identifier = "_" | letter+
+	Keyword = "@" identifier
 	InfixExp = EXP InfixFunc EXP 
 	BinOpExp = EXP BinOp EXP 
+	Parens = "(" EXP* ")" 
+	MethodChainExp = "#" (identifier | EXP) ("." identifier)+ Args 
 	FunctionCall = "#" identifier Args 
-	Definition = Keyword TypedIdentifier Args Assign? 
+	Macro = "@@" identifier Args
+	PipeExp = "#" EXP ("=>" identifier)+ 
+	namespace = identifier ("::" identifier)+
 	Literal = StringLiteral | BlockLiteral | MapLiteral | ArrayLiteral | NumericLiteral
-	LambdaLiteral = "\\" Args Assign
 	StringLiteral = "\"" stringChar*  "\"" 
+	stringChar = ~("\"" | "\\" | lineTerminator) any
 	BlockLiteral = "{" (EXP ";")* "}" --block
 	MapLiteral = "(" (identifier "=" EXP)* ")" 
 	ArrayLiteral = "[" ListOf<EXP,","> "]" 
 	NumericLiteral = | BinLiteral | HexLiteral | OctLiteral | FloatLiteral | IntLiteral  
-	IntLiteral = digit+ ("_" digit+)* 
-	FloatLiteral = digit+ ("_" digit+)* "." digit+ 
 	BinLiteral = "0b" bit+ ("_" bit+)* 
 	HexLiteral = "0x" hexDigit+ ("_" hexDigit+)* 
 	OctLiteral = "0c" octDigit+ ("_" octDigit+)* 
-	Macro = "@@" identifier Args
-	Keyword = "@" identifier
+	FloatLiteral = digit+ ("_" digit+)* "." digit+ 
+	IntLiteral = digit+ ("_" digit+)* 
 	BinOp =   	
 			| "**" --pow 
 			| "++" --concat
@@ -56,21 +67,22 @@ Silicon {
 			| ">=" --gte
 			| "<" --lt
 			| ">" --gt
+			| "&&" --bitwiseAnd
+			| "&" --logicalAnd
+			| "||" --bitwiseOr
+			| "|" --logicalOr
+			| "^^" --bitwiseXor
+			| "^" --logicalXor
+			| "~~" --bitwiseNot
+			| "~" --logicalNot
+			| ">>>" --logicalRightShift
+			| ">>" --arithmeticRightShift
+			| "<<<" --logicalRightShift
+			| "<<" --arithmeticRightShift
 	InfixFunc = "##" identifier
 	octDigit = "0".."7"
 	bit = "0" | "1"
-	stringChar = ~("\"" | "\\" | lineTerminator) any
-	lineTerminator = "\n" | "\r" | "\u2028" | "\u2029"
 	booleanLiteral = "@true" | "@false"
-	namespace = identifier ("::" identifier)+
-	identifier = "_" | letter+
-	TypedIdentifier = identifier (":" ListOf<(identifier | EXP),",">)*
-	Args  = ListOf<EXP+, ",">
-	Assign = "=" EXP
-	comment = multiLineComment | singleLineComment
-	sourceCharacter = any
-	multiLineComment = "/*" (~"*/" sourceCharacter)* "*/"
-	singleLineComment = "//" (~lineTerminator sourceCharacter)*
 	space := whitespace | lineTerminator | comment
 	unicodeSpaceSeparator = "\u2000".."\u200B" | "\u3000"
 	whitespace = "\t"
