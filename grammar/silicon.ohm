@@ -7,28 +7,38 @@ STATEMENT =
 		| singleLineComment 
 		| multiLineComment
 EXP = 
-		| "@open" Args --import
-		| Keyword TypedIdentifier Args Assign? --DEF
-		| "\\" Args Assign --lambda
-		| "#" (identifier | EXP) ("." identifier)+ Args --methodChainExp
-		| "#" EXP ("=>" identifier)+ --pipeExp
-		| EXP BinOp EXP --compare
-		| EXP InfixFunc EXP --binOpKeywordExp
-		| EXP (operator) EXP  --binOpExp
-		| identifier ("." identifier)+ --namespace
+		| Macro
+		| Definition
+		| Literal
+		| PipeExp
+		| MethodChainExp
+		| BinOpExp
+		| InfixExp
+		| namespace
 		| TypedIdentifier
 		| identifier
-		| "0b" bit+ ("_" bit+)* --bin
-		| "0x" hexDigit+ ("_" hexDigit+)* --hex
-		| "0c" octDigit+ ("_" octDigit+)* --oct
-		| digit+ ("_" digit+)* "." digit+ --float
-		| digit+ ("_" digit+)* --int
-		| "\"" stringChar*  "\"" --stringLit
-		| "{" (EXP ";")* "}" --block
-		| "(" (identifier "=" EXP)* ")" --mapLit
-		| "(" EXP* ")" --parens
-		| "[" ListOf<EXP,","> "]" --arrayLit
-		| "#" identifier Args --fnCall
+		| FunctionCall
+		| Parens
+PipeExp = "#" EXP ("=>" identifier)+ 
+MethodChainExp = "#" (identifier | EXP) ("." identifier)+ Args 
+Parens = "(" EXP* ")" 
+InfixExp = EXP InfixFunc EXP 
+BinOpExp = EXP (operator) EXP 
+FunctionCall = "#" identifier Args 
+Definition = Keyword TypedIdentifier Args Assign? 
+Literal = StringLiteraleral | BlockLiteral | MapLiteral | ArrayLiteral | LambdaLiteral
+LambdaLiteral = "\\" Args Assign 
+StringLiteraleral = "\"" stringChar*  "\"" 
+BlockLiteral = "{" (EXP ";")* "}" --block
+MapLiteral = "(" (identifier "=" EXP)* ")" 
+ArrayLiteral = "[" ListOf<EXP,","> "]" 
+NumericLiteral = IntLiteral | FloatLiteral | BinLiteral | HexLiteral | OctalLiteral
+IntLiteral = digit+ ("_" digit+)* 
+FloatLiteral = digit+ ("_" digit+)* "." digit+ 
+BinLiteral = "0b" bit+ ("_" bit+)* 
+HexLiteral = "0x" hexDigit+ ("_" hexDigit+)* 
+OctLiteral = "0c" octDigit+ ("_" octDigit+)* 
+Macro = "@@" identifier Args
 Keyword = "@" identifier
 BinOp =   	
 		| "==" --equal
