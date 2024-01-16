@@ -1,77 +1,83 @@
 Silicon {
-Program   = SourceElement*
-SourceElement = 
-		| STATEMENT --sourceStatement
-		| EXP ";" --sourceExp
-STATEMENT = 
-		| singleLineComment 
-		| multiLineComment
-EXP = 
-		| Macro
-		| Definition
-		| Literal
-		| PipeExp
-		| MethodChainExp
-		| BinOpExp
-		| InfixExp
-		| namespace
-		| TypedIdentifier
-		| identifier
-		| FunctionCall
-		| Parens
-PipeExp = "#" EXP ("=>" identifier)+ 
-MethodChainExp = "#" (identifier | EXP) ("." identifier)+ Args 
-Parens = "(" EXP* ")" 
-InfixExp = EXP InfixFunc EXP 
-BinOpExp = EXP (operator) EXP 
-FunctionCall = "#" identifier Args 
-Definition = Keyword TypedIdentifier Args Assign? 
-Literal = StringLiteraleral | BlockLiteral | MapLiteral | ArrayLiteral | LambdaLiteral
-LambdaLiteral = "\\" Args Assign 
-StringLiteraleral = "\"" stringChar*  "\"" 
-BlockLiteral = "{" (EXP ";")* "}" --block
-MapLiteral = "(" (identifier "=" EXP)* ")" 
-ArrayLiteral = "[" ListOf<EXP,","> "]" 
-NumericLiteral = IntLiteral | FloatLiteral | BinLiteral | HexLiteral | OctalLiteral
-IntLiteral = digit+ ("_" digit+)* 
-FloatLiteral = digit+ ("_" digit+)* "." digit+ 
-BinLiteral = "0b" bit+ ("_" bit+)* 
-HexLiteral = "0x" hexDigit+ ("_" hexDigit+)* 
-OctLiteral = "0c" octDigit+ ("_" octDigit+)* 
-Macro = "@@" identifier Args
-Keyword = "@" identifier
-BinOp =   	
-		| "==" --equal
-		| "===" --identical
-		| "<>" --notEqual
-		| "<=>" --notIdentical
-		| "<" --lt
-		| ">" --gt
-		| "<=" --lte
-		| ">=" --gte
-InfixFunc = "##" identifier
-octDigit = "0".."7"
-bit = "0" | "1"
-operator = "+" | "-" | "*" | "/" | "**" | "++"
-stringChar = ~("\"" | "\\" | lineTerminator) any
-lineTerminator = "\n" | "\r" | "\u2028" | "\u2029"
-booleanLiteral = "@true" | "@false"
-namespace = identifier ("::" identifier)+
-identifier = "_" | letter+
-TypedIdentifier = identifier (":" ListOf<(identifier | EXP),",">)*
-Args  = ListOf<EXP+, ",">
-Assign = "=" EXP
-comment = multiLineComment | singleLineComment
-sourceCharacter = any
-multiLineComment = "/*" (~"*/" sourceCharacter)* "*/"
-singleLineComment = "//" (~lineTerminator sourceCharacter)*
-space := whitespace | lineTerminator | comment
-unicodeSpaceSeparator = "\u2000".."\u200B" | "\u3000"
-whitespace = "\t"
-		| "\x0B"    -- verticalTab
-		| "\x0C"    -- formFeed
-		| " "
-		| "\u00A0"  -- noBreakSpace
-		| "\uFEFF"  -- byteOrderMark
-		| unicodeSpaceSeparator
+	Program   = SourceElement*
+	SourceElement = 
+			| STATEMENT --sourceStatement
+			| EXP ";" --sourceExp
+	STATEMENT = 
+			| singleLineComment 
+			| multiLineComment
+	EXP =   
+			| LambdaLiteral
+			| Definition
+			| InfixExp
+			| BinOpExp
+			| Parens
+			| MethodChainExp
+			| FunctionCall
+			| Macro
+			| PipeExp
+			| namespace
+			| TypedIdentifier
+			| identifier
+			| Literal
+	PipeExp = "#" EXP ("=>" identifier)+ 
+	MethodChainExp = "#" (identifier | EXP) ("." identifier)+ Args 
+	Parens = "(" EXP* ")" 
+	InfixExp = EXP InfixFunc EXP 
+	BinOpExp = EXP BinOp EXP 
+	FunctionCall = "#" identifier Args 
+	Definition = Keyword TypedIdentifier Args Assign? 
+	Literal = StringLiteral | BlockLiteral | MapLiteral | ArrayLiteral | NumericLiteral
+	LambdaLiteral = "\\" Args Assign
+	StringLiteral = "\"" stringChar*  "\"" 
+	BlockLiteral = "{" (EXP ";")* "}" --block
+	MapLiteral = "(" (identifier "=" EXP)* ")" 
+	ArrayLiteral = "[" ListOf<EXP,","> "]" 
+	NumericLiteral = | BinLiteral | HexLiteral | OctLiteral | FloatLiteral | IntLiteral  
+	IntLiteral = digit+ ("_" digit+)* 
+	FloatLiteral = digit+ ("_" digit+)* "." digit+ 
+	BinLiteral = "0b" bit+ ("_" bit+)* 
+	HexLiteral = "0x" hexDigit+ ("_" hexDigit+)* 
+	OctLiteral = "0c" octDigit+ ("_" octDigit+)* 
+	Macro = "@@" identifier Args
+	Keyword = "@" identifier
+	BinOp =   	
+			| "**" --pow 
+			| "++" --concat
+			| "+" --add
+			| "-" --sub
+			| "*" --mult 
+			| "/" --div
+			| "==" --equal
+			| "===" --identical
+			| "<>" --notEqual
+			| "<=>" --notIdentical
+			| "<=" --lte
+			| ">=" --gte
+			| "<" --lt
+			| ">" --gt
+	InfixFunc = "##" identifier
+	octDigit = "0".."7"
+	bit = "0" | "1"
+	stringChar = ~("\"" | "\\" | lineTerminator) any
+	lineTerminator = "\n" | "\r" | "\u2028" | "\u2029"
+	booleanLiteral = "@true" | "@false"
+	namespace = identifier ("::" identifier)+
+	identifier = "_" | letter+
+	TypedIdentifier = identifier (":" ListOf<(identifier | EXP),",">)*
+	Args  = ListOf<EXP+, ",">
+	Assign = "=" EXP
+	comment = multiLineComment | singleLineComment
+	sourceCharacter = any
+	multiLineComment = "/*" (~"*/" sourceCharacter)* "*/"
+	singleLineComment = "//" (~lineTerminator sourceCharacter)*
+	space := whitespace | lineTerminator | comment
+	unicodeSpaceSeparator = "\u2000".."\u200B" | "\u3000"
+	whitespace = "\t"
+			| "\x0B"    -- verticalTab
+			| "\x0C"    -- formFeed
+			| " "
+			| "\u00A0"  -- noBreakSpace
+			| "\uFEFF"  -- byteOrderMark
+			| unicodeSpaceSeparator
 }
