@@ -1,0 +1,78 @@
+Silicon {
+  Program   = SourceElement*
+  
+  SourceElement = 
+  				| STATEMENT --sourceStatement
+                | EXP ";" --sourceExp
+  
+  STATEMENT = singleLineComment | multiLineComment
+        
+  EXP = 
+        // moved @when to standard library. Since Functions CAN replace it, albeit in a more verbose way
+        // static import would be a macro so @@ not @
+        // could have dynamic import, with @ and use @import to differentiate it
+        | "@open" Args --import
+        | Keyword TypedIdentifier Args Assign? --DEF
+        | "\\" Args Assign --lambda
+        | "#" (identifier | EXP) ("." identifier)+ Args --methodChainExp
+        | "#" EXP ("=>" identifier)+ --pipeExp
+  		| EXP BinOp EXP --compare
+  		| EXP InfixFunc EXP -- binOpKeywordExp
+ 		| EXP (operator) EXP  -- binOpExp
+  		| EXP "<=" EXP -- lteEXP
+        | identifier ("." identifier)+ --namespace
+        | TypedIdentifier
+        | identifier
+        | "0b" bit+ ("_" bit+)* --bin
+        | "0x" hexDigit+ ("_" hexDigit+)* --hex
+        | "0c" octDigit+ ("_" octDigit+)* --oct
+        | digit+ ("_" digit+)* "." digit+ --float
+        | digit+ ("_" digit+)* --int
+        | "\"" stringChar*  "\"" --stringLit
+        | "{" (EXP ";")* "}" --block
+        | "(" (identifier "=" EXP)* ")" --mapLit
+        | "(" EXP* ")" -- parens
+        | "[" ListOf<EXP,","> "]" --arrayLit
+        | "#" identifier Args --fnCall
+       
+ Keyword = "@" identifier
+  
+  BinOp =   	| "==" --equal
+  				| "===" --identical
+                | "<>" --notEqual
+                | "<=>" --notIdentical
+                | "<" --lt
+                | ">" --gt
+  				| "<=" --lte
+  				| ">=" --gte
+                
+  // @comp for comptime so I could use ## for infix function?
+  InfixFunc = "##" identifier
+  octDigit = "0".."7"
+  bit = "0" | "1"
+  // ** is power? or #pow x,3 or (x.pow 3)
+  // ++ is string concat
+  operator = "+" | "-" | "*" | "/" | "**" | "++"
+  stringChar = ~("\"" | "\\" | lineTerminator) any
+  lineTerminator = "\n" | "\r" | "\u2028" | "\u2029"
+  booleanLiteral = "@true" | "@false"
+  namespace = identifier ("::" identifier)+
+  identifier = "_" | letter+
+  TypedIdentifier = identifier (":" ListOf<(identifier | EXP),",">)*
+  Args  = ListOf<EXP+, ",">
+  Assign = "=" EXP
+  comment = multiLineComment | singleLineComment
+  sourceCharacter = any
+  multiLineComment = "/*" (~"*/" sourceCharacter)* "*/"
+  singleLineComment = "//" (~lineTerminator sourceCharacter)*
+  space := whitespace | lineTerminator | comment
+  unicodeSpaceSeparator = "\u2000".."\u200B" | "\u3000"
+  whitespace = "\t"
+             | "\x0B"    -- verticalTab
+             | "\x0C"    -- formFeed
+             | " "
+             | "\u00A0"  -- noBreakSpace
+             | "\uFEFF"  -- byteOrderMark
+             | unicodeSpaceSeparator
+}
+
