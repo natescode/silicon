@@ -2,7 +2,7 @@
   <img src="assets/si.svg" height="128px" width="128px" />
 </p>
 
-<h1 align="center">Iron</h1>
+<h1 align="center">Silicon</h1>
 
 <p align="center">
   <a href="https://join.slack.com/t/ironlang/shared_invite/enQtNTEyODMwMDk4MDY1LTYzMWNkOTRlNzM1YmE2Mzk4MjRmZjE3NzhiM2FkOGVlMjhjYThkODlhY2MzMTVlYWJkN2Y0YzIyNjE3MDkwN2Y">
