@@ -27,7 +27,7 @@
   - ✅ decimal literals
   - ✅ hexadecimal literals
   - ✅ digit separators
-  - ❌ octal literals
+  - ✅ octal literals
 
 ## LEGEND
 
