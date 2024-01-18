@@ -11,7 +11,7 @@ Silicon {
 	sourceCharacter = any
 	multiLineComment = "/*" (~"*/" sourceCharacter)* "*/"
 	EXP =   
-   			| BinOpExp
+			| BinOpExp
 			| LambdaLiteral
 			| Definition
 			| Parens
@@ -24,7 +24,6 @@ Silicon {
             | BlockLiteral
 			| Literal
             | identifier
-            
 	LambdaLiteral = "\\" Args Assign
 	Args  = ListOf<Arg, ",">
     Arg = TypedIdentifier | EXP
