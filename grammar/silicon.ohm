@@ -6,44 +6,45 @@ Silicon {
 	STATEMENT = 
 			| singleLineComment 
 			| multiLineComment
-	comment = multiLineComment | singleLineComment
 	singleLineComment = "//" (~lineTerminator sourceCharacter)*
-	multiLineComment = "/*" (~"*/" sourceCharacter)* "*/"
 	lineTerminator = "\n" | "\r" | "\u2028" | "\u2029"
 	sourceCharacter = any
+	multiLineComment = "/*" (~"*/" sourceCharacter)* "*/"
 	EXP =   
+   			| BinOpExp
 			| LambdaLiteral
 			| Definition
-			| InfixExp
-			| BinOpExp
 			| Parens
 			| MethodChainExp
 			| FunctionCall
+            | InfixExp
 			| Macro
 			| PipeExp
 			| namespace
-			| TypedIdentifier
-			| identifier
+            | BlockLiteral
 			| Literal
+            | identifier
+            
 	LambdaLiteral = "\\" Args Assign
-	Args  = ListOf<EXP+, ",">
+	Args  = ListOf<Arg, ",">
+    Arg = TypedIdentifier | EXP
 	Assign = "=" EXP
 	Definition = Keyword TypedIdentifier Args Assign? 
-	TypedIdentifier = identifier (":" ListOf<(identifier | EXP),",">)*
+	TypedIdentifier = identifier (":" ListOf<EXP,",">)*
 	identifier = "_" | letter+
 	Keyword = "@" identifier
 	InfixExp = EXP InfixFunc EXP 
 	BinOpExp = EXP BinOp EXP 
 	Parens = "(" EXP* ")" 
 	MethodChainExp = "#" (identifier | EXP) ("." identifier)+ Args 
-	FunctionCall = "#" identifier Args 
+	FunctionCall = "#" identifier ListOf<EXP,","> 
 	Macro = "@@" identifier Args
 	PipeExp = "#" EXP ("=>" identifier)+ 
 	namespace = identifier ("::" identifier)+
 	Literal = StringLiteral | BlockLiteral | MapLiteral | ArrayLiteral | NumericLiteral
 	StringLiteral = "\"" stringChar*  "\"" 
 	stringChar = ~("\"" | "\\" | lineTerminator) any
-	BlockLiteral = "{" (EXP ";")* "}" --block
+	BlockLiteral = "{" (EXP ";")* "}"
 	MapLiteral = "(" (identifier "=" EXP)* ")" 
 	ArrayLiteral = "[" ListOf<EXP,","> "]" 
 	NumericLiteral = | BinLiteral | HexLiteral | OctLiteral | FloatLiteral | IntLiteral  
@@ -67,22 +68,11 @@ Silicon {
 			| ">=" --gte
 			| "<" --lt
 			| ">" --gt
-			| "&&" --bitwiseAnd
-			| "&" --logicalAnd
-			| "||" --bitwiseOr
-			| "|" --logicalOr
-			| "^^" --bitwiseXor
-			| "^" --logicalXor
-			| "~~" --bitwiseNot
-			| "~" --logicalNot
-			| ">>>" --logicalRightShift
-			| ">>" --arithmeticRightShift
-			| "<<<" --logicalRightShift
-			| "<<" --arithmeticRightShift
 	InfixFunc = "##" identifier
 	octDigit = "0".."7"
 	bit = "0" | "1"
 	booleanLiteral = "@true" | "@false"
+	comment = multiLineComment | singleLineComment
 	space := whitespace | lineTerminator | comment
 	unicodeSpaceSeparator = "\u2000".."\u200B" | "\u3000"
 	whitespace = "\t"
