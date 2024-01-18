@@ -1,15 +1,15 @@
-@fn fib:int n:int
-    @if n <= 2 
-    @then n 
-    @else
-    fib(n - 1) + fib(n - 2)
-@
+@fn fib:int n:int = {
+    #if n <=2, n,(#fib n - 1) + (#fib n - 2);
+}
 
-fib(10) // 55
+//@if n <= 2 
+//$then n 
+//$else (#fib n - 1) + (#fib n - 2)
 
+#fib 10 // 55
 
 // using series calc syntax
 // this is similar to Python's list comprehension syntax
-
-@let fib = 1,1..@x[-1] + @x[-2]..
-fib[10] // 55
+// Haven't solidified this grammar yet
+// @let fib = 1,1..@x[-1] + @x[-2]..
+// #fib[10]; // 55
