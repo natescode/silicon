@@ -11,7 +11,7 @@ Silicon {
 	sourceCharacter = any
 	multiLineComment = "/*" (~"*/" sourceCharacter)* "*/"
 	EXP =   
-			| BinOpExp
+   			| BinOpExp
 			| LambdaLiteral
 			| Definition
 			| Parens
@@ -24,6 +24,7 @@ Silicon {
             | BlockLiteral
 			| Literal
             | identifier
+            
 	LambdaLiteral = "\\" Args Assign
 	Args  = ListOf<Arg, ",">
     Arg = TypedIdentifier | EXP
@@ -35,10 +36,13 @@ Silicon {
 	InfixExp = EXP InfixFunc EXP 
 	BinOpExp = EXP BinOp EXP 
 	Parens = "(" EXP* ")" 
-	MethodChainExp = "#" (identifier | EXP) ("." identifier)+ Args 
-	FunctionCall = "#" identifier ListOf<EXP,","> 
+	MethodChainExp = evalSigil (identifier | EXP) ("." identifier)+ Args 
+	FunctionCall = evalSigil identifier ListOf<EXP,","> 
 	Macro = "@@" identifier Args
-	PipeExp = "#" EXP ("=>" identifier)+ 
+    evalSigil =  comptimeSigil | runtimeSigil
+    runtimeSigil = "#"
+    comptimeSigil = "##" 
+	PipeExp = evalSigil EXP ("=>" identifier)+ 
 	namespace = identifier ("::" identifier)+
 	Literal = StringLiteral | BlockLiteral | MapLiteral | ArrayLiteral | NumericLiteral
 	StringLiteral = "\"" stringChar*  "\"" 
@@ -67,7 +71,7 @@ Silicon {
 			| ">=" --gte
 			| "<" --lt
 			| ">" --gt
-	InfixFunc = "##" identifier
+	InfixFunc = "\\\\" identifier
 	octDigit = "0".."7"
 	bit = "0" | "1"
 	booleanLiteral = "@true" | "@false"
