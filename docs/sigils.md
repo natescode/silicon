@@ -9,17 +9,17 @@ The toolchain is named `sigil` because Silicon uses a handfull of special charac
 
   @if true, {
   "true"
-  }
+  };
 
-  @fn fib 1 = 1
-  @fn fib 2 = 2
+  @fn fib 1 = 1;
+  @fn fib 2 = 2;
 
   @@memo
   @fn fib n = {
-  (#fib n - 1) + (fib n - 2)
-  }
+  (#fib n - 1) + (#fib n - 2);
+  };
 
-  @type bool = $true | $false
+  @type bool = @true \\or @false;
 
 ## Misc
 
