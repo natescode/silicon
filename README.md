@@ -1,5 +1,7 @@
 # The Silicon Language Specification
 
+1 Feb 2024: starting WASM generation
+
 ## Table of Contents
 
 - [grammar](./docs/grammar.md)
