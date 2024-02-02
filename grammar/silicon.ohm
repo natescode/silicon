@@ -1,17 +1,15 @@
 Silicon {
+	// TOP LEVEL EXPRESSIONS
 	Program   = SourceElement*
-	SourceElement = 
-			| STATEMENT --sourceStatement
-			| EXP ";" --sourceExp
-	STATEMENT = 
-			| singleLineComment 
-			| multiLineComment
+	SourceElement = STATEMENT | EXP ";"
+	STATEMENT = comment
+	comment = multiLineComment | singleLineComment
 	singleLineComment = "//" (~lineTerminator sourceCharacter)*
 	lineTerminator = "\n" | "\r" | "\u2028" | "\u2029"
 	sourceCharacter = any
 	multiLineComment = "/*" (~"*/" sourceCharacter)* "*/"
 	EXP =   
-   			| BinOpExp
+			| BinOpExp
 			| LambdaLiteral
 			| Definition
 			| Parens
@@ -24,38 +22,23 @@ Silicon {
             | BlockLiteral
 			| Literal
             | identifier
-            
-	LambdaLiteral = "\\" Args Assign
-	Args  = ListOf<Arg, ",">
-    Arg = TypedIdentifier | EXP
-	Assign = "=" EXP
-	Definition = Keyword TypedIdentifier Args Assign? 
-	TypedIdentifier = identifier (":" ListOf<EXP,",">)*
-	identifier = "_" | letter+
-	Keyword = "@" identifier
-	InfixExp = EXP InfixFunc EXP 
+
+    //EXPRESSION RULES       
 	BinOpExp = EXP BinOp EXP 
+	LambdaLiteral = "\\" Args Assign
+	Definition = Keyword TypedIdentifier Args Assign? 
 	Parens = "(" EXP* ")" 
 	MethodChainExp = evalSigil (identifier | EXP) ("." identifier)+ Args 
 	FunctionCall = evalSigil identifier ListOf<EXP,","> 
+	InfixExp = EXP InfixFunc EXP 
 	Macro = "@@" identifier Args
-    evalSigil =  comptimeSigil | runtimeSigil
-    runtimeSigil = "#"
-    comptimeSigil = "##" 
 	PipeExp = evalSigil EXP ("=>" identifier)+ 
 	namespace = identifier ("::" identifier)+
-	Literal = StringLiteral | BlockLiteral | MapLiteral | ArrayLiteral | NumericLiteral
-	StringLiteral = "\"" stringChar*  "\"" 
-	stringChar = ~("\"" | "\\" | lineTerminator) any
 	BlockLiteral = "{" (EXP ";")* "}"
-	MapLiteral = "(" (identifier "=" EXP)* ")" 
-	ArrayLiteral = "[" ListOf<EXP,","> "]" 
-	NumericLiteral = | BinLiteral | HexLiteral | OctLiteral | FloatLiteral | IntLiteral  
-	BinLiteral = "0b" bit+ ("_" bit+)* 
-	HexLiteral = "0x" hexDigit+ ("_" hexDigit+)* 
-	OctLiteral = "0c" octDigit+ ("_" octDigit+)* 
-	FloatLiteral = digit+ ("_" digit+)* "." digit+ 
-	IntLiteral = digit+ ("_" digit+)* 
+	Literal = StringLiteral | BlockLiteral | MapLiteral | ArrayLiteral | NumericLiteral
+	identifier = "_" | letter+
+
+	// CORE RULES
 	BinOp =   	
 			| "**" --pow 
 			| "++" --concat
@@ -71,18 +54,40 @@ Silicon {
 			| ">=" --gte
 			| "<" --lt
 			| ">" --gt
+
+	Args  = ListOf<Arg, ",">
+    Arg = TypedIdentifier | EXP
+	Assign = "=" EXP
+	Keyword = "@" identifier
+    evalSigil =  comptimeSigil | runtimeSigil
+	TypedIdentifier = identifier (":" ListOf<EXP,",">)*
+    comptimeSigil = "##" 
+    runtimeSigil = "#"
 	InfixFunc = "\\\\" identifier
+
+	// LITERALS
+	StringLiteral = "\"" stringChar*  "\"" 
+	stringChar = ~("\"" | "\\" | lineTerminator) any
+	MapLiteral = "(" (identifier "=" EXP)* ")" 
+	ArrayLiteral = "[" ListOf<EXP,","> "]" 
+	NumericLiteral = | BinLiteral | HexLiteral | OctLiteral | FloatLiteral | IntLiteral  
+	BinLiteral = "0b" bit+ ("_" bit+)* 
+	HexLiteral = "0x" hexDigit+ ("_" hexDigit+)* 
+	OctLiteral = "0c" octDigit+ ("_" octDigit+)* 
+	FloatLiteral = digit+ ("_" digit+)* "." digit+ 
+	IntLiteral = digit+ ("_" digit+)* 
 	octDigit = "0".."7"
 	bit = "0" | "1"
 	booleanLiteral = "@true" | "@false"
-	comment = multiLineComment | singleLineComment
+
+	// SPACE, WHITESPACE and SEPARATORS
 	space := whitespace | lineTerminator | comment
 	unicodeSpaceSeparator = "\u2000".."\u200B" | "\u3000"
 	whitespace = "\t"
-			| "\x0B"    -- verticalTab
-			| "\x0C"    -- formFeed
+			| "\x0B"    --verticalTab
+			| "\x0C"    --formFeed
 			| " "
-			| "\u00A0"  -- noBreakSpace
-			| "\uFEFF"  -- byteOrderMark
+			| "\u00A0"  --noBreakSpace
+			| "\uFEFF"  --byteOrderMark
 			| unicodeSpaceSeparator
 }

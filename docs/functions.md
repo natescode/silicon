@@ -165,7 +165,7 @@ Without default parameter is would just be
     @fn foo x,y = {};
 ```
 
-I could just wrap parameters in `()` to be more consistent. Or drop the `=` of course. or use `;`.
+Recent grammar changes now allow `()` around args/params
 
 ```silicon
     @fn foo (x,y = 3) = {};

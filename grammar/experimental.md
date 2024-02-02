@@ -1,6 +1,6 @@
 # Grammar Experiments
 
-Silicon aims to be simple but flexible and able to easily adding new features without fundamentally changing the language or grammar; much like how LIPS works.
+Silicon aims to be simple but flexible and able to easily adding new features without fundamentally changing the language or grammar; much like how LISP works (for interpreted mode).
 
 Let's go over a few examples.
 
@@ -29,13 +29,13 @@ I used the function name `default` since that is usually what the goal of the nu
 
 - Operators _can_ be universal-ish across many programming languages
 - Operators are natural-language agnostic. Translating function names is difficult.
+- Operators are shorter to type (but LSPs can help)
 
 ## `...` / `..` Spread Operator
 
 Javascript has had this for awhile, approaching a decade now since ES6 in 2015.
 
-C# recently, finally, added this with `..`. Unfortunately, operators aren't _always_ universal as I mentioned they _kinda_
-are in many cases.
+C# recently, finally, added this with `..`. Unfortunately, operators aren't _always_ universal as I mentioned they're universal-ish.
 
 _Spread_ is a short and intuitive word to use. Again, Silicon _really_ avoids adding operators. In this case, this operator is **PERMANENTLY BLOCKED** because `...` is a [unary operator](https://en.wikipedia.org/wiki/Unary_operation). The `??` is at least possible since it take two arguments.
 
@@ -48,15 +48,15 @@ let total = [...left, 5, ...right];
 Let's translate this to Silicon
 
 ```silicon
-@name left = [1, 2, 3, 4];
-@name right = [6, 7, 8, 9];
-@name all = [#spread left, 5, #spread right];
+@let left = [1, 2, 3, 4];
+@let right = [6, 7, 8, 9];
+@let all = [(#spread left), 5, (#spread right)];
 ```
 
 We could also use the `#spread` function as a method thanks to [UFCS](https://en.wikipedia.org/wiki/Uniform_Function_Call_Syntax). This changes the last line to look like:
 
 ```silicon
-@name all = [#left.spread, 5, #right.spread];
+@let all = [#left.spread, 5, #right.spread];
 ```
 
 I personally like this **SO** much better.
