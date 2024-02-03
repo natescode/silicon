@@ -44,34 +44,33 @@
 
 ## Non-Goals
 
-In my opinion, non-goals are just as important as goals. They prevent scope-screep and keep the language and toolchain _great_ at specific use-case instead of
-mediocre at everything.
+In my opinion, non-goals are just as important as goals. They prevent scope-screep and keep the language and toolchain _great_ at specific use-case instead of mediocre at everything.
 
 \*Not a direct goal but other tools will be used
 \*\*A future, much less important goal to think about
 
 - Native Compilation\*
 - LLVM / other native backends\*
-- ~~Variadic functions~~
-- ~~Function over-loading~~
+- Variadic functions \* Silicon Dynamic
+- Function over-loading \* Silicon Dynamic
 - Game dev
-- Systems dev (Yes, even though Silicon has no GC and is fairly "low-level")
-- Operator overloading
-- Functionally Pure
+- Systems dev (Yes, even though Silicon has no GC and is fairly "low-level". It is NOT anything like Zig nor Rust)
+- Operator overloading \* use infix functions instead
+- Functionally Pure \* functional, may have an effects system but it isn't Haskell nor purescript
 - Borrower Checker / compile-type memory safety\*\*
 
 ## SI puts the SI in Simple.
 
 - no unary operators
 - no operator precedence
-- no operator overloading
+- no methods
 - no inheritance
 - no function / method overloading (TDNR so kinda `@let x = 1; x.toString; @let y = $false; y.toString`)
 - no modifiers (just annotations)
 - no garbage collector: reference counting / borrower checker (optional)
-- ONE function syntax `@func` (named, anonymous, lambda)
+- ONE function syntax `@fn` (named, anonymous, lambda)
 - ONE looping expression `@loop` (for, while and do/while)
-- ONE condition expression `@when` (if and switch/case)
+- ONE condition expression `@wif` (if and switch/case)
 
 ## What SI DOES have
 

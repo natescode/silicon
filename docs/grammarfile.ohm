@@ -1,0 +1,92 @@
+Silicon {
+	Program   = SourceElement*
+	SourceElement = 
+			| STATEMENT --sourceStatement
+			| EXP ";" --sourceExp
+	STATEMENT = 
+			| singleLineComment 
+			| multiLineComment
+	singleLineComment = "//" (~lineTerminator sourceCharacter)*
+	lineTerminator = "\n" | "\r" | "\u2028" | "\u2029"
+	sourceCharacter = any
+	multiLineComment = "/*" (~"*/" sourceCharacter)* "*/"
+	EXP =   
+            | BinOpExp
+			| LambdaLiteral
+			| Definition
+			| Parens
+			| MethodChainExp
+			| FunctionCall
+            | InfixExp
+			| Macro
+			| PipeExp
+			| namespace
+            | BlockLiteral
+			| Literal
+            | identifier
+            
+	LambdaLiteral = "\\" Args Assign
+    TypeParams = | "[" Args "]"
+    ArgsWrapped = 
+    | "(" Args ")" --wrappedArgs 
+    | Args --unwrappedArgs
+    Args  = ListOf<Arg, ",">
+    Arg = TypedIdentifier | EXP
+	Assign = "=" EXP
+	Definition = Keyword TypedIdentifier TypeParams? ArgsWrapped Assign? 
+	TypedIdentifier = identifier (":" ListOf<EXP,",">)*
+	identifier = "_" | letter+
+	Keyword = "@" identifier
+	InfixExp = EXP InfixFunc EXP 
+	BinOpExp = EXP BinOp EXP 
+	Parens = "(" EXP* ")" 
+	MethodChainExp = evalSigil (identifier | EXP) ("." identifier)+ Args 
+	FunctionCall = evalSigil identifier ListOf<EXP,","> 
+	Macro = "@@" identifier Args
+    evalSigil =  comptimeSigil | runtimeSigil
+    runtimeSigil = "#"
+    comptimeSigil = "##" 
+	PipeExp = evalSigil EXP ("=>" identifier)+ 
+	namespace = identifier ("::" identifier)+
+	Literal = StringLiteral | BlockLiteral | MapLiteral | ArrayLiteral | NumericLiteral
+	StringLiteral = "\"" stringChar*  "\"" 
+	stringChar = ~("\"" | "\\" | lineTerminator) any
+	BlockLiteral = "{" (EXP ";")* "}"
+	MapLiteral = "(" (identifier "=" EXP)* ")" 
+	ArrayLiteral = "[" ListOf<EXP,","> "]" 
+	NumericLiteral = | BinLiteral | HexLiteral | OctLiteral | FloatLiteral | IntLiteral  
+	BinLiteral = "0b" bit+ ("_" bit+)* 
+	HexLiteral = "0x" hexDigit+ ("_" hexDigit+)* 
+	OctLiteral = "0c" octDigit+ ("_" octDigit+)* 
+	FloatLiteral = digit+ ("_" digit+)* "." digit+ 
+	IntLiteral = digit+ ("_" digit+)* 
+	BinOp =   	
+			| "**" --pow 
+			| "++" --concat
+			| "+" --add
+			| "-" --sub
+			| "*" --mult 
+			| "/" --div
+			| "==" --equal
+			| "===" --identical
+			| "<>" --notEqual
+			| "<=>" --notIdentical
+			| "<=" --lte
+			| ">=" --gte
+			| "<" --lt
+			| ">" --gt
+	InfixFunc = "\\\\" identifier
+	octDigit = "0".."7"
+	bit = "0" | "1"
+	booleanLiteral = "@true" | "@false"
+	comment = multiLineComment | singleLineComment
+	space := whitespace | lineTerminator | comment
+	unicodeSpaceSeparator = "\u2000".."\u200B" | "\u3000"
+	whitespace = "\t"
+			| "\x0B"    -- verticalTab
+			| "\x0C"    -- formFeed
+			| " "
+			| "\u00A0"  -- noBreakSpace
+			| "\uFEFF"  -- byteOrderMark
+			| unicodeSpaceSeparator
+}
