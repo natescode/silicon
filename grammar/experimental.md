@@ -139,3 +139,63 @@ Take a mutatable generic reference to a variable. Then apply the given action (f
 var = #var.action
 }
 ```
+
+## Literals, Literally.
+
+_4 Februrary, 2024_
+
+### Tuple and Array
+
+Tuples and arrays both use `[]` delimited by `,` and can be distinguished by their type factory functions or the use of mixed types of values.
+Arrays are a continuous block of memory of a single type i.e. array of 32bit integers.
+Tuples are a continuous blok of memory of mixed types i.e. 32bit integer, string, bool.
+
+```silicon
+@let id, name, hasChildren = ## Tuple [1,"Nate", @true]
+@let id, age, children    = ## Array [1, 32, 2]
+```
+
+I changed Tuples and Arrays to both use the same bracket type for consistency. This also means if they both use `[]` that `()` do not have _any_ special meaning
+beyond grouping expressions. Why am I so anti-parenthesis? **shrug**.
+
+### Map
+
+Maps and Blocks both use `{}` delimited by `;`.
+
+Maps aka Dictionaries are collections of key,value pairs.
+Using `key=value,` is _okay_.
+
+```silicon
+@let map = ##map {id=1;name="Nathan";hasChildren=@true}
+```
+
+I really like Chat GPT's suggestion of using arrows `->`, delimited by `;`, like lambda functions do in some languages.
+Maps can just be collections of parameterless named functions that map (evaluate) to a single value, more or less.
+
+Using thin-arrow `->` also keeps `=` exclusive to expressions but does introduce another operator `->`.
+
+```silicon
+@let map = ##map {id->1;name->"Nathan";hasChildren->@true}
+```
+
+Grammar
+
+```ohm
+mapEntry = identifier "->" EXP
+MapLiteral = "{" ListOf<mapEntry,";"> "}"
+```
+
+### Block
+
+A blocks of code which is a list of expressions and statements. `Block` refers to both `function` and `lambda`.
+
+```silicon
+@let myBlock = {@let a = 3; @let b = 5; a**b+12;}
+@let myBlock = {@let a = 3; @let b = 5; a**b+12;}
+```
+
+Lamda
+
+```silicon
+\
+```
