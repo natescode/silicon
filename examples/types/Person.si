@@ -3,4 +3,10 @@
     age:U8,
 };
 
+// potentially newline or comma for field delimiters
+@type Person = {
+    name:String
+    age:U8
+};
+
 @@export Person;

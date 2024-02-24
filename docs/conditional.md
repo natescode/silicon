@@ -15,8 +15,8 @@ C if example.
 SI
 
 ```si
-    x = @if true, { 1 } , { 0 };
-    x = @if true, 1, 0;
+    x = @when true, { 1 } , { 0 };
+    x = @when true, 1, 0;
     @when true, (@fn_ true = { x = 1 } , @fn_ false = { x = 0 })
 ```
 

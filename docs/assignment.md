@@ -5,15 +5,15 @@ There is only one declaration syntax, `@name`.
     @name firstName
     @name firstName:string
 
-Silicon has 100% type inference, the developer **NEVER** needs to write types. Types may be optionally added after identifiers with `:type` syntax for clarity, or `Sigil --type file.si` can add them for you.
+Silicon has 100% type inference, the developer **NEVER** needs to write types. Types may be optionally added after identifiers with `:type` syntax for clarity, or `sgl --annotate file.si` can add them for you.
 
 ### Assignment
 
 `=` is for assignment.
 
-Silicon by default is immutable and pure. This means reference have reference transparency.
+Silicon by default is immutable and pure. This means reference have referencial transparency.
 
-    x = 3;
+    @name x = 3;
     x = 5; // error: assignment to immutable variable 'x'
 
 Referencial Tranparency

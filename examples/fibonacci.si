@@ -1,10 +1,12 @@
 @fn fib 1 = 1;
 @fn fib 2 = 2;
+
+@@memo // use @@memo macro to memoize this function
 @fn fib n = {
     (#fib n - 1) + (#fib n - 2);
 };
 
-@fn fib2 n {
+@fn fib2 n = {
     #if n <= 2 
     $then n 
     $else (#fib n - 1) + (#fib n - 2)
@@ -12,8 +14,26 @@
 
 #fib2 10 // 55
 
+
+@fn fib 1 = 1;
+@fn fib 2 = 2;
+
+@fn fib3 n = {
+    @loop n-2, {
+        @let a,b,c = #fib 1,#fib 2, 0;
+        c = a + b;
+        a = b;
+        b = c;
+    };
+};
+
+#fib 10 // 55
+
 // using series calc syntax
 // this is similar to Python's list comprehension syntax
 // Haven't solidified this grammar yet
-// @let fib = 1,1..@x[-1] + @x[-2]..
-// #fib[10]; // 55
+// effectively creates an iterator
+// short and still O(N) runtime.
+@let fib4 = 1,1..@x[-1] + @x[-2]..;
+@let fib5 = [1,1..@x[-1] + @x[-2]..];
+// #fib4[10]; // 55

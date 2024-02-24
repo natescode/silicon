@@ -1,6 +1,6 @@
-@func main = {
+@fn main = {
     @let greeting = "Hello";
     @let target = " world!";
 
-    #print(greeting + target);
+    #IO::print greeting ++ target;
 };

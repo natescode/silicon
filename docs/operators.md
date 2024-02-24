@@ -64,28 +64,17 @@ One of Silicon's priorities is simplicity, clarity and precision. Silicon avoids
 
 > _"Be simple. Get the simple things right"_
 
-# ~Precedence~
-
-| Precedence | Operator                                        | Description                                      |
-| ---------- | ----------------------------------------------- | ------------------------------------------------ |
-| 1          | =                                               | Assignment                                       |
-| 2          | @or                                             | Boolean Or                                       |
-| 3          | @And                                            | Boolean And                                      |
-| 4          | @is, @not, @below, @most, @above, @least, @deep | Comparisons                                      |
-| 5          | + - @bor @bxor                                  | Addition, Substraction, Bitwise Or, Bitwaise XOr |
-| 6          | \* / @band                                      | Multiplication, Division, Bitwise And            |
-
 ## Operator Precedence
 
 Pratt parsers and Pika parsers are really cool because they help with problem like operator precedence and left recursion, respectively.
 
-I realize that by removing unary operator from Silicon than simplifies the language a lot.
+I realize that by removing unary operator from Silicon simplifies the language a lot.
 
 > "...but you still need to handle operator precedence -- imaginary reader"
 
-Hmm, true. Welp I guess we'll just remove operator precedenc all together from the language then.
+Hmm, true. Welp I guess we'll just remove operator precedence all together from the language then.
 
-you:
+reader: _suprised Pikachu face_
 
 ```
 ⢀⣠⣾⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⠀⠀⠀⠀⣠⣤⣶⣶
@@ -122,6 +111,14 @@ negative(b)
 .sqrtof(
     b.squared.minus.4.times(a,c)
     .over(2.times(a)
+```
+
+Silicon
+
+```s
+b.negative
+.(plusorminus (sqrtof b.squared.minus.(times 4,a,c)))
+.(over (times 2,a))
 ```
 
 reads VERY close to how we speak the formula. This make it easier to write in my opinion. We're not doing LaTeX here.
