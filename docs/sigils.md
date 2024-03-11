@@ -2,7 +2,7 @@
 
 The toolchain is named `sigil` because Silicon uses a handfull of special characters to add special meaning. Sigils are not operators. They don't _do_ anything other than distinguish the type of identifier or expression. Sigil only come before an identifier (prepended).
 
-There are three sigil characters: `@`,`$` and `#`. They also have different semantics when doubled.
+There are four sigil characters: `@`,`$`, `#` and `\`. They also have different semantics when doubled.
 
 - `@` keywords.
 - `@@` annotations / macros
@@ -13,7 +13,10 @@ There are three sigil characters: `@`,`$` and `#`. They also have different sema
 - `#` function/block evaluation.
 - `##` compile time function/block evaluation.
 
-  @if true, {
+- `\` lambda function
+- `\\` infix function call
+
+- @if true, {
   "true"
   };
 
@@ -30,3 +33,13 @@ There are three sigil characters: `@`,`$` and `#`. They also have different sema
 ## Misc
 
 - `_` alone indicated a discard value or implicit value.
+
+## Unused Operators / Symbols
+
+`|`
+`&`
+`^`
+`!`
+`%`
+`~`
+`?`

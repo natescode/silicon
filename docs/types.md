@@ -12,6 +12,7 @@ Typically used as `number`
 type integer = i32 | i64;
 type float = f32 | f64;
 type number = integer | float;
+type decimal = int; // maps to BigInt
 ```
 
 - `i32`
@@ -21,17 +22,19 @@ type number = integer | float;
 
 Silicon has 8 primitive data types
 
-- opaque
+- ref
 - vec
 - atom
 - bool
 - int (LEB128)
 - float
-- decimal
+- decimal (128 bit)
 - string
   ~~- rune~~
 
-## Opaque
+## Ref
+
+`ref = func_ref | extern_ref`
 
 ## Vec
 
@@ -67,11 +70,7 @@ Silicon has a decimal type for high precision financial calculations. Decimal is
 
 ## Character
 
-`str(width=1)` ?
-
-`rune` is a UTF-32 codepoint ?
-
-char is poorly defined. Unicode codepoint is clearly defined but doesn't always match the human definition, I.E one emoji can be 3+ codepoints.
+Char is poorly defined. Unicode codepoint is clearly defined but doesn't always match the human definition, I.E one emoji can be 3+ codepoints.
 
 Silicon only has strings. If one _really_ needs a _"character"_ type, type guards can be used.
 
@@ -93,7 +92,7 @@ Silicon uses UTF-32 encoded strings. UTF-16 and UTF-8 are available as well.
 
 Strings don't have `length` because that is poorly defined. Strings have 3 properties: width, bytes, and runes (codepoints).
 
-`width` is how many visual symbols wide the string is.
+`width` is how many visual symbols wide the string is. Still ambigous since some systems may or may not combine multiple codepoints into one symbol.
 `bytes` is the number of bytes required to represent the string.
 `runes` alias for codepoints, is the number of unicode codepoints used to represent the string.
 
@@ -126,8 +125,8 @@ is required by expressions such as `if`, `while`, and `assert`.
 
 Silicon doesn't have these types. Optionals are used instead.
 
-## Opaque
+## References
 
-`opaque`
+Silicon needs references. Since Silicon mainly targets WASM, it too has function and external references.
 
-Opaque is a type that hide its underlying encoding. WASM has this for security purposes and referencing types from C or other languages via FFI.
+References are opaque is a type that hide its underlying encoding. WASM has this for security purposes and referencing types from C or other languages via FFI.

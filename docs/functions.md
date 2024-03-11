@@ -91,11 +91,10 @@ Let's call it as a function then as a method.
 
 ## Type Defined Name Resolution
 
-This is explained elsewhere but it is related to functions / methods. Silicon doesn't allow function/method overloading (Silicon dynamic does).
+This is explained elsewhere but it is related to functions / methods. Silicon doesn't allow function/method overloading (Silicon dynamic aka `Sulfur` does).
 This may feel limiting, it is. So Silicon tries to make it a little better by fixing some cases.
 
-Before defined our `boolToString` function/method before but it has to have its own unique name. We couldn't make it just `ToString` like
-we could if we had function/method overloading. We can simulate this with TDNR by allowing the type of the method reciever to dictate which module we use.
+Before defined our `boolToString` function/method before but it has to have its own unique name. We couldn't make it just `ToString` like we could if we had function/method overloading. We can simulate this with TDNR by allowing the type of the method reciever to dictate which module we use.
 
 For example
 
@@ -126,8 +125,8 @@ This can be fixed if Silicon looks at the type of the method receiver, `foo` in 
 to look inside the correct module (namespace).
 
 ```silicon
-    @let foo = true;
-    @let bar = 10;
+    @name foo = true;
+    @name bar = 10;
 
     // calls Boolean::ToString
     #foo.ToString // "true"
@@ -137,7 +136,7 @@ to look inside the correct module (namespace).
 ```
 
 So this makes the lack of proper function overloading a bit less painful. Again, if we _really_ need true function overloading we could
-use Silicon's dynamic dialect.
+use `Sulfur`, Silicon's dynamic dialect.
 
 ```silicon
 @@dynamic {
@@ -171,4 +170,11 @@ Recent grammar changes now allow `()` around args/params
     @fn foo (x,y = 3) = {};
     @fn foo x,y = 3 {};
     @fn foo x,y = 3; = {};
+```
+
+I prefer doing the `@@pre`` macro which runs just before a function recieves its arguments.
+
+```silicon
+    @@pre y = 3;
+    @fn foo x,y = {};
 ```

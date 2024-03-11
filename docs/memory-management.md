@@ -1,5 +1,7 @@
 # Memory Management
 
+\* None of this has been finalized.
+
 Silicon uses [Gradual Memory Management](https://jondgoodwin.com/pling/gmm.pdf).
 
 Silicon also uses [Locality](https://blog.janestreet.com/oxidizing-ocaml-locality/)
@@ -39,7 +41,7 @@ Let's translate this to `Silicon`
     @let opt = str.toInt |>
         (@fn (Some _) = false,
         @fn None = false)
-}
+};
 ```
 
 OCaml by default puts `opt` in the heap because it _could_ escape but in this case it clearly doesn't. Silicon

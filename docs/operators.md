@@ -16,17 +16,17 @@ Typical unary operators
 
 None are needed.
 
-| unary operator | alternative 1 | alternative 2     |
-| -------------- | ------------- | ----------------- |
-| -x             | x.neg         | 0 - x             |
-| -1             | 1.neg         | 0 - 1             |
-| ++x            | x += 1        | x.inc             |
-| x++            | x.post_inc    | @defer x += 1; x; |
-| !x             | @not x        | x.not             |
-| &x             | @val x        | x.val             |
-| \*x            | @ref x        | x.ref             |
+| unary operator | Method syntax | Non-Method Syntax 2 |
+| -------------- | ------------- | ------------------- |
+| -x             | x.neg         | 0 - x               |
+| -1             | 1.neg         | 0 - 1               |
+| ++x            | x.inc         | x += 1              |
+| x++            | x.post_inc    | @defer x += 1; x;   |
+| !x             | x.not         | @not x              |
+| &x             | x.val         | @val x              |
+| \*x            | x.ref         | @ref x              |
 
-Instead of `&x++` we can do `x.val.pinc`
+Instead of `&x++` we can do `x.val.pInc`
 
 Silicon prefers methods over operators.
 
@@ -60,7 +60,7 @@ So Silicon just removes it. The order is left to right, simple. If a coder wants
 
 > _"Don't add to the language (parser) what you can add to the LSP"_
 
-One of Silicon's priorities is simplicity, clarity and precision. Silicon avoids ambiguity at all costs. Usually expressed with the phrase "Be simple and get the simple things right". Unlike Robotics where simple things for humans are often difficult for robots and vice versa, if parsing is difficult for a human then it is usually difficult for the parser as well. Operator precedence is a solved problem and there are several novel and simple algorithms to handle it of course but it DOES add complexity to the parser and take time. Simplicity natually lends to speed and scalability.
+One of Silicon's priorities is simplicity, clarity and precision. Silicon avoids ambiguity at all costs. Usually expressed with the phrase "Be simple and get the simple things right". Unlike Robotics where simple things for humans are often difficult for robots and vice versa, if parsing is difficult for a human then it is usually difficult for the parser as well. Operator precedence is a solved problem and there are several novel and simple algorithms to handle it of course but it DOES add complexity to the parser and developer. Simplicity naturally lends to speed and scalability.
 
 > _"Be simple. Get the simple things right"_
 

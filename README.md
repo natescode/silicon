@@ -6,7 +6,7 @@
 - [comments](./docs/comments.md)
 - [sigils](./docs/sigils.md)
 - [keywords](./docs/keywords.md)
-- [identifiers](./docs/identifiers)
+- [identifiers](./docs/identifiers.md)
 - [types](./docs/types.md)
 - [operators](./docs/operators.md)
 - [assignment](./docs/assignment.md)
