@@ -1,3 +1,27 @@
+## Binary Infix Operators
+
+Silicon _only_ and _exclusively_ has binary infix overators. Silicon prefers functions / methods over operators. There are only a handful of operators.
+
+| name             | operator               |     
+| ---------------- | -------------          | 
+| plus             | 1 + 1                  | 
+| minus            | 1- 1                   |
+| mult             | 2 * 3                  |
+| div              | 6 / 3                  |
+| concat           | "hello, " ++ "world!"  |
+| series           | 1..10                  |
+| spread           | [1,2,3]...1..2         | 
+
+
+1) addition
+1) substraction
+1) multiplication
+1) division
+1) concatentation
+1) series generation
+1) spreading
+
+
 ## No Unary Operators
 
 > "What?! What about ...?"
@@ -16,12 +40,12 @@ Typical unary operators
 
 None are needed.
 
-| unary operator | Method syntax | Non-Method Syntax 2 |
+| unary operator | Method syntax | Non-Method Syntax   |
 | -------------- | ------------- | ------------------- |
 | -x             | x.neg         | 0 - x               |
 | -1             | 1.neg         | 0 - 1               |
-| ++x            | x.inc         | x += 1              |
-| x++            | x.post_inc    | @defer x += 1; x;   |
+| ++x            | x.inc         | x = x + 1           |
+| x++            | x.post_inc    | @defer x = x + 1; x;|
 | !x             | x.not         | @not x              |
 | &x             | x.val         | @val x              |
 | \*x            | x.ref         | @ref x              |

@@ -3,10 +3,10 @@
 <!-- 1. @iden / @name / @let -->
 <!-- 1. @when / @if -->
 
-1. @name
-1. @when
-1. @loop
-1. @func
+1. @name or @let
+1. @when or @if
+1. @loop or @for
+1. @func or @fn
 1. @type
 1. @impl
 1. @next \* replaces 'continue': go to next loop iteration.
@@ -63,3 +63,22 @@
 - @@compile (execute at compile time)
 - @@execute (compile and execute at runtime)
 - @@analyze (interpret and execute at runtime)
+
+
+## Keywords vs Builtins
+
+Keywords start with the `@` sigil. _builtin_ functions like `if` come from the `si` namespace.
+
+
+EXAMPLE
+
+```silicon
+@let age:u32 = 0x21;
+
+&si::if age \at_least 18 \and hasPaid $then 'welcome!' $else 'halt!!!';
+
+if age >= 18 && hasPaid
+
+
+
+```

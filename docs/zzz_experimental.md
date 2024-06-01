@@ -662,3 +662,46 @@ All that said, sometimes one _needs_ true parallelism or at least to run the sam
 ### Workers
 
 `Silicon` has 100% Ecmascript / Node API support. This means `workers` can also be used inside `Silicon` programs. _Though_ there _may_ be some restrictions due to the effect type system like only using `workers` in a special function. There may be a `:Parallel` effect type for just this type of code. It is encouraged to keep inside of a parent co-routine and separate from other I/O and other code. I'll have to flush out this technique more.
+
+## Comments with `//` problem
+
+This isn't a skill issue but more a clean parsing issue. I am parsing Silicon one character at a time. It is weird if I have a `parseOperator` function that accepts `/` but then finds another `/` and has to pass that to a `skipComment` function.
+ 
+To `solve` this. I'm thinking of making `#` for comments, no longer for function calls. That way `//` would still be an operator (same category of Token) just like how `*` is multiply and `**` is power, `/` can be divide and `//` can be integer division (Python etc. does this).
+
+I don't think I need a Sigil for function calls, if I do I'll swap `#` out for `&` probably since both `Powershell` and `Perl` use it and Silicon does't use it as an operator. `PHP` uses `\` but I want to use that for Lambda definitions. `\a,b = a + b;`. I _could_ use `\` for function calls and `\\` for _lambda_ definitions. Though that would be the __ONLY__ definition is Silicon that uses an operator (symbol) instead of a keyword for a definition. `@fn add a,b = {a+b;};` then lambda `@lambda a,b = a + b;`. I could do `@fn _ a,b = a+b;` or `@_ a,b = a + b;`
+
+LAMBDA options
+
+1. `@fn _ a,b = { a + b; };` 6 characters before parameters
+1. `@_ a,b = { a + b; };`    3 characters before parameters
+1. `@_ a,b = a + b;` 3 characters before parameters, no `{}` needed for body.
+1. `\a,b = a + b;` 1 character before parameters.
+1. `@\a,b = a + b;` 2 characters before parameters, and `@`
+
+
+```silicon
+
+// 1,1,2,3,5,8,13,21,34,55,
+@fn fib 1 = 1;
+@fn fib 2 = 1;
+@fn fib n = {
+    # without function call Sigil
+    (fib n - 1) + (fib n -2);
+    # with function call Sigil
+    (&fib n - 1) + (&fib n -2);
+};
+
+# get 10th fibonacci number
+&fib 10; // 55
+```
+
+If I stick with `@fn _` for lambdas, then I _could_ use `\` as a Sigil for function calls 
+
+`\foo bar,baz;` versus `&foo bar,baz;`. The latter looks better to me. The former is _too_ commonly used to declare Lamdas. Likely I'll use `@\` for lamdas as that will follow the Specification "all definitions __MUST__ use a `@` keyword". `@\` may be special in that it doesn't need nor expect whitespace after, it'll be greedily matched. So that `@\a,b=a+b;` would be valid syntax. I _MAY_ add that to the specification that keywords made of only special characters _MUST_ be greedily matched.
+
+> "All _definitions_ __MUST__ use `@` identifier"
+
+
+
+

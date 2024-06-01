@@ -4,7 +4,7 @@ Parenthesis and types are optional. The function is the main abstraction in Sili
 
 ## Parenthesis
 
-Silicon grammar doesn't use parethesis for anything but grouping expression.
+Silicon grammar doesn't use parethesis for anything but grouping expressions, and S-expressions.
 
 ## Types
 
@@ -12,7 +12,17 @@ ALL types in Silicon are inferred. They can be optionally included after the ide
 
 ## Implicit returns
 
-Silicon has implicit returns. `Rust` is a modern example of this. You can still use the `@exit` keyword for explicit returns.
+Silicon has implicit returns. `Rust` is a modern example of this. You can still use the `@return` keyword for explicit returns. Silicon does **NOT** have *implicit values*. This means that a branch of code cannot return nothing to mean `undefined` or `null` like in JavaScript. We must explicitly return a value.
+
+```
+@fn foo = {
+    &if bar 
+    $then 1
+    $else {
+      # error. We must explicitly return a value here
+    };
+
+};
 
 ### Ambiguous function calls
 
@@ -32,7 +42,7 @@ Silicon can disambiguate with `()`
 (fib n - 1) + (fib n - 2)
 ```
 
-Generally, this doesn't happen and removing parens in much easier to read. The Si LSP will warn about ambigous expressions like this.
+Generally, this doesn't happen and removing parens in much easier to read. Sigil will warn about ambigous expressions like this.
 
 ## Function Definition Pattern Matching (FDPM)
 
@@ -40,12 +50,12 @@ Function Definition Pattern Matching means function parameters can be defined wi
 implement an if expression to work with booleans this way.
 
 ```silicon
-// ? means else is optional
+# ? means else is optional
 @fn if true, then, else? = { #then; };
 @fn if false, then, else? = { #else; };
 
-// default parameters? Can't use '='. Use ';'?
-// @fn if bool, then, else=null; =  { }
+# default parameters? Can't use '='. Use ';'?
+# @fn if bool, then, else=null; =  { }
 
 #if true, { #print "I'm working"; }, {#print "Not functioning";};
 ```
@@ -72,7 +82,7 @@ Let's define a simple function that coverts a boolean value to a string.
 
 ```silicon
 @fn boolToString bool = {
-  #if bool
+  &if bool
   $then "true"
   $else "false"
 };
@@ -82,11 +92,11 @@ Let's define a simple function that coverts a boolean value to a string.
 Let's call it as a function then as a method.
 
 ```silicon
-// function
-#boolToString true // "true"
+# function
+&boolToString true # "true"
 
-// method
-#true.boolToString // "true"
+# method
+&true.boolToString # "true"
 ```
 
 ## Type Defined Name Resolution
@@ -101,7 +111,7 @@ For example
 ```silicon
 @module bool = {
     @fn ToString bool = {
-        #if bool
+        &if bool
         $then "true"
         $else "false"
     };
@@ -111,14 +121,14 @@ For example
 We can then use this function with its full name
 
 ```silicon
-    #bool::ToString true // "true"
+    &bool::ToString true # "true"
 ```
 
 We could possibly run into an ambigous function call error if we used UFCS though.
 
 ```silicon
     @let foo = true;
-    #foo.ToString // Error: 'ToString' function is amibgous. 'bool::ToString', 'number::ToString'...
+    &foo.ToString # Error: 'ToString' function is amibgous. 'bool::ToString', 'number::ToString'...
 ```
 
 This can be fixed if Silicon looks at the type of the method receiver, `foo` in this case, and uses that information
@@ -128,11 +138,11 @@ to look inside the correct module (namespace).
     @name foo = true;
     @name bar = 10;
 
-    // calls Boolean::ToString
-    #foo.ToString // "true"
+    # calls Boolean::ToString
+    &foo.ToString # "true"
 
-    // calls Number::ToString
-    #bar.ToString // "10"
+    # calls Number::ToString
+    &bar.ToString # "10"
 ```
 
 So this makes the lack of proper function overloading a bit less painful. Again, if we _really_ need true function overloading we could
@@ -144,7 +154,7 @@ use `Sulfur`, Silicon's dynamic dialect.
     @fn ToString Number:number = {};
 
     @let x = true;
-    #x.ToString; // "true"
+    &x.ToString; # "true"
 }
 ```
 

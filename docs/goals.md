@@ -1,6 +1,6 @@
 # Goals
 
-Silicon, relative to most major general purpose programming languages _is_ **simple**. Being **simple** is not
+Silicon, relative to most major general purpose programming languages _is_ **simple**. 
 
 ## List
 

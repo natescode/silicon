@@ -1,39 +1,48 @@
-@fn fib 1 = 1;
-@fn fib 2 = 2;
+# 1,1,2,3,5,8,13,21,34,55
+# for single line comment
+#/ 
+    for multi-line 
+    comments
+    #/ 
+        nested multi-line 
+        comment
+    /#
+    end of parent comment
+/#
 
-@@memo // use @@memo macro to memoize this function
+@func fib 1 = 1;
+@func fib 2 = 1;
+#or define as 
+@func fib 1..2 = 1;
+@name fullname:string = "Nathan Hedglin";
+@func fullname:string first, last = { a ++ b; };
+&print fullname 
+&print &fullname
+
+
+@name sum = 2 + 3 * 4; # 20
+@name sum = @math.calc '2 + 3 * 4'; # 12
+
+
+# Namespaces?
+# :: like Rust or just . ?
+&open foo, [bar,baz]; # also valid syntax but not by convention
+&open foo $with bar,baz;
+
 @fn fib n = {
-    (#fib n - 1) + (#fib n - 2);
+    # without function call Sigil
+    # function call sigil isn't required when using S-expression (LISP-like syntax). No semicolon needed.
+    (fib n - 1) + (fib n - 2);
+    # full s-expression
+    (Math::add (fib n - 1), (fib n -2));
+
+    # with function call Sigil
+    @let a = &fib n - 1 
+    @let b = &fib n - 2;
+    # implicit return
+    a + b;
 };
-
-@fn fib2 n = {
-    #if n <= 2 
-    $then n 
-    $else (#fib n - 1) + (#fib n - 2)
-};
-
-#fib2 10 // 55
-
-
-@fn fib 1 = 1;
-@fn fib 2 = 2;
-
-@fn fib3 n = {
-    @loop n-2, {
-        @let a,b,c = #fib 1,#fib 2, 0;
-        c = a + b;
-        a = b;
-        b = c;
-    };
-};
-
-#fib 10 // 55
-
-// using series calc syntax
-// this is similar to Python's list comprehension syntax
-// Haven't solidified this grammar yet
-// effectively creates an iterator
-// short and still O(N) runtime.
-@let fib4 = 1,1..@x[-1] + @x[-2]..;
-@let fib5 = [1,1..@x[-1] + @x[-2]..];
-// #fib4[10]; // 55
+# get 10th fibonacci number
+&fib 10; # 55
+# S-expression syntax. Doesn't require semi-colon either.
+(fib 10) # 55

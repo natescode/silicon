@@ -20,8 +20,8 @@ We can do
 @let fib 1 = 1;
 @let fib 2 = 2;
 @let fib n = {
-    (fib n - 1) + (fib n - 2)
-}
+    (fib n - 1) + (fib n - 2);
+};
 ```
 
 Where we directly map the output value for a given input value.
@@ -33,16 +33,16 @@ Instead of:
 ```silicon
 @let foo n = {
   @if n @is null, {
-    @exit
+    @exit;
   }
   // code
-}
+};
 ```
 
 We can do _something_ like this.
 
 ```silicon
-@fn foo null = {}
+@fn foo null = {};
 ```
 
 ## Parens
@@ -77,7 +77,7 @@ Silicon has a sound and robust type system that map well to WASM / JS.
 
 There are 7 base types:
 
-`opaque` - for opaque external reference types
+`exref` - for opaque external reference types
 
 `vec` - v128 for WASM. For SIMD instructions.
 
@@ -114,8 +114,8 @@ Javascript<sup>tm</sup>
 
 Silicon<sup>tm<sup>
 
-```ruby
-    /// bool -> total string
+```silicon
+    ### bool -> total string ###
     @let fooMessage isThing = {
         @if isThing
         $then "Yes"
@@ -129,7 +129,7 @@ Silicon<sup>tm<sup>
 
 Silicon<sup>tm</sup> uses the `@let` keyword.
 
-    @let name:str
+    @let name:str;
 
 ### Mutability and Locality
 
@@ -139,7 +139,7 @@ By default. All variable are immutable and local (cannot escape their scope aka 
 
 // TODO: revisit this. Most likely this modifiers will become annotations or type constructors i.e. `@let x:@mut(int)`
 
-`@let` or `$` - local, immutable
+`@let` - local, immutable
 
 `@m` - local, mutable
 
@@ -148,76 +148,27 @@ By default. All variable are immutable and local (cannot escape their scope aka 
 `@gm` - global, mutable
 
     @m name:str
+    @let name:str@m
 
 These are actual expressions. Which allows for things like
 
-    @if $data = #getData
-         #save db, data
-    @
-
-### Update
-
-// TODO: again, likely `@@global`
-
-Since I want to implement _locality_ like OCaml _but_ have `local` (stack allocation) to be the default instead. So a value can't escape its' region unless `global` was used.
-
-I'm not sure of the keywords `@local mut` versus `@global` maybe?
+    @if @let data = &getData 
+    $then &save db, data;
 
 ## Assignment
 
-    name = "Nathan"
+    name = 'Nathan';
 
 ## Declaration and assignment
 
-    @let name:str = "Nathan"
+    @let name:str = 'Nathan';
 
 ### Atoms
 
-Always start with `$`. Also know as `Symbol` which are completely unique unguessable values.
+Also know as `Symbol` which are completely unique unguessable values.
 Also used for named parameters / types constructors.
 
     @let true = atom()
     @let false = atom()
 
-    $true
-    $false
-
-    @let bool = $true | $false
-
-## Algebraic Data Types
-
-We can make new types by adding, substracting or multiplying types together
-// TODO: read up on how OCaml would handle type inference here since `message` could easily be a `string` or `MessageOrFalse`.
-
-```typescript
-type MessageOrFalse = string | false;
-
-let message: MessageOrFalse = "Hi there";
-let messag2: MessageOrFalse = false;
-```
-
-### New Syntax?
-
-```silicon
-@let n = 15
-
-@fn fizz_buzz_fn 0,0 = "Fizzbuzz"
-@fn fizz_buzz_fn 0,_ = "Buzz"
-@fn fizz_buzz_fn _,0 = "Fizz"
-
-```
-
-## Traits / Typeclasses / Interfaces
-
-```silicon
-    @type stringy:@trait 'Type = {
-        @fn to_string:string a:Type
-    }
-
-    @type stringy:@impl int = {
-        @fn to_string:string a:int = {
-            // ...code...
-        }
-    }
-
-```
+    @let bool = true | false

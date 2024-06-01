@@ -61,6 +61,13 @@ We could also use the `#spread` function as a method thanks to [UFCS](https://en
 
 I personally like this **SO** much better.
 
+A _hack_ ? We _could_ allow the `...` operator but with another parameter, see below.
+
+```silicon
+  [1,2,3,4]..._ # spread the array
+  [1,2,3,4]...1..2 # spread from index 1 to 2 which will return "2,3"
+ ```
+
 ### `...` as Gather?
 
 `Silicon` by default is a statically typed compiled language that doesn't support variadic functions, ad-hoc polymorphism.
@@ -75,7 +82,7 @@ function greetFriends(...friends) {
 
 Let's do this both at compile time and runtime with Silicon.
 
-### compile time gather `##gather`
+### compile time gather `&&gather`
 
 I could do a function annotation like `@@gather friends` too.
 
@@ -89,7 +96,7 @@ I decided to keep both style as close as possible.
 };
 ```
 
-### `#gather` runtime gather
+### `&gather` runtime gather
 
 We could still add the `:string` as a type hint here but it isn't required in either example; thanks type-inference.
 
@@ -148,7 +155,7 @@ _4 Februrary, 2024_
 
 Tuples and arrays both use `[]` delimited by `,` and can be distinguished by their type factory functions or the use of mixed types of values.
 Arrays are a continuous block of memory of a single type i.e. array of 32bit integers.
-Tuples are a continuous blok of memory of mixed types i.e. 32bit integer, string, bool.
+Tuples are a continuous block of memory of mixed types i.e. 32bit integer, string, bool.
 
 ```silicon
 @let id, name, hasChildren = ## Tuple [1,"Nate", @true]
@@ -199,3 +206,120 @@ Lamda
 ```silicon
 \
 ```
+
+
+## Literal Syntax
+
+### Array vs Tuple 
+
+    // Array
+    #Integer [1,2,3,4,5];
+
+    // Tuple
+    #(String Integer Boolean) ["Nate",32,@t];
+
+### Map literal vs Block literal
+
+Map starts with `${` and block is just `{`
+
+    // map
+    ${
+      a=1;
+      b=2;
+    };
+    
+
+    // block
+    {
+      @let a:i32 = 1;
+      @let b:i32 = 2;
+    };
+
+  ## String Interpolation
+
+  c# has `""`for strings but then `''` for characters and `$""` for interpolated strings and `@""` for string literals,  `@$""` for both and `""" """` for raw strings. JavaScript has `''` and `""` for strings and  ``` `` ``` for interpolated template strings. Silicon will only have one string type that does it all with `''`.
+
+  I picked single quotes over double quotes for two reasons:
+  
+  1) Single quote doesn't require shift
+  2) SQL uses single quotes so less context shifting
+  
+    @let age = 32;
+    @let msg = 'My age is {age}';
+    @let last = 'too'!;
+
+    @let templateString = 
+      'multiline string 
+      support {last}';
+
+``` ` ``` can be escaped with `\`. 
+
+### Templating
+
+Silicon strings can use templating with `{}`. I think templating will be a function like 
+
+`&string::template 'Hello, {name} !'`
+
+
+### RAW String Literals
+
+C# uses `""" """` for raw string literals. Again, I think Silicon can just use a builtin in function.
+
+```silicon
+
+&string::raw 'literal string
+  exactly as written here';
+
+```
+
+## Sillyness
+
+  Silicon doesn't natively have `if` as a statement or expression. Yet, of course, it can do condition operations. `if` can be defined as a function.
+
+```silicon
+@fn if $true, then_block, else_block = &then_block;
+@fn if $false, then_block, else_block = &else_block;
+
+&if condition, {&if}
+
+ ```
+
+ This
+
+
+ ### Lexer Performance
+
+I watched a great video on hashing and performance optimization. Developer was optimizing a Typescript Lexer that needed to recognize which identifiers were keywords. Silicon will know immediately because the token type will be `Keyword` already but maybe the specific keyword won't be known yet, or doesn't need to be because that would be the key to the hashmap.
+
+
+## Keywords
+
+### DEF keywords
+
+`@let`
+
+`@fn`
+
+`@trait`
+
+`@struct`
+
+`@class`
+
+`@type`
+
+
+### Native Types
+
+`$int`
+
+`$true`
+
+### Built-in Functions
+
+`@if`
+
+
+
+
+
