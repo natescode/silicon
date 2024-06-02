@@ -11,29 +11,29 @@ Silicon {
 	singleLineComment = "#" (~lineTerminator sourceCharacter)*
 	lineTerminator = "\n" | "\r" | "\u2028" | "\u2029"
 	sourceCharacter = any
-
 	EXP = 	| BinOpExp
 			| Definition
 			| FunctionCall
 			| Literal
-            | identifier
-            | OptionalWrapped<EXP>
-            
+            | IdenOrProp
+            | OptionalWrapped<EXP> 
+    IdenOrProp = identifier ("." identifier)*
     Assign = "=" EXP
-    Args = ListOf<EXP,",">
     idenKeyword = identifier | keyword
     IdenParams = idenKeyword Params
     Type = ":" OptionalWrapped<IdenParams>
     TypedIdentifier = identifier Type?
+    Args = ListOf<EXP,",">
     Params = ListOf<TypedIdentifier,",">
-	Definition = keyword TypedIdentifier Params Assign? 
-    discard = "_"
+	Definition = keyword TypedIdentifier Args Assign? 
 	identifier = 
+    	| discard
     	| letter+ ("_" | alnum)* --iden1
     	| "_" identifier+ --iden2
-	keyword = "@" identifier
+    discard = "_"
+    keyword = "@" identifier
 	BinOpExp = EXP BinOp EXP 
-	FunctionCall = evalSigil idenKeyword ListOf<EXP,","> 
+	FunctionCall = evalSigil (keyword | IdenOrProp) Args 
     evalSigil =  comptimeSigil | runtimeSigil
     runtimeSigil = "&"
     comptimeSigil = "&&"
@@ -42,8 +42,8 @@ Silicon {
 	stringChar = ~("\"" | "\\" | lineTerminator) any
     BlockLiteral = "{" ListOf<EXP,";"> ";"? "}"
     KeyValue = TypedIdentifier Assign?
-    MapEntry = TypedIdentifier "=" EXP
     MapLiteral = "[" ListOf<MapEntry,";"> "]"
+    MapEntry = TypedIdentifier "=" EXP
 	ArrayTupleLiteral = "[" ListOf<EXP,","> "]"
 	NumericLiteral = | BinLiteral | HexLiteral | OctLiteral | FloatLiteral | IntLiteral
 	BinLiteral = "0b" bit+ ("_" bit+)* 
@@ -56,13 +56,16 @@ Silicon {
 			| "++" --concat
 			| "+" --add
 			| "-" --sub
-            | "*" --mult 
+            | "*" --mult
 			| "/" --div
-            | keyword
+            | ".." --series
+            | "..." --spread
+            | keyword --keywordOp // for keyword binary operators such as @and @or etc...aaoeu				
 	octDigit = "0".."7"
 	bit = "0" | "1"
 	booleanLiteral = "@true" | "@false"
 	comment = docComment | multiLineComment | singleLineComment
+    IdenOrLit<literal> = identifier | literal
     OptionalWrapped<rule> = 
     	| rule --unwrapped 
     	| "(" rule ")" --wrapped
