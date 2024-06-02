@@ -1,0 +1,111 @@
+Silicon {
+	Program   = SourceElement*
+	SourceElement = 
+			| STATEMENT --sourceStatement
+			| EXP ";" --sourceExp
+	STATEMENT = 
+			| singleLineComment 
+			| multiLineComment
+	singleLineComment = "//" (~lineTerminator sourceCharacter)*
+	lineTerminator = "\n" | "\r" | "\u2028" | "\u2029"
+	sourceCharacter = any
+	multiLineComment = "/*" (~"*/" sourceCharacter)* "*/"
+	EXP =   
+   			| BinOpExp
+			| LambdaLiteral
+			| Definition
+			| Parens
+			| MethodChainExp
+			| FunctionCall
+            | InfixExp
+			| Macro
+			| PipeExp
+			//| namespace
+            | BlockLiteral
+			| Literal
+            //| Assign
+            | Property
+            | identifier
+            
+    Property = ("_" | letter+) ("." identifier)+   
+	LambdaLiteral = "\\" Args Assign
+    TypeParams = | "[" Args "]"
+    // TODO
+    // Args = (Arg ",")*
+    Args  = ListOf<Arg, ",">
+    Arg = TypedIdentifier | EXP
+    Assign = "=" EXP
+    //Assign = identifier AssignEnd
+	//AssignEnd = "=" EXP
+	Definition = Keyword TypedIdentifier TypeParams? Args Assign? 
+    TypedIdentifier = (Property | identifier) (":" ~Property EXP)*
+	//TypedIdentifier = identifier (":" ListOf<identifier,",">)*
+	identifier = ("_" | letter+)    
+	Keyword = "@" identifier
+	InfixExp = EXP InfixFunc EXP 
+	BinOpExp = EXP BinOp EXP 
+	Parens = "(" EXP* ")" 
+	MethodChainExp = evalSigil (identifier | EXP) ("." identifier)+ Args 
+    // FunctionCall = evalSigil (Property | identifier) (EXP ",")*
+	FunctionCall = evalSigil (Property | identifier) ListOf<EXP,","> 
+	Macro = "@@" identifier Args
+    evalSigil =  comptimeSigil | runtimeSigil
+    runtimeSigil = "#"
+    comptimeSigil = "##" 
+	PipeExp = evalSigil EXP ("=>" identifier)+ 
+	//namespace = identifier ("::" identifier)+
+	Literal = StringLiteral | BlockLiteral | MapLiteral | ArrayTupleLiteral | NumericLiteral | BooleanLiteral
+	StringLiteral = "\"" stringChar*  "\"" 
+	stringChar = ~("\"" | "\\" | lineTerminator) any
+	//BlockLiteral = "{" (EXP ";")* "}"
+    BlockLiteral = "{" ListOf<EXP,";"> ";"? "}"
+    // could require the last "," as it is a more REGULAR grammar
+    // bit annoying for devs BUT that is what an LSP, AI and LINTERS are for
+	//MapLiteral = "(" (TypedIdentifier Assign? ",")*  ")" 
+    KeyValue = TypedIdentifier Assign?
+    //MapLiteral = "(" ListOf<KeyValue,","> ")"
+    MapEntry = TypedIdentifier "->" EXP
+    //MapLiteral = "{" (MapEntry ";")* "}"
+    MapLiteral = "{" ListOf<MapEntry,";"> "}"
+    //	ArrayTupleLiteral = "[" (EXP ",")* "]"
+	ArrayTupleLiteral = "[" ListOf<EXP,","> "]"
+    //TupleLiteral = "[" ListOf<EXP,";"> "]"
+	NumericLiteral = | BinLiteral | HexLiteral | OctLiteral | FloatLiteral | IntLiteral
+	BinLiteral = "0b" bit+ ("_" bit+)* 
+	HexLiteral = "0x" hexDigit+ ("_" hexDigit+)* 
+	OctLiteral = "0c" octDigit+ ("_" octDigit+)* 
+	FloatLiteral = digit+ ("_" digit+)* "." digit+ 
+	IntLiteral = digit+ ("_" digit+)* 
+    BooleanLiteral = "@true" | "@false"
+	BinOp =   	
+			| "**" --pow 
+			| "++" --concat
+			| "+" --add
+			| "-" --sub
+			| "*" --mult 
+			| "/" --div
+			| "==" --equal
+			| "===" --identical
+            //| "!=" --notEqual
+            //| "!==" --notIdentical
+			| "<>" --notEqual
+			| "<=>" --notIdentical
+			| "<=" --lte
+			| ">=" --gte
+			| "<" --lt
+			| ">" --gt
+	InfixFunc = "\\\\" identifier
+	octDigit = "0".."7"
+	bit = "0" | "1"
+	booleanLiteral = "@true" | "@false"
+	comment = multiLineComment | singleLineComment
+	space := whitespace | lineTerminator | comment
+	unicodeSpaceSeparator = "\u2000".."\u200B" | "\u3000"
+	whitespace = "\t"
+			| "\x0B"    -- verticalTab
+			| "\x0C"    -- formFeed
+			| " "
+			| "\u00A0"  -- noBreakSpace
+			| "\uFEFF"  -- byteOrderMark
+			| unicodeSpaceSeparator
+}

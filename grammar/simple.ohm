@@ -1,0 +1,78 @@
+Silicon {
+    // Si spec only allows binary infix operators
+    // Si spec bans any use of < or > symbols in the language
+	Program   = SourceElement*
+	SourceElement = 
+			| STATEMENT --sourceStatement
+			| EXP ";" --sourceExp
+	STATEMENT = | comment
+    docComment = "###" (~"###" sourceCharacter)* "###"
+    multiLineComment = "##" (~"##" sourceCharacter)* "##"
+	singleLineComment = "#" (~lineTerminator sourceCharacter)*
+	lineTerminator = "\n" | "\r" | "\u2028" | "\u2029"
+	sourceCharacter = any
+
+	EXP = 	| BinOpExp
+			| Definition
+			| FunctionCall
+			| Literal
+            | identifier
+            | OptionalWrapped<EXP>
+            
+    Assign = "=" EXP
+    Args = ListOf<EXP,",">
+    idenKeyword = identifier | keyword
+    IdenParams = idenKeyword Params
+    Type = ":" OptionalWrapped<IdenParams>
+    TypedIdentifier = identifier Type?
+    Params = ListOf<TypedIdentifier,",">
+	Definition = keyword TypedIdentifier Params Assign? 
+    discard = "_"
+	identifier = 
+    	| letter+ ("_" | alnum)* --iden1
+    	| "_" identifier+ --iden2
+	keyword = "@" identifier
+	BinOpExp = EXP BinOp EXP 
+	FunctionCall = evalSigil idenKeyword ListOf<EXP,","> 
+    evalSigil =  comptimeSigil | runtimeSigil
+    runtimeSigil = "&"
+    comptimeSigil = "&&"
+	Literal = StringLiteral | BlockLiteral | MapLiteral | ArrayTupleLiteral | NumericLiteral | BooleanLiteral
+	StringLiteral = "\"" stringChar*  "\"" 
+	stringChar = ~("\"" | "\\" | lineTerminator) any
+    BlockLiteral = "{" ListOf<EXP,";"> ";"? "}"
+    KeyValue = TypedIdentifier Assign?
+    MapEntry = TypedIdentifier "=" EXP
+    MapLiteral = "[" ListOf<MapEntry,";"> "]"
+	ArrayTupleLiteral = "[" ListOf<EXP,","> "]"
+	NumericLiteral = | BinLiteral | HexLiteral | OctLiteral | FloatLiteral | IntLiteral
+	BinLiteral = "0b" bit+ ("_" bit+)* 
+	HexLiteral = "0x" hexDigit+ ("_" hexDigit+)* 
+	OctLiteral = "0c" octDigit+ ("_" octDigit+)* 
+	FloatLiteral = digit+ ("_" digit+)* "." digit+ 
+	IntLiteral = digit+ ("_" digit+)* 
+    BooleanLiteral = "$true" | "$false"
+	BinOp =  
+			| "++" --concat
+			| "+" --add
+			| "-" --sub
+            | "*" --mult 
+			| "/" --div
+            | keyword
+	octDigit = "0".."7"
+	bit = "0" | "1"
+	booleanLiteral = "@true" | "@false"
+	comment = docComment | multiLineComment | singleLineComment
+    OptionalWrapped<rule> = 
+    	| rule --unwrapped 
+    	| "(" rule ")" --wrapped
+	space := whitespace | lineTerminator
+	unicodeSpaceSeparator = "\u2000".."\u200B" | "\u3000"
+	whitespace = "\t"
+			| "\x0B"    -- verticalTab
+			| "\x0C"    -- formFeed
+			| " "
+			| "\u00A0"  -- noBreakSpace
+			| "\uFEFF"  -- byteOrderMark
+			| unicodeSpaceSeparator
+}
