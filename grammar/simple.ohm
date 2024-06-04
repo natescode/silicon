@@ -1,6 +1,6 @@
 Silicon {
 	Program   = SourceElement*
-	SourceElement = 
+	SourceElement =
 			| STATEMENT --sourceStatement
 			| EXP ";" --sourceExp
 	STATEMENT = | comment
@@ -9,8 +9,15 @@ Silicon {
 	singleLineComment = "#" (~lineTerminator sourceCharacter)*
 	lineTerminator = "\n" | "\r" | "\u2028" | "\u2029"
 	sourceCharacter = any
-	EXP = 	| BinOpExp | Definition | FunctionCall | Literal | IdenOrProp | OptionalWrapped<EXP> 
+	EXP = 	| BinOpExp
+			| Definition
+			| FunctionCall
+			| Literal
+            | Name
+            | OptionalWrapped<EXP> 
     IdenOrProp = identifier ("." identifier)*
+    IdenOrNamespace = identifier ("::" identifier)* 
+    Name = idenKeyword ("::" identifier)* ("." identifier)*
     Assign = "=" EXP
     idenKeyword = identifier | keyword
     IdenParams = idenKeyword Params
@@ -19,18 +26,20 @@ Silicon {
     Args = ListOf<EXP,",">
     Params = ListOf<TypedIdentifier,",">
 	Definition = keyword TypedIdentifier Args Assign? 
-	identifier =| discard
-                | letter+ ("_" | alnum)* --iden1
-                | "_" identifier+ --iden2
+	identifier = 
+    	| discard
+    	| letter+ ("_" | alnum)* --iden1
+    	| "_" identifier+ --iden2
     discard = "_"
+    Macro = "@@" identifier
     keyword = "@" identifier
-	BinOpExp = EXP BinOp EXP 
-	FunctionCall = evalSigil (keyword | IdenOrProp) Args 
+	BinOpExp = EXP BinOp EXP
+	FunctionCall = evalSigil Name Args
     evalSigil =  comptimeSigil | runtimeSigil
     runtimeSigil = "&"
     comptimeSigil = "&&"
 	Literal = StringLiteral | BlockLiteral | MapLiteral | ArrayTupleLiteral | NumericLiteral | BooleanLiteral
-	StringLiteral = "\"" stringChar*  "\"" 
+	StringLiteral = "\"" stringChar*  "\""
 	stringChar = ~("\"" | "\\" | lineTerminator) any
     BlockLiteral = "{" ListOf<EXP,";"> ";"? "}"
     KeyValue = TypedIdentifier Assign?
@@ -38,13 +47,13 @@ Silicon {
     MapEntry = TypedIdentifier "=" EXP
 	ArrayTupleLiteral = "[" ListOf<EXP,","> "]"
 	NumericLiteral = | BinLiteral | HexLiteral | OctLiteral | FloatLiteral | IntLiteral
-	BinLiteral = "0b" bit+ ("_" bit+)* 
-	HexLiteral = "0x" hexDigit+ ("_" hexDigit+)* 
-	OctLiteral = "0c" octDigit+ ("_" octDigit+)* 
-	FloatLiteral = digit+ ("_" digit+)* "." digit+ 
-	IntLiteral = digit+ ("_" digit+)* 
+	BinLiteral = "0b" bit+ ("_" bit+)*
+	HexLiteral = "0x" hexDigit+ ("_" hexDigit+)*
+	OctLiteral = "0c" octDigit+ ("_" octDigit+)*
+	FloatLiteral = digit+ ("_" digit+)* "." digit+
+	IntLiteral = digit+ ("_" digit+)*
     BooleanLiteral = "$true" | "$false"
-	BinOp =  
+	BinOp =
 			| "++" --concat
 			| "+" --add
 			| "-" --sub
@@ -58,8 +67,8 @@ Silicon {
 	booleanLiteral = "@true" | "@false"
 	comment = docComment | multiLineComment | singleLineComment
     IdenOrLit<literal> = identifier | literal
-    OptionalWrapped<rule> = 
-    	| rule --unwrapped 
+    OptionalWrapped<rule> =
+    	| rule --unwrapped
     	| "(" rule ")" --wrapped
 	space := whitespace | lineTerminator
 	unicodeSpaceSeparator = "\u2000".."\u200B" | "\u3000"
