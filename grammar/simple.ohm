@@ -1,6 +1,4 @@
 Silicon {
-    // Si spec only allows binary infix operators
-    // Si spec bans any use of < or > symbols in the language
 	Program   = SourceElement*
 	SourceElement = 
 			| STATEMENT --sourceStatement
@@ -11,12 +9,7 @@ Silicon {
 	singleLineComment = "#" (~lineTerminator sourceCharacter)*
 	lineTerminator = "\n" | "\r" | "\u2028" | "\u2029"
 	sourceCharacter = any
-	EXP = 	| BinOpExp
-			| Definition
-			| FunctionCall
-			| Literal
-            | IdenOrProp
-            | OptionalWrapped<EXP> 
+	EXP = 	| BinOpExp | Definition | FunctionCall | Literal | IdenOrProp | OptionalWrapped<EXP> 
     IdenOrProp = identifier ("." identifier)*
     Assign = "=" EXP
     idenKeyword = identifier | keyword
@@ -26,10 +19,9 @@ Silicon {
     Args = ListOf<EXP,",">
     Params = ListOf<TypedIdentifier,",">
 	Definition = keyword TypedIdentifier Args Assign? 
-	identifier = 
-    	| discard
-    	| letter+ ("_" | alnum)* --iden1
-    	| "_" identifier+ --iden2
+	identifier =| discard
+                | letter+ ("_" | alnum)* --iden1
+                | "_" identifier+ --iden2
     discard = "_"
     keyword = "@" identifier
 	BinOpExp = EXP BinOp EXP 
