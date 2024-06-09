@@ -1,4 +1,0 @@
-Pipe {
-    Grammar = Exp "|>" Method
-    Method = identifier | keyword
-}

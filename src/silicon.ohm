@@ -4,27 +4,27 @@ Silicon {
 			| STATEMENT --sourceStatement
 			| EXP ";" --sourceExp
 	STATEMENT = | comment
-    docComment = docSigil (~"###" sourceCharacter)* "###"
-    multiLineComment = mlcommentSigil (~"##" sourceCharacter)* "##"
-	singleLineComment = commentSigil "#" (~lineTerminator sourceCharacter)*
+    docComment = "###" (~"###" sourceCharacter)* "###"
+    multiLineComment = "##" (~"##" sourceCharacter)* "##"
+	singleLineComment = "#" (~lineTerminator sourceCharacter)*
 	lineTerminator = "\n" | "\r" | "\u2028" | "\u2029"
 	sourceCharacter = any
-	EXP = 	| BinOpExp --binary
-			| Definition --definition
-			| FunctionCall --Function
-			| Literal --literal
-            | Name --name
-            | OptionalWrapped<EXP>  --wrapped
+	EXP = 	| BinaryExp
+			| Definition
+			| FunctionCall
+			| Literal
+            | Name
+            | OptionalWrapped<EXP> 
     IdenOrProp = identifier ("." identifier)*
     IdenOrNamespace = identifier ("::" identifier)* 
     Name = idenKeyword ("::" identifier)* ("." identifier)*
     Assign = "=" EXP
     idenKeyword = identifier | keyword
-	keyword = keywordSigil identifier
     IdenParams = idenKeyword Params
     Type = ":" OptionalWrapped<IdenParams>
     TypedIdentifier = identifier Type?
     Args = ListOf<EXP,",">
+    NamedArg = "$" identifier EXP
     Params = ListOf<TypedIdentifier,",">
 	Definition = keyword TypedIdentifier Args Assign? 
 	identifier = 
@@ -32,8 +32,14 @@ Silicon {
     	| letter+ ("_" | alnum)* --iden1
     	| "_" identifier+ --iden2
     discard = "_"
-	BinOpExp = EXP BinOp Literal
-	FunctionCall = evalSigil Name Args
+    Macro = "@@" identifier
+    keyword = "@" identifier
+    BinaryExp = 
+    	| EXP BinOp (Literal | Name) --bin
+	FunctionCall = evalSigil Name Args NamedArg*
+    evalSigil =  comptimeSigil | runtimeSigil
+    runtimeSigil = "&"
+    comptimeSigil = "&&"
 	Literal = StringLiteral | BlockLiteral | MapLiteral | ArrayTupleLiteral | NumericLiteral | BooleanLiteral
 	StringLiteral = "\"" stringChar*  "\""
 	stringChar = ~("\"" | "\\" | lineTerminator) any
@@ -49,28 +55,15 @@ Silicon {
 	FloatLiteral = digit+ ("_" digit+)* "." digit+
 	IntLiteral = digit+ ("_" digit+)*
     BooleanLiteral = "$true" | "$false"
-	// Sigils
-    evalSigil =  comptimeSigil | runtimeSigil
-    runtimeSigil = "&"
-    comptimeSigil = "&&"
-	keywordSigil = "@"
-	macroSigil = "@@"
-	sigil = 
-		| docSigil --doc
-		| 
-		| evalSigil  --eval
-		| runtimeSigil --runtime
-		| comptimeSigil --comptime
-		| keywordSigil  --keyword
-		| macroSigil --macro
 	BinOp =
 			| "++" --concat
 			| "+" --add
 			| "-" --sub
             | "*" --mult
 			| "/" --div
-            | ".." --series
             | "..." --spread
+            | ".." --series
+            | "|>" --pipe
             | keyword --keywordOp // for keyword binary operators such as @and @or etc...aaoeu				
 	octDigit = "0".."7"
 	bit = "0" | "1"
