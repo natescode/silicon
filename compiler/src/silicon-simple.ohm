@@ -7,7 +7,7 @@ Silicon {
             // | BlockLiteral --block
             | literal --lit
 	binOp =
-			// | "++" 
+			| "++" 
 			| "+" 
 			| "-" 
             | "*" 

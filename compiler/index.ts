@@ -13,7 +13,7 @@ Silicon {
             // | BlockLiteral --block
             | literal --lit
 	binOp =
-			// | "++" 
+			| "++" 
 			| "+" 
 			| "-" 
       | "*" 
@@ -71,6 +71,7 @@ const semantics = g.createSemantics().addOperation('eval', {
   EXP_binaryExp(exp, binop, lit) {
     let val = exp.eval()
     let litVal = lit.eval()
+    if (binop.sourceString === '++') return val + litVal
     if (binop.sourceString === '+') return val + litVal
     if (binop.sourceString === '-') return val - litVal
     if (binop.sourceString === '*') return val * litVal
@@ -99,11 +100,15 @@ const semantics = g.createSemantics().addOperation('eval', {
   EXP_lit(literal) {
     return literal.eval()
   },
-  intLiteral(firstDigit, underscore, remaining) {
+  intLiteral(firstDigit, _, remaining) {
     let intString = firstDigit.sourceString + remaining.sourceString.split('_').join('')
     // console.log(`intString ${intString}`)
     let intInteger = parseInt(intString, 10)
     return intInteger
+  },
+  stringLiteral(_, chars, __) {
+    // return '"' + chars.children.map(c => c.sourceString).join('') + '"'
+    return chars.children.map(c => c.sourceString).join('')
   }
   // BlockLiteral(lBracket,exps,sc,rBracket){
 
@@ -114,7 +119,8 @@ const semantics = g.createSemantics().addOperation('eval', {
 });
 
 let result;
-let sourceCode = '1 + 5 - 2 * 3 - 4;'
+// let sourceCode = '1 + 5 - 2 * 3 - 4;'
+let sourceCode = '"hello, " + "world!";'
 const m = g.match(sourceCode);
 if (m.succeeded()) {
   result = semantics(m).eval();  // Evaluate the expression.
