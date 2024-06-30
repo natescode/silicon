@@ -96,8 +96,12 @@ const semantics = g.createSemantics().addOperation('eval', {
   EXP_lit(literal) {
     return literal.eval()
   },
-  intLiteral(a, b, c) {
-    return 0
+  intLiteral(firstDigit, underscore, remaining) {
+    // return 0
+    let intString = firstDigit.sourceString + remaining.sourceString.split('_').join('')
+    console.log(`intString ${intString}`)
+    let intInteger = parseInt(intString, 10)
+    return intInteger
     // return parseInt(children.map(c => c.sourceString).join('),10'))
     // return parseInt(firstDigit.sourceString + digits.map(d => d.sourceString).toString())
   }
