@@ -3,6 +3,9 @@
 # Typescript 
 *.d.ts
 
+# Ohm
+*-bundle.js
+
 # Logs
 
 logs

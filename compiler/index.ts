@@ -1,6 +1,6 @@
 console.log("Silicon v2024.01");
 import * as ohm from 'ohm-js'
-import type { SiliconGrammar, SiliconActionDict, SiliconSemantics } from './src/silicon.ohm-bundle.d.ts';
+import type { SiliconGrammar, SiliconActionDict, SiliconSemantics } from './src/silicon-simple.ohm-bundle.js'
 // An Ohm grammar for arithmetic expressions.
 // Syntax reference: https://github.com/harc/ohm/blob/master/doc/syntax-reference.md
 const grammarSource = String.raw`
