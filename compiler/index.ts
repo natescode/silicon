@@ -3,7 +3,9 @@ import * as ohm from 'ohm-js'
 import type { SiliconGrammar, SiliconActionDict, SiliconSemantics } from './src/silicon-simple.ohm-bundle.js'
 // An Ohm grammar for arithmetic expressions.
 // Syntax reference: https://github.com/harc/ohm/blob/master/doc/syntax-reference.md
-const grammarSource = String.raw`
+const grammarSource = Bun.file('./src/silicon-simple.ohm')
+
+const _grammarSource = String.raw`
 Silicon {
 	Program   = SourceElement*
 	SourceElement =
@@ -38,9 +40,9 @@ Silicon {
 			intLiteral = digit+ ("_" digit+)*
 		booleanLiteral = "@true" | "@false"
 	identifier = 
-    	| discard
-    	| letter+ ("_" | alnum)* --iden1
-    	| "_" identifier+ --iden2
+    	| discard -- discard
+    	| letter+ ("_" | alnum)* -- pub
+    	| "_" identifier+ -- priv
     	discard = "_"
     // Assign = "=" EXP
 	space := whitespace | lineTerminator
@@ -57,7 +59,7 @@ Silicon {
 
 // let x:si.SiliconGrammar
 // Instantiate the grammar defined above.
-const g = ohm.grammar(grammarSource);
+const g = ohm.grammar(await grammarSource.text());
 
 // Define an operation named 'eval' which evaluates the expression.
 // See https://github.com/cdglabs/ohm/blob/master/doc/api-reference.md#semantics
@@ -109,9 +111,30 @@ const semantics = g.createSemantics().addOperation('eval', {
   stringLiteral(_, chars, __) {
     // return '"' + chars.children.map(c => c.sourceString).join('') + '"'
     return chars.children.map(c => c.sourceString).join('')
+  },
+  booleanLiteral(v) {
+    if (v.sourceString === "@true") return true
+    if (v.sourceString === "@false") return true
+    throw new Error("invalid boolean literal value")
+  },
+  keyword(at, word) {
+    return word.sourceString
+  },
+  identifier_discard(discard) {
+    return discard.sourceString
+  },
+  identifier_pub(start, end) {
+    return start.sourceString + end.children.map(c => c.sourceString).join('')
+  },
+  identifier_priv(underscore, name) {
+    return underscore.sourceString + name.children.map(c => c.sourceString).join('')
+  },
+  discard(discard) {
+    // "_" character
+    return discard.sourceString
   }
-  // BlockLiteral(lBracket,exps,sc,rBracket){
 
+  // BlockLiteral(lBracket,exps,sc,rBracket){
   // }
   // Assign(eq, exp) {
   //   // todo assign
@@ -119,8 +142,8 @@ const semantics = g.createSemantics().addOperation('eval', {
 });
 
 let result;
-// let sourceCode = '1 + 5 - 2 * 3 - 4;'
-let sourceCode = '"hello, " + "world!";'
+let sourceCode = '1 + 5 - 2 * 3 - 4;'
+// let sourceCode = '"hello, " + "world!";'
 const m = g.match(sourceCode);
 if (m.succeeded()) {
   result = semantics(m).eval();  // Evaluate the expression.

@@ -10,7 +10,7 @@ Silicon {
 			| "++" 
 			| "+" 
 			| "-" 
-            | "*" 
+      		| "*" 
 			| "/" 
             // | "..." 
             // | ".." 
@@ -32,9 +32,9 @@ Silicon {
 			intLiteral = digit+ ("_" digit+)*
 		booleanLiteral = "@true" | "@false"
 	identifier = 
-    	| discard
-    	| letter+ ("_" | alnum)* --iden1
-    	| "_" identifier+ --iden2
+    	| discard -- discard
+    	| letter+ ("_" | alnum)* -- pub
+    	| "_" identifier+ -- priv
     	discard = "_"
     // Assign = "=" EXP
 	space := whitespace | lineTerminator

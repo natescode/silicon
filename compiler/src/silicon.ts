@@ -2,7 +2,7 @@
 
 import * as fs from "node:fs/promises"
 // import stringify from "graph-stringify"
-import compile from "./compiler.ts"
+import { compile } from "./compiler"
 
 const help = `Sigil: the Official Silicon compiler 
 
