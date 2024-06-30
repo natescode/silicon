@@ -2,24 +2,26 @@ Silicon {
 	Program   = SourceElement*
 	SourceElement =
 			| EXP ";" --sourceExp
-	EXP = 	| EXP BinOp (literal | identifier) --binaryExp
-			| "@let" identifier Assign? --letExp
-	BinOp =
-			| "++" --concat
-			| "+" --add
-			| "-" --sub
-            | "*" --mult
-			| "/" --div
-            | "..." --spread
-            | ".." --series
-            | "|>" --pipe
-            | keyword --keywordOp // for keyword binary operators such as @and @or etc...aaoeu				
+	EXP = 	| EXP binOp literal --binaryExp
+			// | "@let" identifier Assign? --letExp
+            // | BlockLiteral --block
+            | literal --lit
+	binOp =
+			| "++" 
+			| "+" 
+			| "-" 
+            | "*" 
+			| "/" 
+            | "..." 
+            | ".." 
+            | "|>"
+            | keyword 			
     keyword = "@" identifier
-	literal = stringLiteral | BlockLiteral | MapLiteral | ArrayTupleLiteral | numericLiteral | booleanLiteral
+	literal = stringLiteral | numericLiteral | booleanLiteral
 		stringLiteral = "\"" stringChar*  "\""
 			stringChar = ~("\"" | "\\" | lineTerminator) any
 				lineTerminator = "\n" | "\r" | "\u2028" | "\u2029"
-    	BlockLiteral = "{" ListOf<EXP,";"> ";"? "}"
+    	// BlockLiteral = "{" ListOf<EXP,";"> ";"? "}"
 		numericLiteral = | binLiteral | hexLiteral | octLiteral | floatLiteral | intLiteral
 			binLiteral = "0b" bit+ ("_" bit+)*
 				bit = "0" | "1"
@@ -34,7 +36,7 @@ Silicon {
     	| letter+ ("_" | alnum)* --iden1
     	| "_" identifier+ --iden2
     	discard = "_"
-    Assign = "=" EXP
+    // Assign = "=" EXP
 	space := whitespace | lineTerminator
 	whitespace = "\t"
 			| "\x0B"    -- verticalTab
