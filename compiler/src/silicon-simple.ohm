@@ -7,15 +7,15 @@ Silicon {
             // | BlockLiteral --block
             | literal --lit
 	binOp =
-			| "++" 
+			// | "++" 
 			| "+" 
-			| "-" 
-            | "*" 
-			| "/" 
-            | "..." 
-            | ".." 
-            | "|>"
-            | keyword 			
+			// | "-" 
+            // | "*" 
+			// | "/" 
+            // | "..." 
+            // | ".." 
+            // | "|>"
+            // | keyword 			
     keyword = "@" identifier
 	literal = stringLiteral | numericLiteral | booleanLiteral
 		stringLiteral = "\"" stringChar*  "\""

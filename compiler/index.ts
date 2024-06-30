@@ -13,15 +13,15 @@ Silicon {
             // | BlockLiteral --block
             | literal --lit
 	binOp =
-			| "++" 
+			// | "++" 
 			| "+" 
-			| "-" 
-            | "*" 
-			| "/" 
-            | "..." 
-            | ".." 
-            | "|>"
-            | keyword 			
+			// | "-" 
+            // | "*" 
+			// | "/" 
+            // | "..." 
+            // | ".." 
+            // | "|>"
+            // | keyword 			
     keyword = "@" identifier
 	literal = stringLiteral | numericLiteral | booleanLiteral
 		stringLiteral = "\"" stringChar*  "\""
@@ -71,20 +71,21 @@ const semantics = g.createSemantics().addOperation('eval', {
   EXP_binaryExp(exp, binop, lit) {
     let val = exp.eval()
     let litVal = lit.eval()
-    switch (binop.eval()) {
-      case '++': return val + litVal
-      case '+': return val + litVal
-      case '-': return val - litVal
-      case '*': return val * litVal
-      case '/': return val / litVal
-      // case '...': return val  litVal
-      // case '..': return val series litVal
-      case '|>': return litVal(val)
-      default: {
-        console.log('keyword. todo')
-        return "keyword"
-      }
-    }
+    return val + litVal
+    // switch (binop.eval()) {
+    //   // case '++': return val + litVal
+    //   case '+': return val + litVal
+    //   // case '-': return val - litVal
+    //   // case '*': return val * litVal
+    //   // case '/': return val / litVal
+    //   // case '...': return 0
+    //   // case '..': return 0
+    //   // case '|>': return 0
+    //   default: {
+    //     console.log('keyword. todo')
+    //     // return "keyword"
+    //   }
+    // }
   },
   // EXP_letExp(letkeyword, identifier, assign) {
 
@@ -95,6 +96,11 @@ const semantics = g.createSemantics().addOperation('eval', {
   EXP_lit(literal) {
     return literal.eval()
   },
+  intLiteral(a, b, c) {
+    return 0
+    // return parseInt(children.map(c => c.sourceString).join('),10'))
+    // return parseInt(firstDigit.sourceString + digits.map(d => d.sourceString).toString())
+  }
   // BlockLiteral(lBracket,exps,sc,rBracket){
 
   // }
@@ -104,7 +110,7 @@ const semantics = g.createSemantics().addOperation('eval', {
 });
 
 let result;
-const m = g.match('1 + 5 - 4;');
+const m = g.match('1 + 5;');
 if (m.succeeded()) {
   result = semantics(m).eval();  // Evaluate the expression.
 } else {
