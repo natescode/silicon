@@ -1,9 +1,8 @@
-console.log("Silicon v2024.01");
-import * as ohm from 'ohm-js'
+import ohm from 'ohm-js';
 // An Ohm grammar for arithmetic expressions.
 // Syntax reference: https://github.com/harc/ohm/blob/master/doc/syntax-reference.md
 const grammarSource = String.raw`
-  Silicon {
+  Arithmetic {
     Exp = AddExp
     AddExp = AddExp "+" PriExp  -- plus
            | AddExp "-" PriExp  -- minus
@@ -44,7 +43,7 @@ const semantics = g.createSemantics().addOperation('eval', {
 });
 
 let result;
-const m = g.match('1 + 5 - 4');
+const m = g.match('1 + 2 - 3');
 if (m.succeeded()) {
   result = semantics(m).eval();  // Evaluate the expression.
 } else {

@@ -1,0 +1,47 @@
+Silicon {
+	Program   = SourceElement*
+	SourceElement =
+			| EXP ";" --sourceExp
+	EXP = 	| EXP BinOp (literal | identifier) --binaryExp
+			| "@let" identifier Assign? --letExp
+	BinOp =
+			| "++" --concat
+			| "+" --add
+			| "-" --sub
+            | "*" --mult
+			| "/" --div
+            | "..." --spread
+            | ".." --series
+            | "|>" --pipe
+            | keyword --keywordOp // for keyword binary operators such as @and @or etc...aaoeu				
+    keyword = "@" identifier
+	literal = stringLiteral | BlockLiteral | MapLiteral | ArrayTupleLiteral | numericLiteral | booleanLiteral
+		stringLiteral = "\"" stringChar*  "\""
+			stringChar = ~("\"" | "\\" | lineTerminator) any
+				lineTerminator = "\n" | "\r" | "\u2028" | "\u2029"
+    	BlockLiteral = "{" ListOf<EXP,";"> ";"? "}"
+		numericLiteral = | binLiteral | hexLiteral | octLiteral | floatLiteral | intLiteral
+			binLiteral = "0b" bit+ ("_" bit+)*
+				bit = "0" | "1"
+			hexLiteral = "0x" hexDigit+ ("_" hexDigit+)*
+			octLiteral = "0c" octDigit+ ("_" octDigit+)*
+				octDigit = "0".."7"
+			floatLiteral = digit+ ("_" digit+)* "." digit+
+			intLiteral = digit+ ("_" digit+)*
+		booleanLiteral = "@true" | "@false"
+	identifier = 
+    	| discard
+    	| letter+ ("_" | alnum)* --iden1
+    	| "_" identifier+ --iden2
+    	discard = "_"
+    Assign = "=" EXP
+	space := whitespace | lineTerminator
+	whitespace = "\t"
+			| "\x0B"    -- verticalTab
+			| "\x0C"    -- formFeed
+			| " "
+			| "\u00A0"  -- noBreakSpace
+			| "\uFEFF"  -- byteOrderMark
+			| unicodeSpaceSeparator
+	unicodeSpaceSeparator = "\u2000".."\u200B" | "\u3000"
+}
