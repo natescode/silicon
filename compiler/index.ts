@@ -15,9 +15,9 @@ Silicon {
 	binOp =
 			// | "++" 
 			| "+" 
-			// | "-" 
-            // | "*" 
-			// | "/" 
+			| "-" 
+      | "*" 
+			| "/" 
             // | "..." 
             // | ".." 
             // | "|>"
@@ -71,7 +71,10 @@ const semantics = g.createSemantics().addOperation('eval', {
   EXP_binaryExp(exp, binop, lit) {
     let val = exp.eval()
     let litVal = lit.eval()
-    return val + litVal
+    if (binop.sourceString === '+') return val + litVal
+    if (binop.sourceString === '-') return val - litVal
+    if (binop.sourceString === '*') return val * litVal
+    if (binop.sourceString === '/') return val / litVal
     // switch (binop.eval()) {
     //   // case '++': return val + litVal
     //   case '+': return val + litVal
@@ -97,13 +100,10 @@ const semantics = g.createSemantics().addOperation('eval', {
     return literal.eval()
   },
   intLiteral(firstDigit, underscore, remaining) {
-    // return 0
     let intString = firstDigit.sourceString + remaining.sourceString.split('_').join('')
-    console.log(`intString ${intString}`)
+    // console.log(`intString ${intString}`)
     let intInteger = parseInt(intString, 10)
     return intInteger
-    // return parseInt(children.map(c => c.sourceString).join('),10'))
-    // return parseInt(firstDigit.sourceString + digits.map(d => d.sourceString).toString())
   }
   // BlockLiteral(lBracket,exps,sc,rBracket){
 
@@ -114,13 +114,15 @@ const semantics = g.createSemantics().addOperation('eval', {
 });
 
 let result;
-const m = g.match('1 + 5;');
+let sourceCode = '1 + 5 - 2 * 3 - 4;'
+const m = g.match(sourceCode);
 if (m.succeeded()) {
   result = semantics(m).eval();  // Evaluate the expression.
 } else {
   result = m.message;  // Extract the error message.
 }
-console.log(`result \n ${result}`)
+let sc = sourceCode.slice(0, -1)
+console.log(`${sc} = ${result}`)
 
 // TODO move 9 above into this method
 // function parseExpression(input: string, grammar: SiliconGrammar): ohm.MatchResult {
