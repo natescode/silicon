@@ -1,11 +1,14 @@
 Silicon {
 	Program   = SourceElement*
-	SourceElement =
-			| EXP ";" --sourceExp
-	EXP = 	| EXP binOp literal --binaryExp
-			// | "@let" identifier Assign? --letExp
-            // | BlockLiteral --block
-            | literal --lit
+	
+	SourceElement = | EXP ";" --sourceExp
+
+	EXP = 	| EXP binOp EXPR  --binaryExp
+			| EXPR --expr
+    
+    EXPR =  | literal --lit
+    		| "(" EXP ")" --paren
+
 	binOp =
 			| "++" 
 			| "+" 

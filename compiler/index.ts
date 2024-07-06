@@ -4,103 +4,35 @@ import type { SiliconGrammar, SiliconActionDict, SiliconSemantics } from './src/
 // An Ohm grammar for arithmetic expressions.
 // Syntax reference: https://github.com/harc/ohm/blob/master/doc/syntax-reference.md
 const grammarSource = Bun.file('./src/silicon-simple.ohm')
-
-const _grammarSource = String.raw`
-Silicon {
-	Program   = SourceElement*
-	SourceElement =
-			| EXP ";" --sourceExp
-	EXP = 	| EXP binOp literal --binaryExp
-			// | "@let" identifier Assign? --letExp
-            // | BlockLiteral --block
-            | literal --lit
-	binOp =
-			| "++" 
-			| "+" 
-			| "-" 
-      | "*" 
-			| "/" 
-            // | "..." 
-            // | ".." 
-            // | "|>"
-            // | keyword 			
-    keyword = "@" identifier
-	literal = stringLiteral | numericLiteral | booleanLiteral
-		stringLiteral = "\"" stringChar*  "\""
-			stringChar = ~("\"" | "\\" | lineTerminator) any
-				lineTerminator = "\n" | "\r" | "\u2028" | "\u2029"
-    	// BlockLiteral = "{" ListOf<EXP,";"> ";"? "}"
-		numericLiteral = | binLiteral | hexLiteral | octLiteral | floatLiteral | intLiteral
-			binLiteral = "0b" bit+ ("_" bit+)*
-				bit = "0" | "1"
-			hexLiteral = "0x" hexDigit+ ("_" hexDigit+)*
-			octLiteral = "0c" octDigit+ ("_" octDigit+)*
-				octDigit = "0".."7"
-			floatLiteral = digit+ ("_" digit+)* "." digit+
-			intLiteral = digit+ ("_" digit+)*
-		booleanLiteral = "@true" | "@false"
-	identifier = 
-    	| discard -- discard
-    	| letter+ ("_" | alnum)* -- pub
-    	| "_" identifier+ -- priv
-    	discard = "_"
-    // Assign = "=" EXP
-	space := whitespace | lineTerminator
-	whitespace = "\t"
-			| "\x0B"    -- verticalTab
-			| "\x0C"    -- formFeed
-			| " "
-			| "\u00A0"  -- noBreakSpace
-			| "\uFEFF"  -- byteOrderMark
-			| unicodeSpaceSeparator
-	unicodeSpaceSeparator = "\u2000".."\u200B" | "\u3000"
-}
-`;
-
-// let x:si.SiliconGrammar
-// Instantiate the grammar defined above.
-const g = ohm.grammar(await grammarSource.text());
+// Instantiate the grammar defined in ./src/silicon-simple.ohm
+const siliconGrammar = ohm.grammar(await grammarSource.text());
 
 // Define an operation named 'eval' which evaluates the expression.
 // See https://github.com/cdglabs/ohm/blob/master/doc/api-reference.md#semantics
-const semantics = g.createSemantics().addOperation('eval', {
+const siliconSemantics = siliconGrammar.createSemantics().addOperation('eval', {
   Program(sourceElements) {
     return sourceElements.children.map(sourceElement => sourceElement.eval())
   },
   SourceElement_sourceExp(exp, sc) {
     return exp.eval()
   },
-  EXP_binaryExp(exp, binop, lit) {
-    let val = exp.eval()
-    let litVal = lit.eval()
-    if (binop.sourceString === '++') return val + litVal
-    if (binop.sourceString === '+') return val + litVal
-    if (binop.sourceString === '-') return val - litVal
-    if (binop.sourceString === '*') return val * litVal
-    if (binop.sourceString === '/') return val / litVal
-    // switch (binop.eval()) {
-    //   // case '++': return val + litVal
-    //   case '+': return val + litVal
-    //   // case '-': return val - litVal
-    //   // case '*': return val * litVal
-    //   // case '/': return val / litVal
-    //   // case '...': return 0
-    //   // case '..': return 0
-    //   // case '|>': return 0
-    //   default: {
-    //     console.log('keyword. todo')
-    //     // return "keyword"
-    //   }
-    // }
+  EXP_binaryExp(left, binop, right) {
+    let lvalue = left.eval()
+    let rvalue = right.eval()
+    if (binop.sourceString === '++') return lvalue + rvalue
+    if (binop.sourceString === '+') return lvalue + rvalue
+    if (binop.sourceString === '-') return lvalue - rvalue
+    if (binop.sourceString === '*') return lvalue * rvalue
+    if (binop.sourceString === '/') return lvalue / rvalue
   },
-  // EXP_letExp(letkeyword, identifier, assign) {
-
-  // },
-  // EXP_block(blockLiteral) {
-  //   return blockLiteral.eval()
-  // },
-  EXP_lit(literal) {
+  EXP_expr(expr) {
+    return expr.eval()
+  },
+  EXPR_lit(literal) {
     return literal.eval()
+  },
+  EXPR_paren(lparen, exp, rparen) {
+    return exp.eval()
   },
   intLiteral(firstDigit, _, remaining) {
     let intString = firstDigit.sourceString + remaining.sourceString.split('_').join('')
@@ -142,13 +74,14 @@ const semantics = g.createSemantics().addOperation('eval', {
 });
 
 let result;
-let sourceCode = '1 + 5 - 2 * 3 - 4;'
+// let sourceCode = '1 + 5 - 2 * 3 - 4;'
 // let sourceCode = '"hello, " + "world!";'
-const m = g.match(sourceCode);
-if (m.succeeded()) {
-  result = semantics(m).eval();  // Evaluate the expression.
+let sourceCode = '1 + 5 - (2 * 3) - 4;'
+const match = siliconGrammar.match(sourceCode);
+if (match.succeeded()) {
+  result = siliconSemantics(match).eval();  // Evaluate the expression.
 } else {
-  result = m.message;  // Extract the error message.
+  result = match.message;  // Extract the error message.
 }
 let sc = sourceCode.slice(0, -1)
 console.log(`${sc} = ${result}`)
