@@ -21,8 +21,8 @@ Silicon {
             // | keyword 			
     keyword = "@" identifier
 	literal = stringLiteral | numericLiteral | booleanLiteral
-		stringLiteral = "\"" stringChar*  "\""
-			stringChar = ~("\"" | "\\" | lineTerminator) any
+		stringLiteral = "'" stringChar*  "'"
+			stringChar = ~("'" | "\\" | lineTerminator) any
 				lineTerminator = "\n" | "\r" | "\u2028" | "\u2029"
     	// BlockLiteral = "{" ListOf<EXP,";"> ";"? "}"
 		numericLiteral = | binLiteral | hexLiteral | octLiteral | floatLiteral | intLiteral

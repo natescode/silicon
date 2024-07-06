@@ -19,7 +19,7 @@ const siliconSemantics = siliconGrammar.createSemantics().addOperation('eval', {
   EXP_binaryExp(left, binop, right) {
     let lvalue = left.eval()
     let rvalue = right.eval()
-    if (binop.sourceString === '++') return lvalue + rvalue
+    if (binop.sourceString === '++') return `'${lvalue + rvalue}'`
     if (binop.sourceString === '+') return lvalue + rvalue
     if (binop.sourceString === '-') return lvalue - rvalue
     if (binop.sourceString === '*') return lvalue * rvalue
@@ -69,7 +69,7 @@ const siliconSemantics = siliconGrammar.createSemantics().addOperation('eval', {
     throw new Error("invalid boolean literal value")
   },
   keyword(at, word) {
-    return word.sourceString
+    return at.sourceString + word.sourceString
   },
   identifier_discard(discard) {
     return discard.sourceString
@@ -97,7 +97,8 @@ let result;
 // let sourceCode = '"hello, " + "world!";'
 // let sourceCode = '5 - 1 + (2 * 3) / 2;'
 // let sourceCode = '0x10 + 0x11;'
-let sourceCode = '1.2 + 1.8;'
+// let sourceCode = '1.2 + 1.8;'
+let sourceCode = "'hello, ' ++ 'world!';";
 const match = siliconGrammar.match(sourceCode);
 if (match.succeeded()) {
   result = siliconSemantics(match).eval();  // Evaluate the expression.
