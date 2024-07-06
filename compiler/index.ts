@@ -44,6 +44,25 @@ const siliconSemantics = siliconGrammar.createSemantics().addOperation('eval', {
     // return '"' + chars.children.map(c => c.sourceString).join('') + '"'
     return chars.children.map(c => c.sourceString).join('')
   },
+  binLiteral(_0b, firstDigit, _, remaining) {
+    let intString = _0b.sourceString + firstDigit.sourceString + remaining.sourceString.split('_').join('')
+    let intInteger = parseInt(intString)
+    return intInteger
+  },
+  hexLiteral(_0x, firstDigit, _, remaining) {
+    let intString = _0x.sourceString + firstDigit.sourceString + remaining.sourceString.split('_').join('')
+    let intInteger = parseInt(intString)
+    return intInteger
+  },
+  octLiteral(_0c, firstDigit, _, remaining) {
+    let intString = firstDigit.sourceString + remaining.sourceString.split('_').join('')
+    let intInteger = parseInt(intString, 8)
+    return intInteger
+  },
+  floatLiteral(firstDigit, _, secondDigit, dot, decimalDigits) {
+    let floatString = firstDigit.sourceString + secondDigit.sourceString + dot.sourceString + decimalDigits.sourceString
+    return parseFloat(floatString)
+  },
   booleanLiteral(v) {
     if (v.sourceString === "@true") return true
     if (v.sourceString === "@false") return true
@@ -74,9 +93,11 @@ const siliconSemantics = siliconGrammar.createSemantics().addOperation('eval', {
 });
 
 let result;
-// let sourceCode = '1 + 5 - 2 * 3 - 4;'
+// let sourceCode = '5 - 1 + 2 * 3 / 2;'
 // let sourceCode = '"hello, " + "world!";'
-let sourceCode = '1 + 5 - (2 * 3) - 4;'
+// let sourceCode = '5 - 1 + (2 * 3) / 2;'
+// let sourceCode = '0x10 + 0x11;'
+let sourceCode = '1.2 + 1.8;'
 const match = siliconGrammar.match(sourceCode);
 if (match.succeeded()) {
   result = siliconSemantics(match).eval();  // Evaluate the expression.
