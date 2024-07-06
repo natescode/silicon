@@ -28,6 +28,9 @@ const siliconSemantics = siliconGrammar.createSemantics().addOperation('eval', {
   EXP_expr(expr) {
     return expr.eval()
   },
+  EXP_letEXP(_let, identifier, eq, exp) {
+    return exp.eval()
+  },
   EXPR_lit(literal) {
     return literal.eval()
   },
@@ -98,7 +101,8 @@ let result;
 // let sourceCode = '5 - 1 + (2 * 3) / 2;'
 // let sourceCode = '0x10 + 0x11;'
 // let sourceCode = '1.2 + 1.8;'
-let sourceCode = "'hello, ' ++ 'world!';";
+// let sourceCode = "'hello, ' ++ 'world!';";
+let sourceCode = `1 + (@let x = 2);`
 const match = siliconGrammar.match(sourceCode);
 if (match.succeeded()) {
   result = siliconSemantics(match).eval();  // Evaluate the expression.

@@ -5,6 +5,7 @@ Silicon {
 
 	EXP = 	| EXP binOp EXPR  --binaryExp
 			| EXPR --expr
+			| "@let" identifier "=" EXP --letEXP
     
     EXPR =  | literal --lit
     		| "(" EXP ")" --paren
