@@ -21,7 +21,11 @@ Silicon {
             // | "|>"
             // | keyword 			
     keyword = "@" identifier
-	literal = stringLiteral | numericLiteral | booleanLiteral
+	literal = 
+		| stringLiteral  -- str
+		| numericLiteral -- num 
+		| booleanLiteral -- bln
+
 		stringLiteral = "'" stringChar*  "'"
 			stringChar = ~("'" | "\\" | lineTerminator) any
 				lineTerminator = "\n" | "\r" | "\u2028" | "\u2029"

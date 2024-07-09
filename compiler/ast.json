@@ -1,0 +1,44 @@
+{
+    "type": "program",
+    "statements": [
+        {
+            "type": "binary_exp",
+            "left": {
+                "type": "expression",
+                "exp": {
+                    "type": "expr_literal",
+                    "value": {
+                        "type": "literal",
+                        "exp": {
+                            "type": "numeric_literal",
+                            "lit": "1"
+                        }
+                    }
+                }
+            },
+            "op": {
+                "type": "operator",
+                "op": "+"
+            },
+            "right": {
+                "type": "let_exp",
+                "_let": "@let",
+                "id": "x",
+                "eq": "=",
+                "exp": {
+                    "type": "expression",
+                    "exp": {
+                        "type": "expr_literal",
+                        "value": {
+                            "type": "literal",
+                            "exp": {
+                                "type": "numeric_literal",
+                                "lit": "2"
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    ]
+}
