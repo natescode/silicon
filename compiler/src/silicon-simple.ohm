@@ -1,14 +1,16 @@
 Silicon {
-	Program   = SourceElement*
-	
-	SourceElement = | EXP ";" --sourceExp
+	Program   = Element*
+	Element = | ExpressionStart ";" -- Expression
+			// | Statement ";" -- Statement
 
-	EXP = 	| EXP binOp EXPR  --binaryExp
-			| EXPR --expr
-			| "@let" identifier "=" EXP --letEXP
-    
-    EXPR =  | literal --lit
-    		| "(" EXP ")" --paren
+	ExpressionStart = 	
+			| ExpressionStart binOp ExpressionEnd -- binaryExpression
+			| "@let" identifier "=" ExpressionStart -- letExpression
+			| ExpressionEnd
+
+    ExpressionEnd =  
+			| literal 
+    		| "(" ExpressionStart ")" -- paren
 
 	binOp =
 			| "++" 
@@ -16,35 +18,34 @@ Silicon {
 			| "-" 
       		| "*" 
 			| "/" 
-            // | "..." 
-            // | ".." 
-            // | "|>"
-            // | keyword 			
+
     keyword = "@" identifier
 	literal = 
 		| stringLiteral  -- str
-		| numericLiteral -- num 
-		| booleanLiteral -- bln
+		| booleanLiteral -- bool
+		| floatLiteral -- float 
+		| intLiteral -- integer
 
 		stringLiteral = "'" stringChar*  "'"
 			stringChar = ~("'" | "\\" | lineTerminator) any
 				lineTerminator = "\n" | "\r" | "\u2028" | "\u2029"
-    	// BlockLiteral = "{" ListOf<EXP,";"> ";"? "}"
-		numericLiteral = | binLiteral | hexLiteral | octLiteral | floatLiteral | intLiteral
+			intLiteral = decLiteral | binLiteral | hexLiteral | octLiteral
 			binLiteral = "0b" bit+ ("_" bit+)*
 				bit = "0" | "1"
 			hexLiteral = "0x" hexDigit+ ("_" hexDigit+)*
 			octLiteral = "0c" octDigit+ ("_" octDigit+)*
 				octDigit = "0".."7"
 			floatLiteral = digit+ ("_" digit+)* "." digit+
-			intLiteral = digit+ ("_" digit+)*
+			decLiteral = digit+ ("_" digit+)*
 		booleanLiteral = "@true" | "@false"
+
 	identifier = 
     	| discard -- discard
     	| letter+ ("_" | alnum)* -- pub
     	| "_" identifier+ -- priv
+
     	discard = "_"
-    // Assign = "=" EXP
+
 	space := whitespace | lineTerminator
 	whitespace = "\t"
 			| "\x0B"    -- verticalTab

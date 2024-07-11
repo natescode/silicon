@@ -1,13 +1,13 @@
 import * as ohm from 'ohm-js'
 export default function addEvalSemantics(siliconGrammar: ohm.Grammar) {
     return siliconGrammar.createSemantics().addOperation('eval', {
-        Program(sourceElements) {
-            return sourceElements.children.map(sourceElement => sourceElement.eval())
+        Program(elements) {
+            return elements.children.map(element => element.eval())
         },
-        SourceElement_sourceExp(exp, sc) {
+        Element_Expression(exp, sc) {
             return exp.eval()
         },
-        EXP_binaryExp(left, binop, right) {
+        ExpressionStart_binaryExpression(left, binop, right) {
             let lvalue = left.eval()
             let rvalue = right.eval()
             if (binop.sourceString === '++') return `'${lvalue + rvalue}'`
@@ -16,19 +16,31 @@ export default function addEvalSemantics(siliconGrammar: ohm.Grammar) {
             if (binop.sourceString === '*') return lvalue * rvalue
             if (binop.sourceString === '/') return lvalue / rvalue
         },
-        EXP_expr(expr) {
+        ExpressionStart_letExpression(_let, identifier, eq, exp) {
+            return exp.eval()
+        },
+        ExpressionEnd(expr) {
             return expr.eval()
         },
-        EXP_letEXP(_let, identifier, eq, exp) {
-            return exp.eval()
+        ExpressionEnd_paren(lparen, expression, rparen) {
+            return expression.eval()
         },
-        EXPR_lit(literal) {
+        literal_str(str) {
+            return str.eval()
+        },
+        literal_bool(bool) {
+            return bool.eval()
+        },
+        literal_float(float) {
+            return float.eval()
+        },
+        literal_integer(integer) {
+            return integer.eval()
+        },
+        intLiteral(literal) {
             return literal.eval()
         },
-        EXPR_paren(lparen, exp, rparen) {
-            return exp.eval()
-        },
-        intLiteral(firstDigit, _, remaining) {
+        decLiteral(firstDigit, _, remaining) {
             let intString = firstDigit.sourceString + remaining.sourceString.split('_').join('')
             // console.log(`intString ${intString}`)
             let intInteger = parseInt(intString, 10)
