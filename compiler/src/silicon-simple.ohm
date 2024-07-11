@@ -9,8 +9,11 @@ Silicon {
 			| ExpressionEnd
 
     ExpressionEnd =  
-			| literal 
-    		| "(" ExpressionStart ")" -- paren
+			| stringLiteral  
+			| booleanLiteral 
+			| floatLiteral 
+			| intLiteral 
+			| "(" ExpressionStart ")" -- paren
 
 	binOp =
 			| "++" 
@@ -20,11 +23,6 @@ Silicon {
 			| "/" 
 
     keyword = "@" identifier
-	literal = 
-		| stringLiteral  -- str
-		| booleanLiteral -- bool
-		| floatLiteral -- float 
-		| intLiteral -- integer
 
 		stringLiteral = "'" stringChar*  "'"
 			stringChar = ~("'" | "\\" | lineTerminator) any

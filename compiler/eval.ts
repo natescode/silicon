@@ -25,18 +25,18 @@ export default function addEvalSemantics(siliconGrammar: ohm.Grammar) {
         ExpressionEnd_paren(lparen, expression, rparen) {
             return expression.eval()
         },
-        literal_str(str) {
-            return str.eval()
-        },
-        literal_bool(bool) {
-            return bool.eval()
-        },
-        literal_float(float) {
-            return float.eval()
-        },
-        literal_integer(integer) {
-            return integer.eval()
-        },
+        // literal_str(str) {
+        //     return str.eval()
+        // },
+        // literal_bool(bool) {
+        //     return bool.eval()
+        // },
+        // literal_float(float) {
+        //     return float.eval()
+        // },
+        // literal_integer(integer) {
+        //     return integer.eval()
+        // },
         intLiteral(literal) {
             return literal.eval()
         },
