@@ -1,1 +1,54 @@
-{"type":"program","statements":[{"type":"binary_exp","left":{"type":"binary_exp","left":{"type":"binary_exp","left":{"type":"expression","exp":{"type":"integer_literal","value":"5"}},"op":{"type":"operator","op":"+"},"right":{"type":"expression","exp":{"type":"integer_literal","value":"4"}}},"op":{"type":"operator","op":"-"},"right":{"type":"expression","exp":{"type":"integer_literal","value":"3"}}},"op":{"type":"operator","op":"*"},"right":{"type":"expression","exp":{"type":"integer_literal","value":"2"}}}]}
+{
+    "type": "program",
+    "statements": [
+        {
+            "type": "binary_exp",
+            "left": {
+                "type": "binary_exp",
+                "left": {
+                    "type": "binary_exp",
+                    "left": {
+                        "type": "expression",
+                        "exp": {
+                            "type": "integer_literal",
+                            "value": "5"
+                        }
+                    },
+                    "op": {
+                        "type": "operator",
+                        "op": "+"
+                    },
+                    "right": {
+                        "type": "expression",
+                        "exp": {
+                            "type": "integer_literal",
+                            "value": "4"
+                        }
+                    }
+                },
+                "op": {
+                    "type": "operator",
+                    "op": "-"
+                },
+                "right": {
+                    "type": "expression",
+                    "exp": {
+                        "type": "integer_literal",
+                        "value": "3"
+                    }
+                }
+            },
+            "op": {
+                "type": "operator",
+                "op": "*"
+            },
+            "right": {
+                "type": "expression",
+                "exp": {
+                    "type": "integer_literal",
+                    "value": "2"
+                }
+            }
+        }
+    ]
+}

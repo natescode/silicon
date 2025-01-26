@@ -13,12 +13,11 @@ export default function addCompileSemantics(siliconGrammar: ohm.Grammar) {
     return siliconGrammar.createSemantics().addOperation('compile', {
         Program(elements) {
             const body_wat = elements.children.map(element => element.compile())
-            const program_wat = `
-            (module
-                (func (export "main") (result i32)
-                ${body_wat} 
-                )
-            )`
+            const program_wat = `(module
+    (func (export "main") (result i32)
+        ${body_wat} 
+    )
+)`
             return program_wat
         },
         Element_Expression(exp, sc) {
@@ -28,26 +27,18 @@ export default function addCompileSemantics(siliconGrammar: ohm.Grammar) {
             let lvalue = left.compile()
             let rvalue = right.compile()
             if (binop.sourceString === '++') return `'${lvalue + rvalue}'`
-            if (binop.sourceString === '+') return `
-            ${lvalue}
-            ${rvalue}
-            i32.add
-            `
-            if (binop.sourceString === '-') return `
-            ${lvalue}
-            ${rvalue}
-            i32.sub
-            `
-            if (binop.sourceString === '*') return `
-            ${lvalue}
-            ${rvalue}
-            i32.mul
-            `
-            if (binop.sourceString === '/') return `
-            ${lvalue}
-            ${rvalue}
-            i32.div_s
-            `
+            if (binop.sourceString === '+') return `${lvalue}
+        ${rvalue}
+        i32.add`
+            if (binop.sourceString === '-') return `${lvalue}
+        ${rvalue}
+        i32.sub`
+            if (binop.sourceString === '*') return `${lvalue}
+        ${rvalue}
+        i32.mul`
+            if (binop.sourceString === '/') return `${lvalue}
+        ${rvalue}
+        i32.div_s`
         },
         ExpressionStart_letExpression(_let, identifier, eq, exp) {
             return exp.compile()

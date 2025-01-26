@@ -19,3 +19,23 @@ This project was created using `bun init` in bun v1.0.29. [Bun](https://bun.sh) 
 [Binaryen](https://github.com/WebAssembly/binaryen)
 [Releases](https://github.com/WebAssembly/binaryen/releases)
 [WABT](https://github.com/WebAssembly/wabt)
+
+
+## WAT 2 WASM
+Currently, Sigil only compiles to WAT (Web Assembly text format)
+To convert use `wat2wasm` CLI.
+
+```bash
+brew install binaryen
+brew install wabt
+wat2wasm main.wat -o main.wasm
+```
+
+## Use in JavaScript
+
+```javascript
+const wasmInstance =
+      new WebAssembly.Instance(wasmModule, {});
+const { main } = wasmInstance.exports;
+console.log(main());
+```
