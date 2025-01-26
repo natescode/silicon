@@ -1,124 +1,107 @@
 import * as ohm from 'ohm-js'
-export default function addParseSemantics(siliconGrammar: ohm.Grammar) {
+export default function addEvalSemantics(siliconGrammar: ohm.Grammar) {
     return siliconGrammar.createSemantics().addOperation('parse', {
-        Program(sourceElements) {
-            return sourceElements.children.map(sourceElement => sourceElement.eval())
+        Program(elements) {
+            // TODO create context
+            return { type: 'program', elements: elements.children.map(element => element.parse()) }
         },
-        SourceElement_sourceExp(exp, sc) {
-            return exp.parse()
+        Element_Expression(exp, sc) {
+            return { type: 'expression', expression: exp.parse() }
         },
-        EXP_binaryExp(left, binop, right) {
-            // TODO return binaryEXP Node
-            // TODO lookup operator function?
+        ExpressionStart_binaryExpression(left, op, right) {
+            let lvalue = left.parse()
+            let rvalue = right.parse()
             return {
-                left,
-                operator: binop,
-                right
+                type: 'binary_expression',
+                left: lvalue,
+                op: op.sourceString,
+                right: rvalue,
             }
         },
-        EXP_expr(expr) {
-            return {
-                type: 'exp',
-                value: expr.eval()
-            }
-        },
-        EXP_letEXP(_let, identifier, eq, exp) {
+        ExpressionStart_letExpression(_let, identifier, eq, expression) {
             // TODO add identifier to context
-            // return exp.eval()
-        },
-        EXPR_lit(literal) {
             return {
-                literal: literal.sourceString
-            }
-            // return literal.eval()
-        },
-        EXPR_paren(lparen, exp, rparen) {
-            return {
-                type: 'EXPR_paren',
-                lparen,
-                exp: exp.eval(),
-                rparen
+                type: 'let_expression',
+                identifier: identifier.sourceString,
+                expression: expression.parse()
             }
         },
-        intLiteral(firstDigit, _, remaining) {
+        ExpressionEnd(expr) {
+            return expr.parse()
+        },
+        ExpressionEnd_paren(lparen, expression, rparen) {
+            return { type: 'expression', expression: expression.parse() }
+        },
+        intLiteral(literal) {
+            return { type: 'int_literal', value: literal.parse() }
+        },
+        decLiteral(firstDigit, _, remaining) {
             let intString = firstDigit.sourceString + remaining.sourceString.split('_').join('')
+            // console.log(`intString ${intString}`)
             let intInteger = parseInt(intString, 10)
-            return {
-                literal: intInteger
-            }
+            return { type: 'int', value: intInteger }
         },
         stringLiteral(_, chars, __) {
-            return {
-                literal: chars.children.map(c => c.sourceString).join('')
-            }
+            // return '"' + chars.children.map(c => c.sourceString).join('') + '"'
+            return chars.children.map(c => c.sourceString).join('')
         },
         binLiteral(_0b, firstDigit, _, remaining) {
             let intString = _0b.sourceString + firstDigit.sourceString + remaining.sourceString.split('_').join('')
             let intInteger = parseInt(intString)
-            return {
-                literal: intString,
-                value: intInteger
-            }
+            return { type: 'int', value: intInteger }
         },
         hexLiteral(_0x, firstDigit, _, remaining) {
             let intString = _0x.sourceString + firstDigit.sourceString + remaining.sourceString.split('_').join('')
             let intInteger = parseInt(intString)
-            return {
-                literal: intString,
-                value: intInteger
-            }
+            return { type: 'int', value: intInteger }
         },
         octLiteral(_0c, firstDigit, _, remaining) {
             let intString = firstDigit.sourceString + remaining.sourceString.split('_').join('')
             let intInteger = parseInt(intString, 8)
-            return {
-                type: 'octal',
-                literal: intString,
-                value: intInteger
-            }
+            return { type: 'int', value: intInteger }
         },
         floatLiteral(firstDigit, _, secondDigit, dot, decimalDigits) {
             let floatString = firstDigit.sourceString + secondDigit.sourceString + dot.sourceString + decimalDigits.sourceString
-            return {
-                type: 'float',
-                literal: floatString,
-            }
+            return { type: 'float', value: parseFloat(floatString) }
         },
         booleanLiteral(v) {
-            if (v.sourceString === "@true") return { type: 'boolean', literal: '@true', value: true }
-            if (v.sourceString === "@false") return { type: 'boolean', literal: '@false', value: false }
+            if (v.sourceString === "@true") {
+                return {
+                    type: 'boolean', value: true
+                }
+            }
+            if (v.sourceString === "@false") {
+                return { type: 'boolean', value: false }
+            }
             throw new Error("invalid boolean literal value")
         },
         keyword(at, word) {
-            // TODO validate keyword
             return {
                 type: 'keyword',
-                literal: at.sourceString + word.sourceString
+                value: word.sourceString.toLowerCase()
             }
         },
         identifier_discard(discard) {
             return {
-                type: 'discard',
-                literal: discard.sourceString
+                type: 'discard'
             }
         },
         identifier_pub(start, end) {
             return {
                 type: 'identifier',
-                literal: start.sourceString + end.children.map(c => c.sourceString).join('')
+                value: start.sourceString + end.children.map(c => c.sourceString).join('')
             }
         },
         identifier_priv(underscore, name) {
             return {
                 type: 'identifier',
-                literal: underscore.sourceString + name.children.map(c => c.sourceString).join('')
+                value: underscore.sourceString + name.children.map(c => c.sourceString).join('')
             }
         },
         discard(discard) {
-            return {
-                type: 'discard',
-                literal: discard.sourceString
-            }
+            // "_" character
+            return discard.sourceString
         }
+
     });
 }

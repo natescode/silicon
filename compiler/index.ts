@@ -2,7 +2,9 @@ console.log("Silicon v2024.01");
 import { toAST } from 'ohm-js/extras'
 import siliconGrammar from './SiliconGrammar';
 import addEvalSemantics from './eval';
+import addCompileSemantics from './compile';
 const evalSemantics = addEvalSemantics(siliconGrammar);
+const compileSemantics = addCompileSemantics(siliconGrammar)
 // TESTS
 // let sourceCode = '5 - 1 + 2 * 3 / 2;'
 // let sourceCode = '"hello, " + "world!";'
@@ -21,15 +23,16 @@ if (match.succeeded()) {
 } else {
   result = match.message;  // Extract the error message.
 }
-
 console.log(`Result = ${result}`)
+
+
 // TODO covert match tree to AST
 const ast = toAST(match, {
   Program: { type: 'program', statements: 0 },
   // SourceElement_sourceExp: { type: 'source_element', exp: 0 },
   ExpressionStart_binaryExpression: { type: 'binary_exp', left: 0, op: 1, right: 2 },
-  ExpressionEnd: { type: 'expression', exp: 0 },
   ExpressionStart_letExpression: { type: 'let_exp', _let: 0, id: 1, eq: 2, exp: 3 },
+  ExpressionEnd: { type: 'expression', exp: 0 },
   // ExpressionEnd: { type: 'expr_literal', value: 0 },
   // EXPR_paren: { type: 'paren_exp', lparen: 0, exp: 1, rparen: 2 },
   binOp: { type: 'operator', op: 0 },
@@ -58,3 +61,6 @@ console.log(`AST
 // output result of eval
 // let sc = sourceCode.slice(0, -1)
 // console.log(`${sc} = ${result}`)
+
+const compileResults = compileSemantics(match).compile();  // Compile the expression.
+Bun.write('main.wat', compileResults)
