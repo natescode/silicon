@@ -1,7 +1,8 @@
 Silicon {
 	Program   = Element*
 	Element = | ExpressionStart ";" -- Expression
-			// | Statement ";" -- Statement
+			  | FuncDef ";" -- Func
+			  | LetDef ";" -- Let
 
 	ExpressionStart = 	
 			| ExpressionStart binOp ExpressionEnd -- binaryExpression
@@ -13,7 +14,12 @@ Silicon {
 			| booleanLiteral 
 			| floatLiteral 
 			| intLiteral 
+			| variable
 			| "(" ExpressionStart ")" -- paren
+			| ";"
+
+	LetDef =
+		| "@let" typedIdentifier "=" ExpressionStart
 
 	binOp =
 			| "++" 
@@ -22,12 +28,22 @@ Silicon {
       		| "*" 
 			| "/" 
 
+	FuncDef = // @fn math:i32 = 1 + 2
+			 // for now, the type will map EXACTLY to WASM type: i32 or f32
+			// | "@fn" typedIdentifier ListOf<typedIdentifier, ",">? "=" "{" ListOf<ExpressionStart, ";">? "}"
+			| "@fn" typedIdentifier "=" ExpressionStart
+
     keyword = "@" identifier
 
+		variable = identifier
 		stringLiteral = "'" stringChar*  "'"
 			stringChar = ~("'" | "\\" | lineTerminator) any
 				lineTerminator = "\n" | "\r" | "\u2028" | "\u2029"
-			intLiteral = decLiteral | binLiteral | hexLiteral | octLiteral
+			intLiteral = 
+			| decLiteral --dec
+			| binLiteral --bin
+			| hexLiteral --hex 
+			| octLiteral --oct
 			binLiteral = "0b" bit+ ("_" bit+)*
 				bit = "0" | "1"
 			hexLiteral = "0x" hexDigit+ ("_" hexDigit+)*
@@ -36,6 +52,10 @@ Silicon {
 			floatLiteral = digit+ ("_" digit+)* "." digit+
 			decLiteral = digit+ ("_" digit+)*
 		booleanLiteral = "@true" | "@false"
+
+		typedIdentifier = identifier type
+
+		type = ":" identifier
 
 	identifier = 
     	| discard -- discard

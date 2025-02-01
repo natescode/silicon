@@ -3,7 +3,7 @@ import { toAST } from 'ohm-js/extras'
 import siliconGrammar from './SiliconGrammar';
 import addEvalSemantics from './eval';
 import addCompileSemantics from './compile';
-const evalSemantics = addEvalSemantics(siliconGrammar);
+// const evalSemantics = addEvalSemantics(siliconGrammar);
 const compileSemantics = addCompileSemantics(siliconGrammar)
 // TESTS
 // let sourceCode = '5 - 1 + 2 * 3 / 2;'
@@ -15,15 +15,18 @@ const compileSemantics = addCompileSemantics(siliconGrammar)
 let result;
 // let sourceCode = `1 + (@let x = 2);`
 // let sourceCode = `5 + 4 - (3 * 2);`
-let sourceCode = `5 + 4 - 3 * 2;`
+// let sourceCode = `5 + 4 - 3 * 2;`
+// let sourceCode = `@fn add:i32 = 1 + 2;`
+// let sourceCode = `@fn add:i32 = 1 + 2; @let foo = 7;`
+let sourceCode = `@let age:i32 = 33;age;`
 // let sourceCode = `1 + 2;`
 const match = siliconGrammar.match(sourceCode);
-if (match.succeeded()) {
-  result = evalSemantics(match).eval();  // Evaluate the expression.
-} else {
-  result = match.message;  // Extract the error message.
-}
-console.log(`Result = ${result}`)
+// if (match.succeeded()) {
+//   result = evalSemantics(match).eval();  // Evaluate the expression.
+// } else {
+//   result = match.message;  // Extract the error message.
+// }
+// console.log(`Result = ${result}`)
 
 
 // TODO covert match tree to AST

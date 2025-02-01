@@ -1,4 +1,5 @@
 import * as ohm from 'ohm-js'
+import { IndentStyle } from 'typescript';
 
 /*
 These are the semantics for compiling Silicon into Web Assembly. This version
@@ -12,10 +13,11 @@ Mac:
 export default function addCompileSemantics(siliconGrammar: ohm.Grammar) {
     return siliconGrammar.createSemantics().addOperation('compile', {
         Program(elements) {
-            const body_wat = elements.children.map(element => element.compile())
+            const body_wat = elements.children.map(element => element.compile()).join("\n")
             const program_wat = `(module
     (func (export "main") (result i32)
         ${body_wat} 
+        return
     )
 )`
             return program_wat
@@ -23,11 +25,24 @@ export default function addCompileSemantics(siliconGrammar: ohm.Grammar) {
         Element_Expression(exp, sc) {
             return exp.compile()
         },
+        Element_Func(funcdef, sc) {
+            const [fn, nameType, eq, expr] = funcdef.children;
+            return `
+                (func (export "${nameType.sourceString.split(':')[0]}") (result ${nameType.sourceString.split(':')[1]}))
+                    ${expr.compile()} 
+                    return
+                )
+                `
+        },
+        Element_Let(letdef, _sc) {
+            return letdef.compile()
+        },
         ExpressionStart_binaryExpression(left, binop, right) {
             let lvalue = left.compile()
             let rvalue = right.compile()
             if (binop.sourceString === '++') return `'${lvalue + rvalue}'`
-            if (binop.sourceString === '+') return `${lvalue}
+            if (binop.sourceString === '+') return `
+        ${lvalue}
         ${rvalue}
         i32.add`
             if (binop.sourceString === '-') return `${lvalue}
@@ -48,6 +63,16 @@ export default function addCompileSemantics(siliconGrammar: ohm.Grammar) {
         },
         ExpressionEnd_paren(lparen, expression, rparen) {
             return expression.compile()
+        },
+        LetDef(_let, identype, _eq, exp) {
+            let [identifier, _type] = identype.sourceString.split(":")
+
+            return `(local \$${identifier} ${_type})
+            (local.set \$${identifier} ${exp.compile()})
+            `
+        },
+        variable(identifier) {
+            return `(local.get \$${identifier.sourceString})`
         },
         // literal_str(str) {
         //     return str.compile()

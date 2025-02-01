@@ -7,6 +7,9 @@ export default function addEvalSemantics(siliconGrammar: ohm.Grammar) {
         Element_Expression(exp, sc) {
             return exp.eval()
         },
+        Element_Func(fn, nameType, eq, expr) {
+            return expr.eval()
+        },
         ExpressionStart_binaryExpression(left, binop, right) {
             let lvalue = left.eval()
             let rvalue = right.eval()
