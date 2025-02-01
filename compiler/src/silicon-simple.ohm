@@ -31,7 +31,11 @@ Silicon {
 	FuncDef = // @fn math:i32 = 1 + 2
 			 // for now, the type will map EXACTLY to WASM type: i32 or f32
 			// | "@fn" typedIdentifier ListOf<typedIdentifier, ",">? "=" "{" ListOf<ExpressionStart, ";">? "}"
-			| "@fn" typedIdentifier "=" ExpressionStart
+			| "@fn" typedIdentifier Params? Assign?
+
+	Params = ListOf<typedIdentifier,",">
+
+	Assign = "=" ExpressionStart
 
     keyword = "@" identifier
 

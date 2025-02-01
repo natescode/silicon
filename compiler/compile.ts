@@ -14,22 +14,32 @@ export default function addCompileSemantics(siliconGrammar: ohm.Grammar) {
     return siliconGrammar.createSemantics().addOperation('compile', {
         Program(elements) {
             const body_wat = elements.children.map(element => element.compile()).join("\n")
-            const program_wat = `(module
-    (func (export "main") (result i32)
-        ${body_wat} 
-        return
-    )
-)`
+            //             const program_wat = `(module
+            //     (func (export "main") (result i32)
+            //         ${body_wat} 
+            //         return
+            //     )
+            // )`
+            const program_wat = body_wat
             return program_wat
         },
         Element_Expression(exp, sc) {
             return exp.compile()
         },
         Element_Func(funcdef, sc) {
-            const [fn, nameType, eq, expr] = funcdef.children;
+            const [fn, nameType, params, assign] = funcdef.children;
+            const [_eq, expr] = assign.children[0].children
+
+            // console.log('expr: ' + assign.children[0].children[1].sourceString)
+
+            const paramsCode = params.sourceString.split(',').map((param) => `(param \$${param.split(':')[0]} ${param.split(':')[1]}) `).join('')
+
+            //    ( ${params.asIteration().map((value: string) => `param \$${value.split(':')[0]} ${value.split(':')[1]}}`)} )
             return `
-                (func (export "${nameType.sourceString.split(':')[0]}") (result ${nameType.sourceString.split(':')[1]}))
-                    ${expr.compile()} 
+                (func (export "${nameType.sourceString.split(':')[0]}")
+                ${paramsCode}
+                (result ${nameType.sourceString.split(':')[1]})
+                    ${expr.compile()}
                     return
                 )
                 `
@@ -67,12 +77,15 @@ export default function addCompileSemantics(siliconGrammar: ohm.Grammar) {
         LetDef(_let, identype, _eq, exp) {
             let [identifier, _type] = identype.sourceString.split(":")
 
-            return `(local \$${identifier} ${_type})
-            (local.set \$${identifier} ${exp.compile()})
+            return `local \$${identifier} ${_type}
+            local.set \$${identifier} ${exp.compile()}
             `
         },
         variable(identifier) {
             return `(local.get \$${identifier.sourceString})`
+        },
+        Params(_params) {
+            console.log(_params.sourceString)
         },
         // literal_str(str) {
         //     return str.compile()

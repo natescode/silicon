@@ -39,3 +39,12 @@ const wasmInstance =
 const { main } = wasmInstance.exports;
 console.log(main());
 ```
+
+
+## Compile, Build, Run
+
+```bash
+bun run index.ts
+wat2wasm main.wat -o main.wasm
+wasmer run main.wasm --invoke add 9 7
+```

@@ -18,7 +18,8 @@ let result;
 // let sourceCode = `5 + 4 - 3 * 2;`
 // let sourceCode = `@fn add:i32 = 1 + 2;`
 // let sourceCode = `@fn add:i32 = 1 + 2; @let foo = 7;`
-let sourceCode = `@let age:i32 = 33;age;`
+// let sourceCode = `@let age:i32 = 33;age;`
+let sourceCode = `@fn add:i32 a:i32,b:i32 = a + b;`
 // let sourceCode = `1 + 2;`
 const match = siliconGrammar.match(sourceCode);
 // if (match.succeeded()) {
