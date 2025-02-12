@@ -48,3 +48,8 @@ bun run index.ts
 wat2wasm main.wat -o main.wasm
 wasmer run main.wasm --invoke add 9 7
 ```
+
+## View WASM Binary
+```bash
+wasmer run main.wasm --invoke foo
+```

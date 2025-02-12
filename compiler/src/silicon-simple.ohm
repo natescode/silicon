@@ -2,11 +2,14 @@ Silicon {
 	Program   = Element*
 	Element = | ExpressionStart ";" -- Expression
 			  | FuncDef ";" -- Func
-			  | LetDef ";" -- Let
 
 	ExpressionStart = 	
 			| ExpressionStart binOp ExpressionEnd -- binaryExpression
-			| "@let" identifier "=" ExpressionStart -- letExpression
+			| "@let" typedIdentifier "=" ExpressionStart -- letExpression
+			// When 1, 9, 4
+			| "@when" ExpressionStart ","  "{" ExpressionStart "}" "," "{" ExpressionStart "}" -- whenExpression
+            |  "&@loop" intLiteral ".." intLiteral "," Element_Func -- Loop
+            // | Block
 			| ExpressionEnd
 
     ExpressionEnd =  
@@ -18,20 +21,25 @@ Silicon {
 			| "(" ExpressionStart ")" -- paren
 			| ";"
 
-	LetDef =
-		| "@let" typedIdentifier "=" ExpressionStart
-
 	binOp =
 			| "++" 
 			| "+" 
 			| "-" 
       		| "*" 
 			| "/" 
+			// | ".." -- range// range
 
 	FuncDef = // @fn math:i32 = 1 + 2
 			 // for now, the type will map EXACTLY to WASM type: i32 or f32
 			// | "@fn" typedIdentifier ListOf<typedIdentifier, ",">? "=" "{" ListOf<ExpressionStart, ";">? "}"
 			| "@fn" typedIdentifier Params? Assign?
+
+	// Loop = "&@loop" (range | intLiteral) "," (Block | FuncDef)
+	// Loop = "&@loop" intLiteral ".." intLiteral "," FuncDef
+
+	// Block = "{" ListOf<ExpressionStart,""> "}"
+
+	// range = intLiteral binOp_range intLiteral
 
 	Params = ListOf<typedIdentifier,",">
 
@@ -57,7 +65,7 @@ Silicon {
 			decLiteral = digit+ ("_" digit+)*
 		booleanLiteral = "@true" | "@false"
 
-		typedIdentifier = identifier type
+		typedIdentifier = identifier type?
 
 		type = ":" identifier
 

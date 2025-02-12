@@ -14,13 +14,13 @@ export default function addCompileSemantics(siliconGrammar: ohm.Grammar) {
     return siliconGrammar.createSemantics().addOperation('compile', {
         Program(elements) {
             const body_wat = elements.children.map(element => element.compile()).join("\n")
-            //             const program_wat = `(module
-            //     (func (export "main") (result i32)
-            //         ${body_wat} 
-            //         return
-            //     )
-            // )`
-            const program_wat = body_wat
+            const program_wat = `(module
+                (func (export "main") (result i32)
+                    ${body_wat} 
+                    return
+                )
+            )`
+            // const program_wat = body_wat
             return program_wat
         },
         Element_Expression(exp, sc) {
@@ -37,49 +37,108 @@ export default function addCompileSemantics(siliconGrammar: ohm.Grammar) {
             //    ( ${params.asIteration().map((value: string) => `param \$${value.split(':')[0]} ${value.split(':')[1]}}`)} )
             return `
                 (func (export "${nameType.sourceString.split(':')[0]}")
-                ${paramsCode}
+                ${params.sourceString != "" ? paramsCode : ''}
                 (result ${nameType.sourceString.split(':')[1]})
                     ${expr.compile()}
                     return
                 )
                 `
         },
-        Element_Let(letdef, _sc) {
-            return letdef.compile()
-        },
         ExpressionStart_binaryExpression(left, binop, right) {
             let lvalue = left.compile()
             let rvalue = right.compile()
+
             if (binop.sourceString === '++') return `'${lvalue + rvalue}'`
+
             if (binop.sourceString === '+') return `
         ${lvalue}
         ${rvalue}
         i32.add`
+
             if (binop.sourceString === '-') return `${lvalue}
         ${rvalue}
         i32.sub`
+
             if (binop.sourceString === '*') return `${lvalue}
         ${rvalue}
         i32.mul`
+
             if (binop.sourceString === '/') return `${lvalue}
         ${rvalue}
         i32.div_s`
+
+            if (binop.sourceString === '..') {
+                return `$`
+            }
+
+
         },
-        ExpressionStart_letExpression(_let, identifier, eq, exp) {
-            return exp.compile()
+        ExpressionStart_letExpression(_let, identtype, eq, exp) {
+            let [identifier, _type] = identtype.sourceString.split(":")
+
+            return `local \$${identifier} ${_type}
+            local.set \$${identifier} ${exp.compile()}
+            `
+        },
+        ExpressionStart_whenExpression($when, cond, _c1, _lbrace1, $then, _rbrace1, _c2, _lbrace2, $else, _rbrace2) {
+            return `${cond.compile()}
+            (if (result i32)
+                (then ${$then.compile()})
+                (else ${$else.compile()})
+            )
+            `
+        },
+        ExpressionStart_Loop(_loop, start, _dotdot, stop, _comma, func) {
+
+            let funcString = func.compile()
+            let funcName = func.children[1].sourceString.split(':')[0]
+            let loop = `
+    ;; Loop from start to stop
+
+    ;; initialize $index 
+    (local $index i32)
+    i32.const 0
+    local.set $index
+
+    ;; initialize value
+    (local $value i32)
+    local.get ${start}
+    local.set $value
+
+    ;; loop from start to stop
+    (loop $loop
+
+      ;; Call inline function with index & value as arguments
+      (call \$${funcName} (local.get $index) (local.get $value))
+
+      ;; Increment value
+      local.get $value
+      i32.const 1
+      i32.add
+      local.set $value
+
+      ;; Increment index
+      local.get $index
+      i32.const 1
+      i32.add
+      local.set $index
+      
+      ;; Check if we are under $stop value
+      local.get $value
+      i32.const ${stop}
+      i32.le_u
+      br_if $loop
+    )
+`
+
+            return `${funcString}
+            ${loop}`
         },
         ExpressionEnd(expr) {
             return expr.compile()
         },
         ExpressionEnd_paren(lparen, expression, rparen) {
             return expression.compile()
-        },
-        LetDef(_let, identype, _eq, exp) {
-            let [identifier, _type] = identype.sourceString.split(":")
-
-            return `local \$${identifier} ${_type}
-            local.set \$${identifier} ${exp.compile()}
-            `
         },
         variable(identifier) {
             return `(local.get \$${identifier.sourceString})`

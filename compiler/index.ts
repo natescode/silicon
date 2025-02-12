@@ -19,7 +19,10 @@ let result;
 // let sourceCode = `@fn add:i32 = 1 + 2;`
 // let sourceCode = `@fn add:i32 = 1 + 2; @let foo = 7;`
 // let sourceCode = `@let age:i32 = 33;age;`
-let sourceCode = `@fn add:i32 a:i32,b:i32 = a + b;`
+// let sourceCode = `@fn add:i32 a:i32,b:i32 = a + b;`
+// let sourceCode = `@fn foo:i32 = @when 1, { 2 }, { 99 };`
+let sourceCode = `&@loop 1..3, @fn foo:i32 index:i32, value:i32 = 1;;`
+
 // let sourceCode = `1 + 2;`
 const match = siliconGrammar.match(sourceCode);
 // if (match.succeeded()) {
