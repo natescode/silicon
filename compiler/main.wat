@@ -1,6 +1,5 @@
-(module
-    (func (export "main") (result i32)
-                (func (export "foo")
+
+                (func $foo (export "foo")
                 (param $index i32) (param $ value i32) 
                 (result i32)
                     i32.const 1
@@ -24,7 +23,7 @@
     (loop $loop
 
       ;; Call inline function with index & value as arguments
-      (call $; (local.get $index) (local.get $value))
+      (call $foo (local.get $index) (local.get $value))
 
       ;; Increment value
       local.get $value
@@ -44,7 +43,3 @@
       i32.le_u
       br_if $loop
     )
- 
-                    return
-                )
-            )

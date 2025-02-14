@@ -3,7 +3,7 @@ import { IndentStyle } from 'typescript';
 
 /*
 These are the semantics for compiling Silicon into Web Assembly. This version
-compiles to WAT (Web Assembly text format). Tools like Wat2Wasm.
+c[semantics wrapper for Silicon]ompiles to WAT (Web Assembly text format). Tools like Wat2Wasm.
 Mac:
     #install
     brew install wabt
@@ -14,13 +14,13 @@ export default function addCompileSemantics(siliconGrammar: ohm.Grammar) {
     return siliconGrammar.createSemantics().addOperation('compile', {
         Program(elements) {
             const body_wat = elements.children.map(element => element.compile()).join("\n")
-            const program_wat = `(module
-                (func (export "main") (result i32)
-                    ${body_wat} 
-                    return
-                )
-            )`
-            // const program_wat = body_wat
+            // const program_wat = `(module
+            //     (func $main (export "main") (result i32)
+            //         ${body_wat} 
+            //         return
+            //     )
+            // )`
+            const program_wat = body_wat
             return program_wat
         },
         Element_Expression(exp, sc) {
@@ -30,13 +30,11 @@ export default function addCompileSemantics(siliconGrammar: ohm.Grammar) {
             const [fn, nameType, params, assign] = funcdef.children;
             const [_eq, expr] = assign.children[0].children
 
-            // console.log('expr: ' + assign.children[0].children[1].sourceString)
+            const paramsCode = params.compile()
 
-            const paramsCode = params.sourceString.split(',').map((param) => `(param \$${param.split(':')[0]} ${param.split(':')[1]}) `).join('')
-
-            //    ( ${params.asIteration().map((value: string) => `param \$${value.split(':')[0]} ${value.split(':')[1]}}`)} )
+            var funcName = nameType.sourceString.split(':')[0]
             return `
-                (func (export "${nameType.sourceString.split(':')[0]}")
+                (func \$${funcName} (export "${funcName}")
                 ${params.sourceString != "" ? paramsCode : ''}
                 (result ${nameType.sourceString.split(':')[1]})
                     ${expr.compile()}
@@ -91,7 +89,7 @@ export default function addCompileSemantics(siliconGrammar: ohm.Grammar) {
         ExpressionStart_Loop(_loop, start, _dotdot, stop, _comma, func) {
 
             let funcString = func.compile()
-            let funcName = func.children[1].sourceString.split(':')[0]
+            let funcName = func.children[0].children[1].sourceString.split(':')[0]
             let loop = `
     ;; Loop from start to stop
 
@@ -144,7 +142,9 @@ export default function addCompileSemantics(siliconGrammar: ohm.Grammar) {
             return `(local.get \$${identifier.sourceString})`
         },
         Params(_params) {
-            console.log(_params.sourceString)
+            const result = _params.sourceString.split(',').map((param) => "(param $" + param.split(':').join(' ')).join(')') + ")"
+            // const result = _params.asIteration().children.map((param)=>param)
+            return result
         },
         // literal_str(str) {
         //     return str.compile()
