@@ -2,7 +2,7 @@
 
 Silicon has an ML-inspired module system. There are three levels to modules.
 
-- Package `package.si`
+- Package `package.si` defined at the root of a project
 - Module folder holding `.si` files or `module.si`
 - Component any `.si` file
 
@@ -27,7 +27,7 @@ including:
 
 - functions
 - types
-- protocols
+- ~~protocols~~ Contracts
 - extensions
 - enums
 

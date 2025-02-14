@@ -1,30 +1,33 @@
 ## Syntax / Symbols
 
-- `$` atoms
-- `()` group expressions are expression / key-value pairs
-- `[]` list of values
+- `$` atoms / named function parameters
+- `&` function call
+- `()` group expressions are expression 
+- `[]` list of values or key-value pairs
 - `{}` statements
 - `@` keyword
 - `` ` backticks for template strings
-- `_` unused identifier or anonymous.
-  - Sigil for private functions or variables.
+- `_` unused identifier (discard) or anonymous.
+  <!-- - Sigil for private functions or variables. -->
   - Digit separated in number literals.
 - `;` end of statement or expression
-- `.` field access OR namespace access
-- `..` range / series operator
+<!-- - `.` field access OR namespace access -->
+`.` float literals
 - `,` separate values or parameters
-- `:` adds optional type name / info to identifiers.
+- `:` adds optional type 
 - `/` division
-- `//` comment
-- `///` multi-line comment (then no \* is needed).
+- `#` comment
+<!-- - `///` multi-line comment (then no \* is needed). -->
 - `=` assignment
-- `|` or in Algebraic Data Types
-- `|>` pipe (uses `|` and `>`) could use `@pipe` or `=>`
+<!-- - `|` or in Algebraic Data Types -->
+- `|` pipe 
 - `*` multiply
-- `**` power?
 - `+` add
-- `++` concat string? `@concat`
-- `\` lambda / block
+- `++` concat string
+- `@\` lambda / block ?
+<!-- @fn _ a,b = {a + b;};  becomes @\ a,b = a + b -->
+- `..` series / range
+- `...` spread
 
 Maybe ?
 
@@ -35,16 +38,12 @@ Maybe ?
 
 1. `~`
 1. `!`
+<!-- 1. '&' -->
 1. `%`
 1. `^`
-1. `&`
-1. `\`
+<!-- 1. `\` -->
 1. `?`
-1. `|`
-
-Maybe Not
-
-- ~`'T` Generic indentifier~ Use `@any` instead
+<!-- 1. `|` -->
 
 ## Objects / Maps `()`, `=` for assign and `,` separated
 

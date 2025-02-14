@@ -8,13 +8,13 @@ Start wit `#` goes to the end of the line
 
 ## Multi-line
 
-Starts with `#/` end with equivalent `/#`. Supports nested multi-line comments.
+Starts with `##` end with equivalent `##`. Supports nested multi-line comments.
 
-    #/
+    ##
         Multi-line
         Comments start with 
         and end with 
-    /#
+    ##
 
 ## Doc Comments
 

@@ -5,12 +5,12 @@ Silicon _only_ and _exclusively_ has binary infix overators. Silicon prefers fun
 | name             | operator               |     
 | ---------------- | -------------          | 
 | plus             | 1 + 1                  | 
-| minus            | 1- 1                   |
+| minus            | 1 - 1                  |
 | mult             | 2 * 3                  |
 | div              | 6 / 3                  |
 | concat           | "hello, " ++ "world!"  |
 | series           | 1..10                  |
-| spread           | [1,2,3]...1..2         | 
+| spread           | [1,2,3]..._            | 
 
 
 1) addition
@@ -40,17 +40,17 @@ Typical unary operators
 
 None are needed.
 
-| unary operator | Method syntax | Non-Method Syntax   |
-| -------------- | ------------- | ------------------- |
-| -x             | x.neg         | 0 - x               |
-| -1             | 1.neg         | 0 - 1               |
-| ++x            | x.inc         | x = x + 1           |
-| x++            | x.post_inc    | @defer x = x + 1; x;|
-| !x             | x.not         | @not x              |
-| &x             | x.val         | @val x              |
-| \*x            | x.ref         | @ref x              |
+| unary operator | Method syntax  | Non-Method Syntax   |
+| -------------- | -------------  | ------------------- |
+| -x             | x\|neg         | 0 - x               |
+| -1             | 1\|neg         | 0 - 1               |
+| ++x            | x\|inc         | x = x + 1           |
+| x++            | x\|post_inc    | &post_inc x         |
+| !x             | x\|not         | &not x              |
+| &x             | x\|val         | &val x              |
+| \*x            | x\|ref         | &ref x              |
 
-Instead of `&x++` we can do `x.val.pInc`
+Instead of `&x++` we can do `x.val|post_inc`
 
 Silicon prefers methods over operators.
 

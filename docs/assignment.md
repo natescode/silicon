@@ -1,11 +1,18 @@
 ### Declaration
 
-There is only one declaration syntax, `@let`.
+There is only one declaration syntax, `@var` or `@name`.
 
-    @let firstName;
-    @let firstName:string;
+    @name first_name;
+    @name first_name:string;
 
-Silicon has 100% type inference, the developer **NEVER** needs to write types. Types may be optionally added after identifiers with `:type` syntax for clarity, or `sgl --annotate file.si` can add them for you.
+
+*Aside*
+> Silicon uses snake case. Once thing the Python language got correct. 
+
+*if Python uses snake case. Does OCaml use Camel case and Pascal use Pascal case?*
+
+
+Silicon has powerful type inference, the developer **rarely** needs to write types. Types may be optionally added after identifiers with `:type` syntax for clarity, or `sgl --annotate file.si` can add them for you.
 
 \* Technically the developer, sometimes, will _want_ to add types. Having a language with 100% type inference is cool but very limiting. Sigil *MAY* warn about types that get inferred as `@any` where the compiler cannot figure out a more specific type. More research and practice will be needed with this.
 
@@ -35,7 +42,7 @@ Even `random` isn't random. It returns an iterator that generates a series of ps
 
 Silicon like other languages have Deconstructing assignment.
 
-We can also mix and match new declarations, something `Go`'s `:=` gopher syntax can't do.
+~~We can also mix and match new declarations, something `Go`'s `:=` gopher syntax can't do.~~
 
 ```silicon
     @name a:mut(int)
@@ -43,25 +50,36 @@ We can also mix and match new declarations, something `Go`'s `:=` gopher syntax 
     // a is assigned
     // b is declared AND assigned
     a, @name b = ("into a", "into b")
+    # new variables with $ sigil was an old idea.
+    # tuples would probably be just `[]` or `$()`
+    a, $b = ["into a", "into b"] 
+```
+
+Thinking more like this now
+
+```silicon
+
+    @name a:(mut int);
+    a, $b = ["into A", "into b"];
 ```
 
 ## Defs
 
 All definitions: `@name`, `@func`, ``@type`, and `@comp` use assignment syntax `=`. This make Silicon's grammar much more intuitive and consistent.
 
-They all follow the exact same grammar `'@' keyword TypedIdentifier params? '=' expression`
+They all follow the exact same grammar `keyword name type? params? '=' expression`
 
 ### `@name`
 
-    @name nate = (first="Nathan",last="Hedglin",age=30)
+    @name nate = (first="Nathan",last="Hedglin",age=30);
 
 ### `@func`
 
-    @func add a,b = { a + b }
+    @func add a,b = { a + b; };
 
 ### `@type`
 
-    @type point = (x:int = 0, y:int = 0)
+    @type point = (x:int = 0, y:int = 0);
 
 ### `@comp`
 
@@ -70,9 +88,9 @@ They all follow the exact same grammar `'@' keyword TypedIdentifier params? '=' 
         @fn sub a,b = {a - b},
         @fn mult a,b = {a * b},
         @fn div a,b = {a / b},
-    }
+    };
 
-    #math.add 1,2 // 3
+    #math.add 1,2; # 3
 
 ## Conclusion
 

@@ -60,6 +60,48 @@ implement an if expression to work with booleans this way.
 #if true, { #print "I'm working"; }, {#print "Not functioning";};
 ```
 
+**NEW ADDITIONS**
+
+Instead of this
+
+```silicon
+@fn fizzbuzz 0,0,_ = 'fizzbuzz';
+@fn fizzbuzz 0,_,_ = 'fizz';
+@fn fizzbuzz _,0,_ = 'buzz'
+@fn fizzbuzz _,_,index:string = index;
+```
+
+We can do this.
+
+```silicon
+@fn fizzbuzz three, five, index:string = [
+    0,0,_ = 'fizzbuzz';
+    0,_,_ = 'fizz';
+    _,0,_ = 'buzz';
+    _,_,m = m;
+];
+```
+
+OR maybe
+
+```silicon
+@fn fizzbuzz |= 0,0,_ = 'fizzbuzz'
+             |= 0,_,_ = 'fizz'
+             |= _,0,_ = 'buzz'
+             |= _,_,m = m;
+```
+
+The `|=` operator would signify we are assigning multiple params-body pairs, sorta like switch case.
+
+a switch case / match equivalent can be created by piping values into an anonymous function that pattern matches.
+```silicon
+a,b,c | @fn _  |= 0,0,_ = 'fizzbuzz'
+               |= 0,_,_ = 'fizz'
+               |= _,0,_ = 'buzz'
+               |= _,_,m = m;
+```
+
+
 ## Named Parameters
 
 In the last example we defined a simple 'if' function. We can make 'if' work with more of a DSL by using
@@ -68,36 +110,25 @@ Silicon's named parameter syntax. `$` Sigil defines atoms which are named parame
 We could call `if` with named parameters instead. They then act like keywords. I may default these parameters to be inside `{}` implicitly since normally
 just passing in code mean it runs immediately and it isn't a block.
 
+Instead of 
+
 ```silicon
-#if true
+&@if $true,
+then = #print "I'm working",
+else = #print "Not functioning";
+```
+
+We can remove the `=` and the `,` and just use `$` for the parameter names. Notice that the first parameter `condition` isn't named. Silicon will use position to map arguments to parameters if no explicit name is given.
+
+```silicon
+&@if $true
 $then #print "I'm working"
 $else #print "Not functioning"
 ```
 
-## Unified Function Call Syntax (UFCS)
+## Pipes
 
-Unified Function Call Syntax. This means that function may be called like methods without any modification. The first parameter because the reciever.
-
-Let's define a simple function that coverts a boolean value to a string.
-
-```silicon
-@fn boolToString bool = {
-  &if bool
-  $then "true"
-  $else "false"
-};
-
-```
-
-Let's call it as a function then as a method.
-
-```silicon
-# function
-&boolToString true # "true"
-
-# method
-&true.boolToString # "true"
-```
+**TODO**
 
 ## Type Defined Name Resolution
 
@@ -110,6 +141,10 @@ For example
 
 ```silicon
 @module bool = {
+    
+    
+    
+
     @fn ToString bool = {
         &if bool
         $then "true"
@@ -128,8 +163,10 @@ We could possibly run into an ambigous function call error if we used UFCS thoug
 
 ```silicon
     @let foo = true;
-    &foo.ToString # Error: 'ToString' function is amibgous. 'bool::ToString', 'number::ToString'...
+    &foo.ToString # Error: 'ToString' function is ambigous between 'bool::ToString' and 'number::ToString'...
 ```
+
+**NOTE** The method syntax changed from '.' to `|` (pipe). Nothing else changes in this context.
 
 This can be fixed if Silicon looks at the type of the method receiver, `foo` in this case, and uses that information
 to look inside the correct module (namespace).

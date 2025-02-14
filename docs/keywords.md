@@ -1,30 +1,25 @@
 # Keywords
 
-<!-- 1. @iden / @name / @let -->
-<!-- 1. @when / @if -->
-
-1. @name or @let
-1. @when or @if
-1. @loop or @for
-1. @func or @fn
+1. @name or @var 
+1. @when 
+1. @loop 
+1. @fn
 1. @type
 1. @impl
 1. @next \* replaces 'continue': go to next loop iteration.
 1. @fall (fallthrough) \* may not be needed because of pattern matching
-1. @exit \* replaces 'break': break from current loop.
-1. @give \* replaces 'yield': yield from current block.
-1. @quit \* replaces 'return': return from current block.
-   // return values get wrapped.
+1. @break \* replaces 'break': break from current loop.
+1. @yield \* replaces 'yield': yield from current block.
+1. @return \* replaces 'return': return from current block.
 
 - 'Done' wraps a value while indicating we return a value and are done.
 - 'Some' wraps a value while indicating we yield a value and keep going.
 - 'None' wraps no value while indicating we keep going.
 
-1. @done \* return 'return': exit current block with optional value.
-1. @yeet // non-local return? since Silicon doesn't have throw
-1. @dead // throw / panic? kick, konk, ends, croak, term (terminate)
+1. @return
+1. @panic 
 1. @class
-1. @value \* replaces `struct`
+1. @struct / @record  / @value
 1. @trait
 1. @union
 1. @alias
@@ -69,8 +64,7 @@
 
 Keywords start with the `@` sigil. _builtin_ functions like `if` come from the `si` namespace.
 
-
-EXAMPLE
+**EXAMPLE**
 
 ```silicon
 @let age:u32 = 0x21;
@@ -78,7 +72,4 @@ EXAMPLE
 &si::if age \at_least 18 \and hasPaid $then 'welcome!' $else 'halt!!!';
 
 if age >= 18 && hasPaid
-
-
-
 ```

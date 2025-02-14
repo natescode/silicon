@@ -1,0 +1,41 @@
+/*
+    COMMENT
+    DEFINITION
+    EXPRESSION
+    CALL
+    IDENTIFIER
+    LITERAL
+    PAREN
+*/
+core {
+	comment = docComment | multiLineComment | singleLineComment
+        docComment = "###" (~"###" sourceCharacter)* "###"
+        multiLineComment = "##" (~"##" sourceCharacter)* "##"
+        singleLineComment = "#" (~lineTerminator sourceCharacter)*
+            lineTerminator = "\n" | "\r" | "\u2028" | "\u2029"
+            sourceCharacter = any
+
+    // @let foo;
+    // @type Point;
+    // @fn add:int a:int,b:int;
+    Definition = keyword typedIdentifier params? Assign?
+
+    keyword = "@" identifier
+
+	identifier = 
+    	| discard
+    	| letter+ ("_" | alnum)* --iden1
+    	| "_" identifier+ --iden2
+
+    typedIdentifier = identifier type?
+
+    type = ":" identifier_iden1
+
+    Params = ListOf<typedIdentifier,",">()
+
+    Expression = 
+        | DEFINITION
+        | BINARY
+        | IDENTIFIER
+        
+}

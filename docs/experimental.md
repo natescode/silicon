@@ -53,10 +53,10 @@ Let's translate this to Silicon
 @let all = [(#spread left), 5, (#spread right)];
 ```
 
-We could also use the `#spread` function as a method thanks to [UFCS](https://en.wikipedia.org/wiki/Uniform_Function_Call_Syntax). This changes the last line to look like:
+We could also use the `spread` function with `|>`. This changes the last line to look like:
 
 ```silicon
-@let all = [#left.spread, 5, #right.spread];
+@let all = [left |> spread, 5, right |> spread];
 ```
 
 I personally like this **SO** much better.

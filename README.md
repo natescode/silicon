@@ -7,7 +7,7 @@
 - [sigils](./docs/sigils.md)
 - [keywords](./docs/keywords.md)
 - [identifiers](./docs/identifiers.md)
-- [types](./docs/types.md)
+- [types](./docs/types.md) Requires more thinking
 - [operators](./docs/operators.md)
 - [assignment](./docs/assignment.md)
 - [equality & identity](./docs/equality-identity.md)
@@ -21,12 +21,12 @@
 - [dialects](./docs/dialects.md)
 
 <p align="center">
-  <img src="assets/si.svg" height="128px" width="128px" />
+  <img src="assets/si14.svg" height="256px" width="256px" />
 </p>
 
 <h1 align="center">Silicon</h1>
 
-> Silicon is a new programming language that emphasizes simplicity, extensibility and usability. It is extremely easy to learn and extremely difficult to use incorrectly. The main target is WASM. This is the specification, currently just the PEG grammar, for the language.
+> Silicon is a new programming language that emphasizes simplicity, extensibility and usability. It is extremely easy to learn and extremely difficult to use incorrectly. The main target is WASM. This is the specification with documentation on all the future features.
 
 ## Goals
 
@@ -70,56 +70,62 @@ In my opinion, non-goals are just as important as goals. They prevent scope-scre
 - no garbage collector: reference counting / borrower checker (optional)
 - ONE function syntax `@fn` (named, anonymous, lambda)
 - ONE looping expression `@loop` (for, while and do/while)
-- ONE condition expression `@wif` (if and switch/case)
+- ONE condition expression `@when` (if and switch/case)
 
 ## What SI DOES have
 
-- Traits (because they're awesome)
+- Native Testing (Unit, Fuzz)
+- Protocols: Typesafe usage and upgrades to APIs
+- Row Polymorphism
+- Algebraic Effects
 - Annotations (for flexiblity)
-- UFCS (fake methods)
 - TDNR (fake overloading)
-- ADT (Algebraic Data Type;the best type of type)
 - SIMPLE and consistent syntax
-- coroutines: no locks, mutexes / semaphores or runtime to schedule concurrent tasks
+- Parallel Parsing
+- Coroutines: no locks, mutexes / semaphores or runtime to schedule concurrent tasks
 - Pattern matching
 - Full type inference!
 - Full lifetime inference!
 - Large standard library (many native libraryes from C, C++ and Rust)
   - Common integrations (SQL, websockets, graphql, ORMs, Kafka, Graphics etc)
-- Native dependency injection
-- Native testing (within the same file)
 - Great errors as values and error handling
-- Generics
-- Sinq (Silicon equivalent of C# LINQ)
 - Cross-platform!
-- Cross-compilation (thanks Zig cc!)
-- C interop!
+- Sandboxed (WASM)
 - 100% Web API coverage
 - 100% Node API coverage
+- WASI(X) APIs
+-
 
 ## Grammar
 
 Silicon's grammar is extremely regular and straight forward. That does make it simple but simple is simply (pun intended) a
 by product of using a few simple grammar rules everywhere for everything.
 
+Silicon has only two Semantic grammar rules: Statements and Expressions.
+
 My goal is to keep Silicon's grammar to around 100 lines of PEG grammar. It may grow but it should never be more than 150-200 LOC. 100-125 is more realistic.
+For comparison, Zig which is very minimalistic uses 300 lines of PEG grammar.
 
 ## Key Features
 
 Silicon's goal is to only have the most expressive and versatile language features.
 
-Influenced from: Ruby, Lua, Zig, Rust, LISP, ML
+Influenced by: Ruby, Lua, Zig, Rust, LISP, ML, Effiel...
 
 1. ML Algebraic Data Types
 1. ML Function Definition Pattern Matching
 1. ML Hindley-Milner Type System: 100% Type Inference
 1. ML Effectful Type System: total, exception, timeout/nohault, pure(previous two), IO, random, parallel
-1. Lua Co-routines
-1. Lua (self)Embeddable as a Dynamically Typed Scripting Language
-1. Ruby Blocks: non-local returns, thread safe etc..
+1. Co-routines
+1. (self)Embeddable as a Dynamically Typed Scripting Language
 1. WASM output: fast, safe, cross-platform, interop, ecosystem
-1. No GC: ARC, Generational References, manual or Lifetimes, MAYBE a tracing GC for the backend.
+1. GC optional: ARC, Generational References, manual or Lifetimes, MAYBE a tracing GC for the backend.
 1. JS 100% Web API and Node API compatability
+1. Protocols: API usage and upgrade help
+1. SilVer: Silicon (smart) Versioning. No more failing at SemVer.
+1. Capabilities: Permissions in code
+1. Idiomatic Merging: Via Git or NIT. Language aware code merging!
+1. Quasi-Quoting (Lisp style macros that work on the AST! Are hygenic and use comptime)
 
 ### Other features
 
@@ -127,6 +133,7 @@ Influenced from: Ruby, Lua, Zig, Rust, LISP, ML
 1. Easy and fast to parse
 1. Forced DI of I/O Functions
 1. UFCS (fake methods) & TDNR (fake overloading)
+1. Pipe syntax ( when UFCS isn't needed)
 1. LISP style macros / quotes?
 1. Language Interop via WASM and Zig. Uses many proven Native Libraries.
 1. Zig CC Cross-Compilation

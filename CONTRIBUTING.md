@@ -11,9 +11,9 @@ Please read Intro section to get up to speed
 
 ## Intro
 
-Silicon is meant to be the language specification (rules, grammar not code). Sigil will be the actual code project.
+Silicon is meant to be the language specification (rules, grammar not code). Sigil will be the actual implementation.
 
-Sigil is written in JavaScript using [Ohm](https://ohmjs.org/) for the parser generator.
+Sigil is written in JavaScript/Typescript using [Ohm](https://ohmjs.org/) for the parser generator.
 
 Following a few [tutorials](https://2am.tech/blog/building-a-language-interpreter-in-javascript/) on how to manually create a lexer and parser will help too.
 

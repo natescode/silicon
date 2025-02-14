@@ -1,6 +1,7 @@
 ## Loops
 
-Silicon has exactly one looping contruct, `@loop`
+Silicon has exactly one looping contruct, `@loop` or `@for`
+
 
 // TODO: copy from zzz_experimental
 Silicol has one overloaded `@loop` construct. They are also expressions.
@@ -22,7 +23,7 @@ For loop with step 2 with range syntax
 #### Lambda
 
     // 1,3,5,7,9,11...
-    @loop 1..3..100, \\i => {
+    @loop 1..3..100, \i = {
         #print i;
     };
 
@@ -62,4 +63,19 @@ For loop with step 2 with range syntax
         i += 1;
         #print i;
         @if i >= 100 $then @exit;
+    };
+
+
+### NEW ideas for WHILE loop
+
+New Ideas to keep loop grammar consistent. 21 JULY 2024
+
+First parameter should be an iterator. 
+
+    @name i = 0
+    &@loop _, @func _ i = {
+        i += 1;
+        #print i;
+        &if @not i < 100 
+        $then #Done 
     };

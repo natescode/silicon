@@ -115,6 +115,9 @@ Using a class to define a `Person`.
 
 How to disambiguate `{}` for key, value pairs and code blocks?
 
+    - `${}` for object literals 
+    - `{}` for code blocks
+
 ```
     // similar to OCaml data types. No Names required.  // types are still always :type
     @type Person = :string, :int, :Person
@@ -702,6 +705,124 @@ If I stick with `@fn _` for lambdas, then I _could_ use `\` as a Sigil for funct
 
 > "All _definitions_ __MUST__ use `@` identifier"
 
+## function definition pattern matching experiments
+
+Instead of this
+
+```silicon
+@fn fizzbuzz 0,0,_ = 'fizzbuzz';
+@fn fizzbuzz 0,_,_ = 'fizz';
+@fn fizzbuzz _,0,_ = 'buzz'
+@fn fizzbuzz _,_,index:string = index;
+```
+
+We can do this.
+
+```silicon
+@fn fizzbuzz three, five, index:string = [
+    0,0,_ = 'fizzbuzz';
+    0,_,_ = 'fizz';
+    _,0,_ = 'buzz';
+    _,_,m = m;
+];
+```
+
+OR maybe
+
+```silicon
+@fn fizzbuzz |= 0,0,_ = 'fizzbuzz'
+             |= 0,_,_ = 'fizz'
+             |= _,0,_ = 'buzz'
+             |= _,_,m = m;
+```
+
+The `|=` operator would signify we are assigning multiple params-body pairs, sorta like switch case.
+
+a switch case / match equivalent can be created by piping values into an anonymous function that pattern matches.
+```silicon
+a,b,c | @fn _  |= 0,0,_ = 'fizzbuzz'
+               |= 0,_,_ = 'fizz'
+               |= _,0,_ = 'buzz'
+               |= _,_,m = m;
+```
+
+
+## GRAMMAR & PARSING changes
+
+I refreshed my memory on scanners, lexers and parsers. I realized that Silicon would be a good fit for a [scannerless parsing](https://en.wikipedia.org/wiki/Scannerless_parsing). This would
+mean that I could most if not all Sigils from the language. I would lex and parse the grammar in a single step allowing. This means that `let let = 3;` could be valid and I wouldn't need reserved words,
+aka identifier names that cannot be used. I was getting around reserved words before by using the `@` for all keywords so no regular identifiers would need to be reserved. I'll likely 
+keep the Sigils, but maybe I can remove them because the grammar will be easily parsed without them and it'll visually look cleaner for devs. 
+
+Keeping `@` has another benefit, custom keywords. This allows the translation of keywords into different languages, but also for Silicon to make macros that modify the language and add new keywords
+on the fly. Though, there may not be a need for that still. I'll have to experiment with that.
+
+### Before
+
+```silicon
+    @fn add a,b = a + b;
+    &add 1,2;
+```
+
+### after
+
+```silicon
+    fn add a,b = a + b;
+    add 1,2;
+```
+
+
+### Keywords (not reserved)
+
+keywords so far
+
+`let`
+`type`
+`fn`
+`trait`
+`impl`
+`loop`
+`return`
+`if`
+`try`
+`break`
+`yield`
+basic types?
+
+## Sigil
+
+Sigil may be **VERY** simple and small. Likely two files: `parser` and `codegen`, that's it.
+
+
+## Lifetime annotations
+
+Generics: `'generic_type_name`
+Lifetime: `''lifetime_type_name`
+
+Lifetimes, like all types will be inferred. Still, notation is needed.
+
+```silicon
+    
+    # generic type parameters
+    @fn add a:'T, b:'T = 
+    {
+        return a + b;  
+    };
+
+    # lifetime annotations
+
+    foo:''lifetime_x @int = 5;
+
+```
 
 
 
+```silicon
+
+isAlive.Bool::toString
+age.Int::toString
+
+
+
+
+```

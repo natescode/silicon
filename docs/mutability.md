@@ -14,3 +14,8 @@ If we really need to mutate then
 Technically the full type is `:mut:int` for mutable integer
 
     @name age:mut:int = 32;
+
+
+## Update 18-Jan-25
+
+Syntax for mutability will likely change. `age:mut[int]` could be one way with type parameters (generics).

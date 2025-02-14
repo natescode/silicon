@@ -20,6 +20,15 @@ SI
     @when true, (@fn_ true = { x = 1 } , @fn_ false = { x = 0 })
 ```
 
+**NEW**
+
+```silicon
+    @let x = &@if true, 1, 0;
+
+    @fn if true, then, _= &then;
+    @fn if false, _, else = &else;
+```
+
 ## When
 
 Silicon doesn't have a direct equivalent to `if`. Instead, it has a more powerful and versatile `@when`,

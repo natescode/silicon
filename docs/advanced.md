@@ -22,9 +22,9 @@ The Opaque type is used for extern types like for interoping with C or environme
 
 ## `this`, traits, interfaces
 
-Silicon has no `this` keyword. Silicon uses UFCS but has no real methods or dispatch. It has TDFD or whatever.
+Silicon has no `this` keyword. Silicon has no real methods or dispatch. It has TDFD or whatever.
 
-~~Silicon is structurally typed _by default_ like `Go`. Silicon is a flexible language with _modes_ and _defaults_.~~
+Silicon is structurally typed _by default_ like `Go`. Silicon is a flexible language with _modes_ and _defaults_.
 
 ### Trait aka Interface
 
@@ -37,8 +37,8 @@ Interfaces in Silicon are just like traits like `Rust`, they're nominally typed 
         @fn toUpperCase:string value:T
     }
 
-    // takes a string pointer and returns void
-    /// ->str => void
+    # takes a string pointer and returns void
+    ## ->str => void
     @fn toUpperCase:void self:->str
         self.map(
             @fn _ index,val
@@ -48,16 +48,6 @@ Interfaces in Silicon are just like traits like `Rust`, they're nominally typed 
             @
         )
     @
-```
-
-### Universal Function Call Syntax UFCS
-
-```silicon
-    // function syntax
-    #toUpperCase("hello, world")
-
-    // method syntax
-    "hello, world".toUpperCase // "HELLO, WORLD"
 ```
 
 ### Traits
@@ -78,19 +68,33 @@ Silicon uses `@` prepended to all keywords for a very good reason. There will ne
 
 ## Quasi-Quotes
 
+This allows embedding DSLs, possibly ones created with [Macros](#macros), within an Silicon program.
+
+```silicon
+    @let UserQuery = ```sql
+        SELECT *
+        FROM users
+        WHERE id = ${user.id}
+    ```
+```
+
 ## Macros
 
-## UFCS
+Macros use the `@@` sigil. Macros is Silicon are extremely powerful. Macros can be used to create whole new language features and syntax. This is **NOT** encouraged but for niche applications and mostly for *incremental bootstrapping* new language features.
 
-[Uniform Function Call Syntax](https://en.wikipedia.org/wiki/Uniform_Function_Call_Syntax) treats function as methods based on the first parameter type. `nim`, `rust` and `zig` do this as well. Silicon does not have a 'this' keyword, nor closures. At least for the time being. It adds too much complexity.
+## Pipes
 
-    @fn plusOne:int n:int
-        n + 1
-    @
+Silicon encourages function composition so there is a dedicated pipe operator, `|>`.
 
-    $age = 32
-    #plusOne age // 33
-    age.plusOne // 33
+    # setup
+    @fn plusOne:int n:int = n + 1;
+    @let age = 32;
+
+    # function call
+    &plusOne age // 33
+
+    # pipe
+    age |> plusOne // 33
 
 ## Negative Indexing
 
