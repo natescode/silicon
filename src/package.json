@@ -1,0 +1,22 @@
+{
+  "name": "sigil",
+  "version": "0.1",
+  "module": "index.ts",
+  "type": "module",
+  "scripts": {
+    "build-types": "bunx ohm generateBundles --withTypes src/silicon-simple.ohm",
+    "opt-wasm": "bun run ./binaryen-version_117/wasm-opt.js ../dist/bin.wasm"
+  },
+  "devDependencies": {
+    "@ohm-js/cli": "^2.0.0",
+    "@types/bun": "latest",
+    "@types/node": "^20.14.2",
+    "ohm-js": "^17.1.0"
+  },
+  "peerDependencies": {
+    "typescript": "^5.0.0"
+  },
+  "dependencies": {
+    "binaryen": "^117.0.0"
+  }
+}

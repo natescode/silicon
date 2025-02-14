@@ -1,0 +1,1 @@
+{"type":"program","statements":[{"1":{"type":"integer_literal","value":"1"},"3":{"type":"integer_literal","value":"4"},"5":{"1":"foo:i32","2":["index:i32","value:i32"],"3":{"type":"expression","exp":{"type":"integer_literal","value":"1"}},"type":"FuncDef"},"type":"ExpressionStart_Loop"}]}

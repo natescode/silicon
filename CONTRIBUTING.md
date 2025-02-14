@@ -3,15 +3,13 @@
 First and foremost, thank you very much for your interest in Silicon! 🎉
 
 When contributing to this repository, please first discuss the change you wish to make via issue,
-email, or any other method with the owners of this repository before making a change.
-
-Please note we have a code of conduct, please follow it in all your interactions with the project.
+email, discord message etc  with the Nate (me) before making a change.
 
 Please read Intro section to get up to speed
 
 ## Intro
 
-Silicon is meant to be the language specification (rules, grammar not code). Sigil will be the actual implementation.
+Silicon is meant to be the language specification (rules, grammar not code). Sigil is the name of the actual implementation.
 
 Sigil is written in JavaScript/Typescript using [Ohm](https://ohmjs.org/) for the parser generator.
 
