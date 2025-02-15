@@ -30,12 +30,15 @@ export default function addCompileSemantics(siliconGrammar: ohm.Grammar) {
             const [fn, nameType, params, assign] = funcdef.children;
             const [_eq, expr] = assign.children[0].children
 
-            const paramsCode = params.compile()
+            const paramsCode = params.children
+                .map((param) => param.compile())
+                .map((nameType) => `(param ${nameType[0]} ${nameType[1]})`).join(' ')
+
 
             var funcName = nameType.sourceString.split(':')[0]
             return `
                 (func \$${funcName} (export "${funcName}")
-                ${params.sourceString != "" ? paramsCode : ''}
+                ${paramsCode} 
                 (result ${nameType.sourceString.split(':')[1]})
                     ${expr.compile()}
                     return
@@ -142,9 +145,11 @@ export default function addCompileSemantics(siliconGrammar: ohm.Grammar) {
             return `(local.get \$${identifier.sourceString})`
         },
         Params(_params) {
-            const result = _params.sourceString.split(',').map((param) => "(param $" + param.split(':').join(' ')).join(')') + ")"
+            // const paramsList = _params.children.map((param) => param.sourceString).join(' ')
+            const paramsList: any[] = _params.asIteration().children.map((param) => param.compile())
+            // const result = _params.sourceString.split(',').map((param) => "(param $" + param.split(':').join(' ')).join(')') + ")"
             // const result = _params.asIteration().children.map((param)=>param)
-            return result
+            return paramsList
         },
         // literal_str(str) {
         //     return str.compile()
@@ -158,6 +163,9 @@ export default function addCompileSemantics(siliconGrammar: ohm.Grammar) {
         // literal_integer(integer) {
         //     return integer.compile()
         // },
+        typedIdentifier(identifier, type) {
+            return [identifier.sourceString, type.sourceString]
+        },
         intLiteral(literal) {
             return literal.compile()
         },
