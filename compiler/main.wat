@@ -1,6 +1,6 @@
 
                 (func $foo (export "foo")
-                (param index,:i32 value,:i32) 
+                (param index i32) (param value i32) 
                 (result i32)
                     i32.const 1
                     return

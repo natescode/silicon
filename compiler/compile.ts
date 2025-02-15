@@ -31,8 +31,8 @@ export default function addCompileSemantics(siliconGrammar: ohm.Grammar) {
             const [_eq, expr] = assign.children[0].children
 
             const paramsCode = params.children
-                .map((param) => param.compile())
-                .map((nameType) => `(param ${nameType[0]} ${nameType[1]})`).join(' ')
+                .map((param) => param.compile()
+                    .map((nameType: any[]) => `(param ${nameType[0]} ${nameType[1].split(':')[1]})`).join(' '))
 
 
             var funcName = nameType.sourceString.split(':')[0]
