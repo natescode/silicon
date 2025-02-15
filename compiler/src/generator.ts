@@ -1,1 +1,0 @@
-// TODO use binaryen API to generate WASM / WAT
