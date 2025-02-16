@@ -1,7 +1,15 @@
 # Based on https://raw.githubusercontent.com/github/gitignore/main/Node.gitignore
 
+bin/
+
+# JavaScript not allowed
+*.js
+
 # Typescript 
 *.d.ts
+
+# Ohm
+*-bundle.js
 
 # Logs
 
