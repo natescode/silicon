@@ -1,6 +1,7 @@
-@fn main = {
+## @main is a special main function where the program starts
+@main = {
     @let greeting = "Hello";
     @let target = " world!";
 
-    #IO::print greeting ++ target;
+    &@print greeting ++ target;
 };

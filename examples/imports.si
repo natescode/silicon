@@ -1,2 +1,0 @@
-@@import "./types/Person";
-@@import "./types/Person" @alias Employee;

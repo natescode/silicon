@@ -70,7 +70,22 @@ In my opinion, non-goals are just as important as goals. They prevent scope-scre
 - no garbage collector: reference counting / borrower checker (optional)
 - ONE function syntax `@fn` (named, anonymous, lambda)
 - ONE looping expression `@loop` (for, while and do/while)
-- ONE condition expression `@when` (if and switch/case)
+- ONE condition expression `@when` (if and switch/case
+
+```silicon
+
+# if function
+&if cond, then, else;
+
+# when function: compare_value, keys, values, default
+&when value, [true, false], [1, -1], 0;
+
+# with named params
+&when value 
+  $is true $then 1 
+  $is false $then -1 
+  $else else;
+```
 
 ## What SI DOES have
 
@@ -138,3 +153,47 @@ Influenced by: Ruby, Lua, Zig, Rust, LISP, ML, Effiel...
 1. Language Interop via WASM and Zig. Uses many proven Native Libraries.
 1. Zig CC Cross-Compilation
 1. Rust borrower checker / lifetimes BUT without writing the lifetimes
+
+
+## KEYWORDS
+
+```silicon
+def / fn
+when
+loop
+number
+  integer
+  real / float
+  decimal
+string 
+codepoint / char / rune
+boolean
+```
+
+Different letter each:
+
+- def
+- when 
+- loop
+- number
+- integer
+- float
+- decimal
+- string
+- rune
+- boolean
+
+Here is the list in alphabetical order:
+
+- boolean  
+- currency (decimal)
+- def / fn
+- float  
+- integer  
+- loop 
+- macro 
+- number 
+- rune 
+- string 
+- var / let
+- when 

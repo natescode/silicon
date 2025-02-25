@@ -1,12 +1,41 @@
 # Effects
 
-`Silicon` is heavily inspired by ML languages and functional languages. It has a very simple but
-robust effects system.
+`Silicon` is heavily inspired by ML languages and functional languages. ~It has a very robust algebraic effects system.~
 
-_Effects_ are side-effects that a function may have, such as returning and error, never haulting, 
-allocating memory etc. 
+_Effects_ are part of a secondary type system. They represent side effects that a function may have, such as returning and error, never haulting, 
+allocating memory etc. Effects can be thought of like Events or Commands that need to be handled outside of the function.
 
-There are three types of effects in Silicon `total`, `pure` and `impure`. 
+All Effects have effect handlers. There are default effect handlers for native effects. Users may create custom Effects as well. 
+
+Effects are extremely versatile. Silicon uses algebraic effects to implement numerous language features and patterns: 
+  - concurrency
+  - error handling
+  - events
+  - early returns
+  - CQRS
+  - functional programming
+  - 
+
+### Effects Example
+
+Here is a simple hello,world example.
+
+```silicon
+# string -> string
+@fn greet:string message:string = {
+  &@effect IO::print, message;
+  @return message;
+}
+
+@effect print message:string = {
+  &print message;
+}
+```
+
+The above code takes a message of type string and returns it. It also calls the IO::print effect and
+passes the message to it.
+
+
 
 ## Total
 
