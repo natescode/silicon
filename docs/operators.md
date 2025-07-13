@@ -42,15 +42,15 @@ None are needed.
 
 | unary operator | Method syntax  | Non-Method Syntax   |
 | -------------- | -------------  | ------------------- |
-| -x             | x\|neg         | 0 - x               |
-| -1             | 1\|neg         | 0 - 1               |
-| ++x            | x\|inc         | x = x + 1           |
-| x++            | x\|post_inc    | &post_inc x         |
-| !x             | x\|not         | &not x              |
-| &x             | x\|val         | &val x              |
-| \*x            | x\|ref         | &ref x              |
+| -x             | x.neg         | 0 - x               |
+| -1             | 1.neg         | 0 - 1               |
+| ++x            | x.inc         | x = x + 1           |
+| x++            | x.post_inc    | &post_inc x         |
+| !x             | x.not         | &not x              |
+| &x             | x.val         | &val x              |
+| \*x            | x.ref         | &ref x              |
 
-Instead of `&x++` we can do `x.val|post_inc`
+Instead of `&x++` we can do `x.val.post_inc`
 
 Silicon prefers methods over operators.
 

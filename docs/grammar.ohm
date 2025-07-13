@@ -1,0 +1,98 @@
+// Grammar for Silicon, a simple programming language
+// This grammar is designed to be simple and easy to parse, with no operator precedence.
+// It is intended to be used with the Ohm parser library.
+// The grammar is designed to be used with the Silicon compiler, which will generate WebAssembly code
+// from the parsed syntax tree.
+Silicon {
+	Program   = Element*
+	Element = | ExpressionStart -- Expression
+			  | FuncDef -- Func
+
+	// Expression are broken into 'ExpressionStart' and 'ExpressionEnd' so that
+    // parsing happens left to right instead of right to left
+    // Silicon has no operator precedence
+	ExpressionStart = 	
+			| ExpressionStart binOp ExpressionEnd -- binaryExpression
+			| "@let" typedIdentifier "=" ExpressionStart -- letExpression
+			// When 1, 9, 4
+			| "@if" ExpressionStart "," (Block | ExpressionStart) "," (Block | ExpressionStart) -- whenExpression
+            |  "&@loop" intLiteral ".." intLiteral "," Element_Func -- Loop
+            // | Block
+            | "&" identifier Params? -- funcCall
+			| ExpressionEnd
+
+    ExpressionEnd =  
+			| stringLiteral  
+			| booleanLiteral 
+			| floatLiteral 
+			| intLiteral 
+			| variable
+			| "(" ExpressionStart ")" -- paren
+			| ";"
+
+	binOp =
+			| "++" 
+			| "+" 
+			| "-" 
+      		| "*" 
+			| "/" 
+			// | ".." -- range// range
+
+	FuncDef = // @fn math:i32 = 1 + 2
+			 // for now, the type will map EXACTLY to WASM type: i32 or f32
+			// | "@fn" typedIdentifier ListOf<typedIdentifier, ",">? "=" "{" ListOf<ExpressionStart, ";">? "}"
+			| "@fn" typedIdentifier (stringLiteral | booleanLiteral | floatLiteral | intLiteral | Params)? ("=" Block)?
+    
+
+	// Loop = "&@loop" (range | intLiteral) "," (Block | FuncDef)
+	// Loop = "&@loop" intLiteral ".." intLiteral "," FuncDef
+
+	Block = "{" ListOf<ExpressionStart,""> "}"
+
+	// range = intLiteral binOp_range intLiteral
+
+	Params = ListOf<typedIdentifier,",">
+
+	Assign = "=" ExpressionStart
+
+    keyword = "@" identifier
+
+		variable = identifier
+		stringLiteral = "'" stringChar*  "'"
+			stringChar = ~("'" | "\\" | lineTerminator) any
+				lineTerminator = "\n" | "\r" | "\u2028" | "\u2029"
+			intLiteral = 
+			| decLiteral --dec
+			| binLiteral --bin
+			| hexLiteral --hex 
+			| octLiteral --oct
+			binLiteral = "0b" bit+ ("_" bit+)*
+				bit = "0" | "1"
+			hexLiteral = "0x" hexDigit+ ("_" hexDigit+)*
+			octLiteral = "0c" octDigit+ ("_" octDigit+)*
+				octDigit = "0".."7"
+			floatLiteral = digit+ ("_" digit+)* "." digit+
+			decLiteral = digit+ ("_" digit+)*
+		booleanLiteral = "@true" | "@false"
+
+		typedIdentifier = identifier type?
+
+		type = ":" identifier
+
+	identifier = 
+    	| discard -- discard
+    	| letter+ ("_" | alnum)* -- pub
+    	| "_" identifier+ -- priv
+
+    	discard = "_"
+
+	space := whitespace | lineTerminator
+	whitespace = "\t"
+			| "\x0B"    -- verticalTab
+			| "\x0C"    -- formFeed
+			| " "
+			| "\u00A0"  -- noBreakSpace
+			| "\uFEFF"  -- byteOrderMark
+			| unicodeSpaceSeparator
+	unicodeSpaceSeparator = "\u2000".."\u200B" | "\u3000"
+}

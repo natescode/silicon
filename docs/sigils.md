@@ -1,6 +1,7 @@
 # Sigils
 
-The toolchain is named `sigil` because Silicon uses a handfull of special characters to add special meaning. Sigils are not operators. They don't _do_ anything other than distinguish the type of identifier or expression. Sigil only come before an identifier (prepended).
+The toolchain is named `sigil` because Silicon uses a handfull of special characters to add special meaning. Sigils are not operators. They don't _do_ anything other than distinguish the type of identifier or expression.
+Sigil only come before an identifier (prepended).
 
 There are four sigil characters: `@`,`$`, `&` and `\`. They also have different semantics when doubled.
 
@@ -28,13 +29,12 @@ Silicon has 11 Special characters left unused. They _MAY_ be defined according t
 `!`
 `%`
 `^`
-`^`
 `%`
 `?`
-`<`
-`>`
+`<` *
+`>` *
 
-`<` and `>` are unused and banned since they're used in markup languages such as HTML and XML; builtin functions and methods can be used instead, which imho are more readable.
+\* `<` and `>` are unused and banned since they're used in markup languages such as HTML and XML; built-in functions and methods can be used instead, which imho are more readable.
 
 `&below age, 5` same as `age.below 5`
 

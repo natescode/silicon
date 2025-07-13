@@ -16,6 +16,18 @@ Starts with `##` end with equivalent `##`. Supports nested multi-line comments.
         and end with 
     ##
 
+
+Nested
+
+        ##
+            comment
+            one
+            ## 
+                comment two
+            ##
+            end of comment one
+        ##
+
 ## Doc Comments
 
 Special multi-line comments for code documentation.
@@ -37,4 +49,3 @@ Silicon functions have implicity returns. `@exit` can be used a the return keywo
 @let add a,b = {
     a + b
 }
-```

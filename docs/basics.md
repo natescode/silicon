@@ -17,9 +17,9 @@ So instead of:
 We can do
 
 ```silicon
-@let fib 1 = 1;
-@let fib 2 = 2;
-@let fib n = {
+@fn fib 1 = 1;
+@fn fib 2 = 2;
+@fn fib n = {
     (fib n - 1) + (fib n - 2);
 };
 ```

@@ -1,27 +1,19 @@
 # v1.0 Features
 
-1. Targets WASM
+1. WASM compilation target
 1. Custom allocators `zig`
 1. Comptime `zig`
 1. Quote / Unquote macros for Hygenic Procedural Macros `lisp`
 1. Sum types `ML`
 1. Pattern Matching `ML`
-1. Coroutines `Lua`
+1. Co-routines `Lua`
 1. Yield Semantics
 1. NO GC / Runtime \*GC Optional
-1. Perceus Reference Counting `Koka`
-1. Type Inference `ML`
+1. 100% Type Inference `ML`
 1. Errors as Value
 1. WASI(X), POSIX, and Web API support
-1. Effects `Koka` ??
 1. Immutable, Total / Pure, and Stack allocated by default
 
-`Koka` Core features include
-
-- first-class functions
-- a higher-rank impredicative polymorphic type and effect system
-- algebraic data types
-- effect handlers.
 
 ## WASM
 

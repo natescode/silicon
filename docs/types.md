@@ -27,7 +27,7 @@ Silicon has 8 primitive data types
 - atom
 - bool
 - int (LEB128)
-- float
+- float (IEEE 754)
 - decimal (128 bit)
 - string
   ~~- rune~~
@@ -83,26 +83,26 @@ Strings do not have `length`. Instead there are `width`,`bytes`,and `codepoints`
 
 `str`
 
-Silicon uses UTF-32 encoded strings. UTF-16 and UTF-8 are available as well.
+Silicon uses UTF-8 encoded strings. UTF-16 and UTF-32 are available as well.
 
-    @let name = "Nathan" // UTF-32
-    @let name = #UTF16 "Nathan"
+    @let name = "Nathan" # UTF-8
+    @let name = #UTF16 "Nathan" # UTF-16
 
 ### No Length?
 
-Strings don't have `length` because that is poorly defined. Strings have 3 properties: width, bytes, and runes (codepoints).
+Strings don't have `length` because that is poorly defined. Strings have 3 properties: bytes, runes (codepoints), and graphemes (grapheme clusters).
 
-`width` is how many visual symbols wide the string is. Still ambigous since some systems may or may not combine multiple codepoints into one symbol.
 `bytes` is the number of bytes required to represent the string.
 `runes` alias for codepoints, is the number of unicode codepoints used to represent the string.
+`grapheme` is how many visual symbols wide the string is. Known as grapheme clusters. Still ambigous since some systems may or may not combine multiple codepoints into one symbol.
 
 Example string
 
     "ü❤️Silicon"
 
-    width = 9
     bytes = 13
     runes = 10
+    graphemes = 9
 
 `ü` it one character wide. 2 bytes. 2 codepoints.
 
@@ -123,7 +123,10 @@ is required by expressions such as `if`, `while`, and `assert`.
 
 ## Null & Undefined
 
+`$VOID`
+
 Silicon doesn't have these types. Optionals are used instead.
+
 
 ## References
 

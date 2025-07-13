@@ -11,16 +11,16 @@ There is only one declaration syntax, `@var` or `@name`.
 
 *if Python uses snake case. Does OCaml use Camel case and Pascal use Pascal case?*
 
+Silicon has powerful type inference, the developer **rarely** needs to write types.
+Types may be optionally added after identifiers with `:type` syntax for clarity, or `sgl --annotate file.si` can add them for you.
 
-Silicon has powerful type inference, the developer **rarely** needs to write types. Types may be optionally added after identifiers with `:type` syntax for clarity, or `sgl --annotate file.si` can add them for you.
-
-\* Technically the developer, sometimes, will _want_ to add types. Having a language with 100% type inference is cool but very limiting. Sigil *MAY* warn about types that get inferred as `@any` where the compiler cannot figure out a more specific type. More research and practice will be needed with this.
+\* Technically the developer, sometimes, will _want_ to add types. Having a language with 100% type inference is cool but very limiting.
 
 ### Assignment
 
 `=` is for assignment.
 
-Silicon by default is immutable and pure. This means references have referencial transparency. I don't want Silicon to be TOO ML, otherwise I might as well use Haskell. I think at least separating pure and impure code is a good idea. Maybe that can be done with `=` as well, I'm not sure.
+Silicon by default is immutable and pure. This means references have referencial transparency.
 
     @let x = 3;
     x = 5; # error: assignment to immutable variable 'x'
@@ -58,8 +58,7 @@ Silicon like other languages have Deconstructing assignment.
 Thinking more like this now
 
 ```silicon
-
-    @name a:(mut int);
+    @name a:mut[int];
     a, $b = ["into A", "into b"];
 ```
 
@@ -81,16 +80,16 @@ They all follow the exact same grammar `keyword name type? params? '=' expressio
 
     @type point = (x:int = 0, y:int = 0);
 
-### `@comp`
+### `@mod`
 
-    @comp math = {
+    @mod math = {
         @fn add a,b = {a + b},
         @fn sub a,b = {a - b},
         @fn mult a,b = {a * b},
         @fn div a,b = {a / b},
     };
 
-    #math.add 1,2; # 3
+    #math.add 1,2; 
 
 ## Conclusion
 

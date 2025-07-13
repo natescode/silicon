@@ -6,9 +6,9 @@ Many languages get this confused or wrong.
 
 ### Defining Equality and Identity
 
-- **Equality** checks whether two things are equal, based on some library-defined definition of equality.
+- **Equality** checks *value* equality. This may be defined for custom types.
 
-- **Identity** checks whether two things are identical, based on a built-in definition of identity."
+- **Identity** checks *reference* equality.
 
 Every language has a way to compare things. There are two types of comparison though: referential equality and value equality.
 

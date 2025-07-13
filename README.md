@@ -5,8 +5,7 @@
 - [grammar](./docs/grammar.md)
 - [comments](./docs/comments.md)
 - [sigils](./docs/sigils.md)
-- [keywords](./docs/keywords.md)
-- [identifiers](./docs/identifiers.md)
+- [keywords &amp; identifiers](./docs/identifiers.md)
 - [types](./docs/types.md) Requires more thinking
 - [operators](./docs/operators.md)
 - [assignment](./docs/assignment.md)
@@ -18,7 +17,7 @@
 - [mutability](./docs/mutability.md)
 - [modules](./docs/modules.md)
 - [concurrency](./docs/concurrency.md)
-- [dialects](./docs/dialects.md)
+- [Sulfur](./docs/sulfur.md)
 
 <p align="center">
   <img src="assets/si14.svg" height="256px" width="256px" />
@@ -109,7 +108,8 @@ In my opinion, non-goals are just as important as goals. They prevent scope-scre
 - 100% Web API coverage
 - 100% Node API coverage
 - WASI(X) APIs
--
+- Self-embeddable
+
 
 ## Grammar
 

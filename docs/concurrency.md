@@ -1,3 +1,4 @@
+\* Likely use Algebraic Effects / Co-routines
 # Concurrency
 
 Concurrency is difficult. Most enterprise programming languages use `async / await`. Which works well enough and can easily have a stack-based implementation.

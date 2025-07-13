@@ -225,3 +225,34 @@ I prefer doing the `@@pre`` macro which runs just before a function recieves its
     @@pre y = 3;
     @fn foo x,y = {};
 ```
+
+
+## Wrappers
+
+Silicon is a functional language so of course functions are first-class values to create High-Order functions.
+Silicon has native syntax for creating high order functions via `wrappers` aka annotations in
+other languages.
+
+
+```silicon
+@@capabilities IO
+@fn hello_world = {
+  IO::print 'Hello, world!';
+};
+
+&hello_world;
+```
+
+No different than
+
+```silicon
+@fn io_wrapper IO, fn ={
+    &fn
+}
+@fn hello_world = {
+  IO::print 'Hello, world!';
+};
+
+&io_wrapper console.log, hello_world;
+
+```

@@ -18,6 +18,12 @@ SI
     x = @when true, { 1 } , { 0 };
     x = @when true, 1, 0;
     @when true, (@fn_ true = { x = 1 } , @fn_ false = { x = 0 })
+    
+    @when x 
+      $is x % 15 ==0 $then 'fizz buzz' 
+      $is x % 3 $then 'fizz'
+      $is x % 5 ==0 $then 'buzz' 
+      $else x
 ```
 
 **NEW**

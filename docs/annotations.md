@@ -14,5 +14,5 @@ Annotations provide a lot of flexibility in the language.
 
 Annotations can define macros like `HTML!` in Rust.
 
-    @@@html `<h1>${title}</h1>
+    @@html `<h1>${title}</h1>
              <p>${body}</p>`
