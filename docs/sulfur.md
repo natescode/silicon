@@ -12,11 +12,11 @@ There are MANY benefits to this.
 1. Silicon is it's own scripting language
 1. The language can modify itself at runtime! Easy live updates without recompilation.
 
-
 All of these are bilingual tech stacks
 
  ### Stacks
 - Lua + C++
 - JavaScript then rewrite in Go, Rust etc
+- CGo: Go + C
 - C++ but then bash for cmake.
 - JavaScript on front-end, Java on backend

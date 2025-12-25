@@ -127,6 +127,46 @@ is required by expressions such as `if`, `while`, and `assert`.
 
 Silicon doesn't have these types. Optionals are used instead.
 
+## Alias Types
+
+Silicon has type aliases as well. They're just aliases or other local names for a type.
+
+```silicon
+@type_alias age = int;
+
+@let my_age: int = 34;
+@let cat_age: age = 4;
+
+my_age > cat_age; // true
+```
+
+## Distinct Types
+
+Similar to Odin, Silicon has distinct types. These are *like* aliases but make a completely new type from an existing one.
+
+```silicon
+@type_distinct age = int;
+
+@let my_age: int = 34;
+@let cat_age: age = 4;
+
+my_age > cat_age; // false, cast needed!
+my_age.cast()
+```
+
+## Opaque Types
+
+Silicon also has opaque types where the underlying representation may not be observed by the consumer. WASM has this as well.
+
+```silicon
+@type_opaque UserId = int;
+
+# consumer has no idea UserId is int or GUID or what.
+@@open foo_lib @@import UserId;
+
+@@type_of UserId; // @opaque (cannot see underlying representation)
+
+```
 
 ## References
 

@@ -1,5 +1,7 @@
 ## Type-Directed Name Resolution (TDNR)
 
+\* *18-AUG-25* I won't implement TDNR in the core language. 
+
 There was a [proposal to add TDNR to Haskell](https://web.archive.org/web/20160310052223/https://prime.haskell.org/wiki/TypeDirectedNameResolution).
 This is _REALLY_ interesting for Silicon because this would really sell the language and set it apart from being too FP or too OOP.
 

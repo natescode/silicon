@@ -256,3 +256,69 @@ No different than
 &io_wrapper console.log, hello_world;
 
 ```
+
+## Function Patterns 
+
+If we take [Function Definition Pattern Matching](#function-definition-pattern-matching-fdpm) one step farther, we gain some amazing composition superpowers. 
+
+```silicon
+@fn NumberOperation n:number = {
+    n * n ^ (Math.sqrt N) / (n!);
+};
+
+```
+
+Above we have a contrived example of a simple function that performs some mathematical operation. Let's say that
+when the function receives an `n` with a negative value then we return an error. 
+
+```silicon
+
+@fn NumberOperation n:number = {
+    @if n < 0 
+    @then &Error "value is negative"
+    @else n * n ^ (Math.sqrt N) / (n!);
+};
+
+```
+
+Now we'll convert that function to use FDPM
+
+```silicon
+
+@fn NumberOperation (n < 0):number = {
+    return &Error "value is negative";
+};
+
+@fn NumberOperation n:number = {
+    n * n ^ (Math.sqrt N) / (n!);
+};
+
+```
+
+Splitting it up really keeps the happy path function clean. This also makes testing easier since we do not have
+any explicit conditional statements aka branches. 
+
+BUT now that they're separate, we'll show that the first definition that handles negative numbers can be made generic and reusable via composition.
+
+```silicon
+
+## This is our generic function to handle negative numbers
+## just a regular function, no magic here
+@fn HandleNegativeN (n < 0):number = {
+    return &Error "value is negative";
+};
+
+@fn NumberOperation n:number = HandleNegativeN;
+# alternative syntax
+# this would assume 'NumberOperation' is already defined;
+# NumberOperation = HandleNegativeN;
+
+@fn NumberOperation n:number = {
+    n * n ^ (Math.sqrt N) / (n!);
+};
+
+
+```
+
+As you see, *IF* the function signatures match then we can reuse functions as patterns for other functions. This is like more powerful switch case that can be dynamically modified to handle different cases which are composable. Combined with compile time execution an we can create many
+expressive patterns.
