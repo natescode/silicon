@@ -1,12 +1,11 @@
-// Grammar for Silicon, a simple programming language
+// Grammar for Silicon, a WASM-first programming language
 // This grammar is designed to be simple and easy to parse, with no operator precedence.
 // It is intended to be used with the Ohm parser library.
-// The grammar is designed to be used with the Silicon compiler, which will generate WebAssembly code
-// from the parsed syntax tree.
 Silicon {
 	Program   = Element*
 	Element = | ExpressionStart -- Expression
-			  | FuncDef -- Func
+			  | Definition -- Definition
+			//   | FuncDef -- Func
 
 	// Expression are broken into 'ExpressionStart' and 'ExpressionEnd' so that
     // parsing happens left to right instead of right to left
@@ -14,11 +13,11 @@ Silicon {
 	ExpressionStart = 	
 			| ExpressionStart binOp ExpressionEnd -- binaryExpression
 			| "@let" typedIdentifier "=" ExpressionStart -- letExpression
-			// When 1, 9, 4
-			| "@if" ExpressionStart "," (Block | ExpressionStart) "," (Block | ExpressionStart) -- whenExpression
-            |  "&@loop" intLiteral ".." intLiteral "," Element_Func -- Loop
-            // | Block
             | "&" identifier Params? -- funcCall
+			// When 1, 9, 4
+			// | "@if" ExpressionStart "," (Block | ExpressionStart) "," (Block | ExpressionStart) -- whenExpression
+            // |  "&@loop" intLiteral ".." intLiteral "," Element_Func -- Loop
+            // | Block
 			| ExpressionEnd
 
     ExpressionEnd =  
@@ -38,20 +37,22 @@ Silicon {
 			| "/" 
 			// | ".." -- range// range
 
-	FuncDef = // @fn math:i32 = 1 + 2
-			 // for now, the type will map EXACTLY to WASM type: i32 or f32
-			// | "@fn" typedIdentifier ListOf<typedIdentifier, ",">? "=" "{" ListOf<ExpressionStart, ";">? "}"
-			| "@fn" typedIdentifier (stringLiteral | booleanLiteral | floatLiteral | intLiteral | Params)? ("=" Block)?
-    
+	Definition =
+		| keyword typedIdentifier Params? Assign 
 
-	// Loop = "&@loop" (range | intLiteral) "," (Block | FuncDef)
-	// Loop = "&@loop" intLiteral ".." intLiteral "," FuncDef
+	FunctionCallSigil = "&" 
+	FunctionCallBody =
+		| keyword Args? -- builtinFunctionCall
+		| identifier Args? -- userFunctionCall
+	FunctionCall = FunctionCallSigil FunctionCallBody
 
 	Block = "{" ListOf<ExpressionStart,""> "}"
 
-	// range = intLiteral binOp_range intLiteral
+	range = intLiteral binOp_range intLiteral
 
 	Params = ListOf<typedIdentifier,",">
+
+	Args = ListOf<ExpressionStart, ",">
 
 	Assign = "=" ExpressionStart
 
