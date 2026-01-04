@@ -11,6 +11,9 @@ Silicon { // Grammar for Silicon, a WASM-first programming language
 			| booleanLiteral 
 			| floatLiteral 
 			| intLiteral 
+			| arrayLiteral
+			| objectLiteral
+			| tupleLiteral
 			| variable
 			| Block
 			| "(" ExpressionStart ")" -- paren
@@ -28,6 +31,10 @@ Silicon { // Grammar for Silicon, a WASM-first programming language
 	Args = ListOf<ExpressionStart, ",">
     keyword = "@" identifier
 		variable = identifier
+		arrayLiteral = "$[" ListOf<ExpressionStart,","> "]"
+		objectLiteral = "${" ListOf<keyValuePair,","> "}"
+		tupleLiteral = "$(" ListOf<ExpressionStart,","> ")"
+		keyValuePair = typedIdentifier "=" ExpressionStart
 		stringLiteral = "'" stringChar*  "'"
 			stringChar = ~("'" | "\\" | lineTerminator) any
 				lineTerminator = "\n" | "\r" | "\u2028" | "\u2029"
