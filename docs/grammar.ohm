@@ -1,15 +1,9 @@
-// Grammar for Silicon, a WASM-first programming language
-// This grammar is designed to be simple and easy to parse, with no operator precedence.
-// It supports basic expressions, function definitions, and function calls.
-// Silicon relies on elaboration to define semantics and more complex constructs.
-Silicon {
+Silicon { // Grammar for Silicon, a WASM-first programming language
 	Program   = Element*
 	Element = | ExpressionStart -- Expression
 			  | Definition -- Definition
-    // Silicon has no operator precedence, Parsing happens left to right instead of right to left
-	ExpressionStart = 	
+	ExpressionStart = 	 // Silicon has no operator precedence, Parsing happens left to right instead of right to left
 			| ExpressionStart binOp ExpressionEnd -- binaryExpression
-			| "@let" typedIdentifier "=" ExpressionStart -- letExpression
             | "&" identifier Params? -- funcCall
 			| ExpressionEnd
     ExpressionEnd =  
@@ -18,23 +12,20 @@ Silicon {
 			| floatLiteral 
 			| intLiteral 
 			| variable
+			| Block
 			| "(" ExpressionStart ")" -- paren
 			| ";"
-	binOp = ~ReservedOp operatorChar+
-	ReservedOp = | "&" | "@" | "$" | "." | ":" | "::"   
+	binOp = ~ReservedOp operatorChar+ // Silicon does not define operators with specific semantics, see 'elaboration' in docs/elaboration.md
+	ReservedOp = | "&" | "@" | "$" | "." | ":" | "::" // Sigils cannot be used an operators
 	operatorChar = | "=" | "<" | ">" | "!" | "+" | "-" | "*" | "/" | "%" | "^" | "|" | "~" | "?" | "++" | "+" | "-" | "*" | "/"
-	Definition =
-		| keyword typedIdentifier Params? Assign 
+	Definition = | keyword typedIdentifier Params? 
 	FunctionCallSigil = "&" 
-	FunctionCallBody =
-		| keyword Args? -- builtinFunctionCall
-		| identifier Args? -- userFunctionCall
+	FunctionCallBody = | keyword Args? -- builtinFunctionCall 
+					   | identifier Args? -- userFunctionCall
 	FunctionCall = FunctionCallSigil FunctionCallBody
 	Block = "{" ListOf<ExpressionStart,""> "}"
-	range = intLiteral binOp_range intLiteral
 	Params = ListOf<typedIdentifier,",">
 	Args = ListOf<ExpressionStart, ",">
-	Assign = "=" ExpressionStart
     keyword = "@" identifier
 		variable = identifier
 		stringLiteral = "'" stringChar*  "'"
