@@ -1,40 +1,58 @@
-Silicon { // Grammar for Silicon, a WASM-first programming language
+Silicon {
 	Program   = Element*
 	Element = | ExpressionStart -- Expression
-			  | Definition -- Definition
-	ExpressionStart = 	 // Silicon has no operator precedence, Parsing happens left to right instead of right to left
+			  | FuncDef -- Func
+
+	// Expression are broken into 'ExpressionStart' and 'ExpressionEnd' so that
+    // parsing happens left to right instead of right to left
+    // Silicon has no operator precedence, it is always left-to-right precedent
+	ExpressionStart = 	
 			| ExpressionStart binOp ExpressionEnd -- binaryExpression
-            | FunctionCall -- functionCall 
+			| "@let" typedIdentifier "=" ExpressionStart -- letExpression
+			// When 1, 9, 4
+			| "@if" ExpressionStart "," (Block | ExpressionStart) "," (Block | ExpressionStart) -- whenExpression
+            |  "&@loop" intLiteral ".." intLiteral "," Element_Func -- Loop
+            // | Block
+            | "&" identifier Params? -- funcCall
 			| ExpressionEnd
+
     ExpressionEnd =  
 			| stringLiteral  
 			| booleanLiteral 
 			| floatLiteral 
 			| intLiteral 
-			| arrayLiteral
-			| objectLiteral
-			| tupleLiteral
 			| variable
-			| Block
 			| "(" ExpressionStart ")" -- paren
 			| ";"
-	binOp = ~ReservedOp operatorChar+ // Silicon does not define operators with specific semantics, see 'elaboration' in docs/elaboration.md
-	ReservedOp = | "&" | "@" | "$" | "." | ":" | "::" // Sigils cannot be used an operators
-	operatorChar = | "=" | "<" | ">" | "!" | "+" | "-" | "*" | "/" | "%" | "^" | "|" | "~" | "?" | "++" | "+" | "-" | "*" | "/"
-	Definition = | keyword typedIdentifier Params? 
-	FunctionCallSigil = "&" 
-	FunctionCallBody = | keyword Args? -- builtinFunctionCall 
-					   | identifier Args? -- userFunctionCall
-	FunctionCall = FunctionCallSigil FunctionCallBody
+
+	binOp =
+			| "++" 
+			| "+" 
+			| "-" 
+      		| "*" 
+			| "/" 
+			// | ".." -- range// range
+
+	FuncDef = // @fn math:i32 = 1 + 2
+			 // for now, the type will map EXACTLY to WASM type: i32 or f32
+			// | "@fn" typedIdentifier ListOf<typedIdentifier, ",">? "=" "{" ListOf<ExpressionStart, ";">? "}"
+			| "@fn" typedIdentifier (stringLiteral | booleanLiteral | floatLiteral | intLiteral | Params)? ("=" Block)?
+    
+
+	// Loop = "&@loop" (range | intLiteral) "," (Block | FuncDef)
+	// Loop = "&@loop" intLiteral ".." intLiteral "," FuncDef
+
 	Block = "{" ListOf<ExpressionStart,""> "}"
+
+	// range = intLiteral binOp_range intLiteral
+
 	Params = ListOf<typedIdentifier,",">
-	Args = ListOf<ExpressionStart, ",">
+
+	Assign = "=" ExpressionStart
+
     keyword = "@" identifier
+
 		variable = identifier
-		arrayLiteral = "$[" ListOf<ExpressionStart,","> "]"
-		objectLiteral = "${" ListOf<keyValuePair,","> "}"
-		tupleLiteral = "$(" ListOf<ExpressionStart,","> ")"
-		keyValuePair = typedIdentifier "=" ExpressionStart
 		stringLiteral = "'" stringChar*  "'"
 			stringChar = ~("'" | "\\" | lineTerminator) any
 				lineTerminator = "\n" | "\r" | "\u2028" | "\u2029"
@@ -51,13 +69,18 @@ Silicon { // Grammar for Silicon, a WASM-first programming language
 			floatLiteral = digit+ ("_" digit+)* "." digit+
 			decLiteral = digit+ ("_" digit+)*
 		booleanLiteral = "@true" | "@false"
+
 		typedIdentifier = identifier type?
+
 		type = ":" identifier
+
 	identifier = 
     	| discard -- discard
     	| letter+ ("_" | alnum)* -- pub
     	| "_" identifier+ -- priv
+
     	discard = "_"
+
 	space := whitespace | lineTerminator
 	whitespace = "\t"
 			| "\x0B"    -- verticalTab
