@@ -1,40 +1,38 @@
-Silicon { // Grammar for Silicon, a WASM-first programming language
-	Program   = Element*
-	Element = | ExpressionStart -- Expression
-			  | Definition -- Definition
-	ExpressionStart = 	 // Silicon has no operator precedence, Parsing happens left to right instead of right to left
-			| ExpressionStart binOp ExpressionEnd -- binaryExpression
-            | FunctionCall -- functionCall 
-			| ExpressionEnd
-    ExpressionEnd =  
-			| stringLiteral  
-			| booleanLiteral 
-			| floatLiteral 
-			| intLiteral 
-			| arrayLiteral
-			| objectLiteral
-			| tupleLiteral
-			| variable
+Silicon {
+  Program = Element*
+  Element = Item ";"
+  Item = | Statement
+  		 | ExpressionStart
+  Statement =	| Assignment
+  				| Definition
+  Assignment = (Definition | binding) "=" ExpressionStart
+  ExpressionStart = | ExpressionStart BinOp ExpressionEnd --binary
+    				| FunctionCall --functionCall
+    				| Definition
+    				| ExpressionEnd
+	BinOp = | ReservedOp (ReservedOp | operatorChar)+ --withReservedOp
+    		| operatorChar+
+    // Silicon does not define operators with specific semantics, see 'elaboration' in docs/elaboration.md
+	ReservedOp = "#" | "&" | "@" | "$" | "." | ":" // Sigils cannot be used an operators
+	operatorChar = | "=" | "<" | ">" | "!" | "+" | "-" | "*" | "/" | "%" | "^" | "|" | "~" | "?" | "++" | "+" | "-" | "*" | "/"
+  FunctionCallSigil = "&" 
+  FunctionCallBody = | keyword Args? -- builtinFunctionCall 
+					 | binding Args? -- userFunctionCall
+  FunctionCall = FunctionCallSigil FunctionCallBody
+  Args = ListOf<ExpressionStart, ",">
+  ExpressionEnd = 
+			| Literal
+			| binding
 			| Block
 			| "(" ExpressionStart ")" -- paren
-			| ";"
-	binOp = ~ReservedOp operatorChar+ // Silicon does not define operators with specific semantics, see 'elaboration' in docs/elaboration.md
-	ReservedOp = | "&" | "@" | "$" | "." | ":" | "::" // Sigils cannot be used an operators
-	operatorChar = | "=" | "<" | ">" | "!" | "+" | "-" | "*" | "/" | "%" | "^" | "|" | "~" | "?" | "++" | "+" | "-" | "*" | "/"
-	Definition = | keyword typedIdentifier Params? 
-	FunctionCallSigil = "&" 
-	FunctionCallBody = | keyword Args? -- builtinFunctionCall 
-					   | identifier Args? -- userFunctionCall
-	FunctionCall = FunctionCallSigil FunctionCallBody
-	Block = "{" ListOf<ExpressionStart,""> "}"
-	Params = ListOf<typedIdentifier,",">
-	Args = ListOf<ExpressionStart, ",">
-    keyword = "@" identifier
-		variable = identifier
-		arrayLiteral = "$[" ListOf<ExpressionStart,","> "]"
-		objectLiteral = "${" ListOf<keyValuePair,","> "}"
-		tupleLiteral = "$(" ListOf<ExpressionStart,","> ")"
-		keyValuePair = typedIdentifier "=" ExpressionStart
+  Assign = "=" ExpressionStart       
+  Block = "{" (Item ";")* "}"
+  binding = identifier ("::" identifier)*
+  		Literal = | ArrayLiteral | ObjectLiteral | TupleLiteral | stringLiteral | intLiteral | floatLiteral | booleanLiteral
+		ArrayLiteral = "$[" ListOf<ExpressionStart,","> "]"
+		ObjectLiteral = "${" ListOf<KeyValuePair,","> "}"
+		TupleLiteral = "$(" ListOf<ExpressionStart,","> ")"
+		KeyValuePair = typedIdentifier "=" ExpressionStart
 		stringLiteral = "'" stringChar*  "'"
 			stringChar = ~("'" | "\\" | lineTerminator) any
 				lineTerminator = "\n" | "\r" | "\u2028" | "\u2029"
@@ -51,20 +49,14 @@ Silicon { // Grammar for Silicon, a WASM-first programming language
 			floatLiteral = digit+ ("_" digit+)* "." digit+
 			decLiteral = digit+ ("_" digit+)*
 		booleanLiteral = "@true" | "@false"
-		typedIdentifier = identifier type?
-		type = ":" identifier
-	identifier = 
-    	| discard -- discard
-    	| letter+ ("_" | alnum)* -- pub
-    	| "_" identifier+ -- priv
-    	discard = "_"
-	space := whitespace | lineTerminator
-	whitespace = "\t"
-			| "\x0B"    -- verticalTab
-			| "\x0C"    -- formFeed
-			| " "
-			| "\u00A0"  -- noBreakSpace
-			| "\uFEFF"  -- byteOrderMark
-			| unicodeSpaceSeparator
-	unicodeSpaceSeparator = "\u2000".."\u200B" | "\u3000"
+  Definition = keyword typedIdentifier GenericParams? (Params | Literal)* 
+  GenericParams = "[" ListOf<identifier,","> "]"
+  Params = typedIdentifier ListOf<typedIdentifier, ",">
+  keyword = "@" identifier
+  typedIdentifier = identifier type?
+  type = ":" identifier
+  identifier = letter+
+  space := whitespace | lineTerminator
+  whitespace = "\t" | "\x0B" | "\x0C" | " " | "\u00A0" | "\uFEFF" | unicodeSpaceSeparator
+  unicodeSpaceSeparator = "\u2000".."\u200B" | "\u3000"
 }
