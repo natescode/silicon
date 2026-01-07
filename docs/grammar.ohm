@@ -6,7 +6,7 @@ Silicon {
   Statement =	| Assignment
   				| Definition
   Assignment = (Definition | binding) "=" ExpressionStart
-  ExpressionStart = | ExpressionStart BinOp ExpressionEnd --binary
+
     				| FunctionCall --functionCall
     				| Definition
     				| ExpressionEnd
