@@ -110,25 +110,134 @@ Instead:
 
 1. The grammar produces a **CST**
 2. Elaboration hooks interpret meaning
-3. Intrinsics are resolved during elaboration
+3. Intrinsics are resolved during elaboration (when referenced)
 4. The resulting AST is lowered to WASM
 
-Example:
+Intrinsics are one of the main ways elaboration hooks *connect Silicon code to the machine*.
+
+However, most elaboration hooks should **not** be “intrinsic-heavy”:
+- They should primarily compose existing Silicon semantics (functions, types, modules, pattern rules, etc.)
+- Intrinsics should be used **relatively rarely**, mostly at the bottom of the stack (std/prelude, runtime, ABI glue)
+
+Think of intrinsics as the “assembly layer” that makes higher-level semantics possible — not something most code touches.
+
+---
+
+## Worked Example: How `+` Becomes `i32.add`
+
+This example shows the full pipeline:
+
+- How `+` is **parsed** (no meaning yet)
+- How elaboration decides what `+` **means**
+- How an intrinsic like `Wasm::i32_add` can be used to implement that meaning
+- How it lowers to **WAT**
+
+### 1) Source code
 
 ```silicon
 1 + 2
 ```
 
-- `+` is not intrinsically meaningful
-- Elaboration resolves `+` to a function
-- That function may eventually call `Wasm::i32_add`
-- The compiler lowers it to:
+At this point, Silicon has not assigned any semantics to `+`.
 
-```wat
-(i32.add)
+### 2) Parse result (CST)
+
+The grammar recognizes an infix operator and produces a simple structural node, e.g.:
+
+```text
+BinOp {
+  op: "+",
+  left: IntLiteral("1"),
+  right: IntLiteral("2")
+}
 ```
 
-This keeps **syntax, semantics, and lowering fully decoupled**.
+Key point: the parser only knows:
+- there is an operator token `"+"`
+- and two sub-expressions
+
+It does **not** know what `"+"` does.
+
+### 3) Elaboration resolves the meaning of `"+"`
+
+During elaboration, Sigil runs hooks that interpret the CST and produce a typed/semantic AST.
+
+A common (and very “Silicon”) approach is:
+
+- Treat operators as *ordinary names* to be resolved like functions
+- Look up an implementation for the symbol `"+"` in scope
+- Select the best match based on types (or other rules)
+
+Conceptually:
+
+```text
+resolveOperator("+", [typeOf(left), typeOf(right)], scope)
+  -> returns a function symbol, e.g. `Std::Int32::add` or `Prelude::+`
+```
+
+If `1` and `2` default to `i32`, then elaboration might choose:
+
+```text
+Std::I32::add : (i32, i32) -> i32
+```
+
+### 4) The chosen implementation may use an intrinsic
+
+Now we get to the “intrinsics power primitive elaboration hooks” part:
+
+The compiler didn’t hardcode that `+` is `i32.add`.  
+Instead, it found a `+` implementation **defined in Silicon** (likely in the prelude / stdlib) that *happens* to be implemented in terms of an intrinsic.
+
+For example (conceptual Silicon-ish pseudocode):
+
+```silicon
+@fn Std::I32::add (a: i32, b: i32) : i32 = {
+  Wasm::i32_add a b
+};
+```
+
+So the meaning of:
+
+```silicon
+1 + 2
+```
+
+becomes:
+
+```silicon
+Std::I32::add 1 2
+```
+
+…and *that* becomes an intrinsic call:
+
+```silicon
+Wasm::i32_add 1 2
+```
+
+### 5) Lowering to WASM (WAT)
+
+Once elaboration produces a semantic/typed representation, lowering is straightforward:
+
+```wat
+(i32.add
+  (i32.const 1)
+  (i32.const 2))
+```
+
+That is why intrinsics matter:
+- they’re the bridge from Silicon’s *user-defined semantics* to WASM’s *machine operations*
+- but the **selection of semantics** (`+` -> `Std::I32::add`) happens via elaboration and normal name/type resolution
+
+### What this buys you
+
+This design means:
+
+- `+` is not special in the grammar
+- `+` is not special in the language
+- `+` is only special if something in scope defines it
+- and intrinsics are only involved if the chosen definition uses them
+
+You get a “minimal core” language with maximum control over semantics, without turning the language into “a pile of compiler magic”.
 
 ---
 
@@ -243,7 +352,9 @@ They are the *contract* between Silicon and the machine.
 - Silicon has **no built-in intrinsics**
 - Sigil exposes **compiler intrinsics**
 - Intrinsics are **ordinary functions**
-- Semantics are defined during elaboration
+- Semantics are defined during elaboration hooks
+- Intrinsics enable primitive semantics at the bottom of the stack
+- Most elaboration hooks should primarily use existing Silicon semantics
 - WASM is the ultimate execution model
 - Safety is enforced *above* intrinsics, not inside them
 
