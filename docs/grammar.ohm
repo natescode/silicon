@@ -20,7 +20,7 @@ Silicon {
     		| operatorChar+
     // Silicon does not define operators with specific semantics, see 'elaboration' in docs/elaboration.md
 	ReservedOp =  "&" | "@" | "$" | "." | ":=" | ":" // Sigils cannot be used an operators
-	operatorChar = | "=" | "<" | ">" | "!" | "+" | "-" | "*" | "/" | "%" | "^" | "|" | "~" | "?" | "++" | "+" | "-" | "*" | "/"
+	operatorChar = | "=" | "<" | ">" | "!" | "+" | "-" | "*" | "/" | "%" | "^" | "|" | "~" | "?" | "++" 
   FunctionCallSigil = "&" 
   FunctionCallBody = | keyword Args? -- builtinFunctionCall 
 					 | namespace Args? -- userFunctionCall
