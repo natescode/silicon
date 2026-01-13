@@ -45,6 +45,7 @@ export default function addCompileSemantics(siliconGrammar: ohm.Grammar) {
                 )
                 `
         },
+        // TODO: eventually, this will delegate to elaboration phase to determine operator semantics
         ExpressionStart_binaryExpression(left, binop, right) {
             let lvalue = left.compile()
             let rvalue = right.compile()

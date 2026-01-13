@@ -1,53 +1,17 @@
 Silicon {
-	Program   = Element*
-	Element = | ExpressionStart ";" -- Expression
-			  | FuncDef ";" -- Func
-
-	ExpressionStart = 	
-			| ExpressionStart binOp ExpressionEnd -- binaryExpression
-			| "@let" typedIdentifier "=" ExpressionStart -- letExpression
-			// When 1, 9, 4
-			| "@when" ExpressionStart ","  "{" ExpressionStart "}" "," "{" ExpressionStart "}" -- whenExpression
-            |  "&@loop" intLiteral ".." intLiteral "," Element_Func -- Loop
-            // | Block
-			| ExpressionEnd
-
-    ExpressionEnd =  
-			| stringLiteral  
-			| booleanLiteral 
-			| floatLiteral 
-			| intLiteral 
-			| variable
+  Program = Element*
+  Element = | Item ";" -- item
+  Item = | ExpressionStart
+  ExpressionStart = | ExpressionStart BinOp ExpressionEnd  --binOp
+    				| ExpressionEnd
+	BinOp = | ReservedOp (ReservedOp | operatorChar)+ --withReservedOp
+    		| operatorChar+
+	ReservedOp =  "&" | "@" | "$" | "." | ":=" | ":" // Sigils cannot be used an operators
+	operatorChar = | "=" | "<" | ">" | "!" | "+" | "-" | "*" | "/" | "%" | "^" | "|" | "~" | "?" | "++" | "+" | "-" | "*" | "/"
+  ExpressionEnd = 
+			| Literal
 			| "(" ExpressionStart ")" -- paren
-			| ";"
-
-	binOp =
-			| "++" 
-			| "+" 
-			| "-" 
-      		| "*" 
-			| "/" 
-			// | ".." -- range// range
-
-	FuncDef = // @fn math:i32 = 1 + 2
-			 // for now, the type will map EXACTLY to WASM type: i32 or f32
-			// | "@fn" typedIdentifier ListOf<typedIdentifier, ",">? "=" "{" ListOf<ExpressionStart, ";">? "}"
-			| "@fn" typedIdentifier Params? Assign?
-
-	// Loop = "&@loop" (range | intLiteral) "," (Block | FuncDef)
-	// Loop = "&@loop" intLiteral ".." intLiteral "," FuncDef
-
-	// Block = "{" ListOf<ExpressionStart,""> "}"
-
-	// range = intLiteral binOp_range intLiteral
-
-	Params = ListOf<typedIdentifier,",">
-
-	Assign = "=" ExpressionStart
-
-    keyword = "@" identifier
-
-		variable = identifier
+  		Literal = | intLiteral | floatLiteral | booleanLiteral
 		stringLiteral = "'" stringChar*  "'"
 			stringChar = ~("'" | "\\" | lineTerminator) any
 				lineTerminator = "\n" | "\r" | "\u2028" | "\u2029"
@@ -64,25 +28,8 @@ Silicon {
 			floatLiteral = digit+ ("_" digit+)* "." digit+
 			decLiteral = digit+ ("_" digit+)*
 		booleanLiteral = "@true" | "@false"
-
-		typedIdentifier = identifier type?
-
-		type = ":" identifier
-
-	identifier = 
-    	| discard -- discard
-    	| letter+ ("_" | alnum)* -- pub
-    	| "_" identifier+ -- priv
-
-    	discard = "_"
-
-	space := whitespace | lineTerminator
-	whitespace = "\t"
-			| "\x0B"    -- verticalTab
-			| "\x0C"    -- formFeed
-			| " "
-			| "\u00A0"  -- noBreakSpace
-			| "\uFEFF"  -- byteOrderMark
-			| unicodeSpaceSeparator
-	unicodeSpaceSeparator = "\u2000".."\u200B" | "\u3000"
+  comment =  "#" (~lineTerminator any)*
+  space := whitespace | lineTerminator | comment
+  whitespace = "\t" | "\x0B" | "\x0C" | " " | "\u00A0" | "\uFEFF" | unicodeSpaceSeparator
+  unicodeSpaceSeparator = "\u2000".."\u200B" | "\u3000"
 }
