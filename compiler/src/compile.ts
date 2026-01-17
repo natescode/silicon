@@ -13,218 +13,237 @@ Mac:
 export default function addCompileSemantics(siliconGrammar: ohm.Grammar) {
     return siliconGrammar.createSemantics().addOperation('compile', {
         Program(elements) {
-            const body_wat = elements.children.map(element => element.compile()).join("\n")
-            // const program_wat = `(module
-            //     (func $main (export "main") (result i32)
-            //         ${body_wat} 
-            //         return
-            //     )
-            // )`
-            const program_wat = body_wat
-            return program_wat
+            const body = elements.children.map(el => el.compile()).filter(s => s).join('\n');
+            return `(module
+(memory 1)
+(global $heap (mut i32) (i32.const 1024))
+${body}
+)`;
         },
-        Element_Expression(exp, sc) {
-            return exp.compile()
+        Element_item(item, _semi) {
+            return item.compile();
         },
-        Element_Func(funcdef, sc) {
-            const [fn, nameType, params, assign] = funcdef.children;
-            const [_eq, expr] = assign.children[0].children
-
-            const paramsCode = params.children
-                .map((param) => param.compile()
-                    .map((nameType: any[]) => `(param ${nameType[0]} ${nameType[1].split(':')[1]})`).join(' '))
-
-
-            var funcName = nameType.sourceString.split(':')[0]
-            return `
-                (func \$${funcName} (export "${funcName}")
-                ${paramsCode} 
-                (result ${nameType.sourceString.split(':')[1]})
-                    ${expr.compile()}
-                    return
-                )
-                `
+        Element(docComment) {
+            // Ignore doc comments in WAT
+            return '';
         },
-        // TODO: eventually, this will delegate to elaboration phase to determine operator semantics
-        ExpressionStart_binaryExpression(left, binop, right) {
-            let lvalue = left.compile()
-            let rvalue = right.compile()
+        Item_statement(stmt) {
+            return stmt.compile();
+        },
+        Item(exp) {
+            return exp.compile();
+        },
+        Statement_assignment(assgn) {
+            return assgn.compile();
+        },
+        Statement_definition(def) {
+            return def.compile();
+        },
+        DocComment(_hashhash, chars) {
+            return '';
+        },
+        Assignment(ns, _eq, exp) {
+            const name = ns.compile();
+            const value = exp.compile();
+            return `(global.set $${name} ${value})`;
+        },
+        Definition(kw, typedId, generics, params, binding) {
+            const name = typedId.compile();
+            const paramList = params.children.map(p => p.compile()).join(' ');
+            const body = binding ? binding.compile() : '';
+            return `(func $${name} ${paramList} (local $addr i32)\n${body}\n)`;
+        },
+        ExpressionStart_binOp(left, op, right) {
+            const left_wat = left.compile();
+            const right_wat = right.compile();
+            const op_wat = op.compile();
 
-            if (binop.sourceString === '++') return `'${lvalue + rvalue}'`
+            // Detect type from WAT
+            const isFloat = /f32\.const/.test(left_wat) || /f32\.const/.test(right_wat);
 
-            if (binop.sourceString === '+') return `
-        ${lvalue}
-        ${rvalue}
-        i32.add`
-
-            if (binop.sourceString === '-') return `${lvalue}
-        ${rvalue}
-        i32.sub`
-
-            if (binop.sourceString === '*') return `${lvalue}
-        ${rvalue}
-        i32.mul`
-
-            if (binop.sourceString === '/') return `${lvalue}
-        ${rvalue}
-        i32.div_s`
-
-            if (binop.sourceString === '..') {
-                return `$`
+            let instr = '';
+            if (isFloat) {
+                switch (op_wat) {
+                    case '+': instr = 'f32.add'; break;
+                    case '-': instr = 'f32.sub'; break;
+                    case '*': instr = 'f32.mul'; break;
+                    case '/': instr = 'f32.div'; break;
+                    default: throw new Error(`Unsupported operator for f32: ${op_wat}`);
+                }
+            } else {
+                switch (op_wat) {
+                    case '+': instr = 'i32.add'; break;
+                    case '-': instr = 'i32.sub'; break;
+                    case '*': instr = 'i32.mul'; break;
+                    case '/': instr = 'i32.div_s'; break;
+                    default: throw new Error(`Unsupported operator: ${op_wat}`);
+                }
             }
 
-
+            return `${left_wat}\n${right_wat}\n${instr}`;
         },
-        ExpressionStart_letExpression(_let, identtype, eq, exp) {
-            let [identifier, _type] = identtype.sourceString.split(":")
-
-            return `local \$${identifier} ${_type}
-            local.set \$${identifier} ${exp.compile()}
-            `
+        ExpressionStart_functionCall(call) {
+            return call.compile();
         },
-        ExpressionStart_whenExpression($when, cond, _c1, _lbrace1, $then, _rbrace1, _c2, _lbrace2, $else, _rbrace2) {
-            return `${cond.compile()}
-            (if (result i32)
-                (then ${$then.compile()})
-                (else ${$else.compile()})
-            )
-            `
+        ExpressionStart(expEnd) {
+            return expEnd.compile();
         },
-        ExpressionStart_Loop(_loop, start, _dotdot, stop, _comma, func) {
-
-            let funcString = func.compile()
-            let funcName = func.children[0].children[1].sourceString.split(':')[0]
-            let loop = `
-    ;; Loop from start to stop
-
-    ;; initialize $index 
-    (local $index i32)
-    i32.const 0
-    local.set $index
-
-    ;; initialize value
-    (local $value i32)
-    local.get ${start}
-    local.set $value
-
-    ;; loop from start to stop
-    (loop $loop
-
-      ;; Call inline function with index & value as arguments
-      (call \$${funcName} (local.get $index) (local.get $value))
-
-      ;; Increment value
-      local.get $value
-      i32.const 1
-      i32.add
-      local.set $value
-
-      ;; Increment index
-      local.get $index
-      i32.const 1
-      i32.add
-      local.set $index
-      
-      ;; Check if we are under $stop value
-      local.get $value
-      i32.const ${stop}
-      i32.le_u
-      br_if $loop
-    )
-`
-
-            return `${funcString}
-            ${loop}`
+        BinOp(op) {
+            return op.sourceString;
         },
-        ExpressionEnd(expr) {
-            return expr.compile()
+        FunctionCall(_sigil, body) {
+            return body.compile();
         },
-        ExpressionEnd_paren(lparen, expression, rparen) {
-            return expression.compile()
+        FunctionCallBody_builtinFunctionCall(kw, args) {
+            const funcName = kw.compile();
+            const argList = args ? args.compile() : '';
+            return `(call $${funcName} ${argList})`;
         },
-        variable(identifier) {
-            return `(local.get \$${identifier.sourceString})`
+        FunctionCallBody_userFunctionCall(ns, args) {
+            const funcName = ns.compile();
+            const argList = args ? args.compile() : '';
+            return `(call $${funcName} ${argList})`;
         },
-        Params(_params) {
-            // const paramsList = _params.children.map((param) => param.sourceString).join(' ')
-            const paramsList: any[] = _params.asIteration().children.map((param) => param.compile())
-            // const result = _params.sourceString.split(',').map((param) => "(param $" + param.split(':').join(' ')).join(')') + ")"
-            // const result = _params.asIteration().children.map((param)=>param)
-            return paramsList
+        Args(exps) {
+            return exps.children.map(e => e.compile()).join(' ');
         },
-        // literal_str(str) {
-        //     return str.compile()
-        // },
-        // literal_bool(bool) {
-        //     return bool.compile()
-        // },
-        // literal_float(float) {
-        //     return float.compile()
-        // },
-        // literal_integer(integer) {
-        //     return integer.compile()
-        // },
-        typedIdentifier(identifier, type) {
-            return [identifier.sourceString, type.sourceString]
+        ExpressionEnd_literal(lit) {
+            return lit.compile();
         },
-        intLiteral(literal) {
-            return literal.compile()
+        ExpressionEnd_namespace(ns) {
+            return `(global.get $${ns.compile()})`;
         },
-        decLiteral(firstDigit, _, remaining) {
-            let intString = firstDigit.sourceString + remaining.sourceString.split('_').join('')
-            // console.log(`intString ${intString}`)
-            let intInteger = parseInt(intString, 10)
-            return "i32.const " + intInteger
+        ExpressionEnd_block(block) {
+            return block.compile();
         },
-        stringLiteral(_, chars, __) {
-            // return '"' + chars.children.map(c => c.sourceString).join('') + '"'
-            return chars.children.map(c => c.sourceString).join('')
+        ExpressionEnd_paren(_open, exp, _close) {
+            return exp.compile();
         },
-        binLiteral(_0b, firstDigit, _, remaining) {
-            let intString = _0b.sourceString + firstDigit.sourceString + remaining.sourceString.split('_').join('')
-            let intInteger = parseInt(intString)
-            return intInteger
+        Assign(_eq, exp) {
+            return exp.compile();
         },
-        hexLiteral(_0x, firstDigit, _, remaining) {
-            let intString = _0x.sourceString + firstDigit.sourceString + remaining.sourceString.split('_').join('')
-            let intInteger = parseInt(intString)
-            return intInteger
+        Binding(_bind, exp) {
+            return exp.compile();
         },
-        octLiteral(_0c, firstDigit, _, remaining) {
-            let intString = firstDigit.sourceString + remaining.sourceString.split('_').join('')
-            let intInteger = parseInt(intString, 8)
-            return intInteger
+        Block(_open, items, _close) {
+            const body = items.children.map(i => i.compile()).filter(s => s).join('\n');
+            return `(block\n${body}\n)`;
         },
-        floatLiteral(firstDigit, _, secondDigit, dot, decimalDigits) {
-            let floatString = firstDigit.sourceString + secondDigit.sourceString + dot.sourceString + decimalDigits.sourceString
-            return "f32.const " + parseFloat(floatString)
+        namespace(id, rest) {
+            return this.sourceString;
         },
-        booleanLiteral(v) {
-            if (v.sourceString === "@true") return 'i32.const 1';
-            if (v.sourceString === "@false") return 'i32.const 0';
-            throw new Error("invalid boolean literal value")
+        Literal_array(arr) {
+            return arr.compile();
         },
-        keyword(at, word) {
-            return at.sourceString + word.sourceString
+        Literal_object(obj) {
+            throw new Error('Object literals not supported in WAT compilation yet');
         },
-        identifier_discard(discard) {
-            return discard.sourceString
+        Literal_tuple(tup) {
+            throw new Error('Tuple literals not supported in WAT compilation yet');
         },
-        identifier_pub(start, end) {
-            return start.sourceString + end.children.map(c => c.sourceString).join('')
+        Literal_string(str) {
+            return 'i32.const 0'; // Placeholder
         },
-        identifier_priv(underscore, name) {
-            return underscore.sourceString + name.children.map(c => c.sourceString).join('')
+        Literal_int(int) {
+            return int.compile();
         },
-        discard(discard) {
-            // "_" character
-            return discard.sourceString
+        Literal_float(flt) {
+            return flt.compile();
+        },
+        Literal_bool(bool) {
+            return bool.compile();
+        },
+        // use STD allocator for arrays
+        ArrayLiteral(_sigil, exps, _close) {
+            // Allocate array in linear memory
+            let size = exps.children.length;
+            // use STD allocator for arrays
+            let alloc = `(call $alloc_array (i32.const ${size})) ;; allocate array of size ${size}`;
+            let stores = exps.children.map((e, i) => {
+                return `${alloc}\n${e.compile()}\ni32.store offset=${i * 4}`;
+            }).join('\n');
+            return `${alloc}\n${stores}\ni32.const ${size}\n`; // Return pointer and size
+        },
+        ObjectLiteral(_sigil, pairs, _close) {
+            throw new Error('Objects not supported');
+        },
+        TupleLiteral(_sigil, exps, _close) {
+            throw new Error('Tuples not supported');
+        },
+        KeyValuePair(id, _eq, exp) {
+            // Not used directly
+            return '';
+        },
+        stringLiteral(_quote, chars, _quote2) {
+            return 'i32.const 0';
+        },
+        intLiteral_dec(dec) {
+            return dec.compile();
+        },
+        intLiteral_bin(bin) {
+            return bin.compile();
+        },
+        intLiteral_hex(hex) {
+            return hex.compile();
+        },
+        intLiteral_oct(oct) {
+            return oct.compile();
+        },
+        decLiteral() {
+            const raw = this.sourceString.replace(/_/g, '');
+            const n = parseInt(raw, 10);
+            return `i32.const ${n}`;
+        },
+        binLiteral() {
+            const raw = this.sourceString.slice(2).replace(/_/g, '');
+            const n = parseInt(raw, 2);
+            return `i32.const ${n}`;
+        },
+        hexLiteral() {
+            const raw = this.sourceString.slice(2).replace(/_/g, '');
+            const n = parseInt(raw, 16);
+            return `i32.const ${n}`;
+        },
+        octLiteral() {
+            const raw = this.sourceString.slice(2).replace(/_/g, '');
+            const n = parseInt(raw, 8);
+            return `i32.const ${n}`;
+        },
+        floatLiteral() {
+            const raw = this.sourceString.replace(/_/g, '');
+            const v = parseFloat(raw);
+            return `f32.const ${v}`;
+        },
+        booleanLiteral() {
+            return this.sourceString === '@true' ? 'i32.const 1' : 'i32.const 0';
+        },
+        GenericParams(_open, ids, _close) {
+            return ''; // Ignore generics for now
+        },
+        ParamLiteral_typed(typedId) {
+            return `(param $${typedId.compile()} i32)`; // Assume i32 for now
+        },
+        ParamLiteral_literal(lit) {
+            return lit.compile();
+        },
+        Params(id, rest) {
+            const params = [id].concat(rest.children).map(p => `(param $${p.compile()} i32)`).join(' ');
+            return params;
+        },
+        keyword(_at, id) {
+            return id.sourceString;
+        },
+        typedIdentifier(id, type) {
+            return id.sourceString;
+        },
+        type(_colon, id) {
+            return '';
+        },
+        discard() {
+            return '_';
+        },
+        identifier() {
+            return this.sourceString;
         }
-
-        // BlockLiteral(lBracket,exps,sc,rBracket){
-        // }
-        // Assign(eq, exp) {
-        //   // todo assign
-        // }
-    });
+    })
 }
