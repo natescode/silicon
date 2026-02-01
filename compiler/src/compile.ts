@@ -11,7 +11,18 @@ Mac:
     wat2wasm main.wat -o main.wasm
 */
 export default function addCompileSemantics(siliconGrammar: ohm.Grammar) {
-    return siliconGrammar.createSemantics().addOperation('compile', {
+    // Helper function
+    function getTypeSize(type: string): number {
+        switch (type) {
+            case 'i32':
+            case 'f32':
+                return 4;
+            default:
+                return 4; // default to 4 bytes
+        }
+    }
+
+    const semantics = siliconGrammar.createSemantics().addOperation('compile', {
         Program(elements) {
             const body = elements.children.map(el => el.compile()).filter(s => s).join('\n');
             return `(module
@@ -57,6 +68,17 @@ ${body}
             const left_wat = left.compile();
             const right_wat = right.compile();
             const op_wat = op.compile();
+
+            // if (op_wat === '.') {
+            //     // Member access: assume right is int literal for field index (0-based)
+            //     const indexMatch = right_wat.match(/i32\.const (\d+)/);
+            //     if (!indexMatch) {
+            //         throw new Error('Member access right side must be an integer literal for field index');
+            //     }
+            //     const index = parseInt(indexMatch[1]);
+            //     const offset = index * 4;
+            //     return `${left_wat} (i32.const ${offset}) i32.add i32.load`;
+            // }
 
             // Detect type from WAT
             const isFloat = /f32\.const/.test(left_wat) || /f32\.const/.test(right_wat);
@@ -164,8 +186,27 @@ ${body}
             }).join('\n');
             return `${alloc}\n${stores}\ni32.const ${size}\n`; // Return pointer and size
         },
+        /// ${name: type = value, ...}
         ObjectLiteral(_sigil, pairs, _close) {
-            throw new Error('Objects not supported');
+            const fields = pairs.children.map(pair => {
+                const typedId = pair.children[0];
+                const exp = pair.children[2];
+                return {
+                    type: typedId.type(),
+                    value: exp.compile()
+                };
+            });
+
+            let offset = 0;
+            const stores = fields.map(field => {
+                const storeInstr = field.type === 'f32' ? 'f32.store' : 'i32.store';
+                const store = `(local.get $addr) (i32.const ${offset}) i32.add ${field.value} ${storeInstr}`;
+            }).join('\n');
+
+            const size = offset;
+            const alloc = `(call $alloc_array (i32.const ${size}))`;
+
+            return `(block (result i32)\n  (local $addr i32)\n  ${alloc}\n  (local.set $addr)\n  ${stores}\n  (local.get $addr)\n)`;
         },
         TupleLiteral(_sigil, exps, _close) {
             throw new Error('Tuples not supported');
@@ -245,5 +286,20 @@ ${body}
         identifier() {
             return this.sourceString;
         }
+    }).addOperation('type', {
+        typedIdentifier(id, type) {
+            return type.children.length > 0 ? type.type() : 'i32';
+        },
+        type(_colon, id) {
+            return id.sourceString;
+        },
+        // Default for other rules
+        _terminal() {
+            return '';
+        },
+        _nonterminal() {
+            return '';
+        }
     })
+    return semantics;
 }
