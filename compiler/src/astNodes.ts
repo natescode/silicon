@@ -1,5 +1,3 @@
-// AST Node type definitions for Silicon-official grammar
-
 export type ASTNode =
     | Program
     | Element
