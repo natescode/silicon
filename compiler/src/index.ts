@@ -24,8 +24,8 @@ import { siliconGrammar } from './grammar'
 console.log('Silicon v2024.01')
 
 // Example Silicon program
-// TODO: Make this accept input from CLI or files
-const sourceCode = `&@loop 1..4, @fn foo:i32 index:i32, value:i32 = 1;;`
+// TODO: Make this accept input from CLI or files  
+const sourceCode = `5;`
 
 // ============================================================================
 // COMPILATION PIPELINE
