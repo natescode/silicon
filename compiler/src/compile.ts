@@ -1,27 +1,8 @@
 import * as ohm from 'ohm-js'
-import { IndentStyle } from 'typescript';
 
-/*
-These are the semantics for compiling Silicon into Web Assembly. This version
-c[semantics wrapper for Silicon]ompiles to WAT (Web Assembly text format). Tools like Wat2Wasm.
-Mac:
-    #install
-    brew install wabt
-    #convert WAT to WASM
-    wat2wasm main.wat -o main.wasm
-*/
+// Compile Silicon AST to WebAssembly Text format (WAT)
+// To convert WAT to WASM: wat2wasm main.wat -o main.wasm
 export default function addCompileSemantics(siliconGrammar: ohm.Grammar) {
-    // Helper function
-    function getTypeSize(type: string): number {
-        switch (type) {
-            case 'i32':
-            case 'f32':
-                return 4;
-            default:
-                return 4; // default to 4 bytes
-        }
-    }
-
     const semantics = siliconGrammar.createSemantics().addOperation('compile', {
         Program(elements) {
             const body = elements.children.map(el => el.compile()).filter(s => s).join('\n');
@@ -35,7 +16,6 @@ ${body}
             return item.compile();
         },
         Element(docComment) {
-            // Ignore doc comments in WAT
             return '';
         },
         Item_statement(stmt) {
