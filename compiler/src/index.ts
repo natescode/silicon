@@ -1,10 +1,12 @@
 console.log("Silicon v2024.01");
 import { toAST } from 'ohm-js/extras'
 import siliconGrammar from './SiliconGrammar';
-import addEvalSemantics from './eval';
+// import addEvalSemantics from './eval';
 import addCompileSemantics from './compile';
+import addToAstSemantics from './toAst';
 // const evalSemantics = addEvalSemantics(siliconGrammar);
 const compileSemantics = addCompileSemantics(siliconGrammar)
+const astSemantics = addToAstSemantics(siliconGrammar)
 // TESTS
 // let sourceCode = '5 - 1 + 2 * 3 / 2;'
 // let sourceCode = '"hello, " + "world!";'
@@ -33,37 +35,13 @@ const match = siliconGrammar.match(sourceCode);
 // console.log(`Result = ${result}`)
 
 
-// TODO covert match tree to AST
-const ast = toAST(match, {
-  Program: { type: 'program', statements: 0 },
-  // SourceElement_sourceExp: { type: 'source_element', exp: 0 },
-  ExpressionStart_binaryExpression: { type: 'binary_exp', left: 0, op: 1, right: 2 },
-  ExpressionStart_letExpression: { type: 'let_exp', _let: 0, id: 1, eq: 2, exp: 3 },
-  ExpressionEnd: { type: 'expression', exp: 0 },
-  // ExpressionEnd: { type: 'expr_literal', value: 0 },
-  // EXPR_paren: { type: 'paren_exp', lparen: 0, exp: 1, rparen: 2 },
-  binOp: { type: 'operator', op: 0 },
-  keyword: { type: 'keyword', at: 0, id: 1 },
-  literal: { type: 'literal', exp: 0 },
-  literal_str: { type: 'string_literal', value: 0 },
-  literal_integer: { type: 'integer_literal', value: 0 },
-  binLiteral: { type: 'binary_literal', value: 0 },
-  hexLiteral: { type: 'hexadecimal_literal', value: 0 },
-  octLiteral: { type: 'octal_literal', value: 0 },
-  floatLiteral: { type: 'float_literal', value: 0 },
-  intLiteral: { type: 'integer_literal', value: 0 },
-  literal_bln: { type: 'boolean_literal', value: 0 },
-  identifier_discard: { type: 'discard', id: 0 },
-  identifier_pub: { type: 'identifier', id: 0 },
-  identifier_priv: { type: 'identifier', id: 0 },
-  bit: { type: 'bit', value: 0 },
-  discard: { type: 'discard_identifier', id: 0 },
-})
+// TODO covert match tree to AST with type annotations
+const ast = astSemantics(match).toAst()
 
-Bun.write('ast.json', JSON.stringify(ast))
+Bun.write('ast.json', JSON.stringify(ast, null, 2))
 
 console.log(`AST
-  ${JSON.stringify(ast)}`)
+  ${JSON.stringify(ast, null, 2)}`)
 
 // output result of eval
 // let sc = sourceCode.slice(0, -1)
