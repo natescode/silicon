@@ -1,3 +1,20 @@
+/**
+ * Abstract Syntax Tree Node Definitions
+ *
+ * This module defines all the TypeScript interfaces and types that make up the
+ * Silicon Abstract Syntax Tree (AST). The AST is a strongly-typed representation
+ * of Silicon programs that preserves semantic information.
+ *
+ * Design decisions:
+ * - All nodes have a discriminating `type` field for safe pattern matching
+ * - Complex nodes use a `kind` field to distinguish between variants
+ * - Optional `sourceLocation` for error reporting and debugging
+ * - Factory functions (ASTFactory) ensure consistent node creation
+ *
+ * @see toAst.ts - Converts parse trees to AST nodes
+ * @see compile.ts - Transforms AST nodes into WebAssembly
+ */
+
 export type ASTNode =
     | Program
     | Element

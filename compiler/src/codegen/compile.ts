@@ -1,7 +1,36 @@
+/**
+ * Silicon to WebAssembly Code Generation
+ *
+ * This module transforms the AST into WebAssembly Text format (WAT). This is
+ * stage 3 of the compilation pipeline.
+ *
+ * Architecture:
+ * - Implements Ohm's semantic action pattern
+ * - Walks the parse tree recursively, generating WAT instructions
+ * - Handles type inference (i32 vs f32 operations)
+ * - Manages memory layout and function definitions
+ *
+ * Output:
+ * - Valid WebAssembly text format that can be assembled with wat2wasm
+ * - Includes standard memory (1 page) and heap setup
+ * - Each function becomes a (func ...) definition
+ *
+ * @example
+ *   const compileSemantics = addCompileSemantics(grammar)
+ *   const wat = compileSemantics(match).compile()
+ *   // wat is a string containing valid WAT code
+ *
+ * @see std.wat - Standard library and helper functions
+ */
+
 import * as ohm from 'ohm-js'
 
-// Compile Silicon AST to WebAssembly Text format (WAT)
-// To convert WAT to WASM: wat2wasm main.wat -o main.wasm
+/**
+ * Create semantic actions for AST to WAT compilation
+ *
+ * @param siliconGrammar - The compiled Ohm grammar
+ * @returns Ohm semantics object with 'compile' operation
+ */
 export default function addCompileSemantics(siliconGrammar: ohm.Grammar) {
     const semantics = siliconGrammar.createSemantics().addOperation('compile', {
         Program(elements) {

@@ -1,6 +1,36 @@
+/**
+ * Parse Tree to AST Transformation
+ *
+ * This module converts the raw parse tree produced by Ohm into a strongly-typed
+ * Abstract Syntax Tree (AST). This is stage 2 of the compilation pipeline.
+ *
+ * Architecture:
+ * - Implements Ohm's semantic action pattern
+ * - One semantic action per grammar rule
+ * - Uses ASTFactory to ensure type safety and consistency
+ * - Preserves all semantic information needed for later compilation stages
+ *
+ * The resulting AST is:
+ * - Strongly typed with full TypeScript support
+ * - Free of parse tree cruft (tokens, whitespace, etc.)
+ * - Optimized for downstream transformations
+ *
+ * @example
+ *   const astSemantics = addToAstSemantics(grammar)
+ *   const ast = astSemantics(match).toAst()
+ *
+ * @see astNodes.ts - Type definitions for all AST nodes
+ */
+
 import * as ohm from 'ohm-js'
 import { ASTFactory } from './astNodes'
 
+/**
+ * Create semantic actions for transforming parse trees to AST
+ *
+ * @param siliconGrammar - The compiled Ohm grammar
+ * @returns Ohm semantics object with 'toAst' operation
+ */
 export default function addToAstSemantics(siliconGrammar: ohm.Grammar) {
     const semantics = siliconGrammar.createSemantics().addOperation('toAst', {
         Program(elements) {
@@ -255,4 +285,7 @@ export default function addToAstSemantics(siliconGrammar: ohm.Grammar) {
             const literalAst = lit.toAst()
             return ASTFactory.parameter('_param', undefined, true, literalAst)
         },
+    })
 
+    return semantics
+}
