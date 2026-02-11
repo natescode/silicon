@@ -16,8 +16,8 @@
  *   bun run src/index.ts
  */
 
-import { parse } from './parser'
-import { addToAstSemantics, ASTNode } from './ast'
+import parse from './parser'
+import { addToAstSemantics, type ASTNode } from './ast'
 import { addCompileSemantics } from './codegen'
 import { siliconGrammar } from './grammar'
 
