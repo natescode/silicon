@@ -90,7 +90,12 @@ export interface Definition {
     generics?: GenericParams
     params: Parameter[]
     binding?: Binding
-    sourceLocation?: SourceLocation
+    sourceLocation?: SourceLocation,
+    // This field can be used during elaboration to link this definition to a specific elaboration hook
+    // string: the name of the hook (e.g. 'functionDefinition', 'typeDefinition', etc.)
+    // false: if no hook applies -- built-in definitions or definitions that don't require elaboration
+    // null: not yet resolved
+    hook?: string | false // Resolved elaboration hook name (e.g. 'functionDefinition')
 }
 
 export interface ExpressionStart {
@@ -259,6 +264,7 @@ export const ASTFactory = {
         return { type: 'Assignment', target, value }
     },
 
+    // TODO: add property for the resolved elaboration hook 
     definition(
         keyword: string,
         name: TypedIdentifier,
