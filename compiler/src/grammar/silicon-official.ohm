@@ -30,6 +30,7 @@ Silicon {
 			| namespace
 			| Block
 			| "(" ExpressionStart ")" -- paren
+  Assign = "=" ExpressionStart       
   Binding = ":=" ExpressionEnd
   Block = "{" (Item ";")* "}"
   namespace = identifier ("::" identifier)*
@@ -57,14 +58,13 @@ Silicon {
   Definition = keyword typedIdentifier GenericParams? ListOf<ParamLiteral,","> Binding? 
   GenericParams = "[" ListOf<identifier,","> "]"
   ParamLiteral = typedIdentifier | Literal
-//   Params = typedIdentifier ListOf<typedIdentifier, ",">
   keyword = "@" identifier
   typedIdentifier = identifier type?
   type = ":" identifier
   discard = "_"
   identifier = discard | letter+ 
-//   comment =  "#" (~lineTerminator any)*
-//   space := whitespace | lineTerminator | comment
-//   whitespace = "\t" | "\x0B" | "\x0C" | " " | "\u00A0" | "\uFEFF" | unicodeSpaceSeparator
-//   unicodeSpaceSeparator = "\u2000".."\u200B" | "\u3000"
+  comment =  "#" (~lineTerminator any)*
+  space := whitespace | lineTerminator | comment
+  whitespace = "\t" | "\x0B" | "\x0C" | " " | "\u00A0" | "\uFEFF" | unicodeSpaceSeparator
+  unicodeSpaceSeparator = "\u2000".."\u200B" | "\u3000"
 }
