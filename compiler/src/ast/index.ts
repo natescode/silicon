@@ -7,6 +7,6 @@
  * @see toAst.ts - Parse tree → AST transformation
  */
 
-export type { ASTNode } from './astNodes'
+export type { ASTNode, Program } from './astNodes'
 export { ASTFactory } from './astNodes'
 export { default as addToAstSemantics } from './toAst'

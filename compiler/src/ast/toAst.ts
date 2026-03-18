@@ -31,7 +31,7 @@ import { ASTFactory } from './astNodes'
  * @param siliconGrammar - The compiled Ohm grammar
  * @returns Ohm semantics object with 'toAst' operation
  */
-export default function addToAstSemantics(siliconGrammar: ohm.Grammar) {
+export default function addToAstSemantics(siliconGrammar: ohm.Grammar): ohm.Semantics {
     const semantics = siliconGrammar.createSemantics().addOperation('toAst', {
         Program(elements) {
             const elementList = elements.children.map((el: any) => el.toAst())
@@ -40,6 +40,10 @@ export default function addToAstSemantics(siliconGrammar: ohm.Grammar) {
 
         Element_item(item, _semi) {
             return ASTFactory.element('item', item.toAst())
+        },
+
+        Element_elaboration(elaboration, _semi) {
+            return ASTFactory.element_elaboration(elaboration.toAst())
         },
 
         Element(docComment) {
@@ -93,6 +97,48 @@ export default function addToAstSemantics(siliconGrammar: ohm.Grammar) {
         GenericParams(_open, params, _close) {
             const paramList = params.asIteration().children.map((p: any) => p.sourceString)
             return ASTFactory.genericParams(paramList)
+        },
+
+        Elaboration(_stratum, strataDef) {
+            return strataDef.toAst()
+        },
+
+        strataDefinition(def) {
+            return def.toAst()
+        },
+
+        operatorDefinition(name, _open, _op, _comma1, symbol, _comma2, nodeParam, _close, _eq, body) {
+            const elaborationName = name.sourceString
+            const operatorSymbol = symbol.toAst()
+            const nodeParamName = nodeParam.sourceString
+            const semanticsBody = body.toAst()
+            return ASTFactory.elaboration('operator', elaborationName, 'Operator', operatorSymbol, nodeParamName, semanticsBody)
+        },
+
+        keywordDefinition(name, _open, _kw, _comma1, keywordName, _comma2, nodeParam, _close, _eq, body) {
+            const elaborationName = name.sourceString
+            const kwName = keywordName.toAst()
+            const nodeParamName = nodeParam.sourceString
+            const semanticsBody = body.toAst()
+            return ASTFactory.elaboration('keyword', elaborationName, 'Keyword', kwName, nodeParamName, semanticsBody)
+        },
+
+        operatorSymbol(stringLit) {
+            return stringLit.toAst()
+        },
+
+        keywordName(stringLit) {
+            return stringLit.toAst()
+        },
+
+        strataBody(_open, items, _close) {
+            const itemList = items.asIteration().children.map((item: any) => item.toAst())
+            // strataBody contains a Block which is wrapped in ExpressionEnd then ExpressionStart
+            // But ExpressionStart expects to contain one of: BinOp | FunctionCall | ExpressionEnd
+            // So we create: ExpressionStart -> ExpressionEnd -> Block
+            const block = ASTFactory.block(itemList)
+            const expressionEnd = ASTFactory.expressionEnd('block', block)
+            return ASTFactory.expressionStart('expressionEnd', expressionEnd)
         },
 
         ExpressionStart_binOp(left, op, right) {

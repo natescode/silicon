@@ -22,6 +22,7 @@ export type ASTNode =
     | Statement
     | Assignment
     | Definition
+    | Elaboration
     | ExpressionStart
     | BinOp
     | FunctionCall
@@ -51,8 +52,8 @@ export interface Program {
 
 export interface Element {
     type: 'Element'
-    kind: 'item' | 'docComment'
-    value: Item | DocComment
+    kind: 'item' | 'docComment' | 'elaboration'
+    value: Item | DocComment | Elaboration
     sourceLocation?: SourceLocation
 }
 
@@ -98,6 +99,17 @@ export interface Definition {
     hook?: string | false // Resolved elaboration hook name (e.g. 'functionDefinition')
 }
 
+export interface Elaboration {
+    type: 'Elaboration'
+    kind: 'operator' | 'keyword'
+    name: string                        // e.g., "Plus"
+    strataType: 'Operator' | 'Keyword'  // What type of elaborator
+    symbol: string                      // e.g., "+" for operators, or keyword name
+    nodeParamName: string               // e.g., "Node" - the variable name for node context
+    semantics: ExpressionStart          // The body containing semantic rules
+    sourceLocation?: SourceLocation
+}
+
 export interface ExpressionStart {
     type: 'ExpressionStart'
     kind: 'binOp' | 'functionCall' | 'expressionEnd'
@@ -111,6 +123,9 @@ export interface BinOp {
     operator: string
     right: ExpressionEnd
     sourceLocation?: SourceLocation
+    // Semantics attached during elaboration phase
+    // Contains the StrataNode with semantic definition for this operator
+    semantics?: any  // StrataNode (avoid circular import)
 }
 
 export interface FunctionCall {
@@ -248,6 +263,10 @@ export const ASTFactory = {
         return { type: 'Element', kind, value }
     },
 
+    element_elaboration(elaboration: Elaboration): Element {
+        return { type: 'Element', kind: 'elaboration', value: elaboration }
+    },
+
     item(kind: 'statement' | 'expression', value: Statement | ExpressionStart): Item {
         return { type: 'Item', kind, value }
     },
@@ -273,6 +292,17 @@ export const ASTFactory = {
         binding?: Binding
     ): Definition {
         return { type: 'Definition', keyword, name, generics, params, binding }
+    },
+
+    elaboration(
+        kind: 'operator' | 'keyword',
+        name: string,
+        strataType: 'Operator' | 'Keyword',
+        symbol: string,
+        nodeParamName: string,
+        semantics: ExpressionStart
+    ): Elaboration {
+        return { type: 'Elaboration', kind, name, strataType, symbol, nodeParamName, semantics }
     },
 
     expressionStart(kind: 'binOp' | 'functionCall' | 'expressionEnd', value: BinOp | FunctionCall | ExpressionEnd): ExpressionStart {

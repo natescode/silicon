@@ -4,6 +4,7 @@
   "module": "index.ts",
   "type": "module",
   "scripts": {
+    "test": "bun test",
     "compile": "bun run src/index.ts",
     "build-types": "bunx ohm generateBundles --withTypes src/silicon-simple.ohm",
     "opt-wasm": "bun run ./binaryen-version_117/wasm-opt.js ../dist/bin.wasm"

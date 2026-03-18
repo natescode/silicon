@@ -24,6 +24,15 @@
  */
 
 import * as ohm from 'ohm-js'
+import { isWasmIntrinsic, getWasmIntrinsic } from '../intrinsics'
+
+/**
+ * Helper function to convert Silicon identifiers to WAT function names
+ * Converts :: to _ for valid WAT identifiers
+ */
+function toWatIdentifier(siliconName: string): string {
+    return siliconName.replace(/::/g, '_')
+}
 
 /**
  * Create semantic actions for AST to WAT compilation
@@ -50,7 +59,7 @@ ${body}
         Item_statement(stmt) {
             return stmt.compile();
         },
-        Item(exp) {
+        Item_expressionStart(exp) {
             return exp.compile();
         },
         Statement_assignment(assgn) {
@@ -64,16 +73,18 @@ ${body}
         },
         Assignment(ns, _eq, exp) {
             const name = ns.compile();
+            const watName = toWatIdentifier(name);
             const value = exp.compile();
-            return `(global.set $${name} ${value})`;
+            return `(global.set $${watName} ${value})`;
         },
         Definition(kw, typedId, generics, params, binding) {
             const name = typedId.compile();
+            const watName = toWatIdentifier(name);
             const paramList = params.children.map(p => p.compile()).join(' ');
             const body = binding ? binding.compile() : '';
-            return `(func $${name} ${paramList} (local $addr i32)\n${body}\n)`;
+            return `(func $${watName} ${paramList} (local $addr i32)\n${body}\n)`;
         },
-        ExpressionStart_binOp(left, op, right) {
+        ExpressionStart_binChain(left, op, right) {
             const left_wat = left.compile();
             const right_wat = right.compile();
             const op_wat = op.compile();
@@ -132,8 +143,17 @@ ${body}
         },
         FunctionCallBody_userFunctionCall(ns, args) {
             const funcName = ns.compile();
+            const watName = toWatIdentifier(funcName);
             const argList = args ? args.compile() : '';
-            return `(call $${funcName} ${argList})`;
+
+            // For WASM intrinsics, emit the instruction directly instead of a call
+            if (isWasmIntrinsic(funcName)) {
+                const intrinsic = getWasmIntrinsic(funcName)!;
+                const instrWithArgs = argList ? `${argList} ${intrinsic.wasmInstr}` : intrinsic.wasmInstr;
+                return instrWithArgs;
+            }
+
+            return `(call $${watName} ${argList})`;
         },
         Args(exps) {
             return exps.children.map(e => e.compile()).join(' ');
@@ -142,7 +162,9 @@ ${body}
             return lit.compile();
         },
         ExpressionEnd_namespace(ns) {
-            return `(global.get $${ns.compile()})`;
+            const name = ns.compile();
+            const watName = toWatIdentifier(name);
+            return `(global.get $${watName})`;
         },
         ExpressionEnd_block(block) {
             return block.compile();
@@ -156,11 +178,11 @@ ${body}
         Binding(_bind, exp) {
             return exp.compile();
         },
-        Block(_open, items, _close) {
+        Block(_open, items, _semi, _close) {
             const body = items.children.map(i => i.compile()).filter(s => s).join('\n');
             return `(block\n${body}\n)`;
         },
-        namespace(id, rest) {
+        namespace(first, _colon, rest) {
             return this.sourceString;
         },
         Literal_array(arr) {
@@ -239,33 +261,33 @@ ${body}
         intLiteral_oct(oct) {
             return oct.compile();
         },
-        decLiteral() {
-            const raw = this.sourceString.replace(/_/g, '');
+        decLiteral(lit) {
+            const raw = lit.sourceString.replace(/_/g, '');
             const n = parseInt(raw, 10);
             return `i32.const ${n}`;
         },
-        binLiteral() {
-            const raw = this.sourceString.slice(2).replace(/_/g, '');
-            const n = parseInt(raw, 2);
+        binLiteral(_prefix, bits, _rest) {
+            const raw = _prefix.sourceString + bits.sourceString + (_rest ? _rest.sourceString : '');
+            const n = parseInt(raw.slice(2).replace(/_/g, ''), 2);
             return `i32.const ${n}`;
         },
-        hexLiteral() {
-            const raw = this.sourceString.slice(2).replace(/_/g, '');
-            const n = parseInt(raw, 16);
+        hexLiteral(_prefix, digits, _rest) {
+            const raw = _prefix.sourceString + digits.sourceString + (_rest ? _rest.sourceString : '');
+            const n = parseInt(raw.slice(2).replace(/_/g, ''), 16);
             return `i32.const ${n}`;
         },
-        octLiteral() {
-            const raw = this.sourceString.slice(2).replace(/_/g, '');
-            const n = parseInt(raw, 8);
+        octLiteral(_prefix, digits, _rest) {
+            const raw = _prefix.sourceString + digits.sourceString + (_rest ? _rest.sourceString : '');
+            const n = parseInt(raw.slice(2).replace(/_/g, ''), 8);
             return `i32.const ${n}`;
         },
-        floatLiteral() {
-            const raw = this.sourceString.replace(/_/g, '');
-            const v = parseFloat(raw);
+        floatLiteral(intPart, _rest, fracPart) {
+            const raw = intPart.sourceString + _rest.sourceString + fracPart.sourceString;
+            const v = parseFloat(raw.replace(/_/g, ''));
             return `f32.const ${v}`;
         },
-        booleanLiteral() {
-            return this.sourceString === '@true' ? 'i32.const 1' : 'i32.const 0';
+        booleanLiteral(lit) {
+            return lit.sourceString === '@true' ? 'i32.const 1' : 'i32.const 0';
         },
         GenericParams(_open, ids, _close) {
             return ''; // Ignore generics for now

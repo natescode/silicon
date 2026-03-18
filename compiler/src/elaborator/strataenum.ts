@@ -25,7 +25,7 @@ export interface SourceLocation {
 
 
 function createStrataNode(type: StrataType, discriminant: string, data?: any, sourceLocation?: SourceLocation): StrataNode {
-    return { type, discriminant, sourceLocation }
+    return { type, discriminant, data, sourceLocation }
 }
 
 export function createOperatorNode(op: string, left: any, right: any): StrataNode {
