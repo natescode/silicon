@@ -96,10 +96,11 @@ function buildElaboratorRegistry(ast: Program): ElaboratorRegistry {
  * @returns A StrataNode containing the semantic information
  */
 function elaborationToStrataNode(elaboration: Elaboration): StrataNode {
-  return createOperatorNode(elaboration.symbol, {
-    body: elaboration.semantics,
-    nodeParamName: elaboration.nodeParamName
-  })
+  return createOperatorNode(
+    elaboration.symbol,
+    elaboration.semantics,
+    { nodeParamName: elaboration.nodeParamName }
+  )
 }
 
 /**
@@ -127,7 +128,8 @@ function elaborateElement(element: Element, registry: ElaboratorRegistry): Eleme
   }
 
   if (element.kind === 'item') {
-    const elaboratedItem = elaborateItem(element.value, registry)
+    const item = element.value as Item
+    const elaboratedItem = elaborateItem(item, registry)
     return { ...element, value: elaboratedItem }
   }
 
@@ -139,12 +141,14 @@ function elaborateElement(element: Element, registry: ElaboratorRegistry): Eleme
  */
 function elaborateItem(item: Item, registry: ElaboratorRegistry): Item {
   if (item.kind === 'statement') {
-    const elaboratedStatement = elaborateStatement(item.value, registry)
+    const stmt = item.value as Statement
+    const elaboratedStatement = elaborateStatement(stmt, registry)
     return { ...item, value: elaboratedStatement }
   }
 
   if (item.kind === 'expression') {
-    const elaboratedExpression = elaborateExpressionStart(item.value, registry)
+    const expr = item.value as ExpressionStart
+    const elaboratedExpression = elaborateExpressionStart(expr, registry)
     return { ...item, value: elaboratedExpression }
   }
 
@@ -156,12 +160,14 @@ function elaborateItem(item: Item, registry: ElaboratorRegistry): Item {
  */
 function elaborateStatement(stmt: Statement, registry: ElaboratorRegistry): Statement {
   if (stmt.kind === 'assignment') {
-    const elaboratedValue = elaborateExpressionStart(stmt.value, registry)
-    return { ...stmt, value: elaboratedValue }
+    const assignment = stmt.value as Assignment
+    const elaboratedValue = elaborateExpressionStart(assignment.value, registry)
+    return { ...stmt, value: { ...assignment, value: elaboratedValue } }
   }
 
   if (stmt.kind === 'definition') {
-    const elaboratedDef = elaborateDefinition(stmt.value, registry)
+    const def = stmt.value as Definition
+    const elaboratedDef = elaborateDefinition(def, registry)
     return { ...stmt, value: elaboratedDef }
   }
 
@@ -191,17 +197,20 @@ function elaborateExpressionStart(
   registry: ElaboratorRegistry
 ): ExpressionStart {
   if (exp.kind === 'binOp') {
-    const elaboratedBinOp = elaborateBinOp(exp.value, registry)
+    const binOp = exp.value as BinOp
+    const elaboratedBinOp = elaborateBinOp(binOp, registry)
     return { ...exp, value: elaboratedBinOp }
   }
 
   if (exp.kind === 'functionCall') {
-    const elaboratedFuncCall = elaborateFunctionCall(exp.value, registry)
+    const call = exp.value as FunctionCall
+    const elaboratedFuncCall = elaborateFunctionCall(call, registry)
     return { ...exp, value: elaboratedFuncCall }
   }
 
   if (exp.kind === 'expressionEnd') {
-    const elaboratedExprEnd = elaborateExpressionEnd(exp.value, registry)
+    const expEnd = exp.value as ExpressionEnd
+    const elaboratedExprEnd = elaborateExpressionEnd(expEnd, registry)
     return { ...exp, value: elaboratedExprEnd }
   }
 
@@ -257,12 +266,14 @@ function elaborateExpressionEnd(
   }
 
   if (expEnd.kind === 'block') {
-    const elaboratedBlock = elaborateBlock(expEnd.value, registry)
+    const block = expEnd.value as Block
+    const elaboratedBlock = elaborateBlock(block, registry)
     return { ...expEnd, value: elaboratedBlock }
   }
 
   if (expEnd.kind === 'paren') {
-    const elaboratedParen = elaborateExpressionStart(expEnd.value, registry)
+    const expr = expEnd.value as ExpressionStart
+    const elaboratedParen = elaborateExpressionStart(expr, registry)
     return { ...expEnd, value: elaboratedParen }
   }
 

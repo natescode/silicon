@@ -7,6 +7,7 @@
  * - Handle missing entries gracefully
  */
 
+import { test, expect, describe } from 'bun:test'
 import {
     createElaboratorRegistry,
     registerElaborator,
