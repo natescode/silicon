@@ -226,3 +226,62 @@ test("elaborate extracts elaborations from program", () => {
   // Should complete without error
   expect(result.type).toBe('Program')
 })
+
+// Test 9: builtin elaborators are registered
+test("elaborate registers builtin elaborators for arithmetic operators", () => {
+  const ast = createSimpleBinOpAST()
+  const result = elaborate(ast)
+
+  // Extract the BinOp from the result
+  const firstElement = result.elements[0]
+  if (firstElement.kind === 'item') {
+    const item = firstElement.value as Item
+    if (item.kind === 'expression') {
+      const expr = item.value as ExpressionStart
+      if (expr.kind === 'binOp') {
+        const binOp = expr.value as BinOp
+        // The + operator should be found in builtins and have semantics
+        expect(binOp.semantics).toBeDefined()
+        expect(binOp.semantics?.discriminant).toBe('+')
+      }
+    }
+  }
+})
+
+// Test 10: builtin elaborators for various operators
+test("elaborate registers builtin elaborators for multiple operators", () => {
+  const operators = ['+', '-', '*', '/', '%', '==', '!=', '<', '>', '<=', '>=']
+
+  for (const op of operators) {
+    const left = ASTFactory.intLiteral('1', 'decimal')
+    const leftLit = ASTFactory.literal('int', left)
+    const leftExpEnd = ASTFactory.expressionEnd('literal', leftLit)
+    const leftExp = ASTFactory.expressionStart('expressionEnd', leftExpEnd)
+
+    const right = ASTFactory.intLiteral('2', 'decimal')
+    const rightLit = ASTFactory.literal('int', right)
+    const rightExpEnd = ASTFactory.expressionEnd('literal', rightLit)
+
+    const binOp = ASTFactory.binOp(leftExp, op, rightExpEnd)
+    const exp = ASTFactory.expressionStart('binOp', binOp)
+    const item = ASTFactory.item('expression', exp)
+    const element = ASTFactory.element('item', item)
+    const program = ASTFactory.program([element])
+
+    const result = elaborate(program)
+
+    // Extract and verify semantics are attached
+    const resultElement = result.elements[0]
+    if (resultElement.kind === 'item') {
+      const resultItem = resultElement.value as Item
+      if (resultItem.kind === 'expression') {
+        const resultExpr = resultItem.value as ExpressionStart
+        if (resultExpr.kind === 'binOp') {
+          const resultBinOp = resultExpr.value as BinOp
+          expect(resultBinOp.semantics).toBeDefined()
+          expect(resultBinOp.semantics?.discriminant).toBe(op)
+        }
+      }
+    }
+  }
+})

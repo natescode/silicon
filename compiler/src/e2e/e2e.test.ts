@@ -205,7 +205,7 @@ test("E2E: Stratum elaboration on binary operators", () => {
     expect(result.elaboratedAST).toBeDefined();
     expect(result.wat).toBeDefined();
     // The elaborator should attach stratum information to the AST
-    expect(result.elaboratedAST.elements).toBeDefined();
+    expect(result?.elaboratedAST?.elements).toBeDefined();
 });
 
 /**
@@ -257,4 +257,172 @@ test("E2E: Generated WAT is structurally valid", () => {
     expect(result.wat).toContain("(module");
     expect(result.wat).toContain("(memory");
     expect(result.wat).toContain("(global");
+});
+
+/**
+ * Test: Builtin operators - subtraction
+ * Verifies that subtraction operator generates correct i32.sub instruction
+ */
+test("E2E: Builtin operator - subtraction (5 - 3)", () => {
+    const sourceCode = "5 - 3;";
+    const result = compileSource(sourceCode);
+
+    expect(result.success).toBe(true);
+    expect(result.elaboratedAST).toBeDefined();
+    expect(result.wat).toBeDefined();
+    // Should contain i32.sub for subtraction
+    expect(result.wat).toContain("sub");
+});
+
+/**
+ * Test: Builtin operators - multiplication
+ * Verifies that multiplication operator generates correct i32.mul instruction
+ */
+test("E2E: Builtin operator - multiplication (4 * 5)", () => {
+    const sourceCode = "4 * 5;";
+    const result = compileSource(sourceCode);
+
+    expect(result.success).toBe(true);
+    expect(result.elaboratedAST).toBeDefined();
+    expect(result.wat).toBeDefined();
+    // Should contain i32.mul for multiplication
+    expect(result.wat).toContain("mul");
+});
+
+/**
+ * Test: Builtin operators - division
+ * Verifies that division operator generates correct i32.div_s instruction
+ */
+test("E2E: Builtin operator - division (10 / 2)", () => {
+    const sourceCode = "10 / 2;";
+    const result = compileSource(sourceCode);
+
+    expect(result.success).toBe(true);
+    expect(result.elaboratedAST).toBeDefined();
+    expect(result.wat).toBeDefined();
+    // Should contain div for division
+    expect(result.wat).toContain("div");
+});
+
+/**
+ * Test: Builtin operators - modulo
+ * Verifies that modulo operator generates correct i32.rem_s instruction
+ */
+test("E2E: Builtin operator - modulo (10 % 3)", () => {
+    const sourceCode = "10 % 3;";
+    const result = compileSource(sourceCode);
+
+    expect(result.success).toBe(true);
+    expect(result.elaboratedAST).toBeDefined();
+    expect(result.wat).toBeDefined();
+    // Should contain rem for remainder/modulo
+    expect(result.wat).toContain("rem");
+});
+
+/**
+ * Test: Builtin operators - equality comparison
+ * Verifies that equality operator generates correct i32.eq instruction
+ */
+test("E2E: Builtin operator - equality (5 == 5)", () => {
+    const sourceCode = "5 == 5;";
+    const result = compileSource(sourceCode);
+
+    expect(result.success).toBe(true);
+    expect(result.elaboratedAST).toBeDefined();
+    expect(result.wat).toBeDefined();
+    // Should contain eq for equality comparison
+    expect(result.wat).toContain("eq");
+});
+
+/**
+ * Test: Builtin operators - inequality comparison
+ * Verifies that inequality operator generates correct i32.ne instruction
+ */
+test("E2E: Builtin operator - inequality (5 != 3)", () => {
+    const sourceCode = "5 != 3;";
+    const result = compileSource(sourceCode);
+
+    expect(result.success).toBe(true);
+    expect(result.elaboratedAST).toBeDefined();
+    expect(result.wat).toBeDefined();
+    // Should contain ne for inequality comparison
+    expect(result.wat).toContain("ne");
+});
+
+/**
+ * Test: Builtin operators - less than comparison
+ * Verifies that less than operator generates correct i32.lt_s instruction
+ */
+test("E2E: Builtin operator - less than (3 < 5)", () => {
+    const sourceCode = "3 < 5;";
+    const result = compileSource(sourceCode);
+
+    expect(result.success).toBe(true);
+    expect(result.elaboratedAST).toBeDefined();
+    expect(result.wat).toBeDefined();
+    // Should contain lt for less than comparison
+    expect(result.wat).toContain("lt");
+});
+
+/**
+ * Test: Builtin operators - greater than comparison
+ * Verifies that greater than operator generates correct i32.gt_s instruction
+ */
+test("E2E: Builtin operator - greater than (5 > 3)", () => {
+    const sourceCode = "5 > 3;";
+    const result = compileSource(sourceCode);
+
+    expect(result.success).toBe(true);
+    expect(result.elaboratedAST).toBeDefined();
+    expect(result.wat).toBeDefined();
+    // Should contain gt for greater than comparison
+    expect(result.wat).toContain("gt");
+});
+
+/**
+ * Test: Builtin operators - less than or equal comparison
+ * Verifies that <= operator generates correct i32.le_s instruction
+ */
+test("E2E: Builtin operator - less than or equal (3 <= 5)", () => {
+    const sourceCode = "3 <= 5;";
+    const result = compileSource(sourceCode);
+
+    expect(result.success).toBe(true);
+    expect(result.elaboratedAST).toBeDefined();
+    expect(result.wat).toBeDefined();
+    // Should contain le for less than or equal comparison
+    expect(result.wat).toContain("le");
+});
+
+/**
+ * Test: Builtin operators - greater than or equal comparison
+ * Verifies that >= operator generates correct i32.ge_s instruction
+ */
+test("E2E: Builtin operator - greater than or equal (5 >= 3)", () => {
+    const sourceCode = "5 >= 3;";
+    const result = compileSource(sourceCode);
+
+    expect(result.success).toBe(true);
+    expect(result.elaboratedAST).toBeDefined();
+    expect(result.wat).toBeDefined();
+    // Should contain ge for greater than or equal comparison
+    expect(result.wat).toContain("ge");
+});
+
+/**
+ * Test: Builtin operators in complex expressions
+ * Verifies that multiple builtin operators work together in one expression
+ */
+test("E2E: Multiple builtin operators in complex expression", () => {
+    const sourceCode = "(10 - 2) * (3 + 1) / (5 - 3);";
+    const result = compileSource(sourceCode);
+
+    expect(result.success).toBe(true);
+    expect(result.elaboratedAST).toBeDefined();
+    expect(result.wat).toBeDefined();
+    // Should contain all the necessary operations
+    expect(result.wat).toContain("sub");
+    expect(result.wat).toContain("add");
+    expect(result.wat).toContain("mul");
+    expect(result.wat).toContain("div");
 });

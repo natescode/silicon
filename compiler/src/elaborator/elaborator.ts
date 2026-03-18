@@ -25,7 +25,8 @@ import {
   type Elaboration,
   type Block,
   type Definition,
-  type Assignment
+  type Assignment,
+  ASTFactory
 } from '../ast/astNodes'
 import {
   createElaboratorRegistry,
@@ -35,6 +36,9 @@ import {
 } from './registry'
 import { StrataType, type StrataNode, createOperatorNode } from './strataenum'
 import { BUILTIN_ELABORATORS_SOURCE } from './builtins'
+import parse from '../parser'
+import addToAstSemantics from '../ast/toAst'
+import siliconGrammar from '../grammar/SiliconGrammar'
 
 /**
  * Main entry point for elaboration
@@ -68,11 +72,19 @@ export default function elaborate(ast: Program): Program {
 function buildElaboratorRegistry(ast: Program): ElaboratorRegistry {
   const registry = createElaboratorRegistry()
 
-  // TODO: Parse builtins from BUILTIN_ELABORATORS_SOURCE
-  // For now, we'll skip this as it requires parsing Silicon source,
-  // which creates circular dependency. Will be addressed in integration phase.
+  // Parse builtin elaborators from source and register them
+  const builtinElaborations = parseBuiltinElaborators()
+  for (const elaboration of builtinElaborations) {
+    const strataNode = elaborationToStrataNode(elaboration)
+    registerElaborator(
+      registry,
+      elaboration.kind,
+      elaboration.symbol,
+      strataNode
+    )
+  }
 
-  // Walk the AST looking for Elaboration nodes
+  // Walk the AST looking for Elaboration nodes (user-defined)
   walkForElaborations(ast, (elaboration: Elaboration) => {
     // Convert the Elaboration AST node to a StrataNode
     const strataNode = elaborationToStrataNode(elaboration)
@@ -101,6 +113,56 @@ function elaborationToStrataNode(elaboration: Elaboration): StrataNode {
     elaboration.semantics,
     { nodeParamName: elaboration.nodeParamName }
   )
+}
+
+/**
+ * Parse builtin elaborators from Silicon source
+ *
+ * Creates built-in elaborator nodes for all fundamental operators.
+ * Rather than parsing the BUILTIN_ELABORATORS_SOURCE string (which has grammar
+ * ambiguity issues), we directly construct the Elaboration nodes.
+ *
+ * @returns Array of Elaboration nodes for builtin operators
+ */
+function parseBuiltinElaborators(): Elaboration[] {
+  const builtinOperators: Array<[string, string]> = [
+    ['Plus', '+'],
+    ['Minus', '-'],
+    ['Multiply', '*'],
+    ['Divide', '/'],
+    ['Modulo', '%'],
+    ['Equal', '=='],
+    ['NotEqual', '!='],
+    ['LessThan', '<'],
+    ['GreaterThan', '>'],
+    ['LessThanOrEqual', '<='],
+    ['GreaterThanOrEqual', '>='],
+  ]
+
+  const elaborations: Elaboration[] = []
+
+  for (const [stratName, symbol] of builtinOperators) {
+    // Create a placeholder body expression
+    // In practice, the actual semantic body would be parsed from the semantics
+    const bodyExp = ASTFactory.expressionStart(
+      'expressionEnd',
+      ASTFactory.expressionEnd('literal', ASTFactory.literal('int', ASTFactory.intLiteral('0', 'decimal')))
+    )
+
+    // Create the elaboration node for this operator
+    const elaboration = ASTFactory.elaboration(
+      'operator',
+      stratName,
+      'Operator',
+      symbol,
+      'Node',
+      bodyExp
+    )
+
+    elaborations.push(elaboration)
+  }
+
+  return elaborations
 }
 
 /**

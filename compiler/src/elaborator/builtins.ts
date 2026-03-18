@@ -30,47 +30,47 @@
  * It elaborates to: &WASM::i32_add 1, 2
  */
 export const BUILTIN_ELABORATORS_SOURCE = `
-@stratum Plus (Operator, "+", Node) = {
+@stratum Plus (Operator, '+', Node) = {
   &WASM::i32_add Node.left, Node.right;
 };
 
-@stratum Minus (Operator, "-", Node) = {
+@stratum Minus (Operator, '-', Node) = {
   &WASM::i32_sub Node.left, Node.right;
 };
 
-@stratum Multiply (Operator, "*", Node) = {
+@stratum Multiply (Operator, '*', Node) = {
   &WASM::i32_mul Node.left, Node.right;
 };
 
-@stratum Divide (Operator, "/", Node) = {
+@stratum Divide (Operator, '/', Node) = {
   &WASM::i32_div_s Node.left, Node.right;
 };
 
-@stratum Modulo (Operator, "%", Node) = {
+@stratum Modulo (Operator, '%', Node) = {
   &WASM::i32_rem_s Node.left, Node.right;
 };
 
-@stratum Equal (Operator, "==", Node) = {
+@stratum Equal (Operator, '==', Node) = {
   &WASM::i32_eq Node.left, Node.right;
 };
 
-@stratum NotEqual (Operator, "!=", Node) = {
+@stratum NotEqual (Operator, '!=', Node) = {
   &WASM::i32_ne Node.left, Node.right;
 };
 
-@stratum LessThan (Operator, "<", Node) = {
+@stratum LessThan (Operator, '<', Node) = {
   &WASM::i32_lt_s Node.left, Node.right;
 };
 
-@stratum GreaterThan (Operator, ">", Node) = {
+@stratum GreaterThan (Operator, '>', Node) = {
   &WASM::i32_gt_s Node.left, Node.right;
 };
 
-@stratum LessThanOrEqual (Operator, "<=", Node) = {
+@stratum LessThanOrEqual (Operator, '<=', Node) = {
   &WASM::i32_le_s Node.left, Node.right;
 };
 
-@stratum GreaterThanOrEqual (Operator, ">=", Node) = {
+@stratum GreaterThanOrEqual (Operator, '>=', Node) = {
   &WASM::i32_ge_s Node.left, Node.right;
 };
 `;
@@ -80,6 +80,6 @@ export const BUILTIN_ELABORATORS_SOURCE = `
  * These are guaranteed to be available in any Silicon program
  */
 export const BUILTIN_OPERATORS = [
-    '+', '-', '*', '/', '%',      // Arithmetic
-    '==', '!=', '<', '>', '<=', '>='  // Comparison
+  '+', '-', '*', '/', '%',      // Arithmetic
+  '==', '!=', '<', '>', '<=', '>='  // Comparison
 ];
