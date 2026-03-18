@@ -64,13 +64,12 @@ Silicon {
   strataDefinition =
     | operatorDefinition
     | keywordDefinition
-  operatorDefinition = 
-    identifier "(" "Operator" "," operatorSymbol "," identifier ")" "=" strataBody
-  keywordDefinition = 
-    identifier "(" "Keyword" "," keywordName "," identifier ")" "=" strataBody
+  operatorDefinition = identifier "(" "Operator" "," operatorSymbol "," identifier ")" "=" strataBody
+  keywordDefinition = identifier "(" "Keyword" "," keywordName "," identifier ")" "=" strataBody
   operatorSymbol = stringLiteral
   keywordName = stringLiteral
-  strataBody = "{" (Item ";")* "}"
+  strataBody = "{" strataBodyContent* "}"
+  strataBodyContent = ~"}" any
   
   typedIdentifier = identifier type?
   type = ":" identifier
