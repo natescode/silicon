@@ -53,7 +53,10 @@ ${body}
         Element_item(item, _semi) {
             return item.compile();
         },
-        Element(docComment) {
+        Element_elaboration(elaboration, _semi) {
+            return elaboration.compile();
+        },
+        Element_docComment(docComment) {
             return '';
         },
         Item_statement(stmt) {
@@ -84,51 +87,53 @@ ${body}
             const body = binding ? binding.compile() : '';
             return `(func $${watName} ${paramList} (local $addr i32)\n${body}\n)`;
         },
-        ExpressionStart_binChain(left, op, right) {
-            const left_wat = left.compile();
-            const right_wat = right.compile();
-            const op_wat = op.compile();
+        ExpressionStart_binChain(left, binOps, endOps) {
+            let result = left.compile();
+            // binOps is iteration of BinOp
+            // endOps is iteration of ExpressionEnd
+            if (binOps.children && binOps.children.length > 0) {
+                for (let i = 0; i < binOps.children.length; i++) {
+                    const op = binOps.children[i];
+                    const right = endOps.children[i];
+                    const right_wat = right.compile();
+                    const op_wat = op.compile();
 
-            // if (op_wat === '.') {
-            //     // Member access: assume right is int literal for field index (0-based)
-            //     const indexMatch = right_wat.match(/i32\.const (\d+)/);
-            //     if (!indexMatch) {
-            //         throw new Error('Member access right side must be an integer literal for field index');
-            //     }
-            //     const index = parseInt(indexMatch[1]);
-            //     const offset = index * 4;
-            //     return `${left_wat} (i32.const ${offset}) i32.add i32.load`;
-            // }
+                    // Detect type from WAT
+                    const isFloat = /f32\.const/.test(result) || /f32\.const/.test(right_wat);
 
-            // Detect type from WAT
-            const isFloat = /f32\.const/.test(left_wat) || /f32\.const/.test(right_wat);
-
-            let instr = '';
-            if (isFloat) {
-                switch (op_wat) {
-                    case '+': instr = 'f32.add'; break;
-                    case '-': instr = 'f32.sub'; break;
-                    case '*': instr = 'f32.mul'; break;
-                    case '/': instr = 'f32.div'; break;
-                    default: throw new Error(`Unsupported operator for f32: ${op_wat}`);
-                }
-            } else {
-                switch (op_wat) {
-                    case '+': instr = 'i32.add'; break;
-                    case '-': instr = 'i32.sub'; break;
-                    case '*': instr = 'i32.mul'; break;
-                    case '/': instr = 'i32.div_s'; break;
-                    default: throw new Error(`Unsupported operator: ${op_wat}`);
+                    let instr = '';
+                    if (isFloat) {
+                        switch (op_wat) {
+                            case '+': instr = 'f32.add'; break;
+                            case '-': instr = 'f32.sub'; break;
+                            case '*': instr = 'f32.mul'; break;
+                            case '/': instr = 'f32.div'; break;
+                            default: throw new Error(`Unsupported operator for f32: ${op_wat}`);
+                        }
+                    } else {
+                        switch (op_wat) {
+                            case '+': instr = 'i32.add'; break;
+                            case '-': instr = 'i32.sub'; break;
+                            case '*': instr = 'i32.mul'; break;
+                            case '/': instr = 'i32.div_s'; break;
+                            case '%': instr = 'i32.rem_s'; break;
+                            case '==': instr = 'i32.eq'; break;
+                            case '!=': instr = 'i32.ne'; break;
+                            case '<': instr = 'i32.lt_s'; break;
+                            case '>': instr = 'i32.gt_s'; break;
+                            case '<=': instr = 'i32.le_s'; break;
+                            case '>=': instr = 'i32.ge_s'; break;
+                            default: throw new Error(`Unsupported operator: ${op_wat}`);
+                        }
+                    }
+                    result = result + '\n' + right_wat + '\n' + instr;
                 }
             }
+            return result;
+        },
 
-            return `${left_wat}\n${right_wat}\n${instr}`;
-        },
-        ExpressionStart_functionCall(call) {
-            return call.compile();
-        },
-        ExpressionStart(expEnd) {
-            return expEnd.compile();
+        ExpressionStart(exp) {
+            return exp.compile();
         },
         BinOp(op) {
             return op.sourceString;
@@ -136,12 +141,13 @@ ${body}
         FunctionCall(_sigil, body) {
             return body.compile();
         },
-        FunctionCallBody_builtinFunctionCall(kw, args) {
+        FunctionCallBody_builtin(kw, args) {
             const funcName = kw.compile();
             const argList = args ? args.compile() : '';
             return `(call $${funcName} ${argList})`;
         },
-        FunctionCallBody_userFunctionCall(ns, args) {
+
+        FunctionCallBody_user(ns, args) {
             const funcName = ns.compile();
             const watName = toWatIdentifier(funcName);
             const argList = args ? args.compile() : '';
@@ -158,6 +164,19 @@ ${body}
         Args(exps) {
             return exps.children.map(e => e.compile()).join(' ');
         },
+
+        CallArgs(_ampersand, args) {
+            return args.compile();
+        },
+
+        CallNoArgs(_lookahead) {
+            return '';
+        },
+
+        CallArgsOrEnd(argsOrEnd) {
+            return argsOrEnd.compile();
+        },
+
         ExpressionEnd_literal(lit) {
             return lit.compile();
         },
@@ -172,42 +191,36 @@ ${body}
         ExpressionEnd_paren(_open, exp, _close) {
             return exp.compile();
         },
-        Assign(_eq, exp) {
-            return exp.compile();
-        },
         Binding(_bind, exp) {
             return exp.compile();
         },
-        Block(_open, items, _semi, _close) {
+        Block(_open, items, _semis, _close) {
             const body = items.children.map(i => i.compile()).filter(s => s).join('\n');
             return `(block\n${body}\n)`;
         },
-        namespace(first, _colon, rest) {
+        namespace(first, _seps, rest) {
             return this.sourceString;
         },
-        Literal_array(arr) {
-            return arr.compile();
+        Literal(lit) {
+            return lit.compile();
         },
-        Literal_object(obj) {
-            throw new Error('Object literals not supported in WAT compilation yet');
+
+        NonemptyListOf(first, _seps, rest) {
+            // This handles expressions in arrays/objects/tuples
+            const results = [first.compile()];
+            if (rest.children) {
+                rest.children.forEach((item: any) => {
+                    results.push(item.children[1].compile());
+                });
+            }
+            return results.join(' ');
         },
-        Literal_tuple(tup) {
-            throw new Error('Tuple literals not supported in WAT compilation yet');
+
+        EmptyListOf() {
+            return '';
         },
-        Literal_string(str) {
-            return 'i32.const 0'; // Placeholder
-        },
-        Literal_int(int) {
-            return int.compile();
-        },
-        Literal_float(flt) {
-            return flt.compile();
-        },
-        Literal_bool(bool) {
-            return bool.compile();
-        },
-        // use STD allocator for arrays
-        ArrayLiteral(_sigil, exps, _close) {
+
+        ArrayLiteral(_bracket, exps, _close) {
             // Allocate array in linear memory
             let size = exps.children.length;
             // use STD allocator for arrays
@@ -217,8 +230,7 @@ ${body}
             }).join('\n');
             return `${alloc}\n${stores}\ni32.const ${size}\n`; // Return pointer and size
         },
-        /// ${name: type = value, ...}
-        ObjectLiteral(_sigil, pairs, _close) {
+        ObjectLiteral(_bracket, pairs, _close) {
             const fields = pairs.children.map(pair => {
                 const typedId = pair.children[0];
                 const exp = pair.children[2];
@@ -239,51 +251,44 @@ ${body}
 
             return `(block (result i32)\n  (local $addr i32)\n  ${alloc}\n  (local.set $addr)\n  ${stores}\n  (local.get $addr)\n)`;
         },
-        TupleLiteral(_sigil, exps, _close) {
+        TupleLiteral(_bracket, exps, _close) {
             throw new Error('Tuples not supported');
         },
         KeyValuePair(id, _eq, exp) {
             // Not used directly
             return '';
         },
-        stringLiteral(_quote, chars, _quote2) {
+        stringLiteral(_quote, chars, _closedQuote) {
             return 'i32.const 0';
         },
-        intLiteral_dec(dec) {
-            return dec.compile();
-        },
-        intLiteral_bin(bin) {
-            return bin.compile();
-        },
-        intLiteral_hex(hex) {
-            return hex.compile();
-        },
-        intLiteral_oct(oct) {
-            return oct.compile();
-        },
-        decLiteral(lit) {
-            const raw = lit.sourceString.replace(/_/g, '');
+        decLiteral(digits, _seps, _rest) {
+            const raw = digits.sourceString.replace(/_/g, '');
             const n = parseInt(raw, 10);
             return `i32.const ${n}`;
         },
-        binLiteral(_prefix, bits, _rest) {
-            const raw = _prefix.sourceString + bits.sourceString + (_rest ? _rest.sourceString : '');
+
+        binLiteral(_prefix, bits, _seps, _rest) {
+            const raw = _prefix.sourceString + bits.sourceString + (_rest?.sourceString ? _rest.sourceString : '');
             const n = parseInt(raw.slice(2).replace(/_/g, ''), 2);
             return `i32.const ${n}`;
         },
-        hexLiteral(_prefix, digits, _rest) {
-            const raw = _prefix.sourceString + digits.sourceString + (_rest ? _rest.sourceString : '');
+
+        hexLiteral(_prefix, digits, _seps, _rest) {
+            const raw = _prefix.sourceString + digits.sourceString + (_rest?.sourceString ? _rest.sourceString : '');
             const n = parseInt(raw.slice(2).replace(/_/g, ''), 16);
             return `i32.const ${n}`;
         },
-        octLiteral(_prefix, digits, _rest) {
-            const raw = _prefix.sourceString + digits.sourceString + (_rest ? _rest.sourceString : '');
+
+        octLiteral(_prefix, digits, _seps, _rest) {
+            const raw = _prefix.sourceString + digits.sourceString + (_rest?.sourceString ? _rest.sourceString : '');
             const n = parseInt(raw.slice(2).replace(/_/g, ''), 8);
             return `i32.const ${n}`;
         },
-        floatLiteral(intPart, _rest, fracPart) {
-            const raw = intPart.sourceString + _rest.sourceString + fracPart.sourceString;
-            const v = parseFloat(raw.replace(/_/g, ''));
+
+        floatLiteral(intDigits, _intSep, _dot, fracDigits, _fracSep) {
+            const intStr = intDigits.sourceString + (_intSep?.sourceString ? _intSep.sourceString : '');
+            const fracStr = fracDigits.sourceString + (_fracSep?.sourceString ? _fracSep.sourceString : '');
+            const v = parseFloat(intStr.replace(/_/g, '') + '.' + fracStr.replace(/_/g, ''));
             return `f32.const ${v}`;
         },
         booleanLiteral(lit) {
@@ -291,16 +296,6 @@ ${body}
         },
         GenericParams(_open, ids, _close) {
             return ''; // Ignore generics for now
-        },
-        ParamLiteral_typed(typedId) {
-            return `(param $${typedId.compile()} i32)`; // Assume i32 for now
-        },
-        ParamLiteral_literal(lit) {
-            return lit.compile();
-        },
-        Params(id, rest) {
-            const params = [id].concat(rest.children).map(p => `(param $${p.compile()} i32)`).join(' ');
-            return params;
         },
         keyword(_at, id) {
             return id.sourceString;
@@ -311,12 +306,12 @@ ${body}
         type(_colon, id) {
             return '';
         },
-        discard() {
-            return '_';
+        identifier_normal(letter, rest) {
+            return letter.sourceString + rest.sourceString;
         },
-        identifier() {
-            return this.sourceString;
-        }
+        identifier_underscoreStart(underscore, rest) {
+            return underscore.sourceString + rest.sourceString;
+        },
     }).addOperation('type', {
         typedIdentifier(id, type) {
             return type.children.length > 0 ? type.type() : 'i32';

@@ -1,20 +1,24 @@
 Silicon {
   Program = Element*
   Element =
-    | Item ";" -- item 
-	| DocComment
-	| Elaboration ";" -- elaboration
-  Item = | Statement | ExpressionStart
-  Statement = | Assignment | Definition
+    | Item ";" -- item
+    | Elaboration ";" -- elaboration
+    | DocComment -- docComment
+  Item = 
+    | Statement -- statement
+    | ExpressionStart -- expressionStart
+  Statement = 
+    | Assignment -- assignment
+    | Definition -- definition
   DocComment = "##" docChar*
   docChar = ~lineTerminator any
   Assignment = namespace "=" ExpressionStart
   ExpressionStart = ExpressionEnd (BinOp ExpressionEnd)* -- binChain
   ExpressionEnd =
-    | Literal
-    | FunctionCall
-    | namespace
-    | Block
+    | Literal -- literal
+    | FunctionCall -- functionCall
+    | namespace -- namespace
+    | Block -- block
     | "(" ExpressionStart ")" -- paren
   Block = "{" (Item ";")* "}"
   BinOp = operatorToken
@@ -57,7 +61,9 @@ Silicon {
   Definition = keyword typedIdentifier GenericParams? ListOf<ParamLiteral, ","> Binding?
   Binding = ":=" ExpressionEnd
   GenericParams = "[" ListOf<identifier, ","> "]"
-  ParamLiteral = typedIdentifier | Literal
+  ParamLiteral = 
+    | typedIdentifier -- typedId
+    | Literal -- literal
   keyword = "@" identifier
   
   Elaboration = "@stratum" strataDefinition

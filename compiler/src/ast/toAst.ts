@@ -39,27 +39,27 @@ export default function addToAstSemantics(siliconGrammar: ohm.Grammar): ohm.Sema
         },
 
         Element_item(item, _semi) {
-            return ASTFactory.element('item', item.toAst())
+            return item.toAst()
         },
 
         Element_elaboration(elaboration, _semi) {
-            return ASTFactory.element_elaboration(elaboration.toAst())
+            return elaboration.toAst()
         },
 
-        Element(docComment) {
-            return ASTFactory.element('docComment', docComment.toAst())
+        Element_docComment(docComment) {
+            return docComment.toAst()
         },
 
         Item_statement(stmt) {
-            return ASTFactory.item('statement', stmt.toAst())
+            return stmt.toAst()
         },
 
         Item_expressionStart(exp) {
-            return ASTFactory.item('expression', exp.toAst())
+            return exp.toAst()
         },
 
         Item(exp) {
-            return ASTFactory.item('expression', exp.toAst())
+            return exp.toAst()
         },
 
         DocComment(_hashhash, chars) {
@@ -72,11 +72,11 @@ export default function addToAstSemantics(siliconGrammar: ohm.Grammar): ohm.Sema
         },
 
         Statement_assignment(assgn) {
-            return ASTFactory.statement('assignment', assgn.toAst())
+            return assgn.toAst()
         },
 
         Statement_definition(def) {
-            return ASTFactory.statement('definition', def.toAst())
+            return def.toAst()
         },
 
         Assignment(ns, _eq, exp) {
@@ -133,42 +133,33 @@ export default function addToAstSemantics(siliconGrammar: ohm.Grammar): ohm.Sema
 
         strataBody(_open, items, _close) {
             const itemList = items.asIteration().children.map((item: any) => item.toAst())
-            // strataBody contains a Block which is wrapped in ExpressionEnd then ExpressionStart
-            // But ExpressionStart expects to contain one of: BinOp | FunctionCall | ExpressionEnd
-            // So we create: ExpressionStart -> ExpressionEnd -> Block
-            const block = ASTFactory.block(itemList)
-            const expressionEnd = ASTFactory.expressionEnd('block', block)
-            return ASTFactory.expressionStart('expressionEnd', expressionEnd)
+            // strataBody contains a Block
+            return ASTFactory.block(itemList)
         },
 
-        ExpressionStart_binOp(left, op, right) {
-            const leftExp = left.toAst()
-            const operator = op.toAst()
-            const rightExp = right.toAst()
-            const binOpNode = ASTFactory.binOp(leftExp, operator, rightExp)
-            return ASTFactory.expressionStart('binOp', binOpNode)
-        },
-
-        ExpressionStart_functionCall(funcCall) {
-            return ASTFactory.expressionStart('functionCall', funcCall.toAst())
+        ExpressionStart_binChain(left, binOps, endOps) {
+            const leftExp = left.toAst();
+            // binOps is iteration of BinOp
+            // endOps is iteration of ExpressionEnd
+            let result = leftExp;
+            if (binOps.children && binOps.children.length > 0) {
+                for (let i = 0; i < binOps.children.length; i++) {
+                    const operator = binOps.children[i].toAst();
+                    const rightExp = endOps.children[i].toAst();
+                    // Build left-associative chain of binary operations
+                    const binOpNode = ASTFactory.binOp(result, operator, rightExp);
+                    result = binOpNode;
+                }
+            }
+            return result;
         },
 
         ExpressionStart(exp) {
-            return ASTFactory.expressionStart('expressionEnd', exp.toAst())
-        },
-
-        BinOp_withReservedOp(reserved, op) {
-            const first = reserved.sourceString
-            const rest = op.sourceString
-            return first + rest
+            return exp.toAst();
         },
 
         BinOp(op) {
             return op.sourceString
-        },
-
-        ReservedOp(char) {
-            return char.sourceString
         },
 
         operatorChar(char) {
@@ -179,15 +170,15 @@ export default function addToAstSemantics(siliconGrammar: ohm.Grammar): ohm.Sema
             return body.toAst()
         },
 
-        FunctionCallBody_builtinFunctionCall(keyword, args) {
+        FunctionCallBody_builtin(keyword, args) {
             const name = keyword.toAst()
-            const argList = args.children.length > 0 ? args.toAst() : []
+            const argList = args.toAst()
             return ASTFactory.functionCall(name, true, argList)
         },
 
-        FunctionCallBody_userFunctionCall(namespace, args) {
+        FunctionCallBody_user(namespace, args) {
             const name = namespace.toAst()
-            const argList = args.children.length > 0 ? args.toAst() : []
+            const argList = args.toAst()
             return ASTFactory.functionCall(name, false, argList)
         },
 
@@ -195,40 +186,56 @@ export default function addToAstSemantics(siliconGrammar: ohm.Grammar): ohm.Sema
             return args.asIteration().children.map((arg: any) => arg.toAst())
         },
 
+        CallArgs(_ampersand, args) {
+            return args.toAst()
+        },
+
+        CallNoArgs(_lookahead) {
+            return []
+        },
+
+        CallArgsOrEnd(argsOrEnd) {
+            return argsOrEnd.toAst()
+        },
+
         keyword(at, ident) {
             return at.sourceString + ident.sourceString
         },
 
         ExpressionEnd_literal(lit) {
-            return ASTFactory.expressionEnd('literal', lit.toAst())
+            return lit.toAst()
         },
 
         ExpressionEnd_namespace(ns) {
-            return ASTFactory.expressionEnd('namespace', ns.toAst())
+            return ns.toAst()
         },
 
         ExpressionEnd_block(blk) {
-            return ASTFactory.expressionEnd('block', blk.toAst())
+            return blk.toAst()
         },
 
         ExpressionEnd_paren(_open, exp, _close) {
-            return ASTFactory.expressionEnd('paren', exp.toAst())
+            return exp.toAst()
         },
 
         Binding(_colonEq, exp) {
             return ASTFactory.binding(exp.toAst())
         },
 
-        Block(_open, items, _close) {
-            const itemList = items.children.map((itemNode: any) => itemNode.toAst()[0])
+        Block(_open, items, _semis, _close) {
+            const itemList = items.children.map((itemNode: any) => itemNode.toAst())
             return ASTFactory.block(itemList)
         },
 
-        namespace(first, rest) {
+        namespace(first, _seps, rest) {
             const parts: string[] = [first.sourceString]
-            rest.children.forEach((segment: any) => {
-                parts.push(segment.children[1].sourceString)
-            })
+            if (rest && rest.children) {
+                rest.children.forEach((segment: any) => {
+                    if (segment.sourceString) {
+                        parts.push(segment.sourceString)
+                    }
+                })
+            }
             return ASTFactory.namespace(parts)
         },
 
@@ -236,19 +243,19 @@ export default function addToAstSemantics(siliconGrammar: ohm.Grammar): ohm.Sema
             return lit.toAst()
         },
 
-        ArrayLiteral(_dollar, _open, elements, _close) {
+        ArrayLiteral(_bracket, elements, _close) {
             const elementList = elements.asIteration().children.map((el: any) => el.toAst())
-            return ASTFactory.literal('array', ASTFactory.arrayLiteral(elementList))
+            return ASTFactory.arrayLiteral(elementList)
         },
 
-        ObjectLiteral(_dollar, _open, pairs, _close) {
+        ObjectLiteral(_bracket, pairs, _close) {
             const pairList = pairs.asIteration().children.map((p: any) => p.toAst())
-            return ASTFactory.literal('object', ASTFactory.objectLiteral(pairList))
+            return ASTFactory.objectLiteral(pairList)
         },
 
-        TupleLiteral(_dollar, _open, elements, _close) {
+        TupleLiteral(_bracket, elements, _close) {
             const elementList = elements.asIteration().children.map((el: any) => el.toAst())
-            return ASTFactory.literal('tuple', ASTFactory.tupleLiteral(elementList))
+            return ASTFactory.tupleLiteral(elementList)
         },
 
         KeyValuePair(typedId, _eq, exp) {
@@ -257,9 +264,9 @@ export default function addToAstSemantics(siliconGrammar: ohm.Grammar): ohm.Sema
             return ASTFactory.keyValuePair(key, value)
         },
 
-        stringLiteral(_open, chars, _close) {
+        stringLiteral(_quote, chars, _closedQuote) {
             const content = chars.sourceString
-            return ASTFactory.literal('string', ASTFactory.stringLiteral(content))
+            return ASTFactory.stringLiteral(content)
         },
 
         stringChar(char) {
@@ -274,42 +281,48 @@ export default function addToAstSemantics(siliconGrammar: ohm.Grammar): ohm.Sema
             return lit.toAst()
         },
 
-        decLiteral(lit) {
-            return ASTFactory.literal('int', ASTFactory.intLiteral(lit.sourceString, 'decimal'))
+        decLiteral(digits, _seps, rest) {
+            const value = digits.sourceString + (_seps.children?.length > 0 ? _seps.sourceString : '') + (rest?.sourceString ? rest.sourceString : '')
+            return ASTFactory.intLiteral(value, 'decimal')
         },
 
-        binLiteral(_prefix, bits, _rest) {
-            return ASTFactory.literal('int', ASTFactory.intLiteral(_prefix.sourceString + bits.sourceString, 'binary'))
+        binLiteral(_prefix, bits, _seps, _rest) {
+            const value = _prefix.sourceString + bits.sourceString + (_seps.children?.length > 0 ? _seps.sourceString : '') + (_rest?.sourceString ? _rest.sourceString : '')
+            return ASTFactory.intLiteral(value, 'binary')
         },
 
         bit(b) {
             return b.sourceString
         },
 
-        hexLiteral(_prefix, digits, _rest) {
-            return ASTFactory.literal('int', ASTFactory.intLiteral(_prefix.sourceString + digits.sourceString, 'hexadecimal'))
+        hexLiteral(_prefix, digits, _seps, _rest) {
+            const value = _prefix.sourceString + digits.sourceString + (_seps.children?.length > 0 ? _seps.sourceString : '') + (_rest?.sourceString ? _rest.sourceString : '')
+            return ASTFactory.intLiteral(value, 'hexadecimal')
         },
 
         hexDigit(d) {
             return d.sourceString
         },
 
-        octLiteral(_prefix, digits, _rest) {
-            return ASTFactory.literal('int', ASTFactory.intLiteral(_prefix.sourceString + digits.sourceString, 'octal'))
+        octLiteral(_prefix, digits, _seps, _rest) {
+            const value = _prefix.sourceString + digits.sourceString + (_seps.children?.length > 0 ? _seps.sourceString : '') + (_rest?.sourceString ? _rest.sourceString : '')
+            return ASTFactory.intLiteral(value, 'octal')
         },
 
         octDigit(d) {
             return d.sourceString
         },
 
-        floatLiteral(intPart, _rest, fracPart) {
-            const value = parseFloat(intPart.sourceString + '.' + fracPart.sourceString)
-            return ASTFactory.literal('float', ASTFactory.floatLiteral(value))
+        floatLiteral(intDigits, _intSep, _dot, fracDigits, _fracSep) {
+            const intStr = intDigits.sourceString + (_intSep.children.length > 0 ? _intSep.sourceString : '')
+            const fracStr = fracDigits.sourceString + (_fracSep.children.length > 0 ? _fracSep.sourceString : '')
+            const value = intStr + '.' + fracStr
+            return ASTFactory.floatLiteral(value)
         },
 
         booleanLiteral(lit) {
             const value = lit.sourceString === '@true'
-            return ASTFactory.literal('boolean', ASTFactory.booleanLiteral(value))
+            return ASTFactory.booleanLiteral(value)
         },
 
         typedIdentifier(ident, type) {
@@ -330,6 +343,14 @@ export default function addToAstSemantics(siliconGrammar: ohm.Grammar): ohm.Sema
         ParamLiteral_literal(lit) {
             const literalAst = lit.toAst()
             return ASTFactory.parameter('_param', undefined, true, literalAst)
+        },
+
+        identifier_normal(letter, rest) {
+            return letter.sourceString + rest.sourceString
+        },
+
+        identifier_underscoreStart(underscore, rest) {
+            return underscore.sourceString + rest.sourceString
         },
     })
 

@@ -118,7 +118,7 @@ export interface ExpressionStart {
 }
 
 export interface BinOp {
-    type: 'BinOp'
+    type: 'BinaryOp'
     left: ExpressionStart
     operator: string
     right: ExpressionEnd
@@ -183,7 +183,7 @@ export interface IntLiteral {
 
 export interface FloatLiteral {
     type: 'FloatLiteral'
-    value: number
+    value: string
     sourceLocation?: SourceLocation
 }
 
@@ -310,7 +310,7 @@ export const ASTFactory = {
     },
 
     binOp(left: ExpressionStart, operator: string, right: ExpressionEnd): BinOp {
-        return { type: 'BinOp', left, operator, right }
+        return { type: 'BinaryOp', left, operator, right }
     },
 
     functionCall(name: string | Namespace, isBuiltin: boolean, args: ExpressionStart[]): FunctionCall {
@@ -345,8 +345,8 @@ export const ASTFactory = {
         return { type: 'IntLiteral', value, base }
     },
 
-    floatLiteral(value: number): FloatLiteral {
-        return { type: 'FloatLiteral', value }
+    floatLiteral(value: string | number): FloatLiteral {
+        return { type: 'FloatLiteral', value: typeof value === 'string' ? value : value.toString() }
     },
 
     booleanLiteral(value: boolean): BooleanLiteral {
