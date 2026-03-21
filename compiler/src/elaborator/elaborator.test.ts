@@ -55,6 +55,35 @@ function createSimpleBinOpAST(): Program {
 }
 
 /**
+ * Helper: Create a binary operation AST with custom operator
+ * Represents: 1 @@@ 2 (using a custom operator not in builtins)
+ */
+function createCustomOpBinOpAST(): Program {
+  const left = ASTFactory.intLiteral('1', 'decimal')
+  const leftLit = ASTFactory.literal('int', left)
+  const leftExpEnd = ASTFactory.expressionEnd('literal', leftLit)
+  const leftExp = ASTFactory.expressionStart('expressionEnd', leftExpEnd)
+
+  const right = ASTFactory.intLiteral('2', 'decimal')
+  const rightLit = ASTFactory.literal('int', right)
+  const rightExpEnd = ASTFactory.expressionEnd('literal', rightLit)
+
+  const binOp = ASTFactory.binOp(leftExp, '@@@', rightExpEnd)
+  const exp = ASTFactory.expressionStart('binOp', binOp)
+
+  const item = ASTFactory.item('expression', exp)
+  const stmt = ASTFactory.statement('definition', {
+    type: 'Definition',
+    keyword: '@test',
+    name: ASTFactory.typedIdentifier('test'),
+    params: []
+  })
+  const element = ASTFactory.element('item', item)
+
+  return ASTFactory.program([element])
+}
+
+/**
  * Helper: Create an elaborator (operator definition) AST
  *
  * @stratum Plus (Operator, "+", Node) = {
@@ -109,7 +138,7 @@ test("elaborate does not crash on empty program", () => {
 
 // Test 5: leaves BinOp semantics undefined when operator not registered
 test("elaborate leaves BinOp semantics undefined when operator not registered", () => {
-  const ast = createSimpleBinOpAST()
+  const ast = createCustomOpBinOpAST()
   const result = elaborate(ast)
 
   // Extract the BinOp from the result

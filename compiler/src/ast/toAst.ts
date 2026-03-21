@@ -314,9 +314,9 @@ export default function addToAstSemantics(siliconGrammar: ohm.Grammar): ohm.Sema
         },
 
         floatLiteral(intDigits, _intSep, _dot, fracDigits, _fracSep) {
-            const intStr = intDigits.sourceString + (_intSep.children.length > 0 ? _intSep.sourceString : '')
-            const fracStr = fracDigits.sourceString + (_fracSep.children.length > 0 ? _fracSep.sourceString : '')
-            const value = intStr + '.' + fracStr
+            const intStr = intDigits.sourceString + (_intSep?.sourceString ?? '')
+            const fracStr = fracDigits.sourceString + (_fracSep?.sourceString ?? '')
+            const value = intStr + _dot.sourceString + fracStr
             return ASTFactory.floatLiteral(value)
         },
 

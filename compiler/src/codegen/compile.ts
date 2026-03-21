@@ -208,9 +208,13 @@ ${body}
         NonemptyListOf(first, _seps, rest) {
             // This handles expressions in arrays/objects/tuples
             const results = [first.compile()];
-            if (rest.children) {
+            if (rest && rest.children) {
                 rest.children.forEach((item: any) => {
-                    results.push(item.children[1].compile());
+                    if (item.children && item.children.length > 1) {
+                        results.push(item.children[1].compile());
+                    } else if (item.compile) {
+                        results.push(item.compile());
+                    }
                 });
             }
             return results.join(' ');
