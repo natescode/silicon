@@ -108,6 +108,8 @@ function buildElaboratorRegistry(ast: Program): ElaboratorRegistry {
  * @returns A StrataNode containing the semantic information
  */
 function elaborationToStrataNode(elaboration: Elaboration): StrataNode {
+  // For builtin operators, semantics may be undefined. Only include nodeParamName in data.
+  // The semantics (Codegen, type checking, etc.) will be attached separately during compilation.
   return createOperatorNode(
     elaboration.symbol,
     elaboration.semantics,
@@ -116,11 +118,11 @@ function elaborationToStrataNode(elaboration: Elaboration): StrataNode {
 }
 
 /**
- * Parse builtin elaborators from Silicon source
+ * Create builtin elaborators for fundamental operators
  *
- * Creates built-in elaborator nodes for all fundamental operators.
- * Rather than parsing the BUILTIN_ELABORATORS_SOURCE string (which has grammar
- * ambiguity issues), we directly construct the Elaboration nodes.
+ * Builtin operators are registered in the elaborator registry without requiring
+ * explicit semantic definitions. The semantic information (Codegen, type checking, etc.)
+ * is handled separately during compilation.
  *
  * @returns Array of Elaboration nodes for builtin operators
  */
@@ -142,21 +144,16 @@ function parseBuiltinElaborators(): Elaboration[] {
   const elaborations: Elaboration[] = []
 
   for (const [stratName, symbol] of builtinOperators) {
-    // Create a placeholder body expression
-    // In practice, the actual semantic body would be parsed from the semantics
-    const bodyExp = ASTFactory.expressionStart(
-      'expressionEnd',
-      ASTFactory.expressionEnd('literal', ASTFactory.literal('int', ASTFactory.intLiteral('0', 'decimal')))
-    )
-
-    // Create the elaboration node for this operator
+    // Create elaboration without semantics body.
+    // Builtins are registered purely for operator identification.
+    // Semantic compilation rules are handled separately during code generation.
     const elaboration = ASTFactory.elaboration(
       'operator',
       stratName,
       'Operator',
       symbol,
-      'Node',
-      bodyExp
+      'Node'
+      // semantics omitted for builtins
     )
 
     elaborations.push(elaboration)

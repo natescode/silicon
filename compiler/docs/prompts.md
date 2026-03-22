@@ -1,0 +1,3 @@
+# Refactor
+
+Let's do some refactoring. In elaborator.ts on line 147, we have a placeholder bodyExp. This isn't the approach I want to take. The basic idea behind Stratum is to lookup the Semantics of a keyword or operator. Semantics is really several things but we're starting with just Codegen. So we don't care about the left and right of the operator in the elaborator. We only care about looking up how to compile the operator. 

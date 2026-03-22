@@ -106,7 +106,7 @@ export interface Elaboration {
     strataType: 'Operator' | 'Keyword'  // What type of elaborator
     symbol: string                      // e.g., "+" for operators, or keyword name
     nodeParamName: string               // e.g., "Node" - the variable name for node context
-    semantics: ExpressionStart          // The body containing semantic rules
+    semantics?: ExpressionStart         // Optional: The body containing semantic rules (user-defined elaborations only)
     sourceLocation?: SourceLocation
 }
 
@@ -300,7 +300,7 @@ export const ASTFactory = {
         strataType: 'Operator' | 'Keyword',
         symbol: string,
         nodeParamName: string,
-        semantics: ExpressionStart
+        semantics?: ExpressionStart
     ): Elaboration {
         return { type: 'Elaboration', kind, name, strataType, symbol, nodeParamName, semantics }
     },
