@@ -74,6 +74,34 @@ ${body}
         DocComment(_hashhash, chars) {
             return '';
         },
+        Elaboration(_stratum, strataDef) {
+            // Elaborations strateg definitions) don't generate code
+            // They are processed during elaboration phase
+            return '';
+        },
+        StrataDefinition(def) {
+            // Strategy definitions don't generate code in codegen
+            return '';
+        },
+        OperatorDefinition(name, _open, _op, _comma1, symbol, _comma2, nodeParam, _close, _eq, body) {
+            // Operator definitions don't generate code - they're metadata
+            return '';
+        },
+        KeywordDefinition(name, _open, _kw, _comma1, keywordName, _comma2, nodeParam, _close, _eq, body) {
+            // Keyword definitions don't generate code - they're metadata
+            return '';
+        },
+        OperatorSymbol(stringLit) {
+            return stringLit.compile();
+        },
+        KeywordName(stringLit) {
+            return stringLit.compile();
+        },
+        StrataBody(open, items, _semis, close) {
+            // StataBody is just a Block
+            const body = items.children.map(i => i.compile()).filter(s => s).join('\n');
+            return body;
+        },
         Assignment(ns, _eq, exp) {
             const name = ns.compile();
             const watName = toWatIdentifier(name);

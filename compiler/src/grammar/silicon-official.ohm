@@ -37,7 +37,7 @@ Silicon {
   CallNoArgs = &callTerminator
   callTerminator = ";" | ")" | "}" | "," | end
   argStart = &(digit | "'" | "$" | "@" | "{" | "(" | "&" | letter | "_")
-  namespace = identifier ("::" identifier)*
+  namespace = identifier (("::" | ".") identifier)*
   Literal = ArrayLiteral | ObjectLiteral | TupleLiteral | stringLiteral | floatLiteral | intLiteral | booleanLiteral
   ArrayLiteral = "$[" ListOf<ExpressionStart, ","> "]"
   ObjectLiteral = "${" ListOf<KeyValuePair, ","> "}"
@@ -66,16 +66,15 @@ Silicon {
     | Literal -- literal
   keyword = "@" identifier
   
-  Elaboration = "@stratum" strataDefinition
-  strataDefinition =
-    | operatorDefinition
-    | keywordDefinition
-  operatorDefinition = identifier "(" "Operator" "," operatorSymbol "," identifier ")" "=" strataBody
-  keywordDefinition = identifier "(" "Keyword" "," keywordName "," identifier ")" "=" strataBody
-  operatorSymbol = stringLiteral
-  keywordName = stringLiteral
-  strataBody = "{" strataBodyContent* "}"
-  strataBodyContent = ~"}" any
+  Elaboration = "@stratum" StrataDefinition
+  StrataDefinition =
+    | OperatorDefinition
+    | KeywordDefinition
+  OperatorDefinition = identifier "(" "Operator" "," OperatorSymbol "," identifier ")" "=" StrataBody
+  KeywordDefinition = identifier "(" "Keyword" "," KeywordName "," identifier ")" "=" StrataBody
+  OperatorSymbol = stringLiteral
+  KeywordName = stringLiteral
+  StrataBody = "{" (Item ";")* "}"
   
   typedIdentifier = identifier type?
   type = ":" identifier

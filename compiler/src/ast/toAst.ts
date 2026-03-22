@@ -103,11 +103,11 @@ export default function addToAstSemantics(siliconGrammar: ohm.Grammar): ohm.Sema
             return strataDef.toAst()
         },
 
-        strataDefinition(def) {
+        StrataDefinition(def) {
             return def.toAst()
         },
 
-        operatorDefinition(name, _open, _op, _comma1, symbol, _comma2, nodeParam, _close, _eq, body) {
+        OperatorDefinition(name, _open, _op, _comma1, symbol, _comma2, nodeParam, _close, _eq, body) {
             const elaborationName = name.sourceString
             const operatorSymbol = symbol.toAst()
             const nodeParamName = nodeParam.sourceString
@@ -115,7 +115,7 @@ export default function addToAstSemantics(siliconGrammar: ohm.Grammar): ohm.Sema
             return ASTFactory.elaboration('operator', elaborationName, 'Operator', operatorSymbol, nodeParamName, semanticsBody)
         },
 
-        keywordDefinition(name, _open, _kw, _comma1, keywordName, _comma2, nodeParam, _close, _eq, body) {
+        KeywordDefinition(name, _open, _kw, _comma1, keywordName, _comma2, nodeParam, _close, _eq, body) {
             const elaborationName = name.sourceString
             const kwName = keywordName.toAst()
             const nodeParamName = nodeParam.sourceString
@@ -123,17 +123,16 @@ export default function addToAstSemantics(siliconGrammar: ohm.Grammar): ohm.Sema
             return ASTFactory.elaboration('keyword', elaborationName, 'Keyword', kwName, nodeParamName, semanticsBody)
         },
 
-        operatorSymbol(stringLit) {
+        OperatorSymbol(stringLit) {
             return stringLit.toAst()
         },
 
-        keywordName(stringLit) {
+        KeywordName(stringLit) {
             return stringLit.toAst()
         },
 
-        strataBody(_open, items, _close) {
-            const itemList = items.asIteration().children.map((item: any) => item.toAst())
-            // strataBody contains a Block
+        StrataBody(_open, items, _semis, _close) {
+            const itemList = items.children.map((itemNode: any) => itemNode.toAst())
             return ASTFactory.block(itemList)
         },
 
@@ -227,14 +226,18 @@ export default function addToAstSemantics(siliconGrammar: ohm.Grammar): ohm.Sema
             return ASTFactory.block(itemList)
         },
 
-        namespace(first, _seps, rest) {
+        namespace(first, sepAndText, rest) {
             const parts: string[] = [first.sourceString]
-            if (rest && rest.children) {
-                rest.children.forEach((segment: any) => {
-                    if (segment.sourceString) {
-                        parts.push(segment.sourceString)
+            if (sepAndText && sepAndText.children) {
+                for (let i = 0; i < sepAndText.children.length; i++) {
+                    const pair = sepAndText.children[i];
+                    // Each pair is (("::" | ".") identifier)
+                    // We want just the identifier
+                    if (pair.children && pair.children.length >= 2) {
+                        const identifier = pair.children[1];
+                        parts.push(identifier.sourceString);
                     }
-                })
+                }
             }
             return ASTFactory.namespace(parts)
         },

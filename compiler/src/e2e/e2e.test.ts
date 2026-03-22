@@ -16,7 +16,7 @@ import { test, expect } from "bun:test";
 import { readFileSync } from "fs";
 import { join } from "path";
 import { parse } from "../parser/index.ts";
-import { addToAstSemantics, type ASTNode, type Program } from "../ast/index.ts";
+import { addToAstSemantics, type ASTNode, type Program, type Elaboration, type ExpressionStart, type BinaryOp } from "../ast/index.ts";
 import { addCompileSemantics } from "../codegen/index.ts";
 import { elaborate } from "../elaborator/index.ts";
 import { siliconGrammar } from "../grammar/index.ts";
@@ -194,7 +194,7 @@ test("E2E: Parse and compile multiple statements", () => {
 
 /**
  * Test: Stratum elaboration
- * Tests that strata are properly attached to operators during elaboration
+ * Tests that operators are properly elaborated with builtin semantics
  */
 test("E2E: Stratum elaboration on binary operators", () => {
     const sourceCode = loadExample("stratum_definition.si");
@@ -204,8 +204,39 @@ test("E2E: Stratum elaboration on binary operators", () => {
     expect(result.ast).toBeDefined();
     expect(result.elaboratedAST).toBeDefined();
     expect(result.wat).toBeDefined();
-    // The elaborator should attach stratum information to the AST
-    expect(result?.elaboratedAST?.elements).toBeDefined();
+
+    // Check that the elaboration process attached semantics to the '+' operator
+    const elaboratedAST = result.elaboratedAST as Program;
+
+    // Find an expression element - need to navigate through the structure
+    // Elements contain Items which contain Expressions
+    let binOpNode: BinaryOp | null = null;
+    for (const element of elaboratedAST.elements) {
+        if (element.kind === 'item') {
+            const item = element.value as Item;
+            if (item.kind === 'expression') {
+                const expr = item.value as ExpressionStart;
+                if (expr.kind === 'binOp') {
+                    binOpNode = expr.value as BinaryOp;
+                    break;
+                }
+            }
+        }
+    }
+
+    expect(binOpNode).toBeDefined();
+    if (binOpNode) {
+        expect(binOpNode.type).toBe('BinaryOp');
+        expect(binOpNode.operator).toBe('+');
+        // The elaborator should attach semantics (StrataNode) to builtin operators
+        expect(binOpNode.semantics).toBeDefined();
+        if (binOpNode.semantics) {
+            expect(binOpNode.semantics.discriminant).toBe('+');
+        }
+    }
+
+    // Verify that the WAT output contains the expected instruction
+    expect(result.wat).toContain('i32.add');
 });
 
 /**

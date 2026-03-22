@@ -1,1 +1,9 @@
+## Example Stratum definition for the '+' operator
+## Defines the semantic elaboration (code generation) for the + operator
+@stratum Plus ( Operator , '+' , Node ) = {
+  &WASM::i32_add Node.left, Node.right;
+};
+
+## Now use the operator - it will be elaborated according to the stratum above
 1 + 2;
+
