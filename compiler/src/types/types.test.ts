@@ -11,12 +11,14 @@ import {
     TypeBool,
     TypeUnknown,
     ArrayOf,
+    FunctionOf,
     wasmTypeOf,
     typeEquals,
     formatType,
     parseTypeName,
     isNumeric,
     isComparable,
+    isEqualityComparable,
 } from './types'
 
 // ------------------------------------------------------------------
@@ -121,10 +123,39 @@ test('isNumeric: Int and Float only', () => {
     expect(isNumeric(ArrayOf(TypeInt))).toBe(false)
 })
 
-test('isComparable: numeric + Bool', () => {
+test('isComparable: numeric + Bool (ordering operators)', () => {
     expect(isComparable(TypeInt)).toBe(true)
     expect(isComparable(TypeFloat)).toBe(true)
     expect(isComparable(TypeBool)).toBe(true)
     expect(isComparable(TypeString)).toBe(false)
     expect(isComparable(ArrayOf(TypeInt))).toBe(false)
+})
+
+test('isEqualityComparable: numeric + Bool + String', () => {
+    expect(isEqualityComparable(TypeInt)).toBe(true)
+    expect(isEqualityComparable(TypeFloat)).toBe(true)
+    expect(isEqualityComparable(TypeBool)).toBe(true)
+    expect(isEqualityComparable(TypeString)).toBe(true)
+    expect(isEqualityComparable(ArrayOf(TypeInt))).toBe(false)
+})
+
+test('wasmTypeOf: Function lowers to i32 (function table index)', () => {
+    expect(wasmTypeOf(FunctionOf([TypeInt], TypeFloat))).toBe('i32')
+    expect(wasmTypeOf(FunctionOf([], TypeInt))).toBe('i32')
+})
+
+test('typeEquals: Function structural equality', () => {
+    const f1 = FunctionOf([TypeInt, TypeFloat], TypeBool)
+    const f2 = FunctionOf([TypeInt, TypeFloat], TypeBool)
+    const f3 = FunctionOf([TypeInt], TypeBool)
+    const f4 = FunctionOf([TypeInt, TypeFloat], TypeInt)
+    expect(typeEquals(f1, f2)).toBe(true)
+    expect(typeEquals(f1, f3)).toBe(false)
+    expect(typeEquals(f1, f4)).toBe(false)
+    expect(typeEquals(f1, TypeInt)).toBe(false)
+})
+
+test('formatType: Function type', () => {
+    expect(formatType(FunctionOf([TypeInt, TypeFloat], TypeBool))).toBe('Function(Int, Float) -> Bool')
+    expect(formatType(FunctionOf([], TypeInt))).toBe('Function() -> Int')
 })

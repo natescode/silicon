@@ -44,7 +44,7 @@ const ast: ASTNode = addToAstSemantics(siliconGrammar)(match).toAst()
 const { program: elaboratedAST, registry } = elaborate(ast as Program)
 
 // Stage 2.6: Type-check — annotate the AST with inferred types
-const { program: typedAST, errors: typeErrors } = typecheck(elaboratedAST, registry)
+const { program: typedAST, errors: typeErrors, functions } = typecheck(elaboratedAST, registry)
 
 if (typeErrors.length > 0) {
     console.error('Type errors:')
@@ -55,7 +55,7 @@ if (typeErrors.length > 0) {
 }
 
 // Stage 3: Generate WebAssembly from AST
-const wat: string = addCompileSemantics(siliconGrammar, registry)(match).compile()
+const wat: string = addCompileSemantics(siliconGrammar, registry, functions)(match).compile()
 
 // ============================================================================
 // OUTPUT ARTIFACTS

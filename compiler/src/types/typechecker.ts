@@ -58,10 +58,12 @@ import {
     TypeBool,
     TypeUnknown,
     ArrayOf,
+    FunctionOf,
     typeEquals,
     parseTypeName,
     isNumeric,
     isComparable,
+    isEqualityComparable,
 } from './types'
 import {
     type TypeError,
@@ -71,6 +73,7 @@ import {
     unknownType,
     heterogeneousArray,
     annotationMismatch,
+    immutableAssignment,
 } from './errors'
 import { getWasmIntrinsic } from '../intrinsics'
 import { type ElaboratorRegistry, lookupOperator, lookupKeyword } from '../elaborator/registry'
@@ -86,11 +89,14 @@ interface Ctx {
     // Function signature table. Populated when a Definition is checked so that
     // call sites can resolve both the return type and validate arg types.
     functions: Map<string, FunctionSig>
+    // Names of immutable bindings (@let, @fn, @extern). Assignment to these is
+    // a type error.
+    immutable: Set<string>
     // Stratum registry for user-defined operator type checking (optional).
     registry?: ElaboratorRegistry
 }
 
-interface FunctionSig {
+export interface FunctionSig {
     params: SiliconType[]
     result: SiliconType
 }
@@ -116,6 +122,7 @@ function withScope(ctx: Ctx, fn: (inner: Ctx) => SiliconType): SiliconType {
 export interface TypeCheckResult {
     program: Program
     errors: TypeError[]
+    functions: Map<string, FunctionSig>
 }
 
 /**
@@ -127,11 +134,79 @@ export interface TypeCheckResult {
  *     if (errors.length) { ... }
  */
 export default function typecheck(program: Program, registry?: ElaboratorRegistry): TypeCheckResult {
-    const ctx: Ctx = { errors: [], symbols: new Map(), functions: new Map(), registry }
+    const ctx: Ctx = { errors: [], symbols: new Map(), functions: new Map(), immutable: new Set(), registry }
+    // Pre-registration pass: seed the function/symbol tables from top-level
+    // definitions so forward references and forward calls resolve correctly.
+    preRegisterDefinitions(program.elements as any[], ctx)
     for (const element of program.elements as any[]) {
         checkNode(element, ctx)
     }
-    return { program, errors: ctx.errors }
+    return { program, errors: ctx.errors, functions: ctx.functions }
+}
+
+// ---------------------------------------------------------------------------
+// Pre-registration pass (forward-reference support)
+// ---------------------------------------------------------------------------
+
+/**
+ * Extract the innermost Definition node from either the flat AST shape
+ * (Definition directly) or the wrapped shape (Element → Item → Statement →
+ * Definition). Returns null for non-definition elements.
+ */
+function extractDefinitionNode(el: any): any {
+    if (!el || typeof el !== 'object') return null
+    if (el.type === 'Definition') return el
+    if (el.type === 'Element' && el.kind === 'item' && el.value) return extractDefinitionNode(el.value)
+    if (el.type === 'Item' && el.value) return extractDefinitionNode(el.value)
+    if (el.type === 'Statement' && el.kind === 'definition') return el.value
+    return null
+}
+
+/**
+ * Seed `ctx.functions`, `ctx.symbols`, and `ctx.immutable` from every
+ * top-level definition before the main checking pass begins. This allows
+ * call sites that appear before a definition to resolve the callee's type,
+ * and lets the checker catch wrong-arg-type errors on forward calls.
+ *
+ * Result types are derived from explicit annotations only (no body
+ * inference here); the main pass will refine them once bodies are walked.
+ */
+function preRegisterDefinitions(elements: any[], ctx: Ctx): void {
+    for (const el of elements) {
+        const def = extractDefinitionNode(el)
+        if (!def || !def.name?.name) continue
+
+        const paramTypes: SiliconType[] = []
+        for (const p of def.params || []) {
+            if (p.isLiteral || !p.typeAnnotation) continue
+            paramTypes.push(parseTypeName(p.typeAnnotation.typename) ?? TypeUnknown)
+        }
+
+        let resultType: SiliconType = TypeUnknown
+        if (def.name.typeAnnotation) {
+            const parsed = parseTypeName(def.name.typeAnnotation.typename)
+            if (parsed) resultType = parsed
+        }
+
+        ctx.functions.set(def.name.name, { params: paramTypes, result: resultType })
+
+        // Store as FunctionOf when there are parameters; otherwise store the
+        // result type directly so value-position references work naturally.
+        if (paramTypes.length > 0) {
+            ctx.symbols.set(def.name.name, FunctionOf(paramTypes, resultType))
+        } else {
+            ctx.symbols.set(def.name.name, resultType)
+        }
+
+        // Mark immutable for non-mutable definitions. @var / hook==='global'
+        // is the only mutable def-kind.
+        const hook = def.hook
+        const keyword = def.keyword
+        const isMutable = hook === 'global' || keyword === '@var'
+        if (!isMutable) {
+            ctx.immutable.add(def.name.name)
+        }
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -200,6 +275,12 @@ function checkAssignment(a: any, ctx: Ctx): SiliconType {
     const target = a.target
     const path: string[] = target && target.path ? target.path : []
     const key = path.join('::')
+
+    if (ctx.immutable.has(key)) {
+        ctx.errors.push(immutableAssignment(key, a.sourceLocation))
+        return valueT
+    }
+
     const existing = ctx.symbols.get(key)
     if (existing && !typeEquals(existing, valueT) && valueT.kind !== 'Unknown') {
         ctx.errors.push(mismatch(existing, valueT, `assignment to '${key}'`, a.sourceLocation))
@@ -250,15 +331,28 @@ function checkDefinition(d: any, ctx: Ctx): SiliconType {
     }
 
     if (d.name && d.name.name) {
-        ctx.symbols.set(d.name.name, finalType)
-        // Register the full function signature so call sites can check arity
-        // and argument types. The params list collects only typed parameters.
         const paramTypes: SiliconType[] = []
         for (const param of d.params || []) {
             if (param.isLiteral || !param.typeAnnotation) continue
             paramTypes.push(parseTypeName(param.typeAnnotation.typename) ?? TypeUnknown)
         }
         ctx.functions.set(d.name.name, { params: paramTypes, result: finalType })
+
+        // Store FunctionOf in symbols for definitions that accept parameters so
+        // namespace references to function names don't emit false "unbound" errors.
+        if (paramTypes.length > 0) {
+            ctx.symbols.set(d.name.name, FunctionOf(paramTypes, finalType))
+        } else {
+            ctx.symbols.set(d.name.name, finalType)
+        }
+
+        // Mark immutable. @var / hook==='global' is the only mutable def-kind.
+        const hook = (d as any).hook
+        const keyword = d.keyword
+        const isMutable = hook === 'global' || keyword === '@var'
+        if (!isMutable) {
+            ctx.immutable.add(d.name.name)
+        }
     }
     return finalType
 }
@@ -288,9 +382,15 @@ function checkBinaryOp(b: any, ctx: Ctx): SiliconType {
                 return TypeUnknown
             }
             return leftT
-        // Comparison — same comparable type on both sides, result is Bool.
+        // Equality — same type on both sides; String allowed (pointer equality).
         case '==':
         case '!=':
+            if (!isEqualityComparable(leftT) || !isEqualityComparable(rightT) || !typeEquals(leftT, rightT)) {
+                ctx.errors.push(invalidOperator(b.operator, leftT, rightT, b.sourceLocation))
+                return TypeUnknown
+            }
+            return TypeBool
+        // Ordering — same comparable type, String excluded (pointer order is meaningless).
         case '<':
         case '>':
         case '<=':
@@ -452,6 +552,11 @@ function typeOfNamespace(ns: any, ctx: Ctx): SiliconType {
     if (path.length === 1) {
         const t2 = ctx.symbols.get(path[0])
         if (t2) return t2
+        // Cross-check the function signature table. Function names stored there
+        // but not yet in symbols (e.g. @extern with no binding) should not
+        // produce false "unbound identifier" errors.
+        const sig = ctx.functions.get(path[0])
+        if (sig) return FunctionOf(sig.params, sig.result)
     }
     ctx.errors.push(unbound(key, ns.sourceLocation))
     return TypeUnknown

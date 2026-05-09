@@ -187,3 +187,61 @@ test('wrong arity at user function call site errors', () => {
     expect(errors.length).toBeGreaterThan(0)
     expect(errors[0].kind).toBe('Mismatch')
 })
+
+// ------------------------------------------------------------------
+// Forward references
+// ------------------------------------------------------------------
+
+test('forward reference: wrong arg type caught before definition', () => {
+    // &add appears before @let add — pre-pass seeds the signature so the
+    // call site is type-checked even though the definition comes later.
+    const { errors } = check('&add 1, 2.5; @let add x:Int, y:Int := x + y;')
+    expect(errors.length).toBeGreaterThan(0)
+    expect(errors[0].kind).toBe('Mismatch')
+})
+
+test('forward reference: correct call before definition has no errors', () => {
+    const { errors } = check('&add 1, 2; @let add x:Int, y:Int := x + y;')
+    expect(errors).toHaveLength(0)
+})
+
+// ------------------------------------------------------------------
+// Immutable bindings
+// ------------------------------------------------------------------
+
+test('@let binding cannot be reassigned', () => {
+    const { errors } = check('@let x:Int := 5; x = 10;')
+    expect(errors.length).toBeGreaterThan(0)
+    expect(errors[0].kind).toBe('ImmutableAssignment')
+})
+
+test('@fn binding cannot be reassigned', () => {
+    const { errors } = check('@fn add x:Int, y:Int := x + y; add = 0;')
+    expect(errors.length).toBeGreaterThan(0)
+    expect(errors[0].kind).toBe('ImmutableAssignment')
+})
+
+test('@var binding can be reassigned', () => {
+    const { errors } = check('@var count:Int := 0; count = 1;')
+    expect(errors).toHaveLength(0)
+})
+
+// ------------------------------------------------------------------
+// String equality
+// ------------------------------------------------------------------
+
+test('String == String yields Bool with no error', () => {
+    const { errors } = check("'a' == 'b';")
+    expect(errors).toHaveLength(0)
+})
+
+test('String != String yields Bool with no error', () => {
+    const { errors } = check("'hello' != 'world';")
+    expect(errors).toHaveLength(0)
+})
+
+test('String < String is a type error', () => {
+    const { errors } = check("'a' < 'b';")
+    expect(errors.length).toBeGreaterThan(0)
+    expect(errors[0].kind).toBe('InvalidOperator')
+})

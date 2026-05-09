@@ -35,6 +35,8 @@ import { join, dirname } from 'path'
 import { fileURLToPath } from 'url'
 import { isWasmIntrinsic, getWasmIntrinsic } from '../intrinsics'
 import { type ElaboratorRegistry, lookupOperator, lookupDefKindEntry, lookupKeyword } from '../elaborator/registry'
+import { wasmTypeOf } from '../types/types'
+import type { FunctionSig } from '../types/typechecker'
 
 // Resolve std.wat relative to this source file so the path works under
 // both `bun run` and compiled TS.
@@ -149,7 +151,11 @@ function allocStaticString(sd: StaticData, s: string): number {
  * @param siliconGrammar - The compiled Ohm grammar
  * @returns Ohm semantics object with 'compile' operation
  */
-export default function addCompileSemantics(siliconGrammar: ohm.Grammar, registry?: ElaboratorRegistry) {
+export default function addCompileSemantics(
+    siliconGrammar: ohm.Grammar,
+    registry?: ElaboratorRegistry,
+    functionSigs?: Map<string, FunctionSig>
+) {
     // Static data and heap layout state lives per semantics object. Each
     // call to `addCompileSemantics` yields an isolated compilation unit so
     // tests don't bleed state into each other.
@@ -182,11 +188,20 @@ export default function addCompileSemantics(siliconGrammar: ohm.Grammar, registr
 
         const retTypeName = typedId.type()
         const hasBinding = binding.children.length > 0
-        const resultDecl = retTypeName
-            ? `(result ${siliconTypeToWat(retTypeName)})`
-            : hasBinding
-                ? (body.includes('f32.') ? '(result f32)' : '(result i32)')
-                : ''
+        let resultDecl: string
+        if (retTypeName) {
+            resultDecl = `(result ${siliconTypeToWat(retTypeName)})`
+        } else if (hasBinding) {
+            const sig = functionSigs?.get(watName)
+            if (sig && sig.result.kind !== 'Unknown') {
+                resultDecl = `(result ${wasmTypeOf(sig.result)})`
+            } else {
+                // Fallback: sniff for f32 instructions in the compiled body.
+                resultDecl = body.includes('f32.') ? '(result f32)' : '(result i32)'
+            }
+        } else {
+            resultDecl = ''
+        }
 
         const funcDecl = `(func $${watName} ${paramList} ${resultDecl} (local $addr i32)\n${body}\n)`
         const exportDecl = `(export "${watName}" (func $${watName}))`

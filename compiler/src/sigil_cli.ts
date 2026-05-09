@@ -25,7 +25,7 @@ async function compileFile(filename: string) {
     const match = parse(source)
     const ast: ASTNode = addToAstSemantics(siliconGrammar)(match).toAst()
     const { program: elaboratedAST, registry } = elaborate(ast as Program)
-    const { program: typedAST, errors: typeErrors } = typecheck(elaboratedAST, registry)
+    const { program: typedAST, errors: typeErrors, functions } = typecheck(elaboratedAST, registry)
 
     if (typeErrors.length > 0) {
         console.error('Type errors:')
@@ -35,7 +35,7 @@ async function compileFile(filename: string) {
         process.exit(1)
     }
 
-    const wat: string = addCompileSemantics(siliconGrammar, registry)(match).compile()
+    const wat: string = addCompileSemantics(siliconGrammar, registry, functions)(match).compile()
 
     await Bun.write('ast.json', JSON.stringify(typedAST, null, 2))
     await Bun.write('main.wat', wat)

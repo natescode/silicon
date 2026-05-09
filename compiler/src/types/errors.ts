@@ -26,6 +26,7 @@ export type TypeErrorKind =
     | 'UnboundIdentifier'     // Reference to an unknown identifier
     | 'HeterogeneousArray'    // Array literal elements do not all share a type
     | 'Annotation'            // Initializer doesn't match declared annotation
+    | 'ImmutableAssignment'   // Assignment to an immutable binding (@let, @fn, @extern)
 
 export interface TypeError {
     kind: TypeErrorKind
@@ -115,6 +116,17 @@ export function annotationMismatch(
     return {
         kind: 'Annotation',
         message: `'${name}' declared as ${formatType(annotated)} but initialiser has type ${formatType(actual)}`,
+        sourceLocation,
+    }
+}
+
+/**
+ * Factory — assignment to a binding that cannot be mutated.
+ */
+export function immutableAssignment(name: string, sourceLocation?: SourceLocation): TypeError {
+    return {
+        kind: 'ImmutableAssignment',
+        message: `'${name}' is immutable and cannot be reassigned`,
         sourceLocation,
     }
 }

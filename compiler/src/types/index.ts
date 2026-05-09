@@ -19,12 +19,14 @@ export {
     TypeBool,
     TypeUnknown,
     ArrayOf,
+    FunctionOf,
     wasmTypeOf,
     typeEquals,
     formatType,
     parseTypeName,
     isNumeric,
     isComparable,
+    isEqualityComparable,
 } from './types'
 
 export {
@@ -36,7 +38,8 @@ export {
     unknownType,
     heterogeneousArray,
     annotationMismatch,
+    immutableAssignment,
     formatTypeError,
 } from './errors'
 
-export { default as typecheck, type TypeCheckResult } from './typechecker'
+export { default as typecheck, type TypeCheckResult, type FunctionSig } from './typechecker'

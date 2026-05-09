@@ -37,6 +37,7 @@ export type SiliconType =
     | { kind: 'String' }
     | { kind: 'Bool' }
     | { kind: 'Array'; element: SiliconType }
+    | { kind: 'Function'; params: SiliconType[]; result: SiliconType }
     // `Unknown` is the top type used when the checker cannot determine a type
     // (e.g. references to unbound identifiers). It never appears in a
     // well-typed program. Downstream code should treat `Unknown` as "do not
@@ -67,6 +68,14 @@ export function ArrayOf(element: SiliconType): SiliconType {
 }
 
 /**
+ * Construct a Function type. Represents a callable with typed parameters and
+ * a typed return value. Lowers to i32 (function index) in WASM.
+ */
+export function FunctionOf(params: SiliconType[], result: SiliconType): SiliconType {
+    return { kind: 'Function', params, result }
+}
+
+/**
  * Map a SiliconType to its WebAssembly value type.
  *
  * This is the single source of truth for the language → WASM lowering. Codegen
@@ -76,8 +85,9 @@ export function wasmTypeOf(t: SiliconType): WasmType {
     switch (t.kind) {
         case 'Int':
         case 'Bool':
-        case 'String':  // pointer
-        case 'Array':   // pointer
+        case 'String':   // pointer
+        case 'Array':    // pointer
+        case 'Function': // function table index
             return 'i32'
         case 'Float':
             return 'f32'
@@ -96,6 +106,13 @@ export function typeEquals(a: SiliconType, b: SiliconType): boolean {
     if (a.kind === 'Array' && b.kind === 'Array') {
         return typeEquals(a.element, b.element)
     }
+    if (a.kind === 'Function' && b.kind === 'Function') {
+        if (a.params.length !== b.params.length) return false
+        for (let i = 0; i < a.params.length; i++) {
+            if (!typeEquals(a.params[i], b.params[i])) return false
+        }
+        return typeEquals(a.result, b.result)
+    }
     return true
 }
 
@@ -110,6 +127,7 @@ export function formatType(t: SiliconType): string {
         case 'String': return 'String'
         case 'Bool': return 'Bool'
         case 'Array': return `Array[${formatType(t.element)}]`
+        case 'Function': return `Function(${t.params.map(formatType).join(', ')}) -> ${formatType(t.result)}`
         case 'Unknown': return '<unknown>'
     }
 }
@@ -147,9 +165,17 @@ export function isNumeric(t: SiliconType): boolean {
 }
 
 /**
- * True when `t` is one of the comparable primitive types.
- * Comparison operators (`==`, `!=`, `<`, etc.) require this.
+ * True when `t` supports ordering operators (`<`, `>`, `<=`, `>=`).
+ * String is excluded — pointer ordering is not meaningful.
  */
 export function isComparable(t: SiliconType): boolean {
     return t.kind === 'Int' || t.kind === 'Float' || t.kind === 'Bool'
+}
+
+/**
+ * True when `t` supports equality operators (`==`, `!=`).
+ * String is included — compares pointers (reference equality).
+ */
+export function isEqualityComparable(t: SiliconType): boolean {
+    return t.kind === 'Int' || t.kind === 'Float' || t.kind === 'Bool' || t.kind === 'String'
 }

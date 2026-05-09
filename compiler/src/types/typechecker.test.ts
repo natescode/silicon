@@ -205,12 +205,23 @@ test('Int < Float is a type error', () => {
     expect(errors[0].kind).toBe('InvalidOperator')
 })
 
-test('String == String is a type error (String not comparable in POC)', () => {
+test('String == String yields Bool (reference equality)', () => {
     const left = ASTFactory.expressionStart('expressionEnd', stringExpEnd('a'))
     const bin = ASTFactory.binOp(left, '==', stringExpEnd('b'))
     const exp = ASTFactory.expressionStart('binOp', bin)
+    const { errors, program } = typecheck(wrapItem(exp))
+    expect(errors).toHaveLength(0)
+    const bop = firstBinOp(program)
+    expect(typeEquals(bop.inferredType, TypeBool)).toBe(true)
+})
+
+test('String < String is a type error (no ordering on pointers)', () => {
+    const left = ASTFactory.expressionStart('expressionEnd', stringExpEnd('a'))
+    const bin = ASTFactory.binOp(left, '<', stringExpEnd('b'))
+    const exp = ASTFactory.expressionStart('binOp', bin)
     const { errors } = typecheck(wrapItem(exp))
     expect(errors.length).toBeGreaterThan(0)
+    expect(errors[0].kind).toBe('InvalidOperator')
 })
 
 // ------------------------------------------------------------------
