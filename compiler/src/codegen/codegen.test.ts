@@ -243,6 +243,25 @@ test("compile unknown definition keyword throws", () => {
   expect(() => semantics(match).compile()).toThrow("Unknown definition keyword: @foo");
 });
 
+test("compile if-else as binding emits (result i32)", () => {
+  const semantics = createTestSemantics(siliconGrammar);
+  const match = siliconGrammar.match("@let pick a:Int, b:Int, c:Int := { @if c { a } @else { b } };");
+  expect(match.succeeded()).toBe(true);
+  const wat = semantics(match).compile();
+  expect(wat).toContain("(if (result i32)");
+  expect(wat).toContain("(then");
+  expect(wat).toContain("(else");
+});
+
+test("compile if without else does not emit result type", () => {
+  const semantics = createTestSemantics(siliconGrammar);
+  const match = siliconGrammar.match("@let doIf x:Int := { @if x { x = x + 1; }; x };");
+  expect(match.succeeded()).toBe(true);
+  const wat = semantics(match).compile();
+  // No else → void form, no (result ...)
+  expect(wat).not.toContain("(if (result");
+});
+
 test("compile @let function is auto-exported", () => {
   const semantics = createTestSemantics(siliconGrammar);
   const match = siliconGrammar.match("@let add x:Int, y:Int := x + y;");

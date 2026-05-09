@@ -1,0 +1,1 @@
+@fn choose a:Int, b:Int, flag:Int := { @if flag { a } @else { b } };

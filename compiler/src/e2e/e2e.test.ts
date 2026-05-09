@@ -497,10 +497,11 @@ test("E2E: Function call emits (call $add ...) in start function", () => {
 });
 
 /**
- * Test: @if inside a block body (Round 4 grammar fix)
- * The defKw/reservedId grammar fix prevents @if from being parsed as a Definition keyword
+ * Test: @if/@else as trailing expression emits (if (result i32) ...)
+ * The defKw/reservedId grammar fix prevents @if from being parsed as a Definition keyword.
+ * The inExprPosition fix ensures if-else as a return value gets a WAT result type.
  */
-test("E2E: @if inside block body compiles correctly", () => {
+test("E2E: @if/@else as trailing expression emits typed WAT if", () => {
     const sourceCode = loadExample("if_in_block.si");
     const result = compileSource(sourceCode);
 
@@ -510,6 +511,22 @@ test("E2E: @if inside block body compiles correctly", () => {
     expect(result.wat).toContain("(param $x i32)");
     expect(result.wat).toContain("lt_s");
     expect(result.wat).toContain("sub");
+    expect(result.wat).toContain("(if (result i32)");
+});
+
+/**
+ * Test: @if/@else purely in expression position (choose function)
+ */
+test("E2E: @if/@else in expression position emits typed WAT if", () => {
+    const sourceCode = loadExample("if_else_expr.si");
+    const result = compileSource(sourceCode);
+
+    expect(result.success).toBe(true);
+    expect(result.wat).toBeDefined();
+    expect(result.wat).toContain("(func $choose");
+    expect(result.wat).toContain("(if (result i32)");
+    expect(result.wat).toContain("(then");
+    expect(result.wat).toContain("(else");
 });
 
 /**

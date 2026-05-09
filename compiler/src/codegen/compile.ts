@@ -157,6 +157,9 @@ export default function addCompileSemantics(siliconGrammar: ohm.Grammar, registr
     let loopCount = 0
     // Names of the current function's parameters so namespace refs use local.get.
     let currentParams: Set<string> = new Set()
+    // True when the current node is in expression position (its value is consumed by
+    // a caller). Used by IfExpr to decide whether to emit (result type).
+    let inExprPosition: boolean = false
 
     // Emit a WAT (func ...) for the 'function' Def-Kind.
     // Extracted so the Definition action can delegate cleanly.
@@ -389,6 +392,11 @@ export default function addCompileSemantics(siliconGrammar: ohm.Grammar, registr
             const thenWat = thenBlock.compile();
             if (elsePart.children.length > 0) {
                 const elseWat = elsePart.children[0].compile();
+                if (inExprPosition) {
+                    // Typed if: result is consumed by caller. Sniff body for f32 vs i32.
+                    const resultType = (/f32\./.test(thenWat) || /f32\./.test(elseWat)) ? 'f32' : 'i32'
+                    return `(if (result ${resultType})\n  ${condWat}\n  (then ${thenWat})\n  (else ${elseWat})\n)`
+                }
                 return `(if\n  ${condWat}\n  (then ${thenWat})\n  (else ${elseWat})\n)`;
             }
             return `(if\n  ${condWat}\n  (then ${thenWat})\n)`;
@@ -403,11 +411,21 @@ export default function addCompileSemantics(siliconGrammar: ohm.Grammar, registr
             return `(block $brk_${id}\n  (loop $cont_${id}\n    (br_if $brk_${id} (i32.eqz\n      ${condWat}\n    ))\n    ${bodyWat}\n    (br $cont_${id})\n  )\n)`;
         },
         Binding(_bind, exp) {
-            return exp.compile();
+            // The bound expression is always in expression position — its value is the function body.
+            const prev = inExprPosition
+            inExprPosition = true
+            const result = exp.compile()
+            inExprPosition = prev
+            return result
         },
         Block(_open, items, _semis, trailing, _close) {
+            // Statements are void; only the trailing expression is in expression position.
+            const prev = inExprPosition
+            inExprPosition = false
             const stmts = items.children.map((i: any) => i.compile()).filter((s: string) => s).join('\n');
+            inExprPosition = true
             const trailingWat = trailing.children.length > 0 ? trailing.children[0].compile() : '';
+            inExprPosition = prev
             return [stmts, trailingWat].filter(s => s).join('\n');
         },
         namespace(first, _seps, rest) {
