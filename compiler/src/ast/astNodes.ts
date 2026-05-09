@@ -234,7 +234,7 @@ export interface WhileExpr {
 
 export interface Binding {
     type: 'Binding'
-    expression: ExpressionEnd
+    expression: ASTNode
     sourceLocation?: SourceLocation
 }
 
@@ -395,7 +395,7 @@ export const ASTFactory = {
         return { type: 'WhileExpr', condition, body }
     },
 
-    binding(expression: ExpressionEnd): Binding {
+    binding(expression: ASTNode): Binding {
         return { type: 'Binding', expression }
     },
 

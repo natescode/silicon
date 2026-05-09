@@ -154,17 +154,27 @@ export default function addCompileSemantics(siliconGrammar: ohm.Grammar, registr
 
     const semantics = siliconGrammar.createSemantics().addOperation('compile', {
         Program(elements) {
-            const body = elements.children.map(el => el.compile()).filter(s => s).join('\n');
-            const stdWat = loadStdWat();
-            const dataSection = staticData.dataDirectives.join('\n');
-            // std.wat already declares (memory 1) and (global $heap ...) plus
-            // the runtime imports, so the outer wrapper is just `(module ...)`
-            // around the runtime + static data + user code.
-            return `(module
-${stdWat}
-${dataSection}
-${body}
-)`;
+            const funcs: string[] = []
+            const topLevelCode: string[] = []
+
+            for (const el of elements.children) {
+                const compiled = el.compile()
+                if (!compiled) continue
+                if (el.isDefinition()) {
+                    funcs.push(compiled)
+                } else {
+                    topLevelCode.push(compiled)
+                }
+            }
+
+            const stdWat = loadStdWat()
+            const dataSection = staticData.dataDirectives.join('\n')
+
+            const startFunc = topLevelCode.length > 0
+                ? `(func $__start (local $addr i32)\n${topLevelCode.join('\n')}\n)\n(export "__start" (func $__start))`
+                : ''
+
+            return `(module\n${stdWat}\n${dataSection}\n${funcs.join('\n')}\n${startFunc}\n)`
         },
         Element_item(item, _semi) {
             return item.compile();
@@ -240,7 +250,12 @@ ${body}
             currentParams = prevParams
 
             const retTypeName = typedId.type()
-            const resultDecl = retTypeName ? `(result ${siliconTypeToWat(retTypeName)})` : ''
+            const hasBinding = binding.children.length > 0
+            const resultDecl = retTypeName
+                ? `(result ${siliconTypeToWat(retTypeName)})`
+                : hasBinding
+                    ? (body.includes('f32.') ? '(result f32)' : '(result i32)')
+                    : ''
 
             return `(func $${watName} ${paramList} ${resultDecl} (local $addr i32)\n${body}\n)`
         },
@@ -550,6 +565,14 @@ ${body}
         _nonterminal() {
             return '';
         }
+    }).addOperation('isDefinition', {
+        Element_item(item, _semi) { return item.isDefinition() },
+        Element_elaboration(_elab, _semi) { return false },
+        Element_docComment(_dc) { return false },
+        Item_statement(stmt) { return stmt.isDefinition() },
+        Item_expressionStart(_exp) { return false },
+        Statement_definition(_def) { return true },
+        Statement_assignment(_assgn) { return false },
     })
     return semantics;
 }

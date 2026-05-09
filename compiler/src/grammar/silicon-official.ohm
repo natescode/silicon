@@ -64,7 +64,7 @@ Silicon {
   octDigit = "0".."7"
   booleanLiteral = "@true" | "@false"
   Definition = keyword typedIdentifier GenericParams? ListOf<ParamLiteral, ","> Binding?
-  Binding = ":=" ExpressionEnd
+  Binding = ":=" ExpressionStart
   GenericParams = "[" ListOf<identifier, ","> "]"
   ParamLiteral = 
     | typedIdentifier -- typedId

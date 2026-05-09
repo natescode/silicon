@@ -457,3 +457,58 @@ test("E2E: Multiple builtin operators in complex expression", () => {
     expect(result.wat).toContain("mul");
     expect(result.wat).toContain("div");
 });
+
+/**
+ * Test: Function definition
+ * Verifies that @let with params emits a proper WAT (func ...) at module level
+ */
+test("E2E: Function definition emits WAT func with params", () => {
+    const sourceCode = loadExample("function_definition.si");
+    const result = compileSource(sourceCode);
+
+    expect(result.success).toBe(true);
+    expect(result.wat).toBeDefined();
+    expect(result.wat).toContain("(func $add");
+    expect(result.wat).toContain("(param $x i32)");
+    expect(result.wat).toContain("(param $y i32)");
+    expect(result.wat).toContain("(result i32)");
+    expect(result.wat).toContain("i32.add");
+});
+
+/**
+ * Test: Function call
+ * Verifies that &add 1, 2 emits (call $add ...) in $__start
+ */
+test("E2E: Function call emits (call $add ...) in start function", () => {
+    const sourceCode = loadExample("function_call.si");
+    const result = compileSource(sourceCode);
+
+    expect(result.success).toBe(true);
+    expect(result.wat).toBeDefined();
+    expect(result.wat).toContain("(func $add");
+    expect(result.wat).toContain("(call $add");
+    expect(result.wat).toContain("$__start");
+    // $add must appear at module level (before $__start, not nested inside it)
+    const addIdx = result.wat!.indexOf("(func $add");
+    const startIdx = result.wat!.indexOf("(func $__start");
+    expect(addIdx).toBeGreaterThan(-1);
+    expect(startIdx).toBeGreaterThan(-1);
+    expect(addIdx).toBeLessThan(startIdx);
+});
+
+/**
+ * Test: User-defined stratum operator
+ * Verifies that a custom @stratum operator (+++) drives codegen to emit i32.add
+ */
+test("E2E: User-defined stratum operator generates correct WAT", () => {
+    const sourceCode = loadExample("user_stratum_add.si");
+    const result = compileSource(sourceCode);
+
+    expect(result.success).toBe(true);
+    expect(result.wat).toBeDefined();
+    expect(result.wat).toContain("(func $myAdd");
+    expect(result.wat).toContain("(param $x i32)");
+    expect(result.wat).toContain("(param $y i32)");
+    // The +++ operator defined via @stratum MyAdd -> WASM::i32_add should lower to i32.add
+    expect(result.wat).toContain("i32.add");
+});
