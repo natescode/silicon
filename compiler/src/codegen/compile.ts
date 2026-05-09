@@ -331,30 +331,17 @@ export default function addCompileSemantics(siliconGrammar: ohm.Grammar, registr
         FunctionCallBody_builtin(kw, args) {
             const funcName = kw.compile();
             const kwEntry = registry ? lookupKeyword(registry, '@' + funcName) : undefined;
-            const intrinsic = kwEntry?.data?.intrinsic;
+            const intrinsicName = kwEntry?.data?.intrinsic;
 
-            if (intrinsic === 'WASM::control_if') {
-                const myExprPos = inExprPosition;
-                const argWats: string[] = args.compileArgList();
-                const condWat = argWats[0] ?? '';
-                const thenWat = argWats[1] ?? '';
-                const elseWat = argWats[2];
-                if (elseWat !== undefined) {
-                    if (myExprPos) {
-                        const resultType = (/f32\./.test(thenWat) || /f32\./.test(elseWat)) ? 'f32' : 'i32';
-                        return `(if (result ${resultType})\n  ${condWat}\n  (then ${thenWat})\n  (else ${elseWat})\n)`;
-                    }
-                    return `(if\n  ${condWat}\n  (then ${thenWat})\n  (else ${elseWat})\n)`;
+            if (intrinsicName) {
+                const intr = getWasmIntrinsic(intrinsicName);
+                if (intr?.emitStructured) {
+                    const argWats: string[] = args.compileArgList();
+                    return intr.emitStructured(argWats, {
+                        inExprPosition,
+                        nextLoopId: () => loopCount++,
+                    });
                 }
-                return `(if\n  ${condWat}\n  (then ${thenWat})\n)`;
-            }
-
-            if (intrinsic === 'WASM::control_loop') {
-                const argWats: string[] = args.compileArgList();
-                const id = loopCount++;
-                const condWat = argWats[0] ?? '';
-                const bodyWat = argWats[1] ?? '';
-                return `(block $brk_${id}\n  (loop $cont_${id}\n    (br_if $brk_${id} (i32.eqz\n      ${condWat}\n    ))\n    ${bodyWat}\n    (br $cont_${id})\n  )\n)`;
             }
 
             const argList = args.compile();

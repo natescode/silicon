@@ -10,6 +10,17 @@
  * - Organized by category: arithmetic, comparison, memory, conversion, bitwise
  */
 
+/**
+ * Context passed to emitStructured for control-flow intrinsics.
+ * Carries mutable compiler state needed to emit correct WAT.
+ */
+export interface StructuredEmitCtx {
+    /** True when the result value is consumed by a surrounding expression. */
+    inExprPosition: boolean
+    /** Allocate a unique loop label id (increments the caller's counter). */
+    nextLoopId: () => number
+}
+
 export interface WasmIntrinsic {
     /** Full name including namespace: WASM::func_name */
     name: string
@@ -25,6 +36,12 @@ export interface WasmIntrinsic {
     outputs: number
     /** Description of what this intrinsic does */
     description: string
+    /**
+     * If present, this intrinsic emits structured WAT rather than a flat
+     * instruction. Called by FunctionCallBody_builtin with individually
+     * compiled arg strings and compiler context.
+     */
+    emitStructured?: (args: string[], ctx: StructuredEmitCtx) => string
 }
 
 export const wasmIntrinsics: Record<string, WasmIntrinsic> = {
@@ -548,6 +565,44 @@ export const wasmIntrinsics: Record<string, WasmIntrinsic> = {
         inputs: 1,
         outputs: 1,
         description: 'Grow linear memory by specified number of pages'
+    },
+
+    // ============================================================================
+    // Structural Control Flow (used by @if / @loop strata)
+    // ============================================================================
+    control_if: {
+        name: 'WASM::control_if',
+        wasmInstr: 'if',
+        binary: false,
+        unary: false,
+        inputs: -1,
+        outputs: -1,
+        description: 'WAT (if/then/else) structural construct — used by the @if stratum',
+        emitStructured(args, ctx) {
+            const [condWat, thenWat, elseWat] = args
+            if (elseWat !== undefined) {
+                if (ctx.inExprPosition) {
+                    const resultType = /f32\./.test(thenWat) || /f32\./.test(elseWat) ? 'f32' : 'i32'
+                    return `(if (result ${resultType})\n  ${condWat}\n  (then ${thenWat})\n  (else ${elseWat})\n)`
+                }
+                return `(if\n  ${condWat}\n  (then ${thenWat})\n  (else ${elseWat})\n)`
+            }
+            return `(if\n  ${condWat}\n  (then ${thenWat})\n)`
+        },
+    },
+    control_loop: {
+        name: 'WASM::control_loop',
+        wasmInstr: 'loop',
+        binary: false,
+        unary: false,
+        inputs: -1,
+        outputs: -1,
+        description: 'WAT (block/loop) while-loop construct — used by the @loop stratum',
+        emitStructured(args, ctx) {
+            const id = ctx.nextLoopId()
+            const [condWat, bodyWat] = args
+            return `(block $brk_${id}\n  (loop $cont_${id}\n    (br_if $brk_${id} (i32.eqz\n      ${condWat}\n    ))\n    ${bodyWat}\n    (br $cont_${id})\n  )\n)`
+        },
     },
 }
 

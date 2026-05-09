@@ -18,4 +18,5 @@ export {
     getWasmIntrinsicByShortName,
     listWasmIntrinsics,
     type WasmIntrinsic,
+    type StructuredEmitCtx,
 } from './intrinsics'

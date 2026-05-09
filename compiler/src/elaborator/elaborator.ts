@@ -42,6 +42,7 @@ import {
 import { StrataType, type StrataNode } from './strataenum'
 import { BUILTIN_ELABORATORS_SOURCE } from './builtins'
 import { BUILTIN_DEF_KINDS, registerDefKind } from './defkinds'
+import { loadBuiltinStrata } from '../strata/index'
 import parse from '../parser'
 import addToAstSemantics from '../ast/toAst'
 import siliconGrammar from '../grammar/SiliconGrammar'
@@ -76,8 +77,13 @@ function buildElaboratorRegistry(ast: Program): ElaboratorRegistry {
     registerDefKind(registry.defKinds, entry)
   }
 
-  // Parse and register builtin elaborators from Silicon source (with bodies).
+  // Parse and register builtin elaborators (operators) from Silicon source.
   for (const elab of parseBuiltinElaborators()) {
+    registerElaborator(registry, elab.kind, symbolToString(elab.symbol), elaborationToStrataNode(elab))
+  }
+
+  // Parse and register builtin strata from .si files in src/strata/.
+  for (const elab of parseBuiltinStrata()) {
     registerElaborator(registry, elab.kind, symbolToString(elab.symbol), elaborationToStrataNode(elab))
   }
 
@@ -104,20 +110,21 @@ function symbolToString(symbol: any): string {
   return String(symbol)
 }
 
-/**
- * Parse BUILTIN_ELABORATORS_SOURCE with the Silicon parser so builtin strata
- * have their bodies (and therefore intrinsic references) stored.
- */
-function parseBuiltinElaborators(): Elaboration[] {
-  const match = parse(BUILTIN_ELABORATORS_SOURCE)
+/** Parse a Silicon source string and return all Elaboration nodes found. */
+function parseStrataSource(source: string): Elaboration[] {
+  const match = parse(source)
   const ast = addToAstSemantics(siliconGrammar)(match).toAst() as Program
-  const elaborations: Elaboration[] = []
-  for (const element of ast.elements as any[]) {
-    if (element.type === 'Elaboration') {
-      elaborations.push(element as Elaboration)
-    }
-  }
-  return elaborations
+  return (ast.elements as any[]).filter(el => el.type === 'Elaboration') as Elaboration[]
+}
+
+/** Builtin operator elaborators (@stratum Plus, Minus, …) embedded as TS source. */
+function parseBuiltinElaborators(): Elaboration[] {
+  return parseStrataSource(BUILTIN_ELABORATORS_SOURCE)
+}
+
+/** Builtin keyword strata (@if, @loop, …) loaded from .si files in src/strata/. */
+function parseBuiltinStrata(): Elaboration[] {
+  return parseStrataSource(loadBuiltinStrata())
 }
 
 /**

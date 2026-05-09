@@ -1,0 +1,3 @@
+@stratum Loop (Keyword, '@loop', Node) = {
+  &WASM::control_loop;
+};

@@ -73,14 +73,6 @@ export const BUILTIN_ELABORATORS_SOURCE = `
 @stratum GreaterThanOrEqual (Operator, '>=', Node) = {
   &WASM::i32_ge_s Node.left, Node.right;
 };
-
-@stratum If (Keyword, '@if', Node) = {
-  &WASM::control_if;
-};
-
-@stratum Loop (Keyword, '@loop', Node) = {
-  &WASM::control_loop;
-};
 `;
 
 /**
