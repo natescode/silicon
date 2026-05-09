@@ -243,6 +243,14 @@ test("compile unknown definition keyword throws", () => {
   expect(() => semantics(match).compile()).toThrow("Unknown definition keyword: @foo");
 });
 
+test("compile @let function is auto-exported", () => {
+  const semantics = createTestSemantics(siliconGrammar);
+  const match = siliconGrammar.match("@let add x:Int, y:Int := x + y;");
+  expect(match.succeeded()).toBe(true);
+  const wat = semantics(match).compile();
+  expect(wat).toContain('(export "add" (func $add))');
+});
+
 test("compile @fn definition routes through def-kind registry", () => {
   const semantics = createTestSemantics(siliconGrammar);
   const match = siliconGrammar.match("@fn add x:Int, y:Int := x + y;");

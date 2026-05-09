@@ -587,6 +587,59 @@ test("E2E: Assignment to function parameter emits local.set", () => {
 });
 
 /**
+ * Test: Function definitions are auto-exported
+ * WAT output must include (export "name" (func $name)) for @let and @fn
+ */
+test("E2E: @let function is auto-exported", () => {
+    const sourceCode = loadExample("function_definition.si");
+    const result = compileSource(sourceCode);
+
+    expect(result.success).toBe(true);
+    expect(result.wat).toBeDefined();
+    expect(result.wat).toContain('(export "add" (func $add))');
+});
+
+test("E2E: @fn function is auto-exported", () => {
+    const sourceCode = loadExample("fn_function.si");
+    const result = compileSource(sourceCode);
+
+    expect(result.success).toBe(true);
+    expect(result.wat).toBeDefined();
+    expect(result.wat).toContain('(export "add" (func $add))');
+});
+
+/**
+ * Test: @var global mutation in start code
+ * Assignments to a @var name outside any function lower to global.set in $__start
+ */
+test("E2E: @var global mutation emits global.set in start", () => {
+    const sourceCode = loadExample("var_mutation.si");
+    const result = compileSource(sourceCode);
+
+    expect(result.success).toBe(true);
+    expect(result.wat).toBeDefined();
+    expect(result.wat).toContain("(global $count (mut i32)");
+    expect(result.wat).toContain("global.set $count");
+    expect(result.wat).toContain("global.get $count");
+    expect(result.wat).toContain("$__start");
+});
+
+/**
+ * Test: Zero-param @let compiles to a zero-arg WAT function and is callable
+ */
+test("E2E: Zero-param @let emits zero-arg WAT func and is callable", () => {
+    const sourceCode = loadExample("let_constant.si");
+    const result = compileSource(sourceCode);
+
+    expect(result.success).toBe(true);
+    expect(result.wat).toBeDefined();
+    expect(result.wat).toContain("(func $PI");
+    expect(result.wat).toContain("(i32.const 314)");
+    expect(result.wat).toContain("(call $PI");
+    expect(result.wat).toContain('(export "PI" (func $PI))');
+});
+
+/**
  * Test: User-defined stratum operator
  * Verifies that a custom @stratum operator (+++) drives codegen to emit i32.add
  */

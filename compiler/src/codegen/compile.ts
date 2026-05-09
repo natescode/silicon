@@ -185,7 +185,9 @@ export default function addCompileSemantics(siliconGrammar: ohm.Grammar, registr
                 ? (body.includes('f32.') ? '(result f32)' : '(result i32)')
                 : ''
 
-        return `(func $${watName} ${paramList} ${resultDecl} (local $addr i32)\n${body}\n)`
+        const funcDecl = `(func $${watName} ${paramList} ${resultDecl} (local $addr i32)\n${body}\n)`
+        const exportDecl = `(export "${watName}" (func $${watName}))`
+        return `${funcDecl}\n${exportDecl}`
     }
 
     // Emit a WAT (global ...) mutable global for the 'global' Def-Kind.
