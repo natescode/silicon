@@ -1,0 +1,13 @@
+{
+  "type": "Program",
+  "elements": [
+    {
+      "type": "IntLiteral",
+      "value": "5",
+      "base": "decimal",
+      "inferredType": {
+        "kind": "Int"
+      }
+    }
+  ]
+}

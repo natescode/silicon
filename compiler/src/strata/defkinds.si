@@ -9,3 +9,7 @@
 @stratum VarDef (Keyword, '@var', Node) = {
   &WASM::def_global;
 };
+
+@stratum ExternDef (Keyword, '@extern', Node) = {
+  &WASM::def_extern;
+};

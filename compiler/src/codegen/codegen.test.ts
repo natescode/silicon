@@ -298,3 +298,47 @@ test("compile assignment to parameter uses local.set", () => {
   expect(wat).toContain("local.set $x");
   expect(wat).toContain("local.get $x");
 });
+
+test("compile @extern with no return type emits void import", () => {
+  const semantics = createTestSemantics(siliconGrammar);
+  const match = siliconGrammar.match("@extern print x:Int;");
+  expect(match.succeeded()).toBe(true);
+  const wat = semantics(match).compile();
+  expect(wat).toContain('(import "env" "print"');
+  expect(wat).toContain("(param $x i32)");
+  // The import line itself should not declare a result type
+  const importLine = wat.split('\n').find((l: string) => l.includes('(import "env" "print"')) ?? ''
+  expect(importLine).not.toContain("(result");
+});
+
+test("compile @extern with return type emits result declaration", () => {
+  const semantics = createTestSemantics(siliconGrammar);
+  const match = siliconGrammar.match("@extern readInt:Int;");
+  expect(match.succeeded()).toBe(true);
+  const wat = semantics(match).compile();
+  expect(wat).toContain('(import "env" "readInt"');
+  expect(wat).toContain("(func $readInt");
+  expect(wat).toContain("(result i32)");
+});
+
+test("compile @extern appears before function definitions in module", () => {
+  const semantics = createTestSemantics(siliconGrammar);
+  const match = siliconGrammar.match("@extern print x:Int;\n@let greet := { &print 42 };");
+  expect(match.succeeded()).toBe(true);
+  const wat = semantics(match).compile();
+  const importPos = wat.indexOf("(import");
+  const funcPos = wat.indexOf("(func $greet");
+  expect(importPos).toBeGreaterThan(-1);
+  expect(funcPos).toBeGreaterThan(-1);
+  expect(importPos).toBeLessThan(funcPos);
+});
+
+test("compile @extern with multiple params", () => {
+  const semantics = createTestSemantics(siliconGrammar);
+  const match = siliconGrammar.match("@extern add x:Int, y:Int;");
+  expect(match.succeeded()).toBe(true);
+  const wat = semantics(match).compile();
+  expect(wat).toContain('(import "env" "add"');
+  expect(wat).toContain("(param $x i32)");
+  expect(wat).toContain("(param $y i32)");
+});

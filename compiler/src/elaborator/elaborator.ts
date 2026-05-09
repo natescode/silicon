@@ -109,6 +109,7 @@ function buildElaboratorRegistry(ast: Program): ElaboratorRegistry {
 function codegenKindFromIntrinsic(intrinsic: string | undefined): CodegenKind | undefined {
   if (intrinsic === 'WASM::def_function') return 'function'
   if (intrinsic === 'WASM::def_global') return 'global'
+  if (intrinsic === 'WASM::def_extern') return 'extern'
   return undefined
 }
 

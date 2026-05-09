@@ -628,6 +628,15 @@ export const wasmIntrinsics: Record<string, WasmIntrinsic> = {
         outputs: 0,
         description: 'Sentinel: definition keyword lowers to a WAT (global ...)',
     },
+    def_extern: {
+        name: 'WASM::def_extern',
+        wasmInstr: '',
+        binary: false,
+        unary: false,
+        inputs: 0,
+        outputs: 0,
+        description: 'Sentinel: definition keyword lowers to a WAT (import "env" "name" (func ...))',
+    },
 }
 
 /**

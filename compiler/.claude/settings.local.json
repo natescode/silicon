@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(bun run *)",
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)",
+      "Bash(rm -f C:/repos/sigil/.git/index.lock)",
+      "Bash(bun test *)",
+      "Bash(node *)",
+      "Bash(grep -A5 'func $add')",
+      "Bash(grep -A10 'func $compute')"
+    ]
+  }
+}

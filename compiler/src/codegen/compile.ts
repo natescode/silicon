@@ -193,6 +193,19 @@ export default function addCompileSemantics(siliconGrammar: ohm.Grammar, registr
         return `${funcDecl}\n${exportDecl}`
     }
 
+    // Emit a WAT (import "env" ...) declaration for the 'extern' Def-Kind.
+    // @extern name:ReturnType param1:T1, param2:T2;
+    // → (import "env" "name" (func $name (param i32 ...) (result i32)?))
+    function compileExtern(typedId: any, params: any): string {
+        const name = typedId.compile()
+        const watName = toWatIdentifier(name)
+        const paramList = params.asIteration().children.map((p: any) => p.compile()).join(' ')
+        const retTypeName = typedId.type()
+        const resultDecl = retTypeName ? `(result ${siliconTypeToWat(retTypeName)})` : ''
+        const sig = [paramList, resultDecl].filter(s => s).join(' ')
+        return `(import "env" "${watName}" (func $${watName} ${sig}))`
+    }
+
     // Emit a WAT (global ...) mutable global for the 'global' Def-Kind.
     function compileGlobal(typedId: any, binding: any): string {
         const name = typedId.compile()
@@ -207,6 +220,7 @@ export default function addCompileSemantics(siliconGrammar: ohm.Grammar, registr
 
     const semantics = siliconGrammar.createSemantics().addOperation('compile', {
         Program(elements) {
+            const imports: string[] = []
             const funcs: string[] = []
             const topLevelCode: string[] = []
 
@@ -214,7 +228,11 @@ export default function addCompileSemantics(siliconGrammar: ohm.Grammar, registr
                 const compiled = el.compile()
                 if (!compiled) continue
                 if (el.isDefinition()) {
-                    funcs.push(compiled)
+                    if (compiled.startsWith('(import')) {
+                        imports.push(compiled)
+                    } else {
+                        funcs.push(compiled)
+                    }
                 } else {
                     topLevelCode.push(compiled)
                 }
@@ -227,7 +245,7 @@ export default function addCompileSemantics(siliconGrammar: ohm.Grammar, registr
                 ? `(func $__start (local $addr i32)\n${topLevelCode.join('\n')}\n)\n(export "__start" (func $__start))`
                 : ''
 
-            return `(module\n${stdWat}\n${dataSection}\n${funcs.join('\n')}\n${startFunc}\n)`
+            return `(module\n${imports.join('\n')}\n${stdWat}\n${dataSection}\n${funcs.join('\n')}\n${startFunc}\n)`
         },
         Element_item(item, _semi) {
             return item.compile();
@@ -297,6 +315,8 @@ export default function addCompileSemantics(siliconGrammar: ohm.Grammar, registr
                     return compileFunction(typedId, params, binding)
                 case 'global':
                     return compileGlobal(typedId, binding)
+                case 'extern':
+                    return compileExtern(typedId, params)
                 default:
                     throw new Error(`Unhandled codegenKind: ${(entry as any).codegenKind}`)
             }
