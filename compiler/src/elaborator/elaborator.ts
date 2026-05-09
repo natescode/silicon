@@ -40,7 +40,6 @@ import {
   type ElaboratorRegistry
 } from './registry'
 import { StrataType, type StrataNode } from './strataenum'
-import { BUILTIN_ELABORATORS_SOURCE } from './builtins'
 import { BUILTIN_DEF_KINDS, registerDefKind } from './defkinds'
 import { loadBuiltinStrata } from '../strata/index'
 import parse from '../parser'
@@ -75,11 +74,6 @@ function buildElaboratorRegistry(ast: Program): ElaboratorRegistry {
   // Register builtin Def-Kinds (@let → function, etc.)
   for (const entry of BUILTIN_DEF_KINDS) {
     registerDefKind(registry.defKinds, entry)
-  }
-
-  // Parse and register builtin elaborators (operators) from Silicon source.
-  for (const elab of parseBuiltinElaborators()) {
-    registerElaborator(registry, elab.kind, symbolToString(elab.symbol), elaborationToStrataNode(elab))
   }
 
   // Parse and register builtin strata from .si files in src/strata/.
@@ -117,12 +111,7 @@ function parseStrataSource(source: string): Elaboration[] {
   return (ast.elements as any[]).filter(el => el.type === 'Elaboration') as Elaboration[]
 }
 
-/** Builtin operator elaborators (@stratum Plus, Minus, …) embedded as TS source. */
-function parseBuiltinElaborators(): Elaboration[] {
-  return parseStrataSource(BUILTIN_ELABORATORS_SOURCE)
-}
-
-/** Builtin keyword strata (@if, @loop, …) loaded from .si files in src/strata/. */
+/** Builtin strata (@if, @loop, operators, …) loaded from .si files in src/strata/. */
 function parseBuiltinStrata(): Elaboration[] {
   return parseStrataSource(loadBuiltinStrata())
 }

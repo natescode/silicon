@@ -1,0 +1,43 @@
+@stratum Plus (Operator, '+', Node) = {
+  &WASM::i32_add Node.left, Node.right;
+};
+
+@stratum Minus (Operator, '-', Node) = {
+  &WASM::i32_sub Node.left, Node.right;
+};
+
+@stratum Multiply (Operator, '*', Node) = {
+  &WASM::i32_mul Node.left, Node.right;
+};
+
+@stratum Divide (Operator, '/', Node) = {
+  &WASM::i32_div_s Node.left, Node.right;
+};
+
+@stratum Modulo (Operator, '%', Node) = {
+  &WASM::i32_rem_s Node.left, Node.right;
+};
+
+@stratum Equal (Operator, '==', Node) = {
+  &WASM::i32_eq Node.left, Node.right;
+};
+
+@stratum NotEqual (Operator, '!=', Node) = {
+  &WASM::i32_ne Node.left, Node.right;
+};
+
+@stratum LessThan (Operator, '<', Node) = {
+  &WASM::i32_lt_s Node.left, Node.right;
+};
+
+@stratum GreaterThan (Operator, '>', Node) = {
+  &WASM::i32_gt_s Node.left, Node.right;
+};
+
+@stratum LessThanOrEqual (Operator, '<=', Node) = {
+  &WASM::i32_le_s Node.left, Node.right;
+};
+
+@stratum GreaterThanOrEqual (Operator, '>=', Node) = {
+  &WASM::i32_ge_s Node.left, Node.right;
+};
