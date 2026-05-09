@@ -197,6 +197,10 @@ export default function addToAstSemantics(siliconGrammar: ohm.Grammar): ohm.Sema
             return argsOrEnd.toAst()
         },
 
+        defKw(_at, ident) {
+            return '@' + ident.sourceString
+        },
+
         keyword(at, ident) {
             return at.sourceString + ident.sourceString
         },
@@ -244,9 +248,10 @@ export default function addToAstSemantics(siliconGrammar: ohm.Grammar): ohm.Sema
             return ASTFactory.binding(exp.toAst())
         },
 
-        Block(_open, items, _semis, _close) {
+        Block(_open, items, _semis, trailing, _close) {
             const itemList = items.children.map((itemNode: any) => itemNode.toAst())
-            return ASTFactory.block(itemList)
+            const trailingAst = trailing.children.length > 0 ? trailing.children[0].toAst() : undefined
+            return ASTFactory.block(itemList, trailingAst)
         },
 
         namespace(first, sepAndText, rest) {

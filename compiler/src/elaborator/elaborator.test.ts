@@ -277,6 +277,46 @@ test("elaborate registers builtin elaborators for arithmetic operators", () => {
   }
 })
 
+// Test: @let definition gets hook = 'function' after elaboration
+test("elaborate sets hook 'function' on @let Definition", () => {
+  const def = ASTFactory.definition('@let', ASTFactory.typedIdentifier('add'), [], undefined, undefined)
+  const stmt = ASTFactory.statement('definition', def)
+  const item = ASTFactory.item('statement', stmt)
+  const element = ASTFactory.element('item', item)
+  const program = ASTFactory.program([element])
+
+  const { program: result } = elaborate(program)
+
+  const el = result.elements[0] as any
+  const elaboratedDef = el.value.value.value
+  expect(elaboratedDef.type).toBe('Definition')
+  expect(elaboratedDef.hook).toBe('function')
+})
+
+// Test: unknown definition keyword gets hook = false
+test("elaborate sets hook false on unknown definition keyword", () => {
+  const def = ASTFactory.definition('@unknown', ASTFactory.typedIdentifier('foo'), [], undefined, undefined)
+  const stmt = ASTFactory.statement('definition', def)
+  const item = ASTFactory.item('statement', stmt)
+  const element = ASTFactory.element('item', item)
+  const program = ASTFactory.program([element])
+
+  const { program: result } = elaborate(program)
+
+  const el = result.elements[0] as any
+  const elaboratedDef = el.value.value.value
+  expect(elaboratedDef.type).toBe('Definition')
+  expect(elaboratedDef.hook).toBe(false)
+})
+
+// Test: defKinds registry is populated with @let
+test("elaborate registry contains @let def-kind", () => {
+  const program = ASTFactory.program([])
+  const { registry } = elaborate(program)
+  expect(registry.defKinds['@let']).toBeDefined()
+  expect(registry.defKinds['@let'].codegenKind).toBe('function')
+})
+
 // Test 10: builtin elaborators for various operators
 test("elaborate registers builtin elaborators for multiple operators", () => {
   const operators = ['+', '-', '*', '/', '%', '==', '!=', '<', '>', '<=', '>=']

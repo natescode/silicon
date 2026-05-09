@@ -34,7 +34,7 @@ import { readFileSync } from 'fs'
 import { join, dirname } from 'path'
 import { fileURLToPath } from 'url'
 import { isWasmIntrinsic, getWasmIntrinsic } from '../intrinsics'
-import { type ElaboratorRegistry, lookupOperator } from '../elaborator/registry'
+import { type ElaboratorRegistry, lookupOperator, lookupDefKindEntry } from '../elaborator/registry'
 
 // Resolve std.wat relative to this source file so the path works under
 // both `bun run` and compiled TS.
@@ -75,11 +75,17 @@ function stratumInstrFor(op: string, isFloat: boolean, reg: ElaboratorRegistry |
     if (!reg) return undefined
     const stratum = lookupOperator(reg, op)
     if (!stratum?.data?.intrinsic) return undefined
-    const intrName = isFloat
-        ? stratum.data.intrinsic.replace(/^WASM::i32_/, 'WASM::f32_')
-        : stratum.data.intrinsic
-    const intr = getWasmIntrinsic(intrName) ?? getWasmIntrinsic(stratum.data.intrinsic)
-    return intr?.wasmInstr
+    if (!isFloat) {
+        return getWasmIntrinsic(stratum.data.intrinsic)?.wasmInstr
+    }
+    // Float context: swap i32_ prefix for f32_. Signed/unsigned suffixes (_s, _u)
+    // don't exist on f32 instructions, so strip them too.
+    const f32Base = stratum.data.intrinsic.replace(/^WASM::i32_/, 'WASM::f32_')
+    return (
+        getWasmIntrinsic(f32Base) ??
+        getWasmIntrinsic(f32Base.replace(/_[su]$/, '')) ??
+        getWasmIntrinsic(stratum.data.intrinsic)
+    )?.wasmInstr
 }
 
 /**
@@ -151,6 +157,36 @@ export default function addCompileSemantics(siliconGrammar: ohm.Grammar, registr
     let loopCount = 0
     // Names of the current function's parameters so namespace refs use local.get.
     let currentParams: Set<string> = new Set()
+
+    // Emit a WAT (func ...) for the 'function' Def-Kind.
+    // Extracted so the Definition action can delegate cleanly.
+    function compileFunction(typedId: any, params: any, binding: any): string {
+        const name = typedId.compile()
+        const watName = toWatIdentifier(name)
+
+        const paramNames: Set<string> = new Set()
+        params.asIteration().children.forEach((p: any) => {
+            const raw = p.sourceString.split(':')[0].trim()
+            if (raw) paramNames.add(toWatIdentifier(raw))
+        })
+        const prevParams = currentParams
+        currentParams = paramNames
+
+        const paramList = params.asIteration().children.map((p: any) => p.compile()).join(' ')
+        const body = binding.children.length > 0 ? binding.children[0].compile() : ''
+
+        currentParams = prevParams
+
+        const retTypeName = typedId.type()
+        const hasBinding = binding.children.length > 0
+        const resultDecl = retTypeName
+            ? `(result ${siliconTypeToWat(retTypeName)})`
+            : hasBinding
+                ? (body.includes('f32.') ? '(result f32)' : '(result i32)')
+                : ''
+
+        return `(func $${watName} ${paramList} ${resultDecl} (local $addr i32)\n${body}\n)`
+    }
 
     const semantics = siliconGrammar.createSemantics().addOperation('compile', {
         Program(elements) {
@@ -231,33 +267,18 @@ export default function addCompileSemantics(siliconGrammar: ohm.Grammar, registr
             return `(global.set $${watName} ${value})`;
         },
         Definition(kw, typedId, generics, params, binding) {
-            const name = typedId.compile();
-            const watName = toWatIdentifier(name);
+            const keyword = '@' + kw.compile()
+            const entry = registry ? lookupDefKindEntry(registry, keyword) : undefined
+            if (!entry) throw new Error(`Unknown definition keyword: ${keyword}`)
 
-            // Collect param names before compiling the body so namespace
-            // references inside the body use local.get instead of global.get.
-            const paramNames: Set<string> = new Set()
-            params.asIteration().children.forEach((p: any) => {
-                const raw = p.sourceString.split(':')[0].trim()
-                if (raw) paramNames.add(toWatIdentifier(raw))
-            })
-            const prevParams = currentParams
-            currentParams = paramNames
-
-            const paramList = params.asIteration().children.map((p: any) => p.compile()).join(' ')
-            const body = binding.children.length > 0 ? binding.children[0].compile() : ''
-
-            currentParams = prevParams
-
-            const retTypeName = typedId.type()
-            const hasBinding = binding.children.length > 0
-            const resultDecl = retTypeName
-                ? `(result ${siliconTypeToWat(retTypeName)})`
-                : hasBinding
-                    ? (body.includes('f32.') ? '(result f32)' : '(result i32)')
-                    : ''
-
-            return `(func $${watName} ${paramList} ${resultDecl} (local $addr i32)\n${body}\n)`
+            // Dispatch to the appropriate codegen handler for this Def-Kind.
+            // Currently only 'function' exists; future kinds add cases here.
+            switch (entry.codegenKind) {
+                case 'function':
+                    return compileFunction(typedId, params, binding)
+                default:
+                    throw new Error(`Unhandled codegenKind: ${(entry as any).codegenKind}`)
+            }
         },
         ExpressionStart_binChain(left, binOps, endOps) {
             let result = left.compile();
@@ -268,51 +289,9 @@ export default function addCompileSemantics(siliconGrammar: ohm.Grammar, registr
                     const right_wat = right.compile();
                     const op_wat = op.compile();
 
-                    // Pick i32 vs f32 variant by sniffing whether either
-                    // operand's WAT contains an f32 constant. The type
-                    // checker already guarantees operand-type agreement, so
-                    // this is a safe (if crude) discriminator until codegen
-                    // moves to AST-walking and can read inferredType
-                    // directly.
                     const isFloat = /f32\./.test(result) || /f32\./.test(right_wat);
-
-                    let instr = '';
-                    if (isFloat) {
-                        switch (op_wat) {
-                            case '+': instr = 'f32.add'; break;
-                            case '-': instr = 'f32.sub'; break;
-                            case '*': instr = 'f32.mul'; break;
-                            case '/': instr = 'f32.div'; break;
-                            case '==': instr = 'f32.eq'; break;
-                            case '!=': instr = 'f32.ne'; break;
-                            case '<':  instr = 'f32.lt'; break;
-                            case '>':  instr = 'f32.gt'; break;
-                            case '<=': instr = 'f32.le'; break;
-                            case '>=': instr = 'f32.ge'; break;
-                            default: {
-                                instr = stratumInstrFor(op_wat, true, registry)
-                                if (!instr) throw new Error(`Unsupported operator for f32: ${op_wat}`)
-                            }
-                        }
-                    } else {
-                        switch (op_wat) {
-                            case '+': instr = 'i32.add'; break;
-                            case '-': instr = 'i32.sub'; break;
-                            case '*': instr = 'i32.mul'; break;
-                            case '/': instr = 'i32.div_s'; break;
-                            case '%': instr = 'i32.rem_s'; break;
-                            case '==': instr = 'i32.eq'; break;
-                            case '!=': instr = 'i32.ne'; break;
-                            case '<': instr = 'i32.lt_s'; break;
-                            case '>': instr = 'i32.gt_s'; break;
-                            case '<=': instr = 'i32.le_s'; break;
-                            case '>=': instr = 'i32.ge_s'; break;
-                            default: {
-                                instr = stratumInstrFor(op_wat, false, registry)
-                                if (!instr) throw new Error(`Unsupported operator: ${op_wat}`)
-                            }
-                        }
-                    }
+                    const instr = stratumInstrFor(op_wat, isFloat, registry)
+                    if (!instr) throw new Error(`Unknown operator: ${op_wat}`)
                     result = result + '\n' + right_wat + '\n' + instr;
                 }
             }
@@ -408,9 +387,10 @@ export default function addCompileSemantics(siliconGrammar: ohm.Grammar, registr
         Binding(_bind, exp) {
             return exp.compile();
         },
-        Block(_open, items, _semis, _close) {
-            const body = items.children.map(i => i.compile()).filter(s => s).join('\n');
-            return `(block\n${body}\n)`;
+        Block(_open, items, _semis, trailing, _close) {
+            const stmts = items.children.map((i: any) => i.compile()).filter((s: string) => s).join('\n');
+            const trailingWat = trailing.children.length > 0 ? trailing.children[0].compile() : '';
+            return [stmts, trailingWat].filter(s => s).join('\n');
         },
         namespace(first, _seps, rest) {
             return this.sourceString;
@@ -535,6 +515,9 @@ export default function addCompileSemantics(siliconGrammar: ohm.Grammar, registr
         },
         ParamLiteral_literal(_lit) {
             return '';
+        },
+        defKw(_at, id) {
+            return id.sourceString;
         },
         keyword(_at, id) {
             return id.sourceString;

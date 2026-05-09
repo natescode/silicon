@@ -214,6 +214,7 @@ export interface KeyValuePair {
 export interface Block {
     type: 'Block'
     items: Item[]
+    trailing?: ExpressionStart
     sourceLocation?: SourceLocation
 }
 
@@ -383,8 +384,8 @@ export const ASTFactory = {
         return { type: 'KeyValuePair', key, value }
     },
 
-    block(items: Item[]): Block {
-        return { type: 'Block', items }
+    block(items: Item[], trailing?: ExpressionStart): Block {
+        return { type: 'Block', items, trailing }
     },
 
     ifExpr(condition: ExpressionStart, thenBlock: Block, elseBlock?: Block): IfExpr {

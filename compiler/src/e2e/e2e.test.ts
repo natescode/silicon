@@ -497,6 +497,52 @@ test("E2E: Function call emits (call $add ...) in start function", () => {
 });
 
 /**
+ * Test: @if inside a block body (Round 4 grammar fix)
+ * The defKw/reservedId grammar fix prevents @if from being parsed as a Definition keyword
+ */
+test("E2E: @if inside block body compiles correctly", () => {
+    const sourceCode = loadExample("if_in_block.si");
+    const result = compileSource(sourceCode);
+
+    expect(result.success).toBe(true);
+    expect(result.wat).toBeDefined();
+    expect(result.wat).toContain("(func $abs");
+    expect(result.wat).toContain("(param $x i32)");
+    expect(result.wat).toContain("lt_s");
+    expect(result.wat).toContain("sub");
+});
+
+/**
+ * Test: Block trailing expression (implicit return)
+ * A block { stmts; expr } where the last item has no semicolon is the return value
+ */
+test("E2E: Block trailing expression is used as return value", () => {
+    const sourceCode = loadExample("block_trailing_expr.si");
+    const result = compileSource(sourceCode);
+
+    expect(result.success).toBe(true);
+    expect(result.wat).toBeDefined();
+    expect(result.wat).toContain("(func $add");
+    expect(result.wat).toContain("(result i32)");
+    expect(result.wat).toContain("i32.add");
+});
+
+/**
+ * Test: Block with statements then trailing expression
+ * { stmts; trailing_expr } — stmts run first, trailing_expr is the return value
+ */
+test("E2E: Block with statements then trailing expression", () => {
+    const sourceCode = loadExample("block_stmts_then_expr.si");
+    const result = compileSource(sourceCode);
+
+    expect(result.success).toBe(true);
+    expect(result.wat).toBeDefined();
+    expect(result.wat).toContain("(func $compute");
+    expect(result.wat).toContain("(result i32)");
+    expect(result.wat).toContain("i32.add");
+});
+
+/**
  * Test: User-defined stratum operator
  * Verifies that a custom @stratum operator (+++) drives codegen to emit i32.add
  */

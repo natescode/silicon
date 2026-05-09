@@ -17,13 +17,16 @@
  */
 
 import { type StrataNode } from './strataenum'
+import { type DefKindRegistry, type DefKindEntry, createDefKindRegistry, lookupDefKind as _lookupDefKind } from './defkinds'
 
 /**
  * Central registry mapping operator/keyword symbols to StrataNode semantics
+ * and definition keywords to Def-Kind descriptors.
  */
 export interface ElaboratorRegistry {
     operators: Record<string, StrataNode>    // "+" → StrataNode
     keywords: Record<string, StrataNode>     // "@fn" → StrataNode (future)
+    defKinds: DefKindRegistry                // "@let" → DefKindEntry
 }
 
 /**
@@ -33,8 +36,16 @@ export interface ElaboratorRegistry {
 export function createElaboratorRegistry(): ElaboratorRegistry {
     return {
         operators: {},
-        keywords: {}
+        keywords: {},
+        defKinds: createDefKindRegistry(),
     }
+}
+
+/**
+ * Look up a Def-Kind entry by full keyword (e.g. "@let")
+ */
+export function lookupDefKindEntry(registry: ElaboratorRegistry, keyword: string): DefKindEntry | undefined {
+    return _lookupDefKind(registry.defKinds, keyword)
 }
 
 /**

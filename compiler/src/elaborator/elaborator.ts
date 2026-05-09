@@ -38,10 +38,12 @@ import {
   createElaboratorRegistry,
   registerElaborator,
   lookupOperator,
+  lookupDefKindEntry,
   type ElaboratorRegistry
 } from './registry'
 import { StrataType, type StrataNode } from './strataenum'
 import { BUILTIN_ELABORATORS_SOURCE } from './builtins'
+import { BUILTIN_DEF_KINDS, registerDefKind } from './defkinds'
 import parse from '../parser'
 import addToAstSemantics from '../ast/toAst'
 import siliconGrammar from '../grammar/SiliconGrammar'
@@ -70,6 +72,11 @@ export default function elaborate(ast: Program): ElaborateResult {
 
 function buildElaboratorRegistry(ast: Program): ElaboratorRegistry {
   const registry = createElaboratorRegistry()
+
+  // Register builtin Def-Kinds (@let → function, etc.)
+  for (const entry of BUILTIN_DEF_KINDS) {
+    registerDefKind(registry.defKinds, entry)
+  }
 
   // Parse and register builtin elaborators from Silicon source (with bodies).
   for (const elab of parseBuiltinElaborators()) {
@@ -205,28 +212,29 @@ function elaborateNode(node: any, registry: ElaboratorRegistry): any {
       return { ...node, value: elaborateNode(node.value, registry) }
 
     case 'Definition': {
-      if (!node.binding) return node
-      return { ...node, binding: { ...node.binding, expression: elaborateNode(node.binding.expression, registry) } }
+      const defEntry = lookupDefKindEntry(registry, node.keyword)
+      const hook = defEntry ? defEntry.codegenKind : false
+      const elaborated = { ...node, hook }
+      if (!elaborated.binding) return elaborated
+      return { ...elaborated, binding: { ...elaborated.binding, expression: elaborateNode(elaborated.binding.expression, registry) } }
     }
 
     case 'Block':
-      return { ...node, items: node.items.map((i: any) => elaborateNode(i, registry)) }
+      return elaborateBlock(node, registry)
 
     case 'IfExpr':
       return {
         ...node,
         condition: elaborateNode(node.condition, registry),
-        thenBlock: { ...node.thenBlock, items: node.thenBlock.items.map((i: any) => elaborateNode(i, registry)) },
-        elseBlock: node.elseBlock
-          ? { ...node.elseBlock, items: node.elseBlock.items.map((i: any) => elaborateNode(i, registry)) }
-          : undefined,
+        thenBlock: elaborateBlock(node.thenBlock, registry),
+        elseBlock: node.elseBlock ? elaborateBlock(node.elseBlock, registry) : undefined,
       }
 
     case 'WhileExpr':
       return {
         ...node,
         condition: elaborateNode(node.condition, registry),
-        body: { ...node.body, items: node.body.items.map((i: any) => elaborateNode(i, registry)) },
+        body: elaborateBlock(node.body, registry),
       }
 
     // Wrapped AST (ASTFactory shape) — used in unit tests
@@ -272,6 +280,14 @@ function elaborateNode(node: any, registry: ElaboratorRegistry): any {
 
     default:
       return node
+  }
+}
+
+function elaborateBlock(block: any, registry: ElaboratorRegistry): any {
+  return {
+    ...block,
+    items: block.items.map((i: any) => elaborateNode(i, registry)),
+    trailing: block.trailing ? elaborateNode(block.trailing, registry) : undefined,
   }
 }
 

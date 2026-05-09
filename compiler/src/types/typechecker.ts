@@ -389,11 +389,13 @@ function typeOfNamespace(ns: any, ctx: Ctx): SiliconType {
 }
 
 function typeOfBlock(block: any, ctx: Ctx): SiliconType {
-    let last: SiliconType = TypeUnknown
     for (const item of block.items || []) {
-        last = checkNode(item, ctx)
+        checkNode(item, ctx)
     }
-    return last
+    if (block.trailing) {
+        return checkNode(block.trailing, ctx)
+    }
+    return TypeUnknown
 }
 
 function checkIfExpr(node: any, ctx: Ctx): SiliconType {

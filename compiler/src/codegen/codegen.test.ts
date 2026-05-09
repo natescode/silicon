@@ -1,16 +1,28 @@
 import { test, expect } from "bun:test";
 import { addCompileSemantics } from "./index";
 import siliconGrammar from "../grammar/SiliconGrammar";
+import { addToAstSemantics } from "../ast/index";
+import { elaborate } from "../elaborator/index";
+import type { Program } from "../ast/astNodes";
 import type { MatchResult, Semantics } from "ohm-js";
 
 test("addCompileSemantics is a function", () => {
   expect(typeof addCompileSemantics).toBe("function");
 });
 
+// Build the builtin elaborator registry from a trivial program so operators resolve.
+function buildRegistry(grammar: any) {
+  const match = grammar.match("0;");
+  const ast = addToAstSemantics(grammar)(match).toAst() as Program;
+  const { registry } = elaborate(ast);
+  return registry;
+}
+
 // Create compatible semantics for testing
 function createTestSemantics(grammar: any) {
+  const registry = buildRegistry(grammar);
   try {
-    const semantics = addCompileSemantics(grammar) as Semantics | { compile: (match: MatchResult) => any };
+    const semantics = addCompileSemantics(grammar, registry) as Semantics | { compile: (match: MatchResult) => any };
     // Test that it works by checking if it returns a callable
     if (typeof semantics === "function") {
       return semantics;
@@ -211,4 +223,22 @@ test("compile complex expression with operators", () => {
   // Should produce valid WAT
   expect(wat).toContain("(module");
   expect(wat).toContain("i32");
+});
+
+test("compile @let definition routes through def-kind registry", () => {
+  const semantics = createTestSemantics(siliconGrammar);
+  const match = siliconGrammar.match("@let add x:Int, y:Int := x + y;");
+  expect(match.succeeded()).toBe(true);
+  const wat = semantics(match).compile();
+  expect(wat).toContain("(func $add");
+  expect(wat).toContain("(param $x i32)");
+  expect(wat).toContain("i32.add");
+});
+
+test("compile unknown definition keyword throws", () => {
+  const semantics = createTestSemantics(siliconGrammar);
+  // @foo is syntactically valid but not in the def-kind registry
+  const match = siliconGrammar.match("@foo bar := 1;");
+  expect(match.succeeded()).toBe(true);
+  expect(() => semantics(match).compile()).toThrow("Unknown definition keyword: @foo");
 });

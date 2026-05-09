@@ -22,7 +22,7 @@ Silicon {
     | namespace -- namespace
     | Block -- block
     | "(" ExpressionStart ")" -- paren
-  Block = "{" (Item ";")* "}"
+  Block = "{" (Item ";")* ExpressionStart? "}"
   IfExpr = "@if" ExpressionStart Block ElsePart?
   ElsePart = "@else" Block
   WhileExpr = "@while" ExpressionStart Block
@@ -63,7 +63,9 @@ Silicon {
   octLiteral = "0c" octDigit+ ("_" octDigit+)*
   octDigit = "0".."7"
   booleanLiteral = "@true" | "@false"
-  Definition = keyword typedIdentifier GenericParams? ListOf<ParamLiteral, ","> Binding?
+  Definition = defKw typedIdentifier GenericParams? ListOf<ParamLiteral, ","> Binding?
+  defKw = "@" ~reservedId identifier
+  reservedId = ("if" | "while" | "else" | "true" | "false") ~identTail
   Binding = ":=" ExpressionStart
   GenericParams = "[" ListOf<identifier, ","> "]"
   ParamLiteral = 
