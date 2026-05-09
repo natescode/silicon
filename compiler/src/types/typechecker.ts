@@ -167,8 +167,6 @@ function checkNode(node: any, ctx: Ctx): SiliconType {
         case 'Definition': t = checkDefinition(node, ctx); break
         case 'Namespace': t = typeOfNamespace(node, ctx); break
         case 'Block': t = typeOfBlock(node, ctx); break
-        case 'IfExpr': t = checkIfExpr(node, ctx); break
-        case 'WhileExpr': t = checkWhileExpr(node, ctx); break
         case 'Binding': t = checkNode(node.expression, ctx); break
 
         // Anything we don't model (DocComment, Elaboration, TypedIdentifier
@@ -395,24 +393,6 @@ function typeOfBlock(block: any, ctx: Ctx): SiliconType {
     if (block.trailing) {
         return checkNode(block.trailing, ctx)
     }
-    return TypeUnknown
-}
-
-function checkIfExpr(node: any, ctx: Ctx): SiliconType {
-    checkNode(node.condition, ctx)
-    const thenT = withScope(ctx, inner => typeOfBlock(node.thenBlock, inner))
-    if (node.elseBlock) {
-        const elseT = withScope(ctx, inner => typeOfBlock(node.elseBlock, inner))
-        if (thenT.kind !== 'Unknown' && elseT.kind !== 'Unknown' && typeEquals(thenT, elseT)) {
-            return thenT
-        }
-    }
-    return TypeUnknown
-}
-
-function checkWhileExpr(node: any, ctx: Ctx): SiliconType {
-    checkNode(node.condition, ctx)
-    withScope(ctx, inner => typeOfBlock(node.body, inner))
     return TypeUnknown
 }
 

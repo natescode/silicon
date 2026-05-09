@@ -330,7 +330,32 @@ export default function addCompileSemantics(siliconGrammar: ohm.Grammar, registr
         },
         FunctionCallBody_builtin(kw, args) {
             const funcName = kw.compile();
-            const argList = args ? args.compile() : '';
+
+            if (funcName === 'if') {
+                const myExprPos = inExprPosition;
+                const argWats: string[] = args.compileArgList();
+                const condWat = argWats[0] ?? '';
+                const thenWat = argWats[1] ?? '';
+                const elseWat = argWats[2];
+                if (elseWat !== undefined) {
+                    if (myExprPos) {
+                        const resultType = (/f32\./.test(thenWat) || /f32\./.test(elseWat)) ? 'f32' : 'i32';
+                        return `(if (result ${resultType})\n  ${condWat}\n  (then ${thenWat})\n  (else ${elseWat})\n)`;
+                    }
+                    return `(if\n  ${condWat}\n  (then ${thenWat})\n  (else ${elseWat})\n)`;
+                }
+                return `(if\n  ${condWat}\n  (then ${thenWat})\n)`;
+            }
+
+            if (funcName === 'loop') {
+                const argWats: string[] = args.compileArgList();
+                const id = loopCount++;
+                const condWat = argWats[0] ?? '';
+                const bodyWat = argWats[1] ?? '';
+                return `(block $brk_${id}\n  (loop $cont_${id}\n    (br_if $brk_${id} (i32.eqz\n      ${condWat}\n    ))\n    ${bodyWat}\n    (br $cont_${id})\n  )\n)`;
+            }
+
+            const argList = args.compile();
             return `(call $${funcName} ${argList})`;
         },
 
@@ -364,12 +389,6 @@ export default function addCompileSemantics(siliconGrammar: ohm.Grammar, registr
             return argsOrEnd.compile();
         },
 
-        ExpressionEnd_if(ifExpr) {
-            return ifExpr.compile();
-        },
-        ExpressionEnd_while(whileExpr) {
-            return whileExpr.compile();
-        },
         ExpressionEnd_literal(lit) {
             return lit.compile();
         },
@@ -386,29 +405,6 @@ export default function addCompileSemantics(siliconGrammar: ohm.Grammar, registr
         },
         ExpressionEnd_paren(_open, exp, _close) {
             return exp.compile();
-        },
-        IfExpr(_atIf, condition, thenBlock, elsePart) {
-            const condWat = condition.compile();
-            const thenWat = thenBlock.compile();
-            if (elsePart.children.length > 0) {
-                const elseWat = elsePart.children[0].compile();
-                if (inExprPosition) {
-                    // Typed if: result is consumed by caller. Sniff body for f32 vs i32.
-                    const resultType = (/f32\./.test(thenWat) || /f32\./.test(elseWat)) ? 'f32' : 'i32'
-                    return `(if (result ${resultType})\n  ${condWat}\n  (then ${thenWat})\n  (else ${elseWat})\n)`
-                }
-                return `(if\n  ${condWat}\n  (then ${thenWat})\n  (else ${elseWat})\n)`;
-            }
-            return `(if\n  ${condWat}\n  (then ${thenWat})\n)`;
-        },
-        ElsePart(_atElse, block) {
-            return block.compile();
-        },
-        WhileExpr(_atWhile, condition, body) {
-            const id = loopCount++;
-            const condWat = condition.compile();
-            const bodyWat = body.compile();
-            return `(block $brk_${id}\n  (loop $cont_${id}\n    (br_if $brk_${id} (i32.eqz\n      ${condWat}\n    ))\n    ${bodyWat}\n    (br $cont_${id})\n  )\n)`;
         },
         Binding(_bind, exp) {
             // The bound expression is always in expression position — its value is the function body.
@@ -592,6 +588,14 @@ export default function addCompileSemantics(siliconGrammar: ohm.Grammar, registr
         Item_expressionStart(_exp) { return false },
         Statement_definition(_def) { return true },
         Statement_assignment(_assgn) { return false },
+    }).addOperation('compileArgList', {
+        CallArgsOrEnd(argsOrEnd) { return argsOrEnd.compileArgList(); },
+        CallArgs(_amp, args) { return args.compileArgList(); },
+        CallNoArgs(_lookahead) { return []; },
+        Args(exps) { return exps.asIteration().children.map((e: any) => e.compile()); },
+        _nonterminal(..._args: any[]) { return []; },
+        _terminal() { return []; },
+        _iter(..._args: any[]) { return []; },
     })
     return semantics;
 }

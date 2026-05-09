@@ -30,8 +30,6 @@ import {
   type Block,
   type Definition,
   type Assignment,
-  type IfExpr,
-  type WhileExpr,
   ASTFactory
 } from '../ast/astNodes'
 import {
@@ -221,21 +219,6 @@ function elaborateNode(node: any, registry: ElaboratorRegistry): any {
 
     case 'Block':
       return elaborateBlock(node, registry)
-
-    case 'IfExpr':
-      return {
-        ...node,
-        condition: elaborateNode(node.condition, registry),
-        thenBlock: elaborateBlock(node.thenBlock, registry),
-        elseBlock: node.elseBlock ? elaborateBlock(node.elseBlock, registry) : undefined,
-      }
-
-    case 'WhileExpr':
-      return {
-        ...node,
-        condition: elaborateNode(node.condition, registry),
-        body: elaborateBlock(node.body, registry),
-      }
 
     // Wrapped AST (ASTFactory shape) — used in unit tests
     case 'Program':

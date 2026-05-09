@@ -245,7 +245,7 @@ test("compile unknown definition keyword throws", () => {
 
 test("compile if-else as binding emits (result i32)", () => {
   const semantics = createTestSemantics(siliconGrammar);
-  const match = siliconGrammar.match("@let pick a:Int, b:Int, c:Int := { @if c { a } @else { b } };");
+  const match = siliconGrammar.match("@let pick a:Int, b:Int, c:Int := { &@if c, { a }, { b } };");
   expect(match.succeeded()).toBe(true);
   const wat = semantics(match).compile();
   expect(wat).toContain("(if (result i32)");
@@ -255,7 +255,7 @@ test("compile if-else as binding emits (result i32)", () => {
 
 test("compile if without else does not emit result type", () => {
   const semantics = createTestSemantics(siliconGrammar);
-  const match = siliconGrammar.match("@let doIf x:Int := { @if x { x = x + 1; }; x };");
+  const match = siliconGrammar.match("@let doIf x:Int := { &@if x, { x = x + 1; }; x };");
   expect(match.succeeded()).toBe(true);
   const wat = semantics(match).compile();
   // No else → void form, no (result ...)

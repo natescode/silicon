@@ -15,17 +15,12 @@ Silicon {
   Assignment = namespace "=" ExpressionStart
   ExpressionStart = ExpressionEnd (BinOp ExpressionEnd)* -- binChain
   ExpressionEnd =
-    | IfExpr -- if
-    | WhileExpr -- while
     | Literal -- literal
     | FunctionCall -- functionCall
     | namespace -- namespace
     | Block -- block
     | "(" ExpressionStart ")" -- paren
   Block = "{" (Item ";")* ExpressionStart? "}"
-  IfExpr = "@if" ExpressionStart Block ElsePart?
-  ElsePart = "@else" Block
-  WhileExpr = "@while" ExpressionStart Block
   BinOp = operatorToken
   operatorToken = operatorChar+  -- op
   operatorChar = ~("&" | "@" | "$" | "." | ":" ) operatorGlyph
@@ -65,7 +60,7 @@ Silicon {
   booleanLiteral = "@true" | "@false"
   Definition = defKw typedIdentifier GenericParams? ListOf<ParamLiteral, ","> Binding?
   defKw = "@" ~reservedId identifier
-  reservedId = ("if" | "while" | "else" | "true" | "false") ~identTail
+  reservedId = ("true" | "false") ~identTail
   Binding = ":=" ExpressionStart
   GenericParams = "[" ListOf<identifier, ","> "]"
   ParamLiteral = 

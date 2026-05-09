@@ -205,14 +205,6 @@ export default function addToAstSemantics(siliconGrammar: ohm.Grammar): ohm.Sema
             return at.sourceString + ident.sourceString
         },
 
-        ExpressionEnd_if(ifExpr) {
-            return ifExpr.toAst()
-        },
-
-        ExpressionEnd_while(whileExpr) {
-            return whileExpr.toAst()
-        },
-
         ExpressionEnd_literal(lit) {
             return lit.toAst()
         },
@@ -227,21 +219,6 @@ export default function addToAstSemantics(siliconGrammar: ohm.Grammar): ohm.Sema
 
         ExpressionEnd_paren(_open, exp, _close) {
             return exp.toAst()
-        },
-
-        IfExpr(_atIf, condition, thenBlock, elsePart) {
-            const cond = condition.toAst()
-            const then_ = thenBlock.toAst()
-            const else_ = elsePart.children.length > 0 ? elsePart.children[0].toAst() : undefined
-            return ASTFactory.ifExpr(cond, then_, else_)
-        },
-
-        ElsePart(_atElse, block) {
-            return block.toAst()
-        },
-
-        WhileExpr(_atWhile, condition, body) {
-            return ASTFactory.whileExpr(condition.toAst(), body.toAst())
         },
 
         Binding(_colonEq, exp) {
