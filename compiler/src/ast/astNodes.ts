@@ -37,6 +37,8 @@ export type ASTNode =
     | BooleanLiteral
     | KeyValuePair
     | Block
+    | IfExpr
+    | WhileExpr
     | Binding
     | Namespace
     | TypeAnnotation
@@ -115,6 +117,9 @@ export interface ExpressionStart {
     kind: 'binOp' | 'functionCall' | 'expressionEnd'
     value: BinOp | FunctionCall | ExpressionEnd
     sourceLocation?: SourceLocation
+    // Populated by the type checker. Opaque here to avoid a circular import.
+    // Actual shape is SiliconType from '../types/types'.
+    inferredType?: any
 }
 
 export interface BinOp {
@@ -126,6 +131,8 @@ export interface BinOp {
     // Semantics attached during elaboration phase
     // Contains the StrataNode with semantic definition for this operator
     semantics?: any  // StrataNode (avoid circular import)
+    // Populated by the type checker. SiliconType (opaque here to avoid cycles).
+    inferredType?: any
 }
 
 export interface FunctionCall {
@@ -134,13 +141,17 @@ export interface FunctionCall {
     isBuiltin: boolean
     args: ExpressionStart[]
     sourceLocation?: SourceLocation
+    // Populated by the type checker. SiliconType (opaque here to avoid cycles).
+    inferredType?: any
 }
 
 export interface ExpressionEnd {
     type: 'ExpressionEnd'
-    kind: 'literal' | 'namespace' | 'block' | 'paren'
-    value: Literal | Namespace | Block | ExpressionStart
+    kind: 'literal' | 'namespace' | 'block' | 'paren' | 'if' | 'while'
+    value: Literal | Namespace | Block | ExpressionStart | IfExpr | WhileExpr
     sourceLocation?: SourceLocation
+    // Populated by the type checker. SiliconType (opaque here to avoid cycles).
+    inferredType?: any
 }
 
 export interface Literal {
@@ -203,6 +214,21 @@ export interface KeyValuePair {
 export interface Block {
     type: 'Block'
     items: Item[]
+    sourceLocation?: SourceLocation
+}
+
+export interface IfExpr {
+    type: 'IfExpr'
+    condition: ExpressionStart
+    thenBlock: Block
+    elseBlock?: Block
+    sourceLocation?: SourceLocation
+}
+
+export interface WhileExpr {
+    type: 'WhileExpr'
+    condition: ExpressionStart
+    body: Block
     sourceLocation?: SourceLocation
 }
 
@@ -359,6 +385,14 @@ export const ASTFactory = {
 
     block(items: Item[]): Block {
         return { type: 'Block', items }
+    },
+
+    ifExpr(condition: ExpressionStart, thenBlock: Block, elseBlock?: Block): IfExpr {
+        return { type: 'IfExpr', condition, thenBlock, elseBlock }
+    },
+
+    whileExpr(condition: ExpressionStart, body: Block): WhileExpr {
+        return { type: 'WhileExpr', condition, body }
     },
 
     binding(expression: ExpressionEnd): Binding {

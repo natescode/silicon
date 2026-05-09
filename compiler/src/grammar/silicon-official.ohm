@@ -15,12 +15,17 @@ Silicon {
   Assignment = namespace "=" ExpressionStart
   ExpressionStart = ExpressionEnd (BinOp ExpressionEnd)* -- binChain
   ExpressionEnd =
+    | IfExpr -- if
+    | WhileExpr -- while
     | Literal -- literal
     | FunctionCall -- functionCall
     | namespace -- namespace
     | Block -- block
     | "(" ExpressionStart ")" -- paren
   Block = "{" (Item ";")* "}"
+  IfExpr = "@if" ExpressionStart Block ElsePart?
+  ElsePart = "@else" Block
+  WhileExpr = "@while" ExpressionStart Block
   BinOp = operatorToken
   operatorToken = operatorChar+  -- op
   operatorChar = ~("&" | "@" | "$" | "." | ":" ) operatorGlyph

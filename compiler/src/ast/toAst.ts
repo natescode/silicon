@@ -201,6 +201,14 @@ export default function addToAstSemantics(siliconGrammar: ohm.Grammar): ohm.Sema
             return at.sourceString + ident.sourceString
         },
 
+        ExpressionEnd_if(ifExpr) {
+            return ifExpr.toAst()
+        },
+
+        ExpressionEnd_while(whileExpr) {
+            return whileExpr.toAst()
+        },
+
         ExpressionEnd_literal(lit) {
             return lit.toAst()
         },
@@ -217,6 +225,21 @@ export default function addToAstSemantics(siliconGrammar: ohm.Grammar): ohm.Sema
             return exp.toAst()
         },
 
+        IfExpr(_atIf, condition, thenBlock, elsePart) {
+            const cond = condition.toAst()
+            const then_ = thenBlock.toAst()
+            const else_ = elsePart.children.length > 0 ? elsePart.children[0].toAst() : undefined
+            return ASTFactory.ifExpr(cond, then_, else_)
+        },
+
+        ElsePart(_atElse, block) {
+            return block.toAst()
+        },
+
+        WhileExpr(_atWhile, condition, body) {
+            return ASTFactory.whileExpr(condition.toAst(), body.toAst())
+        },
+
         Binding(_colonEq, exp) {
             return ASTFactory.binding(exp.toAst())
         },
@@ -228,17 +251,20 @@ export default function addToAstSemantics(siliconGrammar: ohm.Grammar): ohm.Sema
 
         namespace(first, sepAndText, rest) {
             const parts: string[] = [first.sourceString]
-            if (sepAndText && sepAndText.children) {
-                for (let i = 0; i < sepAndText.children.length; i++) {
-                    const pair = sepAndText.children[i];
-                    // Each pair is (("::" | ".") identifier)
-                    // We want just the identifier
-                    if (pair.children && pair.children.length >= 2) {
-                        const identifier = pair.children[1];
-                        parts.push(identifier.sourceString);
-                    }
-                }
+            // sepAndText is the (("::" | ".") identifier)* part
+            // With _iter, it becomes an array of matched strings like ["::bar::baz"]
+            // We need to extract identifiers from this string
+            const sepAndTextStr = Array.isArray(sepAndText)
+                ? sepAndText.join('')
+                : (sepAndText?.sourceString || '')
+
+            // Extract identifiers from the separator+identifier pattern
+            // Pattern: :: identifier or . identifier
+            const identifierMatches = sepAndTextStr.matchAll(/(::|\.)([a-zA-Z_][a-zA-Z0-9_]*)/g)
+            for (const match of identifierMatches) {
+                parts.push(match[2])
             }
+
             return ASTFactory.namespace(parts)
         },
 
@@ -330,7 +356,12 @@ export default function addToAstSemantics(siliconGrammar: ohm.Grammar): ohm.Sema
 
         typedIdentifier(ident, type) {
             const name = ident.sourceString
-            const typeAnnotation = type.children.length > 0 ? type.toAst() : undefined
+            // `type` here is the iteration node for `type?`. Ohm v16 has no
+            // default `_iter` action, so we must descend into its children
+            // explicitly rather than calling `.toAst()` on the iter wrapper.
+            const typeAnnotation = type.children.length > 0
+                ? type.children[0].toAst()
+                : undefined
             return ASTFactory.typedIdentifier(name, typeAnnotation)
         },
 
@@ -354,6 +385,11 @@ export default function addToAstSemantics(siliconGrammar: ohm.Grammar): ohm.Sema
 
         identifier_underscoreStart(underscore, rest) {
             return underscore.sourceString + rest.sourceString
+        },
+
+        // Ohm v16 requires explicit _iter action for iteration nodes with rest parameter
+        _iter(...children) {
+            return children.map((c: any) => c.toAst())
         },
     })
 
