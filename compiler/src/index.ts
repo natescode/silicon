@@ -1,32 +1,33 @@
 /**
  * Silicon Compiler Entry Point
  *
- * This is the main driver for the Silicon compiler. It orchestrates the compilation
- * pipeline:
+ * Orchestrates the compilation pipeline:
  *
- *   1. PARSE      - Convert source code into a parse tree using the Ohm grammar
- *   2. AST        - Transform parse tree into a strongly-typed Abstract Syntax Tree
- *   3. ELABORATE  - Attach semantic information to operators from elaborator registry
- *   4. CODEGEN    - Generate WebAssembly Text format (WAT) from the AST
+ *   1. PARSE      - Source → Ohm parse tree
+ *   2. AST        - Parse tree → typed AST
+ *   3. ELABORATE  - Attach semantic information to operators (Strata)
+ *   4. TYPECHECK  - Infer types, annotate AST, collect type errors
+ *   5. CODEGEN    - AST → WebAssembly text format (WAT)
  *
- * The compiler outputs two artifacts:
- *   - ast.json: The intermediate representation (useful for debugging and analysis)
- *   - main.wat: WebAssembly text format (can be converted to .wasm with wat2wasm)
+ * Output artifacts:
+ *   - ast.json: elaborated + type-annotated AST (useful for debugging)
+ *   - main.wat: WebAssembly text format (assemble with wat2wasm)
  *
  * @example
  *   bun run src/index.ts
  */
 
 import parse from './parser'
-import { addToAstSemantics, type ASTNode, Program } from './ast'
+import { addToAstSemantics, type ASTNode, type Program } from './ast'
 import { addCompileSemantics } from './codegen'
 import { elaborate } from './elaborator'
+import { typecheck, formatTypeError } from './types'
 import { siliconGrammar } from './grammar'
 
 console.log('Silicon v2024.01')
 
 // Example Silicon program
-// TODO: Make this accept input from CLI or files  
+// TODO: accept input from CLI or files
 const sourceCode = `5;`
 
 // ============================================================================
@@ -39,17 +40,28 @@ const match = parse(sourceCode)
 // Stage 2: Convert parse tree into typed AST
 const ast: ASTNode = addToAstSemantics(siliconGrammar)(match).toAst()
 
-// Stage 2.5: Elaborate - attach semantic information to operators
-const elaboratedAST = elaborate(ast as Program)
+// Stage 2.5: Elaborate — attach semantic information to operators
+const { program: elaboratedAST, registry } = elaborate(ast as Program)
+
+// Stage 2.6: Type-check — annotate the AST with inferred types
+const { program: typedAST, errors: typeErrors } = typecheck(elaboratedAST, registry)
+
+if (typeErrors.length > 0) {
+    console.error('Type errors:')
+    for (const err of typeErrors) {
+        console.error('  ' + formatTypeError(err))
+    }
+    process.exit(1)
+}
 
 // Stage 3: Generate WebAssembly from AST
-const wat: string = addCompileSemantics(siliconGrammar)(match).compile()
+const wat: string = addCompileSemantics(siliconGrammar, registry)(match).compile()
 
 // ============================================================================
 // OUTPUT ARTIFACTS
 // ============================================================================
 
-await Bun.write('ast.json', JSON.stringify(elaboratedAST, null, 2))
+await Bun.write('ast.json', JSON.stringify(typedAST, null, 2))
 await Bun.write('main.wat', wat)
 
-console.log('AST:', JSON.stringify(elaboratedAST, null, 2))
+console.log('AST:', JSON.stringify(typedAST, null, 2))

@@ -116,7 +116,7 @@ test("elaborate is a function", () => {
 // Test 2: accepts a Program AST and returns a Program
 test("elaborate accepts a Program AST and returns a Program", () => {
   const ast = createSimpleBinOpAST()
-  const result = elaborate(ast)
+  const { program: result } = elaborate(ast)
   expect(result.type).toBe('Program')
   expect(Array.isArray(result.elements)).toBe(true)
 })
@@ -124,14 +124,14 @@ test("elaborate accepts a Program AST and returns a Program", () => {
 // Test 3: preserves AST structure when no elaborators found
 test("elaborate preserves AST structure when no elaborators found", () => {
   const ast = createSimpleBinOpAST()
-  const result = elaborate(ast)
+  const { program: result } = elaborate(ast)
   expect(result.elements.length).toBe(ast.elements.length)
 })
 
 // Test 4: does not crash on empty program
 test("elaborate does not crash on empty program", () => {
   const emptyProgram = ASTFactory.program([])
-  const result = elaborate(emptyProgram)
+  const { program: result } = elaborate(emptyProgram)
   expect(result.type).toBe('Program')
   expect(result.elements.length).toBe(0)
 })
@@ -139,7 +139,7 @@ test("elaborate does not crash on empty program", () => {
 // Test 5: leaves BinOp semantics undefined when operator not registered
 test("elaborate leaves BinOp semantics undefined when operator not registered", () => {
   const ast = createCustomOpBinOpAST()
-  const result = elaborate(ast)
+  const { program: result } = elaborate(ast)
 
   // Extract the BinOp from the result
   const firstElement = result.elements[0]
@@ -181,7 +181,7 @@ test("elaborate attaches semantics to BinOp when operator is registered", () => 
   const program1 = ASTFactory.program([elaboElement, itemElement])
 
   // Elaborate
-  const result1 = elaborate(program1)
+  const { program: result1 } = elaborate(program1)
 
   // Extract the BinOp from the second element
   const secondElement = result1.elements[1]
@@ -227,7 +227,7 @@ test("elaborate elaborates nested expressions", () => {
   const element2 = ASTFactory.element('item', item2)
   const program2 = ASTFactory.program([element2])
 
-  const result2 = elaborate(program2)
+  const { program: result2 } = elaborate(program2)
   expect(result2.type).toBe('Program')
   // Just verify it doesn't crash and produces a valid AST
 })
@@ -251,7 +251,7 @@ test("elaborate extracts elaborations from program", () => {
   const elem2 = ASTFactory.element_elaboration(elab2)
   const program = ASTFactory.program([elem1, elem2])
 
-  const result = elaborate(program)
+  const { program: result } = elaborate(program)
   // Should complete without error
   expect(result.type).toBe('Program')
 })
@@ -259,7 +259,7 @@ test("elaborate extracts elaborations from program", () => {
 // Test 9: builtin elaborators are registered
 test("elaborate registers builtin elaborators for arithmetic operators", () => {
   const ast = createSimpleBinOpAST()
-  const result = elaborate(ast)
+  const { program: result } = elaborate(ast)
 
   // Extract the BinOp from the result
   const firstElement = result.elements[0]
@@ -297,7 +297,7 @@ test("elaborate registers builtin elaborators for multiple operators", () => {
     const element = ASTFactory.element('item', item)
     const program = ASTFactory.program([element])
 
-    const result = elaborate(program)
+    const { program: result } = elaborate(program)
 
     // Extract and verify semantics are attached
     const resultElement = result.elements[0]

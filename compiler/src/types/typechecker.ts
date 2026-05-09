@@ -73,6 +73,7 @@ import {
     annotationMismatch,
 } from './errors'
 import { getWasmIntrinsic } from '../intrinsics'
+import { type ElaboratorRegistry, lookupOperator } from '../elaborator/registry'
 
 /**
  * Mutable checking context. Threaded through the recursive walk so error
@@ -82,6 +83,8 @@ interface Ctx {
     errors: TypeError[]
     // Flat symbol table. Keyed by the joined namespace path (e.g. "module::x").
     symbols: Map<string, SiliconType>
+    // Stratum registry for user-defined operator type checking (optional).
+    registry?: ElaboratorRegistry
 }
 
 /**
@@ -115,8 +118,8 @@ export interface TypeCheckResult {
  *     const { program: typed, errors } = typecheck(elaborated)
  *     if (errors.length) { ... }
  */
-export default function typecheck(program: Program): TypeCheckResult {
-    const ctx: Ctx = { errors: [], symbols: new Map() }
+export default function typecheck(program: Program, registry?: ElaboratorRegistry): TypeCheckResult {
+    const ctx: Ctx = { errors: [], symbols: new Map(), registry }
     for (const element of program.elements as any[]) {
         checkNode(element, ctx)
     }
@@ -281,11 +284,25 @@ function checkBinaryOp(b: any, ctx: Ctx): SiliconType {
                 return TypeUnknown
             }
             return TypeBool
-        default:
-            // Custom operators (user strata): we don't yet know their types.
-            // Leave as Unknown rather than erroring — the elaborator has
-            // already attached semantics for these.
+        default: {
+            // User-defined operators: consult the stratum registry.
+            // The stratum body references a WASM intrinsic; its signature
+            // tells us the expected operand and result types.
+            const stratum = ctx.registry && lookupOperator(ctx.registry, b.operator)
+            if (stratum?.data?.intrinsic) {
+                const sig = intrinsicSignature(stratum.data.intrinsic)
+                if (sig) {
+                    if (leftT.kind !== 'Unknown' && !typeEquals(sig.params[0], leftT)) {
+                        ctx.errors.push(mismatch(sig.params[0], leftT, `${b.operator} left operand`, b.sourceLocation))
+                    }
+                    if (rightT.kind !== 'Unknown' && !typeEquals(sig.params[1] ?? sig.params[0], rightT)) {
+                        ctx.errors.push(mismatch(sig.params[1] ?? sig.params[0], rightT, `${b.operator} right operand`, b.sourceLocation))
+                    }
+                    return sig.result
+                }
+            }
             return TypeUnknown
+        }
     }
 }
 

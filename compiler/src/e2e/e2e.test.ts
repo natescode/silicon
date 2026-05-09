@@ -45,10 +45,10 @@ function compileSource(sourceCode: string) {
         const ast: ASTNode = addToAstSemantics(siliconGrammar)(match).toAst();
 
         // Stage 2.5: Elaborate - attach semantic information and stratum definitions
-        const elaboratedAST = elaborate(ast as Program);
+        const { program: elaboratedAST, registry } = elaborate(ast as Program);
 
         // Stage 3: Generate WebAssembly from AST
-        const wat: string = addCompileSemantics(siliconGrammar)(match).compile();
+        const wat: string = addCompileSemantics(siliconGrammar, registry)(match).compile();
 
         return {
             success: true,

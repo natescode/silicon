@@ -34,6 +34,7 @@ import { readFileSync } from 'fs'
 import { join, dirname } from 'path'
 import { fileURLToPath } from 'url'
 import { isWasmIntrinsic, getWasmIntrinsic } from '../intrinsics'
+import { type ElaboratorRegistry, lookupOperator } from '../elaborator/registry'
 
 // Resolve std.wat relative to this source file so the path works under
 // both `bun run` and compiled TS.
@@ -63,6 +64,22 @@ function toWatIdentifier(siliconName: string): string {
 
 function siliconTypeToWat(typeName: string): string {
     return typeName === 'Float' ? 'f32' : 'i32'
+}
+
+/**
+ * Look up the WAT instruction for a user-defined operator via the stratum
+ * registry. For float context, attempts to swap the i32 intrinsic for its
+ * f32 counterpart. Returns undefined if the operator isn't in the registry.
+ */
+function stratumInstrFor(op: string, isFloat: boolean, reg: ElaboratorRegistry | undefined): string | undefined {
+    if (!reg) return undefined
+    const stratum = lookupOperator(reg, op)
+    if (!stratum?.data?.intrinsic) return undefined
+    const intrName = isFloat
+        ? stratum.data.intrinsic.replace(/^WASM::i32_/, 'WASM::f32_')
+        : stratum.data.intrinsic
+    const intr = getWasmIntrinsic(intrName) ?? getWasmIntrinsic(stratum.data.intrinsic)
+    return intr?.wasmInstr
 }
 
 /**
@@ -126,7 +143,7 @@ function allocStaticString(sd: StaticData, s: string): number {
  * @param siliconGrammar - The compiled Ohm grammar
  * @returns Ohm semantics object with 'compile' operation
  */
-export default function addCompileSemantics(siliconGrammar: ohm.Grammar) {
+export default function addCompileSemantics(siliconGrammar: ohm.Grammar, registry?: ElaboratorRegistry) {
     // Static data and heap layout state lives per semantics object. Each
     // call to `addCompileSemantics` yields an isolated compilation unit so
     // tests don't bleed state into each other.
@@ -257,7 +274,10 @@ ${body}
                             case '>':  instr = 'f32.gt'; break;
                             case '<=': instr = 'f32.le'; break;
                             case '>=': instr = 'f32.ge'; break;
-                            default: throw new Error(`Unsupported operator for f32: ${op_wat}`);
+                            default: {
+                                instr = stratumInstrFor(op_wat, true, registry)
+                                if (!instr) throw new Error(`Unsupported operator for f32: ${op_wat}`)
+                            }
                         }
                     } else {
                         switch (op_wat) {
@@ -272,7 +292,10 @@ ${body}
                             case '>': instr = 'i32.gt_s'; break;
                             case '<=': instr = 'i32.le_s'; break;
                             case '>=': instr = 'i32.ge_s'; break;
-                            default: throw new Error(`Unsupported operator: ${op_wat}`);
+                            default: {
+                                instr = stratumInstrFor(op_wat, false, registry)
+                                if (!instr) throw new Error(`Unsupported operator: ${op_wat}`)
+                            }
                         }
                     }
                     result = result + '\n' + right_wat + '\n' + instr;

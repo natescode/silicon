@@ -90,7 +90,7 @@ export default function addToAstSemantics(siliconGrammar: ohm.Grammar): ohm.Sema
             const name = typedId.toAst()
             const genericParams = generics.children.length > 0 ? generics.toAst() : undefined
             const paramList = params.asIteration().children.map((p: any) => p.toAst())
-            const bindingAst = binding.children.length > 0 ? binding.toAst() : undefined
+            const bindingAst = binding.children.length > 0 ? binding.children[0].toAst() : undefined
             return ASTFactory.definition(keyword, name, paramList, genericParams, bindingAst)
         },
 
