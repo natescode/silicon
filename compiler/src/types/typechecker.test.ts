@@ -417,3 +417,103 @@ test('f32_convert_i32_s converts Int to Float, no coercion error', () => {
     const e = item.value as ExpressionStart
     expect(typeEquals(e.inferredType, TypeFloat)).toBe(true)
 })
+
+// ------------------------------------------------------------------
+// User-defined function signatures
+// ------------------------------------------------------------------
+
+function makeDefinition(
+    keyword: string,
+    name: string,
+    params: { name: string; type: string }[],
+    body: ExpressionStart
+) {
+    const paramNodes = params.map(p =>
+        ASTFactory.parameter(p.name, ASTFactory.typeAnnotation(p.type))
+    )
+    const binding = ASTFactory.binding(body)
+    const typedId = ASTFactory.typedIdentifier(name)
+    return ASTFactory.definition(keyword, typedId, paramNodes, undefined, binding)
+}
+
+test('call site resolves return type of a user-defined function', () => {
+    // @let add x:Int, y:Int := x + y;
+    // &add 1, 2   ← should infer Int
+    const addDef = makeDefinition('@let', 'add',
+        [{ name: 'x', type: 'Int' }, { name: 'y', type: 'Int' }],
+        ASTFactory.expressionStart(
+            'binOp',
+            ASTFactory.binOp(
+                ASTFactory.expressionStart('expressionEnd', ASTFactory.expressionEnd('namespace', ASTFactory.namespace(['x']))),
+                '+',
+                ASTFactory.expressionEnd('namespace', ASTFactory.namespace(['y']))
+            )
+        )
+    )
+    const call = ASTFactory.functionCall('add', false, [intExp('1'), intExp('2')])
+    const callExp = ASTFactory.expressionStart('functionCall', call)
+
+    const stmt = ASTFactory.statement('definition', addDef)
+    const defItem = ASTFactory.item('statement', stmt)
+    const defEl = ASTFactory.element('item', defItem)
+    const callItem = ASTFactory.item('expression', callExp)
+    const callEl = ASTFactory.element('item', callItem)
+    const prog = ASTFactory.program([defEl, callEl])
+
+    const { errors, program } = typecheck(prog)
+    expect(errors).toHaveLength(0)
+    const callItemNode = program.elements[1].value as Item
+    const callExprNode = callItemNode.value as ExpressionStart
+    expect(typeEquals(callExprNode.inferredType, TypeInt)).toBe(true)
+})
+
+test('call with wrong arg type emits a mismatch error', () => {
+    // @let double x:Int := x + x;
+    // &double 1.5   ← Float arg to Int param → error
+    const doubleDef = makeDefinition('@let', 'double',
+        [{ name: 'x', type: 'Int' }],
+        ASTFactory.expressionStart(
+            'binOp',
+            ASTFactory.binOp(
+                ASTFactory.expressionStart('expressionEnd', ASTFactory.expressionEnd('namespace', ASTFactory.namespace(['x']))),
+                '+',
+                ASTFactory.expressionEnd('namespace', ASTFactory.namespace(['x']))
+            )
+        )
+    )
+    const call = ASTFactory.functionCall('double', false, [floatExp('1.5')])
+    const callExp = ASTFactory.expressionStart('functionCall', call)
+
+    const stmt = ASTFactory.statement('definition', doubleDef)
+    const defItem = ASTFactory.item('statement', stmt)
+    const defEl = ASTFactory.element('item', defItem)
+    const callItem = ASTFactory.item('expression', callExp)
+    const callEl = ASTFactory.element('item', callItem)
+    const prog = ASTFactory.program([defEl, callEl])
+
+    const { errors } = typecheck(prog)
+    expect(errors.length).toBeGreaterThan(0)
+    expect(errors[0].kind).toBe('Mismatch')
+})
+
+test('call with wrong arity emits an error', () => {
+    // @let add x:Int, y:Int := x + y;
+    // &add 1   ← too few args → error
+    const addDef = makeDefinition('@let', 'add',
+        [{ name: 'x', type: 'Int' }, { name: 'y', type: 'Int' }],
+        intExp('0')
+    )
+    const call = ASTFactory.functionCall('add', false, [intExp('1')])
+    const callExp = ASTFactory.expressionStart('functionCall', call)
+
+    const stmt = ASTFactory.statement('definition', addDef)
+    const defItem = ASTFactory.item('statement', stmt)
+    const defEl = ASTFactory.element('item', defItem)
+    const callItem = ASTFactory.item('expression', callExp)
+    const callEl = ASTFactory.element('item', callItem)
+    const prog = ASTFactory.program([defEl, callEl])
+
+    const { errors } = typecheck(prog)
+    expect(errors.length).toBeGreaterThan(0)
+    expect(errors[0].kind).toBe('Mismatch')
+})

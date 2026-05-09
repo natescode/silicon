@@ -83,8 +83,16 @@ interface Ctx {
     errors: TypeError[]
     // Flat symbol table. Keyed by the joined namespace path (e.g. "module::x").
     symbols: Map<string, SiliconType>
+    // Function signature table. Populated when a Definition is checked so that
+    // call sites can resolve both the return type and validate arg types.
+    functions: Map<string, FunctionSig>
     // Stratum registry for user-defined operator type checking (optional).
     registry?: ElaboratorRegistry
+}
+
+interface FunctionSig {
+    params: SiliconType[]
+    result: SiliconType
 }
 
 /**
@@ -93,10 +101,10 @@ interface Ctx {
  * shared `ctx.errors` list.
  */
 function withScope(ctx: Ctx, fn: (inner: Ctx) => SiliconType): SiliconType {
-    const saved = ctx.symbols
-    ctx.symbols = new Map(saved)
+    const savedSymbols = ctx.symbols
+    ctx.symbols = new Map(savedSymbols)
     const t = fn(ctx)
-    ctx.symbols = saved
+    ctx.symbols = savedSymbols
     return t
 }
 
@@ -119,7 +127,7 @@ export interface TypeCheckResult {
  *     if (errors.length) { ... }
  */
 export default function typecheck(program: Program, registry?: ElaboratorRegistry): TypeCheckResult {
-    const ctx: Ctx = { errors: [], symbols: new Map(), registry }
+    const ctx: Ctx = { errors: [], symbols: new Map(), functions: new Map(), registry }
     for (const element of program.elements as any[]) {
         checkNode(element, ctx)
     }
@@ -241,7 +249,17 @@ function checkDefinition(d: any, ctx: Ctx): SiliconType {
         ctx.errors.push(annotationMismatch(d.name.name, annotated, bodyType, d.sourceLocation))
     }
 
-    if (d.name && d.name.name) ctx.symbols.set(d.name.name, finalType)
+    if (d.name && d.name.name) {
+        ctx.symbols.set(d.name.name, finalType)
+        // Register the full function signature so call sites can check arity
+        // and argument types. The params list collects only typed parameters.
+        const paramTypes: SiliconType[] = []
+        for (const param of d.params || []) {
+            if (param.isLiteral || !param.typeAnnotation) continue
+            paramTypes.push(parseTypeName(param.typeAnnotation.typename) ?? TypeUnknown)
+        }
+        ctx.functions.set(d.name.name, { params: paramTypes, result: finalType })
+    }
     return finalType
 }
 
@@ -344,8 +362,28 @@ function checkFunctionCall(call: any, ctx: Ctx): SiliconType {
         }
     }
 
-    // Unknown user function: don't cascade errors into the surrounding
-    // expression. Record the call type as Unknown.
+    // User-defined function: look up its registered signature.
+    const sig = ctx.functions.get(name)
+    if (sig) {
+        if (argTypes.length !== sig.params.length) {
+            ctx.errors.push({
+                kind: 'Mismatch',
+                message: `'${name}' expects ${sig.params.length} argument(s), got ${argTypes.length}`,
+                sourceLocation: call.sourceLocation,
+            })
+        } else {
+            for (let i = 0; i < sig.params.length; i++) {
+                const expected = sig.params[i]
+                const actual = argTypes[i]
+                if (actual.kind !== 'Unknown' && !typeEquals(expected, actual)) {
+                    ctx.errors.push(mismatch(expected, actual, `'${name}' arg ${i}`, call.sourceLocation))
+                }
+            }
+        }
+        return sig.result
+    }
+
+    // Truly unknown — don't cascade errors.
     return TypeUnknown
 }
 
