@@ -1,0 +1,1 @@
+@let inc x:Int := { x = x + 1; x };

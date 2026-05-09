@@ -317,6 +317,22 @@ test("elaborate registry contains @let def-kind", () => {
   expect(registry.defKinds['@let'].codegenKind).toBe('function')
 })
 
+// Test: defKinds registry is populated with @fn
+test("elaborate registry contains @fn def-kind", () => {
+  const program = ASTFactory.program([])
+  const { registry } = elaborate(program)
+  expect(registry.defKinds['@fn']).toBeDefined()
+  expect(registry.defKinds['@fn'].codegenKind).toBe('function')
+})
+
+// Test: defKinds registry is populated with @var
+test("elaborate registry contains @var def-kind", () => {
+  const program = ASTFactory.program([])
+  const { registry } = elaborate(program)
+  expect(registry.defKinds['@var']).toBeDefined()
+  expect(registry.defKinds['@var'].codegenKind).toBe('global')
+})
+
 // Test 10: builtin elaborators for various operators
 test("elaborate registers builtin elaborators for multiple operators", () => {
   const operators = ['+', '-', '*', '/', '%', '==', '!=', '<', '>', '<=', '>=']

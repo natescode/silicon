@@ -242,3 +242,32 @@ test("compile unknown definition keyword throws", () => {
   expect(match.succeeded()).toBe(true);
   expect(() => semantics(match).compile()).toThrow("Unknown definition keyword: @foo");
 });
+
+test("compile @fn definition routes through def-kind registry", () => {
+  const semantics = createTestSemantics(siliconGrammar);
+  const match = siliconGrammar.match("@fn add x:Int, y:Int := x + y;");
+  expect(match.succeeded()).toBe(true);
+  const wat = semantics(match).compile();
+  expect(wat).toContain("(func $add");
+  expect(wat).toContain("(param $x i32)");
+  expect(wat).toContain("i32.add");
+});
+
+test("compile @var definition emits mutable global", () => {
+  const semantics = createTestSemantics(siliconGrammar);
+  const match = siliconGrammar.match("@var count:Int := 0;");
+  expect(match.succeeded()).toBe(true);
+  const wat = semantics(match).compile();
+  expect(wat).toContain("(global $count");
+  expect(wat).toContain("(mut i32)");
+  expect(wat).toContain("(i32.const 0)");
+});
+
+test("compile assignment to parameter uses local.set", () => {
+  const semantics = createTestSemantics(siliconGrammar);
+  const match = siliconGrammar.match("@let inc x:Int := { x = x + 1; x };");
+  expect(match.succeeded()).toBe(true);
+  const wat = semantics(match).compile();
+  expect(wat).toContain("local.set $x");
+  expect(wat).toContain("local.get $x");
+});

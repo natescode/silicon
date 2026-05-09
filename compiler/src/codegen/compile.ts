@@ -188,6 +188,18 @@ export default function addCompileSemantics(siliconGrammar: ohm.Grammar, registr
         return `(func $${watName} ${paramList} ${resultDecl} (local $addr i32)\n${body}\n)`
     }
 
+    // Emit a WAT (global ...) mutable global for the 'global' Def-Kind.
+    function compileGlobal(typedId: any, binding: any): string {
+        const name = typedId.compile()
+        const watName = toWatIdentifier(name)
+        const retTypeName = typedId.type()
+        const watType = retTypeName ? siliconTypeToWat(retTypeName) : 'i32'
+        const initExpr = binding.children.length > 0
+            ? binding.children[0].compile()
+            : `(${watType}.const 0)`
+        return `(global $${watName} (mut ${watType}) ${initExpr})`
+    }
+
     const semantics = siliconGrammar.createSemantics().addOperation('compile', {
         Program(elements) {
             const funcs: string[] = []
@@ -264,7 +276,9 @@ export default function addCompileSemantics(siliconGrammar: ohm.Grammar, registr
             const name = ns.compile();
             const watName = toWatIdentifier(name);
             const value = exp.compile();
-            return `(global.set $${watName} ${value})`;
+            // Inside a function body, parameters use locals; otherwise module globals.
+            const setter = currentParams.has(watName) ? 'local.set' : 'global.set';
+            return `${value}\n${setter} $${watName}`;
         },
         Definition(kw, typedId, generics, params, binding) {
             const keyword = '@' + kw.compile()
@@ -276,6 +290,8 @@ export default function addCompileSemantics(siliconGrammar: ohm.Grammar, registr
             switch (entry.codegenKind) {
                 case 'function':
                     return compileFunction(typedId, params, binding)
+                case 'global':
+                    return compileGlobal(typedId, binding)
                 default:
                     throw new Error(`Unhandled codegenKind: ${(entry as any).codegenKind}`)
             }

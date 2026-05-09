@@ -11,9 +11,9 @@
 
 /**
  * What WAT construct a definition keyword lowers to.
- * All currently supported kinds produce a WAT function.
+ * 'function' → WAT (func ...), 'global' → WAT (global ...) mutable global.
  */
-export type CodegenKind = 'function'
+export type CodegenKind = 'function' | 'global'
 
 export interface DefKindEntry {
     keyword: string          // full keyword, e.g. "@let"
@@ -49,5 +49,19 @@ export const BUILTIN_DEF_KINDS: DefKindEntry[] = [
         allowsParams: true,
         allowsBinding: true,
         allowsGenerics: true,
+    },
+    {
+        keyword: '@fn',
+        codegenKind: 'function',
+        allowsParams: true,
+        allowsBinding: true,
+        allowsGenerics: true,
+    },
+    {
+        keyword: '@var',
+        codegenKind: 'global',
+        allowsParams: false,
+        allowsBinding: true,
+        allowsGenerics: false,
     },
 ]

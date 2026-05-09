@@ -543,6 +543,50 @@ test("E2E: Block with statements then trailing expression", () => {
 });
 
 /**
+ * Test: @fn definition (same codegenKind as @let)
+ * Verifies that @fn is registered as a Def-Kind and emits a WAT func
+ */
+test("E2E: @fn definition emits WAT func with params", () => {
+    const sourceCode = loadExample("fn_function.si");
+    const result = compileSource(sourceCode);
+
+    expect(result.success).toBe(true);
+    expect(result.wat).toBeDefined();
+    expect(result.wat).toContain("(func $add");
+    expect(result.wat).toContain("(param $x i32)");
+    expect(result.wat).toContain("(param $y i32)");
+    expect(result.wat).toContain("i32.add");
+});
+
+/**
+ * Test: @var definition emits a mutable WAT global
+ */
+test("E2E: @var definition emits mutable WAT global", () => {
+    const sourceCode = loadExample("var_global.si");
+    const result = compileSource(sourceCode);
+
+    expect(result.success).toBe(true);
+    expect(result.wat).toBeDefined();
+    expect(result.wat).toContain("(global $count");
+    expect(result.wat).toContain("(mut i32)");
+    expect(result.wat).toContain("(i32.const 0)");
+});
+
+/**
+ * Test: Assignment inside a function body uses local.set for parameters
+ */
+test("E2E: Assignment to function parameter emits local.set", () => {
+    const sourceCode = loadExample("local_set_fix.si");
+    const result = compileSource(sourceCode);
+
+    expect(result.success).toBe(true);
+    expect(result.wat).toBeDefined();
+    expect(result.wat).toContain("(func $inc");
+    expect(result.wat).toContain("local.set $x");
+    expect(result.wat).toContain("local.get $x");
+});
+
+/**
  * Test: User-defined stratum operator
  * Verifies that a custom @stratum operator (+++) drives codegen to emit i32.add
  */
