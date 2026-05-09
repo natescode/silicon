@@ -61,6 +61,10 @@ function toWatIdentifier(siliconName: string): string {
     return siliconName.replace(/::/g, '_')
 }
 
+function siliconTypeToWat(typeName: string): string {
+    return typeName === 'Float' ? 'f32' : 'i32'
+}
+
 /**
  * Simple static-data allocator used for string literals. Strings are laid out
  * as length-prefixed byte blocks in the `0..1023` region that sits below the
@@ -128,6 +132,8 @@ export default function addCompileSemantics(siliconGrammar: ohm.Grammar) {
     // tests don't bleed state into each other.
     const staticData = createStaticData()
     let loopCount = 0
+    // Names of the current function's parameters so namespace refs use local.get.
+    let currentParams: Set<string> = new Set()
 
     const semantics = siliconGrammar.createSemantics().addOperation('compile', {
         Program(elements) {
@@ -200,9 +206,26 @@ ${body}
         Definition(kw, typedId, generics, params, binding) {
             const name = typedId.compile();
             const watName = toWatIdentifier(name);
-            const paramList = params.children.map(p => p.compile()).join(' ');
-            const body = binding ? binding.compile() : '';
-            return `(func $${watName} ${paramList} (local $addr i32)\n${body}\n)`;
+
+            // Collect param names before compiling the body so namespace
+            // references inside the body use local.get instead of global.get.
+            const paramNames: Set<string> = new Set()
+            params.asIteration().children.forEach((p: any) => {
+                const raw = p.sourceString.split(':')[0].trim()
+                if (raw) paramNames.add(toWatIdentifier(raw))
+            })
+            const prevParams = currentParams
+            currentParams = paramNames
+
+            const paramList = params.asIteration().children.map((p: any) => p.compile()).join(' ')
+            const body = binding.children.length > 0 ? binding.children[0].compile() : ''
+
+            currentParams = prevParams
+
+            const retTypeName = typedId.type()
+            const resultDecl = retTypeName ? `(result ${siliconTypeToWat(retTypeName)})` : ''
+
+            return `(func $${watName} ${paramList} ${resultDecl} (local $addr i32)\n${body}\n)`
         },
         ExpressionStart_binChain(left, binOps, endOps) {
             let result = left.compile();
@@ -315,6 +338,9 @@ ${body}
         ExpressionEnd_namespace(ns) {
             const name = ns.compile();
             const watName = toWatIdentifier(name);
+            if (currentParams.has(watName)) {
+                return `(local.get $${watName})`;
+            }
             return `(global.get $${watName})`;
         },
         ExpressionEnd_block(block) {
@@ -462,6 +488,16 @@ ${body}
         GenericParams(_open, ids, _close) {
             return '';
         },
+        ParamLiteral_typedId(typedId) {
+            const name = typedId.compile();
+            const watName = toWatIdentifier(name);
+            const typeName = typedId.type();
+            const watType = typeName ? siliconTypeToWat(typeName) : 'i32';
+            return `(param $${watName} ${watType})`;
+        },
+        ParamLiteral_literal(_lit) {
+            return '';
+        },
         keyword(_at, id) {
             return id.sourceString;
         },
@@ -479,7 +515,7 @@ ${body}
         },
     }).addOperation('type', {
         typedIdentifier(id, type) {
-            return type.children.length > 0 ? type.type() : 'i32';
+            return type.children.length > 0 ? type.children[0].type() : '';
         },
         type(_colon, id) {
             return id.sourceString;
