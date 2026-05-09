@@ -139,3 +139,51 @@ test('annotation informs inferred types (i32 alias)', () => {
     // (we don't introspect beyond "no errors" since Definition node isn't
     // an expression and doesn't carry inferredType directly)
 })
+
+// ------------------------------------------------------------------
+// @if type inference
+// ------------------------------------------------------------------
+
+test('@if with matching branches has no errors', () => {
+    const { errors } = check('@let abs x:Int := { &@if x < 0, { 0 - x }, { x } };')
+    expect(errors).toHaveLength(0)
+})
+
+test('@if result type flows through to caller', () => {
+    // &@if flag, { 1 }, { 2 } should infer Int, so 3 + result is valid
+    const { errors } = check('3 + &@if 1, { 1 }, { 2 };')
+    expect(errors).toHaveLength(0)
+})
+
+test('@if with mismatched branch types produces an error', () => {
+    // then: Int, else: Float → mismatch
+    const { errors } = check('@let x:Int := { &@if 1, { 1 }, { 2.5 } };')
+    expect(errors.length).toBeGreaterThan(0)
+})
+
+test('@if without else branch is void (TypeUnknown — no errors)', () => {
+    // Void @if should not error; result type Unknown propagates silently
+    const { errors } = check('&@if 1, { 1 };')
+    expect(errors).toHaveLength(0)
+})
+
+// ------------------------------------------------------------------
+// User-defined function call type inference (end-to-end)
+// ------------------------------------------------------------------
+
+test('return type of user function resolves at call site', () => {
+    const { errors } = check('@let add x:Int, y:Int := x + y; &add 1, 2;')
+    expect(errors).toHaveLength(0)
+})
+
+test('wrong arg type at user function call site errors', () => {
+    const { errors } = check('@let double x:Int := x + x; &double 1.5;')
+    expect(errors.length).toBeGreaterThan(0)
+    expect(errors[0].kind).toBe('Mismatch')
+})
+
+test('wrong arity at user function call site errors', () => {
+    const { errors } = check('@let add x:Int, y:Int := x + y; &add 1;')
+    expect(errors.length).toBeGreaterThan(0)
+    expect(errors[0].kind).toBe('Mismatch')
+})

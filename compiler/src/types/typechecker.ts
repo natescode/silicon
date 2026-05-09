@@ -73,7 +73,7 @@ import {
     annotationMismatch,
 } from './errors'
 import { getWasmIntrinsic } from '../intrinsics'
-import { type ElaboratorRegistry, lookupOperator } from '../elaborator/registry'
+import { type ElaboratorRegistry, lookupOperator, lookupKeyword } from '../elaborator/registry'
 
 /**
  * Mutable checking context. Threaded through the recursive walk so error
@@ -383,8 +383,41 @@ function checkFunctionCall(call: any, ctx: Ctx): SiliconType {
         return sig.result
     }
 
+    // Builtin keyword strata (@if, @loop, …) — look up via the registry.
+    if (call.isBuiltin && ctx.registry) {
+        const kwEntry = lookupKeyword(ctx.registry, name)
+        if (kwEntry?.data?.intrinsic === 'WASM::control_if') {
+            return typeOfIfCall(argTypes, call.sourceLocation, ctx)
+        }
+        if (kwEntry?.data?.intrinsic === 'WASM::control_loop') {
+            return TypeUnknown  // loops are void (no result value)
+        }
+    }
+
     // Truly unknown — don't cascade errors.
     return TypeUnknown
+}
+
+function typeOfIfCall(argTypes: SiliconType[], loc: any, ctx: Ctx): SiliconType {
+    const condT = argTypes[0] ?? TypeUnknown
+    const thenT = argTypes[1] ?? TypeUnknown
+    const elseT = argTypes[2] ?? TypeUnknown
+
+    // Condition must be a numeric or boolean value (truthy check in WAT).
+    if (condT.kind !== 'Unknown' && !isNumeric(condT) && !typeEquals(condT, TypeBool)) {
+        ctx.errors.push(mismatch(TypeInt, condT, '@if condition', loc))
+    }
+
+    // Void form (no else branch) — result is always unknown.
+    if (argTypes.length < 3 || elseT.kind === 'Unknown') return TypeUnknown
+    if (thenT.kind === 'Unknown') return TypeUnknown
+
+    // Both branches present and typed — they must agree.
+    if (!typeEquals(thenT, elseT)) {
+        ctx.errors.push(mismatch(thenT, elseT, '@if branch type mismatch', loc))
+        return TypeUnknown
+    }
+    return thenT
 }
 
 // ---------------------------------------------------------------------------

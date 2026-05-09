@@ -133,6 +133,7 @@ export function hasKeyword(registry: ElaboratorRegistry, name: string): boolean 
 export function mergeRegistries(target: ElaboratorRegistry, source: ElaboratorRegistry): ElaboratorRegistry {
     return {
         operators: { ...target.operators, ...source.operators },
-        keywords: { ...target.keywords, ...source.keywords }
+        keywords: { ...target.keywords, ...source.keywords },
+        defKinds: { ...target.defKinds, ...source.defKinds },
     }
 }
