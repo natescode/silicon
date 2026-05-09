@@ -1,38 +1,56 @@
 #! /usr/bin/env bun
 
 import * as fs from "node:fs/promises"
-// import stringify from "graph-stringify"
-import compile from "./compiler"
+import parse from './parser'
+import { addToAstSemantics, type ASTNode, type Program } from './ast'
+import { addCompileSemantics } from './codegen'
+import { elaborate } from './elaborator'
+import { typecheck, formatTypeError } from './types'
+import { siliconGrammar } from './grammar'
 
-const help = `Sigil: the Official Silicon compiler 
+const help = `Sigil: the Official Silicon compiler
 
---- Version 2024.01 ---
+Usage: sgl <filename>
 
-Syntax: sgl <filename> <outputType>
+Compiles a Silicon (.sgl) source file to WebAssembly text format (WAT).
 
-Prints to stdout according to <outputType>, which must be one of:
-
-  parsed     a message that the program was matched ok by the grammar
-  analyzed   the statically analyzed representation
-  optimized  the optimized semantically analyzed representation
-  es         the translation to JavaScript
-  ts         the translation to TypeScript
-  wab        the translation to WebAssembly binary
-  wat        the translation to WebAssembly text
+Output files (written to current directory):
+  main.wat   WebAssembly text format (assemble with wat2wasm)
+  ast.json   Type-annotated AST (for debugging)
 `
-async function compileFromFile(filename: string) {
-    try {
-        const buffer = await fs.readFile(filename)
-        const compiled = compile(buffer.toString())
-        console.log(compiled)
-    } catch (e) {
-        console.error(`\u001b[31m${e}\u001b[39m`)
-        process.exitCode = 1
+
+async function compileFile(filename: string) {
+    const source = await fs.readFile(filename, 'utf-8')
+
+    const match = parse(source)
+    const ast: ASTNode = addToAstSemantics(siliconGrammar)(match).toAst()
+    const elaboratedAST = elaborate(ast as Program)
+    const { program: typedAST, errors: typeErrors } = typecheck(elaboratedAST)
+
+    if (typeErrors.length > 0) {
+        console.error('Type errors:')
+        for (const err of typeErrors) {
+            console.error('  ' + formatTypeError(err))
+        }
+        process.exit(1)
     }
+
+    const wat: string = addCompileSemantics(siliconGrammar)(match).compile()
+
+    await Bun.write('ast.json', JSON.stringify(typedAST, null, 2))
+    await Bun.write('main.wat', wat)
+
+    console.log(`Compiled ${filename} → main.wat`)
 }
 
-// if (process.argv.length !== 4) {
-//     console.log(help)
-// } else {
-//     compileFromFile(process.argv[2], process.argv[3])
-// }
+if (process.argv.length < 3) {
+    console.log(help)
+    process.exit(0)
+}
+
+try {
+    await compileFile(process.argv[2])
+} catch (e) {
+    console.error(`[31mError: ${e}[39m`)
+    process.exit(1)
+}
