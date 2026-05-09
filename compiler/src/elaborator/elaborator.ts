@@ -40,7 +40,7 @@ import {
   type ElaboratorRegistry
 } from './registry'
 import { StrataType, type StrataNode } from './strataenum'
-import { BUILTIN_DEF_KINDS, registerDefKind } from './defkinds'
+import { registerDefKind, type CodegenKind } from './defkinds'
 import { loadBuiltinStrata } from '../strata/index'
 import parse from '../parser'
 import addToAstSemantics from '../ast/toAst'
@@ -71,14 +71,22 @@ export default function elaborate(ast: Program): ElaborateResult {
 function buildElaboratorRegistry(ast: Program): ElaboratorRegistry {
   const registry = createElaboratorRegistry()
 
-  // Register builtin Def-Kinds (@let → function, etc.)
-  for (const entry of BUILTIN_DEF_KINDS) {
-    registerDefKind(registry.defKinds, entry)
-  }
-
   // Parse and register builtin strata from .si files in src/strata/.
+  // Strata with WASM::def_* intrinsics are also registered as def-kinds.
   for (const elab of parseBuiltinStrata()) {
-    registerElaborator(registry, elab.kind, symbolToString(elab.symbol), elaborationToStrataNode(elab))
+    const node = elaborationToStrataNode(elab)
+    const symbol = symbolToString(elab.symbol)
+    registerElaborator(registry, elab.kind, symbol, node)
+    const codegenKind = codegenKindFromIntrinsic(node.data?.intrinsic)
+    if (codegenKind) {
+      registerDefKind(registry.defKinds, {
+        keyword: symbol,
+        codegenKind,
+        allowsParams: codegenKind === 'function',
+        allowsBinding: true,
+        allowsGenerics: codegenKind === 'function',
+      })
+    }
   }
 
   // Walk the AST for user-defined @stratum definitions.
@@ -95,6 +103,13 @@ function buildElaboratorRegistry(ast: Program): ElaboratorRegistry {
   }
 
   return registry
+}
+
+/** Map a WASM::def_* intrinsic name to the corresponding codegen kind. */
+function codegenKindFromIntrinsic(intrinsic: string | undefined): CodegenKind | undefined {
+  if (intrinsic === 'WASM::def_function') return 'function'
+  if (intrinsic === 'WASM::def_global') return 'global'
+  return undefined
 }
 
 /** Normalize an Elaboration symbol to a plain string. */

@@ -604,6 +604,30 @@ export const wasmIntrinsics: Record<string, WasmIntrinsic> = {
             return `(block $brk_${id}\n  (loop $cont_${id}\n    (br_if $brk_${id} (i32.eqz\n      ${condWat}\n    ))\n    ${bodyWat}\n    (br $cont_${id})\n  )\n)`
         },
     },
+
+    // ============================================================================
+    // Def-Kind Sentinels (used by @let / @fn / @var strata in defkinds.si)
+    // These do not emit WAT instructions — they tell the elaborator how to
+    // register the associated definition keyword in the def-kinds registry.
+    // ============================================================================
+    def_function: {
+        name: 'WASM::def_function',
+        wasmInstr: '',
+        binary: false,
+        unary: false,
+        inputs: 0,
+        outputs: 0,
+        description: 'Sentinel: definition keyword lowers to a WAT (func ...)',
+    },
+    def_global: {
+        name: 'WASM::def_global',
+        wasmInstr: '',
+        binary: false,
+        unary: false,
+        inputs: 0,
+        outputs: 0,
+        description: 'Sentinel: definition keyword lowers to a WAT (global ...)',
+    },
 }
 
 /**

@@ -1,0 +1,11 @@
+@stratum LetDef (Keyword, '@let', Node) = {
+  &WASM::def_function;
+};
+
+@stratum FnDef (Keyword, '@fn', Node) = {
+  &WASM::def_function;
+};
+
+@stratum VarDef (Keyword, '@var', Node) = {
+  &WASM::def_global;
+};

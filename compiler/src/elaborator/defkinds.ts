@@ -37,31 +37,3 @@ export function lookupDefKind(reg: DefKindRegistry, keyword: string): DefKindEnt
     return reg[keyword]
 }
 
-/**
- * Built-in Def-Kind declarations. These bootstrap the language without any
- * special compiler treatment — the elaborator registers them the same way it
- * would register a user-defined Def-Kind.
- */
-export const BUILTIN_DEF_KINDS: DefKindEntry[] = [
-    {
-        keyword: '@let',
-        codegenKind: 'function',
-        allowsParams: true,
-        allowsBinding: true,
-        allowsGenerics: true,
-    },
-    {
-        keyword: '@fn',
-        codegenKind: 'function',
-        allowsParams: true,
-        allowsBinding: true,
-        allowsGenerics: true,
-    },
-    {
-        keyword: '@var',
-        codegenKind: 'global',
-        allowsParams: false,
-        allowsBinding: true,
-        allowsGenerics: false,
-    },
-]
