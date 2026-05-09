@@ -333,6 +333,22 @@ test("elaborate registry contains @var def-kind", () => {
   expect(registry.defKinds['@var'].codegenKind).toBe('global')
 })
 
+test("elaborate registers @if as keyword stratum with control_if intrinsic", () => {
+  const program = ASTFactory.program([])
+  const { registry } = elaborate(program)
+  const entry = registry.keywords['@if']
+  expect(entry).toBeDefined()
+  expect(entry.data.intrinsic).toBe('WASM::control_if')
+})
+
+test("elaborate registers @loop as keyword stratum with control_loop intrinsic", () => {
+  const program = ASTFactory.program([])
+  const { registry } = elaborate(program)
+  const entry = registry.keywords['@loop']
+  expect(entry).toBeDefined()
+  expect(entry.data.intrinsic).toBe('WASM::control_loop')
+})
+
 // Test 10: builtin elaborators for various operators
 test("elaborate registers builtin elaborators for multiple operators", () => {
   const operators = ['+', '-', '*', '/', '%', '==', '!=', '<', '>', '<=', '>=']

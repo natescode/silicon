@@ -34,7 +34,7 @@ import { readFileSync } from 'fs'
 import { join, dirname } from 'path'
 import { fileURLToPath } from 'url'
 import { isWasmIntrinsic, getWasmIntrinsic } from '../intrinsics'
-import { type ElaboratorRegistry, lookupOperator, lookupDefKindEntry } from '../elaborator/registry'
+import { type ElaboratorRegistry, lookupOperator, lookupDefKindEntry, lookupKeyword } from '../elaborator/registry'
 
 // Resolve std.wat relative to this source file so the path works under
 // both `bun run` and compiled TS.
@@ -330,8 +330,10 @@ export default function addCompileSemantics(siliconGrammar: ohm.Grammar, registr
         },
         FunctionCallBody_builtin(kw, args) {
             const funcName = kw.compile();
+            const kwEntry = registry ? lookupKeyword(registry, '@' + funcName) : undefined;
+            const intrinsic = kwEntry?.data?.intrinsic;
 
-            if (funcName === 'if') {
+            if (intrinsic === 'WASM::control_if') {
                 const myExprPos = inExprPosition;
                 const argWats: string[] = args.compileArgList();
                 const condWat = argWats[0] ?? '';
@@ -347,7 +349,7 @@ export default function addCompileSemantics(siliconGrammar: ohm.Grammar, registr
                 return `(if\n  ${condWat}\n  (then ${thenWat})\n)`;
             }
 
-            if (funcName === 'loop') {
+            if (intrinsic === 'WASM::control_loop') {
                 const argWats: string[] = args.compileArgList();
                 const id = loopCount++;
                 const condWat = argWats[0] ?? '';
