@@ -3,8 +3,8 @@
 There are three requirements
 
 - [x] Grammar
-- [ ] Elaboration Hook
-- [ ] Intrinics
+- [x] Elaboration Hook
+- [x] Intrinics
 
 
 Elaboration looks up *Keyword* or *Operator* to attach the [Semantics](#)

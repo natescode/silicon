@@ -8,7 +8,8 @@
       "Bash(bun test *)",
       "Bash(node *)",
       "Bash(grep -A5 'func $add')",
-      "Bash(grep -A10 'func $compute')"
+      "Bash(grep -A10 'func $compute')",
+      "Bash(git commit *)"
     ]
   }
 }
