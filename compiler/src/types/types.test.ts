@@ -12,6 +12,7 @@ import {
     TypeUnknown,
     ArrayOf,
     FunctionOf,
+    DistinctOf,
     wasmTypeOf,
     typeEquals,
     formatType,
@@ -158,4 +159,46 @@ test('typeEquals: Function structural equality', () => {
 test('formatType: Function type', () => {
     expect(formatType(FunctionOf([TypeInt, TypeFloat], TypeBool))).toBe('Function(Int, Float) -> Bool')
     expect(formatType(FunctionOf([], TypeInt))).toBe('Function() -> Int')
+})
+
+// ------------------------------------------------------------------
+// Distinct types
+// ------------------------------------------------------------------
+
+test('DistinctOf: creates a Distinct kind with correct name and underlying', () => {
+    const age = DistinctOf('age', TypeInt)
+    expect(age.kind).toBe('Distinct')
+    if (age.kind === 'Distinct') {
+        expect(age.name).toBe('age')
+        expect(age.underlying).toBe(TypeInt)
+    }
+})
+
+test('wasmTypeOf: Distinct lowers to its underlying WASM type', () => {
+    expect(wasmTypeOf(DistinctOf('age', TypeInt))).toBe('i32')
+    expect(wasmTypeOf(DistinctOf('weight', TypeFloat))).toBe('f32')
+})
+
+test('typeEquals: Distinct is equal only to itself', () => {
+    const age = DistinctOf('age', TypeInt)
+    const age2 = DistinctOf('age', TypeInt)
+    const height = DistinctOf('height', TypeInt)
+    expect(typeEquals(age, age2)).toBe(true)
+    expect(typeEquals(age, height)).toBe(false)
+    expect(typeEquals(age, TypeInt)).toBe(false)
+})
+
+test('formatType: Distinct renders as the user-defined name', () => {
+    expect(formatType(DistinctOf('UserId', TypeInt))).toBe('UserId')
+})
+
+test('parseTypeName: resolves alias names from the alias table', () => {
+    const aliases = new Map<string, SiliconType>([['Metres', TypeInt]])
+    expect(parseTypeName('Metres', aliases)).toBe(TypeInt)
+    expect(parseTypeName('Unknown', aliases)).toBeUndefined()
+})
+
+test('parseTypeName: alias table is optional — built-in names still resolve', () => {
+    expect(parseTypeName('Int')).toBe(TypeInt)
+    expect(parseTypeName('Float')).toBe(TypeFloat)
 })

@@ -672,3 +672,34 @@ test("E2E: User-defined stratum operator generates correct WAT", () => {
     // The +++ operator defined via @stratum MyAdd -> WASM::i32_add should lower to i32.add
     expect(result.wat).toContain("i32.add");
 });
+
+// ---------------------------------------------------------------------------
+// @type_alias / @type_distinct — full pipeline
+// ---------------------------------------------------------------------------
+
+test("E2E: @type_alias compiles without error and emits no WAT for the declaration", () => {
+    const result = compileSource("@type_alias Metres := Int;");
+
+    expect(result.success).toBe(true);
+    expect(result.wat).toBeDefined();
+    // The type alias itself must not generate any WAT construct.
+    expect(result.wat).not.toContain("Metres");
+});
+
+test("E2E: @type_alias used as annotation compiles cleanly", () => {
+    const result = compileSource("@type_alias Metres := Int;\n@let distance:Metres := 100;");
+
+    expect(result.success).toBe(true);
+    expect(result.wat).toBeDefined();
+    expect(result.wat).toContain("$distance");
+    // The global holds an i32 (alias of Int).
+    expect(result.wat).toContain("i32");
+});
+
+test("E2E: @type_distinct compiles without error and emits no WAT for the declaration", () => {
+    const result = compileSource("@type_distinct UserId := Int;");
+
+    expect(result.success).toBe(true);
+    expect(result.wat).toBeDefined();
+    expect(result.wat).not.toContain("UserId");
+});

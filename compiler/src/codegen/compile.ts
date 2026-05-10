@@ -332,6 +332,10 @@ export default function addCompileSemantics(
                     return compileGlobal(typedId, binding)
                 case 'extern':
                     return compileExtern(typedId, params)
+                case 'type_alias':
+                case 'type_distinct':
+                    // Type declarations are compile-time only; they produce no WAT.
+                    return ''
                 default:
                     throw new Error(`Unhandled codegenKind: ${(entry as any).codegenKind}`)
             }

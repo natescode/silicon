@@ -38,6 +38,10 @@ export type SiliconType =
     | { kind: 'Bool' }
     | { kind: 'Array'; element: SiliconType }
     | { kind: 'Function'; params: SiliconType[]; result: SiliconType }
+    // A user-defined distinct type. Structurally identical to `underlying` in
+    // WASM, but incompatible with it (and with other Distinct types) at the
+    // Silicon level. Use `wasmTypeOf` to get the concrete WASM encoding.
+    | { kind: 'Distinct'; name: string; underlying: SiliconType }
     // `Unknown` is the top type used when the checker cannot determine a type
     // (e.g. references to unbound identifiers). It never appears in a
     // well-typed program. Downstream code should treat `Unknown` as "do not
@@ -76,6 +80,15 @@ export function FunctionOf(params: SiliconType[], result: SiliconType): SiliconT
 }
 
 /**
+ * Construct a Distinct type. Shares the WASM encoding of `underlying` but is
+ * a separate, incompatible type at the Silicon level. Assigning an `Int` to a
+ * variable declared as `age` (distinct from Int) is a type error.
+ */
+export function DistinctOf(name: string, underlying: SiliconType): SiliconType {
+    return { kind: 'Distinct', name, underlying }
+}
+
+/**
  * Map a SiliconType to its WebAssembly value type.
  *
  * This is the single source of truth for the language → WASM lowering. Codegen
@@ -91,6 +104,8 @@ export function wasmTypeOf(t: SiliconType): WasmType {
             return 'i32'
         case 'Float':
             return 'f32'
+        case 'Distinct':
+            return wasmTypeOf(t.underlying)
         case 'Unknown':
             // Conservative: assume i32 so codegen still emits something plausible
             // when a type error has been reported upstream.
@@ -113,6 +128,10 @@ export function typeEquals(a: SiliconType, b: SiliconType): boolean {
         }
         return typeEquals(a.result, b.result)
     }
+    // Distinct types are equal only to themselves (same name).
+    if (a.kind === 'Distinct' && b.kind === 'Distinct') {
+        return a.name === b.name
+    }
     return true
 }
 
@@ -128,6 +147,7 @@ export function formatType(t: SiliconType): string {
         case 'Bool': return 'Bool'
         case 'Array': return `Array[${formatType(t.element)}]`
         case 'Function': return `Function(${t.params.map(formatType).join(', ')}) -> ${formatType(t.result)}`
+        case 'Distinct': return t.name
         case 'Unknown': return '<unknown>'
     }
 }
@@ -141,18 +161,21 @@ export function formatType(t: SiliconType): string {
  * Accepted names: `Int`, `Float`, `String`, `Bool`. Generic `Array[T]` is not
  * yet representable in the grammar (grammar stores `typename` as a single
  * identifier), so arrays must be inferred from array-literal context for now.
+ *
+ * Pass `aliases` (populated by the type checker from `@type_alias` and
+ * `@type_distinct` declarations) to resolve user-defined type names.
  */
-export function parseTypeName(name: string): SiliconType | undefined {
+export function parseTypeName(name: string, aliases?: Map<string, SiliconType>): SiliconType | undefined {
     switch (name) {
         case 'Int': return TypeInt
         case 'Float': return TypeFloat
         case 'String': return TypeString
         case 'Bool': return TypeBool
-        // Keep a low-level escape hatch for programmers who want to write the
-        // WASM type directly. Useful while the type system is bootstrapping.
+        // Low-level escape hatch — WASM types written directly.
         case 'i32': return TypeInt
         case 'f32': return TypeFloat
-        default: return undefined
+        default:
+            return aliases?.get(name)
     }
 }
 

@@ -59,6 +59,7 @@ import {
     TypeUnknown,
     ArrayOf,
     FunctionOf,
+    DistinctOf,
     typeEquals,
     parseTypeName,
     isNumeric,
@@ -92,6 +93,9 @@ interface Ctx {
     // Names of immutable bindings (@let, @fn, @extern). Assignment to these is
     // a type error.
     immutable: Set<string>
+    // User-defined type names from @type_alias and @type_distinct declarations.
+    // Passed to parseTypeName so annotations like `x: age` resolve correctly.
+    typeAliases: Map<string, SiliconType>
     // Stratum registry for user-defined operator type checking (optional).
     registry?: ElaboratorRegistry
 }
@@ -123,6 +127,7 @@ export interface TypeCheckResult {
     program: Program
     errors: TypeError[]
     functions: Map<string, FunctionSig>
+    typeAliases: Map<string, SiliconType>
 }
 
 /**
@@ -134,14 +139,21 @@ export interface TypeCheckResult {
  *     if (errors.length) { ... }
  */
 export default function typecheck(program: Program, registry?: ElaboratorRegistry): TypeCheckResult {
-    const ctx: Ctx = { errors: [], symbols: new Map(), functions: new Map(), immutable: new Set(), registry }
-    // Pre-registration pass: seed the function/symbol tables from top-level
-    // definitions so forward references and forward calls resolve correctly.
+    const ctx: Ctx = {
+        errors: [],
+        symbols: new Map(),
+        functions: new Map(),
+        immutable: new Set(),
+        typeAliases: new Map(),
+        registry,
+    }
+    // Pre-registration pass: seed the function/symbol tables and type alias
+    // table from top-level definitions so forward references resolve correctly.
     preRegisterDefinitions(program.elements as any[], ctx)
     for (const element of program.elements as any[]) {
         checkNode(element, ctx)
     }
-    return { program, errors: ctx.errors, functions: ctx.functions }
+    return { program, errors: ctx.errors, functions: ctx.functions, typeAliases: ctx.typeAliases }
 }
 
 // ---------------------------------------------------------------------------
@@ -163,28 +175,41 @@ function extractDefinitionNode(el: any): any {
 }
 
 /**
- * Seed `ctx.functions`, `ctx.symbols`, and `ctx.immutable` from every
- * top-level definition before the main checking pass begins. This allows
- * call sites that appear before a definition to resolve the callee's type,
- * and lets the checker catch wrong-arg-type errors on forward calls.
+ * Seed `ctx.typeAliases`, `ctx.functions`, `ctx.symbols`, and `ctx.immutable`
+ * from every top-level definition before the main checking pass begins.
  *
- * Result types are derived from explicit annotations only (no body
- * inference here); the main pass will refine them once bodies are walked.
+ * Two sub-passes are needed: type declarations are collected first so that
+ * subsequent function/variable annotations can reference user-defined type names.
  */
 function preRegisterDefinitions(elements: any[], ctx: Ctx): void {
+    // Sub-pass 1: collect @type_alias and @type_distinct declarations.
     for (const el of elements) {
         const def = extractDefinitionNode(el)
         if (!def || !def.name?.name) continue
+        const kw: string = def.keyword ?? ''
+        if (kw === '@type_alias' || kw === '@type_distinct') {
+            preRegisterTypeDecl(def, ctx)
+        }
+    }
+
+    // Sub-pass 2: register functions and value bindings using the now-populated
+    // alias table so that annotations like `x: age` resolve correctly.
+    for (const el of elements) {
+        const def = extractDefinitionNode(el)
+        if (!def || !def.name?.name) continue
+        const kw: string = def.keyword ?? ''
+        // Type declarations were handled above; skip them here.
+        if (kw === '@type_alias' || kw === '@type_distinct') continue
 
         const paramTypes: SiliconType[] = []
         for (const p of def.params || []) {
             if (p.isLiteral || !p.typeAnnotation) continue
-            paramTypes.push(parseTypeName(p.typeAnnotation.typename) ?? TypeUnknown)
+            paramTypes.push(parseTypeName(p.typeAnnotation.typename, ctx.typeAliases) ?? TypeUnknown)
         }
 
         let resultType: SiliconType = TypeUnknown
         if (def.name.typeAnnotation) {
-            const parsed = parseTypeName(def.name.typeAnnotation.typename)
+            const parsed = parseTypeName(def.name.typeAnnotation.typename, ctx.typeAliases)
             if (parsed) resultType = parsed
         }
 
@@ -201,12 +226,78 @@ function preRegisterDefinitions(elements: any[], ctx: Ctx): void {
         // Mark immutable for non-mutable definitions. @var / hook==='global'
         // is the only mutable def-kind.
         const hook = def.hook
-        const keyword = def.keyword
-        const isMutable = hook === 'global' || keyword === '@var'
+        const isMutable = hook === 'global' || kw === '@var'
         if (!isMutable) {
             ctx.immutable.add(def.name.name)
         }
     }
+}
+
+/**
+ * Register a single `@type_alias` or `@type_distinct` definition into
+ * `ctx.typeAliases`. The RHS must be a recognised type name; unknown names
+ * are recorded as errors and skipped.
+ */
+function preRegisterTypeDecl(def: any, ctx: Ctx): void {
+    const name: string = def.name.name
+    const kw: string = def.keyword ?? ''
+
+    // The RHS of a type declaration is the type annotation on the name
+    // (e.g. `@type_alias age = Int` parses `Int` as the binding typename)
+    // OR the binding expression if the annotation is absent.
+    // We read the typename from the binding's annotation or from the
+    // binding expression when it is a simple namespace.
+    const underlying = resolveTypeDeclUnderlying(def, ctx)
+    if (!underlying) return  // error already pushed by resolveTypeDeclUnderlying
+
+    if (kw === '@type_alias') {
+        // Alias: transparent — `age` IS `Int` for all type-checking purposes.
+        ctx.typeAliases.set(name, underlying)
+    } else {
+        // Distinct: opaque — `age` is a new type incompatible with `Int`.
+        ctx.typeAliases.set(name, DistinctOf(name, underlying))
+    }
+}
+
+/**
+ * Resolve the underlying type for a type declaration. The RHS is either a
+ * type annotation on the identifier (`@type_alias age:Int`) or a binding
+ * expression that is a simple namespace reference (`@type_alias age = Int`).
+ */
+function resolveTypeDeclUnderlying(def: any, ctx: Ctx): SiliconType | undefined {
+    // Form 1: `@type_alias age:Int` — annotation on the identifier itself.
+    if (def.name?.typeAnnotation?.typename) {
+        const t = parseTypeName(def.name.typeAnnotation.typename, ctx.typeAliases)
+        if (!t) ctx.errors.push({ kind: 'UnknownType', message: `unknown type '${def.name.typeAnnotation.typename}'`, sourceLocation: def.sourceLocation })
+        return t
+    }
+
+    // Form 2: `@type_alias age = Int` — binding whose expression is a namespace.
+    const bindingExpr = def.binding?.expression ?? def.binding
+    if (bindingExpr) {
+        const tyName = extractTypeNameFromExpr(bindingExpr)
+        if (tyName) {
+            const t = parseTypeName(tyName, ctx.typeAliases)
+            if (!t) ctx.errors.push({ kind: 'UnknownType', message: `unknown type '${tyName}'`, sourceLocation: def.sourceLocation })
+            return t
+        }
+    }
+
+    ctx.errors.push({ kind: 'UnknownType', message: `'${def.name.name}' type declaration has no resolvable underlying type`, sourceLocation: def.sourceLocation })
+    return undefined
+}
+
+/** Pull a plain type name out of a Namespace or StringLiteral expression node. */
+function extractTypeNameFromExpr(expr: any): string | undefined {
+    if (!expr) return undefined
+    if (expr.type === 'Namespace' && Array.isArray(expr.path) && expr.path.length === 1) {
+        return expr.path[0]
+    }
+    if (expr.type === 'StringLiteral') return expr.value
+    // Unwrap Binding / ExpressionStart / ExpressionEnd wrappers.
+    if (expr.expression) return extractTypeNameFromExpr(expr.expression)
+    if (expr.value) return extractTypeNameFromExpr(expr.value)
+    return undefined
 }
 
 // ---------------------------------------------------------------------------
@@ -291,11 +382,19 @@ function checkAssignment(a: any, ctx: Ctx): SiliconType {
 }
 
 function checkDefinition(d: any, ctx: Ctx): SiliconType {
+    const keyword: string = d.keyword ?? ''
+
+    // Type declarations are fully handled at pre-registration time; they emit
+    // no WAT and have no body to check.
+    if (keyword === '@type_alias' || keyword === '@type_distinct') {
+        return TypeUnknown
+    }
+
     // Resolve the declared type annotation (if any).
     let annotated: SiliconType | undefined
     const annotation = d.name && d.name.typeAnnotation
     if (annotation) {
-        const parsed = parseTypeName(annotation.typename)
+        const parsed = parseTypeName(annotation.typename, ctx.typeAliases)
         if (!parsed) {
             ctx.errors.push(unknownType(annotation.typename, d.sourceLocation))
         } else {
@@ -311,7 +410,7 @@ function checkDefinition(d: any, ctx: Ctx): SiliconType {
             for (const param of d.params || []) {
                 if (param.isLiteral) continue
                 if (param.typeAnnotation) {
-                    const pt = parseTypeName(param.typeAnnotation.typename)
+                    const pt = parseTypeName(param.typeAnnotation.typename, inner.typeAliases)
                     if (!pt) {
                         ctx.errors.push(unknownType(param.typeAnnotation.typename, d.sourceLocation))
                     } else {
@@ -334,7 +433,7 @@ function checkDefinition(d: any, ctx: Ctx): SiliconType {
         const paramTypes: SiliconType[] = []
         for (const param of d.params || []) {
             if (param.isLiteral || !param.typeAnnotation) continue
-            paramTypes.push(parseTypeName(param.typeAnnotation.typename) ?? TypeUnknown)
+            paramTypes.push(parseTypeName(param.typeAnnotation.typename, ctx.typeAliases) ?? TypeUnknown)
         }
         ctx.functions.set(d.name.name, { params: paramTypes, result: finalType })
 
@@ -348,7 +447,6 @@ function checkDefinition(d: any, ctx: Ctx): SiliconType {
 
         // Mark immutable. @var / hook==='global' is the only mutable def-kind.
         const hook = (d as any).hook
-        const keyword = d.keyword
         const isMutable = hook === 'global' || keyword === '@var'
         if (!isMutable) {
             ctx.immutable.add(d.name.name)

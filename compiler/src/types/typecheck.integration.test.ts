@@ -245,3 +245,62 @@ test('String < String is a type error', () => {
     expect(errors.length).toBeGreaterThan(0)
     expect(errors[0].kind).toBe('InvalidOperator')
 })
+
+// ---------------------------------------------------------------------------
+// @type_alias
+// ---------------------------------------------------------------------------
+
+test('@type_alias: declaration alone produces no errors', () => {
+    const { errors } = check('@type_alias age := Int;')
+    expect(errors).toHaveLength(0)
+})
+
+test('@type_alias: annotation using the alias resolves correctly', () => {
+    const { errors } = check('@type_alias age := Int;\n@let my_age:age := 34;')
+    expect(errors).toHaveLength(0)
+})
+
+test('@type_alias: alias is transparent — alias value + Int is valid', () => {
+    const { errors } = check('@type_alias age := Int;\n@let x:age := 5;\nx + 10;')
+    expect(errors).toHaveLength(0)
+})
+
+test('@type_alias: alias registered in typeAliases map', () => {
+    const { typeAliases } = check('@type_alias Metres := Int;')
+    expect(typeAliases.has('Metres')).toBe(true)
+    const t = typeAliases.get('Metres')!
+    expect(t.kind).toBe('Int')
+})
+
+test('@type_alias: unknown underlying type is an error', () => {
+    const { errors } = check('@type_alias Foo := NonExistentType;')
+    expect(errors.length).toBeGreaterThan(0)
+    expect(errors[0].kind).toBe('UnknownType')
+})
+
+// ---------------------------------------------------------------------------
+// @type_distinct
+// ---------------------------------------------------------------------------
+
+test('@type_distinct: declaration alone produces no errors', () => {
+    const { errors } = check('@type_distinct UserId := Int;')
+    expect(errors).toHaveLength(0)
+})
+
+test('@type_distinct: registered as Distinct kind in typeAliases', () => {
+    const { typeAliases } = check('@type_distinct UserId := Int;')
+    expect(typeAliases.has('UserId')).toBe(true)
+    const t = typeAliases.get('UserId')!
+    expect(t.kind).toBe('Distinct')
+    if (t.kind === 'Distinct') {
+        expect(t.name).toBe('UserId')
+        expect(t.underlying.kind).toBe('Int')
+    }
+})
+
+test('@type_distinct: assigning Int to distinct-typed binding is a type error', () => {
+    const { errors } = check('@type_distinct UserId := Int;\n@let id:UserId := 42;')
+    // 42 is Int; UserId is Distinct — they are not equal, so this is a type error.
+    expect(errors.length).toBeGreaterThan(0)
+    expect(errors[0].kind).toBe('Annotation')
+})

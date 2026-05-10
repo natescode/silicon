@@ -13,3 +13,11 @@
 @stratum ExternDef (Keyword, '@extern', Node) = {
   &WASM::def_extern;
 };
+
+@stratum TypeAliasDef (Keyword, '@type_alias', Node) = {
+  &WASM::def_type_alias;
+};
+
+@stratum TypeDistinctDef (Keyword, '@type_distinct', Node) = {
+  &WASM::def_type_distinct;
+};
