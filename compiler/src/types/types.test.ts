@@ -13,6 +13,7 @@ import {
     ArrayOf,
     FunctionOf,
     DistinctOf,
+    SumOf,
     wasmTypeOf,
     typeEquals,
     formatType,
@@ -201,4 +202,38 @@ test('parseTypeName: resolves alias names from the alias table', () => {
 test('parseTypeName: alias table is optional — built-in names still resolve', () => {
     expect(parseTypeName('Int')).toBe(TypeInt)
     expect(parseTypeName('Float')).toBe(TypeFloat)
+})
+
+// ------------------------------------------------------------------
+// Sum types
+// ------------------------------------------------------------------
+
+test('SumOf: creates a Sum kind with correct name and variants', () => {
+    const color = SumOf('Color', ['Red', 'Green', 'Blue'])
+    expect(color.kind).toBe('Sum')
+    if (color.kind === 'Sum') {
+        expect(color.name).toBe('Color')
+        expect(color.variants).toEqual(['Red', 'Green', 'Blue'])
+    }
+})
+
+test('wasmTypeOf: Sum lowers to i32', () => {
+    expect(wasmTypeOf(SumOf('Color', ['Red', 'Green', 'Blue']))).toBe('i32')
+})
+
+test('typeEquals: Sum is equal only to itself (same name)', () => {
+    const color = SumOf('Color', ['Red', 'Green', 'Blue'])
+    const color2 = SumOf('Color', ['Red', 'Green', 'Blue'])
+    const direction = SumOf('Direction', ['North', 'South'])
+    expect(typeEquals(color, color2)).toBe(true)
+    expect(typeEquals(color, direction)).toBe(false)
+    expect(typeEquals(color, TypeInt)).toBe(false)
+})
+
+test('formatType: Sum renders as Name(V1 | V2 | ...)', () => {
+    expect(formatType(SumOf('Color', ['Red', 'Green', 'Blue']))).toBe('Color(Red | Green | Blue)')
+})
+
+test('isEqualityComparable: Sum types support == and !=', () => {
+    expect(isEqualityComparable(SumOf('Color', ['Red', 'Green']))).toBe(true)
 })

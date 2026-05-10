@@ -221,6 +221,23 @@ export default function addCompileSemantics(
         return `(import "env" "${watName}" (func $${watName} ${sig}))`
     }
 
+    // Emit immutable i32 globals for each variant of a @type_sum.
+    // `binding` is the Binding? node; its sourceString gives us the raw
+    // `Variant1 | Variant2 | ...` text without triggering a compile walk of
+    // the unregistered `|` operator.
+    function compileSumType(typedId: any, binding: any): string {
+        if (binding.children.length === 0) return ''
+        // Binding = ":=" ExpressionStart — children[1] is the ExpressionStart.
+        const exprSource: string = binding.children[0].children[1].sourceString
+        const typeName = toWatIdentifier(typedId.compile())
+        const variants = exprSource.split('|').map((s: string) => s.trim()).filter(Boolean)
+        return variants
+            .map((v: string, i: number) =>
+                `(global $${toWatIdentifier(`${typeName}::${v}`)} i32 (i32.const ${i}))`
+            )
+            .join('\n')
+    }
+
     // Emit a WAT (global ...) mutable global for the 'global' Def-Kind.
     function compileGlobal(typedId: any, binding: any): string {
         const name = typedId.compile()
@@ -336,6 +353,8 @@ export default function addCompileSemantics(
                 case 'type_distinct':
                     // Type declarations are compile-time only; they produce no WAT.
                     return ''
+                case 'type_sum':
+                    return compileSumType(typedId, binding)
                 default:
                     throw new Error(`Unhandled codegenKind: ${(entry as any).codegenKind}`)
             }

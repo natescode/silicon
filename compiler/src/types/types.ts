@@ -42,6 +42,9 @@ export type SiliconType =
     // WASM, but incompatible with it (and with other Distinct types) at the
     // Silicon level. Use `wasmTypeOf` to get the concrete WASM encoding.
     | { kind: 'Distinct'; name: string; underlying: SiliconType }
+    // A user-defined sum type. Variants are stored as i32 constants (0, 1, …)
+    // and are accessed as `Name::Variant` namespace references.
+    | { kind: 'Sum'; name: string; variants: string[] }
     // `Unknown` is the top type used when the checker cannot determine a type
     // (e.g. references to unbound identifiers). It never appears in a
     // well-typed program. Downstream code should treat `Unknown` as "do not
@@ -89,6 +92,15 @@ export function DistinctOf(name: string, underlying: SiliconType): SiliconType {
 }
 
 /**
+ * Construct a Sum type. Variants are the names of each constructor
+ * (e.g. `['Red', 'Green', 'Blue']` for `Color`). All variants lower to i32
+ * constants (0, 1, 2, …) in WAT and are accessed as `Name::Variant`.
+ */
+export function SumOf(name: string, variants: string[]): SiliconType {
+    return { kind: 'Sum', name, variants }
+}
+
+/**
  * Map a SiliconType to its WebAssembly value type.
  *
  * This is the single source of truth for the language → WASM lowering. Codegen
@@ -106,6 +118,8 @@ export function wasmTypeOf(t: SiliconType): WasmType {
             return 'f32'
         case 'Distinct':
             return wasmTypeOf(t.underlying)
+        case 'Sum':
+            return 'i32'
         case 'Unknown':
             // Conservative: assume i32 so codegen still emits something plausible
             // when a type error has been reported upstream.
@@ -132,6 +146,10 @@ export function typeEquals(a: SiliconType, b: SiliconType): boolean {
     if (a.kind === 'Distinct' && b.kind === 'Distinct') {
         return a.name === b.name
     }
+    // Sum types are equal only to themselves (same name).
+    if (a.kind === 'Sum' && b.kind === 'Sum') {
+        return a.name === b.name
+    }
     return true
 }
 
@@ -148,6 +166,7 @@ export function formatType(t: SiliconType): string {
         case 'Array': return `Array[${formatType(t.element)}]`
         case 'Function': return `Function(${t.params.map(formatType).join(', ')}) -> ${formatType(t.result)}`
         case 'Distinct': return t.name
+        case 'Sum': return `${t.name}(${t.variants.join(' | ')})`
         case 'Unknown': return '<unknown>'
     }
 }
@@ -200,5 +219,5 @@ export function isComparable(t: SiliconType): boolean {
  * String is included — compares pointers (reference equality).
  */
 export function isEqualityComparable(t: SiliconType): boolean {
-    return t.kind === 'Int' || t.kind === 'Float' || t.kind === 'Bool' || t.kind === 'String'
+    return t.kind === 'Int' || t.kind === 'Float' || t.kind === 'Bool' || t.kind === 'String' || t.kind === 'Sum'
 }

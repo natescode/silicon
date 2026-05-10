@@ -655,6 +655,15 @@ export const wasmIntrinsics: Record<string, WasmIntrinsic> = {
         outputs: 0,
         description: 'Sentinel: definition keyword declares an opaque distinct type — incompatible with its underlying type, erased at codegen',
     },
+    def_type_sum: {
+        name: 'WASM::def_type_sum',
+        wasmInstr: '',
+        binary: false,
+        unary: false,
+        inputs: 0,
+        outputs: 0,
+        description: 'Sentinel: definition keyword declares a sum type — variants are emitted as immutable i32 globals, type itself is erased',
+    },
 }
 
 /**

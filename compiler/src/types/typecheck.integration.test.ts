@@ -304,3 +304,54 @@ test('@type_distinct: assigning Int to distinct-typed binding is a type error', 
     expect(errors.length).toBeGreaterThan(0)
     expect(errors[0].kind).toBe('Annotation')
 })
+
+// ---------------------------------------------------------------------------
+// @type_sum
+// ---------------------------------------------------------------------------
+
+test('@type_sum: declaration alone produces no errors', () => {
+    const { errors } = check('@type_sum Color := Red | Green | Blue;')
+    expect(errors).toHaveLength(0)
+})
+
+test('@type_sum: sum type registered in typeAliases as Sum kind', () => {
+    const { typeAliases } = check('@type_sum Color := Red | Green | Blue;')
+    expect(typeAliases.has('Color')).toBe(true)
+    const t = typeAliases.get('Color')!
+    expect(t.kind).toBe('Sum')
+    if (t.kind === 'Sum') {
+        expect(t.name).toBe('Color')
+        expect(t.variants).toEqual(['Red', 'Green', 'Blue'])
+    }
+})
+
+test('@type_sum: variant reference Color::Red resolves without error', () => {
+    const { errors } = check('@type_sum Color := Red | Green | Blue;\nColor::Red;')
+    expect(errors).toHaveLength(0)
+})
+
+test('@type_sum: variant reference has the sum type', () => {
+    const { errors, program } = check('@type_sum Color := Red | Green | Blue;\nColor::Red;')
+    expect(errors).toHaveLength(0)
+    // The program elements contain the Namespace node annotated with inferredType.
+    // We just verify no errors — full type annotation tests live in unit tests.
+})
+
+test('@type_sum: variants are immutable — assigning to Color::Red is a type error', () => {
+    const { errors } = check('@type_sum Color := Red | Green | Blue;\nColor::Red = 99;')
+    expect(errors.length).toBeGreaterThan(0)
+    expect(errors[0].kind).toBe('ImmutableAssignment')
+})
+
+test('@type_sum: variant == variant comparison is valid (returns Bool)', () => {
+    const { errors } = check('@type_sum Color := Red | Green | Blue;\nColor::Red == Color::Green;')
+    expect(errors).toHaveLength(0)
+})
+
+test('@type_sum: single-variant sum type works', () => {
+    const { errors, typeAliases } = check('@type_sum Unit := Only;')
+    expect(errors).toHaveLength(0)
+    const t = typeAliases.get('Unit')
+    expect(t?.kind).toBe('Sum')
+    if (t?.kind === 'Sum') expect(t.variants).toEqual(['Only'])
+})

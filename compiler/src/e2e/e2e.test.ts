@@ -703,3 +703,26 @@ test("E2E: @type_distinct compiles without error and emits no WAT for the declar
     expect(result.wat).toBeDefined();
     expect(result.wat).not.toContain("UserId");
 });
+
+// ---------------------------------------------------------------------------
+// @type_sum — full pipeline
+// ---------------------------------------------------------------------------
+
+test("E2E: @type_sum emits an immutable i32 global for each variant", () => {
+    const result = compileSource("@type_sum Color := Red | Green | Blue;");
+
+    expect(result.success).toBe(true);
+    expect(result.wat).toBeDefined();
+    // WAT identifiers use _ instead of ::, so Color::Red → $Color_Red.
+    expect(result.wat).toContain("(global $Color_Red i32 (i32.const 0))");
+    expect(result.wat).toContain("(global $Color_Green i32 (i32.const 1))");
+    expect(result.wat).toContain("(global $Color_Blue i32 (i32.const 2))");
+});
+
+test("E2E: @type_sum variant reference resolves via global.get", () => {
+    const result = compileSource("@type_sum Color := Red | Green | Blue;\nColor::Red;");
+
+    expect(result.success).toBe(true);
+    expect(result.wat).toBeDefined();
+    expect(result.wat).toContain("global.get $Color_Red");
+});

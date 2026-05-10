@@ -112,6 +112,7 @@ function codegenKindFromIntrinsic(intrinsic: string | undefined): CodegenKind | 
   if (intrinsic === 'WASM::def_extern') return 'extern'
   if (intrinsic === 'WASM::def_type_alias') return 'type_alias'
   if (intrinsic === 'WASM::def_type_distinct') return 'type_distinct'
+  if (intrinsic === 'WASM::def_type_sum') return 'type_sum'
   return undefined
 }
 

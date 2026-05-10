@@ -60,6 +60,7 @@ import {
     ArrayOf,
     FunctionOf,
     DistinctOf,
+    SumOf,
     typeEquals,
     parseTypeName,
     isNumeric,
@@ -187,7 +188,7 @@ function preRegisterDefinitions(elements: any[], ctx: Ctx): void {
         const def = extractDefinitionNode(el)
         if (!def || !def.name?.name) continue
         const kw: string = def.keyword ?? ''
-        if (kw === '@type_alias' || kw === '@type_distinct') {
+        if (kw === '@type_alias' || kw === '@type_distinct' || kw === '@type_sum') {
             preRegisterTypeDecl(def, ctx)
         }
     }
@@ -199,7 +200,7 @@ function preRegisterDefinitions(elements: any[], ctx: Ctx): void {
         if (!def || !def.name?.name) continue
         const kw: string = def.keyword ?? ''
         // Type declarations were handled above; skip them here.
-        if (kw === '@type_alias' || kw === '@type_distinct') continue
+        if (kw === '@type_alias' || kw === '@type_distinct' || kw === '@type_sum') continue
 
         const paramTypes: SiliconType[] = []
         for (const p of def.params || []) {
@@ -242,6 +243,11 @@ function preRegisterTypeDecl(def: any, ctx: Ctx): void {
     const name: string = def.name.name
     const kw: string = def.keyword ?? ''
 
+    if (kw === '@type_sum') {
+        preRegisterSumType(def, ctx)
+        return
+    }
+
     // The RHS of a type declaration is the type annotation on the name
     // (e.g. `@type_alias age = Int` parses `Int` as the binding typename)
     // OR the binding expression if the annotation is absent.
@@ -257,6 +263,60 @@ function preRegisterTypeDecl(def: any, ctx: Ctx): void {
         // Distinct: opaque — `age` is a new type incompatible with `Int`.
         ctx.typeAliases.set(name, DistinctOf(name, underlying))
     }
+}
+
+/**
+ * Register a `@type_sum` declaration. Extracts variant names from the
+ * `|`-separated binding expression, registers the sum type in the alias table,
+ * and registers each variant as an immutable symbol of the sum type so that
+ * `Color::Red` resolves correctly at use sites.
+ */
+function preRegisterSumType(def: any, ctx: Ctx): void {
+    const name: string = def.name.name
+    const binding = Array.isArray(def.binding) ? def.binding[0] : def.binding
+    const bindingExpr = binding?.expression ?? binding
+
+    const variants = extractSumVariants(bindingExpr)
+    if (variants.length === 0) {
+        ctx.errors.push({
+            kind: 'UnknownType',
+            message: `'${name}' sum type has no variants`,
+            sourceLocation: def.sourceLocation,
+        })
+        return
+    }
+
+    const sumType = SumOf(name, variants)
+    ctx.typeAliases.set(name, sumType)
+
+    // Register each variant as a value of the sum type.
+    // Variants are accessed as `Name::Variant` in code, matching how the
+    // namespace resolver joins path segments with `::`.
+    for (const variant of variants) {
+        const key = `${name}::${variant}`
+        ctx.symbols.set(key, sumType)
+        ctx.immutable.add(key)
+    }
+}
+
+/**
+ * Walk a BinaryOp tree collecting all operands of `|` operators as variant
+ * names. A single-variant sum (`@type_sum Unit := Only`) produces one entry.
+ */
+function extractSumVariants(expr: any): string[] {
+    if (!expr || typeof expr !== 'object') return []
+    // Unwrap Binding / ExpressionStart / wrapper nodes.
+    if (expr.expression) return extractSumVariants(expr.expression)
+    if (expr.value && expr.type !== 'BinaryOp') return extractSumVariants(expr.value)
+    // BinaryOp with '|' — collect from both sides.
+    if (expr.type === 'BinaryOp' && expr.operator === '|') {
+        return [...extractSumVariants(expr.left), ...extractSumVariants(expr.right)]
+    }
+    // Namespace leaf — the variant name is the last path segment.
+    if (expr.type === 'Namespace' && Array.isArray(expr.path) && expr.path.length > 0) {
+        return [expr.path[expr.path.length - 1]]
+    }
+    return []
 }
 
 /**
@@ -386,7 +446,7 @@ function checkDefinition(d: any, ctx: Ctx): SiliconType {
 
     // Type declarations are fully handled at pre-registration time; they emit
     // no WAT and have no body to check.
-    if (keyword === '@type_alias' || keyword === '@type_distinct') {
+    if (keyword === '@type_alias' || keyword === '@type_distinct' || keyword === '@type_sum') {
         return TypeUnknown
     }
 

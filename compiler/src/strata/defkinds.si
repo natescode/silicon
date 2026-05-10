@@ -21,3 +21,7 @@
 @stratum TypeDistinctDef (Keyword, '@type_distinct', Node) = {
   &WASM::def_type_distinct;
 };
+
+@stratum TypeSumDef (Keyword, '@type_sum', Node) = {
+  &WASM::def_type_sum;
+};
