@@ -604,6 +604,34 @@ export const wasmIntrinsics: Record<string, WasmIntrinsic> = {
             return `(block $brk_${id}\n  (loop $cont_${id}\n    (br_if $brk_${id} (i32.eqz\n      ${condWat}\n    ))\n    ${bodyWat}\n    (br $cont_${id})\n  )\n)`
         },
     },
+    control_match: {
+        name: 'WASM::control_match',
+        wasmInstr: 'if',
+        binary: false,
+        unary: false,
+        inputs: -1,
+        outputs: -1,
+        description: 'WAT nested (if/then/else) chain for sum type pattern matching — used by the @match stratum',
+        emitStructured(args, ctx) {
+            const [discWat, ...armWats] = args
+            // armWats = [pat0, res0, pat1, res1, ...] — pairs of (pattern, result)
+            const resultWats = armWats.filter((_, i) => i % 2 === 1)
+            const isFloat = resultWats.some(w => /f32\./.test(w))
+            const resultType = isFloat ? 'f32' : 'i32'
+
+            function buildMatch(arms: string[]): string {
+                if (arms.length === 0) return '(unreachable)'
+                const [pat, res, ...rest] = arms
+                const inner = buildMatch(rest)
+                if (ctx.inExprPosition) {
+                    return `(if (result ${resultType}) (i32.eq ${discWat} ${pat}) (then ${res}) (else ${inner}))`
+                }
+                return `(if (i32.eq ${discWat} ${pat}) (then ${res}) (else ${inner}))`
+            }
+
+            return buildMatch(armWats)
+        },
+    },
 
     // ============================================================================
     // Def-Kind Sentinels (used by @let / @fn / @var strata in defkinds.si)

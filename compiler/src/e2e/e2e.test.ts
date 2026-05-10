@@ -726,3 +726,39 @@ test("E2E: @type_sum variant reference resolves via global.get", () => {
     expect(result.wat).toBeDefined();
     expect(result.wat).toContain("global.get $Color_Red");
 });
+
+// ---------------------------------------------------------------------------
+// @match — full pipeline
+// ---------------------------------------------------------------------------
+
+test("E2E: @match emits nested (if ...) chain with i32.eq comparisons", () => {
+    const src = [
+        "@type_sum Color := Red | Green | Blue;",
+        "@var c:Color := Color::Red;",
+        "&@match c, Color::Red, { 1 }, Color::Green, { 2 }, Color::Blue, { 3 };",
+    ].join("\n");
+    const result = compileSource(src);
+
+    expect(result.success).toBe(true);
+    expect(result.wat).toBeDefined();
+    // Each arm is compiled as a nested (if ...) with i32.eq discriminant check.
+    expect(result.wat).toContain("i32.eq");
+    expect(result.wat).toContain("global.get $Color_Red");
+    expect(result.wat).toContain("global.get $Color_Green");
+    expect(result.wat).toContain("global.get $Color_Blue");
+    // Exhaustive match ends with (unreachable).
+    expect(result.wat).toContain("unreachable");
+});
+
+test("E2E: @match in expression position emits (if (result i32) ...)", () => {
+    const src = [
+        "@type_sum Color := Red | Green | Blue;",
+        "@var c:Color := Color::Red;",
+        "@let label := { &@match c, Color::Red, { 1 }, Color::Green, { 2 }, Color::Blue, { 3 } };",
+    ].join("\n");
+    const result = compileSource(src);
+
+    expect(result.success).toBe(true);
+    expect(result.wat).toBeDefined();
+    expect(result.wat).toContain("(result i32)");
+});

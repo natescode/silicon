@@ -355,3 +355,48 @@ test('@type_sum: single-variant sum type works', () => {
     expect(t?.kind).toBe('Sum')
     if (t?.kind === 'Sum') expect(t.variants).toEqual(['Only'])
 })
+
+// ---------------------------------------------------------------------------
+// @match
+// ---------------------------------------------------------------------------
+
+test('@match: basic sum type matching has no errors', () => {
+    const { errors } = check(
+        '@type_sum Color := Red | Green | Blue;\n' +
+        '@var c:Color := Color::Red;\n' +
+        '&@match c, Color::Red, { 1 }, Color::Green, { 2 }, Color::Blue, { 3 };'
+    )
+    expect(errors).toHaveLength(0)
+})
+
+test('@match: wrong pattern type is a type error', () => {
+    // Pattern is Int literal, discriminant is Color — Mismatch
+    const { errors } = check(
+        '@type_sum Color := Red | Green | Blue;\n' +
+        '@var c:Color := Color::Red;\n' +
+        '&@match c, 1, { 10 }, 2, { 20 };'
+    )
+    expect(errors.length).toBeGreaterThan(0)
+    expect(errors[0].kind).toBe('Mismatch')
+})
+
+test('@match: mismatched arm result types is a type error', () => {
+    // First arm returns Int, second returns Float
+    const { errors } = check(
+        '@type_sum Color := Red | Green | Blue;\n' +
+        '@var c:Color := Color::Red;\n' +
+        '&@match c, Color::Red, { 1 }, Color::Green, { 2.5 };'
+    )
+    expect(errors.length).toBeGreaterThan(0)
+    expect(errors[0].kind).toBe('Mismatch')
+})
+
+test('@match: result type flows through to caller', () => {
+    // @match returns Int, so 3 + result should be valid
+    const { errors } = check(
+        '@type_sum Color := Red | Green | Blue;\n' +
+        '@var c:Color := Color::Red;\n' +
+        '3 + &@match c, Color::Red, { 1 }, Color::Green, { 2 }, Color::Blue, { 3 };'
+    )
+    expect(errors).toHaveLength(0)
+})

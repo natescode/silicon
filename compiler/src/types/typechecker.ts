@@ -641,7 +641,7 @@ function checkFunctionCall(call: any, ctx: Ctx): SiliconType {
         return sig.result
     }
 
-    // Builtin keyword strata (@if, @loop, …) — look up via the registry.
+    // Builtin keyword strata (@if, @loop, @match, …) — look up via the registry.
     if (call.isBuiltin && ctx.registry) {
         const kwEntry = lookupKeyword(ctx.registry, name)
         if (kwEntry?.data?.intrinsic === 'WASM::control_if') {
@@ -649,6 +649,9 @@ function checkFunctionCall(call: any, ctx: Ctx): SiliconType {
         }
         if (kwEntry?.data?.intrinsic === 'WASM::control_loop') {
             return TypeUnknown  // loops are void (no result value)
+        }
+        if (kwEntry?.data?.intrinsic === 'WASM::control_match') {
+            return typeOfMatchCall(argTypes, call.sourceLocation, ctx)
         }
     }
 
@@ -676,6 +679,43 @@ function typeOfIfCall(argTypes: SiliconType[], loc: any, ctx: Ctx): SiliconType 
         return TypeUnknown
     }
     return thenT
+}
+
+function typeOfMatchCall(argTypes: SiliconType[], loc: any, ctx: Ctx): SiliconType {
+    // args = [discriminant, pat0, res0, pat1, res1, ...]
+    // Must have at least 3 args (discriminant + 1 arm) and an odd total count.
+    if (argTypes.length < 3 || argTypes.length % 2 === 0) {
+        ctx.errors.push({
+            kind: 'Mismatch',
+            message: `@match requires an odd number of arguments ≥ 3: discriminant, pattern, result, ...`,
+            sourceLocation: loc,
+        })
+        return TypeUnknown
+    }
+
+    const discT = argTypes[0]
+    let resultT: SiliconType = TypeUnknown
+
+    for (let i = 1; i < argTypes.length; i += 2) {
+        const patT = argTypes[i]
+        const resT = argTypes[i + 1] ?? TypeUnknown
+
+        // Each pattern must have the same type as the discriminant.
+        if (discT.kind !== 'Unknown' && patT.kind !== 'Unknown' && !typeEquals(discT, patT)) {
+            ctx.errors.push(mismatch(discT, patT, `@match pattern ${Math.floor(i / 2)}`, loc))
+        }
+
+        // All arm results must agree on one type.
+        if (resT.kind !== 'Unknown') {
+            if (resultT.kind === 'Unknown') {
+                resultT = resT
+            } else if (!typeEquals(resultT, resT)) {
+                ctx.errors.push(mismatch(resultT, resT, `@match arm ${Math.floor(i / 2)} result`, loc))
+            }
+        }
+    }
+
+    return resultT
 }
 
 // ---------------------------------------------------------------------------
