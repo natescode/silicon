@@ -637,6 +637,24 @@ export const wasmIntrinsics: Record<string, WasmIntrinsic> = {
         outputs: 0,
         description: 'Sentinel: definition keyword lowers to a WAT (import "env" "name" (func ...))',
     },
+    def_type_alias: {
+        name: 'WASM::def_type_alias',
+        wasmInstr: '',
+        binary: false,
+        unary: false,
+        inputs: 0,
+        outputs: 0,
+        description: 'Sentinel: definition keyword declares a transparent type alias — erased at codegen, no WAT emitted',
+    },
+    def_type_distinct: {
+        name: 'WASM::def_type_distinct',
+        wasmInstr: '',
+        binary: false,
+        unary: false,
+        inputs: 0,
+        outputs: 0,
+        description: 'Sentinel: definition keyword declares an opaque distinct type — incompatible with its underlying type, erased at codegen',
+    },
 }
 
 /**
