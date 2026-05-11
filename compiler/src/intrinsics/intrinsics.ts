@@ -692,6 +692,15 @@ export const wasmIntrinsics: Record<string, WasmIntrinsic> = {
         outputs: 0,
         description: 'Sentinel: definition keyword declares a sum type — variants are emitted as immutable i32 globals, type itself is erased',
     },
+    def_local: {
+        name: 'WASM::def_local',
+        wasmInstr: '',
+        binary: false,
+        unary: false,
+        inputs: 0,
+        outputs: 0,
+        description: 'Sentinel: definition keyword declares a block-local variable — emits (local ...) in the enclosing function preamble and local.set at the binding site',
+    },
 }
 
 /**

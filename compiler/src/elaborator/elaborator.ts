@@ -39,7 +39,7 @@ import {
   lookupDefKindEntry,
   type ElaboratorRegistry
 } from './registry'
-import { StrataType, type StrataNode } from './strataenum'
+import { StrataType, type StrataNode, strataTypeFromIntrinsic } from './strataenum'
 import { registerDefKind, type CodegenKind } from './defkinds'
 import { loadBuiltinStrata } from '../strata/index'
 import parse from '../parser'
@@ -113,6 +113,7 @@ function codegenKindFromIntrinsic(intrinsic: string | undefined): CodegenKind | 
   if (intrinsic === 'WASM::def_type_alias') return 'type_alias'
   if (intrinsic === 'WASM::def_type_distinct') return 'type_distinct'
   if (intrinsic === 'WASM::def_type_sum') return 'type_sum'
+  if (intrinsic === 'WASM::def_local') return 'local'
   return undefined
 }
 
@@ -142,8 +143,9 @@ function parseBuiltinStrata(): Elaboration[] {
  */
 function elaborationToStrataNode(elaboration: Elaboration): StrataNode {
   const intrinsic = extractIntrinsicFromBody(elaboration.semantics)
+  const kind = elaboration.kind as 'operator' | 'keyword'
   return {
-    type: StrataType.Operator,
+    type: strataTypeFromIntrinsic(intrinsic, kind),
     discriminant: symbolToString(elaboration.symbol),
     data: {
       nodeParamName: elaboration.nodeParamName,

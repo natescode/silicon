@@ -161,8 +161,20 @@ export default function addCompileSemantics(
     // tests don't bleed state into each other.
     const staticData = createStaticData()
     let loopCount = 0
-    // Names of the current function's parameters so namespace refs use local.get.
+    // Names of the current function's parameters AND @local variables so
+    // namespace refs inside the function use local.get / local.set.
     let currentParams: Set<string> = new Set()
+    // WAT type for each @local variable declared inside the current function.
+    // Populated as @local bindings are compiled; flushed into the function
+    // preamble by compileFunction.  Saved/restored on function entry/exit.
+    let currentLocals: Map<string, string> = new Map()
+    // WAT identifiers of every module-level global emitted so far (from @var
+    // and @type_sum variants). Used by ExpressionEnd_namespace to decide
+    // whether to emit global.get rather than (call ...).
+    const compiledGlobals: Set<string> = new Set()
+    // WAT identifiers of zero-arg functions emitted at module level (from
+    // zero-param @let / @fn). References use (call $name) not global.get.
+    const compiledZeroArgFuncs: Set<string> = new Set()
     // True when the current node is in expression position (its value is consumed by
     // a caller). Used by IfExpr to decide whether to emit (result type).
     let inExprPosition: boolean = false
@@ -173,18 +185,36 @@ export default function addCompileSemantics(
         const name = typedId.compile()
         const watName = toWatIdentifier(name)
 
+        const hasParams = params.asIteration().children.length > 0
+        // A zero-param function at module level (not nested inside another
+        // function) is tracked so namespace references emit (call $name).
+        if (!hasParams && currentParams.size === 0) {
+            compiledZeroArgFuncs.add(watName)
+        }
+
         const paramNames: Set<string> = new Set()
         params.asIteration().children.forEach((p: any) => {
             const raw = p.sourceString.split(':')[0].trim()
             if (raw) paramNames.add(toWatIdentifier(raw))
         })
+
+        // Save and reset function-level state for this new function scope.
         const prevParams = currentParams
+        const prevLocals = currentLocals
         currentParams = paramNames
+        currentLocals = new Map()
 
         const paramList = params.asIteration().children.map((p: any) => p.compile()).join(' ')
         const body = binding.children.length > 0 ? binding.children[0].compile() : ''
 
+        // Collect @local variable declarations accumulated during body compilation.
+        const localsDecl = [...currentLocals.entries()]
+            .map(([n, t]) => `(local $${n} ${t})`)
+            .join('\n')
+
+        // Restore outer function state.
         currentParams = prevParams
+        currentLocals = prevLocals
 
         const retTypeName = typedId.type()
         const hasBinding = binding.children.length > 0
@@ -203,9 +233,34 @@ export default function addCompileSemantics(
             resultDecl = ''
         }
 
-        const funcDecl = `(func $${watName} ${paramList} ${resultDecl} (local $addr i32)\n${body}\n)`
+        const preamble = ['(local $addr i32)', localsDecl].filter(s => s).join('\n')
+        const funcDecl = `(func $${watName} ${paramList} ${resultDecl} ${preamble}\n${body}\n)`
         const exportDecl = `(export "${watName}" (func $${watName}))`
         return `${funcDecl}\n${exportDecl}`
+    }
+
+    // Emit local.set + update tracking state for the 'local' Def-Kind.
+    // The (local $name type) declaration is accumulated in currentLocals and
+    // flushed into the function preamble by compileFunction.
+    function compileLocal(typedId: any, binding: any): string {
+        const name = typedId.compile()
+        const watName = toWatIdentifier(name)
+        const retTypeName = typedId.type()
+        const watType = retTypeName ? siliconTypeToWat(retTypeName) : 'i32'
+
+        // Register this local so the function preamble includes its declaration.
+        currentLocals.set(watName, watType)
+        // Register in currentParams so subsequent references emit local.get.
+        currentParams.add(watName)
+
+        const prev = inExprPosition
+        inExprPosition = true
+        const initExpr = binding.children.length > 0
+            ? binding.children[0].compile()
+            : `(${watType}.const 0)`
+        inExprPosition = prev
+
+        return `${initExpr}\nlocal.set $${watName}`
     }
 
     // Emit a WAT (import "env" ...) declaration for the 'extern' Def-Kind.
@@ -232,9 +287,11 @@ export default function addCompileSemantics(
         const typeName = toWatIdentifier(typedId.compile())
         const variants = exprSource.split('|').map((s: string) => s.trim()).filter(Boolean)
         return variants
-            .map((v: string, i: number) =>
-                `(global $${toWatIdentifier(`${typeName}::${v}`)} i32 (i32.const ${i}))`
-            )
+            .map((v: string, i: number) => {
+                const watName = toWatIdentifier(`${typeName}::${v}`)
+                compiledGlobals.add(watName)
+                return `(global $${watName} i32 (i32.const ${i}))`
+            })
             .join('\n')
     }
 
@@ -242,6 +299,7 @@ export default function addCompileSemantics(
     function compileGlobal(typedId: any, binding: any): string {
         const name = typedId.compile()
         const watName = toWatIdentifier(name)
+        compiledGlobals.add(watName)
         const retTypeName = typedId.type()
         const watType = retTypeName ? siliconTypeToWat(retTypeName) : 'i32'
         const initExpr = binding.children.length > 0
@@ -349,6 +407,8 @@ export default function addCompileSemantics(
                     return compileGlobal(typedId, binding)
                 case 'extern':
                     return compileExtern(typedId, params)
+                case 'local':
+                    return compileLocal(typedId, binding)
                 case 'type_alias':
                 case 'type_distinct':
                     // Type declarations are compile-time only; they produce no WAT.
@@ -442,9 +502,19 @@ export default function addCompileSemantics(
         ExpressionEnd_namespace(ns) {
             const name = ns.compile();
             const watName = toWatIdentifier(name);
+            // 1. Function parameters and @local variables → local.get
             if (currentParams.has(watName)) {
                 return `(local.get $${watName})`;
             }
+            // 2. Known WAT globals (@var, @type_sum variants) → global.get
+            if (compiledGlobals.has(watName)) {
+                return `(global.get $${watName})`;
+            }
+            // 3. Zero-arg function (zero-param @let / @fn) → call
+            if (compiledZeroArgFuncs.has(watName)) {
+                return `(call $${watName})`;
+            }
+            // 4. Fallback: assume global (implicit assignments, forward refs)
             return `(global.get $${watName})`;
         },
         ExpressionEnd_block(block) {

@@ -750,6 +750,89 @@ test("E2E: @match emits nested (if ...) chain with i32.eq comparisons", () => {
     expect(result.wat).toContain("unreachable");
 });
 
+// ---------------------------------------------------------------------------
+// @local — block-local variables
+// ---------------------------------------------------------------------------
+
+test("E2E: @local emits (local ...) in function preamble", () => {
+    const src = "@let f x:Int := { @local tmp:Int := x + 1; tmp };";
+    const result = compileSource(src);
+
+    expect(result.success).toBe(true);
+    expect(result.wat).toBeDefined();
+    expect(result.wat).toContain("(local $tmp i32)");
+});
+
+test("E2E: @local binding emits local.set at the binding site", () => {
+    const src = "@let f x:Int := { @local tmp:Int := x + 1; tmp };";
+    const result = compileSource(src);
+
+    expect(result.success).toBe(true);
+    expect(result.wat).toContain("local.set $tmp");
+});
+
+test("E2E: @local reference emits local.get", () => {
+    const src = "@let f x:Int := { @local tmp:Int := x + 1; tmp };";
+    const result = compileSource(src);
+
+    expect(result.success).toBe(true);
+    // trailing `tmp` in the block should be local.get
+    expect(result.wat).toContain("local.get $tmp");
+});
+
+test("E2E: @local is reassignable via assignment", () => {
+    // After @local tmp := 0; reassign tmp = x; the assignment emits local.set.
+    const src = "@let f x:Int := { @local tmp:Int := 0; tmp = x; tmp };";
+    const result = compileSource(src);
+
+    expect(result.success).toBe(true);
+    // Two local.set occurrences: initial binding and the assignment
+    const matches = (result.wat ?? "").match(/local\.set \$tmp/g) ?? [];
+    expect(matches.length).toBeGreaterThanOrEqual(2);
+});
+
+test("E2E: multiple @local variables each get their own WAT local", () => {
+    const src = "@let f x:Int := { @local a:Int := x; @local b:Int := a + 1; b };";
+    const result = compileSource(src);
+
+    expect(result.success).toBe(true);
+    expect(result.wat).toContain("(local $a i32)");
+    expect(result.wat).toContain("(local $b i32)");
+});
+
+// ---------------------------------------------------------------------------
+// @let scalar reference fix — zero-param @let uses (call ...) not global.get
+// ---------------------------------------------------------------------------
+
+test("E2E: zero-param @let emits a function and references use (call ...)", () => {
+    const src = "@let five:Int := 5; five + 1;";
+    const result = compileSource(src);
+
+    expect(result.success).toBe(true);
+    expect(result.wat).toContain("(func $five");
+    // References to five should use call, not global.get
+    expect(result.wat).toContain("(call $five)");
+    expect(result.wat).not.toContain("global.get $five");
+});
+
+// ---------------------------------------------------------------------------
+// StrataType tagging — elaborator correctly labels each strata node
+// ---------------------------------------------------------------------------
+
+test("E2E: @if strata has StrataType.Control via registry", () => {
+    const src = "&@if 1, { 2 }, { 3 };";
+    const result = compileSource(src);
+    // If StrataType tagging is wrong the elaborator would still register @if
+    // correctly in the keywords bucket; we verify compilation succeeds and
+    // that the WAT contains the structured if construct.
+    expect(result.success).toBe(true);
+    expect(result.wat).toContain("(if");
+});
+
+// ---------------------------------------------------------------------------
+// @match in expression position
+// ---------------------------------------------------------------------------
+
 test("E2E: @match in expression position emits (if (result i32) ...)", () => {
     const src = [
         "@type_sum Color := Red | Green | Blue;",

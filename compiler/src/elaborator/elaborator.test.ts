@@ -350,6 +350,22 @@ test("elaborate registers @loop as keyword stratum with control_loop intrinsic",
 })
 
 // Test 10: builtin elaborators for various operators
+test("elaborate: @if strata has StrataType.Control", () => {
+  const { registry } = elaborate(ASTFactory.program([]))
+  expect(registry.keywords['@if'].type).toBe(StrataType.Control)
+})
+
+test("elaborate: @let strata has StrataType.Codegen", () => {
+  const { registry } = elaborate(ASTFactory.program([]))
+  expect(registry.keywords['@let'].type).toBe(StrataType.Codegen)
+})
+
+test("elaborate: '+' operator strata has StrataType.Operator", () => {
+  const { registry } = elaborate(ASTFactory.program([]))
+  expect(registry.operators['+'].type).toBe(StrataType.Operator)
+})
+
+// Test 10: builtin elaborators for various operators
 test("elaborate registers builtin elaborators for multiple operators", () => {
   const operators = ['+', '-', '*', '/', '%', '==', '!=', '<', '>', '<=', '>=']
 

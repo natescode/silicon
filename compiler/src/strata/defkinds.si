@@ -25,3 +25,7 @@
 @stratum TypeSumDef (Keyword, '@type_sum', Node) = {
   &WASM::def_type_sum;
 };
+
+@stratum LocalDef (Keyword, '@local', Node) = {
+  &WASM::def_local;
+};

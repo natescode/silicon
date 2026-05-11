@@ -505,9 +505,9 @@ function checkDefinition(d: any, ctx: Ctx): SiliconType {
             ctx.symbols.set(d.name.name, finalType)
         }
 
-        // Mark immutable. @var / hook==='global' is the only mutable def-kind.
+        // Mark immutable. @var, @local, and hook==='global'/'local' are mutable.
         const hook = (d as any).hook
-        const isMutable = hook === 'global' || keyword === '@var'
+        const isMutable = hook === 'global' || hook === 'local' || keyword === '@var' || keyword === '@local'
         if (!isMutable) {
             ctx.immutable.add(d.name.name)
         }

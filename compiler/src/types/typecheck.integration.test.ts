@@ -400,3 +400,56 @@ test('@match: result type flows through to caller', () => {
     )
     expect(errors).toHaveLength(0)
 })
+
+// ---------------------------------------------------------------------------
+// @local — block-local variable bindings
+// ---------------------------------------------------------------------------
+
+test('@local: declaration with matching annotation has no errors', () => {
+    const { errors } = check('@let f x:Int := { @local tmp:Int := x + 1; tmp };')
+    expect(errors).toHaveLength(0)
+})
+
+test('@local: wrong annotation type is a type error', () => {
+    const { errors } = check('@let f x:Int := { @local tmp:Float := x + 1; tmp };')
+    expect(errors.length).toBeGreaterThan(0)
+    expect(errors[0].kind).toBe('Annotation')
+})
+
+test('@local: is mutable — reassignment does not error', () => {
+    const { errors } = check('@let f x:Int := { @local tmp:Int := 0; tmp = x + 1; tmp };')
+    expect(errors).toHaveLength(0)
+})
+
+test('@local: type flows through to caller', () => {
+    // tmp is Int, so tmp + 1 should be valid
+    const { errors } = check('@let f x:Int := { @local tmp:Int := x; tmp + 1 };')
+    expect(errors).toHaveLength(0)
+})
+
+test('@local: wrong type in reassignment is a type error', () => {
+    const { errors } = check('@let f x:Int := { @local tmp:Int := 0; tmp = 3.14; tmp };')
+    expect(errors.length).toBeGreaterThan(0)
+    expect(errors[0].kind).toBe('Mismatch')
+})
+
+// ---------------------------------------------------------------------------
+// @extern type checking
+// ---------------------------------------------------------------------------
+
+test('@extern: call with correct arg type has no errors', () => {
+    const { errors } = check("@extern print msg:String; &print 'hello';")
+    expect(errors).toHaveLength(0)
+})
+
+test('@extern: call with wrong arg type is a Mismatch', () => {
+    const { errors } = check('@extern print msg:String; &print 42;')
+    expect(errors.length).toBeGreaterThan(0)
+    expect(errors[0].kind).toBe('Mismatch')
+})
+
+test('@extern: wrong arity is a Mismatch', () => {
+    const { errors } = check('@extern add x:Int, y:Int; &add 1;')
+    expect(errors.length).toBeGreaterThan(0)
+    expect(errors[0].kind).toBe('Mismatch')
+})

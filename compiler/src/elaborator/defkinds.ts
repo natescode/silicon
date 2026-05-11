@@ -13,7 +13,7 @@
  * What WAT construct a definition keyword lowers to.
  * 'function' → WAT (func ...), 'global' → WAT (global ...) mutable global.
  */
-export type CodegenKind = 'function' | 'global' | 'extern' | 'type_alias' | 'type_distinct' | 'type_sum'
+export type CodegenKind = 'function' | 'global' | 'local' | 'extern' | 'type_alias' | 'type_distinct' | 'type_sum'
 
 export interface DefKindEntry {
     keyword: string          // full keyword, e.g. "@let"
