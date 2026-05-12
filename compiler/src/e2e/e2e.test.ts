@@ -1169,3 +1169,121 @@ test("Round 24: @continue registered in registry as keyword stratum", () => {
     expect(registry.keywords['@continue']).toBeDefined()
     expect(registry.keywords['@continue'].data.intrinsic).toBe('WASM::control_continue')
 });
+
+// ============================================================================
+// Round 26: Bitwise operator strata — |, ^, <<, >>
+// ============================================================================
+
+test("Round 26: | emits i32.or", () => {
+    const result = compileSource(loadExample("bitwise_or.si"));
+    expect(result.success).toBe(true);
+    const uw = userWat(result.wat!)
+    expect(uw).toContain("i32.or");
+});
+
+test("Round 26: ^ emits i32.xor", () => {
+    const result = compileSource(loadExample("bitwise_xor.si"));
+    expect(result.success).toBe(true);
+    const uw = userWat(result.wat!)
+    expect(uw).toContain("i32.xor");
+});
+
+test("Round 26: << emits i32.shl", () => {
+    const result = compileSource(loadExample("bitwise_shl.si"));
+    expect(result.success).toBe(true);
+    const uw = userWat(result.wat!)
+    expect(uw).toContain("i32.shl");
+});
+
+test("Round 26: >> emits i32.shr_s", () => {
+    const result = compileSource(loadExample("bitwise_shr.si"));
+    expect(result.success).toBe(true);
+    const uw = userWat(result.wat!)
+    expect(uw).toContain("i32.shr_s");
+});
+
+test("Round 26: | in function body uses i32.or not f32.or", () => {
+    const result = compileSource("@let mask a:Int, b:Int := { a | b };");
+    expect(result.success).toBe(true);
+    const uw = userWat(result.wat!)
+    expect(uw).toContain("i32.or");
+    expect(uw).not.toContain("f32.or");
+});
+
+test("Round 26: ^ in function body uses i32.xor", () => {
+    const result = compileSource("@let toggle a:Int, b:Int := { a ^ b };");
+    expect(result.success).toBe(true);
+    const uw = userWat(result.wat!)
+    expect(uw).toContain("i32.xor");
+});
+
+test("Round 26: << with literal shift amount", () => {
+    const result = compileSource("@let double a:Int := { a << 1 };");
+    expect(result.success).toBe(true);
+    const uw = userWat(result.wat!)
+    expect(uw).toContain("i32.shl");
+});
+
+test("Round 26: >> with literal shift amount", () => {
+    const result = compileSource("@let half a:Int := { a >> 1 };");
+    expect(result.success).toBe(true);
+    const uw = userWat(result.wat!)
+    expect(uw).toContain("i32.shr_s");
+});
+
+test("Round 26: bitwise ops combined with arithmetic", () => {
+    const result = compileSource("@let f a:Int, b:Int := { (a + b) | (a ^ b) };");
+    expect(result.success).toBe(true);
+    const uw = userWat(result.wat!)
+    expect(uw).toContain("i32.add");
+    expect(uw).toContain("i32.xor");
+    expect(uw).toContain("i32.or");
+});
+
+test("Round 26: bitwise | does not promote to f32 (always emits i32.or)", () => {
+    const result = compileSource("@let f a:Int := { a | 255 };");
+    expect(result.success).toBe(true);
+    const uw = userWat(result.wat!)
+    expect(uw).toContain("i32.or");
+    expect(uw).not.toContain("f32");
+});
+
+test("Round 26: | operator registered in registry as StrataType.Operator", () => {
+    const { registry } = elaborate(ASTFactory.program([]))
+    expect(registry.operators['|']).toBeDefined()
+    expect(registry.operators['|'].data.intrinsic).toBe('WASM::i32_or')
+});
+
+test("Round 26: ^ operator registered in registry as StrataType.Operator", () => {
+    const { registry } = elaborate(ASTFactory.program([]))
+    expect(registry.operators['^']).toBeDefined()
+    expect(registry.operators['^'].data.intrinsic).toBe('WASM::i32_xor')
+});
+
+test("Round 26: << operator registered in registry as StrataType.Operator", () => {
+    const { registry } = elaborate(ASTFactory.program([]))
+    expect(registry.operators['<<']).toBeDefined()
+    expect(registry.operators['<<'].data.intrinsic).toBe('WASM::i32_shl')
+});
+
+test("Round 26: >> operator registered in registry as StrataType.Operator", () => {
+    const { registry } = elaborate(ASTFactory.program([]))
+    expect(registry.operators['>>']).toBeDefined()
+    expect(registry.operators['>>'].data.intrinsic).toBe('WASM::i32_shr_s')
+});
+
+test("Round 26: body template for | has argRefs [left, right]", () => {
+    const { registry } = elaborate(ASTFactory.program([]))
+    const bt = registry.operators['|']?.data?.bodyTemplate
+    expect(bt).toBeDefined()
+    expect(bt.argRefs).toEqual(['left', 'right'])
+});
+
+test("Round 26: | and || are distinct operators", () => {
+    // Bitwise OR and logical OR must coexist without conflict
+    const src = "@var x:Int := 5; @var y:Int := 3; x | y; x || y;";
+    const result = compileSource(src);
+    expect(result.success).toBe(true);
+    expect(result.wat).toContain("i32.or");
+    expect(result.wat).toContain("(if (result i32)");
+});

@@ -478,7 +478,9 @@ export default function addCompileSemantics(
                         currentType = 'i32' // logical/control ops always produce i32
                     } else {
                         const rightType = right.compileType()
-                        const isFloat = currentType === 'f32' || rightType === 'f32'
+                        // Bitwise ops always operate on i32; never promote to f32.
+                        const isBitwise = ['|', '^', '<<', '>>'].includes(op_wat)
+                        const isFloat = !isBitwise && (currentType === 'f32' || rightType === 'f32')
                         const instr = stratumInstrFor(op_wat, isFloat, registry)
                         if (!instr) throw new Error(`Unknown operator: ${op_wat}`)
                         const bodyTemplate = stratum?.data?.bodyTemplate
@@ -491,9 +493,9 @@ export default function addCompileSemantics(
                         } else {
                             result = result + '\n' + right_wat + '\n' + instr
                         }
-                        // Comparison ops produce i32 regardless of operand types.
+                        // Comparison and bitwise ops always produce i32.
                         const isComparison = ['==', '!=', '<', '>', '<=', '>='].includes(op_wat)
-                        currentType = isComparison ? 'i32' : (isFloat ? 'f32' : 'i32')
+                        currentType = (isComparison || isBitwise) ? 'i32' : (isFloat ? 'f32' : 'i32')
                     }
                 }
             }
@@ -809,7 +811,8 @@ export default function addCompileSemantics(
                 const rightType = endOps.children[i].compileType()
                 const isComparison = ['==', '!=', '<', '>', '<=', '>='].includes(op_wat)
                 const isLogical = ['||'].includes(op_wat)
-                if (isComparison || isLogical) {
+                const isBitwise = ['|', '^', '<<', '>>'].includes(op_wat)
+                if (isComparison || isLogical || isBitwise) {
                     t = 'i32'
                 } else {
                     t = (t === 'f32' || rightType === 'f32') ? 'f32' : 'i32'
