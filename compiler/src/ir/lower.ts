@@ -1,0 +1,742 @@
+/**
+ * IR Lowering: Typed AST → IRModule
+ *
+ * Walks the type-checked AST and builds a fully-typed IR tree. Every
+ * expression node in the output carries its `wasmType` derived from the
+ * type checker's `inferredType` field — no sniffing of compiled WAT output.
+ *
+ * Key improvement over the Ohm codegen:
+ *   Float arithmetic is resolved here using `inferredType`, not by inspecting
+ *   whether the compiled WAT substring contains "f32.const". For example,
+ *   `a + b` where both are Float produces `IRBinOp { instr: 'f32.add' }`,
+ *   decided by the actual SiliconType, not string patterns.
+ */
+
+import { wasmTypeOf } from '../types/types'
+import { type SiliconType, TypeUnknown } from '../types/types'
+import { type ElaboratorRegistry, lookupOperator, lookupKeyword, lookupDefKindEntry } from '../elaborator/registry'
+import { getWasmIntrinsic } from '../intrinsics'
+import type { FunctionSig } from '../types/typechecker'
+import type {
+    WasmValType, WasmType,
+    IRModule, IRFunction, IRGlobal, IRImport, IRDataSegment,
+    IRExpr, IRStmt, IRParam, IRLocal,
+    IRConst, IRLocalGet, IRGlobalGet, IRBinOp, IRCall,
+    IRBlock, IRIf, IRLoop, IRBreak, IRContinue, IRNop,
+} from './nodes'
+
+// ---------------------------------------------------------------------------
+// Lowering context
+// ---------------------------------------------------------------------------
+
+interface LowerCtx {
+    /** Current function's params and @local vars → wasmType. */
+    locals: Map<string, WasmValType>
+    /** Module-level globals (@var, sum type variants) → wasmType. */
+    globals: Map<string, WasmValType>
+    /** Known function signatures from the type checker. */
+    functions: Map<string, FunctionSig>
+    /** Strata registry for operator → WASM instruction lookup. */
+    registry: ElaboratorRegistry
+    /** Stack of active loop IDs — for @break / @continue. */
+    loopStack: number[]
+    /** Monotonically increasing loop counter for unique labels. */
+    loopCount: { n: number }
+    /** @local declarations collected during the current function body walk. */
+    pendingLocals: IRLocal[]
+    /** String literal allocator state (shared across the module). */
+    strings: StringAlloc
+}
+
+interface StringAlloc {
+    nextOffset: number
+    segments: IRDataSegment[]
+    /** Deduplication: string content → base address. */
+    cache: Map<string, number>
+}
+
+function createStringAlloc(): StringAlloc {
+    return { nextOffset: 4, segments: [], cache: new Map() }
+}
+
+/** Allocate a string in the static data region; returns its base address. */
+function allocString(sa: StringAlloc, s: string): number {
+    if (sa.cache.has(s)) return sa.cache.get(s)!
+    const bytes = new TextEncoder().encode(s)
+    const base = sa.nextOffset
+    const len = bytes.length
+    const lenBytes = [len & 0xff, (len >> 8) & 0xff, (len >> 16) & 0xff, (len >> 24) & 0xff]
+    const all = [...lenBytes, ...bytes]
+    const encoded = all.map(b => {
+        if (b >= 0x20 && b <= 0x7e && b !== 0x22 && b !== 0x5c) return String.fromCharCode(b)
+        return '\\' + b.toString(16).padStart(2, '0')
+    }).join('')
+    sa.segments.push({ offset: base, encoded })
+    sa.nextOffset += 4 + len
+    sa.cache.set(s, base)
+    return base
+}
+
+// ---------------------------------------------------------------------------
+// Public API
+// ---------------------------------------------------------------------------
+
+export class IRLowerError extends Error {
+    constructor(msg: string) { super(`[IR lower] ${msg}`) }
+}
+
+/**
+ * Lower a type-checked Silicon program to an IRModule.
+ * The `program` must have been through the type checker so that expression
+ * nodes carry `inferredType`.
+ */
+export function lowerProgram(
+    program: any,
+    registry: ElaboratorRegistry,
+    functionSigs: Map<string, FunctionSig>,
+): IRModule {
+    const ctx: LowerCtx = {
+        locals: new Map(),
+        globals: new Map(),
+        functions: functionSigs,
+        registry,
+        loopStack: [],
+        loopCount: { n: 0 },
+        pendingLocals: [],
+        strings: createStringAlloc(),
+    }
+
+    const imports: IRImport[] = []
+    const globals: IRGlobal[] = []
+    const functions: IRFunction[] = []
+
+    // Pre-scan for global definitions so forward references resolve.
+    for (const el of program.elements as any[]) {
+        const node = unwrap(el)
+        if (!node || node.type !== 'Definition') continue
+        const hook = node.hook
+        if (hook === 'global') {
+            const name = watId(node.name?.name ?? '')
+            ctx.globals.set(name, 'i32') // refined below
+        }
+        if (hook === 'type_sum') {
+            // Sum type variants are i32 globals.
+            extractSumVariants(node).forEach(v => {
+                ctx.globals.set(watId(v), 'i32')
+            })
+        }
+    }
+
+    for (const el of program.elements as any[]) {
+        const node = unwrap(el)
+        if (!node) continue
+
+        if (node.type === 'Definition') {
+            const result = lowerDefinition(node, ctx)
+            if (result) {
+                if (result.kind === 'Function') functions.push(result)
+                else if (result.kind === 'Global') globals.push(result)
+                else if (result.kind === 'Import') imports.push(result)
+                else if (Array.isArray(result)) {
+                    // Sum type: multiple globals
+                    for (const g of result) globals.push(g)
+                }
+            }
+        }
+        // Top-level expression statements are ignored (no WAT equivalent).
+    }
+
+    return {
+        kind: 'Module',
+        imports,
+        globals,
+        functions,
+        dataSegments: ctx.strings.segments,
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Unwrap wrapper nodes from the flat AST
+// ---------------------------------------------------------------------------
+
+function unwrap(node: any): any {
+    if (!node) return null
+    // The flat AST from toAst.ts has no Element/Item/Statement wrappers,
+    // but the wrapped shape (from ASTFactory in tests) does. Handle both.
+    if (node.type === 'Element') return unwrap(node.value)
+    if (node.type === 'Item') return unwrap(node.value)
+    if (node.type === 'Statement') return unwrap(node.value)
+    return node
+}
+
+// ---------------------------------------------------------------------------
+// Definition lowering
+// ---------------------------------------------------------------------------
+
+function lowerDefinition(node: any, ctx: LowerCtx): any {
+    const hook = node.hook
+    const name = watId(node.name?.name ?? '')
+
+    switch (hook) {
+        case 'function': return lowerFunction(node, name, ctx)
+        case 'global':   return lowerGlobal(node, name, ctx)
+        case 'extern':   return lowerExtern(node, name, ctx)
+        case 'local':    return lowerLocalDef(node, name, ctx)
+        case 'type_sum': return lowerSumType(node, name, ctx)
+        // Type alias / distinct / sum produce no WAT — handled elsewhere.
+        case 'type_alias':
+        case 'type_distinct':
+            return null
+        default:
+            return null
+    }
+}
+
+function lowerFunction(node: any, name: string, ctx: LowerCtx): IRFunction {
+    const params: IRParam[] = []
+    const paramLocals: Map<string, WasmValType> = new Map()
+
+    for (const p of node.params || []) {
+        if (p.isLiteral || !p.typeAnnotation) continue
+        const wt = siliconTypeNameToWasm(p.typeAnnotation.typename)
+        const pname = watId(p.name)
+        params.push({ name: pname, wasmType: wt })
+        paramLocals.set(pname, wt)
+    }
+
+    // Determine return type.
+    let returnType: WasmType = 'void'
+    if (node.name?.typeAnnotation?.typename) {
+        returnType = siliconTypeNameToWasm(node.name.typeAnnotation.typename)
+    } else {
+        const sig = ctx.functions.get(name)
+        if (sig && sig.result.kind !== 'Unknown') {
+            returnType = wasmTypeOf(sig.result) as WasmType
+        }
+    }
+
+    const childCtx: LowerCtx = {
+        ...ctx,
+        locals: new Map([...ctx.locals, ...paramLocals]),
+        pendingLocals: [],
+        loopStack: [],
+    }
+
+    let body: IRExpr | undefined
+    const binding = Array.isArray(node.binding) ? node.binding[0] : node.binding
+    if (binding) {
+        const expr = binding.expression ?? binding
+        body = lowerExpr(expr, childCtx)
+        // Refine return type from inferred if not annotated.
+        if (returnType === 'void' && body) {
+            const bt = exprWasmType(body)
+            if (bt !== 'void') returnType = bt
+        }
+    }
+
+    ctx.globals.set(name, 'i32') // function pointers are i32 (table index)
+
+    return {
+        kind: 'Function',
+        name,
+        params,
+        returnType,
+        locals: childCtx.pendingLocals,
+        body,
+    }
+}
+
+function lowerGlobal(node: any, name: string, ctx: LowerCtx): IRGlobal {
+    let wasmType: WasmValType = 'i32'
+    if (node.name?.typeAnnotation?.typename) {
+        wasmType = siliconTypeNameToWasm(node.name.typeAnnotation.typename)
+    }
+
+    const binding = Array.isArray(node.binding) ? node.binding[0] : node.binding
+    let init: IRExpr = { kind: 'Const', wasmType, value: 0 }
+    if (binding) {
+        const expr = binding.expression ?? binding
+        init = lowerExpr(expr, ctx)
+        // Refine wasmType from the init expression.
+        const it = exprWasmType(init)
+        if (it !== 'void') wasmType = it
+    }
+
+    ctx.globals.set(name, wasmType)
+    return { kind: 'Global', name, wasmType, mutable: true, init }
+}
+
+function lowerExtern(node: any, name: string, ctx: LowerCtx): IRImport {
+    const params: WasmValType[] = []
+    for (const p of node.params || []) {
+        if (p.isLiteral || !p.typeAnnotation) continue
+        params.push(siliconTypeNameToWasm(p.typeAnnotation.typename))
+    }
+    let result: WasmValType | undefined
+    if (node.name?.typeAnnotation?.typename) {
+        result = siliconTypeNameToWasm(node.name.typeAnnotation.typename)
+    }
+    return { kind: 'Import', env: 'env', field: name, name, params, result }
+}
+
+function lowerLocalDef(node: any, name: string, ctx: LowerCtx): null {
+    // @local inside a function body: collect declaration, emit LocalSet stmt.
+    let wasmType: WasmValType = 'i32'
+    if (node.name?.typeAnnotation?.typename) {
+        wasmType = siliconTypeNameToWasm(node.name.typeAnnotation.typename)
+    }
+    ctx.pendingLocals.push({ name, wasmType })
+    ctx.locals.set(name, wasmType)
+
+    // The initialiser is emitted as an IRLocalSet when we process the block stmt.
+    // We return null here; the block lowering will emit it as an IRExprStmt wrapping
+    // an IRLocalSet when it encounters the definition in its item list.
+    return null
+}
+
+function lowerSumType(node: any, name: string, ctx: LowerCtx): IRGlobal[] {
+    const variants = extractSumVariants(node)
+    return variants.map((v, i) => {
+        const gname = watId(v)
+        ctx.globals.set(gname, 'i32')
+        const init: IRConst = { kind: 'Const', wasmType: 'i32', value: i }
+        return { kind: 'Global' as const, name: gname, wasmType: 'i32' as const, mutable: false, init }
+    })
+}
+
+// ---------------------------------------------------------------------------
+// Expression lowering
+// ---------------------------------------------------------------------------
+
+function lowerExpr(node: any, ctx: LowerCtx): IRExpr {
+    if (!node || typeof node !== 'object') return nop()
+
+    // Unwrap wrapper nodes.
+    const n = unwrap(node)
+    if (!n) return nop()
+
+    switch (n.type) {
+        case 'IntLiteral':
+            return { kind: 'Const', wasmType: 'i32', value: parseIntLiteral(n) }
+
+        case 'FloatLiteral':
+            return { kind: 'Const', wasmType: 'f32', value: parseFloat(n.value) }
+
+        case 'BooleanLiteral':
+            return { kind: 'Const', wasmType: 'i32', value: n.value ? 1 : 0 }
+
+        case 'StringLiteral': {
+            const addr = allocString(ctx.strings, n.value)
+            return { kind: 'Const', wasmType: 'i32', value: addr }
+        }
+
+        case 'Namespace':
+            return lowerNamespace(n, ctx)
+
+        case 'BinaryOp':
+            return lowerBinaryOp(n, ctx)
+
+        case 'FunctionCall':
+            return lowerFunctionCall(n, ctx)
+
+        case 'Block':
+            return lowerBlock(n, ctx)
+
+        case 'Binding':
+            return lowerExpr(n.expression, ctx)
+
+        // Definition inside a block body (e.g. @local).
+        case 'Definition':
+            return lowerDefinitionAsExpr(n, ctx)
+
+        // Assignment inside an expression context — lower as local/global set + Nop result.
+        case 'Assignment':
+            return lowerAssignmentAsExpr(n, ctx)
+
+        // Literal wrappers.
+        case 'Literal':
+        case 'ExpressionStart':
+        case 'ExpressionEnd':
+            return lowerExpr(n.value, ctx)
+
+        case 'ArrayLiteral':
+            return lowerArrayLiteral(n, ctx)
+
+        default:
+            return nop()
+    }
+}
+
+function lowerNamespace(n: any, ctx: LowerCtx): IRExpr {
+    const path: string[] = n.path ?? []
+    const name = path.map(watId).join('::')
+    const key = name
+
+    if (ctx.locals.has(key)) {
+        return { kind: 'LocalGet', wasmType: ctx.locals.get(key)!, name: key }
+    }
+    if (ctx.globals.has(key)) {
+        return { kind: 'GlobalGet', wasmType: ctx.globals.get(key)!, name: key }
+    }
+    // Single-segment — check if it's a zero-arg function.
+    if (path.length === 1) {
+        const sig = ctx.functions.get(key)
+        if (sig) {
+            const wt = (wasmTypeOf(sig.result) as WasmType) ?? 'void'
+            return { kind: 'Call', wasmType: wt, callee: key, callKind: 'user', args: [] }
+        }
+    }
+    // Fall back to global.get (may be a forward reference).
+    const inferT = n.inferredType as SiliconType | undefined
+    const wt: WasmValType = (inferT && inferT.kind !== 'Unknown') ? (wasmTypeOf(inferT) as WasmValType) : 'i32'
+    return { kind: 'GlobalGet', wasmType: wt, name: key }
+}
+
+function lowerBinaryOp(n: any, ctx: LowerCtx): IRExpr {
+    const op: string = n.operator
+    const left = lowerExpr(n.left, ctx)
+    const right = lowerExpr(n.right, ctx)
+
+    // Determine result WASM type from the type checker's inferredType.
+    const inferT = n.inferredType as SiliconType | undefined
+    const resultWt: WasmValType = (inferT && inferT.kind !== 'Unknown')
+        ? (wasmTypeOf(inferT) as WasmValType)
+        : exprWasmType(left)
+
+    // Determine the operand WASM type (drives instruction selection).
+    const leftWt = exprWasmType(left)
+
+    // Special: || is a short-circuit if, not a binary instruction.
+    if (op === '||') {
+        return {
+            kind: 'If',
+            wasmType: 'i32',
+            cond: left,
+            then: { kind: 'Const', wasmType: 'i32', value: 1 },
+            else_: right,
+        }
+    }
+
+    const instr = instrForOp(op, leftWt, ctx.registry)
+    return { kind: 'BinOp', wasmType: resultWt, instr, left, right }
+}
+
+function lowerFunctionCall(n: any, ctx: LowerCtx): IRExpr {
+    const name = callName(n)
+
+    if (n.isBuiltin) {
+        return lowerBuiltinCall(name, n.args || [], ctx, n.inferredType)
+    }
+
+    // WASM intrinsic direct call (e.g. &WASM::i32_add 1, 2).
+    if (name.startsWith('WASM::')) {
+        const intr = getWasmIntrinsic(name)
+        const args = (n.args || []).map((a: any) => lowerExpr(a, ctx))
+        if (intr?.emitStructured) {
+            // Structured intrinsics (cast, etc.) are emitted via a call node
+            // with callKind 'instr' so the emitter can use the wasmInstr.
+            const inferT = n.inferredType as SiliconType | undefined
+            const wt = resolveWasmType(inferT, 'i32')
+            return { kind: 'Call', wasmType: wt, callee: intr.wasmInstr, callKind: 'instr', args }
+        }
+        const inferT = n.inferredType as SiliconType | undefined
+        const wt = resolveWasmType(inferT, 'i32')
+        return { kind: 'Call', wasmType: wt, callee: intr?.wasmInstr ?? name, callKind: 'instr', args }
+    }
+
+    // User-defined function call.
+    const watName = watId(name)
+    const args = (n.args || []).map((a: any) => lowerExpr(a, ctx))
+    const sig = ctx.functions.get(watName)
+    const wt: WasmType = sig
+        ? (wasmTypeOf(sig.result) as WasmType) ?? 'void'
+        : resolveWasmType(n.inferredType as SiliconType | undefined, 'void')
+    return { kind: 'Call', wasmType: wt, callee: watName, callKind: 'user', args }
+}
+
+function lowerBuiltinCall(name: string, rawArgs: any[], ctx: LowerCtx, inferredType?: any): IRExpr {
+    const kwEntry = lookupKeyword(ctx.registry, name)
+    const intrinsic = kwEntry?.data?.intrinsic ?? ''
+
+    switch (intrinsic) {
+        case 'WASM::control_if': {
+            const [condN, thenN, elseN] = rawArgs
+            const cond = lowerExpr(condN, ctx)
+            const then = lowerExpr(thenN, ctx)
+            const else_ = elseN ? lowerExpr(elseN, ctx) : undefined
+            const wt = else_ ? exprWasmType(then) : 'void'
+            return { kind: 'If', wasmType: wt, cond, then, else_ }
+        }
+
+        case 'WASM::control_loop': {
+            const [condN, bodyN] = rawArgs
+            const id = ctx.loopCount.n++
+            ctx.loopStack.push(id)
+            const cond = lowerExpr(condN, ctx)
+            const body = lowerExpr(bodyN, ctx)
+            ctx.loopStack.pop()
+            return { kind: 'Loop', id, cond, body }
+        }
+
+        case 'WASM::control_break': {
+            const id = ctx.loopStack.at(-1)
+            if (id === undefined) throw new IRLowerError('@break outside @loop')
+            return { kind: 'Break', id }
+        }
+
+        case 'WASM::control_continue': {
+            const id = ctx.loopStack.at(-1)
+            if (id === undefined) throw new IRLowerError('@continue outside @loop')
+            return { kind: 'Continue', id }
+        }
+
+        case 'WASM::control_return': {
+            const value = rawArgs[0] ? lowerExpr(rawArgs[0], ctx) : undefined
+            return { kind: 'Return', value }
+        }
+
+        case 'WASM::control_match': {
+            return lowerMatchCall(rawArgs, ctx, inferredType)
+        }
+
+        default: {
+            // Generic builtin (e.g. @toInt, @toFloat, user-defined keyword strata).
+            const intr = intrinsic ? getWasmIntrinsic(intrinsic) : undefined
+            const args = rawArgs.map((a: any) => lowerExpr(a, ctx))
+            const wt = resolveWasmType(inferredType as SiliconType | undefined,
+                intr ? (intrinsic.includes('f32') ? 'f32' : 'i32') : 'i32')
+            if (intr?.emitStructured) {
+                return { kind: 'Call', wasmType: wt, callee: intr.wasmInstr, callKind: 'instr', args }
+            }
+            if (intr) {
+                return { kind: 'Call', wasmType: wt, callee: intr.wasmInstr, callKind: 'instr', args }
+            }
+            // Unknown builtin — call by name.
+            const kwName = watId(name.replace(/^@/, ''))
+            return { kind: 'Call', wasmType: wt, callee: kwName, callKind: 'user', args }
+        }
+    }
+}
+
+function lowerMatchCall(rawArgs: any[], ctx: LowerCtx, inferredType?: any): IRExpr {
+    // @match disc, pat0, res0, pat1, res1, ...
+    // Builds nested if/then/else: if disc==pat0 then res0 else (if disc==pat1 ...)
+    if (rawArgs.length < 3) return nop()
+
+    const discExpr = lowerExpr(rawArgs[0], ctx)
+    const wt = resolveWasmType(inferredType as SiliconType | undefined, 'i32')
+
+    function buildNested(i: number): IRExpr {
+        if (i + 1 >= rawArgs.length) return { kind: 'Nop' }
+        const pat = lowerExpr(rawArgs[i], ctx)
+        const res = lowerExpr(rawArgs[i + 1], ctx)
+        const eqInstr = exprWasmType(discExpr) === 'f32' ? 'f32.eq' : 'i32.eq'
+        const cond: IRBinOp = {
+            kind: 'BinOp',
+            wasmType: 'i32',
+            instr: eqInstr,
+            left: discExpr,
+            right: pat,
+        }
+        const else_ = i + 2 < rawArgs.length ? buildNested(i + 2) : undefined
+        return { kind: 'If', wasmType: wt, cond, then: res, else_ }
+    }
+
+    return buildNested(1)
+}
+
+function lowerBlock(n: any, ctx: LowerCtx): IRExpr {
+    const stmts: IRStmt[] = []
+
+    for (const item of n.items || []) {
+        const unwrapped = unwrap(item)
+        if (!unwrapped) continue
+        const stmt = lowerAsStmt(unwrapped, ctx)
+        if (stmt) stmts.push(stmt)
+    }
+
+    let trailing: IRExpr | undefined
+    if (n.trailing) {
+        trailing = lowerExpr(n.trailing, ctx)
+    }
+
+    const wt: WasmType = trailing ? exprWasmType(trailing) : 'void'
+    return { kind: 'Block', wasmType: wt, stmts, trailing }
+}
+
+function lowerAsStmt(node: any, ctx: LowerCtx): IRStmt | null {
+    if (!node) return null
+
+    if (node.type === 'Assignment') {
+        const target = (node.target?.path ?? []).map(watId).join('::')
+        const value = lowerExpr(node.value, ctx)
+        if (ctx.locals.has(target)) return { kind: 'LocalSet', name: target, value }
+        return { kind: 'GlobalSet', name: target, value }
+    }
+
+    if (node.type === 'Definition' && node.hook === 'local') {
+        const name = watId(node.name?.name ?? '')
+        let wasmType: WasmValType = 'i32'
+        if (node.name?.typeAnnotation?.typename) {
+            wasmType = siliconTypeNameToWasm(node.name.typeAnnotation.typename)
+        }
+        ctx.pendingLocals.push({ name, wasmType })
+        ctx.locals.set(name, wasmType)
+
+        const binding = Array.isArray(node.binding) ? node.binding[0] : node.binding
+        const expr = binding?.expression ?? binding
+        if (expr) {
+            const value = lowerExpr(expr, ctx)
+            // Refine type from init if not annotated.
+            const it = exprWasmType(value)
+            if (it !== 'void') {
+                ctx.locals.set(name, it)
+                const existing = ctx.pendingLocals.find(l => l.name === name)
+                if (existing) existing.wasmType = it
+            }
+            return { kind: 'LocalSet', name, value }
+        }
+        return null
+    }
+
+    // Expression statement — lower and discard value.
+    const expr = lowerExpr(node, ctx)
+    if (expr.kind === 'Nop') return null
+    return { kind: 'ExprStmt', expr }
+}
+
+function lowerDefinitionAsExpr(node: any, ctx: LowerCtx): IRExpr {
+    // Definition inside a block body: treat as void.
+    lowerAsStmt(node, ctx) // side-effects on ctx (adds to pendingLocals, locals)
+    return nop()
+}
+
+function lowerAssignmentAsExpr(node: any, ctx: LowerCtx): IRExpr {
+    const stmt = lowerAsStmt(node, ctx)
+    if (!stmt) return nop()
+    // Wrap as a void ExprStmt and return Nop so the block doesn't count it as trailing.
+    return nop()
+}
+
+function lowerArrayLiteral(n: any, ctx: LowerCtx): IRExpr {
+    const count = (n.elements || []).length
+    const elemExprs = (n.elements || []).map((e: any) => lowerExpr(e, ctx))
+    // Inline the alloc_array pattern as an IRCall chain.
+    // This mirrors the Ohm codegen's ArrayLiteral handler.
+    // For the IR, we represent it as a raw WAT block via a special Call node.
+    // Full array IR lowering is deferred — emit as a placeholder.
+    const allocArgs: IRExpr[] = [
+        { kind: 'Const', wasmType: 'i32', value: count },
+        { kind: 'Const', wasmType: 'i32', value: 4 },
+    ]
+    // We'll build the array block in emit.ts for now.
+    // Store elem exprs as extra args so emitter can use them.
+    return {
+        kind: 'Call',
+        wasmType: 'i32',
+        callee: '__array_literal',
+        callKind: 'user',
+        args: [...allocArgs, ...elemExprs],
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+function nop(): IRNop { return { kind: 'Nop' } }
+
+function exprWasmType(e: IRExpr): WasmType {
+    switch (e.kind) {
+        case 'Const':    return e.wasmType
+        case 'LocalGet': return e.wasmType
+        case 'GlobalGet': return e.wasmType
+        case 'BinOp':   return e.wasmType
+        case 'Call':    return e.wasmType
+        case 'Block':   return e.wasmType
+        case 'If':      return e.wasmType
+        case 'Loop':    return 'void'
+        case 'Break':   return 'void'
+        case 'Continue': return 'void'
+        case 'Return':  return 'void'
+        case 'Nop':     return 'void'
+    }
+}
+
+function resolveWasmType(t: SiliconType | undefined, fallback: WasmType): WasmType {
+    if (!t || t.kind === 'Unknown') return fallback
+    return wasmTypeOf(t) as WasmType
+}
+
+/**
+ * Determine the WAT instruction for a binary operator given the operand type.
+ * The strata registry provides the base (i32) intrinsic; we substitute f32
+ * when the actual operand type is Float. This is driven by `inferredType`,
+ * not by inspecting compiled WAT strings.
+ */
+function instrForOp(op: string, operandWt: WasmValType, registry: ElaboratorRegistry): string {
+    const isBitwise = ['|', '^', '<<', '>>'].includes(op)
+    const effectiveWt = isBitwise ? 'i32' : operandWt
+
+    const stratum = lookupOperator(registry, op)
+    const base = stratum?.data?.intrinsic
+    if (!base) throw new IRLowerError(`No stratum registered for operator '${op}'`)
+
+    // Float context: try swapping the i32_ prefix to f32_.
+    if (effectiveWt === 'f32' && base.includes('WASM::i32_')) {
+        const f32Name = base.replace('WASM::i32_', 'WASM::f32_')
+        const f32Intr =
+            getWasmIntrinsic(f32Name) ??
+            getWasmIntrinsic(f32Name.replace(/_[su]$/, ''))
+        if (f32Intr) return f32Intr.wasmInstr
+    }
+
+    const intr = getWasmIntrinsic(base)
+    if (!intr) throw new IRLowerError(`No WasmIntrinsic for '${base}'`)
+    return intr.wasmInstr
+}
+
+function callName(n: any): string {
+    if (typeof n.name === 'string') return n.name
+    if (n.name?.path) return (n.name.path as string[]).join('::')
+    return ''
+}
+
+function siliconTypeNameToWasm(typename: string): WasmValType {
+    return typename === 'Float' ? 'f32' : 'i32'
+}
+
+/** Convert a Silicon identifier to a safe WAT identifier (:: → _). */
+function watId(s: string): string {
+    return s.replace(/::/g, '_')
+}
+
+/** Extract sum-type variant full names (e.g. 'Color::Red') from a @type_sum def. */
+function extractSumVariants(node: any): string[] {
+    const binding = Array.isArray(node.binding) ? node.binding[0] : node.binding
+    const expr = binding?.expression ?? binding
+    const typeName = node.name?.name ?? ''
+
+    function collect(e: any): string[] {
+        if (!e) return []
+        if (e.expression) return collect(e.expression)
+        if (e.value && e.type !== 'BinaryOp') return collect(e.value)
+        if (e.type === 'BinaryOp' && e.operator === '|') {
+            return [...collect(e.left), ...collect(e.right)]
+        }
+        if (e.type === 'Namespace' && e.path?.length > 0) {
+            return [`${typeName}::${e.path[e.path.length - 1]}`]
+        }
+        return []
+    }
+    return collect(expr)
+}
+
+function parseIntLiteral(n: any): number {
+    const raw: string = n.value ?? '0'
+    const cleaned = raw.replace(/_/g, '')
+    if (cleaned.startsWith('0b') || cleaned.startsWith('0B')) return parseInt(cleaned.slice(2), 2)
+    if (cleaned.startsWith('0x') || cleaned.startsWith('0X')) return parseInt(cleaned.slice(2), 16)
+    if (cleaned.startsWith('0o') || cleaned.startsWith('0O')) return parseInt(cleaned.slice(2), 8)
+    return parseInt(cleaned, 10)
+}
