@@ -19,6 +19,7 @@ import { parse } from "../parser/index.ts";
 import { addToAstSemantics, ASTFactory, type ASTNode, type Program, type Elaboration, type ExpressionStart, type BinaryOp } from "../ast/index.ts";
 import { addCompileSemantics } from "../codegen/index.ts";
 import { elaborate } from "../elaborator/index.ts";
+import { typecheck, formatTypeError } from "../types/index.ts";
 import { siliconGrammar } from "../grammar/index.ts";
 
 /**
@@ -58,8 +59,22 @@ function compileSource(sourceCode: string) {
             };
         }
 
+        // Stage 2.6: Type-check — annotate AST with inferred types, catch type errors
+        const { program: typedAST, errors: typeErrors, functions } = typecheck(elaboratedAST, registry);
+
+        if (typeErrors.length > 0) {
+            return {
+                success: false,
+                error: typeErrors.map(formatTypeError).join('; '),
+                parseTree: match,
+                ast: ast,
+                elaboratedAST: typedAST,
+                wat: null,
+            };
+        }
+
         // Stage 3: Generate WebAssembly from AST
-        const wat: string = addCompileSemantics(siliconGrammar, registry)(match).compile();
+        const wat: string = addCompileSemantics(siliconGrammar, registry, functions)(match).compile();
 
         return {
             success: true,
@@ -1050,10 +1065,11 @@ test("Round 23: float comparison uses f32.lt", () => {
     expect(uw).not.toContain("i32.lt");
 });
 
-test("Round 23: mixed int+float expression promotes to f32", () => {
+test("Round 23: mixed int+float without cast is a type error", () => {
+    // With the type checker active, Int + Float is a strict mismatch — no implicit promotion.
     const result = compileSource("@let mixed a:Int, b:Float := { a + b };");
-    expect(result.success).toBe(true);
-    expect(result.wat).toContain("f32");
+    expect(result.success).toBe(false);
+    expect(result.error).toMatch(/mismatch|Int|Float/i);
 });
 
 test("Round 23: float global resolves to f32 in expressions", () => {
@@ -1412,8 +1428,10 @@ test("Round 27: @toFloat on an Int param emits f32.convert_i32_s", () => {
     expect(uw).toContain("f32.convert_i32_s");
 });
 
-test("Round 27: @toFloat promotes type — mixed int+float uses f32.add", () => {
-    const result = compileSource("@let mixAdd x:Int, y:Float := { &@toFloat x + y };");
+test("Round 27: @toFloat promotes type — explicit cast then float add", () => {
+    // &@toFloat x + y parses as @toFloat(x + y) which is Int+Float → type error.
+    // Parentheses are needed: (&@toFloat x) converts to Float, then + y:Float is f32.add.
+    const result = compileSource("@let mixAdd x:Int, y:Float := { (&@toFloat x) + y };");
     expect(result.success).toBe(true);
     const uw = userWat(result.wat!)
     expect(uw).toContain("f32.convert_i32_s");
@@ -1465,4 +1483,74 @@ test("Round 27: @toFloat and @toInt round-trip in a function", () => {
     const uw = userWat(result.wat!)
     expect(uw).toContain("f32.convert_i32_s");
     expect(uw).toContain("i32.trunc_f32_s");
+});
+
+// ============================================================================
+// Round 28: Type checker wired into the pipeline
+// ============================================================================
+
+test("Round 28: Int + Float without cast is a type error", () => {
+    const result = compileSource("@let f a:Int, b:Float := { a + b };");
+    expect(result.success).toBe(false);
+    expect(result.error).toMatch(/mismatch|Int|Float/i);
+});
+
+test("Round 28: Float + Float compiles successfully", () => {
+    const result = compileSource("@let f a:Float, b:Float := { a + b };");
+    expect(result.success).toBe(true);
+    expect(result.wat).toContain("f32.add");
+});
+
+test("Round 28: annotation mismatch — @let x:Int := 3.14 is a type error", () => {
+    const result = compileSource("@let x:Int := 3.14;");
+    expect(result.success).toBe(false);
+    expect(result.error).toMatch(/mismatch|annotation|Int|Float/i);
+});
+
+test("Round 28: assignment to immutable @let is a type error", () => {
+    const result = compileSource("@let x:Int := 5; x = 10;");
+    expect(result.success).toBe(false);
+    expect(result.error).toMatch(/immutable|x/i);
+});
+
+test("Round 28: wrong arg type in function call is a type error", () => {
+    const result = compileSource("@let double x:Int := { x + x }; @let run := { &double 3.14 };");
+    expect(result.success).toBe(false);
+    expect(result.error).toMatch(/mismatch|Int|Float/i);
+});
+
+test("Round 28: @toInt on a Float param returns Int — no type error", () => {
+    const result = compileSource("@let f x:Float := { &@toInt x };");
+    expect(result.success).toBe(true);
+    expect(result.wat).toContain("i32.trunc_f32_s");
+});
+
+test("Round 28: @toInt on an Int param is a type error", () => {
+    const result = compileSource("@let f x:Int := { &@toInt x };");
+    expect(result.success).toBe(false);
+    expect(result.error).toMatch(/mismatch|Float|Int/i);
+});
+
+test("Round 28: @toFloat on an Int param returns Float — no type error", () => {
+    const result = compileSource("@let f x:Int := { &@toFloat x };");
+    expect(result.success).toBe(true);
+    expect(result.wat).toContain("f32.convert_i32_s");
+});
+
+test("Round 28: @toFloat on a Float param is a type error", () => {
+    const result = compileSource("@let f x:Float := { &@toFloat x };");
+    expect(result.success).toBe(false);
+    expect(result.error).toMatch(/mismatch|Float|Int/i);
+});
+
+test("Round 28: well-typed function with @if compiles successfully", () => {
+    const result = compileSource("@let safeDivide x:Int, y:Int := { &@if y == 0, { &@return 0 }; x / y };");
+    expect(result.success).toBe(true);
+    expect(result.wat).toContain("i32.div_s");
+});
+
+test("Round 28: heterogeneous comparison types is a type error", () => {
+    const result = compileSource("@let f x:Int, y:Float := { x < y };");
+    expect(result.success).toBe(false);
+    expect(result.error).toMatch(/mismatch|Int|Float/i);
 });

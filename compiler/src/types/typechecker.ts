@@ -558,6 +558,13 @@ function checkBinaryOp(b: any, ctx: Ctx): SiliconType {
                 return TypeUnknown
             }
             return TypeBool
+        // Logical short-circuit OR — both sides must be Bool or Int; result is Bool.
+        case '||':
+            if (leftT.kind !== 'Unknown' && !isNumeric(leftT) && !typeEquals(leftT, TypeBool)) {
+                ctx.errors.push(invalidOperator('||', leftT, rightT, b.sourceLocation))
+                return TypeUnknown
+            }
+            return TypeBool
         default: {
             // User-defined operators: consult the stratum registry.
             // The stratum body references a WASM intrinsic; its signature
@@ -641,17 +648,27 @@ function checkFunctionCall(call: any, ctx: Ctx): SiliconType {
         return sig.result
     }
 
-    // Builtin keyword strata (@if, @loop, @match, …) — look up via the registry.
+    // Builtin keyword strata (@if, @loop, @match, @toInt, @toFloat, …) — look up via the registry.
     if (call.isBuiltin && ctx.registry) {
         const kwEntry = lookupKeyword(ctx.registry, name)
-        if (kwEntry?.data?.intrinsic === 'WASM::control_if') {
-            return typeOfIfCall(argTypes, call.sourceLocation, ctx)
-        }
-        if (kwEntry?.data?.intrinsic === 'WASM::control_loop') {
-            return TypeUnknown  // loops are void (no result value)
-        }
-        if (kwEntry?.data?.intrinsic === 'WASM::control_match') {
-            return typeOfMatchCall(argTypes, call.sourceLocation, ctx)
+        if (kwEntry?.data?.intrinsic) {
+            const intr = kwEntry.data.intrinsic as string
+            if (intr === 'WASM::control_if') return typeOfIfCall(argTypes, call.sourceLocation, ctx)
+            if (intr === 'WASM::control_loop') return TypeUnknown  // loops are void
+            if (intr === 'WASM::control_match') return typeOfMatchCall(argTypes, call.sourceLocation, ctx)
+            // For any other intrinsic (e.g. @toInt, @toFloat), derive types from the
+            // intrinsic's known signature. This lets user-defined keyword strata get
+            // type-checked as soon as they reference a typed WASM intrinsic.
+            const sig = intrinsicSignature(intr)
+            if (sig) {
+                for (let i = 0; i < sig.params.length; i++) {
+                    const actual = argTypes[i]
+                    if (actual !== undefined && actual.kind !== 'Unknown' && !typeEquals(sig.params[i], actual)) {
+                        ctx.errors.push(mismatch(sig.params[i], actual, `${name} arg ${i}`, call.sourceLocation))
+                    }
+                }
+                return sig.result
+            }
         }
     }
 
