@@ -1,4 +1,4 @@
-@stratum MyAdd (Operator, '+++', Node) = {
+@stratum_operator MyAdd ('+++', Node) = {
   &WASM::i32_add Node.left, Node.right;
 };
 

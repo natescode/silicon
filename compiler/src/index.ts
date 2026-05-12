@@ -41,7 +41,15 @@ const match = parse(sourceCode)
 const ast: ASTNode = addToAstSemantics(siliconGrammar)(match).toAst()
 
 // Stage 2.5: Elaborate — attach semantic information to operators
-const { program: elaboratedAST, registry } = elaborate(ast as Program)
+const { program: elaboratedAST, registry, errors: elabErrors } = elaborate(ast as Program)
+
+if (elabErrors.length > 0) {
+    console.error('Elaboration errors:')
+    for (const err of elabErrors) {
+        console.error('  ' + err.message)
+    }
+    process.exit(1)
+}
 
 // Stage 2.6: Type-check — annotate the AST with inferred types
 const { program: typedAST, errors: typeErrors, functions } = typecheck(elaboratedAST, registry)

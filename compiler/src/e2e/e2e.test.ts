@@ -16,7 +16,7 @@ import { test, expect } from "bun:test";
 import { readFileSync } from "fs";
 import { join } from "path";
 import { parse } from "../parser/index.ts";
-import { addToAstSemantics, type ASTNode, type Program, type Elaboration, type ExpressionStart, type BinaryOp } from "../ast/index.ts";
+import { addToAstSemantics, ASTFactory, type ASTNode, type Program, type Elaboration, type ExpressionStart, type BinaryOp } from "../ast/index.ts";
 import { addCompileSemantics } from "../codegen/index.ts";
 import { elaborate } from "../elaborator/index.ts";
 import { siliconGrammar } from "../grammar/index.ts";
@@ -45,7 +45,18 @@ function compileSource(sourceCode: string) {
         const ast: ASTNode = addToAstSemantics(siliconGrammar)(match).toAst();
 
         // Stage 2.5: Elaborate - attach semantic information and stratum definitions
-        const { program: elaboratedAST, registry } = elaborate(ast as Program);
+        const { program: elaboratedAST, registry, errors: elabErrors } = elaborate(ast as Program);
+
+        if (elabErrors.length > 0) {
+            return {
+                success: false,
+                error: elabErrors.map(e => e.message).join('; '),
+                parseTree: match,
+                ast: ast,
+                elaboratedAST: elaboratedAST,
+                wat: null,
+            };
+        }
 
         // Stage 3: Generate WebAssembly from AST
         const wat: string = addCompileSemantics(siliconGrammar, registry)(match).compile();
@@ -844,4 +855,317 @@ test("E2E: @match in expression position emits (if (result i32) ...)", () => {
     expect(result.success).toBe(true);
     expect(result.wat).toBeDefined();
     expect(result.wat).toContain("(result i32)");
+});
+
+// ---------------------------------------------------------------------------
+// Round 21: logical operators && || ! via strata
+// ---------------------------------------------------------------------------
+
+test("E2E: || emits short-circuit WAT (if (result i32) ...)", () => {
+    const result = compileSource("@true || @false;");
+
+    expect(result.success).toBe(true);
+    expect(result.wat).toBeDefined();
+    expect(result.wat).toContain("(if (result i32)");
+    expect(result.wat).toContain("(i32.const 1)");
+    expect(result.wat).toContain("(i32.const 0)");
+});
+
+test("E2E: @not emits i32.eqz", () => {
+    const result = compileSource("&@not @true;");
+
+    expect(result.success).toBe(true);
+    expect(result.wat).toBeDefined();
+    expect(result.wat).toContain("i32.eqz");
+});
+
+test("E2E: @and emits short-circuit AND WAT (if (result i32) ...)", () => {
+    const result = compileSource("&@and @true, @false;");
+
+    expect(result.success).toBe(true);
+    expect(result.wat).toBeDefined();
+    expect(result.wat).toContain("(if (result i32)");
+    expect(result.wat).toContain("(i32.const 0)");
+});
+
+test("E2E: || with variables produces correct short-circuit structure", () => {
+    const src = "@var a:Int := 1; @var b:Int := 0; a || b;";
+    const result = compileSource(src);
+
+    expect(result.success).toBe(true);
+    expect(result.wat).toContain("(if (result i32)");
+    expect(result.wat).toContain("global.get $a");
+    expect(result.wat).toContain("global.get $b");
+});
+
+test("E2E: @not of zero is 1 (i32.eqz (i32.const 0))", () => {
+    const result = compileSource("&@not 0;");
+
+    expect(result.success).toBe(true);
+    expect(result.wat).toContain("i32.eqz");
+    expect(result.wat).toContain("(i32.const 0)");
+});
+
+test("E2E: chained || short-circuits left to right", () => {
+    const src = "@var x:Int := 0; @var y:Int := 0; @var z:Int := 1; x || y || z;";
+    const result = compileSource(src);
+
+    expect(result.success).toBe(true);
+    // Each || produces its own (if (result i32) ...)
+    const matches = (result.wat ?? "").match(/if \(result i32\)/g) ?? [];
+    expect(matches.length).toBeGreaterThanOrEqual(2);
+});
+
+test("E2E: || in function body with typed result", () => {
+    const src = "@let check a:Int, b:Int := { a || b };";
+    const result = compileSource(src);
+
+    expect(result.success).toBe(true);
+    expect(result.wat).toContain("(func $check");
+    expect(result.wat).toContain("(if (result i32)");
+});
+
+test("E2E: @and with both true returns right side", () => {
+    const src = "@let f a:Int, b:Int := { &@and a, b };";
+    const result = compileSource(src);
+
+    expect(result.success).toBe(true);
+    expect(result.wat).toContain("(func $f");
+    expect(result.wat).toContain("(if (result i32)");
+    expect(result.wat).toContain("(i32.const 0)");
+});
+
+// ---------------------------------------------------------------------------
+// Round 22: Def-Kind schema validation
+// ---------------------------------------------------------------------------
+
+test("Schema: @var with parameters is rejected", () => {
+    // Silicon params are bare comma-lists, not parenthesized: @var count x:Int := 0
+    const result = compileSource("@var count x:Int := 0;");
+
+    expect(result.success).toBe(false);
+    expect(result.error).toContain("'@var' does not accept parameters");
+});
+
+test("Schema: @extern with a binding is rejected", () => {
+    const result = compileSource("@extern print := 5;");
+
+    expect(result.success).toBe(false);
+    expect(result.error).toContain("'@extern' does not accept a binding");
+});
+
+test("Schema: @let with parameters and binding is accepted", () => {
+    const result = compileSource("@let add x:Int, y:Int := { x + y };");
+
+    expect(result.success).toBe(true);
+    expect(result.wat).toContain("(func $add");
+});
+
+test("Schema: @var with binding and no params is accepted", () => {
+    const result = compileSource("@var count:Int := 0;");
+
+    expect(result.success).toBe(true);
+    expect(result.wat).toContain("(global $count");
+});
+
+test("Schema: @extern with params and no binding is accepted", () => {
+    const result = compileSource("@extern print x:Int;");
+
+    expect(result.success).toBe(true);
+    expect(result.wat).toContain("(import");
+});
+
+test("Schema: @local with params is rejected", () => {
+    // Bare Silicon param syntax: @local tmp a:Int := 0
+    const result = compileSource("@let f x:Int := { @local tmp a:Int := 0; tmp };");
+
+    expect(result.success).toBe(false);
+    expect(result.error).toContain("'@local' does not accept parameters");
+});
+
+test("Schema: unknown def-kind keyword is rejected", () => {
+    const result = compileSource("@unknown foo := 5;");
+
+    expect(result.success).toBe(false);
+    expect(result.error).toContain("Unknown definition keyword '@unknown'");
+});
+
+test("Schema: @var with generic params is rejected", () => {
+    const result = compileSource("@var count[T] := 0;");
+
+    expect(result.success).toBe(false);
+    expect(result.error).toContain("'@var' does not accept generic parameters");
+});
+
+test("Schema: @type_sum with params is rejected", () => {
+    // Bare Silicon param syntax: @type_sum Color x:Int := Red | Green
+    const result = compileSource("@type_sum Color x:Int := Red | Green;");
+
+    expect(result.success).toBe(false);
+    expect(result.error).toContain("'@type_sum' does not accept parameters");
+});
+
+// ============================================================================
+// Round 23: Type-driven codegen (replace f32 string-sniff heuristic)
+// ============================================================================
+
+// Helper: extract only the user-emitted WAT (after the std.wat runtime)
+function userWat(wat: string): string {
+    const marker = '(func $print_string'
+    const idx = wat.indexOf(marker)
+    if (idx < 0) return wat
+    const afterPrint = wat.indexOf('\n\n\n', idx)
+    return afterPrint >= 0 ? wat.slice(afterPrint) : wat.slice(idx)
+}
+
+test("Round 23: float params use f32.add not i32.add", () => {
+    const result = compileSource("@let add a:Float, b:Float := { a + b };");
+    expect(result.success).toBe(true);
+    const uw = userWat(result.wat!)
+    expect(uw).toContain("f32.add");
+    expect(uw).not.toContain("i32.add");
+});
+
+test("Round 23: int params use i32.add not f32.add", () => {
+    const result = compileSource("@let add a:Int, b:Int := { a + b };");
+    expect(result.success).toBe(true);
+    const uw = userWat(result.wat!)
+    expect(uw).toContain("i32.add");
+    expect(uw).not.toContain("f32.add");
+});
+
+test("Round 23: float comparison uses f32.gt", () => {
+    const result = compileSource("@let greater a:Float, b:Float := { a > b };");
+    expect(result.success).toBe(true);
+    const uw = userWat(result.wat!)
+    expect(uw).toContain("f32.gt");
+    expect(uw).not.toContain("i32.gt");
+});
+
+test("Round 23: float comparison uses f32.lt", () => {
+    const result = compileSource("@let lesser a:Float, b:Float := { a < b };");
+    expect(result.success).toBe(true);
+    const uw = userWat(result.wat!)
+    expect(uw).toContain("f32.lt");
+    expect(uw).not.toContain("i32.lt");
+});
+
+test("Round 23: mixed int+float expression promotes to f32", () => {
+    const result = compileSource("@let mixed a:Int, b:Float := { a + b };");
+    expect(result.success).toBe(true);
+    expect(result.wat).toContain("f32");
+});
+
+test("Round 23: float global resolves to f32 in expressions", () => {
+    const result = compileSource("@var x := 1.5; @let getX := { x + 0.0 };");
+    expect(result.success).toBe(true);
+    const uw = userWat(result.wat!)
+    expect(uw).toContain("f32.add");
+});
+
+test("Round 23: float call return type drives arithmetic (f32.add in caller)", () => {
+    // &double takes a Float and returns Float; two calls added together should use f32.add
+    const src = "@let double x:Float := { x + x }; @let quad y:Float := { &double y + &double y };";
+    const result = compileSource(src);
+    expect(result.success).toBe(true);
+    const uw = userWat(result.wat!)
+    expect(uw).toContain("f32.add");
+});
+
+test("Round 23: float subtraction uses f32.sub", () => {
+    const result = compileSource("@let sub a:Float, b:Float := { a - b };");
+    expect(result.success).toBe(true);
+    const uw = userWat(result.wat!)
+    expect(uw).toContain("f32.sub");
+    expect(uw).not.toContain("i32.sub");
+});
+
+test("Round 23: float multiplication uses f32.mul", () => {
+    const result = compileSource("@let mul a:Float, b:Float := { a * b };");
+    expect(result.success).toBe(true);
+    const uw = userWat(result.wat!)
+    expect(uw).toContain("f32.mul");
+    expect(uw).not.toContain("i32.mul");
+});
+
+// ============================================================================
+// Round 24: @break / @continue — loop control flow via strata keywords
+// ============================================================================
+
+test("Round 24: @loop emits block/loop WAT structure", () => {
+    const src = "@let count := { &@loop 1, { 0 }; 42 };";
+    const result = compileSource(src);
+    expect(result.success).toBe(true);
+    const uw = userWat(result.wat!)
+    expect(uw).toContain("(block $brk_");
+    expect(uw).toContain("(loop $cont_");
+    expect(uw).toContain("br_if $brk_");
+    expect(uw).toContain("br $cont_");
+});
+
+test("Round 24: @break emits br to block label", () => {
+    const src = "@let run := { &@loop 1, { &@break }; 0 };";
+    const result = compileSource(src);
+    expect(result.success).toBe(true);
+    const uw = userWat(result.wat!)
+    expect(uw).toMatch(/br \$brk_\d+/);
+});
+
+test("Round 24: @continue emits br to loop label", () => {
+    const src = "@let run := { &@loop 1, { &@continue }; 0 };";
+    const result = compileSource(src);
+    expect(result.success).toBe(true);
+    const uw = userWat(result.wat!)
+    expect(uw).toMatch(/br \$cont_\d+/);
+});
+
+test("Round 24: @break label matches enclosing @loop label", () => {
+    // The $brk_N in @break must equal the $brk_N in the enclosing block
+    const src = "@let run := { &@loop 1, { &@break }; 0 };";
+    const result = compileSource(src);
+    expect(result.success).toBe(true);
+    const uw = userWat(result.wat!)
+    const blockId = uw.match(/block \$brk_(\d+)/)?.[1]
+    const breakId = uw.match(/\(br \$brk_(\d+)\)/)?.[1]
+    expect(blockId).toBeDefined()
+    expect(breakId).toBeDefined()
+    expect(blockId).toBe(breakId)
+});
+
+test("Round 24: @continue label matches enclosing @loop label", () => {
+    const src = "@let run := { &@loop 1, { &@continue }; 0 };";
+    const result = compileSource(src);
+    expect(result.success).toBe(true);
+    const uw = userWat(result.wat!)
+    const loopId = uw.match(/loop \$cont_(\d+)/)?.[1]
+    const contId = uw.match(/\(br \$cont_(\d+)\)/)?.[1]
+    expect(loopId).toBeDefined()
+    expect(contId).toBeDefined()
+    expect(loopId).toBe(contId)
+});
+
+test("Round 24: nested @loop — inner @break uses inner label", () => {
+    const src = "@let run := { &@loop 1, { &@loop 1, { &@break }; 0 }; 0 };";
+    const result = compileSource(src);
+    expect(result.success).toBe(true);
+    const uw = userWat(result.wat!)
+    // Two distinct block IDs must be present
+    const ids = [...uw.matchAll(/block \$brk_(\d+)/g)].map(m => m[1])
+    expect(ids.length).toBe(2)
+    expect(ids[0]).not.toBe(ids[1])
+    // The (br $brk_N) should use the INNER (second) id
+    const breakId = uw.match(/\(br \$brk_(\d+)\)/)?.[1]
+    expect(breakId).toBe(ids[1])
+});
+
+test("Round 24: @break registered in registry as keyword stratum", () => {
+    const { registry } = elaborate(ASTFactory.program([]))
+    expect(registry.keywords['@break']).toBeDefined()
+    expect(registry.keywords['@break'].data.intrinsic).toBe('WASM::control_break')
+});
+
+test("Round 24: @continue registered in registry as keyword stratum", () => {
+    const { registry } = elaborate(ASTFactory.program([]))
+    expect(registry.keywords['@continue']).toBeDefined()
+    expect(registry.keywords['@continue'].data.intrinsic).toBe('WASM::control_continue')
 });

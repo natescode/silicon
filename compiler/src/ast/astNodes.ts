@@ -102,11 +102,10 @@ export interface Definition {
 export interface Elaboration {
     type: 'Elaboration'
     kind: 'operator' | 'keyword'
-    name: string                        // e.g., "Plus"
-    strataType: 'Operator' | 'Keyword'  // What type of elaborator
-    symbol: string                      // e.g., "+" for operators, or keyword name
-    nodeParamName: string               // e.g., "Node" - the variable name for node context
-    semantics?: ExpressionStart         // Optional: The body containing semantic rules (user-defined elaborations only)
+    name: string                // e.g., "Plus"
+    symbol: string              // e.g., "+" for operators, or "@if" for keywords
+    nodeParamName: string       // e.g., "Node" - the variable name for node context
+    semantics?: ExpressionStart // Optional: The body containing semantic rules
     sourceLocation?: SourceLocation
 }
 
@@ -307,12 +306,11 @@ export const ASTFactory = {
     elaboration(
         kind: 'operator' | 'keyword',
         name: string,
-        strataType: 'Operator' | 'Keyword',
         symbol: string,
         nodeParamName: string,
         semantics?: ExpressionStart
     ): Elaboration {
-        return { type: 'Elaboration', kind, name, strataType, symbol, nodeParamName, semantics }
+        return { type: 'Elaboration', kind, name, symbol, nodeParamName, semantics }
     },
 
     expressionStart(kind: 'binOp' | 'functionCall' | 'expressionEnd', value: BinOp | FunctionCall | ExpressionEnd): ExpressionStart {

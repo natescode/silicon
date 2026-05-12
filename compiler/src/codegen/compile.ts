@@ -161,6 +161,9 @@ export default function addCompileSemantics(
     // tests don't bleed state into each other.
     const staticData = createStaticData()
     let loopCount = 0
+    // Stack of active loop IDs (pushed before body compilation, popped after).
+    // @break / @continue read from this to emit the right label.
+    const loopStack: number[] = []
     // Names of the current function's parameters AND @local variables so
     // namespace refs inside the function use local.get / local.set.
     let currentParams: Set<string> = new Set()
@@ -175,6 +178,14 @@ export default function addCompileSemantics(
     // WAT identifiers of zero-arg functions emitted at module level (from
     // zero-param @let / @fn). References use (call $name) not global.get.
     const compiledZeroArgFuncs: Set<string> = new Set()
+    // WAT return type ('i32' | 'f32') of every function compiled so far.
+    // Populated by compileFunction; used by compileType to resolve call types.
+    const compiledFunctionReturnTypes: Map<string, string> = new Map()
+    // WAT type of each current function parameter / @local variable.
+    // Saved and restored on function entry/exit.
+    let currentParamTypes: Map<string, string> = new Map()
+    // WAT type of each module-level global (@var). Set in compileGlobal.
+    const compiledGlobalTypes: Map<string, string> = new Map()
     // True when the current node is in expression position (its value is consumed by
     // a caller). Used by IfExpr to decide whether to emit (result type).
     let inExprPosition: boolean = false
@@ -193,16 +204,26 @@ export default function addCompileSemantics(
         }
 
         const paramNames: Set<string> = new Set()
+        const newParamTypes: Map<string, string> = new Map()
         params.asIteration().children.forEach((p: any) => {
-            const raw = p.sourceString.split(':')[0].trim()
-            if (raw) paramNames.add(toWatIdentifier(raw))
+            const src = p.sourceString
+            const colonIdx = src.indexOf(':')
+            const raw = (colonIdx >= 0 ? src.slice(0, colonIdx) : src).trim()
+            const typeName = colonIdx >= 0 ? src.slice(colonIdx + 1).trim() : ''
+            if (raw) {
+                const watName2 = toWatIdentifier(raw)
+                paramNames.add(watName2)
+                newParamTypes.set(watName2, siliconTypeToWat(typeName))
+            }
         })
 
         // Save and reset function-level state for this new function scope.
         const prevParams = currentParams
         const prevLocals = currentLocals
+        const prevParamTypes = currentParamTypes
         currentParams = paramNames
         currentLocals = new Map()
+        currentParamTypes = newParamTypes
 
         const paramList = params.asIteration().children.map((p: any) => p.compile()).join(' ')
         const body = binding.children.length > 0 ? binding.children[0].compile() : ''
@@ -215,23 +236,32 @@ export default function addCompileSemantics(
         // Restore outer function state.
         currentParams = prevParams
         currentLocals = prevLocals
+        currentParamTypes = prevParamTypes
 
         const retTypeName = typedId.type()
         const hasBinding = binding.children.length > 0
         let resultDecl: string
+        let watReturnType: string = 'i32'
         if (retTypeName) {
-            resultDecl = `(result ${siliconTypeToWat(retTypeName)})`
+            watReturnType = siliconTypeToWat(retTypeName)
+            resultDecl = `(result ${watReturnType})`
         } else if (hasBinding) {
             const sig = functionSigs?.get(watName)
             if (sig && sig.result.kind !== 'Unknown') {
-                resultDecl = `(result ${wasmTypeOf(sig.result)})`
+                watReturnType = wasmTypeOf(sig.result)
+                resultDecl = `(result ${watReturnType})`
             } else {
-                // Fallback: sniff for f32 instructions in the compiled body.
-                resultDecl = body.includes('f32.') ? '(result f32)' : '(result i32)'
+                // Sniff for f32 instructions in the compiled body. With type-driven
+                // codegen in place this is accurate: float ops now emit f32.* directly.
+                watReturnType = body.includes('f32.') ? 'f32' : 'i32'
+                resultDecl = `(result ${watReturnType})`
             }
         } else {
             resultDecl = ''
         }
+
+        // Record return type so callers compiled after this function can use compileType().
+        compiledFunctionReturnTypes.set(watName, watReturnType)
 
         const preamble = ['(local $addr i32)', localsDecl].filter(s => s).join('\n')
         const funcDecl = `(func $${watName} ${paramList} ${resultDecl} ${preamble}\n${body}\n)`
@@ -252,6 +282,8 @@ export default function addCompileSemantics(
         currentLocals.set(watName, watType)
         // Register in currentParams so subsequent references emit local.get.
         currentParams.add(watName)
+        // Track type so compileType() resolves subsequent references correctly.
+        currentParamTypes.set(watName, watType)
 
         const prev = inExprPosition
         inExprPosition = true
@@ -302,6 +334,7 @@ export default function addCompileSemantics(
         compiledGlobals.add(watName)
         const retTypeName = typedId.type()
         const watType = retTypeName ? siliconTypeToWat(retTypeName) : 'i32'
+        compiledGlobalTypes.set(watName, watType)
         const initExpr = binding.children.length > 0
             ? binding.children[0].compile()
             : `(${watType}.const 0)`
@@ -361,18 +394,17 @@ export default function addCompileSemantics(
         DocComment(_hashhash, chars) {
             return '';
         },
-        Elaboration(_stratum, strataDef) {
-            // Elaborations (stratum definitions) don't generate code; they
-            // are processed during the elaboration phase.
+        Elaboration_operator(_keyword, _def) {
+            // Stratum definitions don't generate code; handled in elaboration phase.
             return '';
         },
-        StrataDefinition(def) {
+        Elaboration_keyword(_keyword, _def) {
             return '';
         },
-        OperatorDefinition(name, _open, _op, _comma1, symbol, _comma2, nodeParam, _close, _eq, body) {
+        OperatorDefinition(_name, _open, _symbol, _comma, _nodeParam, _close, _eq, _body) {
             return '';
         },
-        KeywordDefinition(name, _open, _kw, _comma1, keywordName, _comma2, nodeParam, _close, _eq, body) {
+        KeywordDefinition(_name, _open, _keywordName, _comma, _nodeParam, _close, _eq, _body) {
             return '';
         },
         OperatorSymbol(stringLit) {
@@ -421,17 +453,48 @@ export default function addCompileSemantics(
         },
         ExpressionStart_binChain(left, binOps, endOps) {
             let result = left.compile();
+            // Track the WAT type of the accumulated left-hand expression.
+            // This is updated each iteration so chained ops (a + b < c) work correctly.
+            let currentType = left.compileType()
             if (binOps.children && binOps.children.length > 0) {
                 for (let i = 0; i < binOps.children.length; i++) {
                     const op = binOps.children[i];
                     const right = endOps.children[i];
-                    const right_wat = right.compile();
                     const op_wat = op.compile();
+                    const right_wat = right.compile();
 
-                    const isFloat = /f32\./.test(result) || /f32\./.test(right_wat);
-                    const instr = stratumInstrFor(op_wat, isFloat, registry)
-                    if (!instr) throw new Error(`Unknown operator: ${op_wat}`)
-                    result = result + '\n' + right_wat + '\n' + instr;
+                    // Operators with emitStructured (e.g. short-circuit ||) take
+                    // already-compiled arg strings rather than relying on stack order.
+                    const stratum = registry ? lookupOperator(registry, op_wat) : undefined
+                    const intrinsicName = stratum?.data?.intrinsic
+                    const intr = intrinsicName ? getWasmIntrinsic(intrinsicName) : undefined
+
+                    if (intr?.emitStructured) {
+                        result = intr.emitStructured([result, right_wat], {
+                            inExprPosition,
+                            nextLoopId: () => loopCount++,
+                            currentLoopId: () => loopStack.at(-1),
+                        })
+                        currentType = 'i32' // logical/control ops always produce i32
+                    } else {
+                        const rightType = right.compileType()
+                        const isFloat = currentType === 'f32' || rightType === 'f32'
+                        const instr = stratumInstrFor(op_wat, isFloat, registry)
+                        if (!instr) throw new Error(`Unknown operator: ${op_wat}`)
+                        const bodyTemplate = stratum?.data?.bodyTemplate
+                        if (bodyTemplate?.argRefs) {
+                            // Drive arg order from the strata body definition.
+                            const argWats = bodyTemplate.argRefs.map((ref: string) =>
+                                ref === 'left' ? result : right_wat
+                            )
+                            result = [...argWats, instr].join('\n')
+                        } else {
+                            result = result + '\n' + right_wat + '\n' + instr
+                        }
+                        // Comparison ops produce i32 regardless of operand types.
+                        const isComparison = ['==', '!=', '<', '>', '<=', '>='].includes(op_wat)
+                        currentType = isComparison ? 'i32' : (isFloat ? 'f32' : 'i32')
+                    }
                 }
             }
             return result;
@@ -454,11 +517,22 @@ export default function addCompileSemantics(
             if (intrinsicName) {
                 const intr = getWasmIntrinsic(intrinsicName);
                 if (intr?.emitStructured) {
-                    const argWats: string[] = args.compileArgList();
-                    return intr.emitStructured(argWats, {
+                    const baseCtx = {
                         inExprPosition,
                         nextLoopId: () => loopCount++,
-                    });
+                        currentLoopId: () => loopStack.at(-1),
+                    }
+                    // @loop: pre-allocate the ID and push it onto the stack so that
+                    // @break / @continue inside the body can read it.
+                    if (intrinsicName === 'WASM::control_loop') {
+                        const id = loopCount++
+                        loopStack.push(id)
+                        const argWats = args.compileArgList()
+                        loopStack.pop()
+                        return intr.emitStructured(argWats, { ...baseCtx, nextLoopId: () => id })
+                    }
+                    const argWats: string[] = args.compileArgList();
+                    return intr.emitStructured(argWats, baseCtx);
                 }
             }
 
@@ -690,6 +764,9 @@ export default function addCompileSemantics(
         type(_colon, id) {
             return id.sourceString;
         },
+        ParamLiteral_typedId(typedId) {
+            return typedId.type();
+        },
         // Default for other rules
         _terminal() {
             return '';
@@ -713,6 +790,92 @@ export default function addCompileSemantics(
         _nonterminal(..._args: any[]) { return []; },
         _terminal() { return []; },
         _iter(..._args: any[]) { return []; },
+    }).addOperation('compileType', {
+        // Literals
+        floatLiteral(_int, _sep, _dot, _frac, _fracSep) { return 'f32' },
+        booleanLiteral(_) { return 'i32' },
+        stringLiteral(_q, _c, _q2) { return 'i32' },
+        Literal(lit) { return lit.compileType() },
+        ArrayLiteral(_open, _exps, _close) { return 'i32' },
+        ObjectLiteral(_open, _pairs, _close) { return 'i32' },
+        TupleLiteral(_open, _exps, _close) { return 'i32' },
+
+        // Expression chain — tracks type through each operator
+        ExpressionStart_binChain(left, binOps, endOps) {
+            if (binOps.children.length === 0) return left.compileType()
+            let t = left.compileType()
+            for (let i = 0; i < binOps.children.length; i++) {
+                const op_wat = binOps.children[i].compile()
+                const rightType = endOps.children[i].compileType()
+                const isComparison = ['==', '!=', '<', '>', '<=', '>='].includes(op_wat)
+                const isLogical = ['||'].includes(op_wat)
+                if (isComparison || isLogical) {
+                    t = 'i32'
+                } else {
+                    t = (t === 'f32' || rightType === 'f32') ? 'f32' : 'i32'
+                }
+            }
+            return t
+        },
+        ExpressionStart(exp) { return exp.compileType() },
+
+        // ExpressionEnd variants
+        ExpressionEnd_literal(lit) { return lit.compileType() },
+        ExpressionEnd_functionCall(fc) { return fc.compileType() },
+        ExpressionEnd_namespace(ns) {
+            const watName = toWatIdentifier(ns.sourceString)
+            if (currentParamTypes.has(watName)) return currentParamTypes.get(watName)!
+            if (compiledGlobalTypes.has(watName)) return compiledGlobalTypes.get(watName)!
+            if (compiledFunctionReturnTypes.has(watName)) return compiledFunctionReturnTypes.get(watName)!
+            const sig = functionSigs?.get(watName)
+            if (sig && sig.result.kind === 'Float') return 'f32'
+            return 'i32'
+        },
+        ExpressionEnd_block(block) { return block.compileType() },
+        ExpressionEnd_paren(_open, exp, _close) { return exp.compileType() },
+
+        Block(_open, _items, _semis, trailing, _close) {
+            if (trailing.children.length > 0) return trailing.children[0].compileType()
+            return 'void'
+        },
+        Binding(_bind, exp) { return exp.compileType() },
+
+        // Function calls
+        FunctionCall(_sigil, body) { return body.compileType() },
+        FunctionCallBody_builtin(kw, _args) {
+            const kwName = kw.compile()
+            const kwEntry = registry ? lookupKeyword(registry, '@' + kwName) : undefined
+            const intrinsicName = kwEntry?.data?.intrinsic
+            if (intrinsicName) {
+                if (/^WASM::f32_/.test(intrinsicName)) return 'f32'
+                // control_* and i32_* all produce i32
+                return 'i32'
+            }
+            const sig = functionSigs?.get(toWatIdentifier(kwName))
+            if (sig && sig.result.kind === 'Float') return 'f32'
+            return 'i32'
+        },
+        FunctionCallBody_user(ns, _args) {
+            const funcName = ns.sourceString
+            if (isWasmIntrinsic(funcName)) {
+                return /^WASM::f32_/.test(funcName) ? 'f32' : 'i32'
+            }
+            const watName = toWatIdentifier(funcName)
+            if (compiledFunctionReturnTypes.has(watName)) return compiledFunctionReturnTypes.get(watName)!
+            const sig = functionSigs?.get(watName)
+            if (sig && sig.result.kind === 'Float') return 'f32'
+            return 'i32'
+        },
+
+        // Defaults — all integer-like unless overridden above.
+        // Single-child nonterminals (outer alternation wrappers like ExpressionEnd, ExpressionStart)
+        // are delegated through so that ExpressionEnd_namespace etc. can be reached.
+        _terminal() { return 'i32' },
+        _nonterminal(...children: any[]) {
+            if (children.length === 1) return children[0].compileType()
+            return 'i32'
+        },
+        _iter(..._args: any[]) { return 'i32' },
     })
     return semantics;
 }

@@ -1,31 +1,31 @@
-@stratum LetDef (Keyword, '@let', Node) = {
+@stratum_keyword LetDef ('@let', Node) = {
   &WASM::def_function;
 };
 
-@stratum FnDef (Keyword, '@fn', Node) = {
+@stratum_keyword FnDef ('@fn', Node) = {
   &WASM::def_function;
 };
 
-@stratum VarDef (Keyword, '@var', Node) = {
+@stratum_keyword VarDef ('@var', Node) = {
   &WASM::def_global;
 };
 
-@stratum ExternDef (Keyword, '@extern', Node) = {
+@stratum_keyword ExternDef ('@extern', Node) = {
   &WASM::def_extern;
 };
 
-@stratum TypeAliasDef (Keyword, '@type_alias', Node) = {
+@stratum_keyword TypeAliasDef ('@type_alias', Node) = {
   &WASM::def_type_alias;
 };
 
-@stratum TypeDistinctDef (Keyword, '@type_distinct', Node) = {
+@stratum_keyword TypeDistinctDef ('@type_distinct', Node) = {
   &WASM::def_type_distinct;
 };
 
-@stratum TypeSumDef (Keyword, '@type_sum', Node) = {
+@stratum_keyword TypeSumDef ('@type_sum', Node) = {
   &WASM::def_type_sum;
 };
 
-@stratum LocalDef (Keyword, '@local', Node) = {
+@stratum_keyword LocalDef ('@local', Node) = {
   &WASM::def_local;
 };

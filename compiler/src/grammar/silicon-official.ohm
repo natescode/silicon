@@ -68,12 +68,11 @@ Silicon {
     | Literal -- literal
   keyword = "@" identifier
   
-  Elaboration = "@stratum" StrataDefinition
-  StrataDefinition =
-    | OperatorDefinition
-    | KeywordDefinition
-  OperatorDefinition = identifier "(" "Operator" "," OperatorSymbol "," identifier ")" "=" StrataBody
-  KeywordDefinition = identifier "(" "Keyword" "," KeywordName "," identifier ")" "=" StrataBody
+  Elaboration =
+    | "@stratum_operator" OperatorDefinition -- operator
+    | "@stratum_keyword" KeywordDefinition -- keyword
+  OperatorDefinition = identifier "(" OperatorSymbol "," identifier ")" "=" StrataBody
+  KeywordDefinition = identifier "(" KeywordName "," identifier ")" "=" StrataBody
   OperatorSymbol = stringLiteral
   KeywordName = stringLiteral
   StrataBody = "{" (Item ";")* "}"

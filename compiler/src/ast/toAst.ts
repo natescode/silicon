@@ -99,28 +99,28 @@ export default function addToAstSemantics(siliconGrammar: ohm.Grammar): ohm.Sema
             return ASTFactory.genericParams(paramList)
         },
 
-        Elaboration(_stratum, strataDef) {
-            return strataDef.toAst()
-        },
-
-        StrataDefinition(def) {
+        Elaboration_operator(_keyword, def) {
             return def.toAst()
         },
 
-        OperatorDefinition(name, _open, _op, _comma1, symbol, _comma2, nodeParam, _close, _eq, body) {
+        Elaboration_keyword(_keyword, def) {
+            return def.toAst()
+        },
+
+        OperatorDefinition(name, _open, symbol, _comma, nodeParam, _close, _eq, body) {
             const elaborationName = name.sourceString
             const operatorSymbol = symbol.toAst()
             const nodeParamName = nodeParam.sourceString
             const semanticsBody = body.toAst()
-            return ASTFactory.elaboration('operator', elaborationName, 'Operator', operatorSymbol, nodeParamName, semanticsBody)
+            return ASTFactory.elaboration('operator', elaborationName, operatorSymbol, nodeParamName, semanticsBody)
         },
 
-        KeywordDefinition(name, _open, _kw, _comma1, keywordName, _comma2, nodeParam, _close, _eq, body) {
+        KeywordDefinition(name, _open, keywordName, _comma, nodeParam, _close, _eq, body) {
             const elaborationName = name.sourceString
             const kwName = keywordName.toAst()
             const nodeParamName = nodeParam.sourceString
             const semanticsBody = body.toAst()
-            return ASTFactory.elaboration('keyword', elaborationName, 'Keyword', kwName, nodeParamName, semanticsBody)
+            return ASTFactory.elaboration('keyword', elaborationName, kwName, nodeParamName, semanticsBody)
         },
 
         OperatorSymbol(stringLit) {

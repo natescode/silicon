@@ -46,9 +46,15 @@ import parse from '../parser'
 import addToAstSemantics from '../ast/toAst'
 import siliconGrammar from '../grammar/SiliconGrammar'
 
+export interface ElaborationError {
+  keyword: string
+  message: string
+}
+
 export interface ElaborateResult {
   program: Program
   registry: ElaboratorRegistry
+  errors: ElaborationError[]
 }
 
 /**
@@ -60,8 +66,8 @@ export interface ElaborateResult {
  */
 export default function elaborate(ast: Program): ElaborateResult {
   const registry = buildElaboratorRegistry(ast)
-  const program = elaborateAST(ast, registry)
-  return { program, registry }
+  const { program, errors } = elaborateAST(ast, registry)
+  return { program, registry, errors }
 }
 
 // ---------------------------------------------------------------------------
@@ -82,8 +88,8 @@ function buildElaboratorRegistry(ast: Program): ElaboratorRegistry {
       registerDefKind(registry.defKinds, {
         keyword: symbol,
         codegenKind,
-        allowsParams: codegenKind === 'function',
-        allowsBinding: true,
+        allowsParams: codegenKind === 'function' || codegenKind === 'extern',
+        allowsBinding: codegenKind !== 'extern',
         allowsGenerics: codegenKind === 'function',
       })
     }
@@ -138,11 +144,12 @@ function parseBuiltinStrata(): Elaboration[] {
 
 /**
  * Convert an Elaboration AST node to a StrataNode. Extracts the WASM intrinsic
- * reference from the body so downstream phases (codegen, typechecker) can use
- * it without re-walking the body.
+ * reference and body template from the body so downstream phases (codegen,
+ * typechecker) can use them without re-walking the body.
  */
 function elaborationToStrataNode(elaboration: Elaboration): StrataNode {
   const intrinsic = extractIntrinsicFromBody(elaboration.semantics)
+  const bodyTemplate = extractBodyTemplate(elaboration.semantics as any, elaboration.nodeParamName)
   const kind = elaboration.kind as 'operator' | 'keyword'
   return {
     type: strataTypeFromIntrinsic(intrinsic, kind),
@@ -151,8 +158,74 @@ function elaborationToStrataNode(elaboration: Elaboration): StrataNode {
       nodeParamName: elaboration.nodeParamName,
       body: elaboration.semantics,
       intrinsic,
+      bodyTemplate,
     },
   }
+}
+
+/**
+ * Walk the strata body AST and extract the argument pattern from the first
+ * WASM function call. Returns `{ intrinsic, argRefs }` where `argRefs` maps
+ * each call argument to 'left', 'right', or 'unknown' based on whether it
+ * references `{nodeParamName}.left` or `{nodeParamName}.right`.
+ *
+ * This drives body-level arg substitution in codegen so that the strata body
+ * actually determines operand order, rather than the compiler hardcoding it.
+ */
+function extractBodyTemplate(
+  body: any,
+  nodeParamName: string
+): { intrinsic: string; argRefs: Array<'left' | 'right' | 'unknown'> } | undefined {
+  if (!body || !Array.isArray(body.items)) return undefined
+  for (const item of body.items) {
+    if (!item || typeof item !== 'object') continue
+    // Item.value for 'expression' kind is the result of ExpressionStart_binChain,
+    // which with no binary ops returns the ExpressionEnd result directly —
+    // a FunctionCall node in this context.
+    const fc = findFunctionCall(item.value ?? item)
+    if (!fc) continue
+    const name = fc.name
+    if (!name || name.type !== 'Namespace' || name.path?.[0] !== 'WASM') continue
+    const intrinsic = (name.path as string[]).join('::')
+    const argRefs = (fc.args ?? []).map((arg: any): 'left' | 'right' | 'unknown' => {
+      const ns = findNamespace(arg)
+      if (!ns) return 'unknown'
+      const nsStr = (ns.path as string[]).join('.')
+      if (nsStr === `${nodeParamName}.left`) return 'left'
+      if (nsStr === `${nodeParamName}.right`) return 'right'
+      return 'unknown'
+    })
+    return { intrinsic, argRefs }
+  }
+  return undefined
+}
+
+function findFunctionCall(node: any): any {
+  if (!node || typeof node !== 'object') return undefined
+  if (node.type === 'FunctionCall') return node
+  for (const key of Object.keys(node)) {
+    if (key === 'sourceLocation' || key === 'inferredType') continue
+    const child = node[key]
+    if (child && typeof child === 'object') {
+      const r = findFunctionCall(child)
+      if (r) return r
+    }
+  }
+  return undefined
+}
+
+function findNamespace(node: any): any {
+  if (!node || typeof node !== 'object') return undefined
+  if (node.type === 'Namespace') return node
+  for (const key of Object.keys(node)) {
+    if (key === 'sourceLocation' || key === 'inferredType') continue
+    const child = node[key]
+    if (child && typeof child === 'object') {
+      const r = findNamespace(child)
+      if (r) return r
+    }
+  }
+  return undefined
 }
 
 /**
@@ -186,19 +259,20 @@ function extractIntrinsicFromBody(node: any): string | undefined {
 }
 
 // ---------------------------------------------------------------------------
-// Phase 2: Walk AST and attach semantics
+// Phase 2: Walk AST, attach semantics, and validate Def-Kind schemas
 // ---------------------------------------------------------------------------
 
-function elaborateAST(ast: Program, registry: ElaboratorRegistry): Program {
-  const elements = (ast.elements as any[]).map(el => elaborateNode(el, registry))
-  return { type: 'Program', elements }
+function elaborateAST(ast: Program, registry: ElaboratorRegistry): { program: Program; errors: ElaborationError[] } {
+  const errors: ElaborationError[] = []
+  const elements = (ast.elements as any[]).map(el => elaborateNode(el, registry, errors))
+  return { program: { type: 'Program', elements }, errors }
 }
 
 /**
  * Dispatch on any node type — handles both flat (parser) and wrapped
  * (ASTFactory) AST shapes.
  */
-function elaborateNode(node: any, registry: ElaboratorRegistry): any {
+function elaborateNode(node: any, registry: ElaboratorRegistry, errors: ElaborationError[]): any {
   if (!node || typeof node !== 'object') return node
 
   switch (node.type) {
@@ -218,82 +292,111 @@ function elaborateNode(node: any, registry: ElaboratorRegistry): any {
 
     // Flat AST composites
     case 'BinaryOp':
-      return elaborateBinOp(node, registry)
+      return elaborateBinOp(node, registry, errors)
 
     case 'FunctionCall':
-      return { ...node, args: node.args.map((a: any) => elaborateNode(a, registry)) }
+      return { ...node, args: node.args.map((a: any) => elaborateNode(a, registry, errors)) }
 
     case 'Assignment':
-      return { ...node, value: elaborateNode(node.value, registry) }
+      return { ...node, value: elaborateNode(node.value, registry, errors) }
 
     case 'Definition': {
       const defEntry = lookupDefKindEntry(registry, node.keyword)
-      const hook = defEntry ? defEntry.codegenKind : false
+
+      if (!defEntry) {
+        errors.push({
+          keyword: node.keyword,
+          message: `Unknown definition keyword '${node.keyword}' — no @stratum is registered for it`,
+        })
+        return node
+      }
+
+      // Schema validation: check the definition against the Def-Kind's declared schema.
+      if (!defEntry.allowsParams && node.params && node.params.length > 0) {
+        errors.push({
+          keyword: node.keyword,
+          message: `'${node.keyword}' does not accept parameters`,
+        })
+      }
+      if (!defEntry.allowsBinding && node.binding) {
+        errors.push({
+          keyword: node.keyword,
+          message: `'${node.keyword}' does not accept a binding (:= ...)`,
+        })
+      }
+      if (!defEntry.allowsGenerics && node.generics) {
+        errors.push({
+          keyword: node.keyword,
+          message: `'${node.keyword}' does not accept generic parameters`,
+        })
+      }
+
+      const hook = defEntry.codegenKind
       const elaborated = { ...node, hook }
       if (!elaborated.binding) return elaborated
-      return { ...elaborated, binding: { ...elaborated.binding, expression: elaborateNode(elaborated.binding.expression, registry) } }
+      return { ...elaborated, binding: { ...elaborated.binding, expression: elaborateNode(elaborated.binding.expression, registry, errors) } }
     }
 
     case 'Block':
-      return elaborateBlock(node, registry)
+      return elaborateBlock(node, registry, errors)
 
     // Wrapped AST (ASTFactory shape) — used in unit tests
     case 'Program':
-      return { ...node, elements: node.elements.map((el: any) => elaborateNode(el, registry)) }
+      return { ...node, elements: node.elements.map((el: any) => elaborateNode(el, registry, errors)) }
 
     case 'Element': {
       if (node.kind === 'elaboration' || node.kind === 'docComment') return node
-      if (node.kind === 'item') return { ...node, value: elaborateNode(node.value, registry) }
+      if (node.kind === 'item') return { ...node, value: elaborateNode(node.value, registry, errors) }
       return node
     }
 
     case 'Item': {
       if (node.kind === 'statement' || node.kind === 'expression') {
-        return { ...node, value: elaborateNode(node.value, registry) }
+        return { ...node, value: elaborateNode(node.value, registry, errors) }
       }
       return node
     }
 
     case 'Statement': {
       if (node.kind === 'assignment' || node.kind === 'definition') {
-        return { ...node, value: elaborateNode(node.value, registry) }
+        return { ...node, value: elaborateNode(node.value, registry, errors) }
       }
       return node
     }
 
     case 'ExpressionStart': {
-      if (node.kind === 'binOp') return { ...node, value: elaborateBinOp(node.value, registry) }
-      return { ...node, value: elaborateNode(node.value, registry) }
+      if (node.kind === 'binOp') return { ...node, value: elaborateBinOp(node.value, registry, errors) }
+      return { ...node, value: elaborateNode(node.value, registry, errors) }
     }
 
     case 'ExpressionEnd':
-      return { ...node, value: elaborateNode(node.value, registry) }
+      return { ...node, value: elaborateNode(node.value, registry, errors) }
 
     case 'Literal':
-      return { ...node, value: elaborateNode(node.value, registry) }
+      return { ...node, value: elaborateNode(node.value, registry, errors) }
 
     case 'ArrayLiteral':
-      return { ...node, elements: node.elements.map((e: any) => elaborateNode(e, registry)) }
+      return { ...node, elements: node.elements.map((e: any) => elaborateNode(e, registry, errors)) }
 
     case 'Binding':
-      return { ...node, expression: elaborateNode(node.expression, registry) }
+      return { ...node, expression: elaborateNode(node.expression, registry, errors) }
 
     default:
       return node
   }
 }
 
-function elaborateBlock(block: any, registry: ElaboratorRegistry): any {
+function elaborateBlock(block: any, registry: ElaboratorRegistry, errors: ElaborationError[]): any {
   return {
     ...block,
-    items: block.items.map((i: any) => elaborateNode(i, registry)),
-    trailing: block.trailing ? elaborateNode(block.trailing, registry) : undefined,
+    items: block.items.map((i: any) => elaborateNode(i, registry, errors)),
+    trailing: block.trailing ? elaborateNode(block.trailing, registry, errors) : undefined,
   }
 }
 
-function elaborateBinOp(binOp: any, registry: ElaboratorRegistry): any {
-  const left = elaborateNode(binOp.left, registry)
-  const right = elaborateNode(binOp.right, registry)
+function elaborateBinOp(binOp: any, registry: ElaboratorRegistry, errors: ElaborationError[]): any {
+  const left = elaborateNode(binOp.left, registry, errors)
+  const right = elaborateNode(binOp.right, registry, errors)
   const semantics = lookupOperator(registry, binOp.operator)
   return { ...binOp, left, right, semantics }
 }

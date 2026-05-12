@@ -19,6 +19,8 @@ export interface StructuredEmitCtx {
     inExprPosition: boolean
     /** Allocate a unique loop label id (increments the caller's counter). */
     nextLoopId: () => number
+    /** Peek at the innermost active loop id — undefined when not inside a loop. */
+    currentLoopId?: () => number | undefined
 }
 
 export interface WasmIntrinsic {
@@ -546,6 +548,48 @@ export const wasmIntrinsics: Record<string, WasmIntrinsic> = {
     },
 
     // ============================================================================
+    // Logical Operations
+    // ============================================================================
+    i32_eqz: {
+        name: 'WASM::i32_eqz',
+        wasmInstr: 'i32.eqz',
+        binary: false,
+        unary: true,
+        inputs: 1,
+        outputs: 1,
+        description: 'Test if i32 value is zero — logical NOT (returns 1 if zero, 0 otherwise)',
+        emitStructured(args, _ctx) {
+            return `(i32.eqz ${args[0]})`
+        },
+    },
+    control_or: {
+        name: 'WASM::control_or',
+        wasmInstr: 'if',
+        binary: true,
+        unary: false,
+        inputs: -1,
+        outputs: -1,
+        description: 'Short-circuit logical OR — if left is truthy return 1, else evaluate right',
+        emitStructured(args, _ctx) {
+            const [left, right] = args
+            return `(if (result i32) ${left} (then (i32.const 1)) (else ${right}))`
+        },
+    },
+    control_and: {
+        name: 'WASM::control_and',
+        wasmInstr: 'if',
+        binary: true,
+        unary: false,
+        inputs: -1,
+        outputs: -1,
+        description: 'Short-circuit logical AND — if left is falsy return 0, else evaluate right',
+        emitStructured(args, _ctx) {
+            const [left, right] = args
+            return `(if (result i32) ${left} (then ${right}) (else (i32.const 0)))`
+        },
+    },
+
+    // ============================================================================
     // Utility / Control
     // ============================================================================
     data_memory: {
@@ -602,6 +646,34 @@ export const wasmIntrinsics: Record<string, WasmIntrinsic> = {
             const id = ctx.nextLoopId()
             const [condWat, bodyWat] = args
             return `(block $brk_${id}\n  (loop $cont_${id}\n    (br_if $brk_${id} (i32.eqz\n      ${condWat}\n    ))\n    ${bodyWat}\n    (br $cont_${id})\n  )\n)`
+        },
+    },
+    control_break: {
+        name: 'WASM::control_break',
+        wasmInstr: 'br',
+        binary: false,
+        unary: false,
+        inputs: 0,
+        outputs: 0,
+        description: 'Branch to the nearest enclosing loop exit label — used by the @break stratum',
+        emitStructured(_args, ctx) {
+            const id = ctx.currentLoopId?.()
+            if (id === undefined) throw new Error('@break used outside of a @loop')
+            return `(br $brk_${id})`
+        },
+    },
+    control_continue: {
+        name: 'WASM::control_continue',
+        wasmInstr: 'br',
+        binary: false,
+        unary: false,
+        inputs: 0,
+        outputs: 0,
+        description: 'Branch to the nearest enclosing loop header label — used by the @continue stratum',
+        emitStructured(_args, ctx) {
+            const id = ctx.currentLoopId?.()
+            if (id === undefined) throw new Error('@continue used outside of a @loop')
+            return `(br $cont_${id})`
         },
     },
     control_match: {

@@ -101,7 +101,6 @@ function createPlusElaboratorAST(): Elaboration {
   return ASTFactory.elaboration(
     'operator',
     'Plus',
-    'Operator',
     '+',
     'Node',
     bodyExp
@@ -238,7 +237,6 @@ test("elaborate extracts elaborations from program", () => {
   const elab2 = ASTFactory.elaboration(
     'operator',
     'Minus',
-    'Operator',
     '-',
     'Node',
     ASTFactory.expressionStart(
@@ -293,7 +291,7 @@ test("elaborate sets hook 'function' on @let Definition", () => {
   expect(elaboratedDef.hook).toBe('function')
 })
 
-// Test: unknown definition keyword gets hook = false
+// Test: unknown definition keyword produces an elaboration error
 test("elaborate sets hook false on unknown definition keyword", () => {
   const def = ASTFactory.definition('@unknown', ASTFactory.typedIdentifier('foo'), [], undefined, undefined)
   const stmt = ASTFactory.statement('definition', def)
@@ -301,12 +299,11 @@ test("elaborate sets hook false on unknown definition keyword", () => {
   const element = ASTFactory.element('item', item)
   const program = ASTFactory.program([element])
 
-  const { program: result } = elaborate(program)
+  const { errors } = elaborate(program)
 
-  const el = result.elements[0] as any
-  const elaboratedDef = el.value.value.value
-  expect(elaboratedDef.type).toBe('Definition')
-  expect(elaboratedDef.hook).toBe(false)
+  expect(errors.length).toBeGreaterThan(0)
+  expect(errors[0].keyword).toBe('@unknown')
+  expect(errors[0].message).toContain('Unknown definition keyword')
 })
 
 // Test: defKinds registry is populated with @let
