@@ -1093,7 +1093,9 @@ test("Round 23: float multiplication uses f32.mul", () => {
 // ============================================================================
 
 test("Round 24: @loop emits block/loop WAT structure", () => {
-    const src = "@let count := { &@loop 1, { 0 }; 42 };";
+    // Body ends with &@break so br $cont_ appears as unreachable dead code (valid WAT).
+    // { 0 } would leave a value on the stack before br $cont_, producing invalid WASM.
+    const src = "@let count := { &@loop 1, { &@break }; 42 };";
     const result = compileSource(src);
     expect(result.success).toBe(true);
     const uw = userWat(result.wat!)
@@ -1145,7 +1147,8 @@ test("Round 24: @continue label matches enclosing @loop label", () => {
 });
 
 test("Round 24: nested @loop — inner @break uses inner label", () => {
-    const src = "@let run := { &@loop 1, { &@loop 1, { &@break }; 0 }; 0 };";
+    // Outer body ends with &@continue (so outer br $cont_ is unreachable dead code).
+    const src = "@let run := { &@loop 1, { &@loop 1, { &@break }; &@continue }; 0 };";
     const result = compileSource(src);
     expect(result.success).toBe(true);
     const uw = userWat(result.wat!)
@@ -1168,6 +1171,62 @@ test("Round 24: @continue registered in registry as keyword stratum", () => {
     const { registry } = elaborate(ASTFactory.program([]))
     expect(registry.keywords['@continue']).toBeDefined()
     expect(registry.keywords['@continue'].data.intrinsic).toBe('WASM::control_continue')
+});
+
+test("Round 24: @loop registered in registry as keyword stratum", () => {
+    const { registry } = elaborate(ASTFactory.program([]))
+    expect(registry.keywords['@loop']).toBeDefined()
+    expect(registry.keywords['@loop'].data.intrinsic).toBe('WASM::control_loop')
+});
+
+test("Round 24: count_loop.si example compiles successfully", () => {
+    const result = compileSource(loadExample("count_loop.si"));
+    expect(result.success).toBe(true);
+    const uw = userWat(result.wat!)
+    expect(uw).toContain("(block $brk_");
+    expect(uw).toContain("(loop $cont_");
+    expect(uw).toContain("global.set $n");
+});
+
+test("Round 24: condition-based loop — condition embedded in br_if check", () => {
+    const src = "@let run := { @var n:Int := 0; &@loop n < 5, { n = n + 1; }; n };";
+    const result = compileSource(src);
+    expect(result.success).toBe(true);
+    const uw = userWat(result.wat!)
+    // 'n < 5' compiles to lt_s inside the br_if (i32.eqz ...) exit check
+    expect(uw).toContain("lt_s");
+    expect(uw).toContain("br_if $brk_");
+    // Condition check comes before the body mutation
+    const brIfIdx = uw.indexOf("br_if $brk_");
+    const setIdx = uw.indexOf("global.set $n");
+    expect(setIdx).toBeGreaterThan(brIfIdx);
+});
+
+test("Round 24: loop body with mutation-as-item is void — global.set before br $cont_", () => {
+    // The loop body { n = n + 1; } ends with a semicolon → no trailing expression.
+    // global.set $n leaves nothing on the stack, so br $cont_ is reached with empty stack.
+    const src = "@let run := { @var n:Int := 0; &@loop n < 5, { n = n + 1; }; n };";
+    const result = compileSource(src);
+    expect(result.success).toBe(true);
+    const uw = userWat(result.wat!)
+    const setIdx = uw.indexOf("global.set $n");
+    const contIdx = uw.indexOf("br $cont_");
+    expect(setIdx).toBeGreaterThan(-1);
+    expect(contIdx).toBeGreaterThan(-1);
+    expect(setIdx).toBeLessThan(contIdx);
+});
+
+test("Round 24: loop with @if-break pattern — conditional exit inside body", () => {
+    const src = "@let run := { @var n:Int := 0; &@loop 1, { n = n + 1; &@if n >= 3, { &@break }; }; n };";
+    const result = compileSource(src);
+    expect(result.success).toBe(true);
+    const uw = userWat(result.wat!)
+    expect(uw).toContain("ge_s");
+    expect(uw).toContain("(if");
+    // The br inside @if targets the enclosing loop's block label
+    const blockId = uw.match(/block \$brk_(\d+)/)?.[1];
+    expect(blockId).toBeDefined();
+    expect(uw).toContain(`(then (br $brk_${blockId})`);
 });
 
 // ============================================================================
