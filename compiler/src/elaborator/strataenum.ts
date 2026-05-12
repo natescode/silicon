@@ -1,14 +1,8 @@
 export enum StrataType {
     Keyword,
-    Constraint,
-    Type,
-    Capability,
     Operator,
     Control,
-    Runtime,
     Codegen,
-    Metadata,
-    DSL
 }
 
 import { type TypeSig } from '../types/intrinsicSig'
@@ -35,6 +29,16 @@ export interface StrataData {
      * instead of re-deriving from the intrinsic name on every call.
      */
     typeSignature?: TypeSig
+    /**
+     * WAT instruction string for the float (f32) variant of this operator, if one
+     * exists. Pre-computed at strata-load time by looking up `WASM::f32_*` in the
+     * intrinsics table. Codegen reads this directly instead of doing a runtime
+     * regex swap on the intrinsic name.
+     *
+     * Example: for `+` (intrinsic `WASM::i32_add`), this is `'f32.add'`.
+     * Undefined for operators with no f32 counterpart (bitwise, etc.).
+     */
+    floatVariant?: string
 }
 
 export interface StrataNode {
@@ -49,18 +53,6 @@ export interface SourceLocation {
     end: number
 }
 
-
-function createStrataNode(type: StrataType, discriminant: string, data?: any, sourceLocation?: SourceLocation): StrataNode {
-    return { type, discriminant, data, sourceLocation }
-}
-
-export function createOperatorNode(op: string, left: any, right: any): StrataNode {
-    return createStrataNode(StrataType.Operator, op, { left, right })
-}
-
-export function createKeywordNode(value: string, sourceLocation?: SourceLocation): StrataNode {
-    return createStrataNode(StrataType.Keyword, value, sourceLocation)
-}
 
 /**
  * Derive the correct StrataType from a WASM intrinsic name and the syntactic

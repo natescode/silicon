@@ -80,14 +80,7 @@ function stratumInstrFor(op: string, isFloat: boolean, reg: ElaboratorRegistry |
     if (!isFloat) {
         return getWasmIntrinsic(stratum.data.intrinsic)?.wasmInstr
     }
-    // Float context: swap i32_ prefix for f32_. Signed/unsigned suffixes (_s, _u)
-    // don't exist on f32 instructions, so strip them too.
-    const f32Base = stratum.data.intrinsic.replace(/^WASM::i32_/, 'WASM::f32_')
-    return (
-        getWasmIntrinsic(f32Base) ??
-        getWasmIntrinsic(f32Base.replace(/_[su]$/, '')) ??
-        getWasmIntrinsic(stratum.data.intrinsic)
-    )?.wasmInstr
+    return stratum.data.floatVariant ?? getWasmIntrinsic(stratum.data.intrinsic)?.wasmInstr
 }
 
 /**

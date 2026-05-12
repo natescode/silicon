@@ -682,13 +682,8 @@ function instrForOp(op: string, operandWt: WasmValType, registry: ElaboratorRegi
     const base = stratum?.data?.intrinsic
     if (!base) throw new IRLowerError(`No stratum registered for operator '${op}'`)
 
-    // Float context: try swapping the i32_ prefix to f32_.
-    if (effectiveWt === 'f32' && base.includes('WASM::i32_')) {
-        const f32Name = base.replace('WASM::i32_', 'WASM::f32_')
-        const f32Intr =
-            getWasmIntrinsic(f32Name) ??
-            getWasmIntrinsic(f32Name.replace(/_[su]$/, ''))
-        if (f32Intr) return f32Intr.wasmInstr
+    if (effectiveWt === 'f32' && stratum.data?.floatVariant) {
+        return stratum.data.floatVariant
     }
 
     const intr = getWasmIntrinsic(base)

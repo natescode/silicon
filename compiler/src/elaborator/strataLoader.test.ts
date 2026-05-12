@@ -239,3 +239,47 @@ test("buildStrataRegistry: user-defined strata with unknown intrinsic have undef
     // No body → no intrinsic → no typeSignature.
     expect(registry.operators['@@'].data?.typeSignature).toBeUndefined()
 })
+
+// ---------------------------------------------------------------------------
+// Round 32: floatVariant pre-computed at load time
+// ---------------------------------------------------------------------------
+
+test("buildStrataRegistry: '+' has floatVariant 'f32.add'", () => {
+    const registry = buildStrataRegistry(ASTFactory.program([]))
+    expect(registry.operators['+'].data?.floatVariant).toBe('f32.add')
+})
+
+test("buildStrataRegistry: '-' has floatVariant 'f32.sub'", () => {
+    const registry = buildStrataRegistry(ASTFactory.program([]))
+    expect(registry.operators['-'].data?.floatVariant).toBe('f32.sub')
+})
+
+test("buildStrataRegistry: '*' has floatVariant 'f32.mul'", () => {
+    const registry = buildStrataRegistry(ASTFactory.program([]))
+    expect(registry.operators['*'].data?.floatVariant).toBe('f32.mul')
+})
+
+test("buildStrataRegistry: '/' has floatVariant 'f32.div'", () => {
+    const registry = buildStrataRegistry(ASTFactory.program([]))
+    expect(registry.operators['/'].data?.floatVariant).toBe('f32.div')
+})
+
+test("buildStrataRegistry: '<' has floatVariant 'f32.lt'", () => {
+    const registry = buildStrataRegistry(ASTFactory.program([]))
+    expect(registry.operators['<'].data?.floatVariant).toBe('f32.lt')
+})
+
+test("buildStrataRegistry: '==' has floatVariant 'f32.eq'", () => {
+    const registry = buildStrataRegistry(ASTFactory.program([]))
+    expect(registry.operators['=='].data?.floatVariant).toBe('f32.eq')
+})
+
+test("buildStrataRegistry: bitwise '|' has no floatVariant", () => {
+    const registry = buildStrataRegistry(ASTFactory.program([]))
+    expect(registry.operators['|'].data?.floatVariant).toBeUndefined()
+})
+
+test("buildStrataRegistry: bitwise '<<' has no floatVariant", () => {
+    const registry = buildStrataRegistry(ASTFactory.program([]))
+    expect(registry.operators['<<'].data?.floatVariant).toBeUndefined()
+})
