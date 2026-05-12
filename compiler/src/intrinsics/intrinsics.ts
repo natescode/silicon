@@ -450,7 +450,8 @@ export const wasmIntrinsics: Record<string, WasmIntrinsic> = {
         unary: true,
         inputs: 1,
         outputs: 1,
-        description: 'Convert f32 to signed i32 by truncation'
+        description: 'Convert f32 to signed i32 by truncation — used by the @toInt stratum',
+        emitStructured(args, _ctx) { return `(i32.trunc_f32_s ${args[0]})` },
     },
     i32_trunc_f32_u: {
         name: 'WASM::i32_trunc_f32_u',
@@ -468,7 +469,8 @@ export const wasmIntrinsics: Record<string, WasmIntrinsic> = {
         unary: true,
         inputs: 1,
         outputs: 1,
-        description: 'Convert signed i32 to f32'
+        description: 'Convert signed i32 to f32 — used by the @toFloat stratum',
+        emitStructured(args, _ctx) { return `(f32.convert_i32_s ${args[0]})` },
     },
     f32_convert_i32_u: {
         name: 'WASM::f32_convert_i32_u',
@@ -674,6 +676,19 @@ export const wasmIntrinsics: Record<string, WasmIntrinsic> = {
             const id = ctx.currentLoopId?.()
             if (id === undefined) throw new Error('@continue used outside of a @loop')
             return `(br $cont_${id})`
+        },
+    },
+    control_return: {
+        name: 'WASM::control_return',
+        wasmInstr: 'return',
+        binary: false,
+        unary: false,
+        inputs: 0,
+        outputs: 0,
+        description: 'Return from the current function — used by the @return stratum. Optional value arg is pushed before the return instruction.',
+        emitStructured(args, _ctx) {
+            if (args.length === 0 || !args[0]) return 'return'
+            return `${args[0]}\nreturn`
         },
     },
     control_match: {

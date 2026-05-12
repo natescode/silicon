@@ -1,0 +1,2 @@
+@let f:Float := 3.14;
+&@toInt f;

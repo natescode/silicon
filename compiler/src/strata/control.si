@@ -5,3 +5,7 @@
 @stratum_keyword Continue ('@continue', Node) = {
   &WASM::control_continue;
 };
+
+@stratum_keyword Return ('@return', Node) = {
+  &WASM::control_return;
+};

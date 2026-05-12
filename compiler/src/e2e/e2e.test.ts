@@ -1287,3 +1287,123 @@ test("Round 26: | and || are distinct operators", () => {
     expect(result.wat).toContain("i32.or");
     expect(result.wat).toContain("(if (result i32)");
 });
+
+// ============================================================================
+// Round 27: @return early return + @toInt / @toFloat type casts
+// ============================================================================
+
+test("Round 27: @return — early_return.si compiles successfully", () => {
+    const result = compileSource(loadExample("early_return.si"));
+    expect(result.success).toBe(true);
+});
+
+test("Round 27: @return emits 'return' WAT instruction", () => {
+    const result = compileSource(loadExample("early_return.si"));
+    expect(result.success).toBe(true);
+    const uw = userWat(result.wat!)
+    expect(uw).toContain("return");
+});
+
+test("Round 27: @return inside @if — fallthrough code also emits", () => {
+    // Both the early-return path (return) and the normal path (i32.div_s) must appear
+    const result = compileSource(loadExample("early_return.si"));
+    expect(result.success).toBe(true);
+    const uw = userWat(result.wat!)
+    expect(uw).toContain("return");
+    expect(uw).toContain("i32.div_s");
+});
+
+test("Round 27: @return with value emits value then return", () => {
+    const result = compileSource("@let zero := { &@return 0 };");
+    expect(result.success).toBe(true);
+    const uw = userWat(result.wat!)
+    expect(uw).toContain("(i32.const 0)");
+    expect(uw).toContain("return");
+});
+
+test("Round 27: @return with no arg emits bare return", () => {
+    // A @let with no binding just returns the default (empty @return)
+    const result = compileSource("@let earlyExit := { &@return };");
+    expect(result.success).toBe(true);
+    const uw = userWat(result.wat!)
+    expect(uw).toContain("return");
+});
+
+test("Round 27: @return registered in registry as keyword stratum", () => {
+    const { registry } = elaborate(ASTFactory.program([]))
+    expect(registry.keywords['@return']).toBeDefined()
+    expect(registry.keywords['@return'].data.intrinsic).toBe('WASM::control_return')
+});
+
+test("Round 27: @toFloat — cast_to_float.si compiles successfully", () => {
+    const result = compileSource(loadExample("cast_to_float.si"));
+    expect(result.success).toBe(true);
+});
+
+test("Round 27: @toFloat emits f32.convert_i32_s", () => {
+    const result = compileSource(loadExample("cast_to_float.si"));
+    expect(result.success).toBe(true);
+    expect(result.wat).toContain("f32.convert_i32_s");
+});
+
+test("Round 27: @toFloat on an Int param emits f32.convert_i32_s", () => {
+    const result = compileSource("@let cast x:Int := { &@toFloat x };");
+    expect(result.success).toBe(true);
+    const uw = userWat(result.wat!)
+    expect(uw).toContain("f32.convert_i32_s");
+});
+
+test("Round 27: @toFloat promotes type — mixed int+float uses f32.add", () => {
+    const result = compileSource("@let mixAdd x:Int, y:Float := { &@toFloat x + y };");
+    expect(result.success).toBe(true);
+    const uw = userWat(result.wat!)
+    expect(uw).toContain("f32.convert_i32_s");
+    expect(uw).toContain("f32.add");
+    expect(uw).not.toContain("i32.add");
+});
+
+test("Round 27: @toFloat registered in registry as keyword stratum", () => {
+    const { registry } = elaborate(ASTFactory.program([]))
+    expect(registry.keywords['@toFloat']).toBeDefined()
+    expect(registry.keywords['@toFloat'].data.intrinsic).toBe('WASM::f32_convert_i32_s')
+});
+
+test("Round 27: @toInt — cast_to_int.si compiles successfully", () => {
+    const result = compileSource(loadExample("cast_to_int.si"));
+    expect(result.success).toBe(true);
+});
+
+test("Round 27: @toInt emits i32.trunc_f32_s", () => {
+    const result = compileSource(loadExample("cast_to_int.si"));
+    expect(result.success).toBe(true);
+    expect(result.wat).toContain("i32.trunc_f32_s");
+});
+
+test("Round 27: @toInt on a Float param emits i32.trunc_f32_s", () => {
+    const result = compileSource("@let cast x:Float := { &@toInt x };");
+    expect(result.success).toBe(true);
+    const uw = userWat(result.wat!)
+    expect(uw).toContain("i32.trunc_f32_s");
+});
+
+test("Round 27: @toInt registered in registry as keyword stratum", () => {
+    const { registry } = elaborate(ASTFactory.program([]))
+    expect(registry.keywords['@toInt']).toBeDefined()
+    expect(registry.keywords['@toInt'].data.intrinsic).toBe('WASM::i32_trunc_f32_s')
+});
+
+test("Round 27: @toInt result type is i32 — can add with int param", () => {
+    const result = compileSource("@let roundAdd x:Float, y:Int := { (&@toInt x) + y };");
+    expect(result.success).toBe(true);
+    const uw = userWat(result.wat!)
+    expect(uw).toContain("i32.trunc_f32_s");
+    expect(uw).toContain("i32.add");
+});
+
+test("Round 27: @toFloat and @toInt round-trip in a function", () => {
+    const result = compileSource("@let roundTrip x:Int := { &@toInt &@toFloat x };");
+    expect(result.success).toBe(true);
+    const uw = userWat(result.wat!)
+    expect(uw).toContain("f32.convert_i32_s");
+    expect(uw).toContain("i32.trunc_f32_s");
+});
