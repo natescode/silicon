@@ -11,10 +11,27 @@ export enum StrataType {
     DSL
 }
 
+/**
+ * Typed payload stored in a StrataNode after the loader has processed
+ * the strata body. The raw body AST is NOT stored here — only the derived
+ * data that downstream phases (codegen, type checker) actually need.
+ */
+export interface StrataData {
+    /** The parameter name used to refer to the operator node (e.g. "Node"). */
+    nodeParamName: string
+    /** Full WASM intrinsic name extracted from the body (e.g. "WASM::i32_add"). */
+    intrinsic?: string
+    /** Ordered arg references extracted from the body call, driving operand order in codegen. */
+    bodyTemplate?: {
+        intrinsic: string
+        argRefs: Array<'left' | 'right' | 'unknown'>
+    }
+}
+
 export interface StrataNode {
     type: StrataType
     discriminant: string
-    data?: any
+    data?: StrataData
     sourceLocation?: SourceLocation
 }
 

@@ -20,7 +20,7 @@
 import parse from './parser'
 import { addToAstSemantics, type ASTNode, type Program } from './ast'
 import { addCompileSemantics } from './codegen'
-import { elaborate } from './elaborator'
+import { elaborate, buildStrataRegistry } from './elaborator'
 import { typecheck, formatTypeError } from './types'
 import { siliconGrammar } from './grammar'
 
@@ -40,8 +40,11 @@ const match = parse(sourceCode)
 // Stage 2: Convert parse tree into typed AST
 const ast: ASTNode = addToAstSemantics(siliconGrammar)(match).toAst()
 
-// Stage 2.5: Elaborate — attach semantic information to operators
-const { program: elaboratedAST, registry, errors: elabErrors } = elaborate(ast as Program)
+// Stage 2.5a: Build strata registry from builtin .si files + user @stratum definitions
+const registry = buildStrataRegistry(ast as Program)
+
+// Stage 2.5b: Elaborate — walk AST and attach registry data to operator/definition nodes
+const { program: elaboratedAST, errors: elabErrors } = elaborate(ast as Program, registry)
 
 if (elabErrors.length > 0) {
     console.error('Elaboration errors:')
