@@ -43,3 +43,4 @@ export {
 } from './errors'
 
 export { default as typecheck, type TypeCheckResult, type FunctionSig } from './typechecker'
+export { intrinsicSignature, type TypeSig } from './intrinsicSig'

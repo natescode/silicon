@@ -79,6 +79,7 @@ import {
 } from './errors'
 import { getWasmIntrinsic } from '../intrinsics'
 import { type ElaboratorRegistry, lookupOperator, lookupKeyword } from '../elaborator/registry'
+import { intrinsicSignature, type TypeSig } from './intrinsicSig'
 
 /**
  * Mutable checking context. Threaded through the recursive walk so error
@@ -566,21 +567,21 @@ function checkBinaryOp(b: any, ctx: Ctx): SiliconType {
             }
             return TypeBool
         default: {
-            // User-defined operators: consult the stratum registry.
-            // The stratum body references a WASM intrinsic; its signature
-            // tells us the expected operand and result types.
+            // User-defined operators: read the pre-derived TypeSig from the
+            // registry (populated by strataLoader at load time). Fall back to
+            // deriving it from the intrinsic name if typeSignature is absent.
             const stratum = ctx.registry && lookupOperator(ctx.registry, b.operator)
-            if (stratum?.data?.intrinsic) {
-                const sig = intrinsicSignature(stratum.data.intrinsic)
-                if (sig) {
-                    if (leftT.kind !== 'Unknown' && !typeEquals(sig.params[0], leftT)) {
-                        ctx.errors.push(mismatch(sig.params[0], leftT, `${b.operator} left operand`, b.sourceLocation))
-                    }
-                    if (rightT.kind !== 'Unknown' && !typeEquals(sig.params[1] ?? sig.params[0], rightT)) {
-                        ctx.errors.push(mismatch(sig.params[1] ?? sig.params[0], rightT, `${b.operator} right operand`, b.sourceLocation))
-                    }
-                    return sig.result
+            const sig: TypeSig | undefined =
+                stratum?.data?.typeSignature ??
+                (stratum?.data?.intrinsic ? intrinsicSignature(stratum.data.intrinsic) : undefined)
+            if (sig) {
+                if (leftT.kind !== 'Unknown' && !typeEquals(sig.params[0], leftT)) {
+                    ctx.errors.push(mismatch(sig.params[0], leftT, `${b.operator} left operand`, b.sourceLocation))
                 }
+                if (rightT.kind !== 'Unknown' && !typeEquals(sig.params[1] ?? sig.params[0], rightT)) {
+                    ctx.errors.push(mismatch(sig.params[1] ?? sig.params[0], rightT, `${b.operator} right operand`, b.sourceLocation))
+                }
+                return sig.result
             }
             return TypeUnknown
         }
@@ -651,15 +652,16 @@ function checkFunctionCall(call: any, ctx: Ctx): SiliconType {
     // Builtin keyword strata (@if, @loop, @match, @toInt, @toFloat, …) — look up via the registry.
     if (call.isBuiltin && ctx.registry) {
         const kwEntry = lookupKeyword(ctx.registry, name)
-        if (kwEntry?.data?.intrinsic) {
-            const intr = kwEntry.data.intrinsic as string
+        if (kwEntry) {
+            const intr = kwEntry.data?.intrinsic
             if (intr === 'WASM::control_if') return typeOfIfCall(argTypes, call.sourceLocation, ctx)
             if (intr === 'WASM::control_loop') return TypeUnknown  // loops are void
             if (intr === 'WASM::control_match') return typeOfMatchCall(argTypes, call.sourceLocation, ctx)
-            // For any other intrinsic (e.g. @toInt, @toFloat), derive types from the
-            // intrinsic's known signature. This lets user-defined keyword strata get
-            // type-checked as soon as they reference a typed WASM intrinsic.
-            const sig = intrinsicSignature(intr)
+            // Prefer the pre-derived TypeSig stored in the registry; fall back to
+            // deriving from the intrinsic name for strata loaded before Round 30.
+            const sig: TypeSig | undefined =
+                kwEntry.data?.typeSignature ??
+                (intr ? intrinsicSignature(intr) : undefined)
             if (sig) {
                 for (let i = 0; i < sig.params.length; i++) {
                     const actual = argTypes[i]
@@ -787,74 +789,6 @@ function typeOfBlock(block: any, ctx: Ctx): SiliconType {
     return TypeUnknown
 }
 
-// ---------------------------------------------------------------------------
-// Intrinsic signatures
-// ---------------------------------------------------------------------------
-
-/**
- * Map a WASM intrinsic name to its argument and result types. The pattern is
- * highly regular: "i32_add" → i32 × i32 → i32, "f32_convert_i32_s" → i32 → f32.
- * Rather than hand-rolling every entry, we derive it from the name.
- */
-interface IntrinsicSig {
-    params: SiliconType[]
-    result: SiliconType
-}
-
-function intrinsicSignature(fullName: string): IntrinsicSig | undefined {
-    const m = fullName.match(/^WASM::(.+)$/)
-    if (!m) return undefined
-    const short = m[1]
-
-    // Arithmetic / bitwise / comparison binary ops: <type>_<op>
-    // Pull the prefix (i32 or f32) and dispatch by op.
-    const binaryOp = /^(i32|f32)_(add|sub|mul|div(_[su])?|rem(_[su])?|and|or|xor|shl|shr_s|shr_u|rotl|rotr|eq|ne|lt(_[su])?|gt(_[su])?|le(_[su])?|ge(_[su])?)$/
-    if (binaryOp.test(short)) {
-        const prefix = short.startsWith('i32') ? TypeInt : TypeFloat
-        const isComparison = /^(eq|ne|lt|gt|le|ge)(_[su])?$/.test(short.slice(4))
-        return {
-            params: [prefix, prefix],
-            result: isComparison ? TypeBool : prefix,
-        }
-    }
-
-    // Unary ops per type.
-    const unaryI32 = ['clz', 'ctz', 'popcnt']
-    if (short.startsWith('i32_') && unaryI32.includes(short.slice(4))) {
-        return { params: [TypeInt], result: TypeInt }
-    }
-    const unaryF32 = ['abs', 'neg', 'sqrt']
-    if (short.startsWith('f32_') && unaryF32.includes(short.slice(4))) {
-        return { params: [TypeFloat], result: TypeFloat }
-    }
-
-    // Conversions.
-    if (short === 'i32_trunc_f32_s' || short === 'i32_trunc_f32_u') {
-        return { params: [TypeFloat], result: TypeInt }
-    }
-    if (short === 'f32_convert_i32_s' || short === 'f32_convert_i32_u') {
-        return { params: [TypeInt], result: TypeFloat }
-    }
-
-    // Memory ops.
-    if (short === 'i32_load' || short === 'i32_load8_s' || short === 'i32_load8_u') {
-        return { params: [TypeInt], result: TypeInt }
-    }
-    if (short === 'f32_load') {
-        return { params: [TypeInt], result: TypeFloat }
-    }
-    if (short === 'i32_store' || short === 'i32_store8') {
-        return { params: [TypeInt, TypeInt], result: TypeUnknown }
-    }
-    if (short === 'f32_store') {
-        return { params: [TypeInt, TypeFloat], result: TypeUnknown }
-    }
-    if (short === 'data_memory') {
-        return { params: [], result: TypeInt }
-    }
-    if (short === 'mem_grow') {
-        return { params: [TypeInt], result: TypeInt }
-    }
-
-    return undefined
-}
+// intrinsicSignature is imported from ./intrinsicSig and used above for
+// direct WASM intrinsic calls (&WASM::...) and as a fallback for strata
+// whose typeSignature field was not populated by the loader.

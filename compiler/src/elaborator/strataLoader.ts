@@ -26,6 +26,7 @@ import {
   type ElaboratorRegistry,
 } from './registry'
 import { StrataType, type StrataNode, type StrataData, strataTypeFromIntrinsic } from './strataenum'
+import { intrinsicSignature } from '../types/intrinsicSig'
 import { registerDefKind, type CodegenKind } from './defkinds'
 import { loadBuiltinStrata } from '../strata/index'
 import parse from '../parser'
@@ -133,6 +134,7 @@ function elaborationToStrataNode(elaboration: Elaboration): StrataNode {
     nodeParamName: elaboration.nodeParamName,
     intrinsic,
     bodyTemplate,
+    typeSignature: intrinsic ? intrinsicSignature(intrinsic) : undefined,
   }
   return {
     type: strataTypeFromIntrinsic(intrinsic, kind),

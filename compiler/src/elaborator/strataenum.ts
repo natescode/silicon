@@ -11,6 +11,8 @@ export enum StrataType {
     DSL
 }
 
+import { type TypeSig } from '../types/intrinsicSig'
+
 /**
  * Typed payload stored in a StrataNode after the loader has processed
  * the strata body. The raw body AST is NOT stored here — only the derived
@@ -26,6 +28,13 @@ export interface StrataData {
         intrinsic: string
         argRefs: Array<'left' | 'right' | 'unknown'>
     }
+    /**
+     * Type signature derived at strata-load time. Populated by the strata loader
+     * from the WASM intrinsic name (or, in the future, from an explicit
+     * declaration in the strata body). The type checker reads this field directly
+     * instead of re-deriving from the intrinsic name on every call.
+     */
+    typeSignature?: TypeSig
 }
 
 export interface StrataNode {

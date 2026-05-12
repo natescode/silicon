@@ -10,6 +10,7 @@ import { test, expect } from 'bun:test'
 import { buildStrataRegistry } from './strataLoader'
 import { ASTFactory } from '../ast/astNodes'
 import { StrataType } from './strataenum'
+import { TypeInt, TypeFloat, TypeBool } from '../types/types'
 
 // ---------------------------------------------------------------------------
 // Built-in strata registration
@@ -170,4 +171,71 @@ test("buildStrataRegistry: result is independent from elaborate()", () => {
     const r2 = buildStrataRegistry(ASTFactory.program([]))
     expect(Object.keys(r1.operators)).toEqual(Object.keys(r2.operators))
     expect(r1.operators).not.toBe(r2.operators)  // different objects
+})
+
+// ---------------------------------------------------------------------------
+// Round 30: typeSignature populated at load time
+// ---------------------------------------------------------------------------
+
+test("buildStrataRegistry: '+' has typeSignature (Int, Int) -> Int", () => {
+    const registry = buildStrataRegistry(ASTFactory.program([]))
+    const sig = registry.operators['+'].data?.typeSignature
+    expect(sig).toBeDefined()
+    expect(sig!.params).toEqual([TypeInt, TypeInt])
+    expect(sig!.result).toEqual(TypeInt)
+})
+
+test("buildStrataRegistry: '*' has typeSignature (Int, Int) -> Int", () => {
+    const registry = buildStrataRegistry(ASTFactory.program([]))
+    const sig = registry.operators['*'].data?.typeSignature
+    expect(sig).toBeDefined()
+    expect(sig!.params).toEqual([TypeInt, TypeInt])
+    expect(sig!.result).toEqual(TypeInt)
+})
+
+test("buildStrataRegistry: '<' has typeSignature (Int, Int) -> Bool", () => {
+    const registry = buildStrataRegistry(ASTFactory.program([]))
+    const sig = registry.operators['<'].data?.typeSignature
+    expect(sig).toBeDefined()
+    expect(sig!.params).toEqual([TypeInt, TypeInt])
+    expect(sig!.result).toEqual(TypeBool)
+})
+
+test("buildStrataRegistry: '==' has typeSignature (Int, Int) -> Bool", () => {
+    const registry = buildStrataRegistry(ASTFactory.program([]))
+    const sig = registry.operators['=='].data?.typeSignature
+    expect(sig).toBeDefined()
+    expect(sig!.result).toEqual(TypeBool)
+})
+
+test("buildStrataRegistry: @toFloat has typeSignature (Int) -> Float", () => {
+    const registry = buildStrataRegistry(ASTFactory.program([]))
+    const sig = registry.keywords['@toFloat'].data?.typeSignature
+    expect(sig).toBeDefined()
+    expect(sig!.params).toEqual([TypeInt])
+    expect(sig!.result).toEqual(TypeFloat)
+})
+
+test("buildStrataRegistry: @toInt has typeSignature (Float) -> Int", () => {
+    const registry = buildStrataRegistry(ASTFactory.program([]))
+    const sig = registry.keywords['@toInt'].data?.typeSignature
+    expect(sig).toBeDefined()
+    expect(sig!.params).toEqual([TypeFloat])
+    expect(sig!.result).toEqual(TypeInt)
+})
+
+test("buildStrataRegistry: control strata have no typeSignature (they are structural)", () => {
+    const registry = buildStrataRegistry(ASTFactory.program([]))
+    // @if, @loop, @match are structural — no surface type sig derived from WASM name.
+    expect(registry.keywords['@if'].data?.typeSignature).toBeUndefined()
+    expect(registry.keywords['@loop'].data?.typeSignature).toBeUndefined()
+})
+
+test("buildStrataRegistry: user-defined strata with unknown intrinsic have undefined typeSignature", () => {
+    const elab = ASTFactory.elaboration('operator', 'Custom', '@@', 'Node', undefined)
+    const element = ASTFactory.element_elaboration(elab)
+    const program = ASTFactory.program([element])
+    const registry = buildStrataRegistry(program)
+    // No body → no intrinsic → no typeSignature.
+    expect(registry.operators['@@'].data?.typeSignature).toBeUndefined()
 })
