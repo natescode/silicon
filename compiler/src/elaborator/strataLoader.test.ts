@@ -11,6 +11,9 @@ import { buildStrataRegistry } from './strataLoader'
 import { ASTFactory } from '../ast/astNodes'
 import { StrataType } from './strataenum'
 import { TypeInt, TypeFloat, TypeBool } from '../types/types'
+import parse from '../parser'
+import addToAstSemantics from '../ast/toAst'
+import siliconGrammar from '../grammar/SiliconGrammar'
 
 // ---------------------------------------------------------------------------
 // Built-in strata registration
@@ -122,11 +125,14 @@ test("buildStrataRegistry: StrataNode.data has intrinsic but no body property", 
     expect((plus.data as any)?.body).toBeUndefined()
 })
 
-test("buildStrataRegistry: operator strata carry bodyTemplate with argRefs", () => {
+test("buildStrataRegistry: operator strata carry bodyTemplate as array of steps", () => {
     const registry = buildStrataRegistry(ASTFactory.program([]))
     const plus = registry.operators['+']
     expect(plus.data?.bodyTemplate).toBeDefined()
-    expect(plus.data?.bodyTemplate?.argRefs).toEqual(['left', 'right'])
+    expect(Array.isArray(plus.data?.bodyTemplate)).toBe(true)
+    // Single-step body: one entry with left/right arg refs.
+    expect(plus.data?.bodyTemplate?.length).toBe(1)
+    expect(plus.data?.bodyTemplate?.[0]?.argRefs).toEqual(['left', 'right'])
 })
 
 // ---------------------------------------------------------------------------
@@ -252,6 +258,25 @@ test("buildStrataRegistry: '+' has floatVariant 'f32.add'", () => {
 test("buildStrataRegistry: '-' has floatVariant 'f32.sub'", () => {
     const registry = buildStrataRegistry(ASTFactory.program([]))
     expect(registry.operators['-'].data?.floatVariant).toBe('f32.sub')
+})
+
+// ---------------------------------------------------------------------------
+// Round 34: multi-step strata bodies
+// ---------------------------------------------------------------------------
+
+test("buildStrataRegistry: multi-step strata body extracts all steps as an array", () => {
+    // Drive through the full parse → registry path by parsing inline Silicon source.
+    const src = `@stratum_operator Weird ('??', Node) = { &WASM::i32_add Node.left, Node.right; &WASM::i32_eqz; };`
+    const match = parse(src)
+    const prog = addToAstSemantics(siliconGrammar)(match).toAst() as any
+    const registry = buildStrataRegistry(prog)
+    const bt = registry.operators['??']?.data?.bodyTemplate
+    expect(Array.isArray(bt)).toBe(true)
+    expect(bt?.length).toBe(2)
+    expect(bt?.[0]?.intrinsic).toBe('WASM::i32_add')
+    expect(bt?.[0]?.argRefs).toEqual(['left', 'right'])
+    expect(bt?.[1]?.intrinsic).toBe('WASM::i32_eqz')
+    expect(bt?.[1]?.argRefs).toEqual([])
 })
 
 test("buildStrataRegistry: '*' has floatVariant 'f32.mul'", () => {

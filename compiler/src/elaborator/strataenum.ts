@@ -17,11 +17,18 @@ export interface StrataData {
     nodeParamName: string
     /** Full WASM intrinsic name extracted from the body (e.g. "WASM::i32_add"). */
     intrinsic?: string
-    /** Ordered arg references extracted from the body call, driving operand order in codegen. */
-    bodyTemplate?: {
+    /**
+     * Ordered steps extracted from the strata body — each step is one WASM call.
+     * Codegen emits the steps in sequence: for each step, push its arg refs then
+     * the instruction. Steps with no argRefs consume whatever is already on the stack.
+     *
+     * Single-step bodies (the common case) have one entry. Multi-step bodies chain
+     * intermediate results via the WAT operand stack.
+     */
+    bodyTemplate?: Array<{
         intrinsic: string
         argRefs: Array<'left' | 'right' | 'unknown'>
-    }
+    }>
     /**
      * Type signature derived at strata-load time. Populated by the strata loader
      * from the WASM intrinsic name (or, in the future, from an explicit

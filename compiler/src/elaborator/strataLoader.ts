@@ -161,14 +161,19 @@ function elaborationToStrataNode(elaboration: Elaboration): StrataNode {
 }
 
 /**
- * Walk the strata body AST and extract the argument pattern from the first
- * WASM function call, returning the intrinsic name and ordered arg references.
+ * Walk the strata body AST and extract ALL WASM function calls as an ordered
+ * sequence of steps.  Each step captures the intrinsic name and which node
+ * references (left / right) appear as explicit arguments.
+ *
+ * Steps with no argRefs implicitly consume the top of the WAT operand stack
+ * (i.e. the result produced by the previous step).
  */
 function extractBodyTemplate(
   body: any,
   nodeParamName: string
 ): StrataData['bodyTemplate'] {
   if (!body || !Array.isArray(body.items)) return undefined
+  const steps: NonNullable<StrataData['bodyTemplate']> = []
   for (const item of body.items) {
     if (!item || typeof item !== 'object') continue
     const fc = findFunctionCall(item.value ?? item)
@@ -184,9 +189,9 @@ function extractBodyTemplate(
       if (nsStr === `${nodeParamName}.right`) return 'right'
       return 'unknown'
     })
-    return { intrinsic, argRefs }
+    steps.push({ intrinsic, argRefs })
   }
-  return undefined
+  return steps.length > 0 ? steps : undefined
 }
 
 /** Walk an AST node tree looking for the first FunctionCall whose name is a WASM namespace. */

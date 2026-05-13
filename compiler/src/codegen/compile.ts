@@ -477,12 +477,20 @@ export default function addCompileSemantics(
                         const instr = stratumInstrFor(op_wat, isFloat, registry)
                         if (!instr) throw new Error(`Unknown operator: ${op_wat}`)
                         const bodyTemplate = stratum?.data?.bodyTemplate
-                        if (bodyTemplate?.argRefs) {
-                            // Drive arg order from the strata body definition.
-                            const argWats = bodyTemplate.argRefs.map((ref: string) =>
-                                ref === 'left' ? result : right_wat
-                            )
-                            result = [...argWats, instr].join('\n')
+                        if (bodyTemplate && bodyTemplate.length > 0) {
+                            // Emit each step in sequence: push explicit args then instruction.
+                            // Steps with no argRefs take their input from the stack (the
+                            // result left by the previous step).
+                            const parts: string[] = []
+                            for (const step of bodyTemplate) {
+                                const stepIntr = getWasmIntrinsic(step.intrinsic)
+                                const stepInstr = stepIntr?.wasmInstr ?? instr
+                                const argWats = step.argRefs.map((ref: string) =>
+                                    ref === 'left' ? result : right_wat
+                                )
+                                parts.push(...argWats, stepInstr)
+                            }
+                            result = parts.join('\n')
                         } else {
                             result = result + '\n' + right_wat + '\n' + instr
                         }

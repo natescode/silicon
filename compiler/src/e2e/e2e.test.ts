@@ -1356,7 +1356,8 @@ test("Round 26: body template for | has argRefs [left, right]", () => {
     const { registry } = elaborate(ASTFactory.program([]))
     const bt = registry.operators['|']?.data?.bodyTemplate
     expect(bt).toBeDefined()
-    expect(bt.argRefs).toEqual(['left', 'right'])
+    expect(Array.isArray(bt)).toBe(true)
+    expect(bt[0]?.argRefs).toEqual(['left', 'right'])
 });
 
 test("Round 26: | and || are distinct operators", () => {
@@ -1559,3 +1560,41 @@ test("Round 28: heterogeneous comparison types is a type error", () => {
     expect(result.success).toBe(false);
     expect(result.error).toMatch(/mismatch|Int|Float/i);
 });
+
+// ============================================================================
+// Round 34: multi-step strata bodies
+// ============================================================================
+
+test("Round 34: multi-step operator strata emits both instructions in sequence", () => {
+    // A user-defined '??' that adds then immediately converts the result to a bool
+    // via i32.eqz (two-step body: i32_add → i32_eqz).
+    const src = [
+        "@stratum_operator AddThenNot ('??', Node) = { &WASM::i32_add Node.left, Node.right; &WASM::i32_eqz; };",
+        "@let f a:Int, b:Int := { a ?? b };",
+    ].join("\n")
+    const result = compileSource(src)
+
+    expect(result.success).toBe(true)
+    const uw = userWat(result.wat!)
+    // Step 1: the add instruction must appear.
+    expect(uw).toContain("i32.add")
+    // Step 2: the eqz instruction must appear after the add.
+    expect(uw).toContain("i32.eqz")
+    const addIdx = uw.indexOf("i32.add")
+    const eqzIdx = uw.indexOf("i32.eqz")
+    expect(eqzIdx).toBeGreaterThan(addIdx)
+})
+
+test("Round 34: single-step strata body still works (regression)", () => {
+    const result = compileSource("@let f a:Int, b:Int := { a + b };")
+    expect(result.success).toBe(true)
+    expect(userWat(result.wat!)).toContain("i32.add")
+})
+
+test("Round 34: bodyTemplate for '+' is a 1-element array", () => {
+    const { registry } = elaborate(ASTFactory.program([]))
+    const bt = registry.operators['+']?.data?.bodyTemplate
+    expect(Array.isArray(bt)).toBe(true)
+    expect(bt?.length).toBe(1)
+    expect(bt?.[0]?.intrinsic).toBe('WASM::i32_add')
+})

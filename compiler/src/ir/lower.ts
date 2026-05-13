@@ -22,7 +22,7 @@ import type {
     IRModule, IRFunction, IRGlobal, IRImport, IRDataSegment,
     IRExpr, IRStmt, IRParam, IRLocal,
     IRConst, IRLocalGet, IRGlobalGet, IRBinOp, IRCall,
-    IRBlock, IRIf, IRLoop, IRBreak, IRContinue, IRNop, IRUnreachable,
+    IRBlock, IRIf, IRLoop, IRBreak, IRContinue, IRNop, IRUnreachable, IRExprStmt,
 } from './nodes'
 
 // ---------------------------------------------------------------------------
@@ -455,8 +455,27 @@ function lowerBinaryOp(n: any, ctx: LowerCtx): IRExpr {
         }
     }
 
-    const instr = instrForOp(op, leftWt, ctx.registry)
-    return { kind: 'BinOp', wasmType: resultWt, instr, left, right }
+    const { instr, extraSteps } = instrForOp(op, leftWt, ctx.registry)
+    const primary: IRExpr = { kind: 'BinOp', wasmType: resultWt, instr, left, right }
+
+    // Single-step strata (the common case) — return the BinOp directly.
+    if (extraSteps.length === 0) return primary
+
+    // Multi-step strata: the BinOp result feeds into subsequent stack instructions.
+    // Emit as a block: the BinOp is a statement, each extra step is an instr call
+    // whose input comes from the stack.
+    const stmts: IRStmt[] = [{ kind: 'ExprStmt', expr: primary }]
+    let lastWt: WasmType = resultWt
+    for (const step of extraSteps) {
+        const intr = getWasmIntrinsic(step.intrinsic)
+        if (!intr) throw new IRLowerError(`No WasmIntrinsic for extra step '${step.intrinsic}'`)
+        lastWt = step.intrinsic.includes('f32') ? 'f32' : 'i32'
+        // Extra steps take their input implicitly from the stack (no explicit args).
+        stmts.push({ kind: 'ExprStmt', expr: { kind: 'Call', wasmType: lastWt as WasmValType, callee: intr.wasmInstr, callKind: 'instr', args: [] } })
+    }
+    // The last stmt's expr is the trailing value of the block.
+    const trailing = (stmts.pop() as IRExprStmt).expr
+    return { kind: 'Block', wasmType: lastWt, stmts, trailing }
 }
 
 function lowerFunctionCall(n: any, ctx: LowerCtx): IRExpr {
@@ -754,7 +773,14 @@ function resolveWasmType(t: SiliconType | undefined, fallback: WasmType): WasmTy
  * when the actual operand type is Float. This is driven by `inferredType`,
  * not by inspecting compiled WAT strings.
  */
-function instrForOp(op: string, operandWt: WasmValType, registry: ElaboratorRegistry): string {
+interface OpInstrs {
+    /** WAT instruction for the primary (first) step. */
+    instr: string
+    /** Any additional steps beyond the first (empty for single-step strata). */
+    extraSteps: Array<{ intrinsic: string; argRefs: Array<'left' | 'right' | 'unknown'> }>
+}
+
+function instrForOp(op: string, operandWt: WasmValType, registry: ElaboratorRegistry): OpInstrs {
     const isBitwise = ['|', '^', '<<', '>>'].includes(op)
     const effectiveWt = isBitwise ? 'i32' : operandWt
 
@@ -762,13 +788,17 @@ function instrForOp(op: string, operandWt: WasmValType, registry: ElaboratorRegi
     const base = stratum?.data?.intrinsic
     if (!base) throw new IRLowerError(`No stratum registered for operator '${op}'`)
 
+    // Float variant only applies to the primary step.
     if (effectiveWt === 'f32' && stratum.data?.floatVariant) {
-        return stratum.data.floatVariant
+        return { instr: stratum.data.floatVariant, extraSteps: [] }
     }
 
     const intr = getWasmIntrinsic(base)
     if (!intr) throw new IRLowerError(`No WasmIntrinsic for '${base}'`)
-    return intr.wasmInstr
+
+    const template = stratum.data?.bodyTemplate ?? []
+    const extraSteps = template.length > 1 ? template.slice(1) : []
+    return { instr: intr.wasmInstr, extraSteps }
 }
 
 function callName(n: any): string {
