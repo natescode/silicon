@@ -8,7 +8,7 @@
 
 import { test, expect } from 'bun:test'
 import { buildStrataRegistry } from './strataLoader'
-import { lookupTypedOperator } from './registry'
+import { lookupTypedOperator, lookupTypedKeyword } from './registry'
 import { ASTFactory } from '../ast/astNodes'
 import { StrataType } from './strataenum'
 import { TypeInt, TypeFloat, TypeBool } from '../types/types'
@@ -372,4 +372,58 @@ test("buildStrataRegistry: bitwise '<<' falls back to Int primary for Float look
     const registry = buildStrataRegistry(ASTFactory.program([]))
     const floatOp = lookupTypedOperator(registry, '<<', 'Float')
     expect(floatOp?.data?.intrinsic).toBe('WASM::i32_shl')
+})
+
+// ---------------------------------------------------------------------------
+// Round 37: keyword typed dispatch, metadata strata, || strata consistency
+// ---------------------------------------------------------------------------
+
+test("buildStrataRegistry: @toFloat registers typed variant @toFloat:Int", () => {
+    const registry = buildStrataRegistry(ASTFactory.program([]))
+    // @toFloat converts Int → Float, so it registers under the 'Int' typeKind.
+    const typed = lookupTypedKeyword(registry, '@toFloat', 'Int')
+    expect(typed?.data?.intrinsic).toBe('WASM::f32_convert_i32_s')
+})
+
+test("buildStrataRegistry: @toInt registers typed variant @toInt:Float", () => {
+    const registry = buildStrataRegistry(ASTFactory.program([]))
+    // @toInt converts Float → Int, so it registers under the 'Float' typeKind.
+    const typed = lookupTypedKeyword(registry, '@toInt', 'Float')
+    expect(typed?.data?.intrinsic).toBe('WASM::i32_trunc_f32_s')
+})
+
+test("buildStrataRegistry: @toFloat plain entry still exists (backward compat)", () => {
+    const registry = buildStrataRegistry(ASTFactory.program([]))
+    expect(registry.keywords['@toFloat']?.data?.intrinsic).toBe('WASM::f32_convert_i32_s')
+})
+
+test("buildStrataRegistry: lookupTypedKeyword falls back to plain entry for unknown typeKind", () => {
+    const registry = buildStrataRegistry(ASTFactory.program([]))
+    // @toFloat has no 'Bool' variant — should fall back to the plain entry.
+    const fallback = lookupTypedKeyword(registry, '@toFloat', 'Bool')
+    expect(fallback?.data?.intrinsic).toBe('WASM::f32_convert_i32_s')
+})
+
+test("buildStrataRegistry: @export is registered as Metadata stratum", () => {
+    const registry = buildStrataRegistry(ASTFactory.program([]))
+    const entry = registry.keywords['@export']
+    expect(entry).toBeDefined()
+    expect(entry.data?.intrinsic).toBe('WASM::meta_export')
+})
+
+test("buildStrataRegistry: @export is registered in defKinds with codegenKind 'export'", () => {
+    const registry = buildStrataRegistry(ASTFactory.program([]))
+    const defKind = registry.defKinds['@export']
+    expect(defKind).toBeDefined()
+    expect(defKind.codegenKind).toBe('export')
+    expect(defKind.allowsParams).toBe(false)
+    expect(defKind.allowsBinding).toBe(false)
+})
+
+test("buildStrataRegistry: || operator has WASM::control_or intrinsic (strata-driven)", () => {
+    const registry = buildStrataRegistry(ASTFactory.program([]))
+    // || is registered as an operator stratum, not hardcoded — verify via intrinsic.
+    const entry = registry.operators['||']
+    expect(entry?.data?.intrinsic).toBe('WASM::control_or')
+    expect(entry?.type).toBe(StrataType.Control)
 })

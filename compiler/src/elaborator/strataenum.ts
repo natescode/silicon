@@ -2,9 +2,21 @@ export enum StrataType {
     Keyword,
     Operator,
     Control,
-    Codegen,
-    /** Type-constrained overload of an operator for a specific operand type. */
+    /**
+     * Definition-kind strata: drive how a definition keyword (@let, @fn, @var,
+     * @extern, @type_*) is elaborated and lowered. Not to be confused with
+     * code-generation optimisation hooks — that role is reserved for a future
+     * StrataType.Codegen variant.
+     */
+    Definition,
+    /** Type-constrained overload of an operator or keyword for a specific operand type. */
     Constraint,
+    /**
+     * Metadata strata: attach non-value-producing annotations to definitions
+     * (@export, @test, @doc). Elaborated by the IR lowerer into module-level
+     * directives rather than code-generating constructs.
+     */
+    Metadata,
 }
 
 import { type TypeSig } from '../types/intrinsicSig'
@@ -58,8 +70,9 @@ export interface SourceLocation {
  * kind of the strata definition (operator vs keyword).
  *
  * Naming conventions used:
- *   WASM::control_*  → StrataType.Control   (if, loop, match)
- *   WASM::def_*      → StrataType.Codegen   (let, fn, var, extern, local, type_*)
+ *   WASM::control_*  → StrataType.Control    (if, loop, match, break, return, …)
+ *   WASM::def_*      → StrataType.Definition  (let, fn, var, extern, local, type_*)
+ *   WASM::meta_*     → StrataType.Metadata    (export, test, doc, …)
  *   WASM::i32_* / WASM::f32_* → StrataType.Operator
  *   (no intrinsic)   → falls back to syntactic kind
  */
@@ -69,7 +82,8 @@ export function strataTypeFromIntrinsic(
 ): StrataType {
     if (intrinsic) {
         if (/^WASM::control_/.test(intrinsic)) return StrataType.Control
-        if (/^WASM::def_/.test(intrinsic)) return StrataType.Codegen
+        if (/^WASM::def_/.test(intrinsic)) return StrataType.Definition
+        if (/^WASM::meta_/.test(intrinsic)) return StrataType.Metadata
         if (/^WASM::(i32|f32)_/.test(intrinsic)) return StrataType.Operator
     }
     return kind === 'operator' ? StrataType.Operator : StrataType.Keyword

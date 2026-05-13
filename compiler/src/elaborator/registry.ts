@@ -108,17 +108,40 @@ export function lookupTypedOperator(
 }
 
 /**
- * Look up the semantic definition for a keyword
- *
- * @param registry - The registry to search
- * @param name - The keyword name (e.g., "@fn")
- * @returns StrataNode if found, undefined otherwise
+ * Look up the semantic definition for a keyword (primary / untyped entry).
+ * For typed dispatch by argument type use lookupTypedKeyword instead.
  */
 export function lookupKeyword(
     registry: ElaboratorRegistry,
     name: string
 ): StrataNode | undefined {
     return registry.keywords[name]
+}
+
+/**
+ * Register a type-specific keyword overload under the compound key `${name}:${typeKind}`.
+ * The primary entry (plain `name`) is managed separately by registerElaborator.
+ */
+export function registerTypedKeyword(
+    registry: ElaboratorRegistry,
+    name: string,
+    typeKind: string,
+    node: StrataNode,
+): void {
+    registry.keywords[`${name}:${typeKind}`] = node
+}
+
+/**
+ * Type-driven keyword lookup. Tries `${name}:${typeKind}` first, then falls
+ * back to the plain primary entry. Callers pass the first argument's type kind
+ * (e.g. `'Float'`, `'Int'`) as `typeKind`.
+ */
+export function lookupTypedKeyword(
+    registry: ElaboratorRegistry,
+    name: string,
+    typeKind: string,
+): StrataNode | undefined {
+    return registry.keywords[`${name}:${typeKind}`] ?? registry.keywords[name]
 }
 
 /**

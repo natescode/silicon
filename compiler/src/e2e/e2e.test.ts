@@ -1752,3 +1752,58 @@ test("Round 36: typed overload type-checks correctly — Float operands with Flo
     expect(result.success).toBe(true)
     expect(result.error).toBeNull()
 })
+
+// ---------------------------------------------------------------------------
+// Round 37: || strata consistency, keyword typed dispatch, @export metadata strata
+// ---------------------------------------------------------------------------
+
+test("Round 37: || produces short-circuit WAT driven by WASM::control_or intrinsic", () => {
+    // || must be lowered via the strata registry (WASM::control_or → IRIf),
+    // not via a hardcoded symbol check. Verify the emitted structure.
+    const result = compileSource(`@let f a:Int, b:Int := { a || b };`)
+    expect(result.success).toBe(true)
+    const uw = userWat(result.wat!)
+    // Short-circuit OR emits as (if (result i32) cond (then i32.const 1) (else rhs)).
+    expect(uw).toContain('(if')
+    expect(uw).toContain('i32.const 1')
+    // Must NOT emit i32.or (that's the bitwise OR intrinsic, not short-circuit).
+    expect(uw).not.toContain('i32.or')
+})
+
+test("Round 37: @export emits explicit WAT export for a global", () => {
+    const result = compileSource(`@var counter:Int := 0;\n@export counter;`)
+    expect(result.success).toBe(true)
+    expect(result.wat).toContain('(export "counter" (global $counter))')
+})
+
+test("Round 37: @export on a function emits explicit WAT export for the function", () => {
+    const result = compileSource(`@let add a:Int, b:Int := { a + b };\n@export add;`)
+    expect(result.success).toBe(true)
+    expect(result.wat).toContain('(export "add" (func $add))')
+})
+
+test("Round 37: @export unknown keyword is an elaboration error without grammar changes", () => {
+    // @export is registered via metadata.si strata — not a grammar keyword.
+    // Verifies the mechanism works end-to-end (no parse error).
+    const result = compileSource(`@var n:Int := 1;\n@export n;`)
+    expect(result.success).toBe(true)
+})
+
+test("Round 37: user-defined keyword strata with Int and Float overloads dispatch by first arg type", () => {
+    // @neg:Int → i32.eqz (unary), @neg:Float → f32.neg (unary).
+    // The Float variant registers as a typed overload; the Int variant is the primary.
+    const strataSource = [
+        `@stratum_keyword NegI ('@neg', Node) = { &WASM::i32_eqz; };`,
+        `@stratum_keyword NegF ('@neg', Node) = { &WASM::f32_neg; };`,
+    ].join('\n')
+    // Int call path falls back to the primary @neg (i32.eqz).
+    const intResult = compileWithStrata(strataSource, `@let f a:Int := { &@neg a };`)
+    expect(intResult.success).toBe(true)
+    expect(userWat(intResult.wat!)).toContain('i32.eqz')
+    expect(userWat(intResult.wat!)).not.toContain('f32.neg')
+    // Float call path uses the typed @neg:Float overload (f32.neg).
+    const floatResult = compileWithStrata(strataSource, `@let f a:Float := { &@neg a };`)
+    expect(floatResult.success).toBe(true)
+    expect(userWat(floatResult.wat!)).toContain('f32.neg')
+    expect(userWat(floatResult.wat!)).not.toContain('i32.eqz')
+})

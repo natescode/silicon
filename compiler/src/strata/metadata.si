@@ -1,0 +1,3 @@
+@stratum_keyword ExportDecl ('@export', Node) = {
+  &WASM::meta_export;
+};

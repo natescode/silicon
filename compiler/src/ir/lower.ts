@@ -14,12 +14,12 @@
 
 import { wasmTypeOf } from '../types/types'
 import { type SiliconType, TypeUnknown } from '../types/types'
-import { type ElaboratorRegistry, lookupTypedOperator, lookupKeyword, lookupDefKindEntry } from '../elaborator/registry'
+import { type ElaboratorRegistry, lookupTypedOperator, lookupKeyword, lookupTypedKeyword, lookupDefKindEntry } from '../elaborator/registry'
 import { getWasmIntrinsic } from '../intrinsics'
 import type { FunctionSig } from '../types/typechecker'
 import type {
     WasmValType, WasmType,
-    IRModule, IRFunction, IRGlobal, IRImport, IRDataSegment,
+    IRModule, IRFunction, IRGlobal, IRImport, IRDataSegment, IRExport,
     IRExpr, IRStmt, IRParam, IRLocal,
     IRConst, IRLocalGet, IRGlobalGet, IRBinOp, IRCall,
     IRBlock, IRIf, IRLoop, IRBreak, IRContinue, IRNop, IRUnreachable, IRExprStmt,
@@ -112,6 +112,7 @@ export function lowerProgram(
     const imports: IRImport[] = []
     const globals: IRGlobal[] = []
     const functions: IRFunction[] = []
+    const irExports: IRExport[] = []
 
     // Pre-scan for global definitions so forward references resolve.
     for (const el of program.elements as any[]) {
@@ -143,6 +144,7 @@ export function lowerProgram(
                 if (result.kind === 'Function') functions.push(result)
                 else if (result.kind === 'Global') globals.push(result)
                 else if (result.kind === 'Import') imports.push(result)
+                else if (result.kind === 'Export') irExports.push(result)
                 else if (Array.isArray(result)) {
                     // Sum type: multiple globals
                     for (const g of result) globals.push(g)
@@ -182,6 +184,7 @@ export function lowerProgram(
         globals,
         functions,
         dataSegments: ctx.strings.segments,
+        exports: irExports,
     }
 }
 
@@ -213,6 +216,7 @@ function lowerDefinition(node: any, ctx: LowerCtx): any {
         case 'extern':   return lowerExtern(node, name, ctx)
         case 'local':    return lowerLocalDef(node, name, ctx)
         case 'type_sum': return lowerSumType(node, name, ctx)
+        case 'export':   return lowerExportDecl(node, name, ctx)
         // Type alias / distinct produce no WAT — handled by type checker.
         case 'type_alias':
         case 'type_distinct':
@@ -336,6 +340,12 @@ function lowerSumType(node: any, name: string, ctx: LowerCtx): IRGlobal[] {
     })
 }
 
+function lowerExportDecl(_node: any, name: string, ctx: LowerCtx): IRExport {
+    // @export foo; — determine whether `foo` is a global or a function.
+    const what: 'func' | 'global' = ctx.varNames.has(name) ? 'global' : 'func'
+    return { kind: 'Export', alias: name, internalName: name, what }
+}
+
 // ---------------------------------------------------------------------------
 // Expression lowering
 // ---------------------------------------------------------------------------
@@ -435,17 +445,23 @@ function lowerBinaryOp(n: any, ctx: LowerCtx): IRExpr {
     const left = lowerExpr(n.left, ctx)
     const right = lowerExpr(n.right, ctx)
 
-    // Determine result WASM type from the type checker's inferredType.
     const inferT = n.inferredType as SiliconType | undefined
     const resultWt: WasmValType = (inferT && inferT.kind !== 'Unknown')
         ? (wasmTypeOf(inferT) as WasmValType)
         : exprWasmType(left)
 
-    // Determine the operand WASM type (drives instruction selection).
+    // Bitwise ops are always i32; other ops follow the operand type.
+    const isBitwise = ['|', '^', '<<', '>>'].includes(op)
     const leftWt = exprWasmType(left)
+    const typeKind = (isBitwise || leftWt !== 'f32') ? 'Int' : 'Float'
 
-    // Special: || is a short-circuit if, not a binary instruction.
-    if (op === '||') {
+    // Resolve the operator stratum once; dispatch on its intrinsic rather than the symbol.
+    const stratum = lookupTypedOperator(ctx.registry, op, typeKind)
+    const intrinsic = stratum?.data?.intrinsic
+    if (!intrinsic) throw new IRLowerError(`No stratum registered for operator '${op}'`)
+
+    // Control-flow operators: || maps to WASM::control_or (short-circuit evaluation).
+    if (intrinsic === 'WASM::control_or') {
         return {
             kind: 'If',
             wasmType: 'i32',
@@ -455,25 +471,24 @@ function lowerBinaryOp(n: any, ctx: LowerCtx): IRExpr {
         }
     }
 
-    const { instr, extraSteps } = instrForOp(op, leftWt, ctx.registry)
-    const primary: IRExpr = { kind: 'BinOp', wasmType: resultWt, instr, left, right }
+    const intr = getWasmIntrinsic(intrinsic)
+    if (!intr) throw new IRLowerError(`No WasmIntrinsic for '${intrinsic}'`)
 
-    // Single-step strata (the common case) — return the BinOp directly.
+    const primary: IRExpr = { kind: 'BinOp', wasmType: resultWt, instr: intr.wasmInstr, left, right }
+
+    // Multi-step strata: first step is the BinOp; subsequent steps chain on the stack.
+    const template = stratum.data?.bodyTemplate ?? []
+    const extraSteps = template.length > 1 ? template.slice(1) : []
     if (extraSteps.length === 0) return primary
 
-    // Multi-step strata: the BinOp result feeds into subsequent stack instructions.
-    // Emit as a block: the BinOp is a statement, each extra step is an instr call
-    // whose input comes from the stack.
     const stmts: IRStmt[] = [{ kind: 'ExprStmt', expr: primary }]
     let lastWt: WasmType = resultWt
     for (const step of extraSteps) {
-        const intr = getWasmIntrinsic(step.intrinsic)
-        if (!intr) throw new IRLowerError(`No WasmIntrinsic for extra step '${step.intrinsic}'`)
+        const stepIntr = getWasmIntrinsic(step.intrinsic)
+        if (!stepIntr) throw new IRLowerError(`No WasmIntrinsic for extra step '${step.intrinsic}'`)
         lastWt = step.intrinsic.includes('f32') ? 'f32' : 'i32'
-        // Extra steps take their input implicitly from the stack (no explicit args).
-        stmts.push({ kind: 'ExprStmt', expr: { kind: 'Call', wasmType: lastWt as WasmValType, callee: intr.wasmInstr, callKind: 'instr', args: [] } })
+        stmts.push({ kind: 'ExprStmt', expr: { kind: 'Call', wasmType: lastWt as WasmValType, callee: stepIntr.wasmInstr, callKind: 'instr', args: [] } })
     }
-    // The last stmt's expr is the trailing value of the block.
     const trailing = (stmts.pop() as IRExprStmt).expr
     return { kind: 'Block', wasmType: lastWt, stmts, trailing }
 }
@@ -512,7 +527,9 @@ function lowerFunctionCall(n: any, ctx: LowerCtx): IRExpr {
 }
 
 function lowerBuiltinCall(name: string, rawArgs: any[], ctx: LowerCtx, inferredType?: any): IRExpr {
-    const kwEntry = lookupKeyword(ctx.registry, name)
+    // Typed dispatch: try the first arg's type kind, fall back to the untyped entry.
+    const firstArgKind: string = (rawArgs[0] as any)?.inferredType?.kind ?? 'Int'
+    const kwEntry = lookupTypedKeyword(ctx.registry, name, firstArgKind) ?? lookupKeyword(ctx.registry, name)
     const intrinsic = kwEntry?.data?.intrinsic ?? ''
 
     switch (intrinsic) {
@@ -767,35 +784,6 @@ function resolveWasmType(t: SiliconType | undefined, fallback: WasmType): WasmTy
     return wasmTypeOf(t) as WasmType
 }
 
-/**
- * Determine the WAT instruction for a binary operator given the operand type.
- * The strata registry provides the base (i32) intrinsic; we substitute f32
- * when the actual operand type is Float. This is driven by `inferredType`,
- * not by inspecting compiled WAT strings.
- */
-interface OpInstrs {
-    /** WAT instruction for the primary (first) step. */
-    instr: string
-    /** Any additional steps beyond the first (empty for single-step strata). */
-    extraSteps: Array<{ intrinsic: string; argRefs: Array<'left' | 'right' | 'unknown'> }>
-}
-
-function instrForOp(op: string, operandWt: WasmValType, registry: ElaboratorRegistry): OpInstrs {
-    const isBitwise = ['|', '^', '<<', '>>'].includes(op)
-    const effectiveWt = isBitwise ? 'i32' : operandWt
-    const typeKind = effectiveWt === 'f32' ? 'Float' : 'Int'
-
-    const stratum = lookupTypedOperator(registry, op, typeKind)
-    const base = stratum?.data?.intrinsic
-    if (!base) throw new IRLowerError(`No stratum registered for operator '${op}'`)
-
-    const intr = getWasmIntrinsic(base)
-    if (!intr) throw new IRLowerError(`No WasmIntrinsic for '${base}'`)
-
-    const template = stratum.data?.bodyTemplate ?? []
-    const extraSteps = template.length > 1 ? template.slice(1) : []
-    return { instr: intr.wasmInstr, extraSteps }
-}
 
 function callName(n: any): string {
     if (typeof n.name === 'string') return n.name

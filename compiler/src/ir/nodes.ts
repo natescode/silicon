@@ -167,10 +167,23 @@ export interface IRDataSegment {
     encoded: string
 }
 
+/**
+ * Explicit export declaration from @export strata.
+ * Functions are auto-exported; IRExport is primarily useful for globals.
+ */
+export interface IRExport {
+    kind: 'Export'
+    alias: string        // external name (what consumers see)
+    internalName: string // WAT $name (internal identifier)
+    what: 'func' | 'global'
+}
+
 export interface IRModule {
     kind: 'Module'
     imports: IRImport[]
     globals: IRGlobal[]
     functions: IRFunction[]
     dataSegments: IRDataSegment[]
+    /** Explicit exports from @export declarations (supplements auto-exported functions). */
+    exports: IRExport[]
 }

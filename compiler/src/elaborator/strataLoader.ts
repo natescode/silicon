@@ -24,6 +24,7 @@ import {
   createElaboratorRegistry,
   registerElaborator,
   registerTypedOperator,
+  registerTypedKeyword,
   type ElaboratorRegistry,
 } from './registry'
 import { StrataType, type StrataNode, type StrataData, strataTypeFromIntrinsic } from './strataenum'
@@ -111,8 +112,24 @@ function registerElaboration(registry: ElaboratorRegistry, elab: Elaboration): v
     if (!registry.operators[symbol]) {
       registerElaborator(registry, 'operator', symbol, baseNode)
     }
+  } else if (elab.kind === 'keyword' && sig && sig.params.length > 0) {
+    const typeKind = sig.params[0].kind  // 'Int', 'Float', etc.
+
+    // Tag as Constraint when another variant of this keyword is already registered.
+    const isConstraint = registry.keywords[symbol] != null
+    const node: StrataNode = isConstraint
+      ? { ...baseNode, type: StrataType.Constraint }
+      : baseNode
+
+    // Store under compound typed key (e.g. '@toFloat:Int').
+    registerTypedKeyword(registry, symbol, typeKind, node)
+
+    // Also set as the primary entry if this is the first registration for this keyword.
+    if (!registry.keywords[symbol]) {
+      registerElaborator(registry, 'keyword', symbol, baseNode)
+    }
   } else {
-    // No type constraint or not an operator: plain registration (last-one-wins primary).
+    // No type constraint: plain registration (last-one-wins primary).
     registerElaborator(registry, elab.kind, symbol, baseNode)
   }
 
@@ -122,7 +139,7 @@ function registerElaboration(registry: ElaboratorRegistry, elab: Elaboration): v
       keyword: symbol,
       codegenKind,
       allowsParams: codegenKind === 'function' || codegenKind === 'extern',
-      allowsBinding: codegenKind !== 'extern',
+      allowsBinding: codegenKind !== 'extern' && codegenKind !== 'export',
       allowsGenerics: codegenKind === 'function',
     })
   }
@@ -147,7 +164,7 @@ function symbolToString(symbol: any): string {
   return String(symbol)
 }
 
-/** Map a WASM::def_* intrinsic name to the corresponding codegen kind. */
+/** Map a WASM::def_* or WASM::meta_* intrinsic to the corresponding codegen kind. */
 function codegenKindFromIntrinsic(intrinsic: string | undefined): CodegenKind | undefined {
   if (intrinsic === 'WASM::def_function') return 'function'
   if (intrinsic === 'WASM::def_global') return 'global'
@@ -156,6 +173,7 @@ function codegenKindFromIntrinsic(intrinsic: string | undefined): CodegenKind | 
   if (intrinsic === 'WASM::def_type_distinct') return 'type_distinct'
   if (intrinsic === 'WASM::def_type_sum') return 'type_sum'
   if (intrinsic === 'WASM::def_local') return 'local'
+  if (intrinsic === 'WASM::meta_export') return 'export'
   return undefined
 }
 

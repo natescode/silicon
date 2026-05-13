@@ -7,7 +7,7 @@
  */
 
 import type {
-    IRModule, IRFunction, IRGlobal, IRImport, IRDataSegment,
+    IRModule, IRFunction, IRGlobal, IRImport, IRDataSegment, IRExport,
     IRExpr, IRStmt, IRBlock, WasmType, WasmValType,
 } from './nodes'
 
@@ -30,6 +30,7 @@ export function emitModule(mod: IRModule, stdWat: string): string {
         parts.push(emitFunction(f))
         parts.push(`(export "${f.name}" (func $${f.name}))`)
     }
+    for (const exp of mod.exports) parts.push(emitExplicitExport(exp))
     for (const ds of mod.dataSegments) parts.push(emitDataSegment(ds))
 
     parts.push(')')
@@ -67,6 +68,13 @@ function emitFunction(f: IRFunction): string {
 
 function emitDataSegment(ds: IRDataSegment): string {
     return `(data (i32.const ${ds.offset}) "${ds.encoded}")`
+}
+
+function emitExplicitExport(exp: IRExport): string {
+    const item = exp.what === 'global'
+        ? `(global $${exp.internalName})`
+        : `(func $${exp.internalName})`
+    return `(export "${exp.alias}" ${item})`
 }
 
 // ---------------------------------------------------------------------------

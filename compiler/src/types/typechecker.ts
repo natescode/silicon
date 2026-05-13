@@ -78,7 +78,7 @@ import {
     immutableAssignment,
 } from './errors'
 import { getWasmIntrinsic } from '../intrinsics'
-import { type ElaboratorRegistry, lookupOperator, lookupTypedOperator, lookupKeyword } from '../elaborator/registry'
+import { type ElaboratorRegistry, lookupOperator, lookupTypedOperator, lookupKeyword, lookupTypedKeyword } from '../elaborator/registry'
 import { intrinsicSignature, type TypeSig } from './intrinsicSig'
 
 /**
@@ -650,8 +650,10 @@ function checkFunctionCall(call: any, ctx: Ctx): SiliconType {
     }
 
     // Builtin keyword strata (@if, @loop, @match, @toInt, @toFloat, …) — look up via the registry.
+    // Use typed dispatch when the first argument's type is known (e.g. @toFloat:Int).
     if (call.isBuiltin && ctx.registry) {
-        const kwEntry = lookupKeyword(ctx.registry, name)
+        const firstArgKind: string = argTypes[0]?.kind ?? 'Int'
+        const kwEntry = lookupTypedKeyword(ctx.registry, name, firstArgKind) ?? lookupKeyword(ctx.registry, name)
         if (kwEntry) {
             const intr = kwEntry.data?.intrinsic
             if (intr === 'WASM::control_if') return typeOfIfCall(argTypes, call.sourceLocation, ctx)

@@ -352,9 +352,9 @@ test("elaborate: @if strata has StrataType.Control", () => {
   expect(registry.keywords['@if'].type).toBe(StrataType.Control)
 })
 
-test("elaborate: @let strata has StrataType.Codegen", () => {
+test("elaborate: @let strata has StrataType.Definition", () => {
   const { registry } = elaborate(ASTFactory.program([]))
-  expect(registry.keywords['@let'].type).toBe(StrataType.Codegen)
+  expect(registry.keywords['@let'].type).toBe(StrataType.Definition)
 })
 
 test("elaborate: '+' operator strata has StrataType.Operator", () => {
