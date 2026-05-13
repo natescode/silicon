@@ -504,13 +504,6 @@ function lowerFunctionCall(n: any, ctx: LowerCtx): IRExpr {
     if (name.startsWith('WASM::')) {
         const intr = getWasmIntrinsic(name)
         const args = (n.args || []).map((a: any) => lowerExpr(a, ctx))
-        if (intr?.emitStructured) {
-            // Structured intrinsics (cast, etc.) are emitted via a call node
-            // with callKind 'instr' so the emitter can use the wasmInstr.
-            const inferT = n.inferredType as SiliconType | undefined
-            const wt = resolveWasmType(inferT, 'i32')
-            return { kind: 'Call', wasmType: wt, callee: intr.wasmInstr, callKind: 'instr', args }
-        }
         const inferT = n.inferredType as SiliconType | undefined
         const wt = resolveWasmType(inferT, 'i32')
         return { kind: 'Call', wasmType: wt, callee: intr?.wasmInstr ?? name, callKind: 'instr', args }
@@ -593,9 +586,6 @@ function lowerBuiltinCall(name: string, rawArgs: any[], ctx: LowerCtx, inferredT
             const args = rawArgs.map((a: any) => lowerExpr(a, ctx))
             const wt = resolveWasmType(inferredType as SiliconType | undefined,
                 intr ? (intrinsic.includes('f32') ? 'f32' : 'i32') : 'i32')
-            if (intr?.emitStructured) {
-                return { kind: 'Call', wasmType: wt, callee: intr.wasmInstr, callKind: 'instr', args }
-            }
             if (intr) {
                 return { kind: 'Call', wasmType: wt, callee: intr.wasmInstr, callKind: 'instr', args }
             }

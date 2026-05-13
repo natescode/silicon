@@ -11,8 +11,8 @@
  * - Optional `sourceLocation` for error reporting and debugging
  * - Factory functions (ASTFactory) ensure consistent node creation
  *
- * @see toAst.ts - Converts parse trees to AST nodes
- * @see compile.ts - Transforms AST nodes into WebAssembly
+ * @see toAst.ts  - Converts parse trees to AST nodes
+ * @see lower.ts  - Lowers typed AST nodes to IR
  */
 
 export type ASTNode =
