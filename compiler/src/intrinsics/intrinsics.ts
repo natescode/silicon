@@ -138,21 +138,8 @@ export const wasmIntrinsics: Record<string, WasmIntrinsic> = {
     meta_export: { name: 'WASM::meta_export', wasmInstr: '', description: 'Metadata: explicit export declaration (@export)' },
 }
 
-export function isWasmIntrinsic(name: string): boolean {
-    const m = name.match(/^WASM::(.+)$/)
-    return m != null && m[1] in wasmIntrinsics
-}
-
 export function getWasmIntrinsic(name: string): WasmIntrinsic | undefined {
     const m = name.match(/^WASM::(.+)$/)
     if (!m) return undefined
     return wasmIntrinsics[m[1]]
-}
-
-export function getWasmIntrinsicByShortName(shortName: string): WasmIntrinsic | undefined {
-    return wasmIntrinsics[shortName]
-}
-
-export function listWasmIntrinsics(): string[] {
-    return Object.values(wasmIntrinsics).map(i => i.name)
 }

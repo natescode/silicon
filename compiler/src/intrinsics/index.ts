@@ -6,16 +6,10 @@
  * and cannot be defined within Silicon itself.
  *
  * Usage:
- * - Check if a function is an intrinsic: isWasmIntrinsic('WASM::i32_add')
  * - Get intrinsic details: getWasmIntrinsic('WASM::i32_add')
- * - List all intrinsics: listWasmIntrinsics()
  */
 
 export {
-    wasmIntrinsics,
-    isWasmIntrinsic,
     getWasmIntrinsic,
-    getWasmIntrinsicByShortName,
-    listWasmIntrinsics,
     type WasmIntrinsic,
 } from './intrinsics'
