@@ -108,6 +108,32 @@ function loadExample(filename: string): string {
 }
 
 /**
+ * Compile a Silicon program with additional strata loaded from external source strings.
+ * Mirrors the --strata CLI flag: strata sources are registered before the program's
+ * own inline strata, and the program's inline strata can override them.
+ */
+function compileWithStrata(strataSource: string | string[], mainSource: string) {
+    const extraSources = Array.isArray(strataSource) ? strataSource : [strataSource]
+    try {
+        const match = parse(mainSource)
+        const ast: ASTNode = addToAstSemantics(siliconGrammar)(match).toAst()
+        const registry = buildStrataRegistry(ast as Program, extraSources)
+        const { program: elaboratedAST, errors: elabErrors } = elaborate(ast as Program, registry)
+        if (elabErrors.length > 0) {
+            return { success: false, error: elabErrors.map(e => e.message).join('; '), wat: null }
+        }
+        const { program: typedAST, errors: typeErrors, functions } = typecheck(elaboratedAST, registry)
+        if (typeErrors.length > 0) {
+            return { success: false, error: typeErrors.map(formatTypeError).join('; '), wat: null }
+        }
+        const wat = compileToWat(typedAST, registry, functions)
+        return { success: true, error: null, wat }
+    } catch (error) {
+        return { success: false, error: String(error), wat: null }
+    }
+}
+
+/**
  * Test: Simple integer literal
  * Tests basic parsing and code generation
  */
@@ -1597,4 +1623,73 @@ test("Round 34: bodyTemplate for '+' is a 1-element array", () => {
     expect(Array.isArray(bt)).toBe(true)
     expect(bt?.length).toBe(1)
     expect(bt?.[0]?.intrinsic).toBe('WASM::i32_add')
+})
+
+// ============================================================================
+// Round 35: strata imports — external strata sources via compileWithStrata
+// ============================================================================
+
+test("Round 35: operator strata from external source is usable in main program", () => {
+    const strataSource = `@stratum_operator Triple ('***', Node) = { &WASM::i32_mul Node.left, Node.right; };`
+    const mainSource = `@let f a:Int, b:Int := { a *** b };`
+    const result = compileWithStrata(strataSource, mainSource)
+
+    expect(result.success).toBe(true)
+    expect(result.wat).toContain("i32.mul")
+    expect(result.wat).toContain("(func $f")
+})
+
+test("Round 35: keyword strata from external source is usable in main program", () => {
+    const strataSource = `@stratum_keyword Twice ('@twice', Node) = { &WASM::i32_add; };`
+    const mainSource = `@let f a:Int := { &@twice a, a };`
+    const result = compileWithStrata(strataSource, mainSource)
+
+    expect(result.success).toBe(true)
+    expect(result.wat).toContain("i32.add")
+})
+
+test("Round 35: multiple strata sources are all registered", () => {
+    const mathStrata = `@stratum_operator Double ('**', Node) = { &WASM::i32_mul Node.left, Node.right; };`
+    const cmpStrata  = `@stratum_operator Same ('~~', Node) = { &WASM::i32_eq Node.left, Node.right; };`
+    const mainSource = `@let f a:Int, b:Int := { a ** b }; @let g a:Int, b:Int := { a ~~ b };`
+    const result = compileWithStrata([mathStrata, cmpStrata], mainSource)
+
+    expect(result.success).toBe(true)
+    expect(result.wat).toContain("i32.mul")
+    expect(result.wat).toContain("i32.eq")
+})
+
+test("Round 35: inline program strata override external strata on same symbol", () => {
+    // External strata maps '^^^' to i32.mul; program overrides it with i32.add.
+    const strataSource = `@stratum_operator ExtOp ('^^^', Node) = { &WASM::i32_mul Node.left, Node.right; };`
+    const mainSource = [
+        `@stratum_operator InlineOp ('^^^', Node) = { &WASM::i32_add Node.left, Node.right; };`,
+        `@let f a:Int, b:Int := { a ^^^ b };`,
+    ].join("\n")
+    const result = compileWithStrata(strataSource, mainSource)
+
+    expect(result.success).toBe(true)
+    // The inline override wins: i32.add, not i32.mul.
+    const uw = userWat(result.wat!)
+    expect(uw).toContain("i32.add")
+    expect(uw).not.toContain("i32.mul")
+})
+
+test("Round 35: unknown operator from external strata causes elaboration error without it", () => {
+    // Compiling '***' without loading the strata that defines it should fail.
+    const result = compileSource(`@let f a:Int, b:Int := { a *** b };`)
+    expect(result.success).toBe(false)
+})
+
+test("Round 35: buildStrataRegistry extraSources registers before program AST strata", () => {
+    const { registry: regWithout } = elaborate(ASTFactory.program([]))
+    // Load a strata source that defines a new operator.
+    const extraSource = `@stratum_operator NewOp ('$$$', Node) = { &WASM::i32_add Node.left, Node.right; };`
+    const match = parse(extraSource)
+    const ast = addToAstSemantics(siliconGrammar)(match).toAst() as Program
+    const registry = buildStrataRegistry(ASTFactory.program([]), [extraSource])
+    expect(registry.operators['$$$']).toBeDefined()
+    expect(registry.operators['$$$'].data?.intrinsic).toBe('WASM::i32_add')
+    // The registry without extra sources should not have it.
+    expect(regWithout.operators['$$$']).toBeUndefined()
 })

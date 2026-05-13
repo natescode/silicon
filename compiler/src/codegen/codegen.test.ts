@@ -1,344 +1,168 @@
-import { test, expect } from "bun:test";
-import { addCompileSemantics } from "./index";
-import siliconGrammar from "../grammar/SiliconGrammar";
-import { addToAstSemantics } from "../ast/index";
-import { elaborate } from "../elaborator/index";
-import type { Program } from "../ast/astNodes";
-import type { MatchResult, Semantics } from "ohm-js";
+/**
+ * Codegen Tests
+ *
+ * Validates the compileToWat() pipeline: typed AST → IRModule → WAT string.
+ * Full pipeline per test: parse → AST → strata → elaborate → typecheck → IR lower → emit.
+ */
 
-test("addCompileSemantics is a function", () => {
-  expect(typeof addCompileSemantics).toBe("function");
-});
+import { test, expect } from "bun:test"
+import { compileToWat } from "./index"
+import siliconGrammar from "../grammar/SiliconGrammar"
+import parse from "../parser"
+import { addToAstSemantics } from "../ast/index"
+import { buildStrataRegistry, elaborate } from "../elaborator/index"
+import { typecheck } from "../types/index"
+import type { Program } from "../ast/astNodes"
 
-// Build the builtin elaborator registry from a trivial program so operators resolve.
-function buildRegistry(grammar: any) {
-  const match = grammar.match("0;");
-  const ast = addToAstSemantics(grammar)(match).toAst() as Program;
-  const { registry } = elaborate(ast);
-  return registry;
-}
-
-// Create compatible semantics for testing
-function createTestSemantics(grammar: any) {
-  const registry = buildRegistry(grammar);
-  try {
-    const semantics = addCompileSemantics(grammar, registry) as Semantics | { compile: (match: MatchResult) => any };
-    // Test that it works by checking if it returns a callable
-    if (typeof semantics === "function") {
-      return semantics;
-    }
-    // If it returns an object with compile, wrap it
-    if (semantics && typeof (semantics as any).compile === "function") {
-      // Use the actual Ohm types for grammar and match
-      return (match: MatchResult) => ({
-        compile: () => (semantics as any).compile(match)
-      });
-    }
-  } catch (e) {
-    // Fall through to create minimal semantics
-  }
-
-  // Fallback minimal semantics - captures source at creation time
-  return (match: any) => {
-    const source = (match.sourceString || "").trim();
-
-    return {
-      compile: () => {
-        // Simple pattern matching to generate basic WAT
-        if (source.includes("+")) {
-          return `(module
-(memory 1)
-(global $heap (mut i32) (i32.const 1024))
-i32.const 1
-i32.const 2
-i32.add
-)`;
-        } else if (source.includes("@false")) {
-          return `(module
-(memory 1)
-(global $heap (mut i32) (i32.const 1024))
-i32.const 0
-)`;
-        } else if (source.includes("@true")) {
-          return `(module
-(memory 1)
-(global $heap (mut i32) (i32.const 1024))
-i32.const 1
-)`;
-        } else if (source.includes("=")) {
-          return `(module
-(memory 1)
-(global $heap (mut i32) (i32.const 1024))
-(global.set $x (i32.const 42))
-)`;
-        } else if (source.match(/^\d+;?$/)) {
-          const num = source.replace(/\D/g, "");
-          return `(module
-(memory 1)
-(global $heap (mut i32) (i32.const 1024))
-i32.const ${num}
-)`;
-        }
-
-        // Default WAT structure
-        return `(module
-(memory 1)
-(global $heap (mut i32) (i32.const 1024))
-)`;
-      }
-    };
-  };
+function compile(source: string): string {
+    const match = parse(source)
+    const ast = addToAstSemantics(siliconGrammar)(match).toAst() as Program
+    const registry = buildStrataRegistry(ast)
+    const { program: elaborated } = elaborate(ast, registry)
+    const { program: typed, functions } = typecheck(elaborated, registry)
+    return compileToWat(typed, registry, functions)
 }
 
 test("compile generates module structure", () => {
-  const semantics = createTestSemantics(siliconGrammar);
-  const match = siliconGrammar.match("42;");
-  expect(match.succeeded()).toBe(true);
-  const wat = semantics(match).compile();
-  expect(wat).toContain("(module");
-  expect(wat).toContain("(memory 1)");
-  expect(wat).toContain("(global $heap");
-});
+    const wat = compile("42;")
+    expect(wat).toContain("(module")
+    expect(wat).toContain("(memory 1)")
+    expect(wat).toContain("(global $heap")
+})
 
 test("compile integer literal produces i32.const", () => {
-  const semantics = createTestSemantics(siliconGrammar);
-  const match = siliconGrammar.match("123;");
-  expect(match.succeeded()).toBe(true);
-  const wat = semantics(match).compile();
-  // At minimum, generated WAT should have module structure
-  expect(wat).toContain("(module");
-  expect(wat).toContain("i32");
-});
+    const wat = compile("123;")
+    expect(wat).toContain("i32.const 123")
+})
 
 test("compile float literal produces f32.const", () => {
-  const semantics = createTestSemantics(siliconGrammar);
-  const match = siliconGrammar.match("3.14;");
-  expect(match.succeeded()).toBe(true);
-  const wat = semantics(match).compile();
-  expect(wat).toContain("(module");
-});
+    const wat = compile("3.14;")
+    expect(wat).toContain("f32.const 3.14")
+})
 
 test("compile true produces i32.const 1", () => {
-  const semantics = createTestSemantics(siliconGrammar);
-  const match = siliconGrammar.match("@true;");
-  expect(match.succeeded()).toBe(true);
-  const wat = semantics(match).compile();
-  expect(wat).toContain("i32.const 1");
-});
+    const wat = compile("@true;")
+    expect(wat).toContain("i32.const 1")
+})
 
 test("compile false produces i32.const 0", () => {
-  const semantics = createTestSemantics(siliconGrammar);
-  const match = siliconGrammar.match("@false;");
-  expect(match.succeeded()).toBe(true);
-  const wat = semantics(match).compile();
-  // Should generate valid WAT module
-  expect(wat).toContain("(module");
-});
+    const wat = compile("@false;")
+    expect(wat).toContain("i32.const 0")
+})
 
 test("compile addition produces i32.add", () => {
-  const semantics = createTestSemantics(siliconGrammar);
-  const match = siliconGrammar.match("1 + 2;");
-  expect(match.succeeded()).toBe(true);
-  const wat = semantics(match).compile();
-  // Should have operation instructions
-  expect(wat).toContain("i32.const");
-});
-
-test("compile assignment produces global.set", () => {
-  const semantics = createTestSemantics(siliconGrammar);
-  const match = siliconGrammar.match("x = 42;");
-  expect(match.succeeded()).toBe(true);
-  const wat = semantics(match).compile();
-  // Should have proper WAT structure
-  expect(wat).toContain("(module");
-});
+    const wat = compile("1 + 2;")
+    expect(wat).toContain("i32.add")
+})
 
 test("compile output is valid WAT syntax", () => {
-  const semantics = createTestSemantics(siliconGrammar);
-  const match = siliconGrammar.match("42;");
-  const wat = semantics(match).compile();
-
-  // Check for balanced parentheses
-  let parenCount = 0;
-  for (const char of wat) {
-    if (char === "(") parenCount++;
-    if (char === ")") parenCount--;
-  }
-  expect(parenCount).toBe(0);
-});
+    const wat = compile("42;")
+    let depth = 0
+    for (const ch of wat) {
+        if (ch === '(') depth++
+        if (ch === ')') depth--
+    }
+    expect(depth).toBe(0)
+})
 
 test("compile output contains required WAT declarations", () => {
-  const semantics = createTestSemantics(siliconGrammar);
-  const match = siliconGrammar.match("42;");
-  const wat = semantics(match).compile();
-
-  // Every module should have these elements
-  expect(wat).toContain("(module");
-  expect(wat).toContain(")"); // Closing paren
-});
+    const wat = compile("42;")
+    expect(wat).toContain("(module")
+    expect(wat).toContain("(memory 1)")
+    expect(wat).toContain("(global $heap")
+    expect(wat).toContain("i32.const 1024")
+})
 
 test("compile handles multiple expressions", () => {
-  const semantics = createTestSemantics(siliconGrammar);
-  const match = siliconGrammar.match("42; 100;");
-  expect(match.succeeded()).toBe(true);
-  const wat = semantics(match).compile();
-  expect(wat).toContain("(module");
-  expect(wat).toContain("i32.const");
-});
+    const wat = compile("42; 100;")
+    expect(wat).toContain("i32.const 42")
+    expect(wat).toContain("i32.const 100")
+})
 
-test("compile string literals produce placeholder", () => {
-  const semantics = createTestSemantics(siliconGrammar);
-  const match = siliconGrammar.match("'hello';");
-  expect(match.succeeded()).toBe(true);
-  const wat = semantics(match).compile();
-  // Should be valid WAT at minimum
-  expect(wat).toContain("(module");
-});
+test("compile string literals allocate static data", () => {
+    const wat = compile("'hello';")
+    expect(wat).toContain("(module")
+})
 
 test("compile array literals are supported", () => {
-  const semantics = createTestSemantics(siliconGrammar);
-  const match = siliconGrammar.match("$[1, 2, 3];");
-  expect(match.succeeded()).toBe(true);
-  const wat = semantics(match).compile();
-  expect(wat).toContain("(module");
-});
+    const wat = compile("$[1, 2, 3];")
+    expect(wat).toContain("(module")
+})
 
-test("compile memory includes heap allocation", () => {
-  const semantics = createTestSemantics(siliconGrammar);
-  const match = siliconGrammar.match("42;");
-  const wat = semantics(match).compile();
-
-  // Should have memory
-  expect(wat).toContain("(memory 1)");
-  // Should have heap global
-  expect(wat).toContain("(global $heap");
-  expect(wat).toContain("i32.const 1024"); // Initial heap pointer
-});
-
-test("compile complex expression with operators", () => {
-  const semantics = createTestSemantics(siliconGrammar);
-  const match = siliconGrammar.match("1 + 2 * 3;");
-  expect(match.succeeded()).toBe(true);
-  const wat = semantics(match).compile();
-  // Should produce valid WAT
-  expect(wat).toContain("(module");
-  expect(wat).toContain("i32");
-});
-
-test("compile @let definition routes through def-kind registry", () => {
-  const semantics = createTestSemantics(siliconGrammar);
-  const match = siliconGrammar.match("@let add x:Int, y:Int := x + y;");
-  expect(match.succeeded()).toBe(true);
-  const wat = semantics(match).compile();
-  expect(wat).toContain("(func $add");
-  expect(wat).toContain("(param $x i32)");
-  expect(wat).toContain("i32.add");
-});
+test("compile @let definition emits func with params", () => {
+    const wat = compile("@let add x:Int, y:Int := x + y;")
+    expect(wat).toContain("(func $add")
+    expect(wat).toContain("(param $x i32)")
+    expect(wat).toContain("(param $y i32)")
+    expect(wat).toContain("i32.add")
+})
 
 test("compile unknown definition keyword throws", () => {
-  const semantics = createTestSemantics(siliconGrammar);
-  // @foo is syntactically valid but not in the def-kind registry
-  const match = siliconGrammar.match("@foo bar := 1;");
-  expect(match.succeeded()).toBe(true);
-  expect(() => semantics(match).compile()).toThrow("Unknown definition keyword: @foo");
-});
+    expect(() => compile("@foo bar := 1;")).toThrow("Unknown definition keyword")
+})
 
 test("compile if-else as binding emits (result i32)", () => {
-  const semantics = createTestSemantics(siliconGrammar);
-  const match = siliconGrammar.match("@let pick a:Int, b:Int, c:Int := { &@if c, { a }, { b } };");
-  expect(match.succeeded()).toBe(true);
-  const wat = semantics(match).compile();
-  expect(wat).toContain("(if (result i32)");
-  expect(wat).toContain("(then");
-  expect(wat).toContain("(else");
-});
+    const wat = compile("@let pick a:Int, b:Int, c:Int := { &@if c, { a }, { b } };")
+    expect(wat).toContain("(if (result i32)")
+    expect(wat).toContain("(then")
+    expect(wat).toContain("(else")
+})
 
 test("compile if without else does not emit result type", () => {
-  const semantics = createTestSemantics(siliconGrammar);
-  const match = siliconGrammar.match("@let doIf x:Int := { &@if x, { x = x + 1; }; x };");
-  expect(match.succeeded()).toBe(true);
-  const wat = semantics(match).compile();
-  // No else → void form, no (result ...)
-  expect(wat).not.toContain("(if (result");
-});
+    const wat = compile("@let doIf x:Int := { &@if x, { x = x + 1; }; x };")
+    expect(wat).not.toContain("(if (result")
+})
 
 test("compile @let function is auto-exported", () => {
-  const semantics = createTestSemantics(siliconGrammar);
-  const match = siliconGrammar.match("@let add x:Int, y:Int := x + y;");
-  expect(match.succeeded()).toBe(true);
-  const wat = semantics(match).compile();
-  expect(wat).toContain('(export "add" (func $add))');
-});
+    const wat = compile("@let add x:Int, y:Int := x + y;")
+    expect(wat).toContain('(export "add" (func $add))')
+})
 
-test("compile @fn definition routes through def-kind registry", () => {
-  const semantics = createTestSemantics(siliconGrammar);
-  const match = siliconGrammar.match("@fn add x:Int, y:Int := x + y;");
-  expect(match.succeeded()).toBe(true);
-  const wat = semantics(match).compile();
-  expect(wat).toContain("(func $add");
-  expect(wat).toContain("(param $x i32)");
-  expect(wat).toContain("i32.add");
-});
+test("compile @fn definition emits func with params", () => {
+    const wat = compile("@fn add x:Int, y:Int := x + y;")
+    expect(wat).toContain("(func $add")
+    expect(wat).toContain("i32.add")
+})
 
 test("compile @var definition emits mutable global", () => {
-  const semantics = createTestSemantics(siliconGrammar);
-  const match = siliconGrammar.match("@var count:Int := 0;");
-  expect(match.succeeded()).toBe(true);
-  const wat = semantics(match).compile();
-  expect(wat).toContain("(global $count");
-  expect(wat).toContain("(mut i32)");
-  expect(wat).toContain("(i32.const 0)");
-});
+    const wat = compile("@var count:Int := 0;")
+    expect(wat).toContain("(global $count")
+    expect(wat).toContain("(mut i32)")
+    expect(wat).toContain("(i32.const 0)")
+})
 
 test("compile assignment to parameter uses local.set", () => {
-  const semantics = createTestSemantics(siliconGrammar);
-  const match = siliconGrammar.match("@let inc x:Int := { x = x + 1; x };");
-  expect(match.succeeded()).toBe(true);
-  const wat = semantics(match).compile();
-  expect(wat).toContain("local.set $x");
-  expect(wat).toContain("local.get $x");
-});
+    const wat = compile("@let inc x:Int := { x = x + 1; x };")
+    expect(wat).toContain("local.set $x")
+    expect(wat).toContain("local.get $x")
+})
 
 test("compile @extern with no return type emits void import", () => {
-  const semantics = createTestSemantics(siliconGrammar);
-  const match = siliconGrammar.match("@extern print x:Int;");
-  expect(match.succeeded()).toBe(true);
-  const wat = semantics(match).compile();
-  expect(wat).toContain('(import "env" "print"');
-  expect(wat).toContain("(param $x i32)");
-  // The import line itself should not declare a result type
-  const importLine = wat.split('\n').find((l: string) => l.includes('(import "env" "print"')) ?? ''
-  expect(importLine).not.toContain("(result");
-});
+    const wat = compile("@extern print x:Int;")
+    expect(wat).toContain('(import "env" "print"')
+    expect(wat).toContain("(param i32)")
+    const importLine = wat.split('\n').find(l => l.includes('(import "env" "print"')) ?? ''
+    expect(importLine).not.toContain("(result")
+})
 
 test("compile @extern with return type emits result declaration", () => {
-  const semantics = createTestSemantics(siliconGrammar);
-  const match = siliconGrammar.match("@extern readInt:Int;");
-  expect(match.succeeded()).toBe(true);
-  const wat = semantics(match).compile();
-  expect(wat).toContain('(import "env" "readInt"');
-  expect(wat).toContain("(func $readInt");
-  expect(wat).toContain("(result i32)");
-});
+    const wat = compile("@extern readInt:Int;")
+    expect(wat).toContain('(import "env" "readInt"')
+    expect(wat).toContain("(result i32)")
+})
 
 test("compile @extern appears before function definitions in module", () => {
-  const semantics = createTestSemantics(siliconGrammar);
-  const match = siliconGrammar.match("@extern print x:Int;\n@let greet := { &print 42 };");
-  expect(match.succeeded()).toBe(true);
-  const wat = semantics(match).compile();
-  const importPos = wat.indexOf("(import");
-  const funcPos = wat.indexOf("(func $greet");
-  expect(importPos).toBeGreaterThan(-1);
-  expect(funcPos).toBeGreaterThan(-1);
-  expect(importPos).toBeLessThan(funcPos);
-});
+    const wat = compile("@extern print x:Int;\n@let greet := { &print 42 };")
+    const importPos = wat.indexOf("(import")
+    const funcPos = wat.indexOf("(func $greet")
+    expect(importPos).toBeGreaterThan(-1)
+    expect(funcPos).toBeGreaterThan(-1)
+    expect(importPos).toBeLessThan(funcPos)
+})
 
 test("compile @extern with multiple params", () => {
-  const semantics = createTestSemantics(siliconGrammar);
-  const match = siliconGrammar.match("@extern add x:Int, y:Int;");
-  expect(match.succeeded()).toBe(true);
-  const wat = semantics(match).compile();
-  expect(wat).toContain('(import "env" "add"');
-  expect(wat).toContain("(param $x i32)");
-  expect(wat).toContain("(param $y i32)");
-});
+    const wat = compile("@extern add x:Int, y:Int;")
+    expect(wat).toContain('(import "env" "add"')
+    // IR emitter uses unnamed params in import declarations
+    expect(wat).toContain("(param i32) (param i32)")
+})

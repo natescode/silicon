@@ -19,7 +19,7 @@
 
 import parse from './parser'
 import { addToAstSemantics, type ASTNode, type Program } from './ast'
-import { addCompileSemantics } from './codegen'
+import { compileToWat } from './codegen'
 import { elaborate, buildStrataRegistry } from './elaborator'
 import { typecheck, formatTypeError } from './types'
 import { siliconGrammar } from './grammar'
@@ -65,8 +65,8 @@ if (typeErrors.length > 0) {
     process.exit(1)
 }
 
-// Stage 3: Generate WebAssembly from AST
-const wat: string = addCompileSemantics(siliconGrammar, registry, functions)(match).compile()
+// Stage 3: Lower typed AST → IR → WAT
+const wat: string = compileToWat(typedAST, registry, functions)
 
 // ============================================================================
 // OUTPUT ARTIFACTS

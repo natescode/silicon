@@ -44,12 +44,18 @@ export interface ElaborateResult {
 /**
  * Elaborate the AST using the provided registry. If no registry is given,
  * one is built from the program's strata definitions (backward-compatible path).
+ *
+ * @param ast          The parsed Silicon program AST.
+ * @param registry     Pre-built registry (pass one to include external strata).
+ * @param extraSources Extra Silicon source strings to load strata from when no
+ *                     registry is provided (passed through to buildStrataRegistry).
  */
 export default function elaborate(
   ast: Program,
   registry?: ElaboratorRegistry,
+  extraSources: string[] = [],
 ): ElaborateResult {
-  const reg = registry ?? buildStrataRegistry(ast)
+  const reg = registry ?? buildStrataRegistry(ast, extraSources)
   const { program, errors } = elaborateAST(ast, reg)
   return { program, registry: reg, errors }
 }

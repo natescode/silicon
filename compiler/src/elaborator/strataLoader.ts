@@ -41,12 +41,22 @@ import siliconGrammar from '../grammar/SiliconGrammar'
 /**
  * Build an ElaboratorRegistry from all strata visible in the program.
  *
- * Two sources are processed:
+ * Three sources are processed in order (later entries override earlier ones):
  *   1. Built-in strata from .si files in src/strata/ (always loaded first).
- *   2. User-defined @stratum_operator / @stratum_keyword definitions found
- *      in the top-level elements of `ast` (override builtins when symbols clash).
+ *   2. Extra strata sources — Silicon source strings from external strata
+ *      files loaded by the caller (e.g. via the --strata CLI flag).
+ *   3. Inline user-defined @stratum_operator / @stratum_keyword definitions
+ *      found in the top-level elements of `ast`.
+ *
+ * @param ast          The user's parsed program AST.
+ * @param extraSources Optional Silicon source strings to mine for strata
+ *                     definitions before processing the program AST.
+ *                     Each string is the full contents of a strata .si file.
  */
-export function buildStrataRegistry(ast: Program): ElaboratorRegistry {
+export function buildStrataRegistry(
+  ast: Program,
+  extraSources: string[] = [],
+): ElaboratorRegistry {
   const registry = createElaboratorRegistry()
 
   // Phase A: built-in strata from .si files.
@@ -54,7 +64,14 @@ export function buildStrataRegistry(ast: Program): ElaboratorRegistry {
     registerElaboration(registry, elab)
   }
 
-  // Phase B: user-defined strata from the program AST.
+  // Phase B: external strata files supplied by the caller.
+  for (const source of extraSources) {
+    for (const elab of parseStrataSource(source)) {
+      registerElaboration(registry, elab)
+    }
+  }
+
+  // Phase C: inline user-defined strata from the program AST.
   for (const element of ast.elements as any[]) {
     let elab: Elaboration | undefined
     if (element.type === 'Elaboration') {
