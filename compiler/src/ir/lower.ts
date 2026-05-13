@@ -22,7 +22,7 @@ import type {
     IRModule, IRFunction, IRGlobal, IRImport, IRDataSegment,
     IRExpr, IRStmt, IRParam, IRLocal,
     IRConst, IRLocalGet, IRGlobalGet, IRBinOp, IRCall,
-    IRBlock, IRIf, IRLoop, IRBreak, IRContinue, IRNop,
+    IRBlock, IRIf, IRLoop, IRBreak, IRContinue, IRNop, IRUnreachable,
 } from './nodes'
 
 // ---------------------------------------------------------------------------
@@ -34,6 +34,8 @@ interface LowerCtx {
     locals: Map<string, WasmValType>
     /** Module-level globals (@var, sum type variants) → wasmType. */
     globals: Map<string, WasmValType>
+    /** Names that are actual WAT globals (@var / sum-type variants), not zero-arg functions. */
+    varNames: Set<string>
     /** Known function signatures from the type checker. */
     functions: Map<string, FunctionSig>
     /** Strata registry for operator → WASM instruction lookup. */
@@ -98,6 +100,7 @@ export function lowerProgram(
     const ctx: LowerCtx = {
         locals: new Map(),
         globals: new Map(),
+        varNames: new Set(),
         functions: functionSigs,
         registry,
         loopStack: [],
@@ -118,11 +121,14 @@ export function lowerProgram(
         if (hook === 'global') {
             const name = watId(node.name?.name ?? '')
             ctx.globals.set(name, 'i32') // refined below
+            ctx.varNames.add(name)
         }
         if (hook === 'type_sum') {
             // Sum type variants are i32 globals.
             extractSumVariants(node).forEach(v => {
-                ctx.globals.set(watId(v), 'i32')
+                const vname = watId(v)
+                ctx.globals.set(vname, 'i32')
+                ctx.varNames.add(vname)
             })
         }
     }
@@ -143,7 +149,31 @@ export function lowerProgram(
                 }
             }
         }
-        // Top-level expression statements are ignored (no WAT equivalent).
+    }
+
+    // Collect top-level non-definition expression statements into $__start.
+    const startCtx: LowerCtx = {
+        ...ctx,
+        locals: new Map(),
+        pendingLocals: [],
+        loopStack: [],
+    }
+    const startStmts: IRStmt[] = []
+    for (const el of program.elements as any[]) {
+        const node = unwrap(el)
+        if (!node || node.type === 'Definition' || node.type === 'Elaboration') continue
+        const stmt = lowerAsStmt(node, startCtx)
+        if (stmt) startStmts.push(stmt)
+    }
+    if (startStmts.length > 0) {
+        functions.push({
+            kind: 'Function',
+            name: '__start',
+            params: [],
+            returnType: 'void',
+            locals: startCtx.pendingLocals,
+            body: { kind: 'Block', wasmType: 'void', stmts: startStmts },
+        })
     }
 
     return {
@@ -183,12 +213,12 @@ function lowerDefinition(node: any, ctx: LowerCtx): any {
         case 'extern':   return lowerExtern(node, name, ctx)
         case 'local':    return lowerLocalDef(node, name, ctx)
         case 'type_sum': return lowerSumType(node, name, ctx)
-        // Type alias / distinct / sum produce no WAT — handled elsewhere.
+        // Type alias / distinct produce no WAT — handled by type checker.
         case 'type_alias':
         case 'type_distinct':
             return null
         default:
-            return null
+            throw new IRLowerError(`Unknown definition keyword: ${node.keyword ?? hook}`)
     }
 }
 
@@ -263,6 +293,7 @@ function lowerGlobal(node: any, name: string, ctx: LowerCtx): IRGlobal {
     }
 
     ctx.globals.set(name, wasmType)
+    ctx.varNames.add(name)
     return { kind: 'Global', name, wasmType, mutable: true, init }
 }
 
@@ -299,6 +330,7 @@ function lowerSumType(node: any, name: string, ctx: LowerCtx): IRGlobal[] {
     return variants.map((v, i) => {
         const gname = watId(v)
         ctx.globals.set(gname, 'i32')
+        ctx.varNames.add(gname)
         const init: IRConst = { kind: 'Const', wasmType: 'i32', value: i }
         return { kind: 'Global' as const, name: gname, wasmType: 'i32' as const, mutable: false, init }
     })
@@ -369,22 +401,28 @@ function lowerExpr(node: any, ctx: LowerCtx): IRExpr {
 
 function lowerNamespace(n: any, ctx: LowerCtx): IRExpr {
     const path: string[] = n.path ?? []
-    const name = path.map(watId).join('::')
-    const key = name
+    // Join path then apply watId so Color::Red → Color_Red, matching how globals are keyed.
+    const key = watId(path.join('::'))
 
     if (ctx.locals.has(key)) {
         return { kind: 'LocalGet', wasmType: ctx.locals.get(key)!, name: key }
     }
-    if (ctx.globals.has(key)) {
-        return { kind: 'GlobalGet', wasmType: ctx.globals.get(key)!, name: key }
+    // @var and sum-type variant globals take priority over zero-arg function calls.
+    // The type checker registers every definition in functionSigs (including @var),
+    // so we must distinguish actual WAT globals via varNames before consulting functions.
+    if (ctx.varNames.has(key)) {
+        return { kind: 'GlobalGet', wasmType: ctx.globals.get(key) ?? 'i32', name: key }
     }
-    // Single-segment — check if it's a zero-arg function.
+    // Zero-arg function call (single-segment name, no args).
     if (path.length === 1) {
         const sig = ctx.functions.get(key)
-        if (sig) {
+        if (sig && sig.params.length === 0) {
             const wt = (wasmTypeOf(sig.result) as WasmType) ?? 'void'
             return { kind: 'Call', wasmType: wt, callee: key, callKind: 'user', args: [] }
         }
+    }
+    if (ctx.globals.has(key)) {
+        return { kind: 'GlobalGet', wasmType: ctx.globals.get(key)!, name: key }
     }
     // Fall back to global.get (may be a forward reference).
     const inferT = n.inferredType as SiliconType | undefined
@@ -495,6 +533,20 @@ function lowerBuiltinCall(name: string, rawArgs: any[], ctx: LowerCtx, inferredT
             return { kind: 'Return', value }
         }
 
+        case 'WASM::control_and': {
+            const [leftN, rightN] = rawArgs
+            const left = lowerExpr(leftN, ctx)
+            const right = lowerExpr(rightN, ctx)
+            return { kind: 'If', wasmType: 'i32', cond: left, then: right, else_: { kind: 'Const', wasmType: 'i32', value: 0 } }
+        }
+
+        case 'WASM::control_or': {
+            const [leftN, rightN] = rawArgs
+            const left = lowerExpr(leftN, ctx)
+            const right = lowerExpr(rightN, ctx)
+            return { kind: 'If', wasmType: 'i32', cond: left, then: { kind: 'Const', wasmType: 'i32', value: 1 }, else_: right }
+        }
+
         case 'WASM::control_match': {
             return lowerMatchCall(rawArgs, ctx, inferredType)
         }
@@ -538,7 +590,10 @@ function lowerMatchCall(rawArgs: any[], ctx: LowerCtx, inferredType?: any): IREx
             left: discExpr,
             right: pat,
         }
-        const else_ = i + 2 < rawArgs.length ? buildNested(i + 2) : undefined
+        // If there are more arms, recurse; otherwise emit unreachable as the final else.
+        const else_: IRExpr = i + 2 < rawArgs.length
+            ? buildNested(i + 2)
+            : { kind: 'Unreachable' }
         return { kind: 'If', wasmType: wt, cond, then: res, else_ }
     }
 
@@ -572,6 +627,30 @@ function lowerAsStmt(node: any, ctx: LowerCtx): IRStmt | null {
         const value = lowerExpr(node.value, ctx)
         if (ctx.locals.has(target)) return { kind: 'LocalSet', name: target, value }
         return { kind: 'GlobalSet', name: target, value }
+    }
+
+    if (node.type === 'Definition' && node.hook === 'global') {
+        // @var inside a function body: treat as a mutable local variable.
+        const name = watId(node.name?.name ?? '')
+        let wasmType: WasmValType = 'i32'
+        if (node.name?.typeAnnotation?.typename) {
+            wasmType = siliconTypeNameToWasm(node.name.typeAnnotation.typename)
+        }
+        ctx.pendingLocals.push({ name, wasmType })
+        ctx.locals.set(name, wasmType)
+        const binding = Array.isArray(node.binding) ? node.binding[0] : node.binding
+        const expr = binding?.expression ?? binding
+        if (expr) {
+            const value = lowerExpr(expr, ctx)
+            const it = exprWasmType(value)
+            if (it !== 'void') {
+                ctx.locals.set(name, it)
+                const existing = ctx.pendingLocals.find(l => l.name === name)
+                if (existing) existing.wasmType = it
+            }
+            return { kind: 'LocalSet', name, value }
+        }
+        return null
     }
 
     if (node.type === 'Definition' && node.hook === 'local') {
@@ -655,11 +734,12 @@ function exprWasmType(e: IRExpr): WasmType {
         case 'Call':    return e.wasmType
         case 'Block':   return e.wasmType
         case 'If':      return e.wasmType
-        case 'Loop':    return 'void'
-        case 'Break':   return 'void'
-        case 'Continue': return 'void'
-        case 'Return':  return 'void'
-        case 'Nop':     return 'void'
+        case 'Loop':        return 'void'
+        case 'Break':       return 'void'
+        case 'Continue':    return 'void'
+        case 'Return':      return 'void'
+        case 'Nop':         return 'void'
+        case 'Unreachable': return 'void'
     }
 }
 

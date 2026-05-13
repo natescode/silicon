@@ -110,6 +110,9 @@ export function emitExpr(e: IRExpr): string {
 
         case 'Nop':
             return ''
+
+        case 'Unreachable':
+            return 'unreachable'
     }
 }
 
@@ -123,7 +126,7 @@ function emitCall(e: IRExpr & { kind: 'Call' }): string {
     }
     // User function call.
     const argStr = e.args.map(a => emitExpr(a)).join(' ')
-    return `(call $${e.callee} ${argStr})`
+    return argStr ? `(call $${e.callee} ${argStr})` : `(call $${e.callee})`
 }
 
 function emitBlock(b: IRExpr & { kind: 'Block' }): string {

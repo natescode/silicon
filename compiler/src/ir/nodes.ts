@@ -108,9 +108,12 @@ export interface IRReturn   { kind: 'Return';   value?: IRExpr }
 /** No-op placeholder for nodes that produce no WAT (type declarations, etc.). */
 export interface IRNop { kind: 'Nop' }
 
+/** WAT unreachable — bottom type, used as the else-arm of exhaustive match. */
+export interface IRUnreachable { kind: 'Unreachable' }
+
 export type IRExpr =
     | IRConst | IRLocalGet | IRGlobalGet | IRBinOp | IRCall
-    | IRBlock | IRIf | IRLoop | IRBreak | IRContinue | IRReturn | IRNop
+    | IRBlock | IRIf | IRLoop | IRBreak | IRContinue | IRReturn | IRNop | IRUnreachable
 
 // ---------------------------------------------------------------------------
 // Statement IR nodes (produce no stack value)

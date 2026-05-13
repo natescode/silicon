@@ -17,8 +17,8 @@ import { readFileSync } from "fs";
 import { join } from "path";
 import { parse } from "../parser/index.ts";
 import { addToAstSemantics, ASTFactory, type ASTNode, type Program, type Elaboration, type ExpressionStart, type BinaryOp } from "../ast/index.ts";
-import { addCompileSemantics } from "../codegen/index.ts";
-import { elaborate } from "../elaborator/index.ts";
+import { compileToWat } from "../codegen/index.ts";
+import { buildStrataRegistry, elaborate } from "../elaborator/index.ts";
 import { typecheck, formatTypeError } from "../types/index.ts";
 import { siliconGrammar } from "../grammar/index.ts";
 
@@ -45,8 +45,11 @@ function compileSource(sourceCode: string) {
         // Stage 2: Convert parse tree into typed AST
         const ast: ASTNode = addToAstSemantics(siliconGrammar)(match).toAst();
 
-        // Stage 2.5: Elaborate - attach semantic information and stratum definitions
-        const { program: elaboratedAST, registry, errors: elabErrors } = elaborate(ast as Program);
+        // Stage 2.5a: Build strata registry
+        const registry = buildStrataRegistry(ast as Program);
+
+        // Stage 2.5b: Elaborate - attach semantic information and stratum definitions
+        const { program: elaboratedAST, errors: elabErrors } = elaborate(ast as Program, registry);
 
         if (elabErrors.length > 0) {
             return {
@@ -73,8 +76,8 @@ function compileSource(sourceCode: string) {
             };
         }
 
-        // Stage 3: Generate WebAssembly from AST
-        const wat: string = addCompileSemantics(siliconGrammar, registry, functions)(match).compile();
+        // Stage 3: Lower typed AST → IR → WAT
+        const wat: string = compileToWat(typedAST, registry, functions);
 
         return {
             success: true,
@@ -1024,12 +1027,14 @@ test("Schema: @type_sum with params is rejected", () => {
 // Round 23: Type-driven codegen (replace f32 string-sniff heuristic)
 // ============================================================================
 
-// Helper: extract only the user-emitted WAT (after the std.wat runtime)
+// Helper: extract only the user-emitted WAT (after the std.wat runtime).
+// $print_string is the last function in std.wat; the first \n\n after it is
+// the boundary between the runtime and user-emitted code.
 function userWat(wat: string): string {
     const marker = '(func $print_string'
     const idx = wat.indexOf(marker)
     if (idx < 0) return wat
-    const afterPrint = wat.indexOf('\n\n\n', idx)
+    const afterPrint = wat.indexOf('\n\n', idx)
     return afterPrint >= 0 ? wat.slice(afterPrint) : wat.slice(idx)
 }
 
@@ -1201,7 +1206,7 @@ test("Round 24: count_loop.si example compiles successfully", () => {
     const uw = userWat(result.wat!)
     expect(uw).toContain("(block $brk_");
     expect(uw).toContain("(loop $cont_");
-    expect(uw).toContain("global.set $n");
+    expect(uw).toContain("local.set $n");
 });
 
 test("Round 24: condition-based loop — condition embedded in br_if check", () => {
@@ -1212,20 +1217,20 @@ test("Round 24: condition-based loop — condition embedded in br_if check", () 
     // 'n < 5' compiles to lt_s inside the br_if (i32.eqz ...) exit check
     expect(uw).toContain("lt_s");
     expect(uw).toContain("br_if $brk_");
-    // Condition check comes before the body mutation
+    // Condition check comes before the body mutation (use lastIndexOf to skip the @var init)
     const brIfIdx = uw.indexOf("br_if $brk_");
-    const setIdx = uw.indexOf("global.set $n");
+    const setIdx = uw.lastIndexOf("local.set $n");
     expect(setIdx).toBeGreaterThan(brIfIdx);
 });
 
-test("Round 24: loop body with mutation-as-item is void — global.set before br $cont_", () => {
+test("Round 24: loop body with mutation-as-item is void — local.set before br $cont_", () => {
     // The loop body { n = n + 1; } ends with a semicolon → no trailing expression.
-    // global.set $n leaves nothing on the stack, so br $cont_ is reached with empty stack.
+    // local.set $n leaves nothing on the stack, so br $cont_ is reached with empty stack.
     const src = "@let run := { @var n:Int := 0; &@loop n < 5, { n = n + 1; }; n };";
     const result = compileSource(src);
     expect(result.success).toBe(true);
     const uw = userWat(result.wat!)
-    const setIdx = uw.indexOf("global.set $n");
+    const setIdx = uw.indexOf("local.set $n");
     const contIdx = uw.indexOf("br $cont_");
     expect(setIdx).toBeGreaterThan(-1);
     expect(contIdx).toBeGreaterThan(-1);
