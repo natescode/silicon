@@ -8,6 +8,7 @@
 
 import { test, expect } from 'bun:test'
 import { buildStrataRegistry } from './strataLoader'
+import { lookupTypedOperator } from './registry'
 import { ASTFactory } from '../ast/astNodes'
 import { StrataType } from './strataenum'
 import { TypeInt, TypeFloat, TypeBool } from '../types/types'
@@ -247,17 +248,74 @@ test("buildStrataRegistry: user-defined strata with unknown intrinsic have undef
 })
 
 // ---------------------------------------------------------------------------
-// Round 32: floatVariant pre-computed at load time
+// Round 36: typed operator overloads via StrataType.Constraint
 // ---------------------------------------------------------------------------
 
-test("buildStrataRegistry: '+' has floatVariant 'f32.add'", () => {
+test("buildStrataRegistry: '+' primary is the Int (i32) variant", () => {
     const registry = buildStrataRegistry(ASTFactory.program([]))
-    expect(registry.operators['+'].data?.floatVariant).toBe('f32.add')
+    expect(registry.operators['+']?.data?.intrinsic).toBe('WASM::i32_add')
+    expect(registry.operators['+']?.type).not.toBe(StrataType.Constraint)
 })
 
-test("buildStrataRegistry: '-' has floatVariant 'f32.sub'", () => {
+test("buildStrataRegistry: '+' has a Float overload tagged as Constraint", () => {
     const registry = buildStrataRegistry(ASTFactory.program([]))
-    expect(registry.operators['-'].data?.floatVariant).toBe('f32.sub')
+    const floatOp = lookupTypedOperator(registry, '+', 'Float')
+    expect(floatOp?.data?.intrinsic).toBe('WASM::f32_add')
+    expect(floatOp?.type).toBe(StrataType.Constraint)
+})
+
+test("buildStrataRegistry: '-' has a Float overload (f32.sub)", () => {
+    const registry = buildStrataRegistry(ASTFactory.program([]))
+    const floatOp = lookupTypedOperator(registry, '-', 'Float')
+    expect(floatOp?.data?.intrinsic).toBe('WASM::f32_sub')
+})
+
+test("buildStrataRegistry: '*' has a Float overload (f32.mul)", () => {
+    const registry = buildStrataRegistry(ASTFactory.program([]))
+    const floatOp = lookupTypedOperator(registry, '*', 'Float')
+    expect(floatOp?.data?.intrinsic).toBe('WASM::f32_mul')
+})
+
+test("buildStrataRegistry: '/' has a Float overload (f32.div)", () => {
+    const registry = buildStrataRegistry(ASTFactory.program([]))
+    const floatOp = lookupTypedOperator(registry, '/', 'Float')
+    expect(floatOp?.data?.intrinsic).toBe('WASM::f32_div')
+})
+
+test("buildStrataRegistry: '<' has a Float overload (f32.lt)", () => {
+    const registry = buildStrataRegistry(ASTFactory.program([]))
+    const floatOp = lookupTypedOperator(registry, '<', 'Float')
+    expect(floatOp?.data?.intrinsic).toBe('WASM::f32_lt')
+})
+
+test("buildStrataRegistry: '==' has a Float overload (f32.eq)", () => {
+    const registry = buildStrataRegistry(ASTFactory.program([]))
+    const floatOp = lookupTypedOperator(registry, '==', 'Float')
+    expect(floatOp?.data?.intrinsic).toBe('WASM::f32_eq')
+})
+
+test("buildStrataRegistry: bitwise '|' has no Float overload (no f32 counterpart)", () => {
+    const registry = buildStrataRegistry(ASTFactory.program([]))
+    // Typed lookup falls back to Int primary for bitwise ops.
+    const floatOp = lookupTypedOperator(registry, '|', 'Float')
+    expect(floatOp?.data?.intrinsic).toBe('WASM::i32_or')
+})
+
+test("buildStrataRegistry: lookupTypedOperator returns primary for unknown typeKind", () => {
+    const registry = buildStrataRegistry(ASTFactory.program([]))
+    const result = lookupTypedOperator(registry, '+', 'Bool')
+    expect(result?.data?.intrinsic).toBe('WASM::i32_add')
+})
+
+test("buildStrataRegistry: user-defined typed overload is registered under compound key", () => {
+    const src = `@stratum_operator MyPlus ('+', Node) = { &WASM::f32_add Node.left, Node.right; };`
+    const match = parse(src)
+    const prog = addToAstSemantics(siliconGrammar)(match).toAst() as any
+    const registry = buildStrataRegistry(prog)
+    const floatOp = lookupTypedOperator(registry, '+', 'Float')
+    expect(floatOp?.data?.intrinsic).toBe('WASM::f32_add')
+    // User's float variant overrides the builtin Float overload.
+    expect(floatOp?.type).toBe(StrataType.Constraint)
 })
 
 // ---------------------------------------------------------------------------
@@ -279,32 +337,39 @@ test("buildStrataRegistry: multi-step strata body extracts all steps as an array
     expect(bt?.[1]?.argRefs).toEqual([])
 })
 
-test("buildStrataRegistry: '*' has floatVariant 'f32.mul'", () => {
+test("buildStrataRegistry: '>' has a Float overload (f32.gt)", () => {
     const registry = buildStrataRegistry(ASTFactory.program([]))
-    expect(registry.operators['*'].data?.floatVariant).toBe('f32.mul')
+    const floatOp = lookupTypedOperator(registry, '>', 'Float')
+    expect(floatOp?.data?.intrinsic).toBe('WASM::f32_gt')
 })
 
-test("buildStrataRegistry: '/' has floatVariant 'f32.div'", () => {
+test("buildStrataRegistry: '<=' has a Float overload (f32.le)", () => {
     const registry = buildStrataRegistry(ASTFactory.program([]))
-    expect(registry.operators['/'].data?.floatVariant).toBe('f32.div')
+    const floatOp = lookupTypedOperator(registry, '<=', 'Float')
+    expect(floatOp?.data?.intrinsic).toBe('WASM::f32_le')
 })
 
-test("buildStrataRegistry: '<' has floatVariant 'f32.lt'", () => {
+test("buildStrataRegistry: '>=' has a Float overload (f32.ge)", () => {
     const registry = buildStrataRegistry(ASTFactory.program([]))
-    expect(registry.operators['<'].data?.floatVariant).toBe('f32.lt')
+    const floatOp = lookupTypedOperator(registry, '>=', 'Float')
+    expect(floatOp?.data?.intrinsic).toBe('WASM::f32_ge')
 })
 
-test("buildStrataRegistry: '==' has floatVariant 'f32.eq'", () => {
+test("buildStrataRegistry: '!=' has a Float overload (f32.ne)", () => {
     const registry = buildStrataRegistry(ASTFactory.program([]))
-    expect(registry.operators['=='].data?.floatVariant).toBe('f32.eq')
+    const floatOp = lookupTypedOperator(registry, '!=', 'Float')
+    expect(floatOp?.data?.intrinsic).toBe('WASM::f32_ne')
 })
 
-test("buildStrataRegistry: bitwise '|' has no floatVariant", () => {
+test("buildStrataRegistry: '%' has no Float overload (WASM has no f32 modulo)", () => {
     const registry = buildStrataRegistry(ASTFactory.program([]))
-    expect(registry.operators['|'].data?.floatVariant).toBeUndefined()
+    // Falls back to Int primary since no Float variant is registered.
+    const floatOp = lookupTypedOperator(registry, '%', 'Float')
+    expect(floatOp?.data?.intrinsic).toBe('WASM::i32_rem_s')
 })
 
-test("buildStrataRegistry: bitwise '<<' has no floatVariant", () => {
+test("buildStrataRegistry: bitwise '<<' falls back to Int primary for Float lookup", () => {
     const registry = buildStrataRegistry(ASTFactory.program([]))
-    expect(registry.operators['<<'].data?.floatVariant).toBeUndefined()
+    const floatOp = lookupTypedOperator(registry, '<<', 'Float')
+    expect(floatOp?.data?.intrinsic).toBe('WASM::i32_shl')
 })

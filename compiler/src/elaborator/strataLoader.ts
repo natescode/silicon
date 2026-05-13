@@ -23,11 +23,11 @@ import {
 import {
   createElaboratorRegistry,
   registerElaborator,
+  registerTypedOperator,
   type ElaboratorRegistry,
 } from './registry'
 import { StrataType, type StrataNode, type StrataData, strataTypeFromIntrinsic } from './strataenum'
 import { intrinsicSignature } from '../types/intrinsicSig'
-import { getWasmIntrinsic } from '../intrinsics'
 import { registerDefKind, type CodegenKind } from './defkinds'
 import { loadBuiltinStrata } from '../strata/index'
 import parse from '../parser'
@@ -91,11 +91,32 @@ export function buildStrataRegistry(
 
 /** Register a single Elaboration node into the registry. */
 function registerElaboration(registry: ElaboratorRegistry, elab: Elaboration): void {
-  const node = elaborationToStrataNode(elab)
+  const baseNode = elaborationToStrataNode(elab)
   const symbol = symbolToString(elab.symbol)
-  registerElaborator(registry, elab.kind, symbol, node)
+  const sig = baseNode.data?.typeSignature
 
-  const codegenKind = codegenKindFromIntrinsic(node.data?.intrinsic)
+  if (elab.kind === 'operator' && sig && sig.params.length > 0) {
+    const typeKind = sig.params[0].kind  // 'Int', 'Float', 'Bool', etc.
+
+    // Tag as Constraint when another variant of this symbol is already registered.
+    const isConstraint = registry.operators[symbol] != null
+    const node: StrataNode = isConstraint
+      ? { ...baseNode, type: StrataType.Constraint }
+      : baseNode
+
+    // Store under compound typed key (e.g. '+:Float').
+    registerTypedOperator(registry, symbol, typeKind, node)
+
+    // Also set as the primary entry if this is the first registration for this symbol.
+    if (!registry.operators[symbol]) {
+      registerElaborator(registry, 'operator', symbol, baseNode)
+    }
+  } else {
+    // No type constraint or not an operator: plain registration (last-one-wins primary).
+    registerElaborator(registry, elab.kind, symbol, baseNode)
+  }
+
+  const codegenKind = codegenKindFromIntrinsic(baseNode.data?.intrinsic)
   if (codegenKind) {
     registerDefKind(registry.defKinds, {
       keyword: symbol,
@@ -139,21 +160,6 @@ function codegenKindFromIntrinsic(intrinsic: string | undefined): CodegenKind | 
 }
 
 /**
- * Pre-compute the f32 WAT instruction for an i32 intrinsic, if one exists.
- * Strips signed/unsigned suffixes (_s, _u) that have no f32 equivalent.
- * Returns the ready-to-emit WAT instruction string (e.g. 'f32.add'), or
- * undefined when no f32 counterpart exists (bitwise ops, memory ops, etc.).
- */
-function deriveFloatVariant(intrinsic: string): string | undefined {
-  if (!intrinsic.startsWith('WASM::i32_')) return undefined
-  const f32Name = intrinsic.replace('WASM::i32_', 'WASM::f32_')
-  const found =
-    getWasmIntrinsic(f32Name) ??
-    getWasmIntrinsic(f32Name.replace(/_[su]$/, ''))
-  return found?.wasmInstr
-}
-
-/**
  * Convert an Elaboration AST node to a StrataNode.
  * Extracts the WASM intrinsic and body template from the body so downstream
  * phases (codegen, type checker) can use them without re-walking the AST.
@@ -168,7 +174,6 @@ function elaborationToStrataNode(elaboration: Elaboration): StrataNode {
     intrinsic,
     bodyTemplate,
     typeSignature: intrinsic ? intrinsicSignature(intrinsic) : undefined,
-    floatVariant: intrinsic ? deriveFloatVariant(intrinsic) : undefined,
   }
   return {
     type: strataTypeFromIntrinsic(intrinsic, kind),

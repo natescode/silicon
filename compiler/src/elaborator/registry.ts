@@ -71,17 +71,40 @@ export function registerElaborator(
 }
 
 /**
- * Look up the semantic definition for an operator
- *
- * @param registry - The registry to search
- * @param symbol - The operator symbol (e.g., "+")
- * @returns StrataNode if found, undefined otherwise
+ * Look up the semantic definition for an operator (primary / untyped entry).
+ * For typed dispatch by operand type use lookupTypedOperator instead.
  */
 export function lookupOperator(
     registry: ElaboratorRegistry,
     symbol: string
 ): StrataNode | undefined {
     return registry.operators[symbol]
+}
+
+/**
+ * Register a type-specific overload under the compound key `${symbol}:${typeKind}`.
+ * The primary entry (plain `symbol`) is managed separately by registerElaborator.
+ */
+export function registerTypedOperator(
+    registry: ElaboratorRegistry,
+    symbol: string,
+    typeKind: string,
+    node: StrataNode,
+): void {
+    registry.operators[`${symbol}:${typeKind}`] = node
+}
+
+/**
+ * Type-driven operator lookup. Tries the compound key `${symbol}:${typeKind}` first,
+ * then falls back to the plain primary entry. Callers pass `leftType.kind` (e.g.
+ * `'Float'`, `'Int'`) as `typeKind`.
+ */
+export function lookupTypedOperator(
+    registry: ElaboratorRegistry,
+    symbol: string,
+    typeKind: string,
+): StrataNode | undefined {
+    return registry.operators[`${symbol}:${typeKind}`] ?? registry.operators[symbol]
 }
 
 /**

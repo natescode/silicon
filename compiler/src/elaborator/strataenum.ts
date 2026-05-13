@@ -3,6 +3,8 @@ export enum StrataType {
     Operator,
     Control,
     Codegen,
+    /** Type-constrained overload of an operator for a specific operand type. */
+    Constraint,
 }
 
 import { type TypeSig } from '../types/intrinsicSig'
@@ -36,16 +38,6 @@ export interface StrataData {
      * instead of re-deriving from the intrinsic name on every call.
      */
     typeSignature?: TypeSig
-    /**
-     * WAT instruction string for the float (f32) variant of this operator, if one
-     * exists. Pre-computed at strata-load time by looking up `WASM::f32_*` in the
-     * intrinsics table. Codegen reads this directly instead of doing a runtime
-     * regex swap on the intrinsic name.
-     *
-     * Example: for `+` (intrinsic `WASM::i32_add`), this is `'f32.add'`.
-     * Undefined for operators with no f32 counterpart (bitwise, etc.).
-     */
-    floatVariant?: string
 }
 
 export interface StrataNode {

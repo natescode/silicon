@@ -1685,11 +1685,70 @@ test("Round 35: buildStrataRegistry extraSources registers before program AST st
     const { registry: regWithout } = elaborate(ASTFactory.program([]))
     // Load a strata source that defines a new operator.
     const extraSource = `@stratum_operator NewOp ('$$$', Node) = { &WASM::i32_add Node.left, Node.right; };`
-    const match = parse(extraSource)
-    const ast = addToAstSemantics(siliconGrammar)(match).toAst() as Program
     const registry = buildStrataRegistry(ASTFactory.program([]), [extraSource])
     expect(registry.operators['$$$']).toBeDefined()
     expect(registry.operators['$$$'].data?.intrinsic).toBe('WASM::i32_add')
     // The registry without extra sources should not have it.
     expect(regWithout.operators['$$$']).toBeUndefined()
+})
+
+// ---------------------------------------------------------------------------
+// Round 36: typed operator overloads — StrataType::Constraint
+// ---------------------------------------------------------------------------
+
+test("Round 36: Float addition uses f32.add, not i32.add", () => {
+    const result = compileSource(`@let add a:Float, b:Float := { a + b };`)
+    expect(result.success).toBe(true)
+    const uw = userWat(result.wat!)
+    expect(uw).toContain('f32.add')
+    expect(uw).not.toContain('i32.add')
+})
+
+test("Round 36: Int addition uses i32.add, not f32.add (regression)", () => {
+    const result = compileSource(`@let add a:Int, b:Int := { a + b };`)
+    expect(result.success).toBe(true)
+    const uw = userWat(result.wat!)
+    expect(uw).toContain('i32.add')
+    expect(uw).not.toContain('f32.add')
+})
+
+test("Round 36: Float comparison uses f32.lt", () => {
+    const result = compileSource(`@let cmp a:Float, b:Float := { a < b };`)
+    expect(result.success).toBe(true)
+    expect(userWat(result.wat!)).toContain('f32.lt')
+})
+
+test("Round 36: Float division uses f32.div", () => {
+    const result = compileSource(`@let div a:Float, b:Float := { a / b };`)
+    expect(result.success).toBe(true)
+    expect(userWat(result.wat!)).toContain('f32.div')
+})
+
+test("Round 36: user-defined operator with Int and Float overloads dispatches by operand type", () => {
+    const strataSource = [
+        `@stratum_operator Combine_Int ('^^', Node) = { &WASM::i32_add Node.left, Node.right; };`,
+        `@stratum_operator Combine_Float ('^^', Node) = { &WASM::f32_add Node.left, Node.right; };`,
+    ].join('\n')
+    const intSource = `@let f a:Int, b:Int := { a ^^ b };`
+    const floatSource = `@let f a:Float, b:Float := { a ^^ b };`
+
+    const intResult = compileWithStrata(strataSource, intSource)
+    expect(intResult.success).toBe(true)
+    expect(userWat(intResult.wat!)).toContain('i32.add')
+    expect(userWat(intResult.wat!)).not.toContain('f32.add')
+
+    const floatResult = compileWithStrata(strataSource, floatSource)
+    expect(floatResult.success).toBe(true)
+    expect(userWat(floatResult.wat!)).toContain('f32.add')
+    expect(userWat(floatResult.wat!)).not.toContain('i32.add')
+})
+
+test("Round 36: typed overload type-checks correctly — Float operands with Float overload is no error", () => {
+    const strataSource = [
+        `@stratum_operator CombineInt ('^^', Node) = { &WASM::i32_add Node.left, Node.right; };`,
+        `@stratum_operator CombineFloat ('^^', Node) = { &WASM::f32_add Node.left, Node.right; };`,
+    ].join('\n')
+    const result = compileWithStrata(strataSource, `@let f a:Float, b:Float := { a ^^ b };`)
+    expect(result.success).toBe(true)
+    expect(result.error).toBeNull()
 })

@@ -14,7 +14,7 @@
 
 import { wasmTypeOf } from '../types/types'
 import { type SiliconType, TypeUnknown } from '../types/types'
-import { type ElaboratorRegistry, lookupOperator, lookupKeyword, lookupDefKindEntry } from '../elaborator/registry'
+import { type ElaboratorRegistry, lookupTypedOperator, lookupKeyword, lookupDefKindEntry } from '../elaborator/registry'
 import { getWasmIntrinsic } from '../intrinsics'
 import type { FunctionSig } from '../types/typechecker'
 import type {
@@ -783,15 +783,11 @@ interface OpInstrs {
 function instrForOp(op: string, operandWt: WasmValType, registry: ElaboratorRegistry): OpInstrs {
     const isBitwise = ['|', '^', '<<', '>>'].includes(op)
     const effectiveWt = isBitwise ? 'i32' : operandWt
+    const typeKind = effectiveWt === 'f32' ? 'Float' : 'Int'
 
-    const stratum = lookupOperator(registry, op)
+    const stratum = lookupTypedOperator(registry, op, typeKind)
     const base = stratum?.data?.intrinsic
     if (!base) throw new IRLowerError(`No stratum registered for operator '${op}'`)
-
-    // Float variant only applies to the primary step.
-    if (effectiveWt === 'f32' && stratum.data?.floatVariant) {
-        return { instr: stratum.data.floatVariant, extraSteps: [] }
-    }
 
     const intr = getWasmIntrinsic(base)
     if (!intr) throw new IRLowerError(`No WasmIntrinsic for '${base}'`)

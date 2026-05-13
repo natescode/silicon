@@ -80,7 +80,7 @@ function stratumInstrFor(op: string, isFloat: boolean, reg: ElaboratorRegistry |
     if (!isFloat) {
         return getWasmIntrinsic(stratum.data.intrinsic)?.wasmInstr
     }
-    return stratum.data.floatVariant ?? getWasmIntrinsic(stratum.data.intrinsic)?.wasmInstr
+    return getWasmIntrinsic(stratum.data.intrinsic)?.wasmInstr
 }
 
 /**

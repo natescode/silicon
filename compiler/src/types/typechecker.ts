@@ -78,7 +78,7 @@ import {
     immutableAssignment,
 } from './errors'
 import { getWasmIntrinsic } from '../intrinsics'
-import { type ElaboratorRegistry, lookupOperator, lookupKeyword } from '../elaborator/registry'
+import { type ElaboratorRegistry, lookupOperator, lookupTypedOperator, lookupKeyword } from '../elaborator/registry'
 import { intrinsicSignature, type TypeSig } from './intrinsicSig'
 
 /**
@@ -568,9 +568,9 @@ function checkBinaryOp(b: any, ctx: Ctx): SiliconType {
             return TypeBool
         default: {
             // User-defined operators: read the pre-derived TypeSig from the
-            // registry (populated by strataLoader at load time). Fall back to
-            // deriving it from the intrinsic name if typeSignature is absent.
-            const stratum = ctx.registry && lookupOperator(ctx.registry, b.operator)
+            // registry, using the left-operand type to pick the right overload
+            // (e.g. Int variant vs Float variant of the same operator symbol).
+            const stratum = ctx.registry && lookupTypedOperator(ctx.registry, b.operator, leftT.kind)
             const sig: TypeSig | undefined =
                 stratum?.data?.typeSignature ??
                 (stratum?.data?.intrinsic ? intrinsicSignature(stratum.data.intrinsic) : undefined)
