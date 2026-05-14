@@ -113,9 +113,10 @@ test("compile if without else does not emit result type", () => {
     expect(wat).not.toContain("(if (result")
 })
 
-test("compile @let function is auto-exported", () => {
+test("compile @let function without @export is not exported", () => {
     const wat = compile("@let add x:Int, y:Int := x + y;")
-    expect(wat).toContain('(export "add" (func $add))')
+    expect(wat).toContain("(func $add")
+    expect(wat).not.toContain('(export "add"')
 })
 
 test("compile @fn definition emits func with params", () => {
