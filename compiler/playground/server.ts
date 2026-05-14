@@ -141,6 +141,19 @@ const server = Bun.serve({
             })
         }
 
+        // Serve static assets from the playground directory.
+        if (req.method === 'GET') {
+            const safe = url.pathname.replace(/\.\./g, '')
+            const filePath = join(__dir, safe)
+            const file = Bun.file(filePath)
+            if (await file.exists()) {
+                const ct = filePath.endsWith('.js') ? 'application/javascript; charset=utf-8'
+                    : filePath.endsWith('.css') ? 'text/css; charset=utf-8'
+                    : 'application/octet-stream'
+                return new Response(file, { headers: { 'Content-Type': ct } })
+            }
+        }
+
         // Compile endpoint.
         if (req.method === 'POST' && url.pathname === '/compile') {
             let source: string

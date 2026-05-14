@@ -309,7 +309,11 @@ function lowerExtern(node: any, name: string, ctx: LowerCtx): IRImport {
     if (node.name?.typeAnnotation?.typename) {
         result = siliconTypeNameToWasm(node.name.typeAnnotation.typename)
     }
-    return { kind: 'Import', env: 'env', field: name, name, params, result }
+    // Detect namespaced imports: web_xxx → env:"web" field:"xxx"
+    const nsMatch = /^(web|node)_(.+)$/.exec(name)
+    const env = nsMatch ? nsMatch[1] : 'env'
+    const field = nsMatch ? nsMatch[2] : name
+    return { kind: 'Import', env, field, name, params, result }
 }
 
 function lowerLocalDef(node: any, name: string, ctx: LowerCtx): null {
