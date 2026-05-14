@@ -42,6 +42,11 @@ export function intrinsicSignature(fullName: string): TypeSig | undefined {
     }
 
     // Unary ops.
+    // Note: i32_eqz is intentionally excluded — at the Silicon level @not must
+    // accept both Bool and Int operands, but the type system treats them as
+    // distinct types. Giving eqz a typed signature would reject `@not @true`
+    // (Bool arg) when the signature says Int. The stratum stays untyped so
+    // lookupTypedKeyword falls back to the plain entry for both operand kinds.
     const unaryI32 = ['clz', 'ctz', 'popcnt']
     if (short.startsWith('i32_') && unaryI32.includes(short.slice(4))) {
         return { params: [TypeInt], result: TypeInt }

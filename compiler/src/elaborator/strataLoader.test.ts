@@ -427,3 +427,36 @@ test("buildStrataRegistry: || operator has WASM::control_or intrinsic (strata-dr
     expect(entry?.data?.intrinsic).toBe('WASM::control_or')
     expect(entry?.type).toBe(StrataType.Control)
 })
+
+// ---------------------------------------------------------------------------
+// Round 40: IR expander hook — buildStrataRegistry populates registry.expanders
+// ---------------------------------------------------------------------------
+
+test("buildStrataRegistry: populates registry.expanders with built-in control-flow expanders", () => {
+    const registry = buildStrataRegistry(ASTFactory.program([]))
+    // All 8 built-in expanders must be registered.
+    const expected = [
+        'WASM::control_if',
+        'WASM::control_loop',
+        'WASM::control_break',
+        'WASM::control_continue',
+        'WASM::control_return',
+        'WASM::control_and',
+        'WASM::control_or',
+        'WASM::control_match',
+    ]
+    for (const intrinsic of expected) {
+        expect(registry.expanders.has(intrinsic)).toBe(true)
+    }
+})
+
+test("buildStrataRegistry: expanders are callable functions", () => {
+    const registry = buildStrataRegistry(ASTFactory.program([]))
+    const ifExpander = registry.expanders.get('WASM::control_if')
+    expect(typeof ifExpander).toBe('function')
+})
+
+test("buildStrataRegistry: expanders map is a Map instance", () => {
+    const registry = buildStrataRegistry(ASTFactory.program([]))
+    expect(registry.expanders).toBeInstanceOf(Map)
+})

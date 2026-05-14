@@ -24,6 +24,7 @@ import type {
     IRConst, IRLocalGet, IRGlobalGet, IRCall,
     IRBlock, IRIf, IRLoop, IRBreak, IRContinue, IRNop, IRUnreachable, IRExprStmt,
 } from './nodes'
+import { ARRAY_LITERAL_CALLEE } from './nodes'
 
 // ---------------------------------------------------------------------------
 // Lowering context
@@ -657,7 +658,7 @@ function lowerArrayLiteral(n: any, ctx: LowerCtx): IRExpr {
     return {
         kind: 'Call',
         wasmType: 'i32',
-        callee: '__array_literal',
+        callee: ARRAY_LITERAL_CALLEE,
         callKind: 'user',
         args: [...allocArgs, ...elemExprs],
     }

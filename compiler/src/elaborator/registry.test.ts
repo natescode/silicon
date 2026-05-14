@@ -11,6 +11,7 @@ import { test, expect, describe } from 'bun:test'
 import {
     createElaboratorRegistry,
     registerElaborator,
+    registerExpander,
     lookupOperator,
     lookupKeyword,
     listOperators,
@@ -21,13 +22,14 @@ import {
     type ElaboratorRegistry
 } from './registry'
 import { type StrataNode, StrataType } from './strataenum'
+import type { IRExpanderFn } from '../ir/expander'
 
 // Test fixture: create a dummy StrataNode for testing
 function createTestOperatorNode(symbol: string): StrataNode {
     return {
         type: StrataType.Operator,
         discriminant: symbol,
-        data: { test: true }
+        data: undefined,
     }
 }
 
@@ -35,7 +37,7 @@ function createTestKeywordNode(name: string): StrataNode {
     return {
         type: StrataType.Keyword,
         discriminant: name,
-        data: { test: true }
+        data: undefined,
     }
 }
 
@@ -45,6 +47,12 @@ describe('Elaborator Registry', () => {
             const registry = createElaboratorRegistry()
             expect(registry.operators).toEqual({})
             expect(registry.keywords).toEqual({})
+        })
+
+        test('initializes expanders as an empty Map', () => {
+            const registry = createElaboratorRegistry()
+            expect(registry.expanders).toBeInstanceOf(Map)
+            expect(registry.expanders.size).toBe(0)
         })
     })
 
@@ -213,6 +221,58 @@ describe('Elaborator Registry', () => {
             const merged = mergeRegistries(reg1, reg2)
             expect(hasOperator(reg1, '-')).toBe(false)
             expect(hasOperator(reg2, '+')).toBe(false)
+        })
+
+        test('merges expanders from both registries', () => {
+            const fn1: IRExpanderFn = () => ({ kind: 'Nop' })
+            const fn2: IRExpanderFn = () => ({ kind: 'Nop' })
+
+            const reg1 = createElaboratorRegistry()
+            registerExpander(reg1, 'WASM::control_if', fn1)
+
+            const reg2 = createElaboratorRegistry()
+            registerExpander(reg2, 'WASM::control_loop', fn2)
+
+            const merged = mergeRegistries(reg1, reg2)
+            expect(merged.expanders.get('WASM::control_if')).toBe(fn1)
+            expect(merged.expanders.get('WASM::control_loop')).toBe(fn2)
+        })
+
+        test('source expanders overwrite target on conflicts', () => {
+            const fn1: IRExpanderFn = () => ({ kind: 'Nop' })
+            const fn2: IRExpanderFn = () => ({ kind: 'Nop' })
+
+            const reg1 = createElaboratorRegistry()
+            registerExpander(reg1, 'WASM::control_if', fn1)
+
+            const reg2 = createElaboratorRegistry()
+            registerExpander(reg2, 'WASM::control_if', fn2)
+
+            const merged = mergeRegistries(reg1, reg2)
+            expect(merged.expanders.get('WASM::control_if')).toBe(fn2)
+        })
+    })
+
+    describe('registerExpander', () => {
+        test('registers an IR expander by intrinsic name', () => {
+            const registry = createElaboratorRegistry()
+            const fn: IRExpanderFn = () => ({ kind: 'Nop' })
+            registerExpander(registry, 'WASM::control_if', fn)
+            expect(registry.expanders.get('WASM::control_if')).toBe(fn)
+        })
+
+        test('overwrites previous expander for same intrinsic', () => {
+            const registry = createElaboratorRegistry()
+            const fn1: IRExpanderFn = () => ({ kind: 'Nop' })
+            const fn2: IRExpanderFn = () => ({ kind: 'Nop' })
+            registerExpander(registry, 'WASM::control_if', fn1)
+            registerExpander(registry, 'WASM::control_if', fn2)
+            expect(registry.expanders.get('WASM::control_if')).toBe(fn2)
+        })
+
+        test('returns undefined for unregistered intrinsic', () => {
+            const registry = createElaboratorRegistry()
+            expect(registry.expanders.get('WASM::control_if')).toBeUndefined()
         })
     })
 })

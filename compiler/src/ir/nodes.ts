@@ -187,3 +187,6 @@ export interface IRModule {
     /** Explicit exports from @export declarations (supplements auto-exported functions). */
     exports: IRExport[]
 }
+
+/** Sentinel callee name for array-literal IR nodes, shared between lower.ts and emit.ts. */
+export const ARRAY_LITERAL_CALLEE = '__array_literal'

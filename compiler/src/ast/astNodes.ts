@@ -292,7 +292,6 @@ export const ASTFactory = {
         return { type: 'Assignment', target, value }
     },
 
-    // TODO: add property for the resolved elaboration hook 
     definition(
         keyword: string,
         name: TypedIdentifier,

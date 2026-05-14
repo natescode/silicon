@@ -13,8 +13,10 @@ import { test, expect, describe } from 'bun:test'
 import { buildStrataRegistry } from '../elaborator/strataLoader'
 import { ASTFactory } from '../ast/astNodes'
 import { TypeInt, TypeFloat, TypeBool } from '../types/types'
+import { intrinsicSignature } from '../types/intrinsicSig'
 import { lowerProgram, IRLowerError } from './lower'
 import { emitExpr, emitModule } from './emit'
+import { ARRAY_LITERAL_CALLEE } from './nodes'
 import type { IRExpr, IRBinOp, IRConst, IRCall, IRIf } from './nodes'
 
 // ---------------------------------------------------------------------------
@@ -401,5 +403,88 @@ describe('IR pipeline: lowerProgram + emitModule', () => {
         expect(mod.kind).toBe('Module')
         expect(mod.functions).toHaveLength(0)
         expect(mod.globals).toHaveLength(0)
+    })
+})
+
+// ---------------------------------------------------------------------------
+// intrinsicSignature — type signature derivation
+// ---------------------------------------------------------------------------
+
+describe('intrinsicSignature', () => {
+    test('i32_add → (Int, Int) → Int', () => {
+        const sig = intrinsicSignature('WASM::i32_add')
+        expect(sig).toBeDefined()
+        expect(sig!.params).toEqual([TypeInt, TypeInt])
+        expect(sig!.result).toEqual(TypeInt)
+    })
+
+    test('f32_add → (Float, Float) → Float', () => {
+        const sig = intrinsicSignature('WASM::f32_add')
+        expect(sig).toBeDefined()
+        expect(sig!.params).toEqual([TypeFloat, TypeFloat])
+        expect(sig!.result).toEqual(TypeFloat)
+    })
+
+    test('i32_lt_s → (Int, Int) → Bool (comparison)', () => {
+        const sig = intrinsicSignature('WASM::i32_lt_s')
+        expect(sig).toBeDefined()
+        expect(sig!.params).toEqual([TypeInt, TypeInt])
+        expect(sig!.result).toEqual(TypeBool)
+    })
+
+    test('f32_lt → (Float, Float) → Bool (comparison)', () => {
+        const sig = intrinsicSignature('WASM::f32_lt')
+        expect(sig).toBeDefined()
+        expect(sig!.params).toEqual([TypeFloat, TypeFloat])
+        expect(sig!.result).toEqual(TypeBool)
+    })
+
+    test('i32_eqz has no Silicon-level signature (accepts both Int and Bool operands)', () => {
+        // eqz is intentionally untyped: @not must accept Bool and Int. Giving it
+        // a signature would cause the typechecker to reject `@not @true` (Bool arg)
+        // because the table would say the parameter is Int.
+        expect(intrinsicSignature('WASM::i32_eqz')).toBeUndefined()
+    })
+
+    test('f32_neg → (Float) → Float (unary)', () => {
+        const sig = intrinsicSignature('WASM::f32_neg')
+        expect(sig).toBeDefined()
+        expect(sig!.params).toEqual([TypeFloat])
+        expect(sig!.result).toEqual(TypeFloat)
+    })
+
+    test('f32_convert_i32_s → (Int) → Float (conversion)', () => {
+        const sig = intrinsicSignature('WASM::f32_convert_i32_s')
+        expect(sig).toBeDefined()
+        expect(sig!.params).toEqual([TypeInt])
+        expect(sig!.result).toEqual(TypeFloat)
+    })
+
+    test('i32_trunc_f32_s → (Float) → Int (conversion)', () => {
+        const sig = intrinsicSignature('WASM::i32_trunc_f32_s')
+        expect(sig).toBeDefined()
+        expect(sig!.params).toEqual([TypeFloat])
+        expect(sig!.result).toEqual(TypeInt)
+    })
+
+    test('control strata have no signature', () => {
+        expect(intrinsicSignature('WASM::control_if')).toBeUndefined()
+        expect(intrinsicSignature('WASM::control_loop')).toBeUndefined()
+        expect(intrinsicSignature('WASM::control_break')).toBeUndefined()
+    })
+
+    test('def and meta sentinels have no signature', () => {
+        expect(intrinsicSignature('WASM::def_function')).toBeUndefined()
+        expect(intrinsicSignature('WASM::meta_export')).toBeUndefined()
+    })
+
+    test('unknown name returns undefined', () => {
+        expect(intrinsicSignature('WASM::does_not_exist')).toBeUndefined()
+        expect(intrinsicSignature('not_a_wasm_name')).toBeUndefined()
+    })
+
+    test('ARRAY_LITERAL_CALLEE is a defined string constant', () => {
+        expect(typeof ARRAY_LITERAL_CALLEE).toBe('string')
+        expect(ARRAY_LITERAL_CALLEE.length).toBeGreaterThan(0)
     })
 })

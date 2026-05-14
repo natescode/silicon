@@ -8,8 +8,9 @@
 
 import type {
     IRModule, IRFunction, IRGlobal, IRImport, IRDataSegment, IRExport,
-    IRExpr, IRStmt, IRBlock, WasmType, WasmValType,
+    IRExpr, IRStmt, IRBlock, IRConst, WasmType, WasmValType,
 } from './nodes'
+import { ARRAY_LITERAL_CALLEE } from './nodes'
 
 // ---------------------------------------------------------------------------
 // Public API
@@ -125,7 +126,7 @@ export function emitExpr(e: IRExpr): string {
 }
 
 function emitCall(e: IRExpr & { kind: 'Call' }): string {
-    if (e.callee === '__array_literal') return emitArrayLiteral(e.args)
+    if (e.callee === ARRAY_LITERAL_CALLEE) return emitArrayLiteral(e.args)
 
     const argWat = e.args.map(emitExpr).join('\n')
     if (e.callKind === 'instr') {
@@ -177,7 +178,7 @@ function emitArrayLiteral(args: IRExpr[]): string {
     // args[0] = count (IRConst), args[1] = elemBytes (IRConst), args[2..] = elements
     const countWat = emitExpr(args[0])
     const elemBytesWat = emitExpr(args[1])
-    const count = (args[0] as any).value as number
+    const count = (args[0] as IRConst).value
     const elemExprs = args.slice(2)
     const stores = elemExprs.map((el, i) =>
         `(i32.store offset=${4 + i * 4} (local.get $addr) ${emitExpr(el)})`
