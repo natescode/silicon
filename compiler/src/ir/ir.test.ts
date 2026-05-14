@@ -473,9 +473,9 @@ describe('intrinsicSignature', () => {
         expect(intrinsicSignature('WASM::control_break')).toBeUndefined()
     })
 
-    test('def and meta sentinels have no signature', () => {
-        expect(intrinsicSignature('WASM::def_function')).toBeUndefined()
-        expect(intrinsicSignature('WASM::meta_export')).toBeUndefined()
+    test('IR kinds have no intrinsic signature (not WASM instructions)', () => {
+        expect(intrinsicSignature('IR::def_function')).toBeUndefined()
+        expect(intrinsicSignature('IR::meta_export')).toBeUndefined()
     })
 
     test('unknown name returns undefined', () => {

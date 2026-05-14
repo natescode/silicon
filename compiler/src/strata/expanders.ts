@@ -6,7 +6,7 @@
  * strataLoader.ts so lower.ts never needs to be touched for new structural keywords.
  *
  * To add a new structural keyword:
- *   1. Add a WASM::control_* (or WASM::meta_*) sentinel to intrinsics.ts
+ *   1. Add a WASM::control_* entry to intrinsics.ts (or an IR::def_/IR::meta_ entry to irKinds.ts)
  *   2. Add a strata file entry (@stratum_keyword) referencing it
  *   3. Add an expander here
  *   4. No changes to lower.ts needed

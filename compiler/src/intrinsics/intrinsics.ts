@@ -121,21 +121,6 @@ export const wasmIntrinsics: Record<string, WasmIntrinsic> = {
     control_return:   { name: 'WASM::control_return',   wasmInstr: 'return', description: 'Return from function — used by @return stratum' },
     control_match:    { name: 'WASM::control_match',    wasmInstr: 'if',     description: 'Nested if/else chain — used by @match stratum' },
 
-    // -------------------------------------------------------------------------
-    // Definition Sentinels (drive the def-kinds registry; emit no WAT)
-    // -------------------------------------------------------------------------
-    def_function:     { name: 'WASM::def_function',     wasmInstr: '', description: 'Def-kind: function (@let, @fn)' },
-    def_global:       { name: 'WASM::def_global',       wasmInstr: '', description: 'Def-kind: mutable global (@var)' },
-    def_extern:       { name: 'WASM::def_extern',       wasmInstr: '', description: 'Def-kind: import (@extern)' },
-    def_type_alias:   { name: 'WASM::def_type_alias',   wasmInstr: '', description: 'Def-kind: transparent type alias (@type_alias)' },
-    def_type_distinct:{ name: 'WASM::def_type_distinct',wasmInstr: '', description: 'Def-kind: opaque distinct type (@type_distinct)' },
-    def_type_sum:     { name: 'WASM::def_type_sum',     wasmInstr: '', description: 'Def-kind: sum type / enum (@type_sum)' },
-    def_local:        { name: 'WASM::def_local',        wasmInstr: '', description: 'Def-kind: block-local variable (@local)' },
-
-    // -------------------------------------------------------------------------
-    // Metadata Sentinels (drive the def-kinds registry; emit no WAT directly)
-    // -------------------------------------------------------------------------
-    meta_export: { name: 'WASM::meta_export', wasmInstr: '', description: 'Metadata: explicit export declaration (@export)' },
 }
 
 export function getWasmIntrinsic(name: string): WasmIntrinsic | undefined {

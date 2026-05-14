@@ -1,31 +1,31 @@
 @stratum_keyword LetDef ('@let', Node) = {
-  &WASM::def_function;
+  &IR::def_function;
 };
 
 @stratum_keyword FnDef ('@fn', Node) = {
-  &WASM::def_function;
+  &IR::def_function;
 };
 
 @stratum_keyword VarDef ('@var', Node) = {
-  &WASM::def_global;
+  &IR::def_global;
 };
 
 @stratum_keyword ExternDef ('@extern', Node) = {
-  &WASM::def_extern;
+  &IR::def_extern;
 };
 
 @stratum_keyword TypeAliasDef ('@type_alias', Node) = {
-  &WASM::def_type_alias;
+  &IR::def_type_alias;
 };
 
 @stratum_keyword TypeDistinctDef ('@type_distinct', Node) = {
-  &WASM::def_type_distinct;
+  &IR::def_type_distinct;
 };
 
 @stratum_keyword TypeSumDef ('@type_sum', Node) = {
-  &WASM::def_type_sum;
+  &IR::def_type_sum;
 };
 
 @stratum_keyword LocalDef ('@local', Node) = {
-  &WASM::def_local;
+  &IR::def_local;
 };

@@ -1,5 +1,7 @@
 export { lowerProgram, IRLowerError } from './lower'
 export { emitModule, emitExpr, emitStmt } from './emit'
+export { irKinds, getIRKind, isIRKind } from './irKinds'
+export type { IRKind } from './irKinds'
 export type {
     WasmValType, WasmType,
     IRModule, IRFunction, IRGlobal, IRImport, IRDataSegment, IRExport,

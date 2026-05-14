@@ -31,6 +31,7 @@ import {
 import { StrataType, type StrataNode, type StrataData, strataTypeFromIntrinsic } from './strataenum'
 import { intrinsicSignature } from '../types/intrinsicSig'
 import { registerDefKind, type CodegenKind } from './defkinds'
+import { getIRKind } from '../ir/irKinds'
 import { loadBuiltinStrata } from '../strata/index'
 import { builtinExpanders } from '../strata/expanders'
 import parse from '../parser'
@@ -171,17 +172,9 @@ function symbolToString(symbol: any): string {
   return String(symbol)
 }
 
-/** Map a WASM::def_* or WASM::meta_* intrinsic to the corresponding codegen kind. */
+/** Map an IR::def_* or IR::meta_* intrinsic to the corresponding codegen kind. */
 function codegenKindFromIntrinsic(intrinsic: string | undefined): CodegenKind | undefined {
-  if (intrinsic === 'WASM::def_function') return 'function'
-  if (intrinsic === 'WASM::def_global') return 'global'
-  if (intrinsic === 'WASM::def_extern') return 'extern'
-  if (intrinsic === 'WASM::def_type_alias') return 'type_alias'
-  if (intrinsic === 'WASM::def_type_distinct') return 'type_distinct'
-  if (intrinsic === 'WASM::def_type_sum') return 'type_sum'
-  if (intrinsic === 'WASM::def_local') return 'local'
-  if (intrinsic === 'WASM::meta_export') return 'export'
-  return undefined
+  return getIRKind(intrinsic ?? '')?.codegenKind
 }
 
 /**
@@ -226,7 +219,7 @@ function extractBodyTemplate(
     const fc = findFunctionCall(item.value ?? item)
     if (!fc) continue
     const name = fc.name
-    if (!name || name.type !== 'Namespace' || name.path?.[0] !== 'WASM') continue
+    if (!name || name.type !== 'Namespace' || (name.path?.[0] !== 'WASM' && name.path?.[0] !== 'IR')) continue
     const intrinsic = (name.path as string[]).join('::')
     const argRefs = (fc.args ?? []).map((arg: any): 'left' | 'right' | 'unknown' => {
       const ns = findNamespace(arg)
@@ -253,7 +246,7 @@ function extractIntrinsicFromBody(node: any): string | undefined {
   }
   if (node.type === 'FunctionCall') {
     const name = node.name
-    if (name && Array.isArray(name.path) && name.path[0] === 'WASM') {
+    if (name && Array.isArray(name.path) && (name.path[0] === 'WASM' || name.path[0] === 'IR')) {
       return name.path.join('::')
     }
   }

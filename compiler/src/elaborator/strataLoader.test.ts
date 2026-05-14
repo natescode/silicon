@@ -408,7 +408,7 @@ test("buildStrataRegistry: @export is registered as Metadata stratum", () => {
     const registry = buildStrataRegistry(ASTFactory.program([]))
     const entry = registry.keywords['@export']
     expect(entry).toBeDefined()
-    expect(entry.data?.intrinsic).toBe('WASM::meta_export')
+    expect(entry.data?.intrinsic).toBe('IR::meta_export')
 })
 
 test("buildStrataRegistry: @export is registered in defKinds with codegenKind 'export'", () => {
