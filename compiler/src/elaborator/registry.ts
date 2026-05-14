@@ -18,7 +18,7 @@
 
 import { type StrataNode } from './strataenum'
 import { type DefKindRegistry, type DefKindEntry, createDefKindRegistry, lookupDefKind as _lookupDefKind } from './defkinds'
-import type { IRExpanderFn } from '../ir/expander'
+import type { IRExpanderFn, IRDefExpander } from '../ir/expander'
 
 /**
  * Central registry mapping operator/keyword symbols to StrataNode semantics
@@ -30,6 +30,8 @@ export interface ElaboratorRegistry {
     defKinds: DefKindRegistry                // "@let" → DefKindEntry
     /** Intrinsic name → IR expander fn (bypasses the generic lowering path). */
     expanders: Map<string, IRExpanderFn>
+    /** CodegenKind → IR definition expander (bypasses the lowerDefinition switch). */
+    defExpanders: Map<string, IRDefExpander>
 }
 
 /**
@@ -42,6 +44,7 @@ export function createElaboratorRegistry(): ElaboratorRegistry {
         keywords: {},
         defKinds: createDefKindRegistry(),
         expanders: new Map(),
+        defExpanders: new Map(),
     }
 }
 
@@ -56,6 +59,19 @@ export function registerExpander(
     fn: IRExpanderFn,
 ): void {
     registry.expanders.set(intrinsic, fn)
+}
+
+/**
+ * Register a pluggable IR definition expander for a CodegenKind.
+ * When `lowerDefinition` encounters a definition with the matching hook,
+ * it calls the expander instead of the hardcoded switch case.
+ */
+export function registerDefExpander(
+    registry: ElaboratorRegistry,
+    codegenKind: string,
+    expander: IRDefExpander,
+): void {
+    registry.defExpanders.set(codegenKind, expander)
 }
 
 /**
@@ -199,5 +215,6 @@ export function mergeRegistries(target: ElaboratorRegistry, source: ElaboratorRe
         keywords: { ...target.keywords, ...source.keywords },
         defKinds: { ...target.defKinds, ...source.defKinds },
         expanders: new Map([...target.expanders, ...source.expanders]),
+        defExpanders: new Map([...target.defExpanders, ...source.defExpanders]),
     }
 }

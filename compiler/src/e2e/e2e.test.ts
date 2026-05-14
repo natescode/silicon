@@ -1807,3 +1807,76 @@ test("Round 37: user-defined keyword strata with Int and Float overloads dispatc
     expect(userWat(floatResult.wat!)).toContain('f32.neg')
     expect(userWat(floatResult.wat!)).not.toContain('i32.eqz')
 })
+
+// ---------------------------------------------------------------------------
+// Round 43: @match trailing default — catch-all arm (even arg count)
+// ---------------------------------------------------------------------------
+
+test("Round 43: @match trailing default emits no i32.eq for the default arm", () => {
+    // Even arg count: last arg is the catch-all default, no comparison emitted for it.
+    const src = [
+        "@type_sum Color := Red | Green | Blue;",
+        "@var c:Color := Color::Red;",
+        "&@match c, Color::Red, { 1 }, { 0 };",
+    ].join("\n")
+    const result = compileSource(src)
+
+    expect(result.success).toBe(true)
+    expect(result.wat).toBeDefined()
+    // Only one i32.eq: the Red arm. Default has no comparison.
+    const eqMatches = userWat(result.wat ?? "").match(/i32\.eq/g) ?? []
+    expect(eqMatches.length).toBe(1)
+    // Default replaces unreachable — no (unreachable) in output.
+    expect(result.wat).not.toContain("unreachable")
+})
+
+test("Round 43: @match two explicit arms + trailing default", () => {
+    const src = [
+        "@type_sum Status := Ok | Warn | Error;",
+        "@var s:Status := Status::Warn;",
+        "&@match s, Status::Ok, { 0 }, Status::Error, { 2 }, { 1 };",
+    ].join("\n")
+    const result = compileSource(src)
+
+    expect(result.success).toBe(true)
+    expect(result.wat).not.toContain("unreachable")
+    // Two explicit comparisons, none for the default.
+    const eqMatches = userWat(result.wat ?? "").match(/i32\.eq/g) ?? []
+    expect(eqMatches.length).toBe(2)
+})
+
+test("Round 43: type checker accepts trailing default @match without errors", () => {
+    const src = [
+        "@type_sum Bool2 := Yes | No;",
+        "@var b:Bool2 := Bool2::Yes;",
+        "&@match b, Bool2::Yes, { 1 }, { 0 };",
+    ].join("\n")
+    const result = compileSource(src)
+
+    expect(result.success).toBe(true)
+})
+
+test("Round 43: @match trailing default type mismatch is a type error", () => {
+    // Default is Float but arm result is Int — should error.
+    const src = [
+        "@type_sum Color := Red | Green;",
+        "@var c:Color := Color::Red;",
+        "&@match c, Color::Red, { 1 }, { 2.5 };",
+    ].join("\n")
+    const result = compileSource(src)
+
+    expect(result.success).toBe(false)
+    expect(result.error).toBeTruthy()
+})
+
+test("Round 43: @type_sum lowering uses def expander (sum-type globals still emit correctly)", () => {
+    // Regression: type_sum globals must still emit even after removing the
+    // hardcoded lowerSumType — the def expander must produce the same output.
+    const result = compileSource("@type_sum Direction := North | South | East | West;")
+
+    expect(result.success).toBe(true)
+    expect(result.wat).toContain("(global $Direction_North i32 (i32.const 0))")
+    expect(result.wat).toContain("(global $Direction_South i32 (i32.const 1))")
+    expect(result.wat).toContain("(global $Direction_East i32 (i32.const 2))")
+    expect(result.wat).toContain("(global $Direction_West i32 (i32.const 3))")
+})

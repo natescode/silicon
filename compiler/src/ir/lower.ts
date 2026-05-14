@@ -21,7 +21,7 @@ import type {
     WasmValType, WasmType,
     IRModule, IRFunction, IRGlobal, IRImport, IRDataSegment, IRExport,
     IRExpr, IRStmt, IRParam, IRLocal,
-    IRConst, IRLocalGet, IRGlobalGet, IRCall,
+    IRLocalGet, IRGlobalGet, IRCall,
     IRBlock, IRIf, IRLoop, IRBreak, IRContinue, IRNop, IRUnreachable, IRExprStmt,
 } from './nodes'
 import { ARRAY_LITERAL_CALLEE } from './nodes'
@@ -125,14 +125,8 @@ export function lowerProgram(
             ctx.globals.set(name, 'i32') // refined below
             ctx.varNames.add(name)
         }
-        if (hook === 'type_sum') {
-            // Sum type variants are i32 globals.
-            extractSumVariants(node).forEach(v => {
-                const vname = watId(v)
-                ctx.globals.set(vname, 'i32')
-                ctx.varNames.add(vname)
-            })
-        }
+        // Def expander pre-scan (handles type_sum and any user-registered kinds).
+        ctx.registry.defExpanders.get(hook)?.preScan?.(node, ctx)
     }
 
     for (const el of program.elements as any[]) {
@@ -211,12 +205,15 @@ function lowerDefinition(node: any, ctx: LowerCtx): any {
     const hook = node.hook
     const name = watId(node.name?.name ?? '')
 
+    // Def expander takes priority over hardcoded switch cases.
+    const defExp = ctx.registry.defExpanders.get(hook)
+    if (defExp) return defExp.expand(node, name, ctx)
+
     switch (hook) {
         case 'function': return lowerFunction(node, name, ctx)
         case 'global':   return lowerGlobal(node, name, ctx)
         case 'extern':   return lowerExtern(node, name, ctx)
         case 'local':    return lowerLocalDef(node, name, ctx)
-        case 'type_sum': return lowerSumType(node, name, ctx)
         case 'export':   return lowerExportDecl(node, name, ctx)
         // Type alias / distinct produce no WAT — handled by type checker.
         case 'type_alias':
@@ -328,17 +325,6 @@ function lowerLocalDef(node: any, name: string, ctx: LowerCtx): null {
     // We return null here; the block lowering will emit it as an IRExprStmt wrapping
     // an IRLocalSet when it encounters the definition in its item list.
     return null
-}
-
-function lowerSumType(node: any, name: string, ctx: LowerCtx): IRGlobal[] {
-    const variants = extractSumVariants(node)
-    return variants.map((v, i) => {
-        const gname = watId(v)
-        ctx.globals.set(gname, 'i32')
-        ctx.varNames.add(gname)
-        const init: IRConst = { kind: 'Const', wasmType: 'i32', value: i }
-        return { kind: 'Global' as const, name: gname, wasmType: 'i32' as const, mutable: false, init }
-    })
 }
 
 function lowerExportDecl(_node: any, name: string, ctx: LowerCtx): IRExport {
@@ -705,29 +691,8 @@ function siliconTypeNameToWasm(typename: string): WasmValType {
 }
 
 /** Convert a Silicon identifier to a safe WAT identifier (:: → _). */
-function watId(s: string): string {
+export function watId(s: string): string {
     return s.replace(/::/g, '_')
-}
-
-/** Extract sum-type variant full names (e.g. 'Color::Red') from a @type_sum def. */
-function extractSumVariants(node: any): string[] {
-    const binding = Array.isArray(node.binding) ? node.binding[0] : node.binding
-    const expr = binding?.expression ?? binding
-    const typeName = node.name?.name ?? ''
-
-    function collect(e: any): string[] {
-        if (!e) return []
-        if (e.expression) return collect(e.expression)
-        if (e.value && e.type !== 'BinaryOp') return collect(e.value)
-        if (e.type === 'BinaryOp' && e.operator === '|') {
-            return [...collect(e.left), ...collect(e.right)]
-        }
-        if (e.type === 'Namespace' && e.path?.length > 0) {
-            return [`${typeName}::${e.path[e.path.length - 1]}`]
-        }
-        return []
-    }
-    return collect(expr)
 }
 
 function parseIntLiteral(n: any): number {

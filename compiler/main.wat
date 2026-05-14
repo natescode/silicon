@@ -170,9 +170,8 @@
       (local.set $i (i32.add (local.get $i) (i32.const 1)))
       (br $next))))
 
-
-
-(func $__start (local $addr i32)
+(func $__start 
+(local $addr i32)
 (i32.const 5)
 )
 (export "__start" (func $__start))

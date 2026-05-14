@@ -704,20 +704,23 @@ function typeOfIfCall(argTypes: SiliconType[], loc: any, ctx: Ctx): SiliconType 
 
 function typeOfMatchCall(argTypes: SiliconType[], loc: any, ctx: Ctx): SiliconType {
     // args = [discriminant, pat0, res0, pat1, res1, ...]
-    // Must have at least 3 args (discriminant + 1 arm) and an odd total count.
-    if (argTypes.length < 3 || argTypes.length % 2 === 0) {
+    // Odd total: all arms explicit, ends unreachable.
+    // Even total (≥ 4): last arg is a trailing catch-all default value (no pattern).
+    if (argTypes.length < 3) {
         ctx.errors.push({
             kind: 'Mismatch',
-            message: `@match requires an odd number of arguments ≥ 3: discriminant, pattern, result, ...`,
+            message: `@match requires at least 3 arguments: discriminant, pattern, result [, ...default]`,
             sourceLocation: loc,
         })
         return TypeUnknown
     }
 
     const discT = argTypes[0]
+    const hasDefault = argTypes.length % 2 === 0
+    const armsEnd = hasDefault ? argTypes.length - 1 : argTypes.length
     let resultT: SiliconType = TypeUnknown
 
-    for (let i = 1; i < argTypes.length; i += 2) {
+    for (let i = 1; i < armsEnd; i += 2) {
         const patT = argTypes[i]
         const resT = argTypes[i + 1] ?? TypeUnknown
 
@@ -728,10 +731,20 @@ function typeOfMatchCall(argTypes: SiliconType[], loc: any, ctx: Ctx): SiliconTy
 
         // All arm results must agree on one type.
         if (resT.kind !== 'Unknown') {
-            if (resultT.kind === 'Unknown') {
-                resultT = resT
-            } else if (!typeEquals(resultT, resT)) {
+            if (resultT.kind === 'Unknown') resultT = resT
+            else if (!typeEquals(resultT, resT)) {
                 ctx.errors.push(mismatch(resultT, resT, `@match arm ${Math.floor(i / 2)} result`, loc))
+            }
+        }
+    }
+
+    // Trailing default — must agree with the arm result type.
+    if (hasDefault) {
+        const defaultT = argTypes[argTypes.length - 1]
+        if (defaultT.kind !== 'Unknown') {
+            if (resultT.kind === 'Unknown') resultT = defaultT
+            else if (!typeEquals(resultT, defaultT)) {
+                ctx.errors.push(mismatch(resultT, defaultT, `@match default arm`, loc))
             }
         }
     }

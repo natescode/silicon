@@ -78,8 +78,11 @@ const expandOr: IRExpanderFn = (rawArgs, ctx, lower) => {
 }
 
 const expandMatch: IRExpanderFn = (rawArgs, ctx, lower, inferredType) => {
-    // @match disc, pat0, res0, pat1, res1, ...
-    // Builds a nested if/then/else chain.
+    // @match disc, pat0, res0, pat1, res1, ...       — exhaustive, ends unreachable
+    // @match disc, pat0, res0, pat1, res1, default   — trailing default (even total)
+    //
+    // Even arg count: last argument is a catch-all default with no pattern comparison.
+    // Odd arg count: all arms are explicit; falls through to (unreachable).
     if (rawArgs.length < 3) return { kind: 'Nop' }
 
     const discExpr = lower(rawArgs[0], ctx)
@@ -88,13 +91,16 @@ const expandMatch: IRExpanderFn = (rawArgs, ctx, lower, inferredType) => {
         : 'i32'
 
     function buildNested(i: number): IRExpr {
-        if (i + 1 >= rawArgs.length) return { kind: 'Nop' }
+        // Past all arms — no default provided; fall to unreachable.
+        if (i >= rawArgs.length) return { kind: 'Unreachable' }
+        // Lone last item (no paired result) = trailing default / catch-all.
+        if (i + 1 >= rawArgs.length) return lower(rawArgs[i], ctx)
+
         const pat = lower(rawArgs[i], ctx)
         const res = lower(rawArgs[i + 1], ctx)
         const eqInstr = exprWasmType(discExpr) === 'f32' ? 'f32.eq' : 'i32.eq'
         const cond: IRBinOp = { kind: 'BinOp', wasmType: 'i32', instr: eqInstr, left: discExpr, right: pat }
-        const else_: IRExpr = i + 2 < rawArgs.length ? buildNested(i + 2) : { kind: 'Unreachable' }
-        return { kind: 'If', wasmType: wt, cond, then: res, else_ }
+        return { kind: 'If', wasmType: wt, cond, then: res, else_: buildNested(i + 2) }
     }
 
     return buildNested(1)
