@@ -1,0 +1,500 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sigil Playground</title>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg:        #0d1117;
+  --surface:   #161b22;
+  --surface2:  #21262d;
+  --border:    #30363d;
+  --text:      #e6edf3;
+  --muted:     #8b949e;
+  --accent:    #a371f7;
+  --accent2:   #7c3aed;
+  --blue:      #58a6ff;
+  --green:     #3fb950;
+  --red:       #f85149;
+  --yellow:    #d29922;
+  --mono:      'JetBrains Mono', 'Fira Code', 'Cascadia Code', ui-monospace, monospace;
+}
+
+html, body { height: 100%; background: var(--bg); color: var(--text); font-family: system-ui, sans-serif; font-size: 14px; }
+
+/* ── Header ────────────────────────────────────────────────────────────── */
+header {
+  display: flex; align-items: center; gap: 16px;
+  padding: 0 20px; height: 48px;
+  background: var(--surface); border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.logo { font-size: 1rem; font-weight: 700; color: var(--accent); letter-spacing: 0.04em; user-select: none; }
+.logo span { color: var(--muted); font-weight: 400; font-size: 0.85rem; margin-left: 6px; }
+
+.header-actions { display: flex; gap: 8px; margin-left: auto; align-items: center; }
+
+button {
+  cursor: pointer; border: none; border-radius: 6px; font-size: 0.82rem; font-weight: 500;
+  padding: 6px 14px; transition: opacity 0.15s, background 0.15s;
+}
+button:hover { opacity: 0.85; }
+button:active { opacity: 0.7; }
+button:disabled { opacity: 0.4; cursor: not-allowed; }
+
+#btn-compile {
+  background: var(--accent); color: #fff; padding: 7px 18px; font-size: 0.88rem;
+}
+#btn-clear-console {
+  background: var(--surface2); color: var(--muted); border: 1px solid var(--border);
+}
+
+.status-dot {
+  width: 8px; height: 8px; border-radius: 50%; background: var(--border); flex-shrink: 0;
+}
+.status-dot.ok  { background: var(--green); }
+.status-dot.err { background: var(--red); }
+.status-dot.busy { background: var(--yellow); animation: pulse 1s infinite; }
+
+@keyframes pulse { 0%,100% { opacity: 1 } 50% { opacity: 0.3 } }
+
+/* ── Main layout ───────────────────────────────────────────────────────── */
+.layout {
+  display: flex; flex-direction: column;
+  height: calc(100vh - 48px);
+}
+
+/* Top half: editor panes */
+.editors {
+  display: grid; grid-template-columns: 1fr 1fr;
+  flex: 1 1 0; min-height: 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.pane {
+  display: flex; flex-direction: column; min-height: 0;
+  border-right: 1px solid var(--border);
+}
+.pane:last-child { border-right: none; }
+
+.pane-header {
+  display: flex; align-items: center; gap: 8px;
+  padding: 6px 14px; background: var(--surface);
+  border-bottom: 1px solid var(--border); flex-shrink: 0;
+  font-size: 0.75rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em;
+}
+.pane-header .lang-badge {
+  background: var(--accent2); color: #fff; padding: 1px 7px; border-radius: 3px;
+  font-size: 0.68rem; letter-spacing: 0.08em; text-transform: uppercase;
+}
+
+textarea#source {
+  flex: 1; background: var(--bg); color: var(--text);
+  border: none; outline: none; resize: none;
+  font-family: var(--mono); font-size: 0.85rem; line-height: 1.6;
+  padding: 14px 16px; tab-size: 4;
+}
+textarea#source::placeholder { color: var(--border); }
+
+#wat-output {
+  flex: 1; overflow: auto; background: var(--bg);
+  font-family: var(--mono); font-size: 0.82rem; line-height: 1.6;
+  padding: 14px 16px; color: var(--muted); white-space: pre;
+}
+#wat-output .kw  { color: #ff7b72; }
+#wat-output .fn  { color: var(--blue); }
+#wat-output .num { color: #79c0ff; }
+#wat-output .comment { color: #484f58; }
+
+/* ── Bottom section ─────────────────────────────────────────────────────── */
+.bottom {
+  display: flex; flex-direction: column; flex-shrink: 0;
+  max-height: 45vh; min-height: 160px;
+}
+
+/* Exports panel */
+#exports-panel {
+  background: var(--surface); border-bottom: 1px solid var(--border);
+  padding: 10px 16px; overflow-y: auto; max-height: 180px;
+}
+#exports-panel:empty { display: none; }
+
+.exports-label {
+  font-size: 0.72rem; color: var(--muted); text-transform: uppercase;
+  letter-spacing: 0.06em; margin-bottom: 8px;
+}
+
+.export-row {
+  display: flex; align-items: center; flex-wrap: wrap; gap: 8px;
+  padding: 6px 0; border-bottom: 1px solid var(--border);
+}
+.export-row:last-child { border-bottom: none; }
+
+.fn-sig {
+  font-family: var(--mono); font-size: 0.82rem; color: var(--blue);
+  min-width: 200px;
+}
+
+.param-wrap { display: flex; gap: 6px; flex-wrap: wrap; }
+
+.param-field {
+  display: flex; flex-direction: column; gap: 2px;
+}
+.param-label {
+  font-size: 0.68rem; color: var(--muted); font-family: var(--mono);
+}
+.param-field input {
+  background: var(--bg); color: var(--text); border: 1px solid var(--border);
+  border-radius: 4px; padding: 4px 8px; font-family: var(--mono); font-size: 0.82rem;
+  width: 90px; outline: none;
+}
+.param-field input:focus { border-color: var(--accent); }
+
+.btn-call {
+  background: var(--surface2); color: var(--green);
+  border: 1px solid var(--border); padding: 5px 12px; font-size: 0.8rem;
+}
+.btn-call:hover { background: var(--green); color: #000; border-color: var(--green); }
+
+.call-result {
+  font-family: var(--mono); font-size: 0.82rem; color: var(--green); margin-left: 4px;
+}
+
+/* Error banner */
+#error-banner {
+  background: #2d1117; border: 1px solid var(--red); border-radius: 6px;
+  padding: 10px 14px; margin: 8px 16px 0;
+  font-family: var(--mono); font-size: 0.8rem; color: var(--red);
+  white-space: pre-wrap; display: none;
+}
+
+/* Console */
+.console-header {
+  display: flex; align-items: center; gap: 8px;
+  padding: 6px 14px; background: var(--surface);
+  border-top: 1px solid var(--border); border-bottom: 1px solid var(--border);
+  font-size: 0.72rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em;
+}
+
+#console {
+  flex: 1; overflow-y: auto; background: var(--bg);
+  font-family: var(--mono); font-size: 0.82rem; line-height: 1.7;
+  padding: 10px 16px; color: var(--text);
+}
+
+.console-line { display: flex; gap: 8px; }
+.console-line .prefix { color: var(--accent); user-select: none; }
+.console-line .msg    { color: var(--text); }
+.console-line.print .prefix { color: var(--muted); }
+.console-line.print .msg    { color: var(--muted); }
+.console-line.err   .msg    { color: var(--red); }
+.console-line.result .msg   { color: var(--green); }
+
+.console-empty { color: var(--border); font-style: italic; padding: 4px 0; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">⬡ Sigil <span>Playground</span></div>
+  <div class="header-actions">
+    <div class="status-dot" id="status-dot"></div>
+    <button id="btn-clear-console">Clear Console</button>
+    <button id="btn-compile">▶ Compile</button>
+  </div>
+</header>
+
+<div class="layout">
+  <div class="editors">
+    <div class="pane">
+      <div class="pane-header"><span class="lang-badge">silicon</span> Source</div>
+      <textarea id="source" spellcheck="false">@type_sum Direction := North | South | East | West;
+
+@let dirCode d:Direction := {
+    &@match d,
+        Direction::North, { 0 },
+        Direction::South, { 1 },
+        Direction::East,  { 2 },
+        { 3 }
+};
+
+@let clamp v:Int, lo:Int, hi:Int := {
+    &@if v < lo, { &@return lo };
+    &@if v > hi, { &@return hi };
+    v
+};
+
+@let sumTo n:Int := {
+    @var total:Int := 0;
+    @var i:Int := 1;
+    &@loop i <= n, {
+        total = total + i;
+        i = i + 1;
+    };
+    total
+};
+
+@export dirCode;
+@export clamp;
+@export sumTo;
+</textarea>
+    </div>
+    <div class="pane">
+      <div class="pane-header"><span class="lang-badge">wat</span> Output</div>
+      <div id="wat-output"><span style="color:var(--border);font-style:italic">Click ▶ Compile to see output</span></div>
+    </div>
+  </div>
+
+  <div class="bottom">
+    <div id="error-banner"></div>
+    <div id="exports-panel"></div>
+
+    <div class="console-header">
+      Console
+    </div>
+    <div id="console">
+      <div class="console-empty">No output yet. Compile and call an exported function.</div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── State ──────────────────────────────────────────────────────────────────
+let wasmInstance = null
+let wasmExports = []          // ExportInfo[] from last compile
+let printBuffer = []          // captured print() calls
+
+// ── DOM refs ──────────────────────────────────────────────────────────────
+const btnCompile    = document.getElementById('btn-compile')
+const btnClearConsole = document.getElementById('btn-clear-console')
+const statusDot     = document.getElementById('status-dot')
+const watOutput     = document.getElementById('wat-output')
+const exportsPanel  = document.getElementById('exports-panel')
+const errorBanner   = document.getElementById('error-banner')
+const consoleEl     = document.getElementById('console')
+
+// ── Utilities ─────────────────────────────────────────────────────────────
+function setStatus(state) {  // 'idle' | 'busy' | 'ok' | 'err'
+  statusDot.className = 'status-dot' + (state !== 'idle' ? ' ' + state : '')
+}
+
+function showError(msg) {
+  errorBanner.textContent = msg
+  errorBanner.style.display = 'block'
+  setStatus('err')
+}
+function clearError() {
+  errorBanner.style.display = 'none'
+  errorBanner.textContent = ''
+}
+
+function log(msg, type = 'info') {
+  const wasEmpty = consoleEl.querySelector('.console-empty')
+  if (wasEmpty) wasEmpty.remove()
+
+  const line = document.createElement('div')
+  line.className = `console-line ${type}`
+
+  const prefix = document.createElement('span')
+  prefix.className = 'prefix'
+  prefix.textContent = type === 'print' ? '📤' : type === 'err' ? '✖' : type === 'result' ? '=' : '›'
+
+  const msgEl = document.createElement('span')
+  msgEl.className = 'msg'
+  msgEl.textContent = msg
+
+  line.append(prefix, msgEl)
+  consoleEl.appendChild(line)
+  consoleEl.scrollTop = consoleEl.scrollHeight
+}
+
+// ── WAT syntax highlighting (lightweight) ─────────────────────────────────
+function highlightWat(text) {
+  // Escape HTML first
+  const escaped = text
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+
+  return escaped
+    .replace(/^(;;.*)$/gm, '<span class="comment">$1</span>')
+    .replace(/\b(func|module|import|export|memory|global|param|result|local|mut)\b/g, '<span class="kw">$1</span>')
+    .replace(/\b(i32|f32|i64|f64|void)\b/g, '<span class="num">$1</span>')
+    .replace(/\$[\w.]+/g, '<span class="fn">$&</span>')
+    .replace(/\b(\d+(?:\.\d+)?)\b/g, '<span class="num">$1</span>')
+}
+
+// ── Compile ────────────────────────────────────────────────────────────────
+btnCompile.addEventListener('click', compile)
+document.getElementById('source').addEventListener('keydown', e => {
+  if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') compile()
+})
+
+async function compile() {
+  clearError()
+  wasmInstance = null
+  exportsPanel.innerHTML = ''
+  btnCompile.disabled = true
+  setStatus('busy')
+  watOutput.innerHTML = '<span style="color:var(--muted);font-style:italic">Compiling…</span>'
+
+  const source = document.getElementById('source').value
+
+  let data
+  try {
+    const res = await fetch('/compile', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ source }),
+    })
+    data = await res.json()
+  } catch (e) {
+    showError('Network error: ' + e.message)
+    watOutput.innerHTML = ''
+    btnCompile.disabled = false
+    return
+  }
+
+  btnCompile.disabled = false
+
+  if (!data.success) {
+    showError(data.error ?? 'Unknown error')
+    watOutput.innerHTML = ''
+    return
+  }
+
+  // Display highlighted WAT.
+  watOutput.innerHTML = highlightWat(data.wat)
+
+  // Instantiate WASM module.
+  printBuffer = []
+  try {
+    const wasmBytes = Uint8Array.from(atob(data.wasm), c => c.charCodeAt(0))
+    const imports = {
+      env: {
+        print: (v) => {
+          printBuffer.push(v)
+          log(`print(${v})`, 'print')
+        },
+        read: () => 0,
+      },
+    }
+    const { instance } = await WebAssembly.instantiate(wasmBytes, imports)
+    wasmInstance = instance
+    wasmExports = data.exports ?? []
+    renderExports(wasmExports, instance)
+    setStatus('ok')
+    log(`Compiled OK — ${wasmExports.length} export(s) ready`, 'info')
+  } catch (e) {
+    showError('WASM instantiation failed: ' + e.message)
+    setStatus('err')
+  }
+}
+
+// ── Exports panel ─────────────────────────────────────────────────────────
+function renderExports(exports, instance) {
+  exportsPanel.innerHTML = ''
+  if (exports.length === 0) return
+
+  const label = document.createElement('div')
+  label.className = 'exports-label'
+  label.textContent = 'Exported Functions'
+  exportsPanel.appendChild(label)
+
+  for (const exp of exports) {
+    const row = document.createElement('div')
+    row.className = 'export-row'
+
+    // Signature label
+    const sig = document.createElement('span')
+    sig.className = 'fn-sig'
+    const paramStr = exp.params.map(p => `${p.name}: ${p.type}`).join(', ')
+    sig.textContent = `${exp.name}(${paramStr}) → ${exp.result}`
+    row.appendChild(sig)
+
+    // Parameter inputs
+    const paramWrap = document.createElement('div')
+    paramWrap.className = 'param-wrap'
+    const inputs = []
+    for (const param of exp.params) {
+      const field = document.createElement('div')
+      field.className = 'param-field'
+
+      const lbl = document.createElement('span')
+      lbl.className = 'param-label'
+      lbl.textContent = `${param.name}: ${param.type}`
+
+      const inp = document.createElement('input')
+      inp.type = 'text'
+      inp.placeholder = param.wasmType === 'f32' ? '0.0' : '0'
+      inp.className = 'param-input'
+      inp.addEventListener('keydown', e => { if (e.key === 'Enter') callBtn.click() })
+
+      field.append(lbl, inp)
+      paramWrap.appendChild(field)
+      inputs.push({ inp, wasmType: param.wasmType, name: param.name })
+    }
+    row.appendChild(paramWrap)
+
+    // Result display
+    const resultSpan = document.createElement('span')
+    resultSpan.className = 'call-result'
+
+    // Call button
+    const callBtn = document.createElement('button')
+    callBtn.className = 'btn-call'
+    callBtn.textContent = '▶ Call'
+    callBtn.addEventListener('click', () => {
+      if (!wasmInstance) { log('No compiled module — hit Compile first', 'err'); return }
+      callExport(exp, inputs, resultSpan)
+    })
+
+    row.append(callBtn, resultSpan)
+    exportsPanel.appendChild(row)
+  }
+}
+
+function callExport(exp, inputs, resultSpan) {
+  const args = inputs.map(({ inp, wasmType, name }) => {
+    const raw = inp.value.trim()
+    if (raw === '') { log(`${name} is empty`, 'err'); return NaN }
+    return wasmType === 'f32' ? parseFloat(raw) : parseInt(raw, 10)
+  })
+
+  if (args.some(Number.isNaN)) return
+
+  try {
+    const fn = wasmInstance.exports[exp.name]
+    if (typeof fn !== 'function') { log(`${exp.name} is not a function export`, 'err'); return }
+
+    printBuffer = []
+    const raw = fn(...args)
+
+    const argStr = inputs.map(({ inp }) => inp.value.trim()).join(', ')
+    const ret = exp.wasmResult === 'void' ? '(void)' : formatResult(raw, exp.wasmResult)
+    resultSpan.textContent = '→ ' + ret
+    log(`${exp.name}(${argStr}) = ${ret}`, 'result')
+  } catch (e) {
+    log(`${exp.name} threw: ${e.message}`, 'err')
+    resultSpan.textContent = ''
+  }
+}
+
+function formatResult(value, wasmType) {
+  if (wasmType === 'f32') {
+    // JS returns a double; round to 6 significant figures to avoid noise.
+    return Number(value.toPrecision(6)).toString()
+  }
+  return String(value)
+}
+
+// ── Clear console ──────────────────────────────────────────────────────────
+btnClearConsole.addEventListener('click', () => {
+  consoleEl.innerHTML = '<div class="console-empty">Console cleared.</div>'
+  document.querySelectorAll('.call-result').forEach(el => el.textContent = '')
+})
+</script>
+</body>
+</html>

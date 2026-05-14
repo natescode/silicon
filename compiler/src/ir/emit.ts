@@ -94,7 +94,7 @@ export function emitExpr(e: IRExpr): string {
             return `(global.get $${e.name})`
 
         case 'BinOp':
-            return `${emitExpr(e.left)}\n${emitExpr(e.right)}\n${e.instr}`
+            return `(${e.instr} ${emitExpr(e.left)} ${emitExpr(e.right)})`
 
         case 'Call':
             return emitCall(e)
@@ -115,7 +115,7 @@ export function emitExpr(e: IRExpr): string {
             return `(br $cont_${e.id})`
 
         case 'Return':
-            return e.value ? `${emitExpr(e.value)}\nreturn` : 'return'
+            return e.value ? `(return ${emitExpr(e.value)})` : '(return)'
 
         case 'Nop':
             return ''
@@ -129,12 +129,12 @@ function emitCall(e: IRExpr & { kind: 'Call' }): string {
     if (e.callee === ARRAY_LITERAL_CALLEE) return emitArrayLiteral(e.args)
 
     const argWat = e.args.map(emitExpr).join('\n')
+    const argStr = e.args.map(emitExpr).join(' ')
     if (e.callKind === 'instr') {
-        // Inline WASM instruction: push args then emit instruction.
-        return argWat ? `${argWat}\n${e.callee}` : e.callee
+        // Inline WASM instruction in fully-folded form.
+        return argStr ? `(${e.callee} ${argStr})` : `(${e.callee})`
     }
     // User function call.
-    const argStr = e.args.map(a => emitExpr(a)).join(' ')
     return argStr ? `(call $${e.callee} ${argStr})` : `(call $${e.callee})`
 }
 
@@ -164,9 +164,7 @@ function emitLoop(e: IRExpr & { kind: 'Loop' }): string {
     return [
         `(block $brk_${id}`,
         `  (loop $cont_${id}`,
-        `    (br_if $brk_${id} (i32.eqz`,
-        `      ${condWat}`,
-        `    ))`,
+        `    (br_if $brk_${id} (i32.eqz ${condWat}))`,
         `    ${bodyWat}`,
         `    (br $cont_${id})`,
         `  )`,
@@ -199,9 +197,9 @@ function emitArrayLiteral(args: IRExpr[]): string {
 export function emitStmt(s: IRStmt): string {
     switch (s.kind) {
         case 'LocalSet':
-            return `${emitExpr(s.value)}\nlocal.set $${s.name}`
+            return `(local.set $${s.name} ${emitExpr(s.value)})`
         case 'GlobalSet':
-            return `${emitExpr(s.value)}\nglobal.set $${s.name}`
+            return `(global.set $${s.name} ${emitExpr(s.value)})`
         case 'ExprStmt':
             return emitExpr(s.expr)
     }

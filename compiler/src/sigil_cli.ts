@@ -4,13 +4,14 @@ import * as fs from "node:fs/promises"
 import parse from './parser'
 import { addToAstSemantics, type ASTNode, type Program } from './ast'
 import { compileToWat } from './codegen'
+import { watToWasm } from './codegen/toWasm'
 import { elaborate, buildStrataRegistry } from './elaborator'
 import { typecheck, formatTypeError } from './types'
 import { siliconGrammar } from './grammar'
 
 const help = `Sigil: the Official Silicon compiler
 
-Usage: sgl [--strata <file.si>]... <main.si>
+Usage: sgl [--strata <file.si>]... [--wasm] <main.si>
 
 Compiles a Silicon (.si) source file to WebAssembly text format (WAT).
 External strata libraries can be loaded with --strata before the main file.
@@ -18,18 +19,21 @@ External strata libraries can be loaded with --strata before the main file.
 Flags:
   --strata <file>   Load strata definitions from <file> before compiling.
                     May be specified multiple times.
+  --wasm            Also emit main.wasm binary (requires binaryen).
 
 Output files (written to current directory):
   main.wat   WebAssembly text format (assemble with wat2wasm)
   ast.json   Type-annotated AST (for debugging)
+  main.wasm  WebAssembly binary (only with --wasm)
 
 Examples:
   sgl main.si
+  sgl --wasm main.si
   sgl --strata ops.si main.si
   sgl --strata lib/math.si --strata lib/strings.si main.si
 `
 
-async function compileFile(filename: string, strataFiles: string[]) {
+async function compileFile(filename: string, strataFiles: string[], emitWasm: boolean) {
     const source = await fs.readFile(filename, 'utf-8')
 
     // Load extra strata sources from --strata files.
@@ -55,20 +59,28 @@ async function compileFile(filename: string, strataFiles: string[]) {
 
     await Bun.write('ast.json', JSON.stringify(typedAST, null, 2))
     await Bun.write('main.wat', wat)
-
     console.log(`Compiled ${filename} → main.wat`)
+
+    if (emitWasm) {
+        const binary = await watToWasm(wat)
+        await Bun.write('main.wasm', binary)
+        console.log(`Compiled ${filename} → main.wasm (${binary.byteLength} bytes)`)
+    }
 }
 
-// Parse CLI args: collect --strata flags and the positional main file.
+// Parse CLI args: collect --strata flags, --wasm flag, and the positional main file.
 const args = process.argv.slice(2)
 const strataFiles: string[] = []
 let mainFile: string | undefined
+let emitWasm = false
 
 for (let i = 0; i < args.length; i++) {
     if (args[i] === '--strata') {
         const next = args[++i]
         if (!next) { console.error('--strata requires a file argument'); process.exit(1) }
         strataFiles.push(next)
+    } else if (args[i] === '--wasm') {
+        emitWasm = true
     } else if (!mainFile) {
         mainFile = args[i]
     } else {
@@ -82,7 +94,7 @@ if (!mainFile) {
 }
 
 try {
-    await compileFile(mainFile, strataFiles)
+    await compileFile(mainFile, strataFiles, emitWasm)
 } catch (e) {
     console.error(`\x1b[31mError: ${e}\x1b[39m`)
     process.exit(1)
