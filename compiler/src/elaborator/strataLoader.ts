@@ -25,12 +25,14 @@ import {
   registerElaborator,
   registerTypedOperator,
   registerTypedKeyword,
+  registerExpander,
   type ElaboratorRegistry,
 } from './registry'
 import { StrataType, type StrataNode, type StrataData, strataTypeFromIntrinsic } from './strataenum'
 import { intrinsicSignature } from '../types/intrinsicSig'
 import { registerDefKind, type CodegenKind } from './defkinds'
 import { loadBuiltinStrata } from '../strata/index'
+import { builtinExpanders } from '../strata/expanders'
 import parse from '../parser'
 import addToAstSemantics from '../ast/toAst'
 import siliconGrammar from '../grammar/SiliconGrammar'
@@ -81,6 +83,11 @@ export function buildStrataRegistry(
       elab = element.value as Elaboration
     }
     if (elab) registerElaboration(registry, elab)
+  }
+
+  // Phase D: register built-in IR expanders (control-flow strata lowering hooks).
+  for (const [intrinsic, fn] of Object.entries(builtinExpanders)) {
+    registerExpander(registry, intrinsic, fn)
   }
 
   return registry

@@ -13,7 +13,7 @@
  */
 
 import { wasmTypeOf } from '../types/types'
-import { type SiliconType, TypeUnknown } from '../types/types'
+import { type SiliconType } from '../types/types'
 import { type ElaboratorRegistry, lookupTypedOperator, lookupKeyword, lookupTypedKeyword, lookupDefKindEntry } from '../elaborator/registry'
 import { getWasmIntrinsic } from '../intrinsics'
 import type { FunctionSig } from '../types/typechecker'
@@ -21,7 +21,7 @@ import type {
     WasmValType, WasmType,
     IRModule, IRFunction, IRGlobal, IRImport, IRDataSegment, IRExport,
     IRExpr, IRStmt, IRParam, IRLocal,
-    IRConst, IRLocalGet, IRGlobalGet, IRBinOp, IRCall,
+    IRConst, IRLocalGet, IRGlobalGet, IRCall,
     IRBlock, IRIf, IRLoop, IRBreak, IRContinue, IRNop, IRUnreachable, IRExprStmt,
 } from './nodes'
 
@@ -525,105 +525,23 @@ function lowerBuiltinCall(name: string, rawArgs: any[], ctx: LowerCtx, inferredT
     const kwEntry = lookupTypedKeyword(ctx.registry, name, firstArgKind) ?? lookupKeyword(ctx.registry, name)
     const intrinsic = kwEntry?.data?.intrinsic ?? ''
 
-    switch (intrinsic) {
-        case 'WASM::control_if': {
-            const [condN, thenN, elseN] = rawArgs
-            const cond = lowerExpr(condN, ctx)
-            const then = lowerExpr(thenN, ctx)
-            const else_ = elseN ? lowerExpr(elseN, ctx) : undefined
-            const wt = else_ ? exprWasmType(then) : 'void'
-            return { kind: 'If', wasmType: wt, cond, then, else_ }
-        }
-
-        case 'WASM::control_loop': {
-            const [condN, bodyN] = rawArgs
-            const id = ctx.loopCount.n++
-            ctx.loopStack.push(id)
-            const cond = lowerExpr(condN, ctx)
-            const body = lowerExpr(bodyN, ctx)
-            ctx.loopStack.pop()
-            return { kind: 'Loop', id, cond, body }
-        }
-
-        case 'WASM::control_break': {
-            const id = ctx.loopStack.at(-1)
-            if (id === undefined) throw new IRLowerError('@break outside @loop')
-            return { kind: 'Break', id }
-        }
-
-        case 'WASM::control_continue': {
-            const id = ctx.loopStack.at(-1)
-            if (id === undefined) throw new IRLowerError('@continue outside @loop')
-            return { kind: 'Continue', id }
-        }
-
-        case 'WASM::control_return': {
-            const value = rawArgs[0] ? lowerExpr(rawArgs[0], ctx) : undefined
-            return { kind: 'Return', value }
-        }
-
-        case 'WASM::control_and': {
-            const [leftN, rightN] = rawArgs
-            const left = lowerExpr(leftN, ctx)
-            const right = lowerExpr(rightN, ctx)
-            return { kind: 'If', wasmType: 'i32', cond: left, then: right, else_: { kind: 'Const', wasmType: 'i32', value: 0 } }
-        }
-
-        case 'WASM::control_or': {
-            const [leftN, rightN] = rawArgs
-            const left = lowerExpr(leftN, ctx)
-            const right = lowerExpr(rightN, ctx)
-            return { kind: 'If', wasmType: 'i32', cond: left, then: { kind: 'Const', wasmType: 'i32', value: 1 }, else_: right }
-        }
-
-        case 'WASM::control_match': {
-            return lowerMatchCall(rawArgs, ctx, inferredType)
-        }
-
-        default: {
-            // Generic builtin (e.g. @toInt, @toFloat, user-defined keyword strata).
-            const intr = intrinsic ? getWasmIntrinsic(intrinsic) : undefined
-            const args = rawArgs.map((a: any) => lowerExpr(a, ctx))
-            const wt = resolveWasmType(inferredType as SiliconType | undefined,
-                intr ? (intrinsic.includes('f32') ? 'f32' : 'i32') : 'i32')
-            if (intr) {
-                return { kind: 'Call', wasmType: wt, callee: intr.wasmInstr, callKind: 'instr', args }
-            }
-            // Unknown builtin — call by name.
-            const kwName = watId(name.replace(/^@/, ''))
-            return { kind: 'Call', wasmType: wt, callee: kwName, callKind: 'user', args }
-        }
-    }
-}
-
-function lowerMatchCall(rawArgs: any[], ctx: LowerCtx, inferredType?: any): IRExpr {
-    // @match disc, pat0, res0, pat1, res1, ...
-    // Builds nested if/then/else: if disc==pat0 then res0 else (if disc==pat1 ...)
-    if (rawArgs.length < 3) return nop()
-
-    const discExpr = lowerExpr(rawArgs[0], ctx)
-    const wt = resolveWasmType(inferredType as SiliconType | undefined, 'i32')
-
-    function buildNested(i: number): IRExpr {
-        if (i + 1 >= rawArgs.length) return { kind: 'Nop' }
-        const pat = lowerExpr(rawArgs[i], ctx)
-        const res = lowerExpr(rawArgs[i + 1], ctx)
-        const eqInstr = exprWasmType(discExpr) === 'f32' ? 'f32.eq' : 'i32.eq'
-        const cond: IRBinOp = {
-            kind: 'BinOp',
-            wasmType: 'i32',
-            instr: eqInstr,
-            left: discExpr,
-            right: pat,
-        }
-        // If there are more arms, recurse; otherwise emit unreachable as the final else.
-        const else_: IRExpr = i + 2 < rawArgs.length
-            ? buildNested(i + 2)
-            : { kind: 'Unreachable' }
-        return { kind: 'If', wasmType: wt, cond, then: res, else_ }
+    // Pluggable expander path: strata register expanders for their intrinsic.
+    const expander = ctx.registry.expanders.get(intrinsic)
+    if (expander) {
+        return expander(rawArgs, ctx, lowerExpr, inferredType)
     }
 
-    return buildNested(1)
+    // Generic builtin (e.g. @toInt, @toFloat, user-defined keyword strata).
+    const intr = intrinsic ? getWasmIntrinsic(intrinsic) : undefined
+    const args = rawArgs.map((a: any) => lowerExpr(a, ctx))
+    const wt = resolveWasmType(inferredType as SiliconType | undefined,
+        intr ? (intrinsic.includes('f32') ? 'f32' : 'i32') : 'i32')
+    if (intr) {
+        return { kind: 'Call', wasmType: wt, callee: intr.wasmInstr, callKind: 'instr', args }
+    }
+    // Unknown builtin — call by name (user-defined stratum that calls a Silicon function).
+    const kwName = watId(name.replace(/^@/, ''))
+    return { kind: 'Call', wasmType: wt, callee: kwName, callKind: 'user', args }
 }
 
 function lowerBlock(n: any, ctx: LowerCtx): IRExpr {
@@ -751,7 +669,7 @@ function lowerArrayLiteral(n: any, ctx: LowerCtx): IRExpr {
 
 function nop(): IRNop { return { kind: 'Nop' } }
 
-function exprWasmType(e: IRExpr): WasmType {
+export function exprWasmType(e: IRExpr): WasmType {
     switch (e.kind) {
         case 'Const':    return e.wasmType
         case 'LocalGet': return e.wasmType

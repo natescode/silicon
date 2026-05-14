@@ -18,6 +18,7 @@
 
 import { type StrataNode } from './strataenum'
 import { type DefKindRegistry, type DefKindEntry, createDefKindRegistry, lookupDefKind as _lookupDefKind } from './defkinds'
+import type { IRExpanderFn } from '../ir/expander'
 
 /**
  * Central registry mapping operator/keyword symbols to StrataNode semantics
@@ -27,6 +28,8 @@ export interface ElaboratorRegistry {
     operators: Record<string, StrataNode>    // "+" → StrataNode
     keywords: Record<string, StrataNode>     // "@fn" → StrataNode (future)
     defKinds: DefKindRegistry                // "@let" → DefKindEntry
+    /** Intrinsic name → IR expander fn (bypasses the generic lowering path). */
+    expanders: Map<string, IRExpanderFn>
 }
 
 /**
@@ -38,7 +41,21 @@ export function createElaboratorRegistry(): ElaboratorRegistry {
         operators: {},
         keywords: {},
         defKinds: createDefKindRegistry(),
+        expanders: new Map(),
     }
+}
+
+/**
+ * Register a pluggable IR expander for a WASM intrinsic name.
+ * When `lowerBuiltinCall` encounters a strata whose intrinsic matches,
+ * it calls `fn` instead of the generic instruction-emission path.
+ */
+export function registerExpander(
+    registry: ElaboratorRegistry,
+    intrinsic: string,
+    fn: IRExpanderFn,
+): void {
+    registry.expanders.set(intrinsic, fn)
 }
 
 /**
@@ -181,5 +198,6 @@ export function mergeRegistries(target: ElaboratorRegistry, source: ElaboratorRe
         operators: { ...target.operators, ...source.operators },
         keywords: { ...target.keywords, ...source.keywords },
         defKinds: { ...target.defKinds, ...source.defKinds },
+        expanders: new Map([...target.expanders, ...source.expanders]),
     }
 }
