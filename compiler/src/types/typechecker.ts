@@ -201,7 +201,8 @@ function preRegisterDefinitions(elements: any[], ctx: Ctx): void {
         if (!def || !def.name?.name) continue
         const kw: string = def.keyword ?? ''
         // Type declarations were handled above; skip them here.
-        if (kw === '@type_alias' || kw === '@type_distinct' || kw === '@type_sum') continue
+        // @export references an existing name — never defines new params.
+        if (kw === '@type_alias' || kw === '@type_distinct' || kw === '@type_sum' || kw === '@export') continue
 
         const paramTypes: SiliconType[] = []
         for (const p of def.params || []) {
@@ -445,9 +446,9 @@ function checkAssignment(a: any, ctx: Ctx): SiliconType {
 function checkDefinition(d: any, ctx: Ctx): SiliconType {
     const keyword: string = d.keyword ?? ''
 
-    // Type declarations are fully handled at pre-registration time; they emit
-    // no WAT and have no body to check.
-    if (keyword === '@type_alias' || keyword === '@type_distinct' || keyword === '@type_sum') {
+    // Type declarations and export markers are handled at pre-registration time
+    // or by the IR; they have no body to check and must not overwrite existing sigs.
+    if (keyword === '@type_alias' || keyword === '@type_distinct' || keyword === '@type_sum' || keyword === '@export') {
         return TypeUnknown
     }
 
