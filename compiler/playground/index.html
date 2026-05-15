@@ -355,17 +355,17 @@ const siliconTheme = EditorView.theme({
 const INITIAL_SOURCE = `# Modules are auto-resolved from their namespace prefix.
 # web:: maps to the built-in web environment module.
 
-@let greet msg:String := {
+@fn greet msg:String := {
     @local result := ('Hello, ' ++ msg);
     &web::console_log_str result;
     result
 };
 
-@let hypotenuse a:Float, b:Float := {
+@fn hypotenuse a:Float, b:Float := {
     &web::math_sqrt ((&web::math_pow a, 2.0) + (&web::math_pow b, 2.0))
 };
 
-@let roll := {
+@fn roll := {
     &web::math_random
 };
 

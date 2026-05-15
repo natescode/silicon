@@ -1892,7 +1892,7 @@ test("Round 43: @type_sum lowering uses def expander (sum-type globals still emi
 
 test("Round 46: web::console_log_str auto-generates WASM import from module registry", () => {
     const result = compileSource(`
-        @let greet msg:String := {
+        @fn greet msg:String := {
             &web::console_log_str msg;
             msg
         };
@@ -1904,7 +1904,7 @@ test("Round 46: web::console_log_str auto-generates WASM import from module regi
 
 test("Round 46: web::math_sqrt auto-generates float import", () => {
     const result = compileSource(`
-        @let root x:Float := {
+        @fn root x:Float := {
             &web::math_sqrt x
         };
     `)
@@ -1915,7 +1915,7 @@ test("Round 46: web::math_sqrt auto-generates float import", () => {
 
 test("Round 46: web::math_pow with two Float args is deduplicated across multiple calls", () => {
     const result = compileSource(`
-        @let hyp a:Float, b:Float := {
+        @fn hyp a:Float, b:Float := {
             &web::math_sqrt ((&web::math_pow a, 2.0) + (&web::math_pow b, 2.0))
         };
     `)
@@ -1928,7 +1928,7 @@ test("Round 46: web::math_pow with two Float args is deduplicated across multipl
 test("Round 46: no @extern declaration needed for module functions", () => {
     // Previously you had to write @extern web_console_log_str ptr:String; — now it's gone.
     const result = compileSource(`
-        @let log v:Int := {
+        @fn log v:Int := {
             &web::console_log v;
             v
         };
@@ -1940,7 +1940,7 @@ test("Round 46: no @extern declaration needed for module functions", () => {
 
 test("Round 46: unknown module throws a meaningful error", () => {
     const result = compileSource(`
-        @let bad v:Int := {
+        @fn bad v:Int := {
             &nonexistent::foo v
         };
     `)

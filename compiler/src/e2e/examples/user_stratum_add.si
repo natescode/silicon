@@ -2,4 +2,4 @@
   &WASM::i32_add Node.left, Node.right;
 };
 
-@let myAdd x:Int, y:Int := x +++ y;
+@fn myAdd x:Int, y:Int := x +++ y;
