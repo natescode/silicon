@@ -212,30 +212,21 @@ textarea#source::placeholder { color: var(--border); }
   <div class="editors">
     <div class="pane">
       <div class="pane-header"><span class="lang-badge">silicon</span> Source</div>
-      <textarea id="source" spellcheck="false"># Web API bindings — declare the functions you want from the browser.
-# The "web_" prefix routes imports to the "web" WASM namespace.
-
-@extern web_console_log_str ptr:String;
-@extern web_console_log_f   v:Float;
-@extern web_math_sqrt:Float x:Float;
-@extern web_math_pow:Float  base:Float, exp:Float;
-@extern web_math_random:Float;
-@extern web_performance_now:Float;
-
-# ── Examples ──────────────────────────────────────────────────────────
+      <textarea id="source" spellcheck="false"># Modules are auto-resolved from their namespace prefix.
+# web:: maps to the built-in web environment module.
 
 @let greet msg:String := {
     @local result := ('Hello, ' ++ msg);
-    &web_console_log_str result;
+    &web::console_log_str result;
     result
 };
 
 @let hypotenuse a:Float, b:Float := {
-    &web_math_sqrt ((&web_math_pow a, 2.0) + (&web_math_pow b, 2.0))
+    &web::math_sqrt ((&web::math_pow a, 2.0) + (&web::math_pow b, 2.0))
 };
 
 @let roll := {
-    &web_math_random
+    &web::math_random
 };
 
 @export greet;

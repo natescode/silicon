@@ -17,6 +17,7 @@ import { type SiliconType } from '../types/types'
 import { type ElaboratorRegistry, lookupTypedOperator, lookupKeyword, lookupTypedKeyword, lookupDefKindEntry } from '../elaborator/registry'
 import { getWasmIntrinsic } from '../intrinsics'
 import type { FunctionSig } from '../types/typechecker'
+import type { ModuleRegistry } from '../modules/registry'
 import type {
     WasmValType, WasmType,
     IRModule, IRFunction, IRGlobal, IRImport, IRDataSegment, IRExport,
@@ -41,6 +42,10 @@ interface LowerCtx {
     functions: Map<string, FunctionSig>
     /** Strata registry for operator → WASM instruction lookup. */
     registry: ElaboratorRegistry
+    /** Module registry for namespace-qualified calls (web::*, Draw::*, etc.). */
+    moduleRegistry?: ModuleRegistry
+    /** Auto-generated imports from module calls — keyed by WAT name to deduplicate. */
+    pendingImports: Map<string, IRImport>
     /** Stack of active loop IDs — for @break / @continue. */
     loopStack: number[]
     /** Monotonically increasing loop counter for unique labels. */
@@ -105,6 +110,7 @@ export function lowerProgram(
     program: any,
     registry: ElaboratorRegistry,
     functionSigs: Map<string, FunctionSig>,
+    moduleRegistry?: ModuleRegistry,
 ): IRModule {
     const ctx: LowerCtx = {
         locals: new Map(),
@@ -112,6 +118,8 @@ export function lowerProgram(
         varNames: new Set(),
         functions: functionSigs,
         registry,
+        moduleRegistry,
+        pendingImports: new Map(),
         loopStack: [],
         loopCount: { n: 0 },
         pendingLocals: [],
@@ -180,6 +188,9 @@ export function lowerProgram(
             body: { kind: 'Block', wasmType: 'void', stmts: startStmts },
         })
     }
+
+    // Append auto-generated imports from module calls (web::*, Draw::*, …).
+    for (const imp of ctx.pendingImports.values()) imports.push(imp)
 
     return {
         kind: 'Module',
@@ -307,7 +318,7 @@ function lowerGlobal(node: any, name: string, ctx: LowerCtx): IRGlobal {
     return { kind: 'Global', name, wasmType, mutable: true, init }
 }
 
-function lowerExtern(node: any, name: string, ctx: LowerCtx): IRImport {
+function lowerExtern(node: any, name: string, _ctx: LowerCtx): IRImport {
     const params: WasmValType[] = []
     for (const p of node.params || []) {
         if (p.isLiteral || !p.typeAnnotation) continue
@@ -317,11 +328,8 @@ function lowerExtern(node: any, name: string, ctx: LowerCtx): IRImport {
     if (node.name?.typeAnnotation?.typename) {
         result = siliconTypeNameToWasm(node.name.typeAnnotation.typename)
     }
-    // Detect namespaced imports: web_xxx → env:"web" field:"xxx"
-    const nsMatch = /^(web|node)_(.+)$/.exec(name)
-    const env = nsMatch ? nsMatch[1] : 'env'
-    const field = nsMatch ? nsMatch[2] : name
-    return { kind: 'Import', env, field, name, params, result }
+    // Plain @extern always imports from the "env" host namespace.
+    return { kind: 'Import', env: 'env', field: name, name, params, result }
 }
 
 function lowerLocalDef(node: any, name: string, ctx: LowerCtx): null {
@@ -512,12 +520,18 @@ function lowerFunctionCall(n: any, ctx: LowerCtx): IRExpr {
     }
 
     // WASM intrinsic direct call (e.g. &WASM::i32_add 1, 2).
-    if (name.startsWith('WASM::')) {
+    if (name.startsWith('WASM::') || name.startsWith('IR::')) {
         const intr = getWasmIntrinsic(name)
         const args = (n.args || []).map((a: any) => lowerExpr(a, ctx))
         const inferT = n.inferredType as SiliconType | undefined
         const wt = resolveWasmType(inferT, 'i32')
         return { kind: 'Call', wasmType: wt, callee: intr?.wasmInstr ?? name, callKind: 'instr', args }
+    }
+
+    // Module namespaced call: web::console_log_str, Draw::fill_rect, etc.
+    const sepIdx = name.indexOf('::')
+    if (sepIdx !== -1) {
+        return lowerModuleCall(name, sepIdx, n, ctx)
     }
 
     // User-defined function call.
@@ -527,6 +541,43 @@ function lowerFunctionCall(n: any, ctx: LowerCtx): IRExpr {
     const wt: WasmType = sig
         ? (wasmTypeOf(sig.result) as WasmType) ?? 'void'
         : resolveWasmType(n.inferredType as SiliconType | undefined, 'void')
+    return { kind: 'Call', wasmType: wt, callee: watName, callKind: 'user', args }
+}
+
+function lowerModuleCall(name: string, sepIdx: number, n: any, ctx: LowerCtx): IRExpr {
+    const moduleName = name.slice(0, sepIdx)
+    const funcName = name.slice(sepIdx + 2)
+    const moduleEntry = ctx.moduleRegistry?.get(moduleName)
+
+    if (!moduleEntry) {
+        throw new IRLowerError(
+            `Unknown module '${moduleName}' — not found in built-in modules or ./modules/`
+        )
+    }
+    const fnSig = moduleEntry.functions.get(funcName)
+    if (!fnSig) {
+        throw new IRLowerError(
+            `Module '${moduleName}' has no function '${funcName}'`
+        )
+    }
+
+    // WAT internal name: module__function (double-underscore avoids collision with user names)
+    const watName = `${moduleName}__${funcName}`
+
+    // Register the import once per compilation (deduplicated by watName).
+    if (!ctx.pendingImports.has(watName)) {
+        ctx.pendingImports.set(watName, {
+            kind: 'Import',
+            env: moduleName,
+            field: funcName,
+            name: watName,
+            params: fnSig.params,
+            result: fnSig.result,
+        })
+    }
+
+    const args = (n.args || []).map((a: any) => lowerExpr(a, ctx))
+    const wt: WasmType = fnSig.result ?? 'void'
     return { kind: 'Call', wasmType: wt, callee: watName, callKind: 'user', args }
 }
 

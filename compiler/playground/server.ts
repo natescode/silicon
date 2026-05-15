@@ -18,6 +18,8 @@ import { watToWasm } from '../src/codegen/toWasm'
 import { elaborate, buildStrataRegistry } from '../src/elaborator'
 import { typecheck, formatTypeError, formatType, wasmTypeOf } from '../src/types'
 import { siliconGrammar } from '../src/grammar'
+import { loadModules } from '../src/modules'
+import type { FunctionSig } from '../src/types/typechecker'
 
 const __dir = dirname(fileURLToPath(import.meta.url))
 const HTML_PATH = join(__dir, 'index.html')
@@ -99,6 +101,8 @@ function collectExports(program: Program, _functions: Map<string, FunctionSig>):
 // Compiler
 // ---------------------------------------------------------------------------
 
+const moduleRegistry = loadModules(__dir)
+
 async function compileSilicon(source: string) {
     const match = parse(source)
     const ast: ASTNode = addToAstSemantics(siliconGrammar)(match).toAst()
@@ -115,10 +119,10 @@ async function compileSilicon(source: string) {
         return { success: false, error: typeErrors.map(formatTypeError).join('\n') }
     }
 
-    const wat = compileToWat(typed, registry, functions)
+    const wat = compileToWat(typed, registry, functions, moduleRegistry)
     const wasmBytes = await watToWasm(wat)
     const wasm = Buffer.from(wasmBytes).toString('base64')
-    const exports = collectExports(typed, functions)
+    const exports = collectExports(typed, functions as Map<string, FunctionSig>)
 
     return { success: true, wat, wasm, exports }
 }

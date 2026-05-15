@@ -21,6 +21,9 @@ import { compileToWat } from "../codegen/index.ts";
 import { buildStrataRegistry, elaborate } from "../elaborator/index.ts";
 import { typecheck, formatTypeError } from "../types/index.ts";
 import { siliconGrammar } from "../grammar/index.ts";
+import { loadModules } from "../modules/index.ts";
+
+const moduleRegistry = loadModules(join(import.meta.dirname, '../..'));
 
 /**
  * Helper function to compile a Silicon source string through the full pipeline
@@ -77,7 +80,7 @@ function compileSource(sourceCode: string) {
         }
 
         // Stage 3: Lower typed AST → IR → WAT
-        const wat: string = compileToWat(typedAST, registry, functions);
+        const wat: string = compileToWat(typedAST, registry, functions, moduleRegistry);
 
         return {
             success: true,
@@ -1881,4 +1884,66 @@ test("Round 43: @type_sum lowering uses def expander (sum-type globals still emi
     expect(result.wat).toContain("(global $Direction_South i32 (i32.const 1))")
     expect(result.wat).toContain("(global $Direction_East i32 (i32.const 2))")
     expect(result.wat).toContain("(global $Direction_West i32 (i32.const 3))")
+})
+
+// ---------------------------------------------------------------------------
+// Round 46: Module system and web:: namespace APIs
+// ---------------------------------------------------------------------------
+
+test("Round 46: web::console_log_str auto-generates WASM import from module registry", () => {
+    const result = compileSource(`
+        @let greet msg:String := {
+            &web::console_log_str msg;
+            msg
+        };
+    `)
+    expect(result.success).toBe(true)
+    expect(result.wat).toContain('(import "web" "console_log_str" (func $web__console_log_str (param i32)))')
+    expect(result.wat).toContain('(call $web__console_log_str')
+})
+
+test("Round 46: web::math_sqrt auto-generates float import", () => {
+    const result = compileSource(`
+        @let root x:Float := {
+            &web::math_sqrt x
+        };
+    `)
+    expect(result.success).toBe(true)
+    expect(result.wat).toContain('(import "web" "math_sqrt" (func $web__math_sqrt (param f32) (result f32)))')
+    expect(result.wat).toContain('(call $web__math_sqrt')
+})
+
+test("Round 46: web::math_pow with two Float args is deduplicated across multiple calls", () => {
+    const result = compileSource(`
+        @let hyp a:Float, b:Float := {
+            &web::math_sqrt ((&web::math_pow a, 2.0) + (&web::math_pow b, 2.0))
+        };
+    `)
+    expect(result.success).toBe(true)
+    // Import should appear exactly once even though math_pow is called twice.
+    const importMatches = result.wat!.match(/\(import "web" "math_pow"/g) ?? []
+    expect(importMatches.length).toBe(1)
+})
+
+test("Round 46: no @extern declaration needed for module functions", () => {
+    // Previously you had to write @extern web_console_log_str ptr:String; — now it's gone.
+    const result = compileSource(`
+        @let log v:Int := {
+            &web::console_log v;
+            v
+        };
+    `)
+    expect(result.success).toBe(true)
+    expect(result.wat).toContain('(import "web" "console_log"')
+    expect(result.wat).not.toContain('@extern')
+})
+
+test("Round 46: unknown module throws a meaningful error", () => {
+    const result = compileSource(`
+        @let bad v:Int := {
+            &nonexistent::foo v
+        };
+    `)
+    expect(result.success).toBe(false)
+    expect(result.error).toContain("Unknown module 'nonexistent'")
 })

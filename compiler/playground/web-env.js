@@ -2,49 +2,44 @@
  * Silicon Web Environment Library
  *
  * Provides browser/JS API bindings as WASM imports for Silicon programs.
- * Exposes a "web" namespace so @extern declarations like:
- *
- *   @extern web_console_log x:Int;
- *   @extern web_math_sin x:Float;
- *
- * get routed to (import "web" "console_log" ...) in the WAT, and this
- * library fulfils those imports at instantiation time.
+ * Fulfils the built-in "web" module — declared in src/strata/modules/web.si
+ * and auto-resolved by the compiler when Silicon code calls &web::*.
  *
  * Usage:
  *   const env = createWebEnv({ onPrint: (msg, type) => ... })
  *   const { instance } = await WebAssembly.instantiate(bytes, env.imports)
  *   env.bindInstance(instance)   // wire memory for string reads
  *
- * Available Silicon externs (declare with @extern in your Silicon source):
+ * Available via the web:: module namespace (no @extern needed in Silicon source):
  *
  *   Console
- *     @extern web_console_log   v:Int;          -- print integer
- *     @extern web_console_log_f v:Float;         -- print float
- *     @extern web_console_log_str ptr:String;     -- print length-prefixed string
- *     @extern web_console_error v:Int;           -- console.error integer
- *     @extern web_console_warn  v:Int;           -- console.warn integer
- *     @extern web_console_info  v:Int;           -- console.info integer
+ *     &web::console_log   v:Int          -- print integer
+ *     &web::console_log_f v:Float        -- print float
+ *     &web::console_log_str ptr:String   -- print length-prefixed string
+ *     &web::console_error v:Int          -- console.error integer
+ *     &web::console_warn  v:Int          -- console.warn integer
+ *     &web::console_info  v:Int          -- console.info integer
  *
  *   Math  (all f32 → f32 unless noted)
- *     @extern web_math_random:Float;             -- 0.0–1.0
- *     @extern web_math_sin   x:Float;
- *     @extern web_math_cos   x:Float;
- *     @extern web_math_tan   x:Float;
- *     @extern web_math_sqrt  x:Float;
- *     @extern web_math_log   x:Float;            -- natural log
- *     @extern web_math_exp   x:Float;
- *     @extern web_math_pow   base:Float, exp:Float;
- *     @extern web_math_atan2 y:Float, x:Float;
- *     @extern web_math_floor x:Float;
- *     @extern web_math_ceil  x:Float;
- *     @extern web_math_round x:Float;
- *     @extern web_math_abs   x:Float;
- *     @extern web_math_min   a:Float, b:Float;
- *     @extern web_math_max   a:Float, b:Float;
+ *     &web::math_random:Float            -- 0.0–1.0
+ *     &web::math_sin   x:Float
+ *     &web::math_cos   x:Float
+ *     &web::math_tan   x:Float
+ *     &web::math_sqrt  x:Float
+ *     &web::math_log   x:Float           -- natural log
+ *     &web::math_exp   x:Float
+ *     &web::math_pow   base:Float, exp:Float
+ *     &web::math_atan2 y:Float, x:Float
+ *     &web::math_floor x:Float
+ *     &web::math_ceil  x:Float
+ *     &web::math_round x:Float
+ *     &web::math_abs   x:Float
+ *     &web::math_min   a:Float, b:Float
+ *     &web::math_max   a:Float, b:Float
  *
  *   Time  (returns f32 milliseconds)
- *     @extern web_performance_now:Float;         -- high-res timer (ms)
- *     @extern web_date_now:Float;                -- ms since Unix epoch
+ *     &web::performance_now:Float        -- high-res timer (ms)
+ *     &web::date_now:Float               -- ms since Unix epoch
  */
 
 ;(function (global) {

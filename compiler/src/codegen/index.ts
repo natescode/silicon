@@ -15,6 +15,7 @@ import { lowerProgram, emitModule } from '../ir'
 import type { Program } from '../ast/astNodes'
 import type { ElaboratorRegistry } from '../elaborator/registry'
 import type { FunctionSig } from '../types/typechecker'
+import type { ModuleRegistry } from '../modules/registry'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
@@ -40,7 +41,8 @@ export function compileToWat(
     program: Program,
     registry: ElaboratorRegistry,
     functionSigs: Map<string, FunctionSig>,
+    moduleRegistry?: ModuleRegistry,
 ): string {
-    const irModule = lowerProgram(program, registry, functionSigs)
+    const irModule = lowerProgram(program, registry, functionSigs, moduleRegistry)
     return emitModule(irModule, loadStdWat())
 }
