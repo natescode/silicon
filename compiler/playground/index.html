@@ -38,6 +38,15 @@ header {
 
 .header-actions { display: flex; gap: 8px; margin-left: auto; align-items: center; }
 
+#example-select {
+  background: var(--surface2); color: var(--text);
+  border: 1px solid var(--border); border-radius: 6px;
+  padding: 5px 10px; font-size: 0.82rem;
+  cursor: pointer; outline: none; max-width: 200px;
+}
+#example-select:hover { border-color: var(--accent); }
+#example-select option { background: var(--surface2); }
+
 button {
   cursor: pointer; border: none; border-radius: 6px; font-size: 0.82rem; font-weight: 500;
   padding: 6px 14px; transition: opacity 0.15s, background 0.15s;
@@ -206,6 +215,19 @@ button:disabled { opacity: 0.4; cursor: not-allowed; }
 
 <header>
   <div class="logo">⬡ Sigil <span>Playground</span></div>
+  <select id="example-select">
+    <option value="" disabled selected>— Examples —</option>
+    <option value="empty">Empty</option>
+    <option value="hello_world">Hello World</option>
+    <option value="hypotenuse">Hypotenuse</option>
+    <option value="fibonacci">Fibonacci</option>
+    <option value="factorial">Factorial</option>
+    <option value="safe_divide">Safe Divide</option>
+    <option value="countdown">Countdown</option>
+    <option value="color_match">Color Match</option>
+    <option value="bitwise">Bitwise Ops</option>
+    <option value="math_sampler">Math Sampler</option>
+  </select>
   <div class="header-actions">
     <div class="status-dot" id="status-dot"></div>
     <button id="btn-clear-console">Clear Console</button>
@@ -394,6 +416,130 @@ const editorView = new EditorView({
         ],
     }),
     parent: document.getElementById('editor'),
+})
+
+// ── Example programs ──────────────────────────────────────────────────────
+
+const EXAMPLES = {
+    empty: '',
+
+    hello_world:
+`# Concatenate a greeting string and print it to the console.
+# Call greet("World") in the exports panel below.
+
+@fn greet msg:String := {
+    @local result := ('Hello, ' ++ msg);
+    &web::console_log_str result;
+    result
+};
+
+@export greet;`,
+
+    hypotenuse:
+`# Pythagorean theorem using web math APIs.
+# c = sqrt(a² + b²)
+
+@fn hypotenuse a:Float, b:Float := {
+    &web::math_sqrt ((&web::math_pow a, 2.0) + (&web::math_pow b, 2.0))
+};
+
+@fn roll := { &web::math_random };
+
+@export hypotenuse;
+@export roll;`,
+
+    fibonacci:
+`# Recursive Fibonacci sequence.
+# Try: fib(10) = 55, fib(20) = 6765
+
+@fn fib n:Int := {
+    &@if n <= 1, { &@return n };
+    (&fib (n - 1)) + (&fib (n - 2))
+};
+
+@export fib;`,
+
+    factorial:
+`# Recursive factorial.
+# Try: factorial(10) = 3628800
+
+@fn factorial n:Int := {
+    &@if n <= 1, { &@return 1 };
+    n * (&factorial (n - 1))
+};
+
+@export factorial;`,
+
+    safe_divide:
+`# Integer division guarded against divide-by-zero.
+# Returns 0 when y = 0.
+
+@fn safeDivide x:Int, y:Int := {
+    &@if y == 0, { &@return 0 };
+    x / y
+};
+
+@export safeDivide;`,
+
+    countdown:
+`# Count iterations using a mutable loop variable.
+# Returns the final counter value (should equal n).
+
+@fn countTo n:Int := {
+    @var i:Int := 0;
+    &@loop i < n, { i = i + 1; };
+    i
+};
+
+@export countTo;`,
+
+    color_match:
+`# Algebraic sum type with exhaustive pattern matching.
+
+@type_sum Color := Red | Green | Blue;
+
+@fn colorCode c:Color := {
+    &@match c,
+        Color::Red,   { 1 },
+        Color::Green, { 2 },
+        { 3 }
+};
+
+@export colorCode;`,
+
+    bitwise:
+`# Bitwise operations on integers.
+
+@fn mask   a:Int, b:Int := { a | b };
+@fn toggle a:Int, b:Int := { a ^ b };
+@fn doubled a:Int := { a << 1 };
+@fn halved  a:Int := { a >> 1 };
+
+@export mask;
+@export toggle;
+@export doubled;
+@export halved;`,
+
+    math_sampler:
+`# Web math API sampler — trig, log, and random.
+
+@fn roll    := { &web::math_random };
+@fn sinWave x:Float := { &web::math_sin x };
+@fn cosWave x:Float := { &web::math_cos x };
+@fn logNat  x:Float := { &web::math_log x };
+
+@export roll;
+@export sinWave;
+@export cosWave;
+@export logNat;`,
+}
+
+document.getElementById('example-select').addEventListener('change', e => {
+    const src = EXAMPLES[e.target.value] ?? ''
+    editorView.dispatch({
+        changes: { from: 0, to: editorView.state.doc.length, insert: src },
+    })
+    e.target.value = ''  // reset so the same example can be reloaded
 })
 
 // ── State ──────────────────────────────────────────────────────────────────
