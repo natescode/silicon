@@ -23,9 +23,9 @@ import { ARRAY_LITERAL_CALLEE } from './nodes'
  */
 export function emitModule(mod: IRModule, stdWat: string): string {
     const parts: string[] = ['(module']
-    parts.push(stdWat)
 
     for (const imp of mod.imports) parts.push(emitImport(imp))
+    parts.push(stdWat)
     for (const g of mod.globals)  parts.push(emitGlobal(g))
     for (const f of mod.functions) parts.push(emitFunction(f))
     for (const exp of mod.exports) parts.push(emitExplicitExport(exp))

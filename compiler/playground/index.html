@@ -92,13 +92,18 @@ button:disabled { opacity: 0.4; cursor: not-allowed; }
   font-size: 0.68rem; letter-spacing: 0.08em; text-transform: uppercase;
 }
 
-textarea#source {
-  flex: 1; background: var(--bg); color: var(--text);
-  border: none; outline: none; resize: none;
-  font-family: var(--mono); font-size: 0.85rem; line-height: 1.6;
-  padding: 14px 16px; tab-size: 4;
+/* ── CodeMirror editor container ─────────────────────────────────────── */
+#editor {
+  flex: 1; min-height: 0; overflow: hidden;
+  display: flex; flex-direction: column;
 }
-textarea#source::placeholder { color: var(--border); }
+#editor .cm-editor {
+  flex: 1; min-height: 0;
+  font-family: var(--mono); font-size: 0.85rem;
+}
+#editor .cm-scroller {
+  flex: 1 !important; overflow: auto !important; min-height: 0 !important;
+}
 
 #wat-output {
   flex: 1; overflow: auto; background: var(--bg);
@@ -212,27 +217,7 @@ textarea#source::placeholder { color: var(--border); }
   <div class="editors">
     <div class="pane">
       <div class="pane-header"><span class="lang-badge">silicon</span> Source</div>
-      <textarea id="source" spellcheck="false"># Modules are auto-resolved from their namespace prefix.
-# web:: maps to the built-in web environment module.
-
-@let greet msg:String := {
-    @local result := ('Hello, ' ++ msg);
-    &web::console_log_str result;
-    result
-};
-
-@let hypotenuse a:Float, b:Float := {
-    &web::math_sqrt ((&web::math_pow a, 2.0) + (&web::math_pow b, 2.0))
-};
-
-@let roll := {
-    &web::math_random
-};
-
-@export greet;
-@export hypotenuse;
-@export roll;
-</textarea>
+      <div id="editor"></div>
     </div>
     <div class="pane">
       <div class="pane-header"><span class="lang-badge">wat</span> Output</div>
@@ -254,24 +239,180 @@ textarea#source::placeholder { color: var(--border); }
 </div>
 
 <script src="/web-env.js"></script>
-<script>
+<script type="module">
+import {
+    EditorView, keymap, lineNumbers,
+    highlightActiveLine, highlightActiveLineGutter,
+} from 'https://esm.sh/@codemirror/view@6'
+import { EditorState } from 'https://esm.sh/@codemirror/state@6'
+import {
+    defaultKeymap, history, historyKeymap, indentWithTab,
+} from 'https://esm.sh/@codemirror/commands@6'
+import {
+    StreamLanguage, syntaxHighlighting, HighlightStyle, bracketMatching,
+} from 'https://esm.sh/@codemirror/language@6'
+import { tags } from 'https://esm.sh/@lezer/highlight@1'
+
+// ── Silicon syntax highlighting ───────────────────────────────────────────
+
+const siliconHighlight = HighlightStyle.define([
+    { tag: tags.keyword,             color: '#a371f7' },
+    { tag: tags.lineComment,         color: '#484f58', fontStyle: 'italic' },
+    { tag: tags.string,              color: '#3fb950' },
+    { tag: tags.number,              color: '#79c0ff' },
+    { tag: tags.typeName,            color: '#58a6ff' },
+    { tag: tags.function(tags.name), color: '#d2a8ff' },
+    { tag: tags.operator,            color: '#ff7b72' },
+])
+
+const silicon = StreamLanguage.define({
+    name: 'silicon',
+    tokenTable: {
+        keyword:  tags.keyword,
+        typeName: tags.typeName,
+        string:   tags.string,
+        number:   tags.number,
+        comment:  tags.lineComment,
+        fn:       tags.function(tags.name),
+        operator: tags.operator,
+    },
+    token(stream) {
+        if (stream.eatSpace()) return null
+
+        // Line comment
+        if (stream.peek() === '#') { stream.skipToEnd(); return 'comment' }
+
+        // String literal: 'single-quoted'
+        if (stream.peek() === "'") {
+            stream.next()
+            while (!stream.eol()) { if (stream.next() === "'") break }
+            return 'string'
+        }
+
+        // @ keywords  (@let, @fn, @export, @local, @extern, @match, ...)
+        if (stream.peek() === '@') {
+            stream.next()
+            stream.match(/^\w+/)
+            return 'keyword'
+        }
+
+        // & function / namespace call  (&web::foo, &bar)
+        if (stream.peek() === '&') {
+            stream.next()
+            stream.match(/^\w+(?:::\w+)*/)
+            return 'fn'
+        }
+
+        // Float before int
+        if (stream.match(/^\d+\.\d*/)) return 'number'
+        if (stream.match(/^\d+/))      return 'number'
+
+        // Type names
+        if (stream.match(/^(?:Int|Float|Bool|String)\b/)) return 'typeName'
+
+        // Identifiers (plain names — inherit default text color)
+        if (stream.match(/^[a-zA-Z_]\w*/)) return null
+
+        // Multi-char operators
+        if (stream.match(/^(?::=|\+\+|->|=>|::)/)) return 'operator'
+
+        // Single-char operators / punctuation
+        if (stream.match(/^[+\-*\/|<>=!,;:.()[\]{}]/)) return 'operator'
+
+        stream.next()
+        return null
+    },
+    languageData: { commentTokens: { line: '#' } },
+})
+
+const siliconTheme = EditorView.theme({
+    '&': { backgroundColor: '#0d1117', color: '#e6edf3' },
+    '.cm-content': {
+        caretColor: '#a371f7',
+        lineHeight: '1.6',
+        padding: '14px 0',
+    },
+    '.cm-line': { paddingLeft: '16px', paddingRight: '16px' },
+    '.cm-gutters': {
+        backgroundColor: '#161b22',
+        color: '#8b949e',
+        borderRight: '1px solid #30363d',
+    },
+    '.cm-lineNumbers .cm-gutterElement': {
+        paddingRight: '12px', paddingLeft: '8px', minWidth: '40px',
+    },
+    '.cm-activeLineGutter': { backgroundColor: '#21262d', color: '#e6edf3' },
+    '.cm-activeLine': { backgroundColor: 'rgba(255,255,255,0.04)' },
+    '.cm-cursor, .cm-dropCursor': { borderLeftColor: '#a371f7' },
+    '.cm-selectionBackground': { backgroundColor: 'rgba(61,90,126,0.5)' },
+    '&.cm-focused .cm-selectionBackground': { backgroundColor: 'rgba(61,90,126,0.5)' },
+    '.cm-matchingBracket': { outline: '1px solid #a371f7', borderRadius: '2px' },
+    '.cm-nonmatchingBracket': { outline: '1px solid #f85149', borderRadius: '2px' },
+})
+
+// ── Editor setup ───────────────────────────────────────────────────────────
+
+const INITIAL_SOURCE = `# Modules are auto-resolved from their namespace prefix.
+# web:: maps to the built-in web environment module.
+
+@let greet msg:String := {
+    @local result := ('Hello, ' ++ msg);
+    &web::console_log_str result;
+    result
+};
+
+@let hypotenuse a:Float, b:Float := {
+    &web::math_sqrt ((&web::math_pow a, 2.0) + (&web::math_pow b, 2.0))
+};
+
+@let roll := {
+    &web::math_random
+};
+
+@export greet;
+@export hypotenuse;
+@export roll;`
+
+const editorView = new EditorView({
+    state: EditorState.create({
+        doc: INITIAL_SOURCE,
+        extensions: [
+            history(),
+            lineNumbers(),
+            highlightActiveLine(),
+            highlightActiveLineGutter(),
+            bracketMatching(),
+            keymap.of([
+                ...defaultKeymap,
+                ...historyKeymap,
+                indentWithTab,
+                { key: 'Ctrl-Enter', mac: 'Cmd-Enter', run: () => { compile(); return true } },
+            ]),
+            silicon,
+            syntaxHighlighting(siliconHighlight),
+            siliconTheme,
+        ],
+    }),
+    parent: document.getElementById('editor'),
+})
+
 // ── State ──────────────────────────────────────────────────────────────────
 let wasmInstance = null
-let wasmExports = []          // ExportInfo[] from last compile
-let printBuffer = []          // captured print() calls
-let webEnv = null             // createWebEnv() instance
+let wasmExports = []
+let printBuffer = []
+let webEnv = null
 
 // ── DOM refs ──────────────────────────────────────────────────────────────
-const btnCompile    = document.getElementById('btn-compile')
+const btnCompile      = document.getElementById('btn-compile')
 const btnClearConsole = document.getElementById('btn-clear-console')
-const statusDot     = document.getElementById('status-dot')
-const watOutput     = document.getElementById('wat-output')
-const exportsPanel  = document.getElementById('exports-panel')
-const errorBanner   = document.getElementById('error-banner')
-const consoleEl     = document.getElementById('console')
+const statusDot       = document.getElementById('status-dot')
+const watOutput       = document.getElementById('wat-output')
+const exportsPanel    = document.getElementById('exports-panel')
+const errorBanner     = document.getElementById('error-banner')
+const consoleEl       = document.getElementById('console')
 
 // ── Utilities ─────────────────────────────────────────────────────────────
-function setStatus(state) {  // 'idle' | 'busy' | 'ok' | 'err'
+function setStatus(state) {
   statusDot.className = 'status-dot' + (state !== 'idle' ? ' ' + state : '')
 }
 
@@ -307,7 +448,6 @@ function log(msg, type = 'info') {
 
 // ── WAT syntax highlighting (lightweight) ─────────────────────────────────
 function highlightWat(text) {
-  // Escape HTML first
   const escaped = text
     .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
 
@@ -321,9 +461,6 @@ function highlightWat(text) {
 
 // ── Compile ────────────────────────────────────────────────────────────────
 btnCompile.addEventListener('click', compile)
-document.getElementById('source').addEventListener('keydown', e => {
-  if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') compile()
-})
 
 async function compile() {
   clearError()
@@ -333,7 +470,7 @@ async function compile() {
   setStatus('busy')
   watOutput.innerHTML = '<span style="color:var(--muted);font-style:italic">Compiling…</span>'
 
-  const source = document.getElementById('source').value
+  const source = editorView.state.doc.toString()
 
   let data
   try {
@@ -358,10 +495,8 @@ async function compile() {
     return
   }
 
-  // Display highlighted WAT.
   watOutput.innerHTML = highlightWat(data.wat)
 
-  // Instantiate WASM module.
   printBuffer = []
   webEnv = createWebEnv({
     onPrint: (msg, type) => {
@@ -398,14 +533,12 @@ function renderExports(exports, instance) {
     const row = document.createElement('div')
     row.className = 'export-row'
 
-    // Signature label
     const sig = document.createElement('span')
     sig.className = 'fn-sig'
     const paramStr = exp.params.map(p => `${p.name}: ${p.type}`).join(', ')
     sig.textContent = `${exp.name}(${paramStr}) → ${exp.result}`
     row.appendChild(sig)
 
-    // Parameter inputs
     const paramWrap = document.createElement('div')
     paramWrap.className = 'param-wrap'
     const inputs = []
@@ -431,11 +564,9 @@ function renderExports(exports, instance) {
     }
     row.appendChild(paramWrap)
 
-    // Result display
     const resultSpan = document.createElement('span')
     resultSpan.className = 'call-result'
 
-    // Call button
     const callBtn = document.createElement('button')
     callBtn.className = 'btn-call'
     callBtn.textContent = '▶ Call'
@@ -468,7 +599,7 @@ function callExport(exp, inputs, resultSpan) {
 
     printBuffer = []
     const raw = fn(...args)
-    if (webEnv) webEnv.flush()  // drain any pending char output from env.print
+    if (webEnv) webEnv.flush()
 
     const argStr = inputs.map(({ inp, siliconType }) =>
       siliconType === 'String' ? `"${inp.value}"` : inp.value.trim()
