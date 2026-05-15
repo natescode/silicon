@@ -21,6 +21,11 @@
   --red:       #f85149;
   --yellow:    #d29922;
   --mono:      'JetBrains Mono', 'Fira Code', 'Cascadia Code', ui-monospace, monospace;
+  --error-bg:    #2d1117;
+  --wat-kw:      #ff7b72;
+  --wat-fn:      #58a6ff;
+  --wat-num:     #79c0ff;
+  --wat-comment: #484f58;
 }
 
 html, body { height: 100%; background: var(--bg); color: var(--text); font-family: system-ui, sans-serif; font-size: 14px; }
@@ -38,14 +43,16 @@ header {
 
 .header-actions { display: flex; gap: 8px; margin-left: auto; align-items: center; }
 
-#example-select {
+#example-select, #theme-select {
   background: var(--surface2); color: var(--text);
   border: 1px solid var(--border); border-radius: 6px;
   padding: 5px 10px; font-size: 0.82rem;
-  cursor: pointer; outline: none; max-width: 200px;
+  cursor: pointer; outline: none;
 }
-#example-select:hover { border-color: var(--accent); }
-#example-select option { background: var(--surface2); }
+#example-select { max-width: 200px; }
+#theme-select   { max-width: 160px; }
+#example-select:hover, #theme-select:hover { border-color: var(--accent); }
+#example-select option, #theme-select option { background: var(--surface2); }
 
 button {
   cursor: pointer; border: none; border-radius: 6px; font-size: 0.82rem; font-weight: 500;
@@ -119,10 +126,10 @@ button:disabled { opacity: 0.4; cursor: not-allowed; }
   font-family: var(--mono); font-size: 0.82rem; line-height: 1.6;
   padding: 14px 16px; color: var(--muted); white-space: pre;
 }
-#wat-output .kw  { color: #ff7b72; }
-#wat-output .fn  { color: var(--blue); }
-#wat-output .num { color: #79c0ff; }
-#wat-output .comment { color: #484f58; }
+#wat-output .kw      { color: var(--wat-kw); }
+#wat-output .fn      { color: var(--wat-fn); }
+#wat-output .num     { color: var(--wat-num); }
+#wat-output .comment { color: var(--wat-comment); }
 
 /* ── Bottom section ─────────────────────────────────────────────────────── */
 .bottom {
@@ -180,7 +187,7 @@ button:disabled { opacity: 0.4; cursor: not-allowed; }
 
 /* Error banner */
 #error-banner {
-  background: #2d1117; border: 1px solid var(--red); border-radius: 6px;
+  background: var(--error-bg); border: 1px solid var(--red); border-radius: 6px;
   padding: 10px 14px; margin: 8px 16px 0;
   font-family: var(--mono); font-size: 0.8rem; color: var(--red);
   white-space: pre-wrap; display: none;
@@ -228,6 +235,11 @@ button:disabled { opacity: 0.4; cursor: not-allowed; }
     <option value="bitwise">Bitwise Ops</option>
     <option value="math_sampler">Math Sampler</option>
   </select>
+  <select id="theme-select">
+    <option value="sigil-dark" selected>Sigil Dark</option>
+    <option value="vscode-dark">VSCode Dark</option>
+    <option value="github-light">GitHub Light</option>
+  </select>
   <div class="header-actions">
     <div class="status-dot" id="status-dot"></div>
     <button id="btn-clear-console">Clear Console</button>
@@ -266,7 +278,7 @@ import {
     EditorView, keymap, lineNumbers,
     highlightActiveLine, highlightActiveLineGutter,
 } from 'https://esm.sh/@codemirror/view@6'
-import { EditorState } from 'https://esm.sh/@codemirror/state@6'
+import { EditorState, Compartment } from 'https://esm.sh/@codemirror/state@6'
 import {
     defaultKeymap, history, historyKeymap, indentWithTab,
 } from 'https://esm.sh/@codemirror/commands@6'
@@ -275,17 +287,7 @@ import {
 } from 'https://esm.sh/@codemirror/language@6'
 import { tags } from 'https://esm.sh/@lezer/highlight@1'
 
-// ── Silicon syntax highlighting ───────────────────────────────────────────
-
-const siliconHighlight = HighlightStyle.define([
-    { tag: tags.keyword,             color: '#a371f7' },
-    { tag: tags.lineComment,         color: '#484f58', fontStyle: 'italic' },
-    { tag: tags.string,              color: '#3fb950' },
-    { tag: tags.number,              color: '#79c0ff' },
-    { tag: tags.typeName,            color: '#58a6ff' },
-    { tag: tags.function(tags.name), color: '#d2a8ff' },
-    { tag: tags.operator,            color: '#ff7b72' },
-])
+// ── Silicon language (theme-independent tokenizer) ────────────────────────
 
 const silicon = StreamLanguage.define({
     name: 'silicon',
@@ -347,30 +349,110 @@ const silicon = StreamLanguage.define({
     languageData: { commentTokens: { line: '#' } },
 })
 
-const siliconTheme = EditorView.theme({
-    '&': { backgroundColor: '#0d1117', color: '#e6edf3' },
-    '.cm-content': {
-        caretColor: '#a371f7',
-        lineHeight: '1.6',
-        padding: '14px 0',
+// ── Themes ────────────────────────────────────────────────────────────────
+
+function makeTheme(e, syntax) {
+    return [
+        EditorView.theme({
+            '&': { backgroundColor: e.bg, color: e.text },
+            '.cm-content': { caretColor: e.cursor, lineHeight: '1.6', padding: '14px 0' },
+            '.cm-line': { paddingLeft: '16px', paddingRight: '16px' },
+            '.cm-gutters': { backgroundColor: e.gutterBg, color: e.gutterText, borderRight: `1px solid ${e.gutterBorder}` },
+            '.cm-lineNumbers .cm-gutterElement': { paddingRight: '12px', paddingLeft: '8px', minWidth: '40px' },
+            '.cm-activeLineGutter': { backgroundColor: e.gutterActiveBg, color: e.gutterActiveText },
+            '.cm-activeLine': { backgroundColor: e.activeLine },
+            '.cm-cursor, .cm-dropCursor': { borderLeftColor: e.cursor },
+            '.cm-selectionBackground': { backgroundColor: e.selection },
+            '&.cm-focused .cm-selectionBackground': { backgroundColor: e.selection },
+            '.cm-matchingBracket': { outline: `1px solid ${e.cursor}`, borderRadius: '2px' },
+            '.cm-nonmatchingBracket': { outline: `1px solid ${e.errorColor}`, borderRadius: '2px' },
+        }),
+        syntaxHighlighting(HighlightStyle.define(syntax)),
+    ]
+}
+
+const THEMES = {
+    'sigil-dark': {
+        label: 'Sigil Dark',
+        cssVars: {
+            '--bg': '#0d1117', '--surface': '#161b22', '--surface2': '#21262d',
+            '--border': '#30363d', '--text': '#e6edf3', '--muted': '#8b949e',
+            '--accent': '#a371f7', '--accent2': '#7c3aed',
+            '--blue': '#58a6ff', '--green': '#3fb950', '--red': '#f85149', '--yellow': '#d29922',
+            '--error-bg': '#2d1117',
+            '--wat-kw': '#ff7b72', '--wat-fn': '#58a6ff', '--wat-num': '#79c0ff', '--wat-comment': '#484f58',
+        },
+        cmExtensions: makeTheme(
+            { bg: '#0d1117', text: '#e6edf3', cursor: '#a371f7', activeLine: 'rgba(255,255,255,0.04)',
+              selection: 'rgba(61,90,126,0.5)', gutterBg: '#161b22', gutterText: '#8b949e',
+              gutterBorder: '#30363d', gutterActiveBg: '#21262d', gutterActiveText: '#e6edf3',
+              errorColor: '#f85149' },
+            [
+                { tag: tags.keyword,             color: '#a371f7' },
+                { tag: tags.lineComment,         color: '#484f58', fontStyle: 'italic' },
+                { tag: tags.string,              color: '#3fb950' },
+                { tag: tags.number,              color: '#79c0ff' },
+                { tag: tags.typeName,            color: '#58a6ff' },
+                { tag: tags.function(tags.name), color: '#d2a8ff' },
+                { tag: tags.operator,            color: '#ff7b72' },
+            ]
+        ),
     },
-    '.cm-line': { paddingLeft: '16px', paddingRight: '16px' },
-    '.cm-gutters': {
-        backgroundColor: '#161b22',
-        color: '#8b949e',
-        borderRight: '1px solid #30363d',
+    'vscode-dark': {
+        label: 'VSCode Dark',
+        cssVars: {
+            '--bg': '#1e1e1e', '--surface': '#252526', '--surface2': '#2d2d2d',
+            '--border': '#3c3c3c', '--text': '#d4d4d4', '--muted': '#808080',
+            '--accent': '#569cd6', '--accent2': '#264f78',
+            '--blue': '#569cd6', '--green': '#4ec9b0', '--red': '#f44747', '--yellow': '#dcdcaa',
+            '--error-bg': '#2d1b1b',
+            '--wat-kw': '#569cd6', '--wat-fn': '#dcdcaa', '--wat-num': '#b5cea8', '--wat-comment': '#6a9955',
+        },
+        cmExtensions: makeTheme(
+            { bg: '#1e1e1e', text: '#d4d4d4', cursor: '#aeafad', activeLine: 'rgba(255,255,255,0.04)',
+              selection: 'rgba(38,79,120,0.6)', gutterBg: '#1e1e1e', gutterText: '#858585',
+              gutterBorder: '#3c3c3c', gutterActiveBg: '#2a2d2e', gutterActiveText: '#c6c6c6',
+              errorColor: '#f44747' },
+            [
+                { tag: tags.keyword,             color: '#c586c0' },
+                { tag: tags.lineComment,         color: '#6a9955', fontStyle: 'italic' },
+                { tag: tags.string,              color: '#ce9178' },
+                { tag: tags.number,              color: '#b5cea8' },
+                { tag: tags.typeName,            color: '#4ec9b0' },
+                { tag: tags.function(tags.name), color: '#dcdcaa' },
+                { tag: tags.operator,            color: '#d4d4d4' },
+            ]
+        ),
     },
-    '.cm-lineNumbers .cm-gutterElement': {
-        paddingRight: '12px', paddingLeft: '8px', minWidth: '40px',
+    'github-light': {
+        label: 'GitHub Light',
+        cssVars: {
+            '--bg': '#ffffff', '--surface': '#f6f8fa', '--surface2': '#eaeef2',
+            '--border': '#d0d7de', '--text': '#24292f', '--muted': '#57606a',
+            '--accent': '#8250df', '--accent2': '#6639ba',
+            '--blue': '#0969da', '--green': '#1a7f37', '--red': '#cf222e', '--yellow': '#9a6700',
+            '--error-bg': '#fff2f0',
+            '--wat-kw': '#cf222e', '--wat-fn': '#0969da', '--wat-num': '#0550ae', '--wat-comment': '#6e7781',
+        },
+        cmExtensions: makeTheme(
+            { bg: '#ffffff', text: '#24292f', cursor: '#8250df', activeLine: 'rgba(0,0,0,0.04)',
+              selection: 'rgba(130,80,223,0.15)', gutterBg: '#f6f8fa', gutterText: '#57606a',
+              gutterBorder: '#d0d7de', gutterActiveBg: '#eaeef2', gutterActiveText: '#24292f',
+              errorColor: '#cf222e' },
+            [
+                { tag: tags.keyword,             color: '#cf222e' },
+                { tag: tags.lineComment,         color: '#6e7781', fontStyle: 'italic' },
+                { tag: tags.string,              color: '#0a3069' },
+                { tag: tags.number,              color: '#0550ae' },
+                { tag: tags.typeName,            color: '#953800' },
+                { tag: tags.function(tags.name), color: '#8250df' },
+                { tag: tags.operator,            color: '#24292f' },
+            ]
+        ),
     },
-    '.cm-activeLineGutter': { backgroundColor: '#21262d', color: '#e6edf3' },
-    '.cm-activeLine': { backgroundColor: 'rgba(255,255,255,0.04)' },
-    '.cm-cursor, .cm-dropCursor': { borderLeftColor: '#a371f7' },
-    '.cm-selectionBackground': { backgroundColor: 'rgba(61,90,126,0.5)' },
-    '&.cm-focused .cm-selectionBackground': { backgroundColor: 'rgba(61,90,126,0.5)' },
-    '.cm-matchingBracket': { outline: '1px solid #a371f7', borderRadius: '2px' },
-    '.cm-nonmatchingBracket': { outline: '1px solid #f85149', borderRadius: '2px' },
-})
+}
+
+const themeCompartment = new Compartment()
 
 // ── Editor setup ───────────────────────────────────────────────────────────
 
@@ -411,8 +493,7 @@ const editorView = new EditorView({
                 { key: 'Ctrl-Enter', mac: 'Cmd-Enter', run: () => { compile(); return true } },
             ]),
             silicon,
-            syntaxHighlighting(siliconHighlight),
-            siliconTheme,
+            themeCompartment.of(THEMES['sigil-dark'].cmExtensions),
         ],
     }),
     parent: document.getElementById('editor'),
@@ -540,6 +621,21 @@ document.getElementById('example-select').addEventListener('change', e => {
         changes: { from: 0, to: editorView.state.doc.length, insert: src },
     })
     e.target.value = ''  // reset so the same example can be reloaded
+})
+
+// ── Theme switching ───────────────────────────────────────────────────────
+
+function applyTheme(key) {
+    const theme = THEMES[key]
+    if (!theme) return
+    for (const [k, v] of Object.entries(theme.cssVars)) {
+        document.documentElement.style.setProperty(k, v)
+    }
+    editorView.dispatch({ effects: themeCompartment.reconfigure(theme.cmExtensions) })
+}
+
+document.getElementById('theme-select').addEventListener('change', e => {
+    applyTheme(e.target.value)
 })
 
 // ── State ──────────────────────────────────────────────────────────────────
