@@ -566,6 +566,13 @@ function checkBinaryOp(b: any, ctx: Ctx): SiliconType {
                 return TypeUnknown
             }
             return TypeBool
+        // String concatenation — both operands must be String; result is String.
+        case '++':
+            if (!typeEquals(leftT, TypeString) || !typeEquals(rightT, TypeString)) {
+                ctx.errors.push(invalidOperator('++', leftT, rightT, b.sourceLocation))
+                return TypeUnknown
+            }
+            return TypeString
         default: {
             // User-defined operators: read the pre-derived TypeSig from the
             // registry, using the left-operand type to pick the right overload

@@ -62,20 +62,28 @@ function createStringAlloc(): StringAlloc {
     return { nextOffset: 4, segments: [], cache: new Map() }
 }
 
-/** Allocate a string in the static data region; returns its base address. */
+/** Allocate a string in the static data region; returns its base address.
+ *  Strings are encoded as UTF-16 LE (2 bytes per code unit) so JS can decode
+ *  them directly with TextDecoder('utf-16le'). The length prefix stores the
+ *  byte count (byteLen = charCount * 2 for BMP characters). */
 function allocString(sa: StringAlloc, s: string): number {
     if (sa.cache.has(s)) return sa.cache.get(s)!
-    const bytes = new TextEncoder().encode(s)
+    // UTF-16 LE: each JS char is one 16-bit code unit stored little-endian.
+    const byteLen = s.length * 2
     const base = sa.nextOffset
-    const len = bytes.length
-    const lenBytes = [len & 0xff, (len >> 8) & 0xff, (len >> 16) & 0xff, (len >> 24) & 0xff]
-    const all = [...lenBytes, ...bytes]
+    const charBytes: number[] = []
+    for (let i = 0; i < s.length; i++) {
+        const code = s.charCodeAt(i)
+        charBytes.push(code & 0xff, (code >> 8) & 0xff)
+    }
+    const lenBytes = [byteLen & 0xff, (byteLen >> 8) & 0xff, (byteLen >> 16) & 0xff, (byteLen >> 24) & 0xff]
+    const all = [...lenBytes, ...charBytes]
     const encoded = all.map(b => {
         if (b >= 0x20 && b <= 0x7e && b !== 0x22 && b !== 0x5c) return String.fromCharCode(b)
         return '\\' + b.toString(16).padStart(2, '0')
     }).join('')
     sa.segments.push({ offset: base, encoded })
-    sa.nextOffset += 4 + len
+    sa.nextOffset += 4 + byteLen
     sa.cache.set(s, base)
     return base
 }
@@ -449,7 +457,19 @@ function lowerBinaryOp(n: any, ctx: LowerCtx): IRExpr {
     // Resolve the operator stratum once; dispatch on its intrinsic rather than the symbol.
     const stratum = lookupTypedOperator(ctx.registry, op, typeKind)
     const intrinsic = stratum?.data?.intrinsic
-    if (!intrinsic) throw new IRLowerError(`No stratum registered for operator '${op}'`)
+
+    if (!intrinsic) {
+        // No WASM intrinsic — check for a user function call step in the body template.
+        const template = stratum?.data?.bodyTemplate ?? []
+        const userStep = template.find(s => s.userFunc)
+        if (userStep) {
+            const argExprs = userStep.argRefs.map(ref =>
+                ref === 'left' ? left : ref === 'right' ? right : left
+            )
+            return { kind: 'Call', wasmType: resultWt, callee: userStep.userFunc!, callKind: 'user', args: argExprs }
+        }
+        throw new IRLowerError(`No stratum registered for operator '${op}'`)
+    }
 
     // Control-flow operators: || maps to WASM::control_or (short-circuit evaluation).
     if (intrinsic === 'WASM::control_or') {

@@ -32,15 +32,17 @@ export interface StrataData {
     /** Full WASM intrinsic name extracted from the body (e.g. "WASM::i32_add"). */
     intrinsic?: string
     /**
-     * Ordered steps extracted from the strata body — each step is one WASM call.
-     * Codegen emits the steps in sequence: for each step, push its arg refs then
-     * the instruction. Steps with no argRefs consume whatever is already on the stack.
+     * Ordered steps extracted from the strata body. Each step is either:
+     *   - a WASM/IR intrinsic call  ({ intrinsic, argRefs })
+     *   - a Silicon function call   ({ userFunc, argRefs })
      *
-     * Single-step bodies (the common case) have one entry. Multi-step bodies chain
-     * intermediate results via the WAT operand stack.
+     * Codegen emits steps in sequence. WASM steps emit inline instructions;
+     * userFunc steps emit (call $name args). Steps with no argRefs consume
+     * whatever is already on the WAT operand stack.
      */
     bodyTemplate?: Array<{
-        intrinsic: string
+        intrinsic?: string
+        userFunc?: string
         argRefs: Array<'left' | 'right' | 'unknown'>
     }>
     /**

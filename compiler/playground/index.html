@@ -212,25 +212,26 @@ textarea#source::placeholder { color: var(--border); }
   <div class="editors">
     <div class="pane">
       <div class="pane-header"><span class="lang-badge">silicon</span> Source</div>
-      <textarea id="source" spellcheck="false">;; Web API bindings — declare the functions you want from the browser.
-;; The "web_" prefix routes imports to the "web" WASM namespace.
+      <textarea id="source" spellcheck="false"># Web API bindings — declare the functions you want from the browser.
+# The "web_" prefix routes imports to the "web" WASM namespace.
 
-@extern web_console_log   v:Int;
-@extern web_console_log_f v:Float;
-@extern web_math_sqrt     x:Float;
-@extern web_math_pow      base:Float, exp:Float;
+@extern web_console_log_str ptr:String;
+@extern web_console_log_f   v:Float;
+@extern web_math_sqrt:Float x:Float;
+@extern web_math_pow:Float  base:Float, exp:Float;
 @extern web_math_random:Float;
 @extern web_performance_now:Float;
 
-;; ── Examples ──────────────────────────────────────────────────────────
+# ── Examples ──────────────────────────────────────────────────────────
 
-@let greet x:Int := {
-    &web_console_log x;
-    x
+@let greet msg:String := {
+    @local result := ('Hello, ' ++ msg);
+    &web_console_log_str result;
+    result
 };
 
 @let hypotenuse a:Float, b:Float := {
-    &web_math_sqrt &web_math_pow a, 2.0 + &web_math_pow b, 2.0
+    &web_math_sqrt ((&web_math_pow a, 2.0) + (&web_math_pow b, 2.0))
 };
 
 @let roll := {
@@ -427,13 +428,15 @@ function renderExports(exports, instance) {
 
       const inp = document.createElement('input')
       inp.type = 'text'
-      inp.placeholder = param.wasmType === 'f32' ? '0.0' : '0'
+      inp.placeholder = param.type === 'String' ? 'enter a string…'
+                      : param.wasmType === 'f32' ? '0.0' : '0'
       inp.className = 'param-input'
+      if (param.type === 'String') inp.style.width = '160px'
       inp.addEventListener('keydown', e => { if (e.key === 'Enter') callBtn.click() })
 
       field.append(lbl, inp)
       paramWrap.appendChild(field)
-      inputs.push({ inp, wasmType: param.wasmType, name: param.name })
+      inputs.push({ inp, wasmType: param.wasmType, name: param.name, siliconType: param.type })
     }
     row.appendChild(paramWrap)
 
@@ -456,10 +459,14 @@ function renderExports(exports, instance) {
 }
 
 function callExport(exp, inputs, resultSpan) {
-  const args = inputs.map(({ inp, wasmType, name }) => {
-    const raw = inp.value.trim()
-    if (raw === '') { log(`${name} is empty`, 'err'); return NaN }
-    return wasmType === 'f32' ? parseFloat(raw) : parseInt(raw, 10)
+  const args = inputs.map(({ inp, wasmType, siliconType, name }) => {
+    const raw = inp.value
+    if (siliconType === 'String') {
+      return webEnv ? webEnv.writeString(raw) : 0
+    }
+    const trimmed = raw.trim()
+    if (trimmed === '') { log(`${name} is empty`, 'err'); return NaN }
+    return wasmType === 'f32' ? parseFloat(trimmed) : parseInt(trimmed, 10)
   })
 
   if (args.some(Number.isNaN)) return
@@ -472,8 +479,10 @@ function callExport(exp, inputs, resultSpan) {
     const raw = fn(...args)
     if (webEnv) webEnv.flush()  // drain any pending char output from env.print
 
-    const argStr = inputs.map(({ inp }) => inp.value.trim()).join(', ')
-    const ret = exp.wasmResult === 'void' ? '(void)' : formatResult(raw, exp.wasmResult)
+    const argStr = inputs.map(({ inp, siliconType }) =>
+      siliconType === 'String' ? `"${inp.value}"` : inp.value.trim()
+    ).join(', ')
+    const ret = exp.wasmResult === 'void' ? '(void)' : formatResult(raw, exp.wasmResult, exp.result)
     resultSpan.textContent = '→ ' + ret
     log(`${exp.name}(${argStr}) = ${ret}`, 'result')
   } catch (e) {
@@ -482,9 +491,11 @@ function callExport(exp, inputs, resultSpan) {
   }
 }
 
-function formatResult(value, wasmType) {
+function formatResult(value, wasmType, siliconResult) {
+  if (siliconResult === 'String' && webEnv) {
+    return '"' + webEnv.readString(value) + '"'
+  }
   if (wasmType === 'f32') {
-    // JS returns a double; round to 6 significant figures to avoid noise.
     return Number(value.toPrecision(6)).toString()
   }
   return String(value)

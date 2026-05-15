@@ -225,9 +225,7 @@ function extractBodyTemplate(
     if (!item || typeof item !== 'object') continue
     const fc = findFunctionCall(item.value ?? item)
     if (!fc) continue
-    const name = fc.name
-    if (!name || name.type !== 'Namespace' || (name.path?.[0] !== 'WASM' && name.path?.[0] !== 'IR')) continue
-    const intrinsic = (name.path as string[]).join('::')
+
     const argRefs = (fc.args ?? []).map((arg: any): 'left' | 'right' | 'unknown' => {
       const ns = findNamespace(arg)
       if (!ns) return 'unknown'
@@ -236,7 +234,22 @@ function extractBodyTemplate(
       if (nsStr === `${nodeParamName}.right`) return 'right'
       return 'unknown'
     })
-    steps.push({ intrinsic, argRefs })
+
+    const name = fc.name
+    if (!name) continue
+
+    if (name.type === 'Namespace') {
+      const path = name.path as string[]
+      if (path[0] === 'WASM' || path[0] === 'IR') {
+        // WASM/IR intrinsic — existing behaviour
+        steps.push({ intrinsic: path.join('::'), argRefs })
+      } else if (path.length === 1) {
+        // Plain Silicon function call (e.g. &str_concat)
+        steps.push({ userFunc: path[0], argRefs })
+      }
+    } else if (typeof name === 'string') {
+      steps.push({ userFunc: name, argRefs })
+    }
   }
   return steps.length > 0 ? steps : undefined
 }

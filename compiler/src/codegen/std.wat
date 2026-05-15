@@ -31,6 +31,7 @@
 (import "env" "read"  (func $read  (result i32)))
 
 (memory 1)
+(export "memory" (memory 0))
 (global $heap (mut i32) (i32.const 1024))
 
 ;; ------------------------------------------------------------------
@@ -74,6 +75,7 @@
   (local.set $addr (global.get $heap))
   (global.set $heap (local.get $new_heap))
   (local.get $addr))
+(export "alloc" (func $alloc))
 
 ;; ------------------------------------------------------------------
 ;; $alloc_array — allocate a length-prefixed region holding `$count`
@@ -168,3 +170,54 @@
             (i32.add (i32.const 4) (local.get $i)))))
       (local.set $i (i32.add (local.get $i) (i32.const 1)))
       (br $next))))
+
+;; ------------------------------------------------------------------
+;; $str_concat — concatenate two Silicon UTF-16 LE strings.
+;; Both $a and $b are i32 pointers to length-prefixed buffers.
+;; Returns a new heap-allocated string containing $a followed by $b.
+;; ------------------------------------------------------------------
+(func $str_concat (param $a i32) (param $b i32) (result i32)
+  (local $len_a i32)
+  (local $len_b i32)
+  (local $total i32)
+  (local $dst   i32)
+  (local $i     i32)
+
+  (local.set $len_a (i32.load (local.get $a)))
+  (local.set $len_b (i32.load (local.get $b)))
+  (local.set $total (i32.add (local.get $len_a) (local.get $len_b)))
+
+  ;; allocate 4-byte header + combined payload
+  (local.set $dst
+    (call $alloc (i32.add (i32.const 4) (local.get $total))))
+
+  ;; write combined byte-length header
+  (i32.store (local.get $dst) (local.get $total))
+
+  ;; copy payload of $a byte by byte into dst+4
+  (local.set $i (i32.const 0))
+  (block $brk_a
+    (loop $cp_a
+      (br_if $brk_a (i32.ge_s (local.get $i) (local.get $len_a)))
+      (i32.store8
+        (i32.add (i32.add (local.get $dst) (i32.const 4)) (local.get $i))
+        (i32.load8_u
+          (i32.add (i32.add (local.get $a) (i32.const 4)) (local.get $i))))
+      (local.set $i (i32.add (local.get $i) (i32.const 1)))
+      (br $cp_a)))
+
+  ;; copy payload of $b byte by byte into dst+4+len_a
+  (local.set $i (i32.const 0))
+  (block $brk_b
+    (loop $cp_b
+      (br_if $brk_b (i32.ge_s (local.get $i) (local.get $len_b)))
+      (i32.store8
+        (i32.add
+          (i32.add (local.get $dst) (i32.add (i32.const 4) (local.get $len_a)))
+          (local.get $i))
+        (i32.load8_u
+          (i32.add (i32.add (local.get $b) (i32.const 4)) (local.get $i))))
+      (local.set $i (i32.add (local.get $i) (i32.const 1)))
+      (br $cp_b)))
+
+  (local.get $dst))
