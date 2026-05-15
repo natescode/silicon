@@ -27,10 +27,7 @@ export function emitModule(mod: IRModule, stdWat: string): string {
 
     for (const imp of mod.imports) parts.push(emitImport(imp))
     for (const g of mod.globals)  parts.push(emitGlobal(g))
-    for (const f of mod.functions) {
-        parts.push(emitFunction(f))
-        parts.push(`(export "${f.name}" (func $${f.name}))`)
-    }
+    for (const f of mod.functions) parts.push(emitFunction(f))
     for (const exp of mod.exports) parts.push(emitExplicitExport(exp))
     for (const ds of mod.dataSegments) parts.push(emitDataSegment(ds))
 

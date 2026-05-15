@@ -659,25 +659,27 @@ test("E2E: Assignment to function parameter emits local.set", () => {
 });
 
 /**
- * Test: Function definitions are auto-exported
- * WAT output must include (export "name" (func $name)) for @let and @fn
+ * Test: Function definitions without @export are not exported
+ * Functions are only exported when explicitly declared with @export.
  */
-test("E2E: @let function is auto-exported", () => {
+test("E2E: @let function without @export is not exported", () => {
     const sourceCode = loadExample("function_definition.si");
     const result = compileSource(sourceCode);
 
     expect(result.success).toBe(true);
     expect(result.wat).toBeDefined();
-    expect(result.wat).toContain('(export "add" (func $add))');
+    expect(result.wat).toContain("(func $add");
+    expect(result.wat).not.toContain('(export "add"');
 });
 
-test("E2E: @fn function is auto-exported", () => {
+test("E2E: @fn function without @export is not exported", () => {
     const sourceCode = loadExample("fn_function.si");
     const result = compileSource(sourceCode);
 
     expect(result.success).toBe(true);
     expect(result.wat).toBeDefined();
-    expect(result.wat).toContain('(export "add" (func $add))');
+    expect(result.wat).toContain("(func $add");
+    expect(result.wat).not.toContain('(export "add"');
 });
 
 /**
@@ -708,7 +710,7 @@ test("E2E: Zero-param @let emits zero-arg WAT func and is callable", () => {
     expect(result.wat).toContain("(func $PI");
     expect(result.wat).toContain("(i32.const 314)");
     expect(result.wat).toContain("(call $PI");
-    expect(result.wat).toContain('(export "PI" (func $PI))');
+    expect(result.wat).not.toContain('(export "PI"');
 });
 
 /**

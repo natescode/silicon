@@ -9,7 +9,13 @@
       "Bash(node *)",
       "Bash(grep -A5 'func $add')",
       "Bash(grep -A10 'func $compute')",
-      "Bash(git commit *)"
+      "Bash(git commit *)",
+      "Bash(powershell -c \"\\(Get-Content 'C:\\\\repos\\\\sigil\\\\src\\\\types\\\\typecheck.integration.test.ts'\\).Count\")",
+      "Bash(powershell *)",
+      "Bash(Get-ChildItem -Path \"C:\\\\repos\\\\sigil\\\\src\" -Recurse -File)",
+      "Bash(Select-Object -ExpandProperty FullName)",
+      "Bash(Sort-Object)",
+      "PowerShell(Get-Content *)"
     ]
   }
 }

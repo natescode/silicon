@@ -212,35 +212,34 @@ textarea#source::placeholder { color: var(--border); }
   <div class="editors">
     <div class="pane">
       <div class="pane-header"><span class="lang-badge">silicon</span> Source</div>
-      <textarea id="source" spellcheck="false">@type_sum Direction := North | South | East | West;
+      <textarea id="source" spellcheck="false">;; Web API bindings — declare the functions you want from the browser.
+;; The "web_" prefix routes imports to the "web" WASM namespace.
 
-@let dirCode d:Direction := {
-    &@match d,
-        Direction::North, { 0 },
-        Direction::South, { 1 },
-        Direction::East,  { 2 },
-        { 3 }
+@extern web_console_log   v:Int;
+@extern web_console_log_f v:Float;
+@extern web_math_sqrt     x:Float;
+@extern web_math_pow      base:Float, exp:Float;
+@extern web_math_random:Float;
+@extern web_performance_now:Float;
+
+;; ── Examples ──────────────────────────────────────────────────────────
+
+@let greet x:Int := {
+    &web_console_log x;
+    x
 };
 
-@let clamp v:Int, lo:Int, hi:Int := {
-    &@if v < lo, { &@return lo };
-    &@if v > hi, { &@return hi };
-    v
+@let hypotenuse a:Float, b:Float := {
+    &web_math_sqrt &web_math_pow a, 2.0 + &web_math_pow b, 2.0
 };
 
-@let sumTo n:Int := {
-    @var total:Int := 0;
-    @var i:Int := 1;
-    &@loop i <= n, {
-        total = total + i;
-        i = i + 1;
-    };
-    total
+@let roll := {
+    &web_math_random
 };
 
-@export dirCode;
-@export clamp;
-@export sumTo;
+@export greet;
+@export hypotenuse;
+@export roll;
 </textarea>
     </div>
     <div class="pane">
@@ -262,11 +261,13 @@ textarea#source::placeholder { color: var(--border); }
   </div>
 </div>
 
+<script src="/web-env.js"></script>
 <script>
 // ── State ──────────────────────────────────────────────────────────────────
 let wasmInstance = null
 let wasmExports = []          // ExportInfo[] from last compile
 let printBuffer = []          // captured print() calls
+let webEnv = null             // createWebEnv() instance
 
 // ── DOM refs ──────────────────────────────────────────────────────────────
 const btnCompile    = document.getElementById('btn-compile')
@@ -370,18 +371,16 @@ async function compile() {
 
   // Instantiate WASM module.
   printBuffer = []
+  webEnv = createWebEnv({
+    onPrint: (msg, type) => {
+      printBuffer.push(msg)
+      log(msg, type ?? 'print')
+    },
+  })
   try {
     const wasmBytes = Uint8Array.from(atob(data.wasm), c => c.charCodeAt(0))
-    const imports = {
-      env: {
-        print: (v) => {
-          printBuffer.push(v)
-          log(`print(${v})`, 'print')
-        },
-        read: () => 0,
-      },
-    }
-    const { instance } = await WebAssembly.instantiate(wasmBytes, imports)
+    const { instance } = await WebAssembly.instantiate(wasmBytes, webEnv.imports)
+    webEnv.bindInstance(instance)
     wasmInstance = instance
     wasmExports = data.exports ?? []
     renderExports(wasmExports, instance)
@@ -471,6 +470,7 @@ function callExport(exp, inputs, resultSpan) {
 
     printBuffer = []
     const raw = fn(...args)
+    if (webEnv) webEnv.flush()  // drain any pending char output from env.print
 
     const argStr = inputs.map(({ inp }) => inp.value.trim()).join(', ')
     const ret = exp.wasmResult === 'void' ? '(void)' : formatResult(raw, exp.wasmResult)
