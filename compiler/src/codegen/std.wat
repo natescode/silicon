@@ -128,6 +128,17 @@
       (i32.add (i32.const 4) (i32.mul (local.get $index) (i32.const 4))))))
 
 ;; ------------------------------------------------------------------
+;; $arr_store_i32 — write an i32 value to the Nth element of a prefixed array.
+;;   offset = ptr + 4 + (index * 4)
+;; ------------------------------------------------------------------
+(func $arr_store_i32 (param $ptr i32) (param $index i32) (param $value i32)
+  (i32.store
+    (i32.add
+      (local.get $ptr)
+      (i32.add (i32.const 4) (i32.mul (local.get $index) (i32.const 4))))
+    (local.get $value)))
+
+;; ------------------------------------------------------------------
 ;; $arr_load_f32 — read the Nth f32 element of a prefixed f32 array.
 ;; ------------------------------------------------------------------
 (func $arr_load_f32 (param $ptr i32) (param $index i32) (result f32)

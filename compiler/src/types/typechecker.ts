@@ -154,6 +154,7 @@ export default function typecheck(program: Program, registry?: ElaboratorRegistr
     // user-defined functions whose bodies call module functions can resolve
     // the return type correctly via type inference.
     if (moduleRegistry) preRegisterModules(moduleRegistry, ctx)
+    preRegisterStdFunctions(ctx)
     // Pre-registration pass: seed the function/symbol tables and type alias
     // table from top-level definitions so forward references resolve correctly.
     preRegisterDefinitions(program.elements as any[], ctx)
@@ -180,6 +181,25 @@ function preRegisterModules(moduleRegistry: ModuleRegistry, ctx: Ctx): void {
                 ctx.symbols.set(key, resultType)
             }
         }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// std.wat built-in runtime functions callable from Silicon
+// ---------------------------------------------------------------------------
+
+function preRegisterStdFunctions(ctx: Ctx): void {
+    const defs: Array<{ name: string; params: SiliconType[]; result: SiliconType }> = [
+        { name: 'alloc',          params: [TypeInt],                     result: TypeInt },
+        { name: 'alloc_array',    params: [TypeInt, TypeInt],            result: TypeInt },
+        { name: 'arr_len',        params: [TypeInt],                     result: TypeInt },
+        { name: 'arr_load_i32',   params: [TypeInt, TypeInt],            result: TypeInt },
+        { name: 'arr_load_f32',   params: [TypeInt, TypeInt],            result: TypeFloat },
+        { name: 'arr_store_i32',  params: [TypeInt, TypeInt, TypeInt],   result: TypeUnknown },
+    ]
+    for (const { name, params, result } of defs) {
+        ctx.functions.set(name, { params, result })
+        ctx.symbols.set(name, FunctionOf(params, result))
     }
 }
 

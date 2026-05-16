@@ -768,16 +768,22 @@ const EXAMPLES = {
 `# Snake — uses the tick + handle_key export convention.
 # Enable "run main" and compile. Use arrow keys to steer.
 
-@let GRID := 20;
-@let CELL := 16;
+@let GRID   := 20;
+@let CELL   := 16;
+@let MAXLEN := 400;
 
-@var head_x := 10;
-@var head_y := 10;
-@var dir    := 0;
-@var food_x := 5;
-@var food_y := 15;
-@var alive  := 1;
-@var length := 3;
+@var head_x     := 10;
+@var head_y     := 10;
+@var dir        := 0;
+@var food_x     := 5;
+@var food_y     := 15;
+@var alive      := 1;
+@var length     := 3;
+@var body_x_ptr := 0;
+@var body_y_ptr := 0;
+@var ring_head  := 0;
+@var draw_i     := 0;
+@var draw_bi    := 0;
 
 @fn cell x:Int, y:Int, r:Int, g:Int, b:Int := {
     &web::canvas_set_fill r, g, b;
@@ -786,17 +792,36 @@ const EXAMPLES = {
         15.0, 15.0
 };
 
+@fn draw_body := {
+    draw_i = 0;
+    &@loop (draw_i < length), {
+        draw_bi = (ring_head - length + draw_i + MAXLEN) % MAXLEN;
+        &cell (&arr_load_i32 body_x_ptr, draw_bi),
+              (&arr_load_i32 body_y_ptr, draw_bi),
+              63, 185, 80;
+        draw_i = draw_i + 1;
+    }
+};
+
 @fn draw := {
     &web::canvas_set_fill 13, 17, 23;
     &web::canvas_fill_rect 0.0, 0.0,
         (&@toFloat (GRID * CELL)), (&@toFloat (GRID * CELL));
-    &cell head_x, head_y, 63, 185, 80;
+    &draw_body;
     &cell food_x, food_y, 248, 81, 73
 };
 
 @fn main := {
+    body_x_ptr = &alloc_array MAXLEN, 4;
+    body_y_ptr = &alloc_array MAXLEN, 4;
     head_x = 10; head_y = 10;
-    dir = 0; alive = 1; length = 3;
+    dir = 0; alive = 1; length = 3; ring_head = 3;
+    &arr_store_i32 body_x_ptr, 0, 10;
+    &arr_store_i32 body_x_ptr, 1, 10;
+    &arr_store_i32 body_x_ptr, 2, 10;
+    &arr_store_i32 body_y_ptr, 0, 10;
+    &arr_store_i32 body_y_ptr, 1, 10;
+    &arr_store_i32 body_y_ptr, 2, 10;
     &draw
 };
 
@@ -809,6 +834,9 @@ const EXAMPLES = {
     &@if (head_x < 0) || (head_x >= GRID), { alive = 0; };
     &@if (head_y < 0) || (head_y >= GRID), { alive = 0; };
     &@if alive == 0, { &@return 0 };
+    &arr_store_i32 body_x_ptr, ring_head, head_x;
+    &arr_store_i32 body_y_ptr, ring_head, head_y;
+    ring_head = (ring_head + 1) % MAXLEN;
     &@if head_x == food_x, {
         &@if head_y == food_y, {
             length = length + 1;
