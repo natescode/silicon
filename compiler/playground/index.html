@@ -802,18 +802,18 @@ const EXAMPLES = {
 
 @fn tick := {
     &@if alive == 0, { &@return 0 };
-    &@if dir == 0, { head_x = head_x + 1 };
-    &@if dir == 1, { head_y = head_y + 1 };
-    &@if dir == 2, { head_x = head_x - 1 };
-    &@if dir == 3, { head_y = head_y - 1 };
-    &@if (head_x < 0) || (head_x >= GRID), { alive = 0 };
-    &@if (head_y < 0) || (head_y >= GRID), { alive = 0 };
+    &@if dir == 0, { head_x = head_x + 1; };
+    &@if dir == 1, { head_y = head_y + 1; };
+    &@if dir == 2, { head_x = head_x - 1; };
+    &@if dir == 3, { head_y = head_y - 1; };
+    &@if (head_x < 0) || (head_x >= GRID), { alive = 0; };
+    &@if (head_y < 0) || (head_y >= GRID), { alive = 0; };
     &@if alive == 0, { &@return 0 };
     &@if head_x == food_x, {
         &@if head_y == food_y, {
             length = length + 1;
             food_x = (food_x + 7) % GRID;
-            food_y = (food_y + 13) % GRID
+            food_y = (food_y + 13) % GRID;
         }
     };
     &draw;
@@ -821,10 +821,10 @@ const EXAMPLES = {
 };
 
 @fn handle_key key:Int := {
-    &@if key == 37, { dir = 2 };
-    &@if key == 38, { dir = 3 };
-    &@if key == 39, { dir = 0 };
-    &@if key == 40, { dir = 1 };
+    &@if key == 37, { dir = 2; };
+    &@if key == 38, { dir = 3; };
+    &@if key == 39, { dir = 0; };
+    &@if key == 40, { dir = 1; };
     0
 };
 

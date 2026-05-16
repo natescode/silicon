@@ -447,8 +447,30 @@ function lowerNamespace(n: any, ctx: LowerCtx): IRExpr {
     return { kind: 'GlobalGet', wasmType: wt, name: key }
 }
 
+/** Walk ExpressionEnd / ExpressionStart wrappers to reach a Namespace node. */
+function extractNamespacePath(node: any): string[] {
+    if (!node) return []
+    if (node.type === 'Namespace') return node.path ?? []
+    if (node.value !== undefined) return extractNamespacePath(node.value)
+    return []
+}
+
 function lowerBinaryOp(n: any, ctx: LowerCtx): IRExpr {
     const op: string = n.operator
+
+    // `=` in trailing expression position — the grammar parses `x = val` without
+    // a trailing `;` as a BinaryOp rather than an Assignment node. Recover by
+    // treating the left side as the assignment target.
+    if (op === '=') {
+        const path = extractNamespacePath(n.left).map(watId)
+        const target = path.join('::')
+        const value = lowerExpr(n.right, ctx)
+        const setStmt: IRStmt = ctx.locals.has(target)
+            ? { kind: 'LocalSet', name: target, value }
+            : { kind: 'GlobalSet', name: target, value }
+        return { kind: 'Block', wasmType: 'void', stmts: [setStmt] }
+    }
+
     const left = lowerExpr(n.left, ctx)
     const right = lowerExpr(n.right, ctx)
 
@@ -699,8 +721,7 @@ function lowerDefinitionAsExpr(node: any, ctx: LowerCtx): IRExpr {
 function lowerAssignmentAsExpr(node: any, ctx: LowerCtx): IRExpr {
     const stmt = lowerAsStmt(node, ctx)
     if (!stmt) return nop()
-    // Wrap as a void ExprStmt and return Nop so the block doesn't count it as trailing.
-    return nop()
+    return { kind: 'Block', wasmType: 'void', stmts: [stmt] }
 }
 
 function lowerArrayLiteral(n: any, ctx: LowerCtx): IRExpr {
