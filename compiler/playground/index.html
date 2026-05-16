@@ -295,7 +295,6 @@ button:disabled { opacity: 0.4; cursor: not-allowed; }
 <header>
   <div class="logo">⬡ Sigil <span>Playground</span></div>
   <select id="example-select">
-    <option value="" disabled selected>— Examples —</option>
     <option value="empty">Empty</option>
     <option value="hello_world">Hello World</option>
     <option value="hypotenuse">Hypotenuse</option>
@@ -866,7 +865,6 @@ document.getElementById('example-select').addEventListener('change', e => {
     editorView.dispatch({
         changes: { from: 0, to: editorView.state.doc.length, insert: src },
     })
-    e.target.value = ''  // reset so the same example can be reloaded
 })
 
 // ── Theme switching ───────────────────────────────────────────────────────
