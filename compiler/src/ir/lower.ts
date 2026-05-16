@@ -560,9 +560,10 @@ function lowerFunctionCall(n: any, ctx: LowerCtx): IRExpr {
     const watName = watId(name)
     const args = (n.args || []).map((a: any) => lowerExpr(a, ctx))
     const sig = ctx.functions.get(watName)
+    const inferT = n.inferredType as SiliconType | undefined
     const wt: WasmType = sig
-        ? (wasmTypeOf(sig.result) as WasmType) ?? 'void'
-        : resolveWasmType(n.inferredType as SiliconType | undefined, 'void')
+        ? resolveWasmType(sig.result, resolveWasmType(inferT, 'void'))
+        : resolveWasmType(inferT, 'void')
     return { kind: 'Call', wasmType: wt, callee: watName, callKind: 'user', args }
 }
 
