@@ -67,6 +67,7 @@ import {
     isComparable,
     isEqualityComparable,
 } from './types'
+import type { ModuleRegistry } from '../modules/registry'
 import {
     type TypeError,
     mismatch,
@@ -140,7 +141,7 @@ export interface TypeCheckResult {
  *     const { program: typed, errors } = typecheck(elaborated)
  *     if (errors.length) { ... }
  */
-export default function typecheck(program: Program, registry?: ElaboratorRegistry): TypeCheckResult {
+export default function typecheck(program: Program, registry?: ElaboratorRegistry, moduleRegistry?: ModuleRegistry): TypeCheckResult {
     const ctx: Ctx = {
         errors: [],
         symbols: new Map(),
@@ -149,6 +150,10 @@ export default function typecheck(program: Program, registry?: ElaboratorRegistr
         typeAliases: new Map(),
         registry,
     }
+    // Pre-registration pass: seed module function signatures first so that
+    // user-defined functions whose bodies call module functions can resolve
+    // the return type correctly via type inference.
+    if (moduleRegistry) preRegisterModules(moduleRegistry, ctx)
     // Pre-registration pass: seed the function/symbol tables and type alias
     // table from top-level definitions so forward references resolve correctly.
     preRegisterDefinitions(program.elements as any[], ctx)
@@ -156,6 +161,26 @@ export default function typecheck(program: Program, registry?: ElaboratorRegistr
         checkNode(element, ctx)
     }
     return { program, errors: ctx.errors, functions: ctx.functions, typeAliases: ctx.typeAliases }
+}
+
+// ---------------------------------------------------------------------------
+// Module pre-registration
+// ---------------------------------------------------------------------------
+
+function preRegisterModules(moduleRegistry: ModuleRegistry, ctx: Ctx): void {
+    for (const [modName, entry] of moduleRegistry) {
+        for (const [fnName, sig] of entry.functions) {
+            const key = `${modName}::${fnName}`
+            const paramTypes = sig.siliconParams.map(n => parseTypeName(n, ctx.typeAliases) ?? TypeUnknown)
+            const resultType = sig.siliconResult ? (parseTypeName(sig.siliconResult, ctx.typeAliases) ?? TypeUnknown) : TypeUnknown
+            ctx.functions.set(key, { params: paramTypes, result: resultType })
+            if (paramTypes.length > 0) {
+                ctx.symbols.set(key, FunctionOf(paramTypes, resultType))
+            } else {
+                ctx.symbols.set(key, resultType)
+            }
+        }
+    }
 }
 
 // ---------------------------------------------------------------------------

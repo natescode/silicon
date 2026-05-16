@@ -3,6 +3,8 @@ import type { WasmValType } from '../ir/nodes'
 export interface FnSig {
     params: WasmValType[]
     result?: WasmValType
+    siliconParams: string[]
+    siliconResult?: string
 }
 
 export interface ModuleEntry {

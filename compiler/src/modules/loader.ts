@@ -31,7 +31,7 @@ const BUILTIN_MODULES_DIR = join(__dir, '../strata/modules')
 // ---------------------------------------------------------------------------
 // Internal helpers
 // ---------------------------------------------------------------------------
-
+// The AST from the parser is wrapped in a bunch of Element/Item/Statement nodes — unwrap it to get to the actual Definition nodes.
 function unwrap(node: any): any {
     if (!node) return null
     if (node.type === 'Element') return unwrap(node.value)
@@ -40,6 +40,7 @@ function unwrap(node: any): any {
     return node
 }
 
+// Silicon types are a bit more flexible than WASM's — we only support i32 and f32, but allow various names for them.
 function siliconTypeToWasm(typename: string): WasmValType {
     return typename === 'Float' ? 'f32' : 'i32'
 }
@@ -59,16 +60,21 @@ function parseModuleDecls(source: string): Map<string, FnSig> {
             const fnName: string = node.name?.name ?? ''
             if (!fnName) continue
             const params: WasmValType[] = []
+            const siliconParams: string[] = []
             for (const p of (node.params ?? []) as any[]) {
                 if (p.isLiteral || !p.typeAnnotation) continue
-                params.push(siliconTypeToWasm(p.typeAnnotation.typename))
+                const tn: string = p.typeAnnotation.typename
+                params.push(siliconTypeToWasm(tn))
+                siliconParams.push(tn)
             }
             let result: WasmValType | undefined
+            let siliconResult: string | undefined
             const rtn: string | undefined = node.name?.typeAnnotation?.typename
             if (rtn && rtn !== 'Void') {
                 result = siliconTypeToWasm(rtn)
+                siliconResult = rtn
             }
-            functions.set(fnName, { params, result })
+            functions.set(fnName, { params, result, siliconParams, siliconResult })
         }
     } catch {
         // Malformed module file — skip
@@ -97,6 +103,7 @@ export function loadModules(projectDir: string = process.cwd()): ModuleRegistry 
     // Phase A: built-in env modules.
     if (existsSync(BUILTIN_MODULES_DIR)) {
         for (const filename of readdirSync(BUILTIN_MODULES_DIR)) {
+            // Only Silicon source files — skip .wat, .json, etc.
             if (extname(filename) !== '.si') continue
             const modName = basename(filename, '.si')
             const entry = loadModuleFile(join(BUILTIN_MODULES_DIR, filename), modName, 'env')

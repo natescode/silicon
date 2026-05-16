@@ -113,7 +113,7 @@ async function compileSilicon(source: string) {
         return { success: false, error: elabErrors.map(e => e.message).join('\n') }
     }
 
-    const { program: typed, errors: typeErrors, functions } = typecheck(elaborated, registry)
+    const { program: typed, errors: typeErrors, functions } = typecheck(elaborated, registry, moduleRegistry)
 
     if (typeErrors.length > 0) {
         return { success: false, error: typeErrors.map(formatTypeError).join('\n') }
@@ -131,7 +131,7 @@ async function compileSilicon(source: string) {
 // HTTP server
 // ---------------------------------------------------------------------------
 
-const PORT = Number(process.env.PORT ?? 3000)
+const PORT = Number(process.env.PORT ?? 3001)
 
 const server = Bun.serve({
     port: PORT,
@@ -153,7 +153,7 @@ const server = Bun.serve({
             if (await file.exists()) {
                 const ct = filePath.endsWith('.js') ? 'application/javascript; charset=utf-8'
                     : filePath.endsWith('.css') ? 'text/css; charset=utf-8'
-                    : 'application/octet-stream'
+                        : 'application/octet-stream'
                 return new Response(file, { headers: { 'Content-Type': ct } })
             }
         }
