@@ -32,13 +32,13 @@ html, body { height: 100%; background: var(--bg); color: var(--text); font-famil
 
 /* ── Header ────────────────────────────────────────────────────────────── */
 header {
-  display: flex; align-items: center; gap: 16px;
-  padding: 0 20px; height: 48px;
+  display: flex; align-items: center; gap: 12px;
+  padding: 0 16px; height: 48px;
   background: var(--surface); border-bottom: 1px solid var(--border);
   flex-shrink: 0;
 }
 
-.logo { font-size: 1rem; font-weight: 700; color: var(--accent); letter-spacing: 0.04em; user-select: none; }
+.logo { font-size: 1rem; font-weight: 700; color: var(--accent); letter-spacing: 0.04em; user-select: none; white-space: nowrap; }
 .logo span { color: var(--muted); font-weight: 400; font-size: 0.85rem; margin-left: 6px; }
 
 .header-actions { display: flex; gap: 8px; margin-left: auto; align-items: center; }
@@ -53,6 +53,16 @@ header {
 #theme-select   { max-width: 160px; }
 #example-select:hover, #theme-select:hover { border-color: var(--accent); }
 #example-select option, #theme-select option { background: var(--surface2); }
+
+.run-main-label {
+  display: flex; align-items: center; gap: 5px;
+  font-size: 0.82rem; color: var(--muted); cursor: pointer;
+  white-space: nowrap; user-select: none;
+}
+.run-main-label:hover { color: var(--text); }
+#run-main-checkbox {
+  accent-color: var(--accent); width: 13px; height: 13px; cursor: pointer;
+}
 
 button {
   cursor: pointer; border: none; border-radius: 6px; font-size: 0.82rem; font-weight: 500;
@@ -80,8 +90,14 @@ button:disabled { opacity: 0.4; cursor: not-allowed; }
 
 /* ── Main layout ───────────────────────────────────────────────────────── */
 .layout {
-  display: flex; flex-direction: column;
+  display: flex; flex-direction: row;
   height: calc(100vh - 48px);
+}
+
+/* Main content area (editors + bottom) */
+.main-area {
+  display: flex; flex-direction: column;
+  flex: 1; min-width: 0;
 }
 
 /* Top half: editor panes */
@@ -216,6 +232,62 @@ button:disabled { opacity: 0.4; cursor: not-allowed; }
 .console-line.result .msg   { color: var(--green); }
 
 .console-empty { color: var(--border); font-style: italic; padding: 4px 0; }
+
+/* ── Render panel ──────────────────────────────────────────────────────── */
+.render-panel {
+  display: flex; flex-direction: row;
+  flex-shrink: 0; width: 28px;
+  border-left: 1px solid var(--border);
+  background: var(--surface);
+  overflow: hidden;
+  transition: width 0.2s ease;
+}
+.render-panel.open { width: 360px; }
+
+.panel-toggle {
+  flex-shrink: 0; width: 28px; height: 100%;
+  border: none; border-right: 1px solid var(--border);
+  background: transparent; color: var(--muted);
+  cursor: pointer; font-size: 0.75rem; padding: 0;
+  display: flex; align-items: center; justify-content: center;
+  border-radius: 0;
+}
+.panel-toggle:hover { background: var(--surface2); color: var(--text); opacity: 1; }
+
+.panel-body {
+  flex: 1; display: flex; flex-direction: column; min-width: 0; overflow: hidden;
+}
+
+.panel-header-bar {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 6px 10px; background: var(--surface);
+  border-bottom: 1px solid var(--border); flex-shrink: 0;
+}
+.panel-title {
+  font-size: 0.72rem; color: var(--muted);
+  text-transform: uppercase; letter-spacing: 0.06em;
+}
+.btn-panel-clear {
+  background: var(--surface2); color: var(--muted);
+  border: 1px solid var(--border); padding: 2px 8px; font-size: 0.72rem;
+  border-radius: 4px;
+}
+.btn-panel-clear:hover { color: var(--red); border-color: var(--red); }
+
+.panel-content-area {
+  flex: 1; overflow-y: auto; display: flex; flex-direction: column;
+}
+
+#render-canvas {
+  display: block; flex-shrink: 0;
+  width: 332px; height: 332px;
+  background: #0d1117;
+}
+
+#html-out {
+  flex: 1; overflow-y: auto; min-height: 120px;
+}
+#html-out:empty { display: none; }
 </style>
 </head>
 <body>
@@ -234,6 +306,9 @@ button:disabled { opacity: 0.4; cursor: not-allowed; }
     <option value="color_match">Color Match</option>
     <option value="bitwise">Bitwise Ops</option>
     <option value="math_sampler">Math Sampler</option>
+    <option value="simple_main">Simple Main</option>
+    <option value="html_todo">HTML TODO</option>
+    <option value="snake">Snake</option>
   </select>
   <select id="theme-select">
     <option value="sigil-dark" selected>Sigil Dark</option>
@@ -241,6 +316,10 @@ button:disabled { opacity: 0.4; cursor: not-allowed; }
     <option value="github-light">GitHub Light</option>
   </select>
   <div class="header-actions">
+    <label class="run-main-label" title="Automatically call exported main() after each compile">
+      <input type="checkbox" id="run-main-checkbox">
+      run main
+    </label>
     <div class="status-dot" id="status-dot"></div>
     <button id="btn-clear-console">Clear Console</button>
     <button id="btn-compile">▶ Compile</button>
@@ -248,28 +327,47 @@ button:disabled { opacity: 0.4; cursor: not-allowed; }
 </header>
 
 <div class="layout">
-  <div class="editors">
-    <div class="pane">
-      <div class="pane-header"><span class="lang-badge">silicon</span> Source</div>
-      <div id="editor"></div>
+
+  <div class="main-area">
+    <div class="editors">
+      <div class="pane">
+        <div class="pane-header"><span class="lang-badge">silicon</span> Source</div>
+        <div id="editor"></div>
+      </div>
+      <div class="pane">
+        <div class="pane-header"><span class="lang-badge">wat</span> Output</div>
+        <div id="wat-output"><span style="color:var(--border);font-style:italic">Click ▶ Compile to see output</span></div>
+      </div>
     </div>
-    <div class="pane">
-      <div class="pane-header"><span class="lang-badge">wat</span> Output</div>
-      <div id="wat-output"><span style="color:var(--border);font-style:italic">Click ▶ Compile to see output</span></div>
+
+    <div class="bottom">
+      <div id="error-banner"></div>
+      <div id="exports-panel"></div>
+
+      <div class="console-header">
+        Console
+      </div>
+      <div id="console">
+        <div class="console-empty">No output yet. Compile and call an exported function.</div>
+      </div>
     </div>
   </div>
 
-  <div class="bottom">
-    <div id="error-banner"></div>
-    <div id="exports-panel"></div>
-
-    <div class="console-header">
-      Console
-    </div>
-    <div id="console">
-      <div class="console-empty">No output yet. Compile and call an exported function.</div>
+  <!-- Render panel (collapsed by default, opens for canvas/HTML output) -->
+  <div class="render-panel" id="render-panel">
+    <button class="panel-toggle" id="panel-toggle" title="Toggle render panel">▷</button>
+    <div class="panel-body">
+      <div class="panel-header-bar">
+        <span class="panel-title">Render</span>
+        <button class="btn-panel-clear" id="btn-panel-clear">Clear</button>
+      </div>
+      <div class="panel-content-area">
+        <canvas id="render-canvas" width="332" height="332"></canvas>
+        <div id="html-out"></div>
+      </div>
     </div>
   </div>
+
 </div>
 
 <script src="/web-env.js"></script>
@@ -613,6 +711,126 @@ const EXAMPLES = {
 @export sinWave;
 @export cosWave;
 @export logNat;`,
+
+    simple_main:
+`# Entry point example — call helpers from main and print results.
+# Enable "run main" and compile.
+
+@fn add a:Int, b:Int := { a + b };
+
+@fn factorial n:Int := {
+    &@if n <= 1, { &@return 1 };
+    n * (&factorial (n - 1))
+};
+
+@fn main := {
+    @local sum   := (&add 10, 32);
+    @local fac10 := (&factorial 10);
+    &web::console_log sum;
+    &web::console_log fac10
+};
+
+@export main;`,
+
+    html_todo:
+`# TODO list rendered into the HTML panel via web::set_html.
+# Enable "run main" and compile.
+
+@fn done_item label:String := {
+    '<li style="padding:8px 12px;margin:4px 0;border-radius:6px;'
+    ++ 'background:#21262d;color:#3fb950;text-decoration:line-through">'
+    ++ label ++ '</li>'
+};
+
+@fn todo_item label:String := {
+    '<li style="padding:8px 12px;margin:4px 0;border-radius:6px;'
+    ++ 'background:#21262d;color:#e6edf3">'
+    ++ label ++ '</li>'
+};
+
+@fn main := {
+    &web::set_html (
+        '<div style="font:14px system-ui,sans-serif;padding:16px;background:#0d1117;min-height:100%">'
+        ++ '<h2 style="color:#e6edf3;margin:0 0 12px">Sigil Milestones</h2>'
+        ++ '<ul style="list-style:none;padding:0">'
+        ++ (&done_item '@fn keyword')
+        ++ (&done_item 'web:: module system')
+        ++ (&done_item 'Syntax highlighting')
+        ++ (&todo_item 'HTML render panel')
+        ++ (&todo_item 'Snake in Silicon')
+        ++ '</ul></div>'
+    )
+};
+
+@export main;`,
+
+    snake:
+`# Snake — uses the tick + handle_key export convention.
+# Enable "run main" and compile. Use arrow keys to steer.
+
+@let GRID := 20;
+@let CELL := 16;
+
+@var head_x := 10;
+@var head_y := 10;
+@var dir    := 0;
+@var food_x := 5;
+@var food_y := 15;
+@var alive  := 1;
+@var length := 3;
+
+@fn cell x:Int, y:Int, r:Int, g:Int, b:Int := {
+    &web::canvas_set_fill r, g, b;
+    &web::canvas_fill_rect
+        (&@toFloat (x * CELL)), (&@toFloat (y * CELL)),
+        15.0, 15.0
+};
+
+@fn draw := {
+    &web::canvas_set_fill 13, 17, 23;
+    &web::canvas_fill_rect 0.0, 0.0,
+        (&@toFloat (GRID * CELL)), (&@toFloat (GRID * CELL));
+    &cell head_x, head_y, 63, 185, 80;
+    &cell food_x, food_y, 248, 81, 73
+};
+
+@fn main := {
+    head_x = 10; head_y = 10;
+    dir = 0; alive = 1; length = 3;
+    &draw
+};
+
+@fn tick := {
+    &@if alive == 0, { &@return 0 };
+    &@if dir == 0, { head_x = head_x + 1 };
+    &@if dir == 1, { head_y = head_y + 1 };
+    &@if dir == 2, { head_x = head_x - 1 };
+    &@if dir == 3, { head_y = head_y - 1 };
+    &@if (head_x < 0) || (head_x >= GRID), { alive = 0 };
+    &@if (head_y < 0) || (head_y >= GRID), { alive = 0 };
+    &@if alive == 0, { &@return 0 };
+    &@if head_x == food_x, {
+        &@if head_y == food_y, {
+            length = length + 1;
+            food_x = (food_x + 7) % GRID;
+            food_y = (food_y + 13) % GRID
+        }
+    };
+    &draw;
+    0
+};
+
+@fn handle_key key:Int := {
+    &@if key == 37, { dir = 2 };
+    &@if key == 38, { dir = 3 };
+    &@if key == 39, { dir = 0 };
+    &@if key == 40, { dir = 1 };
+    0
+};
+
+@export main;
+@export tick;
+@export handle_key;`,
 }
 
 document.getElementById('example-select').addEventListener('change', e => {
@@ -643,6 +861,9 @@ let wasmInstance = null
 let wasmExports = []
 let printBuffer = []
 let webEnv = null
+let gameLoopInterval = null
+let keydownListener = null
+let renderPanelOpen = false
 
 // ── DOM refs ──────────────────────────────────────────────────────────────
 const btnCompile      = document.getElementById('btn-compile')
@@ -652,6 +873,44 @@ const watOutput       = document.getElementById('wat-output')
 const exportsPanel    = document.getElementById('exports-panel')
 const errorBanner     = document.getElementById('error-banner')
 const consoleEl       = document.getElementById('console')
+const runMainCheckbox = document.getElementById('run-main-checkbox')
+const renderPanel     = document.getElementById('render-panel')
+const panelToggle     = document.getElementById('panel-toggle')
+const btnPanelClear   = document.getElementById('btn-panel-clear')
+
+// ── Render panel ──────────────────────────────────────────────────────────
+function openRenderPanel() {
+    if (!renderPanelOpen) toggleRenderPanel()
+}
+
+function toggleRenderPanel() {
+    renderPanelOpen = !renderPanelOpen
+    if (renderPanelOpen) {
+        renderPanel.classList.add('open')
+        panelToggle.textContent = '◁'
+    } else {
+        renderPanel.classList.remove('open')
+        panelToggle.textContent = '▷'
+    }
+}
+
+panelToggle.addEventListener('click', toggleRenderPanel)
+
+btnPanelClear.addEventListener('click', () => {
+    const canvas = document.getElementById('render-canvas')
+    if (canvas) {
+        const ctx = canvas.getContext('2d')
+        if (ctx) ctx.clearRect(0, 0, canvas.width, canvas.height)
+    }
+    const htmlOut = document.getElementById('html-out')
+    if (htmlOut) htmlOut.innerHTML = ''
+})
+
+// ── Auto-run checkbox ─────────────────────────────────────────────────────
+runMainCheckbox.checked = localStorage.getItem('run-main') === 'true'
+runMainCheckbox.addEventListener('change', () => {
+    localStorage.setItem('run-main', runMainCheckbox.checked)
+})
 
 // ── Utilities ─────────────────────────────────────────────────────────────
 function setStatus(state) {
@@ -701,10 +960,58 @@ function highlightWat(text) {
     .replace(/\b(\d+(?:\.\d+)?)\b/g, '<span class="num">$1</span>')
 }
 
+// ── Auto-run main + game loop ──────────────────────────────────────────────
+function autoRunMain() {
+    const mainExp = wasmExports.find(e => e.name === 'main' && e.params.length === 0)
+    if (!mainExp) return
+
+    try {
+        wasmInstance.exports.main()
+        if (webEnv) webEnv.flush()
+        log('main() called automatically', 'info')
+    } catch (e) {
+        log('main() threw: ' + e.message, 'err')
+        return
+    }
+
+    const tickExp      = wasmExports.find(e => e.name === 'tick'       && e.params.length === 0)
+    const handleKeyExp = wasmExports.find(e => e.name === 'handle_key' && e.params.length === 1)
+
+    if (tickExp) {
+        openRenderPanel()
+        gameLoopInterval = setInterval(() => {
+            try {
+                wasmInstance.exports.tick()
+                if (webEnv) webEnv.flush()
+            } catch (e) {
+                clearInterval(gameLoopInterval)
+                gameLoopInterval = null
+                log('tick() threw: ' + e.message, 'err')
+            }
+        }, 120)
+    }
+
+    if (handleKeyExp) {
+        keydownListener = ev => {
+            try {
+                wasmInstance.exports.handle_key(ev.keyCode)
+                if (webEnv) webEnv.flush()
+            } catch (ex) {
+                log('handle_key() threw: ' + ex.message, 'err')
+            }
+        }
+        document.addEventListener('keydown', keydownListener)
+    }
+}
+
 // ── Compile ────────────────────────────────────────────────────────────────
 btnCompile.addEventListener('click', compile)
 
 async function compile() {
+  // Tear down any running game loop from the previous compile
+  if (gameLoopInterval) { clearInterval(gameLoopInterval); gameLoopInterval = null }
+  if (keydownListener)  { document.removeEventListener('keydown', keydownListener); keydownListener = null }
+
   clearError()
   wasmInstance = null
   exportsPanel.innerHTML = ''
@@ -745,6 +1052,7 @@ async function compile() {
       printBuffer.push(msg)
       log(msg, type ?? 'print')
     },
+    onRenderNeeded: () => openRenderPanel(),
   })
   try {
     const wasmBytes = Uint8Array.from(atob(data.wasm), c => c.charCodeAt(0))
@@ -755,6 +1063,7 @@ async function compile() {
     renderExports(wasmExports, instance)
     setStatus('ok')
     log(`Compiled OK — ${wasmExports.length} export(s) ready`, 'info')
+    if (runMainCheckbox.checked) autoRunMain()
   } catch (e) {
     showError('WASM instantiation failed: ' + e.message)
     setStatus('err')

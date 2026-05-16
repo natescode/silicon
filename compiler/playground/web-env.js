@@ -50,6 +50,7 @@
         var onPrint = opts.onPrint || function (msg, type) {
             console.log('[web-env] ' + msg)
         }
+        var onRenderNeeded = opts.onRenderNeeded || null
 
         // Memory and allocator are wired after WASM instantiation via bindInstance().
         var wasmMemory = null
@@ -148,7 +149,65 @@
                 // Time
                 performance_now: function () { return performance.now() },
                 date_now:        function () { return Date.now() },
+
+                // Canvas drawing
+                canvas_set_fill: function (r, g, b) {
+                    var ctx = getCanvasCtx()
+                    if (ctx) ctx.fillStyle = 'rgb(' + r + ',' + g + ',' + b + ')'
+                },
+                canvas_set_stroke: function (r, g, b) {
+                    var ctx = getCanvasCtx()
+                    if (ctx) ctx.strokeStyle = 'rgb(' + r + ',' + g + ',' + b + ')'
+                },
+                canvas_fill_rect: function (x, y, w, h) {
+                    var ctx = getCanvasCtx()
+                    if (ctx) ctx.fillRect(x, y, w, h)
+                },
+                canvas_stroke_rect: function (x, y, w, h) {
+                    var ctx = getCanvasCtx()
+                    if (ctx) ctx.strokeRect(x, y, w, h)
+                },
+                canvas_clear_rect: function (x, y, w, h) {
+                    var ctx = getCanvasCtx()
+                    if (ctx) ctx.clearRect(x, y, w, h)
+                },
+                canvas_fill_text: function (ptr, x, y) {
+                    var ctx = getCanvasCtx()
+                    if (ctx) ctx.fillText(readLenString(ptr), x, y)
+                },
+                canvas_set_font: function (ptr) {
+                    var ctx = getCanvasCtx()
+                    if (ctx) ctx.font = readLenString(ptr)
+                },
+                canvas_width: function () {
+                    var el = document.getElementById('render-canvas')
+                    return el ? el.width : 320
+                },
+                canvas_height: function () {
+                    var el = document.getElementById('render-canvas')
+                    return el ? el.height : 320
+                },
+
+                // HTML output
+                set_html: function (ptr) {
+                    var el = document.getElementById('html-out')
+                    if (el) {
+                        el.innerHTML = readLenString(ptr)
+                        if (onRenderNeeded) onRenderNeeded()
+                    }
+                },
+                clear_html: function () {
+                    var el = document.getElementById('html-out')
+                    if (el) el.innerHTML = ''
+                },
             },
+        }
+
+        function getCanvasCtx() {
+            var el = document.getElementById('render-canvas')
+            if (!el) return null
+            if (onRenderNeeded) onRenderNeeded()
+            return el.getContext('2d')
         }
 
         return {

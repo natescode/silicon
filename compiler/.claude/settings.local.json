@@ -15,7 +15,10 @@
       "Bash(Get-ChildItem -Path \"C:\\\\repos\\\\sigil\\\\src\" -Recurse -File)",
       "Bash(Select-Object -ExpandProperty FullName)",
       "Bash(Sort-Object)",
-      "PowerShell(Get-Content *)"
+      "PowerShell(Get-Content *)",
+      "Bash(git stash *)",
+      "Bash(curl -s -X POST http://localhost:3001/compile -H 'Content-Type: application/json' -d '{ *)",
+      "Bash(bun -e \"const d=await Bun.stdin.text\\(\\); const r=JSON.parse\\(d\\); if\\(!r.success\\){console.log\\('ERROR:', r.error\\)}else{console.log\\('OK'\\); console.log\\(JSON.stringify\\(r.exports,null,2\\)\\)}\")"
     ]
   }
 }

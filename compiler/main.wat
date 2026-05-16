@@ -32,6 +32,7 @@
 (import "env" "read"  (func $read  (result i32)))
 
 (memory 1)
+(export "memory" (memory 0))
 (global $heap (mut i32) (i32.const 1024))
 
 ;; ------------------------------------------------------------------
@@ -75,6 +76,7 @@
   (local.set $addr (global.get $heap))
   (global.set $heap (local.get $new_heap))
   (local.get $addr))
+(export "alloc" (func $alloc))
 
 ;; ------------------------------------------------------------------
 ;; $alloc_array — allocate a length-prefixed region holding `$count`
@@ -170,75 +172,59 @@
       (local.set $i (i32.add (local.get $i) (i32.const 1)))
       (br $next))))
 
-(global $Color_Red i32 (i32.const 0))
-(global $Color_Green i32 (i32.const 1))
-(global $Color_Blue i32 (i32.const 2))
-(global $Status_Ok i32 (i32.const 0))
-(global $Status_Warn i32 (i32.const 1))
-(global $Status_Error i32 (i32.const 2))
-(func $add (param $a i32) (param $b i32) (result i32)
+;; ------------------------------------------------------------------
+;; $str_concat — concatenate two Silicon UTF-16 LE strings.
+;; Both $a and $b are i32 pointers to length-prefixed buffers.
+;; Returns a new heap-allocated string containing $a followed by $b.
+;; ------------------------------------------------------------------
+(func $str_concat (param $a i32) (param $b i32) (result i32)
+  (local $len_a i32)
+  (local $len_b i32)
+  (local $total i32)
+  (local $dst   i32)
+  (local $i     i32)
+
+  (local.set $len_a (i32.load (local.get $a)))
+  (local.set $len_b (i32.load (local.get $b)))
+  (local.set $total (i32.add (local.get $len_a) (local.get $len_b)))
+
+  ;; allocate 4-byte header + combined payload
+  (local.set $dst
+    (call $alloc (i32.add (i32.const 4) (local.get $total))))
+
+  ;; write combined byte-length header
+  (i32.store (local.get $dst) (local.get $total))
+
+  ;; copy payload of $a byte by byte into dst+4
+  (local.set $i (i32.const 0))
+  (block $brk_a
+    (loop $cp_a
+      (br_if $brk_a (i32.ge_s (local.get $i) (local.get $len_a)))
+      (i32.store8
+        (i32.add (i32.add (local.get $dst) (i32.const 4)) (local.get $i))
+        (i32.load8_u
+          (i32.add (i32.add (local.get $a) (i32.const 4)) (local.get $i))))
+      (local.set $i (i32.add (local.get $i) (i32.const 1)))
+      (br $cp_a)))
+
+  ;; copy payload of $b byte by byte into dst+4+len_a
+  (local.set $i (i32.const 0))
+  (block $brk_b
+    (loop $cp_b
+      (br_if $brk_b (i32.ge_s (local.get $i) (local.get $len_b)))
+      (i32.store8
+        (i32.add
+          (i32.add (local.get $dst) (i32.add (i32.const 4) (local.get $len_a)))
+          (local.get $i))
+        (i32.load8_u
+          (i32.add (i32.add (local.get $b) (i32.const 4)) (local.get $i))))
+      (local.set $i (i32.add (local.get $i) (i32.const 1)))
+      (br $cp_b)))
+
+  (local.get $dst))
+
+(func $__start 
 (local $addr i32)
-(i32.add (local.get $a) (local.get $b))
+(i32.const 5)
 )
-(export "add" (func $add))
-(func $safeDivide (param $x i32) (param $y i32) (result i32)
-(local $addr i32)
-(if
-  (i32.eq (local.get $y) (i32.const 0))
-  (then (return (i32.const 0)))
-)
-(i32.div_s (local.get $x) (local.get $y))
-)
-(export "safeDivide" (func $safeDivide))
-(func $countDown (param $n i32) (result i32)
-(local $addr i32)
-(local $i i32)
-(local.set $i (local.get $n))
-(block $brk_0
-  (loop $cont_0
-    (br_if $brk_0 (i32.eqz (i32.gt_s (local.get $i) (i32.const 0))))
-    (local.set $i (i32.sub (local.get $i) (i32.const 1)))
-    (br $cont_0)
-  )
-)
-(local.get $i)
-)
-(export "countDown" (func $countDown))
-(func $colorCode (param $c i32) (result i32)
-(local $addr i32)
-(if (result i32)
-  (i32.eq (local.get $c) (global.get $Color_Red))
-  (then (i32.const 1))
-  (else (if (result i32)
-  (i32.eq (local.get $c) (global.get $Color_Green))
-  (then (i32.const 2))
-  (else (i32.const 0))
-))
-)
-)
-(export "colorCode" (func $colorCode))
-(func $statusPriority (param $s i32) (result i32)
-(local $addr i32)
-(if (result i32)
-  (i32.eq (local.get $s) (global.get $Status_Error))
-  (then (i32.const 2))
-  (else (if (result i32)
-  (i32.eq (local.get $s) (global.get $Status_Warn))
-  (then (i32.const 1))
-  (else (i32.const 0))
-))
-)
-)
-(export "statusPriority" (func $statusPriority))
-(func $circleArea (param $r f32) (result f32)
-(local $addr i32)
-(f32.mul (local.get $r) (local.get $r))
-)
-(export "circleArea" (func $circleArea))
-(export "add" (func $add))
-(export "safeDivide" (func $safeDivide))
-(export "countDown" (func $countDown))
-(export "colorCode" (func $colorCode))
-(export "statusPriority" (func $statusPriority))
-(export "circleArea" (func $circleArea))
 )
