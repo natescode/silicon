@@ -336,10 +336,15 @@ describe('Phase 0 WASIX smoke test', () => {
             bundle += '\n'
         }
         const userProg = [
+            // good definitions — exercise every codegen kind
             '@let x := 42;',
             '@fn add a:Int, b:Int := { a + b };',
             '@var counter := 0;',
             '@extern print x:Int;',
+            // bad definitions — exercise each constraint code (0/1/2)
+            '@bogus thing := 0;',                // unknown keyword (0)
+            '@var oops a, b := 0;',              // global doesn't take params (1)
+            '@extern badext x:Int := 0;',        // extern doesn't take binding (2)
         ].join('\n') + '\n'
         const input = bundle + userProg
 
@@ -354,6 +359,12 @@ describe('Phase 0 WASIX smoke test', () => {
                 defs.push({ keyword: el.keyword, name, hook: el.hook })
             }
         }
+        // Classify each Stage 0 error message into the Silicon error code.
+        const classify = (msg: string): number => {
+            if (msg.includes('does not accept parameters')) return 1
+            if (msg.includes('does not accept a binding')) return 2
+            return 0
+        }
         const lines: string[] = ['{']
         lines.push('  "definitions": [')
         defs.forEach((d, i) => {
@@ -367,7 +378,7 @@ describe('Phase 0 WASIX smoke test', () => {
             lines.push('  "errors": [')
             errors.forEach((e, i) => {
                 const sep = i < errors.length - 1 ? ',' : ''
-                lines.push(`    { "keyword": "${e.keyword}" }${sep}`)
+                lines.push(`    { "keyword": "${e.keyword}", "code": ${classify(e.message)} }${sep}`)
             })
             lines.push('  ]')
         }

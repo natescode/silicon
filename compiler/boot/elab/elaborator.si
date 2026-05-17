@@ -24,19 +24,33 @@
 @use '../parser/parse.si';
 @use '../strata/registry.si';
 
-# Field offsets within an AST_DEFINITION record (mirrors ast.si).
+# Field offsets within an AST_DEFINITION record (mirrors ast.si):
+#   [kind, kw_off, kw_len, name_off, name_len, type_off, type_len,
+#    n_params, param0_idx, ..., binding_idx_or_-1]
 @let DEF_FIELD_KW_OFF:Int   := 1;
 @let DEF_FIELD_KW_LEN:Int   := 2;
 @let DEF_FIELD_NAME_OFF:Int := 3;
 @let DEF_FIELD_NAME_LEN:Int := 4;
+@let DEF_FIELD_N_PARAMS:Int := 7;
+@let DEF_FIELD_PARAM0:Int   := 8;
+# binding is at DEF_FIELD_PARAM0 + n_params.
+
+# Error codes — match Stage 0 message classification.
+#   0  unknown definition keyword
+#   1  '@kw' does not accept parameters
+#   2  '@kw' does not accept a binding (:= ...)
+@let ELAB_ERR_UNKNOWN:Int := 0;
+@let ELAB_ERR_PARAMS:Int  := 1;
+@let ELAB_ERR_BINDING:Int := 2;
 
 # ── Side table state ─────────────────────────────────────────────────
 
 @var E_DEF_IDX:Int  := 0;   # vec<i32> of AST_DEFINITION node indices
 @var E_HOOK_OFF:Int := 0;   # vec<i32> of codegen-kind off (in P_SRC)
 @var E_HOOK_LEN:Int := 0;   # vec<i32> of codegen-kind len
-@var E_ERR_OFF:Int  := 0;   # vec<i32> of unknown-keyword spans (off)
-@var E_ERR_LEN:Int  := 0;   # vec<i32> of unknown-keyword spans (len)
+@var E_ERR_OFF:Int  := 0;   # vec<i32> of error keyword spans (off)
+@var E_ERR_LEN:Int  := 0;   # vec<i32> of error keyword spans (len)
+@var E_ERR_CODE:Int := 0;   # vec<i32> of ELAB_ERR_* codes
 
 @fn elab_init := {
   E_DEF_IDX  = &vec_new;
@@ -44,6 +58,7 @@
   E_HOOK_LEN = &vec_new;
   E_ERR_OFF  = &vec_new;
   E_ERR_LEN  = &vec_new;
+  E_ERR_CODE = &vec_new;
 };
 
 @fn elab_def_count:Int       := { &vec_len E_DEF_IDX };
@@ -53,6 +68,55 @@
 @fn elab_err_count:Int       := { &vec_len E_ERR_OFF };
 @fn elab_err_off:Int i:Int   := { &vec_get E_ERR_OFF, i };
 @fn elab_err_len:Int i:Int   := { &vec_get E_ERR_LEN, i };
+@fn elab_err_code:Int i:Int  := { &vec_get E_ERR_CODE, i };
+
+@fn elab_push_err off:Int, len:Int, code:Int := {
+  E_ERR_OFF  = &vec_push E_ERR_OFF,  off;
+  E_ERR_LEN  = &vec_push E_ERR_LEN,  len;
+  E_ERR_CODE = &vec_push E_ERR_CODE, code;
+};
+
+# ── allows-params / allows-binding derivation ────────────────────────
+# Stage 0 derives the flags directly from the codegen kind:
+#   allowsParams  = kind ∈ {function, extern}
+#   allowsBinding = kind ∉ {extern, export}
+# We compare the hook bytes (sitting in P_SRC) against literal byte
+# sequences in the data segment.
+
+@fn span_eq_lit:Int off:Int, len:Int, lit_ptr:Int, lit_len:Int := {
+  @local ok := 1;
+  &@if (len != lit_len), { ok = 0; };
+  @local i := 0;
+  &@loop ((ok * (i < len)) == 1), {
+    @local a := &WASM::i32_load8_u (P_SRC + off + i);
+    @local b := &WASM::i32_load8_u (lit_ptr + i);
+    &@if (a != b), { ok = 0; };
+    i = i + 1;
+  };
+  ok
+};
+
+@fn lit_function_ptr:Int := { (&str_ptr 'function') + 4 };
+@fn lit_extern_ptr:Int   := { (&str_ptr 'extern')   + 4 };
+@fn lit_export_ptr:Int   := { (&str_ptr 'export')   + 4 };
+
+@fn hook_allows_params:Int hk_off:Int, hk_len:Int := {
+  @local r := 0;
+  &@if ((&span_eq_lit hk_off, hk_len, (&lit_function_ptr), 8) == 1),
+    { r = 1; };
+  &@if ((&span_eq_lit hk_off, hk_len, (&lit_extern_ptr),   6) == 1),
+    { r = 1; };
+  r
+};
+
+@fn hook_allows_binding:Int hk_off:Int, hk_len:Int := {
+  @local r := 1;
+  &@if ((&span_eq_lit hk_off, hk_len, (&lit_extern_ptr), 6) == 1),
+    { r = 0; };
+  &@if ((&span_eq_lit hk_off, hk_len, (&lit_export_ptr), 6) == 1),
+    { r = 0; };
+  r
+};
 
 # ── Walk ─────────────────────────────────────────────────────────────
 
@@ -74,8 +138,7 @@
       @local kw_len := &ast_field P_AST, elem, DEF_FIELD_KW_LEN;
       @local dk := &registry_dk_lookup kw_off, kw_len;
       &@if (dk < 0), {
-        E_ERR_OFF = &vec_push E_ERR_OFF, kw_off;
-        E_ERR_LEN = &vec_push E_ERR_LEN, kw_len;
+        &elab_push_err kw_off, kw_len, ELAB_ERR_UNKNOWN;
       };
       &@if (dk >= 0), {
         @local cg_off := &registry_dk_cg_off dk;
@@ -83,6 +146,16 @@
         E_DEF_IDX  = &vec_push E_DEF_IDX,  elem;
         E_HOOK_OFF = &vec_push E_HOOK_OFF, cg_off;
         E_HOOK_LEN = &vec_push E_HOOK_LEN, cg_len;
+
+        # Constraint validation: params + binding.
+        @local n_params := &ast_field P_AST, elem, DEF_FIELD_N_PARAMS;
+        &@if ((n_params > 0) * ((&hook_allows_params cg_off, cg_len) == 0) == 1), {
+          &elab_push_err kw_off, kw_len, ELAB_ERR_PARAMS;
+        };
+        @local binding_idx := &ast_field P_AST, elem, (DEF_FIELD_PARAM0 + n_params);
+        &@if ((binding_idx >= 0) * ((&hook_allows_binding cg_off, cg_len) == 0) == 1), {
+          &elab_push_err kw_off, kw_len, ELAB_ERR_BINDING;
+        };
       };
     };
     i = i + 1;

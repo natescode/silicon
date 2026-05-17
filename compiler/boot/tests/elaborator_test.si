@@ -79,8 +79,12 @@
   &@loop (i < n_err), {
     @local eo := &elab_err_off i;
     @local el := &elab_err_len i;
+    @local ec := &elab_err_code i;
     &jw_str '    { "keyword": ';
     &jw_quoted_span eo, el;
+    &jw_str ', "code": ';
+    # Single ASCII digit — codes are 0..2.
+    &jw_byte (48 + ec);
     &jw_str ' }';
     &@if ((i + 1) < n_err), { &jw_byte 44; };
     &jw_byte 10;

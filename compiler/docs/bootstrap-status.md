@@ -98,10 +98,11 @@ Still ahead for Phase 3:
 | Slice                                                | Status | LoC Silicon |
 | ---------------------------------------------------- | ------ | ----------- |
 | Elaborator walker — Definition.hook stamping         | **Landed** | ~95 |
-| Phase 4 gate slice 1: elaboration JSON byte-equal vs Stage 0 | **Landed** | — |
+| Defkind constraint validation (params / binding)     | **Landed** | (in elaborator) |
+| Phase 4 gate: elaboration JSON byte-equal vs Stage 0 | **Landed** | — |
 | Body interpreter (`&Compiler::*` surface)            | Pending | ~250 (estimated) |
 | BinaryOp.semantics resolution                        | Pending | small |
-| Defkind constraint validation (params / binding / generics) | Pending | small |
+| Generics-not-allowed validation                      | Deferred — parser doesn't yet store generic params on Definitions |
 
 What lands today:
 - `boot/elab/elaborator.si` walks `AST_PROGRAM`, looks up each
@@ -115,8 +116,16 @@ What lands today:
 - `boot/tests/elaborator_test.si` reads the strata bundle + a
   user-program tail from stdin and emits
   `{ "definitions": [...], "errors": [...] }`.
-- Phase 4 gate slice 1: bun-side test rebuilds the same dump
-  using Stage 0's `elaborate(ast, reg)` and diffs byte-for-byte.
+- Phase 4 gate: bun-side test rebuilds the same dump using
+  Stage 0's `elaborate(ast, reg)` and diffs byte-for-byte.
+- Constraint validation: `allowsParams` and `allowsBinding` are
+  derived from the hook (codegen kind) via byte comparison
+  against `"function"`, `"extern"`, `"export"` literals.
+  Violations are classified into error codes:
+  `0` unknown keyword, `1` params not allowed, `2` binding not
+  allowed.  The bun-side dump classifies Stage 0's error
+  messages into the same codes via substring match — gate
+  currently exercises all three.
 
 Still ahead for Phase 4:
 - Body interpreter — port `src/elaborator/strataBody.ts` (~250
