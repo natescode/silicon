@@ -16,7 +16,7 @@
 export type CodegenKind =
     | 'function' | 'global' | 'local' | 'extern'
     | 'type_alias' | 'type_distinct' | 'type_sum'
-    | 'export'
+    | 'export' | 'platform'
 
 export interface DefKindEntry {
     keyword: string          // full keyword, e.g. "@let"

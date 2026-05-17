@@ -38,7 +38,8 @@ export const irKinds: Record<string, IRKind> = {
     // -------------------------------------------------------------------------
     // Metadata kinds — non-value-producing annotations lowered to module directives
     // -------------------------------------------------------------------------
-    meta_export: { name: 'IR::meta_export', codegenKind: 'export', description: 'Metadata: explicit export declaration (@export)' },
+    meta_export:    { name: 'IR::meta_export',    codegenKind: 'export',    description: 'Metadata: explicit export declaration (@export)' },
+    meta_platform:  { name: 'IR::meta_platform',  codegenKind: 'platform',  description: 'Metadata: platform declaration (@platform) — no WAT emitted' },
 }
 
 export function isIRKind(name: string): boolean {

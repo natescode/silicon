@@ -1,3 +1,7 @@
 @stratum_keyword ExportDecl ('@export', Node) = {
   &IR::meta_export;
 };
+
+@stratum_keyword PlatformDecl ('@platform', Node) = {
+  &IR::meta_platform;
+};

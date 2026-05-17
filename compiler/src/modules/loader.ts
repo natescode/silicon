@@ -49,7 +49,7 @@ function siliconTypeToWasm(typename: string): WasmValType {
  * Parse a module .si file (raw AST walk — no elaboration needed).
  * Extracts @extern declarations and their WASM parameter/return types.
  */
-function parseModuleDecls(source: string): Map<string, FnSig> {
+export function parseModuleDecls(source: string): Map<string, FnSig> {
     const functions = new Map<string, FnSig>()
     try {
         const match = parse(source)

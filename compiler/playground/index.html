@@ -54,6 +54,32 @@ header {
 #example-select:hover, #theme-select:hover { border-color: var(--accent); }
 #example-select option, #theme-select option { background: var(--surface2); }
 
+/* ── Platform feature selector ──────────────────────────────────── */
+.platform-selector {
+  display: flex; align-items: center; gap: 6px;
+  padding: 0 10px; border-left: 1px solid var(--border);
+  font-size: 0.78rem;
+}
+.platform-label {
+  color: var(--muted); white-space: nowrap; user-select: none;
+  font-size: 0.75rem;
+}
+.platform-name {
+  color: var(--yellow); font-family: var(--mono); font-weight: 600;
+  font-size: 0.78rem; margin-right: 4px;
+}
+.feature-label {
+  display: flex; align-items: center; gap: 3px;
+  color: var(--muted); cursor: pointer; user-select: none;
+  padding: 3px 7px; border-radius: 4px;
+  border: 1px solid transparent;
+  font-size: 0.75rem; white-space: nowrap;
+  transition: border-color 0.12s, color 0.12s;
+}
+.feature-label:hover { border-color: var(--border); color: var(--text); }
+.feature-label input { display: none; }
+.feature-label.active { border-color: var(--accent); color: var(--accent); }
+
 .run-main-label {
   display: flex; align-items: center; gap: 5px;
   font-size: 0.82rem; color: var(--muted); cursor: pointer;
@@ -314,6 +340,21 @@ button:disabled { opacity: 0.4; cursor: not-allowed; }
     <option value="vscode-dark">VSCode Dark</option>
     <option value="github-light">GitHub Light</option>
   </select>
+
+  <div class="platform-selector">
+    <span class="platform-label">Platform:</span>
+    <span class="platform-name">web</span>
+    <label class="feature-label active" id="feature-canvas-label" title="2D canvas drawing APIs">
+      <input type="checkbox" class="feature-cb" value="canvas" checked> canvas
+    </label>
+    <label class="feature-label active" id="feature-game-label" title="requestAnimationFrame game loop — requires exported tick()">
+      <input type="checkbox" class="feature-cb" value="game" checked> game
+    </label>
+    <label class="feature-label active" id="feature-dom-label" title="HTML output APIs (set_html, clear_html)">
+      <input type="checkbox" class="feature-cb" value="dom" checked> dom
+    </label>
+  </div>
+
   <div class="header-actions">
     <label class="run-main-label" title="Automatically call exported main() after each compile">
       <input type="checkbox" id="run-main-checkbox">
@@ -860,11 +901,32 @@ const EXAMPLES = {
 @export handle_key;`,
 }
 
+const EXAMPLE_FEATURES = {
+    snake:      ['canvas', 'game'],
+    html_todo:  ['dom'],
+    simple_main:[''],
+    // examples that use web:: math/console APIs only — core is always on
+}
+
 document.getElementById('example-select').addEventListener('change', e => {
-    const src = EXAMPLES[e.target.value] ?? ''
+    const key = e.target.value
+    const src = EXAMPLES[key] ?? ''
     editorView.dispatch({
         changes: { from: 0, to: editorView.state.doc.length, insert: src },
     })
+    if (key in EXAMPLE_FEATURES) {
+        setFeatures(EXAMPLE_FEATURES[key])
+    } else if (key !== 'empty') {
+        // Default: core only for pure-computation examples; canvas+dom for visual ones
+        const hasCanvas = src.includes('canvas_')
+        const hasDom    = src.includes('set_html')
+        const hasGame   = src.includes('@export tick')
+        const features = []
+        if (hasCanvas) features.push('canvas')
+        if (hasGame)   features.push('game')
+        if (hasDom)    features.push('dom')
+        setFeatures(features)
+    }
 })
 
 // ── Theme switching ───────────────────────────────────────────────────────
@@ -887,9 +949,10 @@ let wasmInstance = null
 let wasmExports = []
 let printBuffer = []
 let webEnv = null
-let gameLoopInterval = null
+let cancelGameLoop = null
 let keydownListener = null
 let renderPanelOpen = false
+let activeFeatures = ['canvas', 'game', 'dom']
 
 // ── DOM refs ──────────────────────────────────────────────────────────────
 const btnCompile      = document.getElementById('btn-compile')
@@ -903,6 +966,31 @@ const runMainCheckbox = document.getElementById('run-main-checkbox')
 const renderPanel     = document.getElementById('render-panel')
 const panelToggle     = document.getElementById('panel-toggle')
 const btnPanelClear   = document.getElementById('btn-panel-clear')
+
+// ── Platform feature checkboxes ───────────────────────────────────────────
+function getActiveFeatures() {
+    return Array.from(document.querySelectorAll('.feature-cb'))
+        .filter(cb => cb.checked)
+        .map(cb => cb.value)
+}
+
+document.querySelectorAll('.feature-cb').forEach(cb => {
+    const label = cb.closest('.feature-label')
+    cb.addEventListener('change', () => {
+        label.classList.toggle('active', cb.checked)
+        activeFeatures = getActiveFeatures()
+    })
+})
+
+function setFeatures(features) {
+    document.querySelectorAll('.feature-cb').forEach(cb => {
+        const label = cb.closest('.feature-label')
+        const enabled = features.includes(cb.value)
+        cb.checked = enabled
+        label.classList.toggle('active', enabled)
+    })
+    activeFeatures = getActiveFeatures()
+}
 
 // ── Render panel ──────────────────────────────────────────────────────────
 function openRenderPanel() {
@@ -987,7 +1075,7 @@ function highlightWat(text) {
 }
 
 // ── Auto-run main + game loop ──────────────────────────────────────────────
-function autoRunMain() {
+function autoRunMain(features) {
     const mainExp = wasmExports.find(e => e.name === 'main' && e.params.length === 0)
     if (!mainExp) return
 
@@ -1000,21 +1088,17 @@ function autoRunMain() {
         return
     }
 
+    const gameEnabled  = features && features.includes('game')
     const tickExp      = wasmExports.find(e => e.name === 'tick'       && e.params.length === 0)
     const handleKeyExp = wasmExports.find(e => e.name === 'handle_key' && e.params.length === 1)
 
-    if (tickExp) {
+    if (gameEnabled && tickExp) {
         openRenderPanel()
-        gameLoopInterval = setInterval(() => {
-            try {
-                wasmInstance.exports.tick()
-                if (webEnv) webEnv.flush()
-            } catch (e) {
-                clearInterval(gameLoopInterval)
-                gameLoopInterval = null
-                log('tick() threw: ' + e.message, 'err')
-            }
-        }, 120)
+        cancelGameLoop = startGameLoop(
+            wasmInstance,
+            e => { log('tick() threw: ' + e.message, 'err') },
+            () => { if (webEnv) webEnv.flush() }
+        )
     }
 
     if (handleKeyExp) {
@@ -1035,8 +1119,8 @@ btnCompile.addEventListener('click', compile)
 
 async function compile() {
   // Tear down any running game loop from the previous compile
-  if (gameLoopInterval) { clearInterval(gameLoopInterval); gameLoopInterval = null }
-  if (keydownListener)  { document.removeEventListener('keydown', keydownListener); keydownListener = null }
+  if (cancelGameLoop) { cancelGameLoop(); cancelGameLoop = null }
+  if (keydownListener) { document.removeEventListener('keydown', keydownListener); keydownListener = null }
 
   clearError()
   wasmInstance = null
@@ -1046,13 +1130,14 @@ async function compile() {
   watOutput.innerHTML = '<span style="color:var(--muted);font-style:italic">Compiling…</span>'
 
   const source = editorView.state.doc.toString()
+  activeFeatures = getActiveFeatures()
 
   let data
   try {
     const res = await fetch('/compile', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ source }),
+      body: JSON.stringify({ source, platform: 'web', features: activeFeatures }),
     })
     data = await res.json()
   } catch (e) {
@@ -1070,6 +1155,8 @@ async function compile() {
     return
   }
 
+  const compiledFeatures = data.features ?? activeFeatures
+
   watOutput.innerHTML = highlightWat(data.wat)
 
   printBuffer = []
@@ -1079,7 +1166,8 @@ async function compile() {
       log(msg, type ?? 'print')
     },
     onRenderNeeded: () => openRenderPanel(),
-  })
+  }, compiledFeatures)
+
   try {
     const wasmBytes = Uint8Array.from(atob(data.wasm), c => c.charCodeAt(0))
     const { instance } = await WebAssembly.instantiate(wasmBytes, webEnv.imports)
@@ -1089,7 +1177,7 @@ async function compile() {
     renderExports(wasmExports, instance)
     setStatus('ok')
     log(`Compiled OK — ${wasmExports.length} export(s) ready`, 'info')
-    if (runMainCheckbox.checked) autoRunMain()
+    if (runMainCheckbox.checked) autoRunMain(compiledFeatures)
   } catch (e) {
     showError('WASM instantiation failed: ' + e.message)
     setStatus('err')

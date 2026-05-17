@@ -19,6 +19,7 @@ import { elaborate, buildStrataRegistry } from '../src/elaborator'
 import { typecheck, formatTypeError, formatType, wasmTypeOf } from '../src/types'
 import { siliconGrammar } from '../src/grammar'
 import { loadModules } from '../src/modules'
+import { loadPlatform, getRequiredExports, type PlatformConfig } from '../src/platforms'
 import type { FunctionSig } from '../src/types/typechecker'
 
 const __dir = dirname(fileURLToPath(import.meta.url))
@@ -101,9 +102,13 @@ function collectExports(program: Program, _functions: Map<string, FunctionSig>):
 // Compiler
 // ---------------------------------------------------------------------------
 
-const moduleRegistry = loadModules(__dir)
+const fallbackModuleRegistry = loadModules(__dir)
 
-async function compileSilicon(source: string) {
+async function compileSilicon(source: string, platformConfig?: PlatformConfig) {
+    const moduleRegistry = platformConfig
+        ? loadPlatform(platformConfig)
+        : fallbackModuleRegistry
+
     const match = parse(source)
     const ast: ASTNode = addToAstSemantics(siliconGrammar)(match).toAst()
     const registry = buildStrataRegistry(ast as Program)
@@ -119,12 +124,38 @@ async function compileSilicon(source: string) {
         return { success: false, error: typeErrors.map(formatTypeError).join('\n') }
     }
 
+    // Validate requiresExport constraints (e.g. web::game requires exported 'tick')
+    if (platformConfig) {
+        const required = getRequiredExports(platformConfig)
+        if (required.size > 0) {
+            const exportedNames = new Set(
+                collectExports(typed, functions as Map<string, FunctionSig>).map(e => e.name)
+            )
+            const missing: string[] = []
+            for (const [feature, exportName] of required) {
+                if (!exportedNames.has(exportName)) {
+                    missing.push(`Platform feature '${feature}' requires an exported function named '${exportName}'`)
+                }
+            }
+            if (missing.length > 0) {
+                return { success: false, error: missing.join('\n') }
+            }
+        }
+    }
+
     const wat = compileToWat(typed, registry, functions, moduleRegistry)
     const wasmBytes = await watToWasm(wat)
     const wasm = Buffer.from(wasmBytes).toString('base64')
     const exports = collectExports(typed, functions as Map<string, FunctionSig>)
 
-    return { success: true, wat, wasm, exports }
+    return {
+        success: true,
+        wat,
+        wasm,
+        exports,
+        platform: platformConfig?.platform ?? 'web',
+        features: platformConfig?.features ?? [],
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -161,15 +192,22 @@ const server = Bun.serve({
         // Compile endpoint.
         if (req.method === 'POST' && url.pathname === '/compile') {
             let source: string
+            let platformConfig: PlatformConfig | undefined
             try {
-                const body = await req.json() as { source: string }
+                const body = await req.json() as { source: string; platform?: string; features?: string[] }
                 source = body.source ?? ''
+                if (body.platform) {
+                    platformConfig = {
+                        platform: body.platform as PlatformConfig['platform'],
+                        features: body.features ?? [],
+                    }
+                }
             } catch {
                 return json({ success: false, error: 'Invalid request body' }, 400)
             }
 
             try {
-                const result = await compileSilicon(source)
+                const result = await compileSilicon(source, platformConfig)
                 return json(result)
             } catch (e) {
                 return json({ success: false, error: String(e) })
