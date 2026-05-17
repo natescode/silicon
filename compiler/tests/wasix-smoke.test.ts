@@ -844,6 +844,92 @@ describe('Phase 0 WASIX smoke test', () => {
         }
     }, 60000)
 
+    test('STAGE 1: bootstrap-compiled compiler produces byte-identical WAT to the TS-built bootstrap', async () => {
+        if (!wasmerAvailable()) {
+            console.log('  (skipped: wasmer not on PATH)')
+            return
+        }
+        const boot = await buildBoot(path.join(PROJECT_ROOT, 'boot', 'tests', 'fn_test.si'))
+        const bootPath = path.join(PROJECT_ROOT, '.stage0-boot.wasm')
+        await fs.writeFile(bootPath, boot)
+
+        // Step 1: assemble the full bootstrap source + stage1 driver.
+        const strataDir = path.join(PROJECT_ROOT, 'src', 'strata')
+        const strataFiles = (await fs.readdir(strataDir))
+            .filter(f => f.endsWith('.si'))
+            .sort()
+        let bundle = ''
+        for (const f of strataFiles) {
+            bundle += await fs.readFile(path.join(strataDir, f), 'utf-8') + '\n'
+        }
+        const wasiStub = [
+            '@extern wasi_snapshot_preview1::fd_write:Int',
+            '  fd:Int, iovs_ptr:Int, iovs_len:Int, nwritten_out:Int;',
+            '@extern wasi_snapshot_preview1::fd_read:Int',
+            '  fd:Int, iovs_ptr:Int, iovs_len:Int, nread_out:Int;',
+        ].join('\n') + '\n'
+        const stage1Sources = [
+            'boot/std/io.si', 'boot/std/arena.si', 'boot/std/vec.si',
+            'boot/parser/tokens.si', 'boot/parser/lex.si',
+            'boot/parser/ast.si', 'boot/parser/parse.si',
+            'boot/strata/registry.si', 'boot/strata/loader.si',
+            'boot/elab/elaborator.si', 'boot/ir/nodes.si',
+            'boot/elab/body.si', 'boot/ir/lower.si',
+            'boot/emit/wat.si', 'boot/stage1.si',
+        ]
+        const stage1Bundle = wasiStub + (await Promise.all(
+            stage1Sources.map(p => fs.readFile(path.join(PROJECT_ROOT, p), 'utf-8')),
+        )).join('')
+
+        const stage1WasmPath = path.join(PROJECT_ROOT, '.stage1.wasm')
+        try {
+            // Step 2: compile stage1 via boot.wasm.
+            const compileRes = spawnSync('wasmer', ['run', bootPath], {
+                input: Buffer.from(bundle + stage1Bundle, 'utf-8'),
+                maxBuffer: 64 * 1024 * 1024,
+            })
+            expect(compileRes.status).toBe(0)
+            const stage1Wat = (compileRes.stdout ?? Buffer.alloc(0)).toString('utf-8')
+            const stage1Compiled = await watToWasm(stage1Wat)
+            await fs.writeFile(stage1WasmPath, Buffer.from(stage1Compiled.buffer))
+
+            // Step 3: run a small Silicon program through BOTH boot.wasm
+            // and stage1.wasm, then diff the resulting WAT byte-for-byte.
+            const userProg = bundle +
+                '@fn add a:Int, b:Int := { a + b };\n' +
+                '@fn main := { &add 20, 22 };\n'
+            const userBuf = Buffer.from(userProg, 'utf-8')
+
+            const bootRun = spawnSync('wasmer', ['run', bootPath], {
+                input: userBuf, maxBuffer: 64 * 1024 * 1024,
+            })
+            expect(bootRun.status).toBe(0)
+            const bootOut = (bootRun.stdout ?? Buffer.alloc(0)).toString('utf-8')
+
+            const stage1Run = spawnSync('wasmer', ['run', stage1WasmPath], {
+                input: userBuf, maxBuffer: 64 * 1024 * 1024,
+            })
+            expect(stage1Run.status).toBe(0)
+            const stage1Out = (stage1Run.stdout ?? Buffer.alloc(0)).toString('utf-8')
+
+            if (bootOut !== stage1Out) {
+                throw new Error(
+                    `Stage 1 vs boot.wasm output diverge.\n` +
+                    `boot:   ${bootOut.length} bytes\n` +
+                    `stage1: ${stage1Out.length} bytes\n` +
+                    `--- first 200 bytes of diff context ---\n` +
+                    `boot:   ${JSON.stringify(bootOut.slice(0, 200))}\n` +
+                    `stage1: ${JSON.stringify(stage1Out.slice(0, 200))}`,
+                )
+            }
+            // Both outputs are non-trivial.
+            expect(bootOut.length).toBeGreaterThan(500)
+        } finally {
+            await fs.unlink(bootPath).catch(() => {})
+            await fs.unlink(stage1WasmPath).catch(() => {})
+        }
+    }, 90000)
+
     test('boot/tests/fn_test.si: bootstrap compiles ITS OWN SOURCE TREE end-to-end (Stage 1 candidate)', async () => {
         if (!wasmerAvailable()) {
             console.log('  (skipped: wasmer not on PATH)')

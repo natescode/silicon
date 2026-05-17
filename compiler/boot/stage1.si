@@ -1,0 +1,48 @@
+# Stage 1 driver — the bootstrap-compiled Silicon compiler.
+#
+# Reads source from stdin, runs lex → parse → strata loader →
+# elaborator → lower → emit, and writes the resulting WAT text to
+# stdout.  WASI calls `_start` automatically.
+#
+# This file is the LAST piece concatenated when building stage1.wasm.
+# Everything it references (read_bytes, lex, parse, registry_init,
+# lower_program, emit_program, ...) is defined by earlier files in
+# the bundle.
+#
+# Build:
+#   cat boot/std/*.si boot/parser/*.si boot/strata/registry.si \
+#       boot/strata/loader.si boot/elab/elaborator.si \
+#       boot/ir/nodes.si boot/elab/body.si boot/ir/lower.si \
+#       boot/emit/wat.si boot/stage1.si | wasmer run boot.wasm > stage1.wat
+#   wat2wasm stage1.wat -o stage1.wasm
+#
+# Run:
+#   cat source.si | wasmer run stage1.wasm > out.wat
+
+@fn _start:Void := {
+  @local cap := 524288;
+  @local buf := &arena_alloc cap;
+  @local total := 0;
+  &@loop 1, {
+    @local n := &read_bytes 0, (buf + total), (cap - total);
+    &@if (n <= 0), { &@break };
+    total = total + n;
+    &@if (total >= cap), { &@break };
+  };
+
+  @local toks := &lex buf, total;
+  @local prog := &parse buf, total, toks;
+  &registry_init;
+  &load_strata prog;
+  &ir_init;
+  &scope_init;
+  &global_init;
+  &litpool_init;
+  &name_pool_init;
+  &fn_sig_init;
+  &fn_sig_register_prelude_voids;
+  &ew_init;
+
+  @local fns := &lower_program prog;
+  &emit_program fns
+};
