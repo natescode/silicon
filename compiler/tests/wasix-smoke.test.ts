@@ -314,6 +314,63 @@ describe('Phase 0 WASIX smoke test', () => {
         }
     })
 
+    test('boot/tests/module_test.si: full Silicon-bootstrap pipeline produces an executable wasm', async () => {
+        if (!wasmerAvailable()) {
+            console.log('  (skipped: wasmer not on PATH)')
+            return
+        }
+        const wasm = await buildBoot(path.join(PROJECT_ROOT, 'boot', 'tests', 'module_test.si'))
+        const tmpPath = path.join(PROJECT_ROOT, '.module-smoke.wasm')
+        await fs.writeFile(tmpPath, wasm)
+
+        const strataDir = path.join(PROJECT_ROOT, 'src', 'strata')
+        const files = (await fs.readdir(strataDir))
+            .filter(f => f.endsWith('.si'))
+            .sort()
+        let bundle = ''
+        for (const f of files) {
+            bundle += await fs.readFile(path.join(strataDir, f), 'utf-8')
+            bundle += '\n'
+        }
+
+        // (input expression, expected $main() return value).
+        const cases: Array<[string, number]> = [
+            ['42;',          42],
+            ['1 + 2;',       3],
+            ['40 + 2;',      42],
+            ['10 * 3;',      30],
+            ['(1 + 2) * 3;', 9],
+            ['100 - 58;',    42],
+            ['12 / 4;',      3],
+            ['17 % 5;',      2],
+        ]
+
+        try {
+            for (const [src, expectedValue] of cases) {
+                const result = spawnSync('wasmer', ['run', tmpPath], {
+                    input: Buffer.from(bundle + src + '\n', 'utf-8'),
+                    maxBuffer: 64 * 1024 * 1024,
+                })
+                expect(result.status).toBe(0)
+                const wat = (result.stdout ?? Buffer.alloc(0)).toString('utf-8')
+
+                // Run the bootstrap-emitted WAT through wabt and execute $main.
+                const compiled = await watToWasm(wat)
+                const { instance } = await WebAssembly.instantiate(compiled.buffer, {})
+                const main = (instance.exports as any).main as () => number
+                const actual = main()
+                if (actual !== expectedValue) {
+                    throw new Error(
+                        `Bootstrap-emitted wasm wrong result for ${JSON.stringify(src)}\n` +
+                        `Expected: ${expectedValue}\nGot: ${actual}\nWAT:\n${wat}`,
+                    )
+                }
+            }
+        } finally {
+            await fs.unlink(tmpPath).catch(() => {})
+        }
+    })
+
     test('boot/tests/emit_test.si: end-to-end emits WAT instructions from Silicon expressions', async () => {
         if (!wasmerAvailable()) {
             console.log('  (skipped: wasmer not on PATH)')

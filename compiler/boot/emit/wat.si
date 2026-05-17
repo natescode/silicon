@@ -66,6 +66,25 @@
   &@if (op == IR_OP_I32_EQZ), { &ew_str 'i32.eqz'; };
 };
 
+# Wrap an expression's emission in a complete WAT module:
+#
+#   (module
+#     (func $main (export "main") (result i32)
+#       <instructions>
+#     )
+#   )
+#
+# Caller is responsible for ensuring the IR tree produces exactly
+# one i32 on the stack (today every covered kind does).  Empty
+# blocks would underflow — add `i32.const 0` if you need a sentinel.
+@fn emit_module result_h:Int := {
+  &ew_str '(module'; &ew_byte 10;
+  &ew_str '  (func $main (export "main") (result i32)'; &ew_byte 10;
+  &emit_expr result_h;
+  &ew_str '  )'; &ew_byte 10;
+  &ew_str ')'; &ew_byte 10;
+};
+
 # Recursive expression emitter.  Writes one instruction per line in
 # postfix/stack-machine order; the result lives on top of the stack
 # when emission completes.

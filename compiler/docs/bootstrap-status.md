@@ -195,7 +195,8 @@ Still ahead for Phase 4:
 | Expression lowerer (IntLit / BoolLit / BinaryOp / Block) | **Landed** | ~85 |
 | WAT emitter — i32 binops + unops + blocks + consts   | **Landed** | ~120 |
 | End-to-end gate: Silicon source → WAT instructions   | **Landed** | — |
-| Module wrapper / function header / exports           | Pending | — |
+| Module wrapper / function header / exports           | **Landed** | (in `wat.si`) |
+| Full bootstrap pipeline gate: Silicon source → wasm → execute | **Landed** | — |
 | IR → JSON dumper                                     | Pending | — |
 | Phase 6 gate: IR-JSON byte-equal vs Stage 0          | Pending | — |
 
