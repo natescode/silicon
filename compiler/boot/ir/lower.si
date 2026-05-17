@@ -50,6 +50,54 @@
   LSCOPE_IDX      = &vec_new;
 };
 
+# ── Globals scope (parallel vecs) ───────────────────────────────────
+# Module-level @var bindings.  Lookups fall through to the global
+# scope if the name isn't bound locally.  Each global gets an
+# initializer expression captured at lower_program time.
+@var GSCOPE_NAME_OFF:Int := 0;
+@var GSCOPE_NAME_LEN:Int := 0;
+@var GSCOPE_INIT_VAL:Int := 0;
+
+@fn global_init := {
+  GSCOPE_NAME_OFF = &vec_new;
+  GSCOPE_NAME_LEN = &vec_new;
+  GSCOPE_INIT_VAL = &vec_new;
+};
+
+@fn global_add name_off:Int, name_len:Int, init_val:Int := {
+  GSCOPE_NAME_OFF = &vec_push GSCOPE_NAME_OFF, name_off;
+  GSCOPE_NAME_LEN = &vec_push GSCOPE_NAME_LEN, name_len;
+  GSCOPE_INIT_VAL = &vec_push GSCOPE_INIT_VAL, init_val;
+};
+
+@fn global_count:Int := { &vec_len GSCOPE_NAME_OFF };
+@fn global_name_off:Int i:Int := { &vec_get GSCOPE_NAME_OFF, i };
+@fn global_name_len:Int i:Int := { &vec_get GSCOPE_NAME_LEN, i };
+@fn global_init_val:Int i:Int := { &vec_get GSCOPE_INIT_VAL, i };
+
+@fn global_lookup:Int q_off:Int, q_len:Int := {
+  @local n := &vec_len GSCOPE_NAME_OFF;
+  @local i := 0;
+  @local found := 0 - 1;
+  &@loop ((found < 0) * (i < n) == 1), {
+    @local n_off := &vec_get GSCOPE_NAME_OFF, i;
+    @local n_len := &vec_get GSCOPE_NAME_LEN, i;
+    &@if (n_len == q_len), {
+      @local ok := 1;
+      @local j := 0;
+      &@loop ((ok * (j < n_len)) == 1), {
+        @local a := &WASM::i32_load8_u (P_SRC + n_off + j);
+        @local b := &WASM::i32_load8_u (P_SRC + q_off + j);
+        &@if (a != b), { ok = 0; };
+        j = j + 1;
+      };
+      &@if (ok == 1), { found = i; };
+    };
+    i = i + 1;
+  };
+  found
+};
+
 # Resolve a span against the scope; returns the bound local_idx or -1.
 @fn scope_lookup:Int q_off:Int, q_len:Int := {
   @local n := &vec_len LSCOPE_NAME_OFF;
@@ -87,16 +135,55 @@
 # IR_FUNCTION handles for every @fn definition.  Other top-level
 # kinds (elaborations, doc comments, top-level @let / @var) are
 # skipped for now — those land alongside global / lazy-fn lowering.
+@fn lit_at_var_ptr:Int := { (&str_ptr '@var') + 4 };
+
 @fn lower_program:Int prog:Int := {
   @local out := &vec_new;
   @local n := &ast_field P_AST, prog, 1;
+
+  # First pass: register every @var with its initializer literal so
+  # later definitions / function bodies can see the global.  Only
+  # int-literal inits are supported today; non-literal inits return
+  # IR_NONE for the global and we skip them.
   @local i := 0;
   &@loop (i < n), {
     @local elem := &ast_field P_AST, prog, (2 + i);
     @local k := &ast_kind P_AST, elem;
     &@if (k == AST_DEFINITION), {
-      @local h := &lower_definition elem;
-      &@if (h != IR_NONE), { out = &vec_push out, h; };
+      @local kw_off := &ast_field P_AST, elem, 1;
+      @local kw_len := &ast_field P_AST, elem, 2;
+      &@if ((&lower_span_eq_lit kw_off, kw_len, (&lit_at_var_ptr), 4) == 1), {
+        @local nm_off := &ast_field P_AST, elem, 3;
+        @local nm_len := &ast_field P_AST, elem, 4;
+        @local n_params := &ast_field P_AST, elem, 7;
+        @local binding := &ast_field P_AST, elem, (8 + n_params);
+        @local init_val := 0;
+        &@if (binding >= 0), {
+          &@if ((&ast_kind P_AST, binding) == AST_INT_LIT), {
+            init_val = &ast_field P_AST, binding, 1;
+          };
+          &@if ((&ast_kind P_AST, binding) == AST_BOOL_LIT), {
+            init_val = &ast_field P_AST, binding, 1;
+          };
+        };
+        &global_add nm_off, nm_len, init_val;
+      };
+    };
+    i = i + 1;
+  };
+
+  # Second pass: lower @fn / @let definitions.
+  i = 0;
+  &@loop (i < n), {
+    @local elem := &ast_field P_AST, prog, (2 + i);
+    @local k := &ast_kind P_AST, elem;
+    &@if (k == AST_DEFINITION), {
+      @local kw_off := &ast_field P_AST, elem, 1;
+      @local kw_len := &ast_field P_AST, elem, 2;
+      &@if ((&lower_span_eq_lit kw_off, kw_len, (&lit_at_var_ptr), 4) == 0), {
+        @local h := &lower_definition elem;
+        &@if (h != IR_NONE), { out = &vec_push out, h; };
+      };
     };
     i = i + 1;
   };
@@ -293,15 +380,17 @@
   };
 
   &@if (k == AST_NAMESPACE), {
-    # Single-segment identifier — look up in the scope.  Multi-segment
-    # namespaces (Module::value, record.field) need a separate path
-    # that lands once we have @use / @type lowering.
+    # Single-segment identifier — look up in the local scope first,
+    # then the module-global scope.  Multi-segment namespaces
+    # (Module::value, record.field) still return IR_NONE.
     @local n_segs := &ast_field P_AST, node, 1;
     &@if (n_segs == 1), {
       @local s_off := &ast_field P_AST, node, 2;
       @local s_len := &ast_field P_AST, node, 3;
       @local idx := &scope_lookup s_off, s_len;
       &@if (idx >= 0), { &@return (&ir_local_get idx); };
+      @local gidx := &global_lookup s_off, s_len;
+      &@if (gidx >= 0), { &@return (&ir_global_get gidx); };
     };
     &@return IR_NONE;
   };
@@ -316,10 +405,18 @@
     @local nm_off := &ast_field P_AST, target, 2;
     @local nm_len := &ast_field P_AST, target, 3;
     @local idx := &scope_lookup nm_off, nm_len;
-    &@if (idx < 0), { &@return IR_NONE; };
-    @local v_h := &lower_expr value;
-    &@if (v_h == IR_NONE), { &@return IR_NONE; };
-    &@return (&ir_local_set idx, v_h);
+    &@if (idx >= 0), {
+      @local v_h := &lower_expr value;
+      &@if (v_h == IR_NONE), { &@return IR_NONE; };
+      &@return (&ir_local_set idx, v_h);
+    };
+    @local gidx := &global_lookup nm_off, nm_len;
+    &@if (gidx >= 0), {
+      @local gv_h := &lower_expr value;
+      &@if (gv_h == IR_NONE), { &@return IR_NONE; };
+      &@return (&ir_global_set gidx, gv_h);
+    };
+    &@return IR_NONE;
   };
 
   &@if (k == AST_DEFINITION), {

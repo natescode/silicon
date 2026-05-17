@@ -136,9 +136,22 @@
   &ew_str '  )'; &ew_byte 10;
 };
 
-# Emit a complete module from a vec<i32> of IR_FUNCTION handles.
+# Emit a complete module: declares each @var as a mutable global
+# `(global $g_N (mut i32) (i32.const <init>))`, then emits every
+# function (each gets its own export).  Globals are looked up by
+# integer index — same convention IR_GLOBAL_GET uses.
 @fn emit_program functions:Int := {
   &ew_str '(module'; &ew_byte 10;
+  @local g_n := &global_count;
+  @local gi := 0;
+  &@loop (gi < g_n), {
+    &ew_str '  (global $g_';
+    &ew_write_int gi;
+    &ew_str ' (mut i32) (i32.const ';
+    &ew_write_int (&global_init_val gi);
+    &ew_str '))'; &ew_byte 10;
+    gi = gi + 1;
+  };
   @local n := &vec_len functions;
   @local i := 0;
   &@loop (i < n), {
@@ -176,6 +189,23 @@
     @local val := &ir_field h, 2;
     &emit_expr val;
     &ew_str 'local.set ';
+    &ew_write_int idx;
+    &ew_byte 10;
+    &@return 0;
+  };
+
+  &@if (k == IR_GLOBAL_GET), {
+    &ew_str 'global.get $g_';
+    &ew_write_int (&ir_field h, 1);
+    &ew_byte 10;
+    &@return 0;
+  };
+
+  &@if (k == IR_GLOBAL_SET), {
+    @local idx := &ir_field h, 1;
+    @local val := &ir_field h, 2;
+    &emit_expr val;
+    &ew_str 'global.set $g_';
     &ew_write_int idx;
     &ew_byte 10;
     &@return 0;

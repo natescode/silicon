@@ -489,6 +489,26 @@ describe('Phase 0 WASIX smoke test', () => {
                     '  s\n' +
                     '};',
               fn: 'sumEven', args: [10], want: 30 },    // 2+4+6+8+10
+            // @var globals — slice 21.
+            // Caller drives the harness: bump returns the post-increment
+            // value, so 3 bumps starting from 0 gives 3.
+            { prog: '@var counter := 0;\n' +
+                    '@fn bump := { counter = counter + 1; counter };\n' +
+                    '@fn bump3 := { &bump; &bump; &bump };',
+              fn: 'bump3', args: [], want: 3 },
+            // get() reads the global after a sequence of mutations.
+            { prog: '@var counter := 0;\n' +
+                    '@fn bump := { counter = counter + 1; counter };\n' +
+                    '@fn add5_get := {\n' +
+                    '  &bump; &bump; &bump; &bump; &bump;\n' +
+                    '  counter\n' +
+                    '};',
+              fn: 'add5_get', args: [], want: 5 },
+            // Globals visible across multiple functions.
+            { prog: '@var acc := 7;\n' +
+                    '@fn addG x:Int := { acc = acc + x; acc };\n' +
+                    '@fn run := { &addG 3; &addG 2; &addG 8 };',
+              fn: 'run', args: [], want: 20 },     // 7+3+2+8
         ]
 
         try {
