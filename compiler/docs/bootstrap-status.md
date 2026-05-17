@@ -3,6 +3,21 @@
 Tracks progress against `docs/bootstrap-plan.html` and
 `docs/stage0-cleanup-plan.html`.  Updated as branches land.
 
+## TL;DR — Stage 1 is real and the bootstrap is a fixed point
+
+```
+stage 0 = boot.wasm                            # built by Stage 0 TypeScript
+stage 1 = wat2wasm(stage0(stage1.si bundle))   # 38 262 bytes
+stage 2 = wat2wasm(stage1(stage1.si bundle))   # 38 262 bytes, byte-equal to stage 1
+```
+
+`bun run scripts/build-stage1.ts` produces `stage1.wasm` from the
+bootstrap source.  `bun run scripts/run-silicon.ts foo.si --wasm`
+compiles a Silicon program via stage 1; the resulting wasm runs
+under WASI.  Test coverage: 29/29 WASIX smoke tests (see
+`tests/wasix-smoke.test.ts`) including the Stage 2 == Stage 1
+byte-equality gate.
+
 ## Stage 0 Cleanup (`docs/stage0-cleanup-plan.html`)
 
 | WS  | Workstream                              | Status        | Branch                       |

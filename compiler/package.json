@@ -9,6 +9,8 @@
     "test:fuzz": "bun test --timeout 120000 tests/fuzz",
     "boot:build": "bun run scripts/build-boot.ts",
     "boot:run": "bun run scripts/run-boot.ts",
+    "stage1:build": "bun run scripts/build-stage1.ts",
+    "stage1:run": "bun run scripts/run-silicon.ts",
     "compile": "bun run src/index.ts",
     "sgl": "bun run src/sigil_cli.ts",
     "build-types": "bunx ohm generateBundles --withTypes src/silicon-simple.ohm",

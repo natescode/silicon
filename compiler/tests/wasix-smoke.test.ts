@@ -844,6 +844,59 @@ describe('Phase 0 WASIX smoke test', () => {
         }
     }, 60000)
 
+    test('scripts/build-stage1.ts + scripts/run-silicon.ts compile & run a WASI hello via stage1', async () => {
+        if (!wasmerAvailable()) {
+            console.log('  (skipped: wasmer not on PATH)')
+            return
+        }
+        // Ensure boot.wasm exists for the build-stage1 script.
+        const bootPath = path.join(PROJECT_ROOT, 'boot.wasm')
+        const wasm = await buildBoot(path.join(PROJECT_ROOT, 'boot', 'tests', 'fn_test.si'))
+        await fs.writeFile(bootPath, wasm)
+
+        const stage1Wasm = path.join(PROJECT_ROOT, 'stage1.wasm')
+        const helloSrc = path.join(PROJECT_ROOT, '.script-hello.si')
+        const helloWat = path.join(PROJECT_ROOT, '.script-hello.wat')
+        const helloWasm = path.join(PROJECT_ROOT, '.script-hello.wasm')
+        try {
+            const buildRes = spawnSync('bun', ['run', 'scripts/build-stage1.ts'],
+                { cwd: PROJECT_ROOT, maxBuffer: 64 * 1024 * 1024 })
+            expect(buildRes.status).toBe(0)
+            const stage1Stat = await fs.stat(stage1Wasm)
+            expect(stage1Stat.size).toBeGreaterThan(20000)
+
+            await fs.writeFile(helloSrc, [
+                "@extern wasi_snapshot_preview1::fd_write:Int",
+                "  fd:Int, iovs_ptr:Int, iovs_len:Int, nwritten_out:Int;",
+                "",
+                "@fn _start:Void := {",
+                "  @local msg := 'stage1 ok\\n';",
+                "  @local iovs := 1024;",
+                "  @local written := 1040;",
+                "  &WASM::i32_store iovs, (msg + 4);",
+                "  &WASM::i32_store (iovs + 4), 10;",
+                "  &wasi_snapshot_preview1::fd_write 1, iovs, 1, written",
+                "};",
+            ].join('\n') + '\n')
+
+            const runScriptRes = spawnSync(
+                'bun', ['run', 'scripts/run-silicon.ts', helloSrc, helloWat, '--wasm'],
+                { cwd: PROJECT_ROOT, maxBuffer: 64 * 1024 * 1024 },
+            )
+            expect(runScriptRes.status).toBe(0)
+
+            const wasiRes = spawnSync('wasmer', ['run', helloWasm],
+                { maxBuffer: 64 * 1024 * 1024 })
+            expect(wasiRes.status).toBe(0)
+            const stdout = (wasiRes.stdout ?? Buffer.alloc(0)).toString('utf-8')
+            expect(stdout).toBe('stage1 ok\n')
+        } finally {
+            await fs.unlink(helloSrc).catch(() => {})
+            await fs.unlink(helloWat).catch(() => {})
+            await fs.unlink(helloWasm).catch(() => {})
+        }
+    }, 120000)
+
     test('STAGE 2 == STAGE 1: self-host fixed-point — stage1.wasm and stage2.wasm are byte-equal', async () => {
         if (!wasmerAvailable()) {
             console.log('  (skipped: wasmer not on PATH)')

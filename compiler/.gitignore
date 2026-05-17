@@ -186,3 +186,5 @@ dist
 .DS_Store
 boot.wasm
 boot.wat
+stage1.wasm
+stage1.wat
