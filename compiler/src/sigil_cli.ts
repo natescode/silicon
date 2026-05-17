@@ -1,6 +1,7 @@
 #! /usr/bin/env bun
 
 import * as fs from "node:fs/promises"
+import * as path from "node:path"
 import parse from './parser'
 import { addToAstSemantics, type ASTNode, type Program } from './ast'
 import { compileToWat, type LowerTarget } from './codegen'
@@ -8,6 +9,7 @@ import { watToWasm } from './codegen/toWasm'
 import { elaborate, buildStrataRegistry } from './elaborator'
 import { typecheck, formatTypeError } from './types'
 import { siliconGrammar } from './grammar'
+import { resolveUses } from './modules/useResolver'
 
 const help = `Sigil: the Official Silicon compiler
 
@@ -26,6 +28,11 @@ Flags:
                                          exports _start so 'wasmer run' picks
                                          it up automatically.
 
+Source includes:
+  @use 'helper.si';   inside a .si file, includes helper.si (relative to
+                      the including file). Cycle-checked; each file is
+                      emitted at most once.  See docs/use-includes.md.
+
 Output files (written to current directory):
   main.wat   WebAssembly text format (assemble with wat2wasm)
   ast.json   Type-annotated AST (for debugging)
@@ -40,7 +47,9 @@ Examples:
 `
 
 async function compileFile(filename: string, strataFiles: string[], emitWasm: boolean, target: LowerTarget) {
-    const source = await fs.readFile(filename, 'utf-8')
+    const rawSource = await fs.readFile(filename, 'utf-8')
+    const entryAbs = path.resolve(filename)
+    const { source } = resolveUses(rawSource, entryAbs)
 
     // Load extra strata sources from --strata files.
     const extraSources: string[] = await Promise.all(
