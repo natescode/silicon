@@ -183,16 +183,19 @@ test('compileBodyToDefExpander: unknown identifier throws StrataBodyError', () =
     expect(() => expander.expand({}, 'bad', api)).toThrow(StrataBodyError)
 })
 
-test('compileBodyToDefExpander: &IR::xxx (non-null) is rejected in rich bodies', () => {
+test('compileBodyToDefExpander: any &IR::xxx / &WASM::xxx is a silent dispatch marker', () => {
+    // Rich bodies build IR through &Compiler::ir::* constructors — raw
+    // intrinsic refs are never invoked at runtime, they only signal the
+    // codegen kind to the loader. So &IR::i32_add silently returns null.
     const elab = parseStrata(`
-        @stratum_keyword BadIntrinsic ('@bad_intrinsic', Node) = {
-            @local v :=Node.x;
+        @stratum_keyword MarkerNoOp ('@marker_noop', Node) = {
+            @local v := Node.x;
             &IR::i32_add Node.x, Node.x;
         };
     `)
     const expander = compileBodyToDefExpander(elab.semantics, elab.nodeParamName)
     const { api } = mockApi()
-    expect(() => expander.expand({ x: 1 }, 'bad', api)).toThrow(/not callable from a rich strata body/)
+    expect(expander.expand({ x: 1 }, 'noop', api)).toBeNull()
 })
 
 // ---------------------------------------------------------------------------

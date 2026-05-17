@@ -25,7 +25,6 @@ import {
   registerElaborator,
   registerTypedOperator,
   registerTypedKeyword,
-  registerExpander,
   registerDefExpander,
   type ElaboratorRegistry,
 } from './registry'
@@ -34,7 +33,6 @@ import { intrinsicSignature } from '../types/intrinsicSig'
 import { registerDefKind, type CodegenKind } from './defkinds'
 import { getIRKind } from '../ir/irKinds'
 import { loadBuiltinStrata } from '../strata/index'
-import { builtinExpanders } from '../strata/expanders'
 import { builtinDefExpanders } from '../strata/defExpanders'
 import { isRichBody, compileBodyToDefExpander, compileBodyToExpanderFn } from './strataBody'
 import parse from '../parser'
@@ -89,17 +87,9 @@ export function buildStrataRegistry(
     if (elab) registerElaboration(registry, elab)
   }
 
-  // Phase D: register built-in IR expanders (control-flow strata lowering hooks).
-  // Only register if a strata-defined rich body hasn't already claimed this intrinsic —
+  // Phase D: register built-in definition expanders (definition-kind lowering hooks).
+  // Only registers if a strata rich body hasn't already claimed the codegen kind —
   // rich bodies win so users can override built-in behaviour from Silicon.
-  for (const [intrinsic, fn] of Object.entries(builtinExpanders)) {
-    if (!registry.expanders.has(intrinsic)) {
-      registerExpander(registry, intrinsic, fn)
-    }
-  }
-
-  // Phase E: register built-in definition expanders (definition-kind lowering hooks).
-  // Same rule as Phase D — strata rich bodies override built-in TS expanders.
   for (const [codegenKind, exp] of Object.entries(builtinDefExpanders)) {
     if (!registry.defExpanders.has(codegenKind)) {
       registerDefExpander(registry, codegenKind, exp)

@@ -16,6 +16,7 @@
 import type { FunctionSig } from '../types/typechecker'
 import type { ModuleRegistry } from '../modules/registry'
 import { resolveIntrinsicWasmInstr } from '../intrinsics'
+import { wasmTypeOf } from '../types/types'
 import type {
     WasmValType, WasmType,
     IRExpr, IRStmt,
@@ -198,6 +199,14 @@ export interface CompilerAPI {
     resolveIntrinsic(name: string): string | undefined
     /** Ternary helper for strata bodies that lack first-class control flow. */
     choose<T>(cond: any, ifTrue: T, ifFalse: T): T
+    /** Indexed access into an args array (e.g. rawArgs[i]). Returns undefined past the end. */
+    arg(node: any, index: number): any
+    /** Lower an expression if defined, otherwise return undefined (preserves IRIf void/typed distinction). */
+    lowerExprIfDefined(node: any): IRExpr | undefined
+    /** Throw an IRLowerError if `value` is null/undefined. Used by strata bodies for guards. */
+    assertDefined(value: any, msg: string): void
+    /** Build the nested if/else chain for @match. Encapsulates the recursion the body interpreter can't express. */
+    expandMatchChain(rawArgs: any[], inferredType: any): IRExpr
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -292,6 +301,29 @@ export function createCompilerAPI(ctx: CtxShape, fns: LowerFns): CompilerAPI {
         freshId:         (prefix = 'tmp') => `${prefix}_${ctx.freshIdCounter.n++}`,
         resolveIntrinsic:(name)        => resolveIntrinsicWasmInstr(name),
         choose:          (cond, t, f) => cond ? t : f,
+        arg:             (node, index) => node?.[index],
+        lowerExprIfDefined: (node) => node == null ? undefined : fns.lowerExpr(node, ctx),
+        assertDefined: (value, msg) => {
+            if (value == null) throw new Error(`[strata body] ${msg}`)
+        },
+        expandMatchChain: (rawArgs, inferredType) => {
+            if (rawArgs.length < 3) return ir.makeNop()
+            const discExpr = fns.lowerExpr(rawArgs[0], ctx)
+            const wt: WasmType = (inferredType && inferredType.kind !== 'Unknown')
+                ? (wasmTypeOf(inferredType) as WasmType)
+                : 'i32'
+
+            const buildNested = (i: number): IRExpr => {
+                if (i >= rawArgs.length) return ir.makeUnreachable()
+                if (i + 1 >= rawArgs.length) return fns.lowerExpr(rawArgs[i], ctx)
+                const pat = fns.lowerExpr(rawArgs[i], ctx)
+                const res = fns.lowerExpr(rawArgs[i + 1], ctx)
+                const eqInstr = fns.exprWasmType(discExpr) === 'f32' ? 'f32.eq' : 'i32.eq'
+                const cond = ir.makeBinOp(eqInstr, discExpr, pat, 'i32')
+                return ir.makeIf(cond, res, buildNested(i + 2), wt)
+            }
+            return buildNested(1)
+        },
     }
 
     return api

@@ -175,25 +175,12 @@ function evalCall(node: any, scope: Scope, api: CompilerAPI): any {
     const path: string[] = name.path ?? []
     if (path.length === 0) return null
 
-    // &IR::null sentinel — return JS null.
-    if (path[0] === 'IR' && path[1] === 'null' && path.length === 2) {
-        return null
-    }
-
-    // &IR::def_* / &IR::meta_* — dispatch markers consumed by the strata loader
-    // to identify the def-kind. Runtime no-op during body execution.
-    if (path[0] === 'IR' && path.length === 2 &&
-        (path[1].startsWith('def_') || path[1].startsWith('meta_'))) {
-        return null
-    }
-
-    // Other &IR::xxx / &WASM::xxx — not callable from rich bodies.
-    // Use &Compiler::ir::* constructors or &Compiler::resolveIntrinsic instead.
+    // &IR::xxx / &WASM::xxx — dispatch markers consumed by the strata loader
+    // to identify the codegen kind / intrinsic.  Runtime no-op during body
+    // execution.  Rich bodies build IR through &Compiler::ir::* constructors;
+    // they never invoke a raw intrinsic, so silencing these is safe.
     if (path[0] === 'IR' || path[0] === 'WASM') {
-        throw new StrataBodyError(
-            `Intrinsic '${path.join('::')}' is not callable from a rich strata body. ` +
-            `Use &Compiler::ir::* constructors or &Compiler::resolveIntrinsic instead.`
-        )
+        return null
     }
 
     // &Compiler::a::b::c(args) — walk the API object and invoke the method.
