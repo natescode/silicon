@@ -466,7 +466,20 @@
 @fn lit_i32_add2_ptr:Int     := { (&str_ptr 'i32_add')     + 4 };
 @fn lit_i32_sub2_ptr:Int     := { (&str_ptr 'i32_sub')     + 4 };
 @fn lit_i32_mul2_ptr:Int     := { (&str_ptr 'i32_mul')     + 4 };
+@fn lit_i32_divs2_ptr:Int    := { (&str_ptr 'i32_div_s')   + 4 };
+@fn lit_i32_rems2_ptr:Int    := { (&str_ptr 'i32_rem_s')   + 4 };
 @fn lit_i32_eqz2_ptr:Int     := { (&str_ptr 'i32_eqz')     + 4 };
+@fn lit_i32_eq2_ptr:Int      := { (&str_ptr 'i32_eq')      + 4 };
+@fn lit_i32_ne2_ptr:Int      := { (&str_ptr 'i32_ne')      + 4 };
+@fn lit_i32_lts2_ptr:Int     := { (&str_ptr 'i32_lt_s')    + 4 };
+@fn lit_i32_les2_ptr:Int     := { (&str_ptr 'i32_le_s')    + 4 };
+@fn lit_i32_gts2_ptr:Int     := { (&str_ptr 'i32_gt_s')    + 4 };
+@fn lit_i32_ges2_ptr:Int     := { (&str_ptr 'i32_ge_s')    + 4 };
+@fn lit_i32_and2_ptr:Int     := { (&str_ptr 'i32_and')     + 4 };
+@fn lit_i32_or2_ptr:Int      := { (&str_ptr 'i32_or')      + 4 };
+@fn lit_i32_xor2_ptr:Int     := { (&str_ptr 'i32_xor')     + 4 };
+@fn lit_i32_shl2_ptr:Int     := { (&str_ptr 'i32_shl')     + 4 };
+@fn lit_i32_shrs2_ptr:Int    := { (&str_ptr 'i32_shr_s')   + 4 };
 @fn lit_i32_load_ptr:Int     := { (&str_ptr 'i32_load')    + 4 };
 @fn lit_i32_load8u_ptr:Int   := { (&str_ptr 'i32_load8_u') + 4 };
 @fn lit_i32_load8s_ptr:Int   := { (&str_ptr 'i32_load8_s') + 4 };
@@ -503,6 +516,110 @@
       @local b := &lower_expr (&ast_field P_AST, call, 4);
       &@if ((a != IR_NONE) * (b != IR_NONE) == 1),
         { &@return (&ir_binop IR_OP_I32_MUL, a, b); };
+    };
+  };
+  &@if ((&lower_span_eq_lit op_off, op_len, (&lit_i32_divs2_ptr), 9) == 1), {
+    &@if (n_args == 2), {
+      @local a := &lower_expr (&ast_field P_AST, call, 3);
+      @local b := &lower_expr (&ast_field P_AST, call, 4);
+      &@if ((a != IR_NONE) * (b != IR_NONE) == 1),
+        { &@return (&ir_binop IR_OP_I32_DIV_S, a, b); };
+    };
+  };
+  &@if ((&lower_span_eq_lit op_off, op_len, (&lit_i32_rems2_ptr), 9) == 1), {
+    &@if (n_args == 2), {
+      @local a := &lower_expr (&ast_field P_AST, call, 3);
+      @local b := &lower_expr (&ast_field P_AST, call, 4);
+      &@if ((a != IR_NONE) * (b != IR_NONE) == 1),
+        { &@return (&ir_binop IR_OP_I32_REM_S, a, b); };
+    };
+  };
+  &@if ((&lower_span_eq_lit op_off, op_len, (&lit_i32_eq2_ptr), 6) == 1), {
+    &@if (n_args == 2), {
+      @local a := &lower_expr (&ast_field P_AST, call, 3);
+      @local b := &lower_expr (&ast_field P_AST, call, 4);
+      &@if ((a != IR_NONE) * (b != IR_NONE) == 1),
+        { &@return (&ir_binop IR_OP_I32_EQ, a, b); };
+    };
+  };
+  &@if ((&lower_span_eq_lit op_off, op_len, (&lit_i32_ne2_ptr), 6) == 1), {
+    &@if (n_args == 2), {
+      @local a := &lower_expr (&ast_field P_AST, call, 3);
+      @local b := &lower_expr (&ast_field P_AST, call, 4);
+      &@if ((a != IR_NONE) * (b != IR_NONE) == 1),
+        { &@return (&ir_binop IR_OP_I32_NE, a, b); };
+    };
+  };
+  &@if ((&lower_span_eq_lit op_off, op_len, (&lit_i32_lts2_ptr), 8) == 1), {
+    &@if (n_args == 2), {
+      @local a := &lower_expr (&ast_field P_AST, call, 3);
+      @local b := &lower_expr (&ast_field P_AST, call, 4);
+      &@if ((a != IR_NONE) * (b != IR_NONE) == 1),
+        { &@return (&ir_binop IR_OP_I32_LT_S, a, b); };
+    };
+  };
+  &@if ((&lower_span_eq_lit op_off, op_len, (&lit_i32_les2_ptr), 8) == 1), {
+    &@if (n_args == 2), {
+      @local a := &lower_expr (&ast_field P_AST, call, 3);
+      @local b := &lower_expr (&ast_field P_AST, call, 4);
+      &@if ((a != IR_NONE) * (b != IR_NONE) == 1),
+        { &@return (&ir_binop IR_OP_I32_LE_S, a, b); };
+    };
+  };
+  &@if ((&lower_span_eq_lit op_off, op_len, (&lit_i32_gts2_ptr), 8) == 1), {
+    &@if (n_args == 2), {
+      @local a := &lower_expr (&ast_field P_AST, call, 3);
+      @local b := &lower_expr (&ast_field P_AST, call, 4);
+      &@if ((a != IR_NONE) * (b != IR_NONE) == 1),
+        { &@return (&ir_binop IR_OP_I32_GT_S, a, b); };
+    };
+  };
+  &@if ((&lower_span_eq_lit op_off, op_len, (&lit_i32_ges2_ptr), 8) == 1), {
+    &@if (n_args == 2), {
+      @local a := &lower_expr (&ast_field P_AST, call, 3);
+      @local b := &lower_expr (&ast_field P_AST, call, 4);
+      &@if ((a != IR_NONE) * (b != IR_NONE) == 1),
+        { &@return (&ir_binop IR_OP_I32_GE_S, a, b); };
+    };
+  };
+  &@if ((&lower_span_eq_lit op_off, op_len, (&lit_i32_and2_ptr), 7) == 1), {
+    &@if (n_args == 2), {
+      @local a := &lower_expr (&ast_field P_AST, call, 3);
+      @local b := &lower_expr (&ast_field P_AST, call, 4);
+      &@if ((a != IR_NONE) * (b != IR_NONE) == 1),
+        { &@return (&ir_binop IR_OP_I32_AND, a, b); };
+    };
+  };
+  &@if ((&lower_span_eq_lit op_off, op_len, (&lit_i32_or2_ptr), 6) == 1), {
+    &@if (n_args == 2), {
+      @local a := &lower_expr (&ast_field P_AST, call, 3);
+      @local b := &lower_expr (&ast_field P_AST, call, 4);
+      &@if ((a != IR_NONE) * (b != IR_NONE) == 1),
+        { &@return (&ir_binop IR_OP_I32_OR, a, b); };
+    };
+  };
+  &@if ((&lower_span_eq_lit op_off, op_len, (&lit_i32_xor2_ptr), 7) == 1), {
+    &@if (n_args == 2), {
+      @local a := &lower_expr (&ast_field P_AST, call, 3);
+      @local b := &lower_expr (&ast_field P_AST, call, 4);
+      &@if ((a != IR_NONE) * (b != IR_NONE) == 1),
+        { &@return (&ir_binop IR_OP_I32_XOR, a, b); };
+    };
+  };
+  &@if ((&lower_span_eq_lit op_off, op_len, (&lit_i32_shl2_ptr), 7) == 1), {
+    &@if (n_args == 2), {
+      @local a := &lower_expr (&ast_field P_AST, call, 3);
+      @local b := &lower_expr (&ast_field P_AST, call, 4);
+      &@if ((a != IR_NONE) * (b != IR_NONE) == 1),
+        { &@return (&ir_binop IR_OP_I32_SHL, a, b); };
+    };
+  };
+  &@if ((&lower_span_eq_lit op_off, op_len, (&lit_i32_shrs2_ptr), 9) == 1), {
+    &@if (n_args == 2), {
+      @local a := &lower_expr (&ast_field P_AST, call, 3);
+      @local b := &lower_expr (&ast_field P_AST, call, 4);
+      &@if ((a != IR_NONE) * (b != IR_NONE) == 1),
+        { &@return (&ir_binop IR_OP_I32_SHR_S, a, b); };
     };
   };
   &@if ((&lower_span_eq_lit op_off, op_len, (&lit_i32_eqz2_ptr), 7) == 1), {

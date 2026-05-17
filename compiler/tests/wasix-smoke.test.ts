@@ -540,6 +540,27 @@ describe('Phase 0 WASIX smoke test', () => {
               fn: 'wasmEqz', args: [0], want: 1 },
             { prog: '@fn wasmEqz x:Int := { &WASM::i32_eqz x };',
               fn: 'wasmEqz', args: [7], want: 0 },
+            // Additional &WASM::* dispatch — slice 27.
+            { prog: '@fn divs a:Int, b:Int := { &WASM::i32_div_s a, b };',
+              fn: 'divs', args: [42, 6], want: 7 },
+            { prog: '@fn rems a:Int, b:Int := { &WASM::i32_rem_s a, b };',
+              fn: 'rems', args: [17, 5], want: 2 },
+            { prog: '@fn eq2 a:Int, b:Int := { &WASM::i32_eq a, b };',
+              fn: 'eq2', args: [3, 3], want: 1 },
+            { prog: '@fn eq2 a:Int, b:Int := { &WASM::i32_eq a, b };',
+              fn: 'eq2', args: [3, 4], want: 0 },
+            { prog: '@fn lt2 a:Int, b:Int := { &WASM::i32_lt_s a, b };',
+              fn: 'lt2', args: [3, 5], want: 1 },
+            { prog: '@fn band a:Int, b:Int := { &WASM::i32_and a, b };',
+              fn: 'band', args: [0xF0, 0x18], want: 0x10 },
+            { prog: '@fn bor a:Int, b:Int := { &WASM::i32_or a, b };',
+              fn: 'bor', args: [0xF0, 0x0F], want: 0xFF },
+            { prog: '@fn bxor a:Int, b:Int := { &WASM::i32_xor a, b };',
+              fn: 'bxor', args: [0xFF, 0x0F], want: 0xF0 },
+            { prog: '@fn shl a:Int, b:Int := { &WASM::i32_shl a, b };',
+              fn: 'shl', args: [1, 4], want: 16 },
+            { prog: '@fn shrs a:Int, b:Int := { &WASM::i32_shr_s a, b };',
+              fn: 'shrs', args: [32, 2], want: 8 },
         ]
 
         // Strings produce a pointer to a length-prefixed UTF-8 block
