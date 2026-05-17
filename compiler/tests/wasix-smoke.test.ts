@@ -314,6 +314,103 @@ describe('Phase 0 WASIX smoke test', () => {
         }
     })
 
+    test('boot/tests/body_test.si: body interpreter dispatches IR::* intrinsics', async () => {
+        if (!wasmerAvailable()) {
+            console.log('  (skipped: wasmer not on PATH)')
+            return
+        }
+        const wasm = await buildBoot(path.join(PROJECT_ROOT, 'boot', 'tests', 'body_test.si'))
+        const tmpPath = path.join(PROJECT_ROOT, '.body-smoke.wasm')
+        await fs.writeFile(tmpPath, wasm)
+
+        const strataDir = path.join(PROJECT_ROOT, 'src', 'strata')
+        const files = (await fs.readdir(strataDir))
+            .filter(f => f.endsWith('.si'))
+            .sort()
+        let bundle = ''
+        for (const f of files) {
+            bundle += await fs.readFile(path.join(strataDir, f), 'utf-8')
+            bundle += '\n'
+        }
+
+        // Build expected per-op output by walking the bundle's
+        // Elaboration nodes in source order (matches Silicon's
+        // registration walk).  Dedup by symbol — first wins.
+        const ast = addToAstSemantics(siliconGrammar)(parse(bundle)).toAst() as Program
+        const opIntrinsicToCode: Record<string, number> = {
+            'i32_add': 1, 'i32_sub': 2, 'i32_mul': 3, 'i32_div_s': 4,
+            'i32_rem_s': 5, 'i32_eq': 6, 'i32_ne': 7,
+            'i32_lt_s': 8, 'i32_le_s': 9, 'i32_gt_s': 10, 'i32_ge_s': 11,
+            'i32_and': 12, 'i32_or': 13, 'i32_xor': 14,
+            'i32_shl': 15, 'i32_shr_s': 16,
+        }
+        const SEED_LEFT = 100, SEED_RIGHT = 200
+        const IR_NULL = 1, IR_BINOP = 4, IR_UNOP = 5
+        const expectedLines: string[] = []
+        const seen = new Set<string>()
+        for (const el of (ast.elements as any[])) {
+            const e = el?.type === 'Elaboration' ? el
+                    : el?.type === 'Element' && el.kind === 'elaboration' ? el.value
+                    : null
+            if (!e) continue
+            if (e.kind !== 'operator') continue
+            const sym = typeof e.symbol === 'string' ? e.symbol
+                      : e.symbol?.value ?? String(e.symbol)
+            if (seen.has(sym)) continue
+            seen.add(sym)
+            // First IR::* call in the body — same shape my Silicon
+            // dispatcher resolves.
+            const findIrCall = (n: any): any => {
+                if (!n || typeof n !== 'object') return null
+                if (n.type === 'FunctionCall' && n.name?.type === 'Namespace'
+                        && n.name.path?.[0] === 'IR') return n
+                for (const k of Object.keys(n)) {
+                    if (k === 'sourceLocation' || k === 'inferredType') continue
+                    const c = n[k]
+                    if (c && typeof c === 'object') {
+                        const r = findIrCall(c)
+                        if (r) return r
+                    }
+                }
+                return null
+            }
+            const fc = findIrCall(e.semantics)
+            let line = `${sym} `
+            if (!fc) {
+                line += 'kind=none op=- l=- r=-'
+            } else {
+                const last = fc.name.path[fc.name.path.length - 1] as string
+                if (last === 'null') {
+                    line += 'kind=1 op=- l=- r=-'
+                } else if (last === 'i32_eqz') {
+                    line += `kind=${IR_UNOP} op=17 l=${SEED_LEFT} r=-`
+                } else if (last in opIntrinsicToCode) {
+                    line += `kind=${IR_BINOP} op=${opIntrinsicToCode[last]} l=${SEED_LEFT} r=${SEED_RIGHT}`
+                } else {
+                    line += 'kind=none op=- l=- r=-'
+                }
+            }
+            expectedLines.push(line)
+        }
+        const expected = expectedLines.join('\n') + '\n'
+
+        try {
+            const result = spawnSync('wasmer', ['run', tmpPath], {
+                input: Buffer.from(bundle, 'utf-8'),
+                maxBuffer: 64 * 1024 * 1024,
+            })
+            expect(result.status).toBe(0)
+            const stdout = (result.stdout ?? Buffer.alloc(0)).toString('utf-8')
+            if (stdout !== expected) {
+                throw new Error(
+                    `Body interpreter mismatch\nExpected:\n${expected}\nGot:\n${stdout}`,
+                )
+            }
+        } finally {
+            await fs.unlink(tmpPath).catch(() => {})
+        }
+    })
+
     test('boot/tests/ir_nodes_test.si: IR record builders + accessors round-trip', async () => {
         if (!wasmerAvailable()) {
             console.log('  (skipped: wasmer not on PATH)')

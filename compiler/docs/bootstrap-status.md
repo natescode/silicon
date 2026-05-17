@@ -104,6 +104,7 @@ Still ahead for Phase 3:
 | Body template extractor (per-step `{call, args}`)    | **Landed** | ~340 |
 | `isRichBody` classification                          | **Landed** | (in `templates_json.si`) |
 | Phase 4 gate: elaboration JSON byte-equal vs Stage 0 | **Landed** | — |
+| Body interpreter — IR::* dispatch (i32 binops + null + eqz) | **Landed** | ~200 |
 | Body interpreter (`&Compiler::*` surface)            | Pending | ~250 (estimated) |
 | Generics-not-allowed validation                      | Deferred — parser doesn't yet store generic params on Definitions |
 
