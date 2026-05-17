@@ -314,6 +314,83 @@ describe('Phase 0 WASIX smoke test', () => {
         }
     })
 
+    test('boot/tests/elaborator_test.si: definition hooks byte-equal Stage 0 elaboration', async () => {
+        if (!wasmerAvailable()) {
+            console.log('  (skipped: wasmer not on PATH)')
+            return
+        }
+        const wasm = await buildBoot(path.join(PROJECT_ROOT, 'boot', 'tests', 'elaborator_test.si'))
+        const tmpPath = path.join(PROJECT_ROOT, '.elab-smoke.wasm')
+        await fs.writeFile(tmpPath, wasm)
+
+        // Built-in strata bundle + a handful of user definitions covering
+        // every codegen kind (function / global / extern) plus one bad
+        // keyword to exercise the error path.
+        const strataDir = path.join(PROJECT_ROOT, 'src', 'strata')
+        const files = (await fs.readdir(strataDir))
+            .filter(f => f.endsWith('.si'))
+            .sort()
+        let bundle = ''
+        for (const f of files) {
+            bundle += await fs.readFile(path.join(strataDir, f), 'utf-8')
+            bundle += '\n'
+        }
+        const userProg = [
+            '@let x := 42;',
+            '@fn add a:Int, b:Int := { a + b };',
+            '@var counter := 0;',
+            '@extern print x:Int;',
+        ].join('\n') + '\n'
+        const input = bundle + userProg
+
+        // Build the Stage 0 reference dump by running the real elaborator.
+        const ast = addToAstSemantics(siliconGrammar)(parse(input)).toAst() as Program
+        const reg = buildStrataRegistry(ast)
+        const { program: elab, errors } = elaborate(ast, reg)
+        const defs: Array<{ keyword: string; name: string; hook: string }> = []
+        for (const el of (elab.elements as any[])) {
+            if (el && el.type === 'Definition' && el.hook) {
+                const name = typeof el.name === 'string' ? el.name : (el.name?.name ?? '')
+                defs.push({ keyword: el.keyword, name, hook: el.hook })
+            }
+        }
+        const lines: string[] = ['{']
+        lines.push('  "definitions": [')
+        defs.forEach((d, i) => {
+            const sep = i < defs.length - 1 ? ',' : ''
+            lines.push(`    { "keyword": "${d.keyword}", "name": "${d.name}", "hook": "${d.hook}" }${sep}`)
+        })
+        lines.push('  ],')
+        if (errors.length === 0) {
+            lines.push('  "errors": []')
+        } else {
+            lines.push('  "errors": [')
+            errors.forEach((e, i) => {
+                const sep = i < errors.length - 1 ? ',' : ''
+                lines.push(`    { "keyword": "${e.keyword}" }${sep}`)
+            })
+            lines.push('  ]')
+        }
+        lines.push('}')
+        const expected = lines.join('\n') + '\n'
+
+        try {
+            const result = spawnSync('wasmer', ['run', tmpPath], {
+                input: Buffer.from(input, 'utf-8'),
+                maxBuffer: 64 * 1024 * 1024,
+            })
+            expect(result.status).toBe(0)
+            const stdout = (result.stdout ?? Buffer.alloc(0)).toString('utf-8')
+            if (stdout !== expected) {
+                throw new Error(
+                    `Elaboration mismatch\nExpected:\n${expected}\nGot:\n${stdout}`,
+                )
+            }
+        } finally {
+            await fs.unlink(tmpPath).catch(() => {})
+        }
+    })
+
     test('boot/tests/json_fixtures_test.si: 26 fixtures in one process match Stage 0', async () => {
         if (!wasmerAvailable()) {
             console.log('  (skipped: wasmer not on PATH)')

@@ -153,3 +153,28 @@
 @fn registry_dk_kw_len:Int i:Int := { &vec_get R_DK_KW_LEN, i };
 @fn registry_dk_cg_off:Int i:Int := { &vec_get R_DK_CG_OFF, i };
 @fn registry_dk_cg_len:Int i:Int := { &vec_get R_DK_CG_LEN, i };
+
+# registry_dk_lookup — linear scan for a defkind by keyword span.
+# Returns the row index, or -1 if no entry matches.
+@fn registry_dk_lookup:Int kw_off:Int, kw_len:Int := {
+  @local n := &vec_len R_DK_KW_OFF;
+  @local i := 0;
+  @local found := 0 - 1;
+  &@loop ((found < 0) * (i < n) == 1), {
+    @local k_off := &vec_get R_DK_KW_OFF, i;
+    @local k_len := &vec_get R_DK_KW_LEN, i;
+    &@if (k_len == kw_len), {
+      @local ok := 1;
+      @local j := 0;
+      &@loop ((ok * (j < kw_len)) == 1), {
+        @local a := &WASM::i32_load8_u (P_SRC + k_off + j);
+        @local b := &WASM::i32_load8_u (P_SRC + kw_off + j);
+        &@if (a != b), { ok = 0; };
+        j = j + 1;
+      };
+      &@if (ok == 1), { found = i; };
+    };
+    i = i + 1;
+  };
+  found
+};

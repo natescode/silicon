@@ -1,0 +1,91 @@
+# Elaborator — Phase 4 slice 1.
+#
+# Walks an AST_PROGRAM produced by boot/parser/parse.si and, for every
+# AST_DEFINITION, looks up the keyword in the strata registry's defKinds
+# table and records the resulting codegen-kind span ("function",
+# "global", "type_sum", …) in a parallel side table keyed by the
+# definition's AST node index.
+#
+# Storing the hook in a side table (rather than mutating the AST_DEFINITION
+# record in place) keeps the Phase 1/2 byte-equal JSON harness valid —
+# elaboration is purely additive metadata.
+#
+# What lands in slice 1:
+#   - Hook stamping for every Definition node in element-order.
+#   - Errors collected when no defKind is registered for a keyword.
+#   - Accessors used by tests / dumps.
+#
+# What's deferred to later slices:
+#   - BinaryOp.semantics resolution (registry lookup per operator).
+#   - The body interpreter (the &Compiler::* surface) — Phase 4 slice 2.
+
+@use '../std/vec.si';
+@use '../parser/ast.si';
+@use '../parser/parse.si';
+@use '../strata/registry.si';
+
+# Field offsets within an AST_DEFINITION record (mirrors ast.si).
+@let DEF_FIELD_KW_OFF:Int   := 1;
+@let DEF_FIELD_KW_LEN:Int   := 2;
+@let DEF_FIELD_NAME_OFF:Int := 3;
+@let DEF_FIELD_NAME_LEN:Int := 4;
+
+# ── Side table state ─────────────────────────────────────────────────
+
+@var E_DEF_IDX:Int  := 0;   # vec<i32> of AST_DEFINITION node indices
+@var E_HOOK_OFF:Int := 0;   # vec<i32> of codegen-kind off (in P_SRC)
+@var E_HOOK_LEN:Int := 0;   # vec<i32> of codegen-kind len
+@var E_ERR_OFF:Int  := 0;   # vec<i32> of unknown-keyword spans (off)
+@var E_ERR_LEN:Int  := 0;   # vec<i32> of unknown-keyword spans (len)
+
+@fn elab_init := {
+  E_DEF_IDX  = &vec_new;
+  E_HOOK_OFF = &vec_new;
+  E_HOOK_LEN = &vec_new;
+  E_ERR_OFF  = &vec_new;
+  E_ERR_LEN  = &vec_new;
+};
+
+@fn elab_def_count:Int       := { &vec_len E_DEF_IDX };
+@fn elab_def_at:Int i:Int    := { &vec_get E_DEF_IDX, i };
+@fn elab_hook_off:Int i:Int  := { &vec_get E_HOOK_OFF, i };
+@fn elab_hook_len:Int i:Int  := { &vec_get E_HOOK_LEN, i };
+@fn elab_err_count:Int       := { &vec_len E_ERR_OFF };
+@fn elab_err_off:Int i:Int   := { &vec_get E_ERR_OFF, i };
+@fn elab_err_len:Int i:Int   := { &vec_get E_ERR_LEN, i };
+
+# ── Walk ─────────────────────────────────────────────────────────────
+
+# elaborate_program — walks the program's top-level elements; for each
+# AST_DEFINITION, looks up its keyword in the defKinds table.  Hook
+# spans get appended to (E_DEF_IDX, E_HOOK_OFF, E_HOOK_LEN); unknown
+# keywords get appended to (E_ERR_OFF, E_ERR_LEN).
+#
+# The caller must `&registry_init` + `&load_strata prog` first so the
+# defKinds table is populated.
+@fn elaborate_program:Int prog:Int := {
+  @local n := &ast_field P_AST, prog, 1;
+  @local i := 0;
+  &@loop (i < n), {
+    @local elem := &ast_field P_AST, prog, (2 + i);
+    @local k := &ast_kind P_AST, elem;
+    &@if (k == AST_DEFINITION), {
+      @local kw_off := &ast_field P_AST, elem, DEF_FIELD_KW_OFF;
+      @local kw_len := &ast_field P_AST, elem, DEF_FIELD_KW_LEN;
+      @local dk := &registry_dk_lookup kw_off, kw_len;
+      &@if (dk < 0), {
+        E_ERR_OFF = &vec_push E_ERR_OFF, kw_off;
+        E_ERR_LEN = &vec_push E_ERR_LEN, kw_len;
+      };
+      &@if (dk >= 0), {
+        @local cg_off := &registry_dk_cg_off dk;
+        @local cg_len := &registry_dk_cg_len dk;
+        E_DEF_IDX  = &vec_push E_DEF_IDX,  elem;
+        E_HOOK_OFF = &vec_push E_HOOK_OFF, cg_off;
+        E_HOOK_LEN = &vec_push E_HOOK_LEN, cg_len;
+      };
+    };
+    i = i + 1;
+  };
+  &elab_def_count
+};

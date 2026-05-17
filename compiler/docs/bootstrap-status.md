@@ -93,6 +93,50 @@ Still ahead for Phase 3:
 - Capability stub (`required_caps: i32`) — Phase 1 grants
   `0xFFFFFFFF` everywhere; the policy check lands post-Stage-3.
 
+## Phase 4 (`bootstrap/03-strata` cont.) — in flight
+
+| Slice                                                | Status | LoC Silicon |
+| ---------------------------------------------------- | ------ | ----------- |
+| Elaborator walker — Definition.hook stamping         | **Landed** | ~95 |
+| Phase 4 gate slice 1: elaboration JSON byte-equal vs Stage 0 | **Landed** | — |
+| Body interpreter (`&Compiler::*` surface)            | Pending | ~250 (estimated) |
+| BinaryOp.semantics resolution                        | Pending | small |
+| Defkind constraint validation (params / binding / generics) | Pending | small |
+
+What lands today:
+- `boot/elab/elaborator.si` walks `AST_PROGRAM`, looks up each
+  `AST_DEFINITION`'s keyword in the defKinds registry, and records
+  the resulting codegen-kind span (`"function"`, `"global"`,
+  `"extern"`, …) in a parallel side table.  Unknown keywords
+  collect into a separate error vec.  Hooks live in a side table
+  rather than in the AST_DEFINITION record so the Phase 1/2
+  byte-equal AST/JSON harnesses stay valid.
+- `registry_dk_lookup(off, len)` — linear scan by keyword span.
+- `boot/tests/elaborator_test.si` reads the strata bundle + a
+  user-program tail from stdin and emits
+  `{ "definitions": [...], "errors": [...] }`.
+- Phase 4 gate slice 1: bun-side test rebuilds the same dump
+  using Stage 0's `elaborate(ast, reg)` and diffs byte-for-byte.
+
+Still ahead for Phase 4:
+- Body interpreter — port `src/elaborator/strataBody.ts` (~250
+  LoC) into Silicon.  Per the plan: stub the whole `Compiler::*`
+  surface up front, fail-loud on unimplemented calls, port them
+  in order of "first failing test".  17 CompilerAPI entry points
+  are actually used by built-in strata
+  (`Compiler::arg`, `Compiler::ir`, `Compiler::lowerExpr`,
+  `Compiler::ctx`, `Compiler::watId`, `Compiler::resolveType`,
+  `Compiler::lowerParams`, `Compiler::lowerFunctionBody`,
+  `Compiler::lowerGlobalInit`, `Compiler::lowerExternParams`,
+  `Compiler::lowerExternResult`, `Compiler::resolveFunctionReturnType`,
+  `Compiler::lowerExprIfDefined`, `Compiler::assertDefined`,
+  `Compiler::choose`, `Compiler::isVarName`,
+  `Compiler::expandMatchChain`).
+- BinaryOp.semantics: attach the resolved StrataNode reference
+  per operator (already populated in the registry).
+- Constraint validation on Definitions: enforce `allowsParams`,
+  `allowsBinding`, `allowsGenerics` flags.
+
 ## Phase 1 (`bootstrap/01-parser`) — in flight
 
 | Slice                                                    | Status | LoC Silicon |
