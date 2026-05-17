@@ -155,6 +155,68 @@
   &vec_push ast, idx
 };
 
+# AST_ARRAY_LIT  [kind, n_elems, elem0, elem1, ...]
+@let AST_ARRAY_LIT:Int   := 11;
+# AST_TUPLE_LIT  [kind, n_elems, elem0, elem1, ...]
+@let AST_TUPLE_LIT:Int   := 12;
+# AST_OBJECT_LIT [kind, n_pairs, key0_off, key0_len, val0_idx, key1_off, ...]
+@let AST_OBJECT_LIT:Int  := 13;
+# AST_DOC_COMMENT [kind, off, len]
+@let AST_DOC_COMMENT:Int := 14;
+# AST_VARIANT    [kind, name_off, name_len, n_fields,
+#                 field0_name_off, field0_name_len, field0_type_off, field0_type_len, ...]
+@let AST_VARIANT:Int     := 15;
+# AST_ASSIGNMENT [kind, target_idx, value_idx]
+@let AST_ASSIGNMENT:Int  := 16;
+
+@fn ast_array_start:Int ast:Int, n:Int := {
+  @local a := &vec_push ast, AST_ARRAY_LIT;
+  &vec_push a, n
+};
+@fn ast_array_elem:Int ast:Int, idx:Int := { &vec_push ast, idx };
+
+@fn ast_tuple_start:Int ast:Int, n:Int := {
+  @local a := &vec_push ast, AST_TUPLE_LIT;
+  &vec_push a, n
+};
+@fn ast_tuple_elem:Int ast:Int, idx:Int := { &vec_push ast, idx };
+
+@fn ast_object_start:Int ast:Int, n:Int := {
+  @local a := &vec_push ast, AST_OBJECT_LIT;
+  &vec_push a, n
+};
+@fn ast_object_pair:Int ast:Int, key_off:Int, key_len:Int, val:Int := {
+  @local a := &vec_push ast, key_off;
+  a = &vec_push a, key_len;
+  &vec_push a, val
+};
+
+@fn ast_doc_comment:Int ast:Int, off:Int, len:Int := {
+  @local a := &vec_push ast, AST_DOC_COMMENT;
+  a = &vec_push a, off;
+  &vec_push a, len
+};
+
+@fn ast_variant_start:Int ast:Int, name_off:Int, name_len:Int, n_fields:Int := {
+  @local a := &vec_push ast, AST_VARIANT;
+  a = &vec_push a, name_off;
+  a = &vec_push a, name_len;
+  &vec_push a, n_fields
+};
+@fn ast_variant_field:Int ast:Int, name_off:Int, name_len:Int,
+                          type_off:Int, type_len:Int := {
+  @local a := &vec_push ast, name_off;
+  a = &vec_push a, name_len;
+  a = &vec_push a, type_off;
+  &vec_push a, type_len
+};
+
+@fn ast_assignment:Int ast:Int, target:Int, value:Int := {
+  @local a := &vec_push ast, AST_ASSIGNMENT;
+  a = &vec_push a, target;
+  &vec_push a, value
+};
+
 # ── Patching helpers ─────────────────────────────────────────────────
 # Sometimes a node's child count isn't known until after the children
 # are pushed (variable-arity nodes built in-place).  ast_patch_at sets

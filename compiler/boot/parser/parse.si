@@ -209,6 +209,155 @@
   call_node
 };
 
+# parse_array_lit — `$[ expr, expr, ... ]`.  Caller has confirmed the
+# current token is TOK_DOLLAR followed by TOK_LBRACK.
+@fn parse_array_lit:Int := {
+  &p_advance;                                  # consume '$'
+  &p_advance;                                  # consume '['
+  @local elems := &vec_new;
+  &@loop 1, {
+    @local k := &p_peek_kind;
+    &@if (k == TOK_RBRACK), { &@break };
+    &@if (k == TOK_EOF),    { &@break };
+    @local e := &parse_expression_start;
+    elems = &vec_push elems, e;
+    &@if ((&p_peek_kind) == TOK_COMMA), { &p_advance; }, { &@break };
+  };
+  &@if ((&p_peek_kind) == TOK_RBRACK), { &p_advance; };
+  @local n := &vec_len elems;
+  @local node := &vec_offset P_AST;
+  P_AST = &ast_array_start P_AST, n;
+  @local i := 0;
+  &@loop (i < n), {
+    P_AST = &ast_array_elem P_AST, (&vec_get elems, i);
+    i = i + 1;
+  };
+  node
+};
+
+# parse_tuple_lit — `$( expr, expr, ... )`.
+@fn parse_tuple_lit:Int := {
+  &p_advance;                                  # consume '$'
+  &p_advance;                                  # consume '('
+  @local elems := &vec_new;
+  &@loop 1, {
+    @local k := &p_peek_kind;
+    &@if (k == TOK_RPAREN), { &@break };
+    &@if (k == TOK_EOF),    { &@break };
+    @local e := &parse_expression_start;
+    elems = &vec_push elems, e;
+    &@if ((&p_peek_kind) == TOK_COMMA), { &p_advance; }, { &@break };
+  };
+  &@if ((&p_peek_kind) == TOK_RPAREN), { &p_advance; };
+  @local n := &vec_len elems;
+  @local node := &vec_offset P_AST;
+  P_AST = &ast_tuple_start P_AST, n;
+  @local i := 0;
+  &@loop (i < n), {
+    P_AST = &ast_tuple_elem P_AST, (&vec_get elems, i);
+    i = i + 1;
+  };
+  node
+};
+
+# parse_object_lit — `${ key=expr, key=expr, ... }`.  Keys are bare
+# identifiers (the grammar uses typedIdentifier; we store the bare
+# name + length and treat the optional type annotation as ignored
+# for Stage 1 ergonomics).
+@fn parse_object_lit:Int := {
+  &p_advance;                                  # consume '$'
+  &p_advance;                                  # consume '{'
+  # Pair layout: parallel arrays of key off/len/val to keep memory
+  # use predictable.
+  @local key_offs := &vec_new;
+  @local key_lens := &vec_new;
+  @local vals     := &vec_new;
+  &@loop 1, {
+    @local k := &p_peek_kind;
+    &@if (k == TOK_RBRACE), { &@break };
+    &@if (k == TOK_EOF),    { &@break };
+    &@if (k != TOK_IDENT),  { &@break };       # malformed
+    @local key_off := &p_peek_off;
+    @local key_len := &p_peek_len;
+    &p_advance;
+    # Optional `:Type` on the key — consume and ignore.
+    &parse_optional_type;
+    &@if ((&p_peek_kind) != TOK_EQ), { &@break };
+    &p_advance;
+    @local v := &parse_expression_start;
+    key_offs = &vec_push key_offs, key_off;
+    key_lens = &vec_push key_lens, key_len;
+    vals     = &vec_push vals, v;
+    &@if ((&p_peek_kind) == TOK_COMMA), { &p_advance; }, { &@break };
+  };
+  &@if ((&p_peek_kind) == TOK_RBRACE), { &p_advance; };
+  @local n := &vec_len vals;
+  @local node := &vec_offset P_AST;
+  P_AST = &ast_object_start P_AST, n;
+  @local i := 0;
+  &@loop (i < n), {
+    P_AST = &ast_object_pair P_AST,
+              (&vec_get key_offs, i),
+              (&vec_get key_lens, i),
+              (&vec_get vals, i);
+    i = i + 1;
+  };
+  node
+};
+
+# parse_dollar — `$` followed by `[`, `(`, `{`, or an identifier
+# (variant declarator).
+@fn parse_dollar:Int := {
+  @local next := &p_lookahead_kind 1;
+  &@if (next == TOK_LBRACK), { &@return (&parse_array_lit); };
+  &@if (next == TOK_LPAREN), { &@return (&parse_tuple_lit); };
+  &@if (next == TOK_LBRACE), { &@return (&parse_object_lit); };
+  &@if (next == TOK_IDENT),  { &@return (&parse_variant_decl); };
+  # Stand-alone `$` isn't valid in Stage 1; skip and return AST_NONE.
+  &p_advance;
+  AST_NONE
+};
+
+# parse_variant_decl — `$Variant field:Type, field:Type`.  Caller has
+# already verified the next token after `$` is TOK_IDENT.
+@fn parse_variant_decl:Int := {
+  &p_advance;                                  # consume '$'
+  @local name_off := &p_peek_off;
+  @local name_len := &p_peek_len;
+  &p_advance;                                  # consume Variant
+  # Parallel arrays for field (name, type) spans.
+  @local f_name_off := &vec_new;
+  @local f_name_len := &vec_new;
+  @local f_type_off := &vec_new;
+  @local f_type_len := &vec_new;
+  &@loop 1, {
+    @local k := &p_peek_kind;
+    &@if (k != TOK_IDENT), { &@break };
+    @local foff := &p_peek_off;
+    @local flen := &p_peek_len;
+    &p_advance;
+    &parse_optional_type;
+    f_name_off = &vec_push f_name_off, foff;
+    f_name_len = &vec_push f_name_len, flen;
+    f_type_off = &vec_push f_type_off, P_TYPE_OFF;
+    f_type_len = &vec_push f_type_len, P_TYPE_LEN;
+    &@if ((&p_peek_kind) == TOK_COMMA), { &p_advance; }, { &@break };
+  };
+  @local n := &vec_len f_name_off;
+  @local node := &vec_offset P_AST;
+  P_AST = &ast_variant_start P_AST, name_off, name_len, n;
+  @local i := 0;
+  &@loop (i < n), {
+    P_AST = &ast_variant_field P_AST,
+              (&vec_get f_name_off, i),
+              (&vec_get f_name_len, i),
+              (&vec_get f_type_off, i),
+              (&vec_get f_type_len, i);
+    i = i + 1;
+  };
+  node
+};
+
 # parse_block — `{` Item* trailing? `}`.  Each Item ends with `;`; the
 # optional trailing expression has no `;`.  Same temp-vec trick as call
 # args: stmt indices collected to a temp vec so the AST_BLOCK header
@@ -253,8 +402,15 @@
   node
 };
 
+# Source-literal byte strings for the keyword bool-lit dispatcher.
+# We keep them as Silicon string literals (which carry length + UTF-8
+# bytes); span_eq compares the *source-buffer* slice against the
+# literal payload starting at (str_ptr s) + 4.
+@fn lit_true_ptr:Int  := { (&str_ptr '@true')  + 4 };
+@fn lit_false_ptr:Int := { (&str_ptr '@false') + 4 };
+
 # parse_expression_end — one ExpressionEnd: literal, namespace, call,
-# parenthesised expression, or block.
+# parenthesised expression, block, or $-literal.
 @fn parse_expression_end:Int := {
   @local k := &p_peek_kind;
   @local node := AST_NONE;
@@ -265,6 +421,13 @@
   &@if (k == TOK_AMP),       { node = &parse_function_call; };
   &@if (k == TOK_LPAREN),    { node = &parse_paren; };
   &@if (k == TOK_LBRACE),    { node = &parse_block; };
+  &@if (k == TOK_DOLLAR),    { node = &parse_dollar; };
+  &@if (k == TOK_KEYWORD), {
+    @local off := &p_peek_off;
+    @local len := &p_peek_len;
+    &@if ((&span_eq off, len, (&lit_true_ptr), 5) == 1), { node = &parse_bool_lit 1; };
+    &@if ((&span_eq off, len, (&lit_false_ptr), 6) == 1), { node = &parse_bool_lit 0; };
+  };
   node
 };
 
@@ -384,13 +547,60 @@
   node
 };
 
+# parse_doc_comment — TOK_DOC, content from `## ` to end-of-line.
+@fn parse_doc_comment:Int := {
+  @local off := &p_peek_off;
+  @local len := &p_peek_len;
+  @local node := &vec_offset P_AST;
+  P_AST = &ast_doc_comment P_AST, off, len;
+  &p_advance;
+  node
+};
+
+# parse_assignment_or_expression — if the upcoming tokens look like
+# `namespace = expr`, build an AST_ASSIGNMENT.  Otherwise fall through
+# to a normal expression.
+@fn parse_maybe_assignment:Int := {
+  # Detect a 2-token lookahead pattern: TOK_IDENT (TOK_NS_SEP TOK_IDENT)* TOK_EQ.
+  # Walk the cursor forward without advancing P_CUR — read by index.
+  @local i := P_CUR;
+  &@if ((&vec_get P_TOKS, (i * 3)) != TOK_IDENT), { &@return (&parse_expression_start); };
+  i = i + 1;
+  &@loop 1, {
+    &@if ((&vec_get P_TOKS, (i * 3)) != TOK_NS_SEP), { &@break };
+    i = i + 1;
+    &@if ((&vec_get P_TOKS, (i * 3)) != TOK_IDENT), { &@return (&parse_expression_start); };
+    i = i + 1;
+  };
+  &@if ((&vec_get P_TOKS, (i * 3)) != TOK_EQ), { &@return (&parse_expression_start); };
+
+  # Confirmed: this is an Assignment.  Parse target + `=` + value.
+  @local target := &parse_namespace;
+  &p_advance;                                  # consume `=`
+  @local value := &parse_expression_start;
+  @local node := &vec_offset P_AST;
+  P_AST = &ast_assignment P_AST, target, value;
+  node
+};
+
 # parse_element_inner — one Item or trailing-expression, WITHOUT
 # consuming the optional trailing `;`.  Used by parse_block (which
 # needs to inspect the post-element token to decide statement vs
 # trailing).
 @fn parse_element_inner:Int := {
   @local k := &p_peek_kind;
-  &@if (k == TOK_KEYWORD), { &@return (&parse_definition); };
+  &@if (k == TOK_DOC),     { &@return (&parse_doc_comment); };
+  &@if (k == TOK_KEYWORD), {
+    # @true / @false are keyword-formed expressions, not definitions.
+    # Dispatch to parse_expression_start so the bool-lit branch fires.
+    @local off := &p_peek_off;
+    @local len := &p_peek_len;
+    @local is_bool := (&span_eq off, len, (&lit_true_ptr), 5)
+                    | (&span_eq off, len, (&lit_false_ptr), 6);
+    &@if (is_bool == 1), { &@return (&parse_expression_start); };
+    &@return (&parse_definition);
+  };
+  &@if (k == TOK_IDENT),   { &@return (&parse_maybe_assignment); };
   &parse_expression_start
 };
 

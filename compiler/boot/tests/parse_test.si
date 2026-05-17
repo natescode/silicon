@@ -135,8 +135,50 @@
   @local binding10 := &ast_field P_AST, elem10, 10;   # 8 hdr + 2 params
   &@if ((&ast_kind P_AST, binding10) != AST_BIN_OP), { &die 93; };
 
+  # ── Case 11: bool literal `@true;` ────────────────────────────────
+  @local prog11 := &parse_str '@true;';
+  @local elem11 := &ast_field P_AST, prog11, 2;
+  &@if ((&ast_kind P_AST, elem11) != AST_BOOL_LIT), { &die 110; };
+  &@if ((&ast_field P_AST, elem11, 1) != 1), { &die 111; };
+
+  # ── Case 12: array literal `$[1, 2, 3];` ──────────────────────────
+  @local prog12 := &parse_str '$[1, 2, 3];';
+  @local elem12 := &ast_field P_AST, prog12, 2;
+  &@if ((&ast_kind P_AST, elem12) != AST_ARRAY_LIT), { &die 120; };
+  &@if ((&ast_field P_AST, elem12, 1) != 3), { &die 121; };
+
+  # ── Case 13: tuple literal `$(1, 2);` ─────────────────────────────
+  @local prog13 := &parse_str '$(1, 2);';
+  @local elem13 := &ast_field P_AST, prog13, 2;
+  &@if ((&ast_kind P_AST, elem13) != AST_TUPLE_LIT), { &die 130; };
+  &@if ((&ast_field P_AST, elem13, 1) != 2), { &die 131; };
+
+  # ── Case 14: object literal `${a=1, b=2};` ────────────────────────
+  @local prog14 := &parse_str '${a=1, b=2};';
+  @local elem14 := &ast_field P_AST, prog14, 2;
+  &@if ((&ast_kind P_AST, elem14) != AST_OBJECT_LIT), { &die 140; };
+  &@if ((&ast_field P_AST, elem14, 1) != 2), { &die 141; };
+
+  # ── Case 15: variant declarator `$Circle r:Int;` ──────────────────
+  @local prog15 := &parse_str '$Circle r:Int;';
+  @local elem15 := &ast_field P_AST, prog15, 2;
+  &@if ((&ast_kind P_AST, elem15) != AST_VARIANT), { &die 150; };
+  &@if ((&ast_field P_AST, elem15, 3) != 1), { &die 151; };
+
+  # ── Case 16: doc comment `## hello\n42;` ──────────────────────────
+  @local prog16 := &parse_str '## hello';
+  @local elem16 := &ast_field P_AST, prog16, 2;
+  &@if ((&ast_kind P_AST, elem16) != AST_DOC_COMMENT), { &die 160; };
+
+  # ── Case 17: assignment `x = 5;` (mutating an @var) ───────────────
+  @local prog17 := &parse_str 'x = 5;';
+  @local elem17 := &ast_field P_AST, prog17, 2;
+  &@if ((&ast_kind P_AST, elem17) != AST_ASSIGNMENT), { &die 170; };
+  @local val17 := &ast_field P_AST, elem17, 2;
+  &@if ((&ast_kind P_AST, val17) != AST_INT_LIT), { &die 171; };
+
   &write_str 1, 'parse OK ';
-  &put_int 10;
+  &put_int 17;
   &write_byte 1, 10;
   &wasi_snapshot_preview1::proc_exit 0;
 };

@@ -6,22 +6,15 @@
       "keyword": "@let",
       "name": {
         "type": "TypedIdentifier",
-        "name": "main"
+        "name": "x"
       },
       "params": [],
       "binding": {
         "type": "Binding",
         "expression": {
-          "type": "Block",
-          "items": [],
-          "trailing": {
-            "type": "IntLiteral",
-            "value": "42",
-            "base": "decimal",
-            "inferredType": {
-              "kind": "Int"
-            }
-          },
+          "type": "IntLiteral",
+          "value": "42",
+          "base": "decimal",
           "inferredType": {
             "kind": "Int"
           }
