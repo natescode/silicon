@@ -72,6 +72,54 @@
   node
 };
 
+# parse_float_lit — TOK_NUM_FLOAT; we preserve the source text by
+# storing (off, len) rather than parsing to an f32 here.
+@fn parse_float_lit:Int := {
+  @local off := &p_peek_off;
+  @local len := &p_peek_len;
+  @local node := &vec_offset P_AST;
+  P_AST = &ast_float_lit P_AST, off, len;
+  &p_advance;
+  node
+};
+
+# parse_string_lit — TOK_STR.  The token text includes the surrounding
+# `'` quotes; we strip them so the AST stores only the payload bytes.
+@fn parse_string_lit:Int := {
+  @local off := &p_peek_off;
+  @local len := &p_peek_len;
+  @local node := &vec_offset P_AST;
+  P_AST = &ast_string_lit P_AST, (off + 1), (len - 2);
+  &p_advance;
+  node
+};
+
+# parse_bool_lit — TOK_KEYWORD whose text is `@true` or `@false`.
+# Caller checks the text before dispatching here.
+@fn parse_bool_lit:Int value:Int := {
+  @local node := &vec_offset P_AST;
+  P_AST = &ast_bool_lit P_AST, value;
+  &p_advance;
+  node
+};
+
+# Compare a (off, len) source span with a fixed ASCII byte sequence
+# `bytes[0..n]`.  Returns 1 if equal.  Used by parse_bool_lit dispatch.
+@fn span_eq:Int off:Int, len:Int, lit_ptr:Int, lit_len:Int := {
+  # Use Int (not Bool) for the flag so reassignment and the function
+  # return type stay coherent — Bool only auto-coerces in arithmetic.
+  @local ok := 1;
+  &@if (len != lit_len), { ok = 0; };
+  @local i := 0;
+  &@loop ((ok * (i < len)) == 1), {
+    @local sb := &WASM::i32_load8_u (P_SRC + off + i);
+    @local lb := &WASM::i32_load8_u (lit_ptr + i);
+    &@if (sb != lb), { ok = 0; };
+    i = i + 1;
+  };
+  ok
+};
+
 # parse_namespace — current token must be TOK_IDENT.
 # Eagerly chews TOK_NS_SEP IDENT pairs to handle `a.b`, `a::b::c`.
 @fn parse_namespace:Int := {
@@ -161,15 +209,62 @@
   call_node
 };
 
+# parse_block — `{` Item* trailing? `}`.  Each Item ends with `;`; the
+# optional trailing expression has no `;`.  Same temp-vec trick as call
+# args: stmt indices collected to a temp vec so the AST_BLOCK header
+# stays contiguous.
+@fn parse_block:Int := {
+  &p_advance;                                   # consume '{'
+  @local stmts := &vec_new;
+  @local trailing := AST_NONE;
+
+  &@loop 1, {
+    @local k := &p_peek_kind;
+    &@if (k == TOK_RBRACE), { &@break };
+    &@if (k == TOK_EOF),    { &@break };
+    @local node := &parse_element_inner;        # parses one Item-or-trailing
+    @local after := &p_peek_kind;
+    &@if (after == TOK_SEMI),
+      {
+        stmts = &vec_push stmts, node;
+        &p_advance;                             # eat ';'
+      },
+      {
+        # No semicolon → this is the trailing expression.
+        trailing = node;
+        &@break;
+      };
+  };
+
+  &@if ((&p_peek_kind) == TOK_RBRACE), { &p_advance; };
+
+  @local has_trailing := 0;
+  &@if (trailing != AST_NONE), { has_trailing = 1; };
+  @local n_stmts := &vec_len stmts;
+
+  @local node := &vec_offset P_AST;
+  P_AST = &ast_block_start P_AST, n_stmts, has_trailing;
+  @local i := 0;
+  &@loop (i < n_stmts), {
+    P_AST = &ast_block_cell P_AST, (&vec_get stmts, i);
+    i = i + 1;
+  };
+  &@if (has_trailing == 1), { P_AST = &ast_block_cell P_AST, trailing; };
+  node
+};
+
 # parse_expression_end — one ExpressionEnd: literal, namespace, call,
-# or parenthesised expression.  Dispatch is by token kind.
+# parenthesised expression, or block.
 @fn parse_expression_end:Int := {
   @local k := &p_peek_kind;
   @local node := AST_NONE;
-  &@if (k == TOK_NUM_DEC), { node = &parse_int_lit; };
-  &@if (k == TOK_IDENT),   { node = &parse_namespace; };
-  &@if (k == TOK_AMP),     { node = &parse_function_call; };
-  &@if (k == TOK_LPAREN),  { node = &parse_paren; };
+  &@if (k == TOK_NUM_DEC),   { node = &parse_int_lit; };
+  &@if (k == TOK_NUM_FLOAT), { node = &parse_float_lit; };
+  &@if (k == TOK_STR),       { node = &parse_string_lit; };
+  &@if (k == TOK_IDENT),     { node = &parse_namespace; };
+  &@if (k == TOK_AMP),       { node = &parse_function_call; };
+  &@if (k == TOK_LPAREN),    { node = &parse_paren; };
+  &@if (k == TOK_LBRACE),    { node = &parse_block; };
   node
 };
 
@@ -190,10 +285,119 @@
   lhs
 };
 
-# parse_element — top-level: function call or expression statement,
-# always terminated by `;`.  Definitions land in the next commit.
+# parse_type_annotation — `:` IDENT.  Returns (off, len) of the type
+# name via two module-level shadows because Silicon has no tuple
+# returns and using a vec for two cells is gratuitous.
+@var P_TYPE_OFF:Int := 0;
+@var P_TYPE_LEN:Int := 0;
+
+@fn parse_optional_type := {
+  P_TYPE_OFF = 0;
+  P_TYPE_LEN = 0;
+  &@if ((&p_peek_kind) == TOK_COLON), {
+    &p_advance;
+    &@if ((&p_peek_kind) == TOK_IDENT), {
+      P_TYPE_OFF = &p_peek_off;
+      P_TYPE_LEN = &p_peek_len;
+      &p_advance;
+    };
+  };
+};
+
+# parse_param_literal — one ParamLiteral.  Today we model parameters
+# as namespace nodes carrying the typed-identifier slot.  Stage-2 will
+# need a richer schema; for the parser's purposes this is enough.
+@fn parse_param_literal:Int := {
+  &@if ((&p_peek_kind) != TOK_IDENT), { &@return AST_NONE; };
+  @local node := &parse_namespace;
+  # Optional `:TypeName` — consumed and recorded in P_TYPE_* but the
+  # parameter AST node itself doesn't yet carry its annotation.  The
+  # Phase 2 AST polish lands this properly.
+  &parse_optional_type;
+  node
+};
+
+# parse_definition — `@kw name [GenericParams?] [ParamLiteral,*]
+#                    [:= ExpressionStart]`.  Caller has already
+# verified the current token is TOK_KEYWORD.
+@fn parse_definition:Int := {
+  @local kw_off := &p_peek_off;
+  @local kw_len := &p_peek_len;
+  &p_advance;                                  # consume `@kw`
+
+  # Definition name — must be an identifier (typedIdentifier).
+  @local name_off := 0;
+  @local name_len := 0;
+  &@if ((&p_peek_kind) == TOK_IDENT), {
+    name_off = &p_peek_off;
+    name_len = &p_peek_len;
+    &p_advance;
+  };
+
+  # Optional type annotation on the name.
+  &parse_optional_type;
+  @local type_off := P_TYPE_OFF;
+  @local type_len := P_TYPE_LEN;
+
+  # Generic params — `[T, U]`.  Skipped lexically for now (consumed
+  # but not stored in the AST).  Stage 2 will tag them.
+  &@if ((&p_peek_kind) == TOK_LBRACK), {
+    &@loop 1, {
+      &p_advance;
+      &@if ((&p_peek_kind) == TOK_RBRACK), { &p_advance; &@break };
+      &@if ((&p_peek_kind) == TOK_EOF),    { &@break };
+    };
+  };
+
+  # ParamLiteral,* — comma-separated.  Collected to a temp vec so the
+  # AST_DEFINITION header stays contiguous.
+  @local params := &vec_new;
+  &@loop 1, {
+    @local k := &p_peek_kind;
+    &@if (k == TOK_COLONEQ), { &@break };
+    &@if (k == TOK_SEMI),    { &@break };
+    &@if (k == TOK_RBRACE),  { &@break };
+    &@if (k == TOK_EOF),     { &@break };
+    @local p := &parse_param_literal;
+    &@if (p == AST_NONE), { &@break };
+    params = &vec_push params, p;
+    &@if ((&p_peek_kind) == TOK_COMMA), { &p_advance; }, { &@break };
+  };
+
+  # Optional binding — `:= ExpressionStart`.
+  @local binding := AST_NONE;
+  &@if ((&p_peek_kind) == TOK_COLONEQ), {
+    &p_advance;
+    binding = &parse_expression_start;
+  };
+
+  @local n_params := &vec_len params;
+  @local node := &vec_offset P_AST;
+  P_AST = &ast_definition_start P_AST,
+            kw_off, kw_len, name_off, name_len, type_off, type_len, n_params;
+  @local i := 0;
+  &@loop (i < n_params), {
+    P_AST = &ast_definition_cell P_AST, (&vec_get params, i);
+    i = i + 1;
+  };
+  P_AST = &ast_definition_cell P_AST, binding;
+  node
+};
+
+# parse_element_inner — one Item or trailing-expression, WITHOUT
+# consuming the optional trailing `;`.  Used by parse_block (which
+# needs to inspect the post-element token to decide statement vs
+# trailing).
+@fn parse_element_inner:Int := {
+  @local k := &p_peek_kind;
+  &@if (k == TOK_KEYWORD), { &@return (&parse_definition); };
+  &parse_expression_start
+};
+
+# parse_element — top-level program element: definition or expression
+# statement; consumes a trailing `;` when present.
 @fn parse_element:Int := {
-  @local node := &parse_expression_start;
+  @local node := &parse_element_inner;
   &@if ((&p_peek_kind) == TOK_SEMI), { &p_advance; };
   node
 };

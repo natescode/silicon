@@ -173,7 +173,7 @@ describe('Phase 0 WASIX smoke test', () => {
         try {
             const result = spawnSync('wasmer', ['run', tmpPath], { encoding: 'buffer' })
             expect(result.status).toBe(0)
-            expect(result.stdout?.toString('utf-8')).toBe('parse OK 6\n')
+            expect(result.stdout?.toString('utf-8')).toBe('parse OK 10\n')
         } finally {
             await fs.unlink(tmpPath).catch(() => {})
         }

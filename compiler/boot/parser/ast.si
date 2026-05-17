@@ -121,6 +121,40 @@
   &vec_push ast, elem
 };
 
+# AST_BLOCK [kind, n_stmts, has_trailing, stmt0, stmt1, ..., trailing_or_-1]
+@fn ast_block_start:Int ast:Int, n_stmts:Int, has_trailing:Int := {
+  @local a := &vec_push ast, AST_BLOCK;
+  a = &vec_push a, n_stmts;
+  &vec_push a, has_trailing
+};
+
+@fn ast_block_cell:Int ast:Int, idx:Int := {
+  &vec_push ast, idx
+};
+
+# AST_DEFINITION [kind, kw_off, kw_len, name_off, name_len,
+#                 type_off, type_len, n_params, param0_idx, ...,
+#                 binding_idx_or_-1]
+@fn ast_definition_start:Int
+    ast:Int,
+    kw_off:Int, kw_len:Int,
+    name_off:Int, name_len:Int,
+    type_off:Int, type_len:Int,
+    n_params:Int := {
+  @local a := &vec_push ast, AST_DEFINITION;
+  a = &vec_push a, kw_off;
+  a = &vec_push a, kw_len;
+  a = &vec_push a, name_off;
+  a = &vec_push a, name_len;
+  a = &vec_push a, type_off;
+  a = &vec_push a, type_len;
+  &vec_push a, n_params
+};
+
+@fn ast_definition_cell:Int ast:Int, idx:Int := {
+  &vec_push ast, idx
+};
+
 # ── Patching helpers ─────────────────────────────────────────────────
 # Sometimes a node's child count isn't known until after the children
 # are pushed (variable-arity nodes built in-place).  ast_patch_at sets

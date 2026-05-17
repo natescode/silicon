@@ -52,13 +52,32 @@ i64 for its `fs_rights_*` parameters and Silicon-Core's WasmValType is
 `i32 | f32`.  Same proof of runtime reachability; same data structures
 ready for Phase 1.
 
-## Next: Phase 1 — Parser in Silicon
+## Phase 1 (`bootstrap/01-parser`) — in flight
 
-Per §11 of the plan: `bootstrap/01-parser`.  Lands `boot/parser/lex.si`
-and `boot/parser/parse.si` — a hand-written predictive parser that
-consumes UTF-8 source bytes and produces AST nodes directly (no CST
-middle layer).  Estimated ~600 LoC of Silicon per the plan.  The gate is
-the Phase 2 AST-JSON equivalence check across `tests/corpus/parser/*.si`.
+| Slice                                         | Status | LoC of Silicon |
+| --------------------------------------------- | ------ | --------------- |
+| Token kinds (`boot/parser/tokens.si`)         | **Landed** | ~30 |
+| Lexer (`boot/parser/lex.si`)                  | **Landed** | ~280 |
+| AST encoding (`boot/parser/ast.si`)           | **Landed** | ~110 |
+| Parser core (`boot/parser/parse.si`)          | **Landed** | ~320 |
+| AST → JSON serializer                         | Not started | — |
+| Corpus equivalence harness vs Stage 0         | Not started | — |
+
+What `parse.si` covers today:
+- Integer / float / string literals, namespaces (with `::` / `.`),
+  binary expressions (flat left-fold), function calls (`&name args`
+  and `&@keyword args`), paren-grouped expressions, multi-element
+  programs, blocks (`{ stmts ; trailing }`), definitions
+  (`@kw name [: Type] params := binding`).
+
+Still ahead in the parser proper:
+- Sum-type variant declarators (`$Variant fields`), array / object /
+  tuple literals, bool literals (`@true`/`@false`), doc comments
+  (`##`), generic params (consumed but not stored).
+
+After parser completion:
+- AST-JSON serializer matching Stage 0's format → that's the Phase 2
+  gate ("AST JSON equivalence with Stage 0 across the corpus").
 
 ## Test Surface (post WS 1–6 + Phases −1 + 0)
 
