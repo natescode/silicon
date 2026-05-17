@@ -308,6 +308,129 @@
 @fn lit_at_extern_ptr:Int  := { (&str_ptr '@extern') + 4 };
 @fn lit_void_ptr:Int       := { (&str_ptr 'Void')    + 4 };
 
+# ── Syntactic void inference (pre-pass, no IR involved) ─────────────
+# Decides whether an AST expression LEAVES a value when evaluated.
+# Used to pre-register every @fn / @let with its return type before
+# any function body is lowered, so calls between functions resolve
+# produces_value correctly regardless of source order.
+@fn lit_at_if2_ptr:Int      := { (&str_ptr '@if')      + 4 };
+@fn lit_at_loop2_ptr:Int    := { (&str_ptr '@loop')    + 4 };
+@fn lit_at_return2_ptr:Int  := { (&str_ptr '@return')  + 4 };
+@fn lit_at_break2_ptr:Int   := { (&str_ptr '@break')   + 4 };
+@fn lit_at_continue2_ptr:Int := { (&str_ptr '@continue') + 4 };
+
+@fn ast_tail_produces_value:Int node:Int := {
+  &@if (node < 0), { &@return 0; };
+  @local k := &ast_kind P_AST, node;
+  &@if (k == AST_INT_LIT),    { &@return 1; };
+  &@if (k == AST_BOOL_LIT),   { &@return 1; };
+  &@if (k == AST_FLOAT_LIT),  { &@return 1; };
+  &@if (k == AST_STRING_LIT), { &@return 1; };
+  &@if (k == AST_BIN_OP),     { &@return 1; };
+  &@if (k == AST_NAMESPACE),  { &@return 1; };
+  # Assignment + @local declaration are void.
+  &@if (k == AST_ASSIGNMENT), { &@return 0; };
+  &@if (k == AST_DEFINITION), { &@return 0; };
+  &@if (k == AST_BLOCK), {
+    @local n_stmts := &ast_field P_AST, node, 1;
+    @local has_trailing := &ast_field P_AST, node, 2;
+    &@if (has_trailing == 1), {
+      &@return (&ast_tail_produces_value
+                  (&ast_field P_AST, node, (3 + n_stmts)));
+    };
+    &@if (n_stmts > 0), {
+      &@return (&ast_tail_produces_value
+                  (&ast_field P_AST, node, (3 + n_stmts - 1)));
+    };
+    &@return 0;
+  };
+  &@if (k == AST_CALL), {
+    @local callee := &ast_field P_AST, node, 1;
+    @local n_args := &ast_field P_AST, node, 2;
+    &@if ((&ast_kind P_AST, callee) != AST_NAMESPACE), { &@return 1; };
+    @local n_segs := &ast_field P_AST, callee, 1;
+    @local s0_off := &ast_field P_AST, callee, 2;
+    @local s0_len := &ast_field P_AST, callee, 3;
+    &@if (n_segs == 1), {
+      # Keyword calls: @if (statement form when n_args < 3), @loop /
+      # @return / @break / @continue are void; @toFloat, @toInt
+      # produce values.
+      &@if ((&lower_span_eq_lit s0_off, s0_len, (&lit_at_if2_ptr),       3) == 1), {
+        &@if (n_args == 3), {
+          @local then_arg := &ast_field P_AST, node, 4;
+          @local else_arg := &ast_field P_AST, node, 5;
+          @local tp := &ast_tail_produces_value then_arg;
+          @local ep := &ast_tail_produces_value else_arg;
+          &@return (tp * ep);
+        };
+        &@return 0;
+      };
+      &@if ((&lower_span_eq_lit s0_off, s0_len, (&lit_at_loop2_ptr),     5) == 1), { &@return 0; };
+      &@if ((&lower_span_eq_lit s0_off, s0_len, (&lit_at_return2_ptr),   7) == 1), { &@return 0; };
+      &@if ((&lower_span_eq_lit s0_off, s0_len, (&lit_at_break2_ptr),    6) == 1), { &@return 0; };
+      &@if ((&lower_span_eq_lit s0_off, s0_len, (&lit_at_continue2_ptr), 9) == 1), { &@return 0; };
+      # Bare-name call to user fn — consult fn_sig.  Unknown defaults
+      # to 1 (will be corrected once the callee is pre-registered).
+      @local first_byte := &WASM::i32_load8_u (P_SRC + s0_off);
+      &@if (first_byte != 64), {
+        @local pv := &fn_sig_lookup s0_off, s0_len, 0;
+        &@if (pv >= 0), { &@return pv; };
+        &@return 1;
+      };
+      &@return 1;
+    };
+    # Multi-segment WASM::* — i32_store / i32_store8 / i32_store16
+    # are void; everything else produces.
+    &@if (n_segs == 2), {
+      @local is_wasm := &lower_span_eq_lit s0_off, s0_len, (&lit_wasm_seg_ptr), 4;
+      &@if (is_wasm == 1), {
+        @local op_off := &ast_field P_AST, callee, 4;
+        @local op_len := &ast_field P_AST, callee, 5;
+        &@if ((&lower_span_eq_lit op_off, op_len, (&lit_i32_store_ptr),   9) == 1), { &@return 0; };
+        &@if ((&lower_span_eq_lit op_off, op_len, (&lit_i32_store8_ptr), 10) == 1), { &@return 0; };
+        &@if ((&lower_span_eq_lit op_off, op_len, (&lit_i32_store16_ptr),11) == 1), { &@return 0; };
+        &@return 1;
+      };
+    };
+    # Other multi-segment calls — check the fn_sig pool entry
+    # (registered by the @extern pre-pass).  Default 1.
+    &@return 1;
+  };
+  1
+};
+
+# ir_produces_value — recursively decide whether the IR at `h`
+# leaves a value on the WAT operand stack.  Mirrors the emitter's
+# node_produces_value but lives in lower.si so the type-inference
+# pass can use it without an emit-side dependency.
+@fn ir_produces_value:Int h:Int := {
+  &@if (h < 0), { &@return 0; };
+  @local k := &ir_kind h;
+  &@if (k == IR_NULL),       { &@return 0; };
+  &@if (k == IR_LOCAL_SET),  { &@return 0; };
+  &@if (k == IR_GLOBAL_SET), { &@return 0; };
+  &@if (k == IR_STORE),      { &@return 0; };
+  &@if (k == IR_RETURN),     { &@return 0; };
+  &@if (k == IR_BREAK),      { &@return 0; };
+  &@if (k == IR_CONTINUE),   { &@return 0; };
+  &@if (k == IR_LOOP),       { &@return 0; };
+  &@if (k == IR_CALL),       { &@return (&ir_call_produces_value h); };
+  &@if (k == IR_IF), {
+    @local then_h := &ir_field h, 2;
+    @local else_h := &ir_field h, 3;
+    &@if (else_h == IR_NONE), { &@return 0; };
+    @local tp := &ir_produces_value then_h;
+    @local ep := &ir_produces_value else_h;
+    &@return (tp * ep);
+  };
+  &@if (k == IR_BLOCK), {
+    @local nc := &ir_block_count h;
+    &@if (nc == 0), { &@return 0; };
+    &@return (&ir_produces_value (&ir_block_child h, (nc - 1)));
+  };
+  1
+};
+
 @fn lower_program:Int prog:Int := {
   @local out := &vec_new;
   @local n := &ast_field P_AST, prog, 1;
@@ -338,6 +461,40 @@
           };
         };
         &global_add nm_off, nm_len, init_val;
+      };
+    };
+    i = i + 1;
+  };
+
+  # Pass 1.5: register every @fn / @let with its inferred (or
+  # annotated) return type so cross-function calls — including
+  # forward references and calls to syntactically-void helpers —
+  # resolve produces_value correctly during pass-2 lowering.
+  # @extern is pre-registered when handled in pass 2 because it
+  # never references other functions.
+  i = 0;
+  &@loop (i < n), {
+    @local elem := &ast_field P_AST, prog, (2 + i);
+    @local k := &ast_kind P_AST, elem;
+    &@if (k == AST_DEFINITION), {
+      @local kw_off := &ast_field P_AST, elem, 1;
+      @local kw_len := &ast_field P_AST, elem, 2;
+      @local is_var := &lower_span_eq_lit kw_off, kw_len, (&lit_at_var_ptr),    4;
+      @local is_ext := &lower_span_eq_lit kw_off, kw_len, (&lit_at_extern_ptr), 7;
+      &@if ((is_var + is_ext) == 0), {
+        @local nm_off := &ast_field P_AST, elem, 3;
+        @local nm_len := &ast_field P_AST, elem, 4;
+        @local ty_off := &ast_field P_AST, elem, 5;
+        @local ty_len := &ast_field P_AST, elem, 6;
+        @local n_params := &ast_field P_AST, elem, 7;
+        @local binding := &ast_field P_AST, elem, (8 + n_params);
+        @local has_res := 1;
+        &@if ((ty_len == 4) * ((&lower_span_eq_lit ty_off, ty_len, (&lit_void_ptr), 4)) == 1),
+          { has_res = 0; };
+        &@if (ty_len == 0), {
+          &@if ((&ast_tail_produces_value binding) == 0), { has_res = 0; };
+        };
+        &fn_sig_register nm_off, nm_len, 0, has_res;
       };
     };
     i = i + 1;
@@ -545,35 +702,12 @@
   &@if ((ty_len == 4) * ((&lower_span_eq_lit ty_off, ty_len, (&lit_void_ptr), 4)) == 1),
     { has_res = 0; };
   &@if (ty_len == 0), {
-    # No annotation — sniff the body's tail.  For an IR_BLOCK,
-    # check the LAST child; for any other kind, check the kind
-    # directly.  body_tail_produces_value mirrors the same
-    # node_produces_value logic the emitter uses.
-    @local tail := body_h;
-    &@if ((&ir_kind body_h) == IR_BLOCK), {
-      @local nc := &ir_block_count body_h;
-      &@if (nc > 0), { tail = &ir_block_child body_h, (nc - 1); };
-      &@if (nc == 0), { tail = (0 - 1); };
-    };
-    @local produces := 1;
-    &@if (tail < 0), { produces = 0; };
-    &@if (tail >= 0), {
-      @local tk := &ir_kind tail;
-      &@if (tk == IR_NULL),       { produces = 0; };
-      &@if (tk == IR_LOCAL_SET),  { produces = 0; };
-      &@if (tk == IR_GLOBAL_SET), { produces = 0; };
-      &@if (tk == IR_STORE),      { produces = 0; };
-      &@if (tk == IR_RETURN),     { produces = 0; };
-      &@if (tk == IR_BREAK),      { produces = 0; };
-      &@if (tk == IR_CONTINUE),   { produces = 0; };
-      &@if (tk == IR_LOOP),       { produces = 0; };
-      &@if (tk == IR_CALL),       {
-        &@if ((&ir_call_produces_value tail) == 0), { produces = 0; };
-      };
-    };
-    &@if (produces == 0), { has_res = 0; };
+    &@if ((&ir_produces_value body_h) == 0), { has_res = 0; };
   };
-  &fn_sig_register nm_off, nm_len, 0, has_res;
+  # Pre-pass already registered this function's signature; no need
+  # to push another entry (and the latest entry wins on lookup, so
+  # re-registering with a possibly-different value would break
+  # forward-reference call sites that fixed produces_value earlier).
   &ir_function nm_off, nm_len, n_params, n_locals, body_h, has_res
 };
 
