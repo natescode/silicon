@@ -334,9 +334,29 @@ describe('Phase 0 WASIX smoke test', () => {
         }
 
         type Step = { call: string; args: string[] }
+        type Entry = { steps: Step[]; rich: boolean }
+        // Need Elaboration AST nodes so we can run isRichBody on each
+        // stratum's semantics block.  Reparse the bundle and collect
+        // them keyed by symbol.
+        const { isRichBody } = await import('../src/elaborator/strataBody')
+        const bundleAst = addToAstSemantics(siliconGrammar)(parse(bundle)).toAst() as Program
+        const elabBySymbol = new Map<string, any[]>()
+        for (const el of (bundleAst.elements as any[])) {
+            const e = el?.type === 'Elaboration' ? el
+                    : el?.type === 'Element' && el.kind === 'elaboration' ? el.value
+                    : null
+            if (!e) continue
+            const sym = typeof e.symbol === 'string' ? e.symbol
+                      : e.symbol?.value ?? String(e.symbol)
+            const k = `${e.kind}:${sym}`
+            if (!elabBySymbol.has(k)) elabBySymbol.set(k, [])
+            elabBySymbol.get(k)!.push(e)
+        }
         const reg = buildStrataRegistry(({ type: 'Program', elements: [] } as any))
-        const bareSorted = (table: Record<string, any>): Array<[string, Step[]]> => {
-            const seen = new Map<string, Step[]>()
+        const bareSorted = (
+            table: Record<string, any>, kind: 'operator' | 'keyword',
+        ): Array<[string, Entry]> => {
+            const seen = new Map<string, Entry>()
             for (const k of Object.keys(table)) {
                 const bare = k.includes(':') ? k.slice(0, k.indexOf(':')) : k
                 if (seen.has(bare)) continue
@@ -345,12 +365,18 @@ describe('Phase 0 WASIX smoke test', () => {
                     call: s.intrinsic ?? s.userFunc ?? '',
                     args: (s.argRefs ?? []) as string[],
                 }))
-                seen.set(bare, steps)
+                // isRichBody is per-stratum; for symbols with multiple
+                // registrations (e.g. Plus + PlusFloat for '+'), use
+                // the FIRST stratum's body (matches Silicon's
+                // first-registered-wins dedup).
+                const elabs = elabBySymbol.get(`${kind}:${bare}`) ?? []
+                const rich = elabs.length > 0 ? isRichBody(elabs[0].semantics) : false
+                seen.set(bare, { steps, rich })
             }
             return Array.from(seen.entries()).sort((a, b) => a[0] < b[0] ? -1 : 1)
         }
-        const ops = bareSorted(reg.operators)
-        const kws = bareSorted(reg.keywords)
+        const ops = bareSorted(reg.operators, 'operator')
+        const kws = bareSorted(reg.keywords,  'keyword')
         const stepStr = (s: Step): string => {
             const args = s.args.length === 0
                 ? '[]'
@@ -363,15 +389,15 @@ describe('Phase 0 WASIX smoke test', () => {
                 : '[ ' + steps.map(stepStr).join(', ') + ' ]'
         const lines: string[] = ['{']
         lines.push('  "operators": [')
-        ops.forEach(([k, steps], i) => {
+        ops.forEach(([k, e], i) => {
             const sep = i < ops.length - 1 ? ',' : ''
-            lines.push(`    { "op": "${k}", "steps": ${stepsStr(steps)} }${sep}`)
+            lines.push(`    { "op": "${k}", "rich": ${e.rich}, "steps": ${stepsStr(e.steps)} }${sep}`)
         })
         lines.push('  ],')
         lines.push('  "keywords": [')
-        kws.forEach(([k, steps], i) => {
+        kws.forEach(([k, e], i) => {
             const sep = i < kws.length - 1 ? ',' : ''
-            lines.push(`    { "kw": "${k}", "steps": ${stepsStr(steps)} }${sep}`)
+            lines.push(`    { "kw": "${k}", "rich": ${e.rich}, "steps": ${stepsStr(e.steps)} }${sep}`)
         })
         lines.push('  ]')
         lines.push('}')

@@ -38,11 +38,17 @@
 @let TPL_ELAB_NP_LEN:Int    := 7;
 @let TPL_ELAB_SEMANTICS:Int := 8;
 
+# AST_DEFINITION keyword field offsets (mirrors ast.si).
+@let TPL_DEF_KW_OFF:Int := 1;
+@let TPL_DEF_KW_LEN:Int := 2;
+
 # ── Literal byte sequences ──────────────────────────────────────────
-@fn lit_ir3_ptr:Int   := { (&str_ptr 'IR')    + 4 };
-@fn lit_wasm3_ptr:Int := { (&str_ptr 'WASM')  + 4 };
-@fn lit_left_ptr:Int  := { (&str_ptr 'left')  + 4 };
-@fn lit_right_ptr:Int := { (&str_ptr 'right') + 4 };
+@fn lit_ir3_ptr:Int       := { (&str_ptr 'IR')       + 4 };
+@fn lit_wasm3_ptr:Int     := { (&str_ptr 'WASM')     + 4 };
+@fn lit_left_ptr:Int      := { (&str_ptr 'left')     + 4 };
+@fn lit_right_ptr:Int     := { (&str_ptr 'right')    + 4 };
+@fn lit_compiler_ptr:Int  := { (&str_ptr 'Compiler') + 4 };
+@fn lit_at_local_ptr:Int  := { (&str_ptr '@local')   + 4 };
 
 @fn span_eq_lit3:Int off:Int, len:Int, lit_ptr:Int, lit_len:Int := {
   @local ok := 1;
@@ -151,6 +157,87 @@
   &@if ((&span_eq_lit3 s1_off, s1_len, (&lit_left_ptr),  4) == 1), { &@return 0; };
   &@if ((&span_eq_lit3 s1_off, s1_len, (&lit_right_ptr), 5) == 1), { &@return 1; };
   2
+};
+
+# ── isRichBody — does the body contain any Compiler:: call or
+# @local definition?  Returns 1 / 0.  Mirrors strataBody.ts:isRichBody.
+@fn is_rich_body:Int node:Int := {
+  &@if (node < 0), { &@return 0; };
+  @local k := &ast_kind P_AST, node;
+
+  &@if (k == AST_NAMESPACE), {
+    @local n_segs := &ast_field P_AST, node, 1;
+    &@if (n_segs >= 1), {
+      @local s0_off := &ast_field P_AST, node, 2;
+      @local s0_len := &ast_field P_AST, node, 3;
+      &@if ((&span_eq_lit3 s0_off, s0_len, (&lit_compiler_ptr), 8) == 1),
+        { &@return 1; };
+    };
+    &@return 0;
+  };
+
+  &@if (k == AST_DEFINITION), {
+    @local kw_off := &ast_field P_AST, node, TPL_DEF_KW_OFF;
+    @local kw_len := &ast_field P_AST, node, TPL_DEF_KW_LEN;
+    &@if ((&span_eq_lit3 kw_off, kw_len, (&lit_at_local_ptr), 6) == 1),
+      { &@return 1; };
+    # Also recurse into the binding.
+    @local n_params := &ast_field P_AST, node, 7;
+    @local binding := &ast_field P_AST, node, (8 + n_params);
+    &@if (binding >= 0), {
+      @local r := &is_rich_body binding;
+      &@if (r == 1), { &@return 1; };
+    };
+    &@return 0;
+  };
+
+  &@if (k == AST_CALL), {
+    @local callee := &ast_field P_AST, node, 1;
+    @local r0 := &is_rich_body callee;
+    &@if (r0 == 1), { &@return 1; };
+    @local n_args := &ast_field P_AST, node, 2;
+    @local i := 0;
+    &@loop (i < n_args), {
+      @local ra := &is_rich_body (&ast_field P_AST, node, (3 + i));
+      &@if (ra == 1), { &@return 1; };
+      i = i + 1;
+    };
+    &@return 0;
+  };
+
+  &@if (k == AST_BLOCK), {
+    @local n_stmts := &ast_field P_AST, node, 1;
+    @local has_trailing := &ast_field P_AST, node, 2;
+    @local i := 0;
+    &@loop (i < n_stmts), {
+      @local r := &is_rich_body (&ast_field P_AST, node, (3 + i));
+      &@if (r == 1), { &@return 1; };
+      i = i + 1;
+    };
+    &@if (has_trailing == 1), {
+      @local rt := &is_rich_body (&ast_field P_AST, node, (3 + n_stmts));
+      &@if (rt == 1), { &@return 1; };
+    };
+    &@return 0;
+  };
+
+  &@if (k == AST_BIN_OP), {
+    @local r1 := &is_rich_body (&ast_field P_AST, node, 3);
+    &@if (r1 == 1), { &@return 1; };
+    @local r2 := &is_rich_body (&ast_field P_AST, node, 4);
+    &@if (r2 == 1), { &@return 1; };
+    &@return 0;
+  };
+
+  &@if (k == AST_ASSIGNMENT), {
+    @local r1 := &is_rich_body (&ast_field P_AST, node, 1);
+    &@if (r1 == 1), { &@return 1; };
+    @local r2 := &is_rich_body (&ast_field P_AST, node, 2);
+    &@if (r2 == 1), { &@return 1; };
+    &@return 0;
+  };
+
+  0
 };
 
 # ── Output helpers ──────────────────────────────────────────────────
@@ -331,11 +418,14 @@
       &tw_byte 10;
       &tw_str '    { "op": ';
       &tw_quoted_span off, len;
-      &tw_str ', "steps": ';
       @local elab := &registry_op_elab idx;
       @local sem := &ast_field P_AST, elab, TPL_ELAB_SEMANTICS;
       @local np_off := &ast_field P_AST, elab, TPL_ELAB_NP_OFF;
       @local np_len := &ast_field P_AST, elab, TPL_ELAB_NP_LEN;
+      &tw_str ', "rich": ';
+      &@if ((&is_rich_body sem) == 1), { &tw_str 'true'; };
+      &@if ((&is_rich_body sem) == 0), { &tw_str 'false'; };
+      &tw_str ', "steps": ';
       &tw_emit_steps sem, np_off, np_len;
       &tw_str ' }';
       printed = printed + 1;
@@ -370,11 +460,14 @@
       &tw_byte 10;
       &tw_str '    { "kw": ';
       &tw_quoted_span off, len;
-      &tw_str ', "steps": ';
       @local elab := &registry_kw_elab idx;
       @local sem := &ast_field P_AST, elab, TPL_ELAB_SEMANTICS;
       @local np_off := &ast_field P_AST, elab, TPL_ELAB_NP_OFF;
       @local np_len := &ast_field P_AST, elab, TPL_ELAB_NP_LEN;
+      &tw_str ', "rich": ';
+      &@if ((&is_rich_body sem) == 1), { &tw_str 'true'; };
+      &@if ((&is_rich_body sem) == 0), { &tw_str 'false'; };
+      &tw_str ', "steps": ';
       &tw_emit_steps sem, np_off, np_len;
       &tw_str ' }';
       printed = printed + 1;
