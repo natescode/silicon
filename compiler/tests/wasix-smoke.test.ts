@@ -626,6 +626,31 @@ describe('Phase 0 WASIX smoke test', () => {
             },
         ]
 
+        // Multi-segment @extern — module name comes from the prefix
+        // before `::` (slice 28).  Needs its own imports object keyed
+        // by the module name, not by "env".
+        const moduleExternCases: Array<{
+            prog: string; fn: string; args: number[]; want: number;
+            importModule: string;
+            importField: string;
+            impl: (...a: number[]) => number;
+        }> = [
+            {
+                prog: '@extern mathmod::double_it:Int x:Int;\n' +
+                      '@fn use x:Int := { &mathmod::double_it x };',
+                fn: 'use', args: [21], want: 42,
+                importModule: 'mathmod', importField: 'double_it',
+                impl: (x: number) => x * 2,
+            },
+            {
+                prog: '@extern wasi_snapshot_preview1::clock_now:Int x:Int;\n' +
+                      '@fn now x:Int := { &wasi_snapshot_preview1::clock_now x };',
+                fn: 'now', args: [0], want: 1234,
+                importModule: 'wasi_snapshot_preview1', importField: 'clock_now',
+                impl: () => 1234,
+            },
+        ]
+
         try {
             for (const c of cases) {
                 const result = spawnSync('wasmer', ['run', tmpPath], {
@@ -700,6 +725,27 @@ describe('Phase 0 WASIX smoke test', () => {
                 if (got !== c.want) {
                     throw new Error(
                         `${c.fn}(${c.args.join(', ')}) for ${JSON.stringify(c.prog)}\n` +
+                        `Expected: ${c.want}\nGot: ${got}\nWAT:\n${wat}`,
+                    )
+                }
+            }
+            for (const c of moduleExternCases) {
+                const result = spawnSync('wasmer', ['run', tmpPath], {
+                    input: Buffer.from(bundle + c.prog + '\n', 'utf-8'),
+                    maxBuffer: 64 * 1024 * 1024,
+                })
+                expect(result.status).toBe(0)
+                const wat = (result.stdout ?? Buffer.alloc(0)).toString('utf-8')
+                const compiled = await watToWasm(wat)
+                const { instance } = await WebAssembly.instantiate(
+                    compiled.buffer,
+                    { [c.importModule]: { [c.importField]: c.impl } },
+                )
+                const f = (instance.exports as any)[c.fn] as (...a: number[]) => number
+                const got = f(...c.args)
+                if (got !== c.want) {
+                    throw new Error(
+                        `${c.fn}(${c.args.join(', ')}) module=${c.importModule}\n` +
                         `Expected: ${c.want}\nGot: ${got}\nWAT:\n${wat}`,
                     )
                 }

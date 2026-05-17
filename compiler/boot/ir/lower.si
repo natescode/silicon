@@ -249,7 +249,18 @@
         @local n_params := &ast_field P_AST, elem, 7;
         @local has_result := 0;
         &@if (ty_len > 0), { has_result = 1; };
-        @local h := &ir_extern nm_off, nm_len, n_params, has_result;
+        # Scan the name for `::` so the emitter can produce a
+        # `(import "<module>" "<field>" ...)` whose module matches
+        # the prefix.  sep_pos == -1 means no `::` → defaults to "env".
+        @local sep_pos := 0 - 1;
+        @local sj := 0;
+        &@loop ((sep_pos < 0) * (sj < (nm_len - 1)) == 1), {
+          @local b0 := &WASM::i32_load8_u (P_SRC + nm_off + sj);
+          @local b1 := &WASM::i32_load8_u (P_SRC + nm_off + sj + 1);
+          &@if ((b0 == 58) * (b1 == 58) == 1), { sep_pos = sj; };
+          sj = sj + 1;
+        };
+        @local h := &ir_extern nm_off, nm_len, n_params, has_result, sep_pos;
         out = &vec_push out, h;
       };
       &@if ((is_var + is_ext) == 0), {

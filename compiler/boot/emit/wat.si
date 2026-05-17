@@ -160,17 +160,56 @@
 };
 
 # Emit one IR_EXTERN as
-#   (import "env" "name" (func $name (param i32)* (result i32)?))
+#   (import "<module>" "<field>" (func $<name> (param i32)* (result i32)?))
+#
+# Where:
+#   - `<module>` = "env" when sep_pos < 0, else the bytes before `::`
+#   - `<field>`  = the bytes after `::` (or the whole name)
+#   - `<name>`   = the full name with `::` replaced by `_` so a call
+#                   site that uses the mangled-pool spelling
+#                   (slice 26) resolves to the same function
 @fn emit_extern fn_h:Int := {
   @local nm_off := &ir_extern_name_off fn_h;
   @local nm_len := &ir_extern_name_len fn_h;
   @local n_params := &ir_extern_n_params fn_h;
   @local has_result := &ir_extern_has_result fn_h;
-  &ew_str '  (import "env" "';
-  &write_bytes 1, (P_SRC + nm_off), nm_len;
+  @local sep_pos := &ir_extern_sep_pos fn_h;
+
+  &ew_str '  (import "';
+  &@if (sep_pos < 0), {
+    &ew_str 'env';
+  };
+  &@if (sep_pos >= 0), {
+    &write_bytes 1, (P_SRC + nm_off), sep_pos;
+  };
+  &ew_str '" "';
+  &@if (sep_pos < 0), {
+    &write_bytes 1, (P_SRC + nm_off), nm_len;
+  };
+  &@if (sep_pos >= 0), {
+    @local field_off := nm_off + sep_pos + 2;
+    @local field_len := nm_len - sep_pos - 2;
+    &write_bytes 1, (P_SRC + field_off), field_len;
+  };
   &ew_str '" (func $';
-  &write_bytes 1, (P_SRC + nm_off), nm_len;
+  # Internal name: full span with `::` → `_`.
   @local i := 0;
+  &@loop (i < nm_len), {
+    @local b := &WASM::i32_load8_u (P_SRC + nm_off + i);
+    @local b2 := 0;
+    &@if (i < (nm_len - 1)), {
+      b2 = &WASM::i32_load8_u (P_SRC + nm_off + i + 1);
+    };
+    &@if ((b == 58) * (b2 == 58) == 1), {
+      &write_byte 1, 95;     # `_`
+      i = i + 2;
+    };
+    &@if ((b != 58) + (b2 != 58) > 0), {
+      &write_byte 1, b;
+      i = i + 1;
+    };
+  };
+  i = 0;
   &@loop (i < n_params), {
     &ew_str ' (param i32)';
     i = i + 1;

@@ -515,13 +515,27 @@
   @local kw_len := &p_peek_len;
   &p_advance;                                  # consume `@kw`
 
-  # Definition name — must be an identifier (typedIdentifier).
+  # Definition name — IDENT, optionally followed by `::` IDENT
+  # for multi-segment names (`@extern wasi_snapshot_preview1::fd_write`).
+  # The stored span covers the full `mod::fn` so the lowerer can
+  # split it later.  Lookahead distinguishes `::` from the type
+  # annotation's `:` (they're different token kinds).
   @local name_off := 0;
   @local name_len := 0;
   &@if ((&p_peek_kind) == TOK_IDENT), {
     name_off = &p_peek_off;
     name_len = &p_peek_len;
     &p_advance;
+    &@loop ((&p_peek_kind) == TOK_NS_SEP), {
+      @local sep_off := &p_peek_off;
+      @local sep_len := &p_peek_len;
+      &p_advance;
+      &@if ((&p_peek_kind) != TOK_IDENT), { &@break };
+      @local seg_off := &p_peek_off;
+      @local seg_len := &p_peek_len;
+      name_len = (seg_off + seg_len) - name_off;
+      &p_advance;
+    };
   };
 
   # Optional type annotation on the name.
