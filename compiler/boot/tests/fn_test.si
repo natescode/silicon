@@ -15,7 +15,7 @@
 @use '../emit/wat.si';
 
 @fn run := {
-  @local cap := 65536;
+  @local cap := 524288;     # 512 KiB — fits the full bootstrap source tree
   @local buf := &arena_alloc cap;
   @local total := 0;
   &@loop 1, {

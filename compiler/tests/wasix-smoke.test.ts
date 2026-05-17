@@ -844,6 +844,63 @@ describe('Phase 0 WASIX smoke test', () => {
         }
     }, 60000)
 
+    test('boot/tests/fn_test.si: bootstrap compiles strata loader + registry standalone', async () => {
+        if (!wasmerAvailable()) {
+            console.log('  (skipped: wasmer not on PATH)')
+            return
+        }
+        const wasm = await buildBoot(path.join(PROJECT_ROOT, 'boot', 'tests', 'fn_test.si'))
+        const tmpPath = path.join(PROJECT_ROOT, '.loader-boot.wasm')
+        await fs.writeFile(tmpPath, wasm)
+
+        const strataDir = path.join(PROJECT_ROOT, 'src', 'strata')
+        const files = (await fs.readdir(strataDir))
+            .filter(f => f.endsWith('.si'))
+            .sort()
+        let bundle = ''
+        for (const f of files) {
+            bundle += await fs.readFile(path.join(strataDir, f), 'utf-8')
+            bundle += '\n'
+        }
+
+        const wasiStub = [
+            '@extern wasi_snapshot_preview1::fd_write:Int',
+            '  fd:Int, iovs_ptr:Int, iovs_len:Int, nwritten_out:Int;',
+            '@extern wasi_snapshot_preview1::fd_read:Int',
+            '  fd:Int, iovs_ptr:Int, iovs_len:Int, nread_out:Int;',
+        ].join('\n') + '\n'
+
+        const pieces = await Promise.all([
+            fs.readFile(path.join(PROJECT_ROOT, 'boot', 'std',    'io.si'),       'utf-8'),
+            fs.readFile(path.join(PROJECT_ROOT, 'boot', 'std',    'arena.si'),    'utf-8'),
+            fs.readFile(path.join(PROJECT_ROOT, 'boot', 'std',    'vec.si'),      'utf-8'),
+            fs.readFile(path.join(PROJECT_ROOT, 'boot', 'parser', 'tokens.si'),   'utf-8'),
+            fs.readFile(path.join(PROJECT_ROOT, 'boot', 'parser', 'lex.si'),      'utf-8'),
+            fs.readFile(path.join(PROJECT_ROOT, 'boot', 'parser', 'ast.si'),      'utf-8'),
+            fs.readFile(path.join(PROJECT_ROOT, 'boot', 'parser', 'parse.si'),    'utf-8'),
+            fs.readFile(path.join(PROJECT_ROOT, 'boot', 'strata', 'registry.si'), 'utf-8'),
+            fs.readFile(path.join(PROJECT_ROOT, 'boot', 'strata', 'loader.si'),   'utf-8'),
+        ])
+
+        const userProg = wasiStub + pieces.join('')
+
+        try {
+            const compileRes = spawnSync('wasmer', ['run', tmpPath], {
+                input: Buffer.from(bundle + userProg, 'utf-8'),
+                maxBuffer: 64 * 1024 * 1024,
+            })
+            expect(compileRes.status).toBe(0)
+            const wat = (compileRes.stdout ?? Buffer.alloc(0)).toString('utf-8')
+            const compiled = await watToWasm(wat)
+            await WebAssembly.compile(compiled.buffer)
+            // ~11 KB feels right for ~2000 LoC of frontend + strata loader.
+            expect(compiled.buffer.byteLength).toBeGreaterThan(7000)
+            expect(compiled.buffer.byteLength).toBeLessThan(50000)
+        } finally {
+            await fs.unlink(tmpPath).catch(() => {})
+        }
+    }, 60000)
+
     test('boot/tests/fn_test.si: bootstrap compiles boot/parser/parse.si standalone (lex+ast+parse+std)', async () => {
         if (!wasmerAvailable()) {
             console.log('  (skipped: wasmer not on PATH)')
