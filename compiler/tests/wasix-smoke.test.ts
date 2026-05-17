@@ -161,4 +161,21 @@ describe('Phase 0 WASIX smoke test', () => {
             await fs.unlink(tmpPath).catch(() => {})
         }
     })
+
+    test('boot/tests/parse_test.si: parser produces expected AST shapes', async () => {
+        if (!wasmerAvailable()) {
+            console.log('  (skipped: wasmer not on PATH)')
+            return
+        }
+        const wasm = await buildBoot(path.join(PROJECT_ROOT, 'boot', 'tests', 'parse_test.si'))
+        const tmpPath = path.join(PROJECT_ROOT, '.parse-smoke.wasm')
+        await fs.writeFile(tmpPath, wasm)
+        try {
+            const result = spawnSync('wasmer', ['run', tmpPath], { encoding: 'buffer' })
+            expect(result.status).toBe(0)
+            expect(result.stdout?.toString('utf-8')).toBe('parse OK 6\n')
+        } finally {
+            await fs.unlink(tmpPath).catch(() => {})
+        }
+    })
 })

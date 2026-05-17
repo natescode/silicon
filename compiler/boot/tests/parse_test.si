@@ -1,0 +1,103 @@
+# Parser unit test — drives the Silicon-in-Silicon parser end-to-end
+# on a handful of small inputs and asserts on the resulting AST shape.
+#
+# Pass: prints "parse OK <n>" exit 0.
+# Fail: prints "parse FAIL <code>" exit 1 — <code> identifies the
+# specific assertion that fired.
+
+@use '../std/io.si';
+@use '../std/vec.si';
+@use '../parser/tokens.si';
+@use '../parser/lex.si';
+@use '../parser/ast.si';
+@use '../parser/parse.si';
+
+@fn put_int n:Int := {
+  @local hundreds := (n / 100);
+  @local tens     := ((n / 10) % 10);
+  @local ones     := (n % 10);
+  &@if (hundreds > 0),     { &write_byte 1, (hundreds + 48); };
+  &@if (((hundreds > 0) | (tens > 0)) == 1), { &write_byte 1, (tens + 48); };
+  &write_byte 1, (ones + 48);
+};
+
+@fn die code:Int := {
+  &write_str 1, 'parse FAIL ';
+  &put_int code;
+  &write_byte 1, 10;
+  &wasi_snapshot_preview1::proc_exit 1;
+};
+
+# parse_str(s) — lex + parse a Silicon string literal, returning the
+# AST root node index.  The AST vec is in P_AST (set by parse).
+@fn parse_str:Int s:String := {
+  @local p := (&str_ptr s) + 4;
+  @local n := &str_len s;
+  @local toks := &lex p, n;
+  &parse p, n, toks
+};
+
+@fn run := {
+  # ── Case 1: bare integer literal statement `42;` ──────────────────
+  @local prog1 := &parse_str '42;';
+  &@if ((&ast_kind P_AST, prog1) != AST_PROGRAM), { &die 1; };
+  @local n_elem1 := &ast_field P_AST, prog1, 1;
+  &@if (n_elem1 != 1), { &die 2; };
+  @local elem1 := &ast_field P_AST, prog1, 2;
+  &@if ((&ast_kind P_AST, elem1) != AST_INT_LIT), { &die 3; };
+  @local val1 := &ast_field P_AST, elem1, 1;
+  &@if (val1 != 42), { &die 4; };
+
+  # ── Case 2: binary expression `1 + 2;` ────────────────────────────
+  @local prog2 := &parse_str '1 + 2;';
+  @local n_elem2 := &ast_field P_AST, prog2, 1;
+  &@if (n_elem2 != 1), { &die 10; };
+  @local elem2 := &ast_field P_AST, prog2, 2;
+  &@if ((&ast_kind P_AST, elem2) != AST_BIN_OP), { &die 11; };
+  @local lhs2 := &ast_field P_AST, elem2, 3;
+  @local rhs2 := &ast_field P_AST, elem2, 4;
+  &@if ((&ast_kind P_AST, lhs2) != AST_INT_LIT), { &die 12; };
+  &@if ((&ast_field P_AST, lhs2, 1) != 1), { &die 13; };
+  &@if ((&ast_kind P_AST, rhs2) != AST_INT_LIT), { &die 14; };
+  &@if ((&ast_field P_AST, rhs2, 1) != 2), { &die 15; };
+
+  # ── Case 3: namespace `Color::Red;` ───────────────────────────────
+  @local prog3 := &parse_str 'Color::Red;';
+  @local elem3 := &ast_field P_AST, prog3, 2;
+  &@if ((&ast_kind P_AST, elem3) != AST_NAMESPACE), { &die 20; };
+  @local segs3 := &ast_field P_AST, elem3, 1;
+  &@if (segs3 != 2), { &die 21; };
+
+  # ── Case 4: function call `&add 1, 2;` ────────────────────────────
+  @local prog4 := &parse_str '&add 1, 2;';
+  @local elem4 := &ast_field P_AST, prog4, 2;
+  &@if ((&ast_kind P_AST, elem4) != AST_CALL), { &die 30; };
+  @local n_args4 := &ast_field P_AST, elem4, 2;
+  &@if (n_args4 != 2), { &die 31; };
+  @local arg0 := &ast_field P_AST, elem4, 3;
+  @local arg1 := &ast_field P_AST, elem4, 4;
+  &@if ((&ast_kind P_AST, arg0) != AST_INT_LIT), { &die 32; };
+  &@if ((&ast_field P_AST, arg0, 1) != 1), { &die 33; };
+  &@if ((&ast_kind P_AST, arg1) != AST_INT_LIT), { &die 34; };
+  &@if ((&ast_field P_AST, arg1, 1) != 2), { &die 35; };
+
+  # ── Case 5: multi-element program `1; 2; 3;` ──────────────────────
+  @local prog5 := &parse_str '1; 2; 3;';
+  @local n_elem5 := &ast_field P_AST, prog5, 1;
+  &@if (n_elem5 != 3), { &die 40; };
+
+  # ── Case 6: nested binary chain `1 + 2 + 3;` is left-folded ───────
+  @local prog6 := &parse_str '1 + 2 + 3;';
+  @local elem6 := &ast_field P_AST, prog6, 2;
+  &@if ((&ast_kind P_AST, elem6) != AST_BIN_OP), { &die 50; };
+  # The outer BinOp has a BinOp on its left (the (1+2) sub-tree).
+  @local left6 := &ast_field P_AST, elem6, 3;
+  &@if ((&ast_kind P_AST, left6) != AST_BIN_OP), { &die 51; };
+
+  &write_str 1, 'parse OK ';
+  &put_int 6;
+  &write_byte 1, 10;
+  &wasi_snapshot_preview1::proc_exit 0;
+};
+
+&run;

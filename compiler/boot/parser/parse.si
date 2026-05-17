@@ -1,0 +1,231 @@
+# Hand-written predictive parser for Silicon — bootstrap-plan §Phase 1.
+#
+#   parse(src_ptr, src_len, toks_vec) -> ast_vec
+#
+# Consumes the token stream from boot/parser/lex.si and produces the
+# flat AST encoding defined in boot/parser/ast.si.
+#
+# Mutable parser state lives in module-level @vars so individual
+# rule functions don't have to thread (src, toks, ast, cursor) through
+# every call.  This matches the bootstrap plan's "shared cursor"
+# sketch and keeps each rule function under 20 lines.
+#
+# Scope of this slice (subsequent commits extend):
+#   ✓ integer literal
+#   ✓ namespace (single ident, plus a.b / a::b chains)
+#   ✓ binary expression (flat left-fold)
+#   ✓ function call &name args
+#   ✓ paren-grouped expression
+#   ☐ string literal, float, bool — payload-encoded but unwrapped
+#   ☐ block, definition, doc comment — next commit
+
+@use '../std/vec.si';
+@use '../parser/tokens.si';
+@use '../parser/lex.si';
+@use '../parser/ast.si';
+
+# ── Parser state ─────────────────────────────────────────────────────
+@var P_SRC:Int  := 0;
+@var P_LEN:Int  := 0;
+@var P_TOKS:Int := 0;
+@var P_AST:Int  := 0;
+@var P_CUR:Int  := 0;          # current token index (0..tok_count)
+
+# ── Token cursor helpers ─────────────────────────────────────────────
+
+@fn p_tok_count:Int := { ((&vec_len P_TOKS) / 3) };
+
+# peek_kind / peek_off / peek_len for the current token.
+@fn p_peek_kind:Int := { &vec_get P_TOKS, (P_CUR * 3) };
+@fn p_peek_off:Int  := { &vec_get P_TOKS, (P_CUR * 3 + 1) };
+@fn p_peek_len:Int  := { &vec_get P_TOKS, (P_CUR * 3 + 2) };
+
+# peek at lookahead (current + n).
+@fn p_lookahead_kind:Int n:Int := { &vec_get P_TOKS, ((P_CUR + n) * 3) };
+
+# Consume the current token, advancing the cursor.
+@fn p_advance := { P_CUR = P_CUR + 1; };
+
+# ── Parse rules ──────────────────────────────────────────────────────
+#
+# Each parse_* function returns the AST index of the produced node.
+# AST_NONE (-1) signals a parse failure / no match.
+# Functions assume the caller has placed the cursor on the first token
+# of their production.
+
+# parse_int_lit — current token must be TOK_NUM_DEC; emits AST_INT_LIT.
+# Decodes the decimal text by walking the source bytes.
+@fn parse_int_lit:Int := {
+  @local off := &p_peek_off;
+  @local len := &p_peek_len;
+  @local v   := 0;
+  @local i   := 0;
+  &@loop (i < len), {
+    @local b := &WASM::i32_load8_u (P_SRC + off + i);
+    # Underscore separators are allowed; skip them.
+    &@if (b != 95), { v = (v * 10) + (b - 48); };
+    i = i + 1;
+  };
+  @local node := &vec_offset P_AST;
+  P_AST = &ast_int_lit P_AST, v;
+  &p_advance;
+  node
+};
+
+# parse_namespace — current token must be TOK_IDENT.
+# Eagerly chews TOK_NS_SEP IDENT pairs to handle `a.b`, `a::b::c`.
+@fn parse_namespace:Int := {
+  @local node := &vec_offset P_AST;
+  @local count_slot := node + 1;
+  P_AST = &ast_namespace_start P_AST;          # placeholder n_segs=0
+
+  P_AST = &ast_namespace_seg P_AST, (&p_peek_off), (&p_peek_len);
+  @local segs := 1;
+  &p_advance;
+
+  &@loop 1, {
+    &@if ((&p_peek_kind) != TOK_NS_SEP), { &@break };
+    &p_advance;
+    &@if ((&p_peek_kind) != TOK_IDENT), { &@break };
+    P_AST = &ast_namespace_seg P_AST, (&p_peek_off), (&p_peek_len);
+    segs = segs + 1;
+    &p_advance;
+  };
+
+  &ast_patch_at P_AST, count_slot, segs;
+  node
+};
+
+# parse_paren_or_atom — handle parenthesised expressions or unwrap
+# a leading-`(` ExpressionStart.  Returns the inner node.
+@fn parse_paren:Int := {
+  &p_advance;                                  # consume '('
+  @local inner := &parse_expression_start;
+  &@if ((&p_peek_kind) == TOK_RPAREN), { &p_advance; };
+  inner
+};
+
+# parse_function_call — current token is TOK_AMP.  Reads &name then a
+# comma-separated arg list of ExpressionStarts until a terminator.
+#
+# Args are parsed BEFORE the call header is emitted: their sub-records
+# would otherwise interleave with the header's arg-index slots and
+# silently corrupt the call layout.  Collected arg indices go into a
+# temp vec, then we emit `[CALL, callee, n_args, arg0, ...]` as one
+# contiguous block.
+@fn parse_function_call:Int := {
+  &p_advance;                                  # consume '&'
+
+  # ── Callee: keyword (`&@if`) or namespace (`&web::log`, `&add`) ──
+  @local callee_kind := &p_peek_kind;
+  @local callee := AST_NONE;
+  &@if (callee_kind == TOK_KEYWORD),
+    {
+      callee = &vec_offset P_AST;
+      @local count_slot := callee + 1;
+      P_AST = &ast_namespace_start P_AST;
+      P_AST = &ast_namespace_seg P_AST, (&p_peek_off), (&p_peek_len);
+      &ast_patch_at P_AST, count_slot, 1;
+      &p_advance;
+    },
+    {
+      &@if (callee_kind == TOK_IDENT), { callee = &parse_namespace; };
+    };
+
+  # ── Args: parse to a temp vec to avoid interleaving with the call
+  # header's arg-index slots.
+  @local arg_idxs := &vec_new;
+  &@loop 1, {
+    @local k := &p_peek_kind;
+    &@if (k == TOK_SEMI),   { &@break };
+    &@if (k == TOK_RPAREN), { &@break };
+    &@if (k == TOK_RBRACE), { &@break };
+    &@if (k == TOK_RBRACK), { &@break };
+    &@if (k == TOK_COMMA),  { &@break };       # leading separator
+    &@if (k == TOK_EOF),    { &@break };
+    @local arg := &parse_expression_start;
+    arg_idxs = &vec_push arg_idxs, arg;
+    &@if ((&p_peek_kind) == TOK_COMMA), { &p_advance; }, { &@break };
+  };
+
+  @local n_args := &vec_len arg_idxs;
+
+  # ── Emit the contiguous call record ──
+  @local call_node := &vec_offset P_AST;
+  P_AST = &ast_call_start P_AST, callee, n_args;
+  @local j := 0;
+  &@loop (j < n_args), {
+    P_AST = &ast_call_arg P_AST, (&vec_get arg_idxs, j);
+    j = j + 1;
+  };
+  call_node
+};
+
+# parse_expression_end — one ExpressionEnd: literal, namespace, call,
+# or parenthesised expression.  Dispatch is by token kind.
+@fn parse_expression_end:Int := {
+  @local k := &p_peek_kind;
+  @local node := AST_NONE;
+  &@if (k == TOK_NUM_DEC), { node = &parse_int_lit; };
+  &@if (k == TOK_IDENT),   { node = &parse_namespace; };
+  &@if (k == TOK_AMP),     { node = &parse_function_call; };
+  &@if (k == TOK_LPAREN),  { node = &parse_paren; };
+  node
+};
+
+# parse_expression_start — ExpressionEnd (BinOp ExpressionEnd)* — flat,
+# no precedence (left-associative fold).
+@fn parse_expression_start:Int := {
+  @local lhs := &parse_expression_end;
+  &@loop 1, {
+    &@if ((&p_peek_kind) != TOK_OPERATOR), { &@break };
+    @local op_off := &p_peek_off;
+    @local op_len := &p_peek_len;
+    &p_advance;
+    @local rhs := &parse_expression_end;
+    @local new_node := &vec_offset P_AST;
+    P_AST = &ast_bin_op P_AST, op_off, op_len, lhs, rhs;
+    lhs = new_node;
+  };
+  lhs
+};
+
+# parse_element — top-level: function call or expression statement,
+# always terminated by `;`.  Definitions land in the next commit.
+@fn parse_element:Int := {
+  @local node := &parse_expression_start;
+  &@if ((&p_peek_kind) == TOK_SEMI), { &p_advance; };
+  node
+};
+
+# parse_program — main entry.  Loops parse_element until EOF, then
+# emits the AST_PROGRAM header.
+@fn parse:Int src_ptr:Int, src_len:Int, toks:Int := {
+  P_SRC  = src_ptr;
+  P_LEN  = src_len;
+  P_TOKS = toks;
+  P_AST  = &vec_new;
+  P_CUR  = 0;
+
+  # First pass: parse elements, collecting their indices in a temp vec.
+  @local elems := &vec_new;
+  &@loop 1, {
+    @local k := &p_peek_kind;
+    &@if (k == TOK_EOF), { &@break };
+    @local elem := &parse_element;
+    &@if (elem == AST_NONE), { &p_advance; },
+                              { elems = &vec_push elems, elem; };
+  };
+
+  # Emit the program header + elem list.
+  @local prog_node := &vec_offset P_AST;
+  @local n := &vec_len elems;
+  P_AST = &ast_program_start P_AST, n;
+  @local i := 0;
+  &@loop (i < n), {
+    P_AST = &ast_program_elem P_AST, (&vec_get elems, i);
+    i = i + 1;
+  };
+
+  prog_node
+};
