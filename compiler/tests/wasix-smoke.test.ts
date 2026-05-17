@@ -269,6 +269,12 @@ describe('Phase 0 WASIX smoke test', () => {
         // with whatever strata land in the bundle.
         const stage0Ops = (bundle.match(/^@stratum_operator/gm) ?? []).length
         const stage0Kws = (bundle.match(/^@stratum_keyword/gm)  ?? []).length
+        // Stage 0 defKinds count is whatever buildStrataRegistry produces.
+        const { buildStrataRegistry } = await import('../src/elaborator')
+        const { ASTFactory } = await import('../src/ast/astNodes')
+        const stage0DefKinds = Object.keys(
+            buildStrataRegistry(ASTFactory.program([])).defKinds,
+        ).length
 
         try {
             const result = spawnSync('wasmer', ['run', tmpPath], {
@@ -277,8 +283,10 @@ describe('Phase 0 WASIX smoke test', () => {
             })
             expect(result.status).toBe(0)
             const stdout = (result.stdout ?? Buffer.alloc(0)).toString('utf-8').trim()
-            // Format: "ops=N kws=M first_op=… op_lookup_ok=1 first_kw=… kw_lookup_ok=1"
-            expect(stdout).toMatch(new RegExp(`^ops=${stage0Ops} kws=${stage0Kws} `))
+            // Format starts with: "ops=N kws=M defkinds=K first_op=…"
+            expect(stdout).toMatch(new RegExp(
+                `^ops=${stage0Ops} kws=${stage0Kws} defkinds=${stage0DefKinds} `,
+            ))
             expect(stdout).toContain('op_lookup_ok=1')
             expect(stdout).toContain('kw_lookup_ok=1')
         } finally {

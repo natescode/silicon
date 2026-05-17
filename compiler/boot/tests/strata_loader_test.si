@@ -48,6 +48,8 @@
   &put_int (&registry_op_count);
   &write_str 1, ' kws=';
   &put_int (&registry_kw_count);
+  &write_str 1, ' defkinds=';
+  &put_int (&registry_dk_count);
   @local has_op := (&registry_op_count) > 0;
   &@if (has_op == 1), {
     &write_str 1, ' first_op=';
@@ -73,6 +75,17 @@
     &@if (kgot == kexpect), { &write_byte 1, 49; }, { &write_byte 1, 48; };
   };
   &write_byte 1, 10;
+
+  # 4. Dump each defkind's (keyword → codegenKind).
+  @local dk_n := &registry_dk_count;
+  @local di := 0;
+  &@loop (di < dk_n), {
+    &write_bytes 1, (P_SRC + (&registry_dk_kw_off di)), (&registry_dk_kw_len di);
+    &write_str 1, '=';
+    &write_bytes 1, (P_SRC + (&registry_dk_cg_off di)), (&registry_dk_cg_len di);
+    &write_byte 1, 10;
+    di = di + 1;
+  };
   &wasi_snapshot_preview1::proc_exit 0;
 };
 
