@@ -462,6 +462,7 @@
 @fn lit_at_continue_ptr:Int := { (&str_ptr '@continue') + 4 };
 @fn lit_at_tofloat_ptr:Int  := { (&str_ptr '@toFloat')  + 4 };
 @fn lit_at_toint_ptr:Int    := { (&str_ptr '@toInt')    + 4 };
+@fn lit_at_match_ptr:Int    := { (&str_ptr '@match')    + 4 };
 @fn lit_wasm_seg_ptr:Int    := { (&str_ptr 'WASM')      + 4 };
 
 # ── Mangled-name pool (i32 slots, one byte per slot). ──────────────
@@ -980,6 +981,46 @@
           &@if (v != IR_NONE), {
             &@return (&ir_unop IR_OP_I32_TRUNC_F32_S, v);
           };
+        };
+      };
+      # &@match val, pat0, body0, [pat1, body1, ...] [, default_body]
+      # Lowered as a chain of IR_IFs: each (val == patN) selects bodyN;
+      # the trailing block (when n_args is even) is the default arm.
+      # Note: `val` is re-lowered for each comparison (n_patterns
+      # times), so for now @match is safe only when the scrutinee is
+      # pure (literal / local-get / arg).  io.si's `errno` qualifies.
+      &@if ((&lower_span_eq_lit nm_off, nm_len, (&lit_at_match_ptr), 6) == 1), {
+        &@if (n_args >= 3), {
+          @local val_idx := &ast_field P_AST, node, 3;
+          @local has_default := 0;
+          # n_args - 1 (excluding val) divided by 2: pairs of pat/body.
+          # If (n_args - 1) is even → no default; odd → trailing default.
+          @local pair_args := n_args - 1;
+          @local n_pairs := pair_args / 2;
+          @local even := pair_args - (n_pairs * 2);
+          &@if (even == 1), { has_default = 1; };
+          # Lower the default first (innermost else).
+          @local result := IR_NONE;
+          &@if (has_default == 1), {
+            @local d_idx := &ast_field P_AST, node, (3 + 1 + (2 * n_pairs));
+            result = &lower_expr d_idx;
+          };
+          &@if (result == IR_NONE), { result = &ir_i32_const 0; };
+          # Build from last pattern back to first, wrapping each as an IF.
+          @local pi := n_pairs;
+          &@loop (pi > 0), {
+            pi = pi - 1;
+            @local pat_idx  := &ast_field P_AST, node, (3 + 1 + (2 * pi));
+            @local body_idx := &ast_field P_AST, node, (3 + 1 + (2 * pi) + 1);
+            @local val_h := &lower_expr val_idx;
+            @local pat_h := &lower_expr pat_idx;
+            @local body_h := &lower_expr body_idx;
+            &@if ((val_h == IR_NONE) + (pat_h == IR_NONE) + (body_h == IR_NONE) > 0),
+              { &@return IR_NONE; };
+            @local cmp := &ir_binop IR_OP_I32_EQ, val_h, pat_h;
+            result = &ir_if cmp, body_h, result;
+          };
+          &@return result;
         };
       };
       &@return IR_NONE;

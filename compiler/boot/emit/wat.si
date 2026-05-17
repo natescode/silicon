@@ -162,6 +162,46 @@
   &ew_str '  )'; &ew_byte 10;
 };
 
+# Emit a minimal std-prelude — the runtime helpers every Silicon
+# program needs.  Without this, the bootstrap-emitted module
+# references `$alloc` / `$scratch_alloc` / `$str_ptr` / `$str_len` /
+# `$heap_get` / `$heap_set` without defining them, so wat2wasm
+# rejects the output as having undefined function variables.
+# Inlining the prelude (rather than expecting the runtime to
+# provide them as imports) keeps the bootstrap-emitted wasm
+# self-contained — wat2wasm consumes it directly.
+#
+# Heap initial value defaults to LITPOOL_NEXT (4-byte aligned)
+# so the bump allocator starts past the literal-pool data
+# segments.
+@fn emit_std_prelude := {
+  &ew_str '  (global $heap (mut i32) (i32.const ';
+  &ew_write_int LITPOOL_NEXT;
+  &ew_str '))'; &ew_byte 10;
+
+  &ew_str '  (func $alloc (param $size i32) (result i32)'; &ew_byte 10;
+  &ew_str '    (local $a i32) (local $new_heap i32) (local $cur_bytes i32) (local $need_pages i32)'; &ew_byte 10;
+  &ew_str '    (local.set $new_heap (i32.add (global.get $heap) (local.get $size)))'; &ew_byte 10;
+  &ew_str '    (local.set $cur_bytes (i32.shl (memory.size) (i32.const 16)))'; &ew_byte 10;
+  &ew_str '    (if (i32.le_s (local.get $new_heap) (local.get $cur_bytes))'; &ew_byte 10;
+  &ew_str '      (then'; &ew_byte 10;
+  &ew_str '        (local.set $a (global.get $heap))'; &ew_byte 10;
+  &ew_str '        (global.set $heap (local.get $new_heap))'; &ew_byte 10;
+  &ew_str '        (return (local.get $a))))'; &ew_byte 10;
+  &ew_str '    (local.set $need_pages (i32.add (i32.shr_u (i32.sub (local.get $new_heap) (local.get $cur_bytes)) (i32.const 16)) (i32.const 1)))'; &ew_byte 10;
+  &ew_str '    (if (i32.eq (memory.grow (local.get $need_pages)) (i32.const -1))'; &ew_byte 10;
+  &ew_str '      (then (return (i32.const -1))))'; &ew_byte 10;
+  &ew_str '    (local.set $a (global.get $heap))'; &ew_byte 10;
+  &ew_str '    (global.set $heap (local.get $new_heap))'; &ew_byte 10;
+  &ew_str '    (local.get $a))'; &ew_byte 10;
+
+  &ew_str '  (func $scratch_alloc (param $n i32) (result i32) (call $alloc (local.get $n)))'; &ew_byte 10;
+  &ew_str '  (func $str_ptr (param $s i32) (result i32) (local.get $s))'; &ew_byte 10;
+  &ew_str '  (func $str_len (param $s i32) (result i32) (i32.load (local.get $s)))'; &ew_byte 10;
+  &ew_str '  (func $heap_get (result i32) (global.get $heap))'; &ew_byte 10;
+  &ew_str '  (func $heap_set (param $h i32) (global.set $heap (local.get $h)))'; &ew_byte 10;
+};
+
 # Emit one IR_EXTERN as
 #   (import "<module>" "<field>" (func $<name> (param i32)* (result i32)?))
 #
@@ -290,6 +330,9 @@
   # of one unused page is negligible.
   &ew_str '  (memory (export "memory") 1)'; &ew_byte 10;
   @local n_lit := &litpool_count;
+  # Inline the std-runtime helpers AFTER memory but BEFORE user
+  # globals so $heap's init expression references resolve.
+  &emit_std_prelude;
   # Globals.
   @local g_n := &global_count;
   @local gi := 0;
