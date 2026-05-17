@@ -50,7 +50,7 @@
 @let IR_CALL:Int        := 15;
 @let IR_LOOP:Int        := 16;
 
-# IR_FUNCTION  [kind, name_off, name_len, n_params, body_h]
+# IR_FUNCTION  [kind, name_off, name_len, n_params, n_locals, body_h]
 @let IR_FUNCTION:Int    := 17;
 
 # Op codes for IR_BINOP / IR_UNOP — mirror the WASM op names used in
@@ -243,15 +243,18 @@
   h
 };
 
-# ir_function — `[IR_FUNCTION, name_off, name_len, n_params, body_h]`.
+# ir_function — `[IR_FUNCTION, name_off, name_len, n_params, n_locals, body_h]`.
 # Names are stored as P_SRC spans so the emitter can write them
-# without a separate symbol table.
-@fn ir_function:Int name_off:Int, name_len:Int, n_params:Int, body:Int := {
+# without a separate symbol table.  n_locals counts hoisted @local
+# decls; all locals are i32 for now.
+@fn ir_function:Int name_off:Int, name_len:Int,
+                    n_params:Int, n_locals:Int, body:Int := {
   @local h := &vec_len IR_VEC;
   IR_VEC = &vec_push IR_VEC, IR_FUNCTION;
   IR_VEC = &vec_push IR_VEC, name_off;
   IR_VEC = &vec_push IR_VEC, name_len;
   IR_VEC = &vec_push IR_VEC, n_params;
+  IR_VEC = &vec_push IR_VEC, n_locals;
   IR_VEC = &vec_push IR_VEC, body;
   h
 };
@@ -259,4 +262,5 @@
 @fn ir_function_name_off:Int handle:Int := { &vec_get IR_VEC, (handle + 1) };
 @fn ir_function_name_len:Int handle:Int := { &vec_get IR_VEC, (handle + 2) };
 @fn ir_function_n_params:Int handle:Int := { &vec_get IR_VEC, (handle + 3) };
-@fn ir_function_body:Int     handle:Int := { &vec_get IR_VEC, (handle + 4) };
+@fn ir_function_n_locals:Int handle:Int := { &vec_get IR_VEC, (handle + 4) };
+@fn ir_function_body:Int     handle:Int := { &vec_get IR_VEC, (handle + 5) };

@@ -84,16 +84,18 @@
 # Emit one IR_FUNCTION record:
 #
 #   (func $name (export "name") (param i32)* (result i32)
+#     (local i32)*
 #     <body instructions>
 #   )
 #
-# All params are i32 today; the result is also i32.  Type strata
-# come later — when they do, this just looks up param/result types
-# from the typed AST rather than hard-coding i32.
+# All params + locals are i32 today; the result is also i32.  Type
+# strata come later — when they do, we'll look up types from the
+# typed AST rather than hard-coding i32.
 @fn emit_function fn_h:Int := {
   @local nm_off := &ir_function_name_off fn_h;
   @local nm_len := &ir_function_name_len fn_h;
   @local n_params := &ir_function_n_params fn_h;
+  @local n_locals := &ir_function_n_locals fn_h;
   @local body := &ir_function_body fn_h;
 
   &ew_str '  (func $';
@@ -107,6 +109,11 @@
     i = i + 1;
   };
   &ew_str ' (result i32)'; &ew_byte 10;
+  i = 0;
+  &@loop (i < n_locals), {
+    &ew_str '(local i32)'; &ew_byte 10;
+    i = i + 1;
+  };
   &emit_expr body;
   &ew_str '  )'; &ew_byte 10;
 };
@@ -215,7 +222,25 @@
     @local n := &ir_block_count h;
     @local i := 0;
     &@loop (i < n), {
-      &emit_expr (&ir_block_child h, i);
+      @local child := &ir_block_child h, i;
+      &emit_expr child;
+      # All but the last child are statements; their stack value
+      # (if any) must be dropped so the block's result type is
+      # only the trailing expression.
+      &@if (i < (n - 1)), {
+        @local ck := &ir_kind child;
+        # Kinds that produce no stack value: IR_NULL, IR_LOCAL_SET,
+        # IR_GLOBAL_SET, IR_RETURN, IR_BREAK, IR_CONTINUE.  Everything
+        # else gets a `drop`.
+        @local needs_drop := 1;
+        &@if (ck == IR_NULL),       { needs_drop = 0; };
+        &@if (ck == IR_LOCAL_SET),  { needs_drop = 0; };
+        &@if (ck == IR_GLOBAL_SET), { needs_drop = 0; };
+        &@if (ck == IR_RETURN),     { needs_drop = 0; };
+        &@if (ck == IR_BREAK),      { needs_drop = 0; };
+        &@if (ck == IR_CONTINUE),   { needs_drop = 0; };
+        &@if (needs_drop == 1), { &ew_str 'drop'; &ew_byte 10; };
+      };
       i = i + 1;
     };
     &@return 0;

@@ -374,6 +374,15 @@ describe('Phase 0 WASIX smoke test', () => {
               fn: 'fact', args: [5],  want: 120 },
             { prog: '@fn fact n:Int := { &@if (n < 2), 1, (n * (&fact (n - 1))) };',
               fn: 'fact', args: [10], want: 3628800 },
+            // @local + assignment — slice 17.
+            { prog: '@fn step x:Int := {\n  @local y := x + 1;\n  y * 2\n};',
+              fn: 'step', args: [20], want: 42 },
+            { prog: '@fn mut := {\n  @local x := 10;\n  x = x + 5;\n  x\n};',
+              fn: 'mut', args: [], want: 15 },
+            { prog: '@fn sum2 a:Int, b:Int := {\n  @local r := 0;\n  r = r + a;\n  r = r + b;\n  r\n};',
+              fn: 'sum2', args: [17, 25], want: 42 },
+            { prog: '@fn swap_use a:Int, b:Int := {\n  @local t := a;\n  a = b;\n  b = t;\n  a - b\n};',
+              fn: 'swap_use', args: [10, 30], want: 20 },
         ]
 
         try {
@@ -430,7 +439,7 @@ describe('Phase 0 WASIX smoke test', () => {
             ['a + b;',       ['local.get 0', 'local.get 1', 'i32.add']],
             ['(a * b) + c;', ['local.get 0', 'local.get 1', 'i32.mul', 'local.get 2', 'i32.add']],
             ['a + a;',       ['local.get 0', 'local.get 0', 'i32.add']],
-            ['{ a; b };',    ['local.get 0', 'local.get 1']],
+            ['{ a; b };',    ['local.get 0', 'drop', 'local.get 1']],
         ]
 
         try {
@@ -536,7 +545,7 @@ describe('Phase 0 WASIX smoke test', () => {
             ['10 * 3;',      ['i32.const 10', 'i32.const 3', 'i32.mul']],
             ['(1 + 2) * 3;', ['i32.const 1', 'i32.const 2', 'i32.add', 'i32.const 3', 'i32.mul']],
             ['5 < 7;',       ['i32.const 5', 'i32.const 7', 'i32.lt_s']],
-            ['{ 1; 2 + 3 };', ['i32.const 1', 'i32.const 2', 'i32.const 3', 'i32.add']],
+            ['{ 1; 2 + 3 };', ['i32.const 1', 'drop', 'i32.const 2', 'i32.const 3', 'i32.add']],
             ['{ };',         []],
         ]
 
@@ -595,6 +604,7 @@ describe('Phase 0 WASIX smoke test', () => {
             ['{ 99 };',       'kind=14 n=1 child[0]=2'],
             ['{ 1; 2; 3 };',  'kind=14 n=3 child[0]=2 child[1]=2 child[2]=2'],
             ['{ 1; 2 + 3 };', 'kind=14 n=2 child[0]=2 child[1]=4'],
+            // (block) IR shape — drops only show up in the WAT emitter.
             ['{ { 1 }; 2 };', 'kind=14 n=2 child[0]=14 child[1]=2'],
             // String concat (++) is a user fn — interpreter returns IR_NONE
             // and the test program emits the `no-ir` sentinel.
