@@ -255,8 +255,6 @@ function lowerDefinition(node: any, ctx: LowerCtx): any {
         case 'function': return lowerFunction(node, name, ctx)
         case 'global':   return lowerGlobal(node, name, ctx)
         case 'extern':   return lowerExtern(node, name, ctx)
-        case 'local':    return lowerLocalDef(node, name, ctx)
-        case 'export':   return lowerExportDecl(node, name, ctx)
         // Type alias / distinct produce no WAT — handled by type checker.
         case 'type_alias':
         case 'type_distinct':
@@ -359,27 +357,6 @@ function lowerExtern(node: any, name: string, _ctx: LowerCtx): IRImport {
     }
     // Plain @extern always imports from the "env" host namespace.
     return { kind: 'Import', env: 'env', field: name, name, params, result }
-}
-
-function lowerLocalDef(node: any, name: string, ctx: LowerCtx): null {
-    // @local inside a function body: collect declaration, emit LocalSet stmt.
-    let wasmType: WasmValType = 'i32'
-    if (node.name?.typeAnnotation?.typename) {
-        wasmType = siliconTypeNameToWasm(node.name.typeAnnotation.typename)
-    }
-    ctx.pendingLocals.push({ name, wasmType })
-    ctx.locals.set(name, wasmType)
-
-    // The initialiser is emitted as an IRLocalSet when we process the block stmt.
-    // We return null here; the block lowering will emit it as an IRExprStmt wrapping
-    // an IRLocalSet when it encounters the definition in its item list.
-    return null
-}
-
-function lowerExportDecl(_node: any, name: string, ctx: LowerCtx): IRExport {
-    // @export foo; — determine whether `foo` is a global or a function.
-    const what: 'func' | 'global' = ctx.varNames.has(name) ? 'global' : 'func'
-    return { kind: 'Export', alias: name, internalName: name, what }
 }
 
 // ---------------------------------------------------------------------------

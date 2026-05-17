@@ -165,6 +165,8 @@ export interface CompilerAPI {
     freshId(prefix?: string): string
     /** Resolve an intrinsic name (WASM::foo or IR::foo) to its WAT instruction string. */
     resolveIntrinsic(name: string): string | undefined
+    /** Ternary helper for strata bodies that lack first-class control flow. */
+    choose<T>(cond: any, ifTrue: T, ifFalse: T): T
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -252,6 +254,7 @@ export function createCompilerAPI(ctx: CtxShape, fns: LowerFns): CompilerAPI {
         watId:           (name)        => fns.watId(name),
         freshId:         (prefix = 'tmp') => `${prefix}_${ctx.freshIdCounter.n++}`,
         resolveIntrinsic:(name)        => resolveIntrinsicWasmInstr(name),
+        choose:          (cond, t, f) => cond ? t : f,
     }
 
     return api

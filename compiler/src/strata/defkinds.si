@@ -28,4 +28,10 @@
 
 @stratum_keyword LocalDef ('@local', Node) = {
   &IR::def_local;
+  @local wasmType := &Compiler::resolveType Node.name.typeAnnotation;
+  @local sname    := &Compiler::watId Node.name.name;
+  @local decl     := &Compiler::ir::makeLocal sname, wasmType;
+  &Compiler::ctx::pendingLocals::push decl;
+  &Compiler::ctx::locals::set sname, wasmType;
+  &IR::null;
 };
