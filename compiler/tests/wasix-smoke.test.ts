@@ -844,6 +844,88 @@ describe('Phase 0 WASIX smoke test', () => {
         }
     }, 60000)
 
+    test('boot/tests/fn_test.si: bootstrap-compiled WASI program calls helper functions', async () => {
+        if (!wasmerAvailable()) {
+            console.log('  (skipped: wasmer not on PATH)')
+            return
+        }
+        const wasm = await buildBoot(path.join(PROJECT_ROOT, 'boot', 'tests', 'fn_test.si'))
+        const tmpPath = path.join(PROJECT_ROOT, '.wasi-helper-boot.wasm')
+        await fs.writeFile(tmpPath, wasm)
+
+        const strataDir = path.join(PROJECT_ROOT, 'src', 'strata')
+        const files = (await fs.readdir(strataDir))
+            .filter(f => f.endsWith('.si'))
+            .sort()
+        let bundle = ''
+        for (const f of files) {
+            bundle += await fs.readFile(path.join(strataDir, f), 'utf-8')
+            bundle += '\n'
+        }
+
+        // Silicon helper functions used by _start.  Demonstrates that
+        // the bootstrap-emitted module correctly resolves call $name
+        // references between user-defined Silicon functions, including
+        // recursive calls.  fact(5) = 120 → digits '1' '2' '0' '\n'.
+        const userProg = [
+            '@extern wasi_snapshot_preview1::fd_write:Int',
+            '  fd:Int, iovs:Int, iovs_len:Int, nwritten:Int;',
+            '',
+            '@fn write_byte_at buf:Int, iovs:Int, written:Int, b:Int := {',
+            '  &WASM::i32_store8 buf, b;',
+            '  &WASM::i32_store iovs, buf;',
+            '  &WASM::i32_store (iovs + 4), 1;',
+            '  &wasi_snapshot_preview1::fd_write 1, iovs, 1, written',
+            '};',
+            '',
+            '@fn fact n:Int := {',
+            '  &@if (n < 2), 1, (n * (&fact (n - 1)))',
+            '};',
+            '',
+            '@fn _start:Void := {',
+            '  @local buf := 1024;',
+            '  @local iovs := 2048;',
+            '  @local written := 2064;',
+            '  @local v := &fact 5;',
+            '  @local d100 := v / 100;',
+            '  @local d10  := (v / 10) - (d100 * 10);',
+            '  @local d1   := v - ((v / 10) * 10);',
+            '  &write_byte_at buf, iovs, written, (48 + d100);',
+            '  &write_byte_at buf, iovs, written, (48 + d10);',
+            '  &write_byte_at buf, iovs, written, (48 + d1);',
+            '  &write_byte_at buf, iovs, written, 10',
+            '};',
+        ].join('\n') + '\n'
+
+        const outWasm = path.join(PROJECT_ROOT, '.wasi-helper.wasm')
+        try {
+            const compileRes = spawnSync('wasmer', ['run', tmpPath], {
+                input: Buffer.from(bundle + userProg, 'utf-8'),
+                maxBuffer: 64 * 1024 * 1024,
+            })
+            expect(compileRes.status).toBe(0)
+            const wat = (compileRes.stdout ?? Buffer.alloc(0)).toString('utf-8')
+
+            const compiled = await watToWasm(wat)
+            await fs.writeFile(outWasm, Buffer.from(compiled.buffer))
+
+            const runRes = spawnSync('wasmer', ['run', outWasm], {
+                maxBuffer: 64 * 1024 * 1024,
+            })
+            expect(runRes.status).toBe(0)
+            const stdout = (runRes.stdout ?? Buffer.alloc(0)).toString('utf-8')
+            if (stdout !== '120\n') {
+                throw new Error(
+                    `WASI helper stdout mismatch.  Expected "120\\n", ` +
+                    `got ${JSON.stringify(stdout)}.\nWAT:\n${wat}`,
+                )
+            }
+        } finally {
+            await fs.unlink(tmpPath).catch(() => {})
+            await fs.unlink(outWasm).catch(() => {})
+        }
+    }, 60000)
+
     test('boot/tests/fn_test.si: Silicon-bootstrap-compiled WASI program prints via fd_write', async () => {
         if (!wasmerAvailable()) {
             console.log('  (skipped: wasmer not on PATH)')
