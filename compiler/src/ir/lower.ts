@@ -164,7 +164,7 @@ export function lowerProgram(
             ctx.varNames.add(name)
         }
         // Def expander pre-scan (handles type_sum and any user-registered kinds).
-        ctx.registry.defExpanders.get(hook)?.preScan?.(node, ctx)
+        ctx.registry.defExpanders.get(hook)?.preScan?.(node, ctx.$compiler!)
     }
 
     for (const el of program.elements as any[]) {
@@ -249,7 +249,7 @@ function lowerDefinition(node: any, ctx: LowerCtx): any {
 
     // Def expander takes priority over hardcoded switch cases.
     const defExp = ctx.registry.defExpanders.get(hook)
-    if (defExp) return defExp.expand(node, name, ctx)
+    if (defExp) return defExp.expand(node, name, ctx.$compiler!)
 
     switch (hook) {
         case 'function': return lowerFunction(node, name, ctx)
@@ -642,7 +642,7 @@ function lowerBuiltinCall(name: string, rawArgs: any[], ctx: LowerCtx, inferredT
     // Pluggable expander path: strata register expanders for their intrinsic.
     const expander = ctx.registry.expanders.get(intrinsic)
     if (expander) {
-        return expander(rawArgs, ctx, lowerExpr, inferredType)
+        return expander(rawArgs, ctx.$compiler!, inferredType)
     }
 
     // Generic builtin (e.g. @toInt, @toFloat, user-defined keyword strata).

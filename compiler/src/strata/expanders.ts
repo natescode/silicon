@@ -1,9 +1,13 @@
 /**
  * Built-in IR Expanders
  *
- * Each entry maps a WASM::control_* intrinsic to an IRExpanderFn that emits
- * the correct IR subtree.  Registered into the ElaboratorRegistry by
+ * Each entry maps a WASM::control_* / IR::control_* intrinsic to an IRExpanderFn
+ * that emits the correct IR subtree. Registered into the ElaboratorRegistry by
  * strataLoader.ts so lower.ts never needs to be touched for new structural keywords.
+ *
+ * Each expander receives a CompilerAPI bound to the active lowering context,
+ * accessed as `api.lowerExpr(node)`, `api.ctx.*`, `api.ir.*`. There is no
+ * direct LowerCtx exposure — all context interaction goes through the API.
  *
  * To add a new structural keyword:
  *   1. Add a WASM::control_* entry to intrinsics.ts (or an IR::def_/IR::meta_ entry to irKinds.ts)
@@ -13,94 +17,87 @@
  */
 
 import type { IRExpanderFn } from '../ir/expander'
-import type { IRExpr, IRBinOp, WasmType } from '../ir/nodes'
-import { IRLowerError, exprWasmType } from '../ir/lower'
+import type { IRExpr, WasmType } from '../ir/nodes'
+import { IRLowerError } from '../ir/lower'
 import { wasmTypeOf } from '../types/types'
 
 // ---------------------------------------------------------------------------
 // Built-in expanders
 // ---------------------------------------------------------------------------
 
-const expandIf: IRExpanderFn = (rawArgs, ctx, lower, inferredType) => {
+const expandIf: IRExpanderFn = (rawArgs, api) => {
     const [condN, thenN, elseN] = rawArgs
-    const cond = lower(condN, ctx)
-    const then = lower(thenN, ctx)
-    const else_ = elseN ? lower(elseN, ctx) : undefined
-    const wt = else_ ? exprWasmType(then) : 'void'
-    return { kind: 'If', wasmType: wt, cond, then, else_ }
+    const cond  = api.lowerExpr(condN)
+    const then  = api.lowerExpr(thenN)
+    const else_ = elseN ? api.lowerExpr(elseN) : undefined
+    return api.ir.makeIf(cond, then, else_)
 }
 
-const expandLoop: IRExpanderFn = (rawArgs, ctx, lower) => {
+const expandLoop: IRExpanderFn = (rawArgs, api) => {
     const [condN, bodyN] = rawArgs
-    const id = ctx.loopCount.n++
-    ctx.loopStack.push(id)
-    const cond = lower(condN, ctx)
-    const body = lower(bodyN, ctx)
-    ctx.loopStack.pop()
-    return { kind: 'Loop', id, cond, body }
+    const id = api.ctx.nextLoopId()
+    api.ctx.loopStack.push(id)
+    const cond = api.lowerExpr(condN)
+    const body = api.lowerExpr(bodyN)
+    api.ctx.loopStack.pop()
+    return api.ir.makeLoop(id, cond, body)
 }
 
-const expandBreak: IRExpanderFn = (_rawArgs, ctx) => {
-    const id = ctx.loopStack.at(-1)
+const expandBreak: IRExpanderFn = (_rawArgs, api) => {
+    const id = api.ctx.loopStack.peek()
     if (id === undefined) throw new IRLowerError('@break outside @loop')
-    return { kind: 'Break', id }
+    return api.ir.makeBreak(id)
 }
 
-const expandContinue: IRExpanderFn = (_rawArgs, ctx) => {
-    const id = ctx.loopStack.at(-1)
+const expandContinue: IRExpanderFn = (_rawArgs, api) => {
+    const id = api.ctx.loopStack.peek()
     if (id === undefined) throw new IRLowerError('@continue outside @loop')
-    return { kind: 'Continue', id }
+    return api.ir.makeContinue(id)
 }
 
-const expandReturn: IRExpanderFn = (rawArgs, ctx, lower) => {
-    const value = rawArgs[0] ? lower(rawArgs[0], ctx) : undefined
-    return { kind: 'Return', value }
+const expandReturn: IRExpanderFn = (rawArgs, api) => {
+    const value = rawArgs[0] ? api.lowerExpr(rawArgs[0]) : undefined
+    return api.ir.makeReturn(value)
 }
 
-const expandAnd: IRExpanderFn = (rawArgs, ctx, lower) => {
+const expandAnd: IRExpanderFn = (rawArgs, api) => {
     const [leftN, rightN] = rawArgs
-    const left = lower(leftN, ctx)
-    const right = lower(rightN, ctx)
-    return {
-        kind: 'If', wasmType: 'i32', cond: left, then: right,
-        else_: { kind: 'Const', wasmType: 'i32', value: 0 },
-    }
+    const left  = api.lowerExpr(leftN)
+    const right = api.lowerExpr(rightN)
+    return api.ir.makeIf(left, right, api.ir.makeConst(0, 'i32'), 'i32')
 }
 
-const expandOr: IRExpanderFn = (rawArgs, ctx, lower) => {
+const expandOr: IRExpanderFn = (rawArgs, api) => {
     const [leftN, rightN] = rawArgs
-    const left = lower(leftN, ctx)
-    const right = lower(rightN, ctx)
-    return {
-        kind: 'If', wasmType: 'i32', cond: left,
-        then: { kind: 'Const', wasmType: 'i32', value: 1 }, else_: right,
-    }
+    const left  = api.lowerExpr(leftN)
+    const right = api.lowerExpr(rightN)
+    return api.ir.makeIf(left, api.ir.makeConst(1, 'i32'), right, 'i32')
 }
 
-const expandMatch: IRExpanderFn = (rawArgs, ctx, lower, inferredType) => {
+const expandMatch: IRExpanderFn = (rawArgs, api, inferredType) => {
     // @match disc, pat0, res0, pat1, res1, ...       — exhaustive, ends unreachable
     // @match disc, pat0, res0, pat1, res1, default   — trailing default (even total)
     //
     // Even arg count: last argument is a catch-all default with no pattern comparison.
     // Odd arg count: all arms are explicit; falls through to (unreachable).
-    if (rawArgs.length < 3) return { kind: 'Nop' }
+    if (rawArgs.length < 3) return api.ir.makeNop()
 
-    const discExpr = lower(rawArgs[0], ctx)
+    const discExpr = api.lowerExpr(rawArgs[0])
     const wt: WasmType = (inferredType && inferredType.kind !== 'Unknown')
         ? (wasmTypeOf(inferredType) as WasmType)
         : 'i32'
 
     function buildNested(i: number): IRExpr {
         // Past all arms — no default provided; fall to unreachable.
-        if (i >= rawArgs.length) return { kind: 'Unreachable' }
+        if (i >= rawArgs.length) return api.ir.makeUnreachable()
         // Lone last item (no paired result) = trailing default / catch-all.
-        if (i + 1 >= rawArgs.length) return lower(rawArgs[i], ctx)
+        if (i + 1 >= rawArgs.length) return api.lowerExpr(rawArgs[i])
 
-        const pat = lower(rawArgs[i], ctx)
-        const res = lower(rawArgs[i + 1], ctx)
-        const eqInstr = exprWasmType(discExpr) === 'f32' ? 'f32.eq' : 'i32.eq'
-        const cond: IRBinOp = { kind: 'BinOp', wasmType: 'i32', instr: eqInstr, left: discExpr, right: pat }
-        return { kind: 'If', wasmType: wt, cond, then: res, else_: buildNested(i + 2) }
+        const pat = api.lowerExpr(rawArgs[i])
+        const res = api.lowerExpr(rawArgs[i + 1])
+        const eqInstr = api.resolveExprType(discExpr) === 'f32' ? 'f32.eq' : 'i32.eq'
+        const cond = api.ir.makeBinOp(eqInstr, discExpr, pat, 'i32')
+        return api.ir.makeIf(cond, res, buildNested(i + 2), wt)
     }
 
     return buildNested(1)

@@ -2,8 +2,12 @@
  * Built-in IR Definition Expanders
  *
  * Each entry maps a CodegenKind to an IRDefExpander that emits the correct
- * IR node(s) for a Definition AST node.  Registered into the ElaboratorRegistry
+ * IR node(s) for a Definition AST node. Registered into the ElaboratorRegistry
  * by strataLoader.ts so lower.ts never needs a switch case for new definition kinds.
+ *
+ * Each expander receives a CompilerAPI bound to the active lowering context,
+ * accessed as `api.ctx.*`, `api.ir.*`, `api.watId()`. There is no direct
+ * LowerCtx exposure — all context interaction goes through the API.
  *
  * To add a new definition keyword:
  *   1. Add an IR::def_ entry to irKinds.ts
@@ -13,15 +17,11 @@
  */
 
 import type { IRDefExpander } from '../ir/expander'
-import type { IRGlobal, IRConst } from '../ir/nodes'
+import type { IRGlobal } from '../ir/nodes'
 
 // ---------------------------------------------------------------------------
-// Utilities (local copies to avoid circular imports with lower.ts)
+// Utilities — pure AST shape inspection, no compiler context required
 // ---------------------------------------------------------------------------
-
-function watId(s: string): string {
-    return s.replace(/::/g, '_')
-}
 
 function extractSumVariants(def: any): string[] {
     const typeName: string = def.name?.name ?? ''
@@ -48,21 +48,20 @@ function extractSumVariants(def: any): string[] {
 // ---------------------------------------------------------------------------
 
 const sumTypeExpander: IRDefExpander = {
-    preScan(def, ctx) {
+    preScan(def, api) {
         extractSumVariants(def).forEach(v => {
-            const gname = watId(v)
-            ctx.globals.set(gname, 'i32')
-            ctx.varNames.add(gname)
+            const gname = api.watId(v)
+            api.ctx.globals.set(gname, 'i32')
+            api.ctx.varNames.add(gname)
         })
     },
 
-    expand(def, _name, ctx): IRGlobal[] {
+    expand(def, _name, api): IRGlobal[] {
         return extractSumVariants(def).map((v, i) => {
-            const gname = watId(v)
-            ctx.globals.set(gname, 'i32')
-            ctx.varNames.add(gname)
-            const init: IRConst = { kind: 'Const', wasmType: 'i32', value: i }
-            return { kind: 'Global' as const, name: gname, wasmType: 'i32' as const, mutable: false, init }
+            const gname = api.watId(v)
+            api.ctx.globals.set(gname, 'i32')
+            api.ctx.varNames.add(gname)
+            return api.ir.makeGlobal(gname, 'i32', false, api.ir.makeConst(i, 'i32'))
         })
     },
 }

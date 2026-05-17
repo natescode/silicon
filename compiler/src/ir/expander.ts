@@ -1,4 +1,5 @@
 import type { IRExpr, IRGlobal, IRFunction, IRImport, IRExport } from './nodes'
+import type { CompilerAPI } from '../compiler-api'
 
 /**
  * IR Expander — pluggable lowering hook for builtin keyword strata.
@@ -9,15 +10,14 @@ import type { IRExpr, IRGlobal, IRFunction, IRImport, IRExport } from './nodes'
  * strata entries + expander registrations without touching lower.ts.
  *
  * Parameters:
- *   rawArgs      — un-lowered AST arg nodes; call `lower(node, ctx)` on each
- *   ctx          — LowerCtx from lower.ts (typed `any` to avoid circular import)
- *   lower        — recursive lowering fn; call it for each rawArg you need
+ *   rawArgs      — un-lowered AST arg nodes; call `api.lowerExpr(node)` on each
+ *   api          — CompilerAPI bound to the current lowering context;
+ *                  exposes `api.lowerExpr`, `api.ctx`, `api.ir`, etc.
  *   inferredType — SiliconType from the type checker (may be undefined)
  */
 export type IRExpanderFn = (
     rawArgs: any[],
-    ctx: any,
-    lower: (node: any, ctx: any) => IRExpr,
+    api: CompilerAPI,
     inferredType?: any,
 ) => IRExpr
 
@@ -32,7 +32,7 @@ export type IRExpanderFn = (
  *
  * Two-phase protocol:
  *   preScan — optional; called before the main lowering pass so the expander
- *             can register globals/functions in ctx for forward-reference resolution.
+ *             can register globals/functions via api.ctx for forward-reference resolution.
  *   expand  — main lowering; return the IR node(s) to emit into the module.
  *             Return type matches what lowerProgram currently handles:
  *               IRGlobal[] (multiple globals, e.g. sum-type variants)
@@ -40,6 +40,6 @@ export type IRExpanderFn = (
  *               null (no output, e.g. type aliases)
  */
 export interface IRDefExpander {
-    preScan?: (def: any, ctx: any) => void
-    expand:   (def: any, name: string, ctx: any) => IRGlobal[] | IRGlobal | IRFunction | IRImport | IRExport | null
+    preScan?: (def: any, api: CompilerAPI) => void
+    expand:   (def: any, name: string, api: CompilerAPI) => IRGlobal[] | IRGlobal | IRFunction | IRImport | IRExport | null
 }
