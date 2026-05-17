@@ -522,6 +522,27 @@ describe('Phase 0 WASIX smoke test', () => {
               fn: 'rt2', args: [1000000], want: 1000000 },
         ]
 
+        // Strings produce a pointer to a length-prefixed UTF-8 block
+        // in linear memory.  The harness reads the memory back to
+        // verify both the length header and the byte content.
+        type StringCase = {
+            prog: string; fn: string; args: number[];
+            wantLen: number; wantText: string;
+        }
+        const stringCases: StringCase[] = [
+            { prog: "@fn greet := { 'hello' };",
+              fn: 'greet', args: [], wantLen: 5, wantText: 'hello' },
+            { prog: "@fn empty := { '' };",
+              fn: 'empty', args: [], wantLen: 0, wantText: '' },
+            // Interning: two identical literals collapse to one pool entry.
+            { prog: "@fn a := { 'shared' };\n" +
+                    "@fn b := { 'shared' };",
+              fn: 'a', args: [], wantLen: 6, wantText: 'shared' },
+            { prog: "@fn a := { 'shared' };\n" +
+                    "@fn b := { 'shared' };",
+              fn: 'b', args: [], wantLen: 6, wantText: 'shared' },
+        ]
+
         // Externs need imports provided to instantiate; tracked
         // separately so the harness can pass an `env` object.
         const externCases: Array<{
@@ -569,6 +590,30 @@ describe('Phase 0 WASIX smoke test', () => {
                     throw new Error(
                         `${c.fn}(${c.args.join(', ')}) for ${JSON.stringify(c.prog)}\n` +
                         `Expected: ${c.want}\nGot: ${got}\nWAT:\n${wat}`,
+                    )
+                }
+            }
+            for (const c of stringCases) {
+                const result = spawnSync('wasmer', ['run', tmpPath], {
+                    input: Buffer.from(bundle + c.prog + '\n', 'utf-8'),
+                    maxBuffer: 64 * 1024 * 1024,
+                })
+                expect(result.status).toBe(0)
+                const wat = (result.stdout ?? Buffer.alloc(0)).toString('utf-8')
+                const compiled = await watToWasm(wat)
+                const { instance } = await WebAssembly.instantiate(compiled.buffer, {})
+                const f = (instance.exports as any)[c.fn] as (...a: number[]) => number
+                const ptr = f(...c.args)
+                const mem = (instance.exports as any).memory as WebAssembly.Memory
+                const view = new DataView(mem.buffer)
+                const gotLen = view.getUint32(ptr, true)
+                const bytes = new Uint8Array(mem.buffer, ptr + 4, gotLen)
+                const gotText = new TextDecoder().decode(bytes)
+                if (gotLen !== c.wantLen || gotText !== c.wantText) {
+                    throw new Error(
+                        `${c.fn}() string mismatch for ${JSON.stringify(c.prog)}\n` +
+                        `Expected: len=${c.wantLen} text="${c.wantText}"\n` +
+                        `Got:      len=${gotLen} text="${gotText}"\nWAT:\n${wat}`,
                     )
                 }
             }

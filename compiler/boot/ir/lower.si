@@ -75,6 +75,65 @@
 @fn global_name_len:Int i:Int := { &vec_get GSCOPE_NAME_LEN, i };
 @fn global_init_val:Int i:Int := { &vec_get GSCOPE_INIT_VAL, i };
 
+# ── String-literal pool ────────────────────────────────────────────
+# Each literal is laid out in linear memory as a 4-byte LE length
+# header followed by the UTF-8 bytes.  We track the (source_off,
+# source_len) span for each unique literal and assign sequential
+# memory offsets starting at LITPOOL_BASE.
+@let LITPOOL_BASE:Int := 16;
+
+@var LITPOOL_OFF:Int := 0;
+@var LITPOOL_LEN:Int := 0;
+@var LITPOOL_ADDR:Int := 0;
+@var LITPOOL_NEXT:Int := 0;
+
+@fn litpool_init := {
+  LITPOOL_OFF  = &vec_new;
+  LITPOOL_LEN  = &vec_new;
+  LITPOOL_ADDR = &vec_new;
+  LITPOOL_NEXT = LITPOOL_BASE;
+};
+
+# Intern a string literal: returns its memory base address (where the
+# 4-byte length header starts).
+@fn litpool_intern:Int s_off:Int, s_len:Int := {
+  @local n := &vec_len LITPOOL_OFF;
+  @local i := 0;
+  @local found := 0 - 1;
+  &@loop ((found < 0) * (i < n) == 1), {
+    @local o := &vec_get LITPOOL_OFF, i;
+    @local l := &vec_get LITPOOL_LEN, i;
+    &@if (l == s_len), {
+      @local ok := 1;
+      @local j := 0;
+      &@loop ((ok * (j < l)) == 1), {
+        @local a := &WASM::i32_load8_u (P_SRC + o + j);
+        @local b := &WASM::i32_load8_u (P_SRC + s_off + j);
+        &@if (a != b), { ok = 0; };
+        j = j + 1;
+      };
+      &@if (ok == 1), { found = &vec_get LITPOOL_ADDR, i; };
+    };
+    i = i + 1;
+  };
+  &@if (found >= 0), { &@return found; };
+  @local new_addr := LITPOOL_NEXT;
+  LITPOOL_OFF  = &vec_push LITPOOL_OFF,  s_off;
+  LITPOOL_LEN  = &vec_push LITPOOL_LEN,  s_len;
+  LITPOOL_ADDR = &vec_push LITPOOL_ADDR, new_addr;
+  # 4-byte length header + content; align next slot to 4 bytes.
+  @local bump := 4 + s_len;
+  @local align := bump - ((bump / 4) * 4);
+  &@if (align != 0), { bump = bump + (4 - align); };
+  LITPOOL_NEXT = LITPOOL_NEXT + bump;
+  new_addr
+};
+
+@fn litpool_count:Int := { &vec_len LITPOOL_OFF };
+@fn litpool_src_off:Int i:Int := { &vec_get LITPOOL_OFF, i };
+@fn litpool_src_len:Int i:Int := { &vec_get LITPOOL_LEN, i };
+@fn litpool_addr:Int    i:Int := { &vec_get LITPOOL_ADDR, i };
+
 @fn global_lookup:Int q_off:Int, q_len:Int := {
   @local n := &vec_len GSCOPE_NAME_OFF;
   @local i := 0;
@@ -392,6 +451,17 @@
   &@if (k == AST_BOOL_LIT), {
     @local v := &ast_field P_AST, node, 1;
     &@return (&ir_i32_const v);
+  };
+
+  &@if (k == AST_STRING_LIT), {
+    # AST_STRING_LIT [kind, source_off, source_len] — source_off
+    # points at the FIRST CHARACTER inside the quotes.  Intern in
+    # the litpool; the lowered value is the i32 base address of
+    # the length-prefixed memory layout.
+    @local s_off := &ast_field P_AST, node, 1;
+    @local s_len := &ast_field P_AST, node, 2;
+    @local lit_a := &litpool_intern s_off, s_len;
+    &@return (&ir_i32_const lit_a);
   };
 
   &@if (k == AST_NAMESPACE), {

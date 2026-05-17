@@ -168,8 +168,41 @@
   &ew_str '))'; &ew_byte 10;
 };
 
+# Emit one (data ...) segment for a string literal: 4-byte LE length
+# header followed by raw UTF-8 bytes, all escaped as `\xx` so the
+# WAT parser accepts non-printable / non-ASCII content.
+@fn emit_byte_escaped b:Int := {
+  &ew_byte 92;                           # '\'
+  @local hi := b / 16;
+  @local lo := b - (hi * 16);
+  &@if (hi < 10), { &ew_byte (48 + hi); };
+  &@if (hi >= 10), { &ew_byte (87 + hi); };       # 'a'..'f' = 97..102
+  &@if (lo < 10), { &ew_byte (48 + lo); };
+  &@if (lo >= 10), { &ew_byte (87 + lo); };
+};
+
+@fn emit_data_segment seg_addr:Int, src_off:Int, src_len:Int := {
+  &ew_str '  (data (i32.const ';
+  &ew_write_int seg_addr;
+  &ew_str ') "';
+  # Length header (little-endian u32).
+  &emit_byte_escaped (src_len - ((src_len / 256) * 256));
+  &emit_byte_escaped ((src_len / 256) - ((src_len / 65536) * 256));
+  &emit_byte_escaped ((src_len / 65536) - ((src_len / 16777216) * 256));
+  &emit_byte_escaped (src_len / 16777216);
+  # Content bytes.
+  @local i := 0;
+  &@loop (i < src_len), {
+    @local b := &WASM::i32_load8_u (P_SRC + src_off + i);
+    &emit_byte_escaped b;
+    i = i + 1;
+  };
+  &ew_str '")'; &ew_byte 10;
+};
+
 # Emit a complete module: imports must come first in the WAT
-# section ordering (WASM convention).  Then globals, then funcs.
+# section ordering (WASM convention).  Then memory/globals, then
+# funcs, then data segments.
 @fn emit_program functions:Int := {
   &ew_str '(module'; &ew_byte 10;
   # Imports first.
@@ -180,7 +213,12 @@
     &@if ((&ir_kind f) == IR_EXTERN), { &emit_extern f; };
     i = i + 1;
   };
-  # Then globals.
+  # Memory if we have any string literals.
+  @local n_lit := &litpool_count;
+  &@if (n_lit > 0), {
+    &ew_str '  (memory (export "memory") 1)'; &ew_byte 10;
+  };
+  # Globals.
   @local g_n := &global_count;
   @local gi := 0;
   &@loop (gi < g_n), {
@@ -191,12 +229,20 @@
     &ew_str '))'; &ew_byte 10;
     gi = gi + 1;
   };
-  # Then functions.
+  # Functions.
   i = 0;
   &@loop (i < n), {
     @local f := &vec_get functions, i;
     &@if ((&ir_kind f) == IR_FUNCTION), { &emit_function f; };
     i = i + 1;
+  };
+  # Data segments last.
+  @local li := 0;
+  &@loop (li < n_lit), {
+    &emit_data_segment (&litpool_addr li),
+                       (&litpool_src_off li),
+                       (&litpool_src_len li);
+    li = li + 1;
   };
   &ew_str ')'; &ew_byte 10;
 };

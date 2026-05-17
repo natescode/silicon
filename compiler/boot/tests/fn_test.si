@@ -32,6 +32,7 @@
   &ir_init;
   &scope_init;
   &global_init;
+  &litpool_init;
   &ew_init;
 
   @local fns := &lower_program prog;
