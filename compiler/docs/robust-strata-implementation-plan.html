@@ -1,0 +1,816 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Robust Strata Implementation Plan — Sigil Compiler</title>
+  <style>
+    :root {
+      --bg: #0f1117;
+      --surface: #1a1d27;
+      --surface2: #222535;
+      --border: #2e3248;
+      --accent: #6c8ef7;
+      --accent2: #b06cf7;
+      --accent3: #3ecf8e;
+      --accent4: #f7a06c;
+      --accent5: #f76c6c;
+      --text: #dde1f0;
+      --muted: #7b82a8;
+      --code-bg: #13151f;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+      padding: 40px 24px;
+    }
+    .page { max-width: 1100px; margin: 0 auto; }
+    h1 { font-size: 2rem; color: var(--accent); margin-bottom: 8px; }
+    h2 { font-size: 1.4rem; color: var(--accent2); margin: 40px 0 16px; border-bottom: 1px solid var(--border); padding-bottom: 8px; }
+    h3 { font-size: 1.1rem; color: var(--accent3); margin: 24px 0 10px; }
+    h4 { font-size: 0.95rem; color: var(--accent4); margin: 16px 0 8px; }
+    p { margin-bottom: 12px; color: var(--text); }
+    .subtitle { color: var(--muted); font-size: 1rem; margin-bottom: 32px; }
+
+    /* Cards */
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 20px 24px;
+      margin-bottom: 20px;
+    }
+    .card.warn { border-color: var(--accent5); }
+    .card.ok   { border-color: var(--accent3); }
+    .card.info { border-color: var(--accent); }
+
+    /* Pipeline diagrams */
+    .pipeline {
+      display: flex;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 0;
+      margin: 20px 0;
+    }
+    .stage {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 10px 16px;
+      font-size: 0.85rem;
+      text-align: center;
+      min-width: 110px;
+    }
+    .stage .label { color: var(--muted); font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.05em; }
+    .stage .name  { color: var(--text); font-weight: 600; }
+    .stage .file  { color: var(--accent); font-size: 0.72rem; margin-top: 2px; }
+    .arrow {
+      color: var(--muted);
+      font-size: 1.2rem;
+      padding: 0 4px;
+      flex-shrink: 0;
+    }
+    .stage.highlight { border-color: var(--accent2); background: #1e1830; }
+    .stage.changed   { border-color: var(--accent3); background: #131e1a; }
+    .stage.new       { border-color: var(--accent4); background: #1e1810; }
+
+    /* Flow chart */
+    .flow {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      margin: 16px 0;
+    }
+    .flow-row {
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+    }
+    .flow-step {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 8px 14px;
+      font-size: 0.85rem;
+      flex: 1;
+    }
+    .flow-step .num {
+      display: inline-block;
+      background: var(--accent);
+      color: #fff;
+      border-radius: 50%;
+      width: 20px;
+      height: 20px;
+      text-align: center;
+      line-height: 20px;
+      font-size: 0.75rem;
+      margin-right: 8px;
+      flex-shrink: 0;
+    }
+    .flow-arrow { color: var(--muted); font-size: 1.4rem; align-self: center; }
+
+    /* Code blocks */
+    pre {
+      background: var(--code-bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 16px;
+      overflow-x: auto;
+      font-family: 'Cascadia Code', 'Fira Code', 'Consolas', monospace;
+      font-size: 0.82rem;
+      line-height: 1.55;
+      margin: 12px 0;
+    }
+    code { font-family: 'Cascadia Code', 'Fira Code', 'Consolas', monospace; font-size: 0.85em; background: var(--code-bg); padding: 1px 5px; border-radius: 4px; }
+    .kw  { color: #c792ea; }
+    .fn  { color: #82aaff; }
+    .str { color: #c3e88d; }
+    .cm  { color: #546e7a; }
+    .ty  { color: #ffcb6b; }
+    .op  { color: #89ddff; }
+    .si  { color: var(--accent3); }  /* Silicon / stratum */
+    .ir  { color: var(--accent4); }  /* IR intrinsic */
+    .api { color: var(--accent2); }  /* compiler API */
+
+    /* Tables */
+    table { width: 100%; border-collapse: collapse; margin: 12px 0; font-size: 0.85rem; }
+    th { background: var(--surface2); color: var(--accent); padding: 8px 12px; text-align: left; border: 1px solid var(--border); }
+    td { padding: 8px 12px; border: 1px solid var(--border); vertical-align: top; }
+    tr:nth-child(even) td { background: #141620; }
+
+    /* Two-column */
+    .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin: 16px 0; }
+    @media (max-width: 700px) { .two-col { grid-template-columns: 1fr; } }
+
+    /* Tags */
+    .tag {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 12px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      margin-right: 4px;
+    }
+    .tag.red    { background: #3a1515; color: var(--accent5); border: 1px solid #5a2020; }
+    .tag.green  { background: #0f2d1f; color: var(--accent3); border: 1px solid #1a4a30; }
+    .tag.blue   { background: #0f1a3a; color: var(--accent);  border: 1px solid #1a2e5a; }
+    .tag.purple { background: #1e1030; color: var(--accent2); border: 1px solid #3a1a50; }
+    .tag.orange { background: #2d1a0f; color: var(--accent4); border: 1px solid #5a3010; }
+
+    /* Section divider */
+    .divider { border: none; border-top: 1px solid var(--border); margin: 40px 0; }
+
+    ul, ol { padding-left: 24px; margin-bottom: 12px; }
+    li { margin-bottom: 4px; }
+
+    .legend {
+      display: flex;
+      gap: 16px;
+      flex-wrap: wrap;
+      font-size: 0.8rem;
+      margin: 12px 0;
+    }
+    .legend-item { display: flex; align-items: center; gap: 6px; }
+    .legend-dot { width: 12px; height: 12px; border-radius: 3px; }
+
+    .section-label {
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: var(--muted);
+      margin-bottom: 4px;
+    }
+  </style>
+</head>
+<body>
+<div class="page">
+
+  <h1>Robust Strata Implementation Plan</h1>
+  <p class="subtitle">Sigil Compiler · Architectural evolution toward a compiler-as-API model where Silicon Strata drive all lowering</p>
+
+  <!-- ─────────────────────────────────────────────── -->
+  <h2>1. Executive Summary</h2>
+  <div class="card info">
+    <p><strong>Problem:</strong> Several definition kinds — <code>def_local</code>, <code>meta_export</code>, <code>meta_platform</code> — are declared in Silicon strata (<code>defkinds.si</code>, <code>metadata.si</code>) but their actual lowering logic lives in hardcoded TypeScript functions inside <code>lower.ts</code> (<code>lowerLocalDef</code>, <code>lowerExportDecl</code>). The strata are therefore hollow: they name an IR intrinsic but cannot actually implement the lowering behavior themselves.</p>
+    <p><strong>Goal:</strong> Expose compiler internals as a minimal, stable API callable from Silicon code inside strata. Every definition-kind lowerer, operator expander, and metadata handler should be expressible as pure Silicon — with <em>zero</em> TypeScript switch-case fallback for domain logic.</p>
+    <p><strong>Principle:</strong> Sigil native code handles only: parse Silicon syntax, understand stratum syntax, expose IR intrinsics, expose compiler library APIs. Everything else is Silicon.</p>
+  </div>
+
+  <!-- ─────────────────────────────────────────────── -->
+  <h2>2. Current Architecture</h2>
+
+  <h3>2.1 Compilation Pipeline</h3>
+  <div class="pipeline">
+    <div class="stage"><div class="label">1</div><div class="name">Parser</div><div class="file">parser/</div></div>
+    <div class="arrow">→</div>
+    <div class="stage"><div class="label">2</div><div class="name">AST</div><div class="file">ast/toAst.ts</div></div>
+    <div class="arrow">→</div>
+    <div class="stage"><div class="label">3</div><div class="name">Strata Load</div><div class="file">strataLoader.ts</div></div>
+    <div class="arrow">→</div>
+    <div class="stage"><div class="label">4</div><div class="name">Elaborate</div><div class="file">elaborator.ts</div></div>
+    <div class="arrow">→</div>
+    <div class="stage"><div class="label">5</div><div class="name">TypeCheck</div><div class="file">types/</div></div>
+    <div class="arrow">→</div>
+    <div class="stage highlight"><div class="label">6</div><div class="name">IR Lower</div><div class="file">ir/lower.ts</div></div>
+    <div class="arrow">→</div>
+    <div class="stage"><div class="label">7</div><div class="name">IR Emit</div><div class="file">ir/emit.ts</div></div>
+    <div class="arrow">→</div>
+    <div class="stage"><div class="label">8</div><div class="name">WAT</div><div class="file">main.wat</div></div>
+  </div>
+
+  <div class="legend">
+    <div class="legend-item"><div class="legend-dot" style="background:#2e3248"></div> unchanged phase</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#3a1a50"></div> phase being changed</div>
+  </div>
+
+  <h3>2.2 Definition-Kind Lowering Flow (Current)</h3>
+  <p>How <code>@local x: Int = 5</code> travels through the compiler today:</p>
+
+  <div class="flow">
+    <div class="flow-row">
+      <div class="flow-step"><span class="num">1</span> <strong>defkinds.si</strong> declares <code>@stratum_keyword LocalDef ('@local', Node) = &#123; &amp;IR::def_local; &#125;</code></div>
+    </div>
+    <div class="flow-arrow" style="padding-left:10px">↓</div>
+    <div class="flow-row">
+      <div class="flow-step"><span class="num">2</span> <strong>strataLoader.ts</strong> reads the Silicon file, calls <code>codegenKindFromIntrinsic('IR::def_local')</code> → <code>'local'</code>, registers <code>DefKindEntry&#123; keyword:'@local', codegenKind:'local' &#125;</code></div>
+    </div>
+    <div class="flow-arrow" style="padding-left:10px">↓</div>
+    <div class="flow-row">
+      <div class="flow-step"><span class="num">3</span> <strong>elaborator.ts</strong> stamps <code>Definition.hook = 'local'</code> on the AST node</div>
+    </div>
+    <div class="flow-arrow" style="padding-left:10px">↓</div>
+    <div class="flow-row">
+      <div class="flow-step"><span class="num">4</span> <strong>lower.ts — lowerDefinition()</strong> checks <code>defExpanders.get('local')</code> → <em>not registered</em> → falls through to <code>switch(hook) &#123; case 'local': return lowerLocalDef(...) &#125;</code></div>
+    </div>
+    <div class="flow-arrow" style="padding-left:10px">↓</div>
+    <div class="flow-row">
+      <div class="flow-step"><span class="num">5</span> <strong>lowerLocalDef()</strong> (hardcoded TS): calls <code>siliconTypeNameToWasm()</code>, pushes to <code>ctx.pendingLocals</code>, sets <code>ctx.locals</code> → returns <code>null</code></div>
+    </div>
+  </div>
+
+  <div class="card warn">
+    <strong>The gap:</strong> Step 1 looks like Silicon controls the lowering. It does not — the strata entry only registers the <em>name</em> of the hook. Steps 4–5 are hardcoded TypeScript. Silicon cannot express the logic of "resolve my type annotation, push a local declaration, record me in the locals map."
+  </div>
+
+  <h3>2.3 Current Strata Architecture Map</h3>
+  <table>
+    <thead>
+      <tr><th>Feature</th><th>Declared In</th><th>Lowering Lives In</th><th>Status</th></tr>
+    </thead>
+    <tbody>
+      <tr><td><code>+</code> (i32)</td><td>operators.si</td><td>lower.ts <code>lowerBinaryOp</code> + intrinsic table</td><td><span class="tag green">Strata-driven</span></td></tr>
+      <tr><td><code>@if</code></td><td>if.si</td><td>expanders.ts <code>expandIf</code> (registered expander)</td><td><span class="tag blue">Expander-driven</span></td></tr>
+      <tr><td><code>@loop</code></td><td>loop.si</td><td>expanders.ts <code>expandLoop</code></td><td><span class="tag blue">Expander-driven</span></td></tr>
+      <tr><td><code>@type_sum</code></td><td>defkinds.si</td><td>defExpanders.ts <code>sumTypeExpander</code></td><td><span class="tag blue">Def-expander</span></td></tr>
+      <tr><td><code>@local</code></td><td>defkinds.si</td><td>lower.ts <code>lowerLocalDef</code> (hardcoded)</td><td><span class="tag red">Hardcoded TS</span></td></tr>
+      <tr><td><code>@export</code></td><td>metadata.si</td><td>lower.ts <code>lowerExportDecl</code> (hardcoded)</td><td><span class="tag red">Hardcoded TS</span></td></tr>
+      <tr><td><code>@platform</code></td><td>metadata.si</td><td>lower.ts (no-op, hardcoded)</td><td><span class="tag red">Hardcoded TS</span></td></tr>
+      <tr><td><code>@let</code> / <code>@fn</code></td><td>defkinds.si</td><td>lower.ts <code>lowerFunction</code> (hardcoded)</td><td><span class="tag red">Hardcoded TS</span></td></tr>
+      <tr><td><code>@var</code></td><td>defkinds.si</td><td>lower.ts <code>lowerGlobal</code> (hardcoded)</td><td><span class="tag red">Hardcoded TS</span></td></tr>
+      <tr><td><code>@extern</code></td><td>defkinds.si</td><td>lower.ts <code>lowerExtern</code> (hardcoded)</td><td><span class="tag red">Hardcoded TS</span></td></tr>
+    </tbody>
+  </table>
+
+  <!-- ─────────────────────────────────────────────── -->
+  <hr class="divider" />
+  <h2>3. Target Architecture</h2>
+
+  <h3>3.1 Core Principle: Compiler as API</h3>
+  <div class="card ok">
+    <p>The compiler's native layer shrinks to four responsibilities:</p>
+    <ol>
+      <li><strong>Parse Silicon syntax</strong> — grammar, tokenizer, AST construction</li>
+      <li><strong>Understand strata syntax and semantics</strong> — load, register, dispatch</li>
+      <li><strong>Expose IR intrinsics</strong> — the raw WebAssembly instruction set as named calls</li>
+      <li><strong>Expose compiler library APIs</strong> — type resolution, context mutation, IR node constructors</li>
+    </ol>
+    <p>All definition lowering, operator expansion, metadata handling, and code generation <em>strategy</em> moves to Silicon strata.</p>
+  </div>
+
+  <h3>3.2 Target Pipeline</h3>
+  <div class="pipeline">
+    <div class="stage"><div class="label">1</div><div class="name">Parser</div><div class="file">parser/</div></div>
+    <div class="arrow">→</div>
+    <div class="stage"><div class="label">2</div><div class="name">AST</div><div class="file">ast/toAst.ts</div></div>
+    <div class="arrow">→</div>
+    <div class="stage changed"><div class="label">3</div><div class="name">Strata Load</div><div class="file">strataLoader.ts</div></div>
+    <div class="arrow">→</div>
+    <div class="stage"><div class="label">4</div><div class="name">Elaborate</div><div class="file">elaborator.ts</div></div>
+    <div class="arrow">→</div>
+    <div class="stage"><div class="label">5</div><div class="name">TypeCheck</div><div class="file">types/</div></div>
+    <div class="arrow">→</div>
+    <div class="stage changed"><div class="label">6</div><div class="name">IR Lower</div><div class="file">ir/lower.ts</div></div>
+    <div class="arrow">→</div>
+    <div class="stage new"><div class="label">API</div><div class="name">Compiler API</div><div class="file">compiler-api/</div></div>
+    <div class="arrow">→</div>
+    <div class="stage"><div class="label">7</div><div class="name">IR Emit</div><div class="file">ir/emit.ts</div></div>
+    <div class="arrow">→</div>
+    <div class="stage"><div class="label">8</div><div class="name">WAT</div><div class="file">main.wat</div></div>
+  </div>
+
+  <div class="legend">
+    <div class="legend-item"><div class="legend-dot" style="background:#131e1a; border:1px solid #1a4a30"></div> changed phase</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#1e1810; border:1px solid #5a3010"></div> new subsystem</div>
+  </div>
+
+  <h3>3.3 How def_local Moves Into Silicon</h3>
+  <p>After the change, <code>lowerLocalDef</code> in TypeScript is replaced by a Silicon strata definition that calls compiler APIs:</p>
+  <pre><span class="cm">// src/strata/defkinds.si  (target state)</span>
+
+<span class="kw">@stratum_keyword</span> <span class="ty">LocalDef</span> (<span class="str">'@local'</span>, <span class="ty">Node</span>) = {
+  <span class="cm">// Resolve the Silicon type annotation to a WASM value type</span>
+  <span class="kw">@local</span> wasmType: <span class="ty">WasmValType</span> = <span class="api">$compiler.resolveType</span>(Node.name.typeAnnotation);
+
+  <span class="cm">// Register the local in the function context (hoisted)</span>
+  <span class="api">$compiler.ctx.pendingLocals</span>.push(&#123; name: Node.name.name, wasmType &#125;);
+  <span class="api">$compiler.ctx.locals</span>.set(Node.name.name, wasmType);
+
+  <span class="cm">// Return null — the block lowerer emits the initialiser as a LocalSet</span>
+  &amp;<span class="ir">IR::null</span>;
+};</pre>
+
+  <p>The strataLoader evaluates this body at registration time, building a closure over the compiler API surface. When <code>lowerDefinition</code> encounters <code>hook='local'</code> it calls the registered stratum body — the TypeScript switch case is gone.</p>
+
+  <h3>3.4 Communication Flow in the Target Architecture</h3>
+  <div class="flow">
+    <div class="flow-row">
+      <div class="flow-step"><span class="num">1</span> <strong>strataLoader.ts</strong> parses a <code>.si</code> file. It sees <code>@stratum_keyword LocalDef</code> with a body referencing <code>$compiler.*</code> API calls and <code>&amp;IR::*</code> intrinsics</div>
+    </div>
+    <div class="flow-arrow" style="padding-left:10px">↓</div>
+    <div class="flow-row">
+      <div class="flow-step"><span class="num">2</span> <strong>strataLoader</strong> compiles the stratum body into an <code>IRDefExpander</code> — a TypeScript closure that captures the compiler API object and the IR node constructors</div>
+    </div>
+    <div class="flow-arrow" style="padding-left:10px">↓</div>
+    <div class="flow-row">
+      <div class="flow-step"><span class="num">3</span> The expander is registered: <code>registry.defExpanders.set('local', compiledExpander)</code></div>
+    </div>
+    <div class="flow-arrow" style="padding-left:10px">↓</div>
+    <div class="flow-row">
+      <div class="flow-step"><span class="num">4</span> <strong>lower.ts — lowerDefinition()</strong> checks <code>defExpanders.get('local')</code> → <em>found</em> → calls <code>expander.expand(node, name, ctx)</code></div>
+    </div>
+    <div class="flow-arrow" style="padding-left:10px">↓</div>
+    <div class="flow-row">
+      <div class="flow-step"><span class="num">5</span> The expander body runs — it calls <code>CompilerAPI.resolveType()</code>, mutates <code>ctx.pendingLocals</code>, mutates <code>ctx.locals</code>, returns <code>null</code></div>
+    </div>
+    <div class="flow-arrow" style="padding-left:10px">↓</div>
+    <div class="flow-row">
+      <div class="flow-step"><span class="num">6</span> <code>lower.ts switch</code> has <strong>no case for 'local'</strong> — the expander handled everything. The switch becomes a last-resort error.</div>
+    </div>
+  </div>
+
+  <!-- ─────────────────────────────────────────────── -->
+  <hr class="divider" />
+  <h2>4. Compiler API Surface</h2>
+  <p>These are all the native APIs Sigil must expose to Silicon strata. They are callable as <code>$compiler.*</code> in stratum bodies. The goal is a small, stable API that covers every use case currently hardcoded in TypeScript.</p>
+
+  <h3>4.1 Type Resolution APIs</h3>
+  <table>
+    <thead><tr><th>API</th><th>Signature</th><th>Purpose</th><th>Used By</th></tr></thead>
+    <tbody>
+      <tr>
+        <td><code>$compiler.resolveType(annotation)</code></td>
+        <td><code>(TypeAnnotation) → WasmValType</code></td>
+        <td>Maps a Silicon type name (<code>Int</code>, <code>Float</code>, <code>Bool</code>, …) to a WASM value type (<code>i32</code>, <code>f32</code>)</td>
+        <td>LocalDef, GlobalDef, FunctionDef params</td>
+      </tr>
+      <tr>
+        <td><code>$compiler.resolveTypeName(name)</code></td>
+        <td><code>(string) → WasmValType</code></td>
+        <td>Same as above, takes a raw string name</td>
+        <td>Extern lowering, cast operators</td>
+      </tr>
+      <tr>
+        <td><code>$compiler.resolveExprType(node)</code></td>
+        <td><code>(ASTNode) → WasmType</code></td>
+        <td>Infers the WASM type of an expression node (already type-checked)</td>
+        <td>Multi-step operator strata, return type inference</td>
+      </tr>
+      <tr>
+        <td><code>$compiler.isVarName(name)</code></td>
+        <td><code>(string) → bool</code></td>
+        <td>Check if a name is a mutable global (varNames set)</td>
+        <td>ExportDecl: decide whether to emit func or global export</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h3>4.2 Context Mutation APIs</h3>
+  <table>
+    <thead><tr><th>API</th><th>Signature</th><th>Purpose</th><th>Used By</th></tr></thead>
+    <tbody>
+      <tr>
+        <td><code>$compiler.ctx.pendingLocals.push(local)</code></td>
+        <td><code>(&#123;name: string, wasmType: WasmValType&#125;) → void</code></td>
+        <td>Registers a pending local variable to be hoisted to the function header</td>
+        <td>LocalDef</td>
+      </tr>
+      <tr>
+        <td><code>$compiler.ctx.locals.set(name, type)</code></td>
+        <td><code>(string, WasmValType) → void</code></td>
+        <td>Records a local in the name→type map for downstream lowerExpr resolution</td>
+        <td>LocalDef</td>
+      </tr>
+      <tr>
+        <td><code>$compiler.ctx.globals.set(name, type)</code></td>
+        <td><code>(string, WasmValType) → void</code></td>
+        <td>Records a global in the module globals map</td>
+        <td>GlobalDef (VarDef)</td>
+      </tr>
+      <tr>
+        <td><code>$compiler.ctx.varNames.add(name)</code></td>
+        <td><code>(string) → void</code></td>
+        <td>Marks a name as a mutable global for export dispatch</td>
+        <td>GlobalDef (VarDef)</td>
+      </tr>
+      <tr>
+        <td><code>$compiler.ctx.loopStack.push(id)</code></td>
+        <td><code>(number) → void</code></td>
+        <td>Pushes a loop ID onto the control-flow stack</td>
+        <td>Loop expanders</td>
+      </tr>
+      <tr>
+        <td><code>$compiler.ctx.loopStack.pop()</code></td>
+        <td><code>() → number</code></td>
+        <td>Pops the current loop ID</td>
+        <td>Loop expanders</td>
+      </tr>
+      <tr>
+        <td><code>$compiler.ctx.loopStack.peek()</code></td>
+        <td><code>() → number | undefined</code></td>
+        <td>Read the innermost loop ID without popping</td>
+        <td>Break/Continue expanders</td>
+      </tr>
+      <tr>
+        <td><code>$compiler.ctx.nextLoopId()</code></td>
+        <td><code>() → number</code></td>
+        <td>Allocates a fresh monotonic loop/block ID</td>
+        <td>Loop, Match expanders</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h3>4.3 Context Query APIs</h3>
+  <table>
+    <thead><tr><th>API</th><th>Signature</th><th>Purpose</th><th>Used By</th></tr></thead>
+    <tbody>
+      <tr>
+        <td><code>$compiler.ctx.locals.get(name)</code></td>
+        <td><code>(string) → WasmValType | undefined</code></td>
+        <td>Look up the type of a local variable by name</td>
+        <td>Expr lowering — local vs global get</td>
+      </tr>
+      <tr>
+        <td><code>$compiler.ctx.globals.get(name)</code></td>
+        <td><code>(string) → WasmValType | undefined</code></td>
+        <td>Look up the type of a global variable</td>
+        <td>Expr lowering — global get</td>
+      </tr>
+      <tr>
+        <td><code>$compiler.ctx.functionSigs.get(name)</code></td>
+        <td><code>(string) → FunctionSig | undefined</code></td>
+        <td>Look up the parameter/return type signature of a named function</td>
+        <td>Call lowering, return type inference</td>
+      </tr>
+      <tr>
+        <td><code>$compiler.ctx.moduleRegistry</code></td>
+        <td><code>ModuleRegistry</code></td>
+        <td>Access the module function registry (web, env imports)</td>
+        <td>Extern lowering, module call resolution</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h3>4.4 IR Node Constructor APIs</h3>
+  <table>
+    <thead><tr><th>API</th><th>Returns</th><th>Purpose</th></tr></thead>
+    <tbody>
+      <tr><td><code>$compiler.ir.makeConst(value, wasmType)</code></td><td><code>IRConst</code></td><td>Create a constant expression node</td></tr>
+      <tr><td><code>$compiler.ir.makeLocalGet(name, wasmType)</code></td><td><code>IRLocalGet</code></td><td>Create a local variable read node</td></tr>
+      <tr><td><code>$compiler.ir.makeLocalSet(name, value)</code></td><td><code>IRLocalSet</code></td><td>Create a local variable write statement</td></tr>
+      <tr><td><code>$compiler.ir.makeGlobalGet(name, wasmType)</code></td><td><code>IRGlobalGet</code></td><td>Create a global variable read node</td></tr>
+      <tr><td><code>$compiler.ir.makeGlobalSet(name, value)</code></td><td><code>IRGlobalSet</code></td><td>Create a global variable write statement</td></tr>
+      <tr><td><code>$compiler.ir.makeBinOp(instr, left, right, wasmType)</code></td><td><code>IRBinOp</code></td><td>Create a binary operation node</td></tr>
+      <tr><td><code>$compiler.ir.makeCall(callee, args, wasmType)</code></td><td><code>IRCall</code></td><td>Create a function call node</td></tr>
+      <tr><td><code>$compiler.ir.makeBlock(stmts, trailing, wasmType)</code></td><td><code>IRBlock</code></td><td>Create a block (sequence of statements)</td></tr>
+      <tr><td><code>$compiler.ir.makeIf(cond, then, else_, wasmType)</code></td><td><code>IRIf</code></td><td>Create a conditional expression</td></tr>
+      <tr><td><code>$compiler.ir.makeLoop(id, cond, body)</code></td><td><code>IRLoop</code></td><td>Create a loop construct</td></tr>
+      <tr><td><code>$compiler.ir.makeBreak(id)</code></td><td><code>IRBreak</code></td><td>Create a break (br)</td></tr>
+      <tr><td><code>$compiler.ir.makeReturn(value?)</code></td><td><code>IRReturn</code></td><td>Create a return statement</td></tr>
+      <tr><td><code>$compiler.ir.makeExport(alias, internalName, what)</code></td><td><code>IRExport</code></td><td>Create a module-level export</td></tr>
+      <tr><td><code>$compiler.ir.makeGlobal(name, wasmType, mutable, init)</code></td><td><code>IRGlobal</code></td><td>Create a module-level global declaration</td></tr>
+      <tr><td><code>$compiler.ir.makeFunction(name, params, returnType, locals, body)</code></td><td><code>IRFunction</code></td><td>Create a function declaration</td></tr>
+      <tr><td><code>$compiler.ir.makeImport(env, field, name, params, result)</code></td><td><code>IRImport</code></td><td>Create a WASM import</td></tr>
+      <tr><td><code>$compiler.ir.null()</code></td><td><code>null</code></td><td>Explicit no-op lowering result</td></tr>
+    </tbody>
+  </table>
+
+  <h3>4.5 AST Traversal APIs</h3>
+  <table>
+    <thead><tr><th>API</th><th>Signature</th><th>Purpose</th></tr></thead>
+    <tbody>
+      <tr>
+        <td><code>$compiler.lowerExpr(node)</code></td>
+        <td><code>(ASTNode) → IRExpr</code></td>
+        <td>Recursively lower an expression AST node to IR. Essential for strata that process sub-expressions (e.g., the condition in an <code>@if</code>)</td>
+      </tr>
+      <tr>
+        <td><code>$compiler.lowerBlock(nodes)</code></td>
+        <td><code>(ASTNode[]) → IRBlock</code></td>
+        <td>Lower a list of statements into an IRBlock</td>
+      </tr>
+      <tr>
+        <td><code>$compiler.lowerParam(param)</code></td>
+        <td><code>(Parameter) → IRParam</code></td>
+        <td>Lower a function parameter declaration</td>
+      </tr>
+      <tr>
+        <td><code>$compiler.unwrapNode(node)</code></td>
+        <td><code>(any) → ASTNode</code></td>
+        <td>Unwrap singleton-array pattern from parser output (the <code>unwrap()</code> utility)</td>
+      </tr>
+      <tr>
+        <td><code>$compiler.watId(name)</code></td>
+        <td><code>(string) → string</code></td>
+        <td>Sanitize a Silicon identifier to a valid WAT identifier (replaces <code>-</code> with <code>_</code>, etc.)</td>
+      </tr>
+      <tr>
+        <td><code>$compiler.freshId(prefix?)</code></td>
+        <td><code>(string?) → string</code></td>
+        <td>Generate a unique synthetic identifier (for compiler-generated temporaries)</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h3>4.6 Module-Level Hooks</h3>
+  <table>
+    <thead><tr><th>Hook</th><th>When It Fires</th><th>Purpose</th></tr></thead>
+    <tbody>
+      <tr>
+        <td><code>preScan(def, ctx)</code></td>
+        <td>Before main lowering pass, once per definition</td>
+        <td>Forward-reference registration (currently used by <code>type_sum</code>). Strata use this to pre-register names.</td>
+      </tr>
+      <tr>
+        <td><code>expand(def, name, ctx)</code></td>
+        <td>During main lowering pass</td>
+        <td>The main lowering function — returns an IR node or null</td>
+      </tr>
+      <tr>
+        <td><code>postExpand(module, ctx)</code></td>
+        <td>After all definitions are lowered</td>
+        <td><em>(new)</em> Post-processing hook — allows strata to inject module-level items after all definitions are known (e.g., generate an init function that calls all static initializers)</td>
+      </tr>
+      <tr>
+        <td><code>onExpressionLower(node, ctx)</code></td>
+        <td>Before each expression is lowered</td>
+        <td><em>(new)</em> Expression intercept hook — strata can handle custom expression forms without modifying lowerExpr's switch</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <!-- ─────────────────────────────────────────────── -->
+  <hr class="divider" />
+  <h2>5. Silicon Strata in Target State</h2>
+  <p>What the key strata look like after the architecture change:</p>
+
+  <h3>5.1 def_local (LocalDef)</h3>
+  <pre><span class="kw">@stratum_keyword</span> <span class="ty">LocalDef</span> (<span class="str">'@local'</span>, <span class="ty">Node</span>) = {
+  <span class="kw">@local</span> wasmType = <span class="api">$compiler.resolveType</span>(Node.name.typeAnnotation);
+  <span class="api">$compiler.ctx.pendingLocals</span>.push(&#123; name: <span class="api">$compiler.watId</span>(Node.name.name), wasmType &#125;);
+  <span class="api">$compiler.ctx.locals</span>.set(<span class="api">$compiler.watId</span>(Node.name.name), wasmType);
+  &amp;<span class="ir">IR::null</span>;
+};</pre>
+
+  <h3>5.2 meta_export (ExportDecl)</h3>
+  <pre><span class="kw">@stratum_keyword</span> <span class="ty">ExportDecl</span> (<span class="str">'@export'</span>, <span class="ty">Node</span>) = {
+  <span class="kw">@local</span> name = <span class="api">$compiler.watId</span>(Node.name.name);
+  <span class="kw">@local</span> what = <span class="api">$compiler.isVarName</span>(name) ? <span class="str">'global'</span> : <span class="str">'func'</span>;
+  <span class="api">$compiler.ir.makeExport</span>(name, name, what);
+};</pre>
+
+  <h3>5.3 meta_platform (PlatformDecl)</h3>
+  <pre><span class="kw">@stratum_keyword</span> <span class="ty">PlatformDecl</span> (<span class="str">'@platform'</span>, <span class="ty">Node</span>) = {
+  <span class="cm">// Platform declarations are metadata only — no WAT emitted</span>
+  &amp;<span class="ir">IR::null</span>;
+};</pre>
+
+  <h3>5.4 def_function (LetDef / FnDef) — target</h3>
+  <pre><span class="kw">@stratum_keyword</span> <span class="ty">FnDef</span> (<span class="str">'@fn'</span>, <span class="ty">Node</span>) = {
+  <span class="kw">@local</span> name       = <span class="api">$compiler.watId</span>(Node.name.name);
+  <span class="kw">@local</span> params     = Node.params.map(<span class="api">$compiler.lowerParam</span>);
+  <span class="kw">@local</span> returnType = <span class="api">$compiler.resolveType</span>(Node.name.typeAnnotation) ?? <span class="str">'void'</span>;
+  <span class="kw">@local</span> body       = <span class="api">$compiler.lowerExpr</span>(Node.binding.expression);
+  <span class="api">$compiler.ir.makeFunction</span>(name, params, returnType, [], body);
+};</pre>
+
+  <h3>5.5 def_global (VarDef) — target</h3>
+  <pre><span class="kw">@stratum_keyword</span> <span class="ty">VarDef</span> (<span class="str">'@var'</span>, <span class="ty">Node</span>) = {
+  <span class="kw">@local</span> name     = <span class="api">$compiler.watId</span>(Node.name.name);
+  <span class="kw">@local</span> wasmType = <span class="api">$compiler.resolveType</span>(Node.name.typeAnnotation) ?? <span class="str">'i32'</span>;
+  <span class="kw">@local</span> initExpr = <span class="api">$compiler.lowerExpr</span>(Node.binding.expression);
+  <span class="api">$compiler.ctx.globals</span>.set(name, wasmType);
+  <span class="api">$compiler.ctx.varNames</span>.add(name);
+  <span class="api">$compiler.ir.makeGlobal</span>(name, wasmType, <span class="kw">true</span>, initExpr);
+};</pre>
+
+  <!-- ─────────────────────────────────────────────── -->
+  <hr class="divider" />
+  <h2>6. Implementation Phases</h2>
+
+  <table>
+    <thead>
+      <tr><th>Phase</th><th>Task</th><th>Files Affected</th><th>Deliverable</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><span class="tag blue">Phase 1</span></td>
+        <td>Define the <code>CompilerAPI</code> TypeScript interface and implement it over the existing <code>LowerCtx</code></td>
+        <td><code>src/compiler-api/index.ts</code> (new)</td>
+        <td>Stable API object passed to all expanders</td>
+      </tr>
+      <tr>
+        <td><span class="tag blue">Phase 2</span></td>
+        <td>Update <code>IRDefExpander</code> and <code>IRExpanderFn</code> signatures to receive the <code>CompilerAPI</code> object</td>
+        <td><code>src/ir/expander.ts</code>, <code>src/strata/expanders.ts</code>, <code>src/strata/defExpanders.ts</code></td>
+        <td>All existing expanders compile with new signature</td>
+      </tr>
+      <tr>
+        <td><span class="tag purple">Phase 3</span></td>
+        <td>Implement Silicon stratum body interpreter/compiler in <code>strataLoader</code> that maps <code>$compiler.*</code> calls to API calls and <code>&amp;IR::*</code> to IR node constructors</td>
+        <td><code>src/elaborator/strataLoader.ts</code></td>
+        <td>Silicon strata bodies with API calls are compiled to expander closures</td>
+      </tr>
+      <tr>
+        <td><span class="tag purple">Phase 4</span></td>
+        <td>Convert <code>LocalDef</code>, <code>ExportDecl</code>, <code>PlatformDecl</code> from hardcoded TS to Silicon — remove switch cases in <code>lower.ts</code></td>
+        <td><code>src/strata/defkinds.si</code>, <code>src/strata/metadata.si</code>, <code>src/ir/lower.ts</code></td>
+        <td>First strata-native definition kinds; switch reduced to error-only default</td>
+      </tr>
+      <tr>
+        <td><span class="tag orange">Phase 5</span></td>
+        <td>Convert <code>FnDef</code>, <code>VarDef</code>, <code>ExternDef</code> to Silicon — these require <code>$compiler.lowerExpr</code> and <code>$compiler.lowerParam</code></td>
+        <td><code>src/strata/defkinds.si</code>, <code>src/ir/lower.ts</code></td>
+        <td>All definition kinds are Silicon-native</td>
+      </tr>
+      <tr>
+        <td><span class="tag orange">Phase 6</span></td>
+        <td>Convert control-flow expanders (<code>expandIf</code>, <code>expandLoop</code>, etc.) from TypeScript to Silicon using the full API surface</td>
+        <td><code>src/strata/expanders.ts</code>, <code>src/strata/if.si</code>, <code>src/strata/loop.si</code>, etc.</td>
+        <td>All control-flow behavior is Silicon-native</td>
+      </tr>
+      <tr>
+        <td><span class="tag green">Phase 7</span></td>
+        <td>Add <code>postExpand</code> and <code>onExpressionLower</code> hooks, expose <code>$compiler.freshId</code>, finalize API surface, write full API documentation in Silicon</td>
+        <td><code>src/compiler-api/</code>, <code>src/ir/lower.ts</code>, <code>docs/compiler-api.md</code></td>
+        <td>Compiler is fully bootstrappable from Silicon</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <!-- ─────────────────────────────────────────────── -->
+  <hr class="divider" />
+  <h2>7. Architectural Trade-offs and Decisions</h2>
+
+  <div class="two-col">
+    <div class="card">
+      <h4>How are stratum bodies executed?</h4>
+      <p><strong>Option A: Interpret Silicon AST at registration time</strong> — strataLoader walks the stratum body AST and builds a JS closure. Simple, no extra compile step. Silicon in strata is a subset (no recursion, no heap allocation).</p>
+      <p><strong>Option B: Compile strata to JavaScript</strong> — heavier machinery, enables full Silicon semantics in strata. Better long-term.</p>
+      <p><em>Recommendation: Option A for phases 1–4, Option B as a future phase.</em></p>
+    </div>
+    <div class="card">
+      <h4>How do strata reference each other?</h4>
+      <p>Strata bodies may need to call helpers defined in other strata (e.g., a shared type-resolution helper). The registry should support <code>$strata.call('HelperName', args)</code> as a cross-stratum dispatch mechanism.</p>
+      <p>This defers cross-stratum calls until registration is complete, avoiding ordering issues.</p>
+    </div>
+    <div class="card">
+      <h4>What stays in the compiler forever?</h4>
+      <ul>
+        <li>Silicon grammar parsing (<code>.ohm</code> file and Ohm.js)</li>
+        <li>Stratum syntax parsing and registration</li>
+        <li>IR node types (<code>nodes.ts</code>) — the data model</li>
+        <li>WAT emission (<code>emit.ts</code>) — the output layer</li>
+        <li>The <code>CompilerAPI</code> object and its implementations</li>
+        <li>Type-checking pass (structural, not semantic)</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h4>What Silicon features are needed in strata?</h4>
+      <p>Strata bodies use a constrained subset of Silicon:</p>
+      <ul>
+        <li><code>@local</code> variable declarations</li>
+        <li>Field access (<code>Node.x.y</code>)</li>
+        <li><code>.map()</code>, <code>.push()</code> calls on collections</li>
+        <li>Ternary / <code>@if</code> for conditional logic</li>
+        <li><code>$compiler.*</code> API calls</li>
+        <li><code>&amp;IR::*</code> intrinsic returns</li>
+      </ul>
+      <p>No heap allocation, no recursion, no closures in strata bodies (at Phase A).</p>
+    </div>
+  </div>
+
+  <!-- ─────────────────────────────────────────────── -->
+  <hr class="divider" />
+  <h2>8. Additional Compiler Hooks to Expose</h2>
+  <p>Looking ahead to enable full bootstrapping, these additional hook points should be planned:</p>
+
+  <table>
+    <thead><tr><th>Hook / API</th><th>Rationale</th><th>Priority</th></tr></thead>
+    <tbody>
+      <tr>
+        <td><code>$compiler.error(msg, node)</code></td>
+        <td>Strata should be able to emit type/semantic errors with source location — currently only the TypeChecker does this</td>
+        <td><span class="tag green">High</span></td>
+      </tr>
+      <tr>
+        <td><code>$compiler.warn(msg, node)</code></td>
+        <td>Non-fatal diagnostic from a stratum (e.g., deprecation warning)</td>
+        <td><span class="tag blue">Medium</span></td>
+      </tr>
+      <tr>
+        <td><code>$compiler.registerType(name, wasmType)</code></td>
+        <td>Strata should be able to register new type aliases into the type environment, enabling user-defined type strata</td>
+        <td><span class="tag green">High</span></td>
+      </tr>
+      <tr>
+        <td><code>$compiler.registerFunction(sig)</code></td>
+        <td>Strata-generated synthetic functions need to be registered in <code>ctx.functionSigs</code> so call-site lowering resolves them</td>
+        <td><span class="tag green">High</span></td>
+      </tr>
+      <tr>
+        <td><code>$compiler.ctx.dataSegments</code></td>
+        <td>String/array strata need to allocate WASM data segments at codegen time — expose the <code>dataSegments</code> array</td>
+        <td><span class="tag blue">Medium</span></td>
+      </tr>
+      <tr>
+        <td><code>$compiler.ctx.heapBase</code></td>
+        <td>The current heap offset (starts at 1024) — strata that implement memory allocation need this</td>
+        <td><span class="tag blue">Medium</span></td>
+      </tr>
+      <tr>
+        <td><code>$compiler.intrinsic(name)</code></td>
+        <td>Look up a raw WASM instruction string by intrinsic name — for strata that emit variable-instruction patterns</td>
+        <td><span class="tag blue">Medium</span></td>
+      </tr>
+      <tr>
+        <td><code>$compiler.moduleRegistry.lookup(module, fn)</code></td>
+        <td>Resolve a module-qualified function name to its import entry — needed for <code>@extern</code> lowering</td>
+        <td><span class="tag blue">Medium</span></td>
+      </tr>
+      <tr>
+        <td><code>$compiler.lowerDefinition(node)</code></td>
+        <td>Allow strata to recursively lower a child definition (e.g., a type_sum stratum generating per-variant <code>@let</code> functions)</td>
+        <td><span class="tag orange">Lower</span></td>
+      </tr>
+      <tr>
+        <td><code>$compiler.phase</code></td>
+        <td>Read-only enum indicating current compiler phase (<code>'preScan' | 'lower' | 'post'</code>) — strata can assert they're called at the right time</td>
+        <td><span class="tag orange">Lower</span></td>
+      </tr>
+      <tr>
+        <td><code>$compiler.typeEnv</code></td>
+        <td>Read-only access to the full type environment from the type-checker — strata can inspect inferred types of arbitrary nodes</td>
+        <td><span class="tag orange">Lower</span></td>
+      </tr>
+    </tbody>
+  </table>
+
+  <!-- ─────────────────────────────────────────────── -->
+  <hr class="divider" />
+  <h2>9. What the Compiler Reduces To</h2>
+
+  <div class="card ok">
+    <p>After all phases complete, the Sigil native compiler is responsible for exactly four things — everything else is Silicon:</p>
+    <div class="pipeline" style="flex-direction:column; gap:8px;">
+      <div class="stage changed" style="min-width:unset; text-align:left; padding:12px 20px;">
+        <div class="name">1. Parse Silicon syntax</div>
+        <div class="file">grammar/silicon-official.ohm + Ohm.js — fixed, never changes</div>
+      </div>
+      <div class="stage changed" style="min-width:unset; text-align:left; padding:12px 20px;">
+        <div class="name">2. Understand strata syntax and dispatch</div>
+        <div class="file">elaborator/strataLoader.ts — loads .si files, compiles bodies to closures, registers in ElaboratorRegistry</div>
+      </div>
+      <div class="stage changed" style="min-width:unset; text-align:left; padding:12px 20px;">
+        <div class="name">3. Expose IR intrinsics</div>
+        <div class="file">intrinsics/intrinsics.ts — the WASM instruction table; Silicon calls these as &amp;IR::name or &amp;WASM::name</div>
+      </div>
+      <div class="stage changed" style="min-width:unset; text-align:left; padding:12px 20px;">
+        <div class="name">4. Expose compiler library APIs</div>
+        <div class="file">compiler-api/index.ts — CompilerAPI: type resolution, context mutation, IR node constructors, AST traversal</div>
+      </div>
+    </div>
+    <p style="margin-top:12px; color: var(--muted);">The IR node types (<code>nodes.ts</code>) and WAT emitter (<code>emit.ts</code>) remain native as they are the <em>data format</em> and <em>output format</em>, not semantic logic.</p>
+  </div>
+
+  <!-- ─────────────────────────────────────────────── -->
+  <hr class="divider" />
+  <p style="color: var(--muted); font-size: 0.8rem; text-align: center;">
+    Sigil Compiler · Robust Strata Implementation Plan · Generated 2026-05-16
+  </p>
+
+</div>
+</body>
+</html>

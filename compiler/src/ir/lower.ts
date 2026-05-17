@@ -26,6 +26,7 @@ import type {
     IRBlock, IRIf, IRLoop, IRBreak, IRContinue, IRNop, IRUnreachable, IRExprStmt,
 } from './nodes'
 import { ARRAY_LITERAL_CALLEE } from './nodes'
+import { type CompilerAPI, type LowerFns, createCompilerAPI } from '../compiler-api'
 
 // ---------------------------------------------------------------------------
 // Lowering context
@@ -54,6 +55,10 @@ interface LowerCtx {
     pendingLocals: IRLocal[]
     /** String literal allocator state (shared across the module). */
     strings: StringAlloc
+    /** Monotonic counter for $compiler.freshId() — synthetic identifier allocation. */
+    freshIdCounter: { n: number }
+    /** The $compiler API surface exposed to strata expanders. Set after ctx creation. */
+    $compiler?: CompilerAPI
 }
 
 interface StringAlloc {
@@ -94,6 +99,21 @@ function allocString(sa: StringAlloc, s: string): number {
 }
 
 // ---------------------------------------------------------------------------
+// LowerFns — function pointers threaded into CompilerAPI
+// All referenced functions are declared later as `function` declarations and
+// are therefore hoisted, making this module-level const safe to define here.
+// ---------------------------------------------------------------------------
+
+const lowerFns: LowerFns = {
+    lowerExpr,
+    lowerBlock,
+    lowerParam,
+    unwrapNode: unwrap,
+    exprWasmType,
+    watId,
+}
+
+// ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
 
@@ -124,7 +144,9 @@ export function lowerProgram(
         loopCount: { n: 0 },
         pendingLocals: [],
         strings: createStringAlloc(),
+        freshIdCounter: { n: 0 },
     }
+    ctx.$compiler = createCompilerAPI(ctx, lowerFns)
 
     const imports: IRImport[] = []
     const globals: IRGlobal[] = []
@@ -171,6 +193,7 @@ export function lowerProgram(
         pendingLocals: [],
         loopStack: [],
     }
+    startCtx.$compiler = createCompilerAPI(startCtx, lowerFns)
     const startStmts: IRStmt[] = []
     for (const el of program.elements as any[]) {
         const node = unwrap(el)
@@ -243,16 +266,21 @@ function lowerDefinition(node: any, ctx: LowerCtx): any {
     }
 }
 
+/** Lower a single function parameter AST node to IRParam, or null for literal/untyped params. */
+export function lowerParam(p: any): IRParam | null {
+    if (p.isLiteral || !p.typeAnnotation) return null
+    return { name: watId(p.name), wasmType: siliconTypeNameToWasm(p.typeAnnotation.typename) }
+}
+
 function lowerFunction(node: any, name: string, ctx: LowerCtx): IRFunction {
     const params: IRParam[] = []
     const paramLocals: Map<string, WasmValType> = new Map()
 
     for (const p of node.params || []) {
-        if (p.isLiteral || !p.typeAnnotation) continue
-        const wt = siliconTypeNameToWasm(p.typeAnnotation.typename)
-        const pname = watId(p.name)
-        params.push({ name: pname, wasmType: wt })
-        paramLocals.set(pname, wt)
+        const param = lowerParam(p)
+        if (!param) continue
+        params.push(param)
+        paramLocals.set(param.name, param.wasmType)
     }
 
     // Determine return type.
@@ -272,6 +300,7 @@ function lowerFunction(node: any, name: string, ctx: LowerCtx): IRFunction {
         pendingLocals: [],
         loopStack: [],
     }
+    childCtx.$compiler = createCompilerAPI(childCtx, lowerFns)
 
     let body: IRExpr | undefined
     const binding = Array.isArray(node.binding) ? node.binding[0] : node.binding
@@ -629,7 +658,7 @@ function lowerBuiltinCall(name: string, rawArgs: any[], ctx: LowerCtx, inferredT
     return { kind: 'Call', wasmType: wt, callee: kwName, callKind: 'user', args }
 }
 
-function lowerBlock(n: any, ctx: LowerCtx): IRExpr {
+function lowerBlock(n: any, ctx: LowerCtx): IRBlock {
     const stmts: IRStmt[] = []
 
     for (const item of n.items || []) {
