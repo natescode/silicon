@@ -764,6 +764,86 @@ describe('Phase 0 WASIX smoke test', () => {
         }
     }, 60000)
 
+    test('boot/tests/fn_test.si: bootstrap compiles a WASI loop that prints the alphabet', async () => {
+        if (!wasmerAvailable()) {
+            console.log('  (skipped: wasmer not on PATH)')
+            return
+        }
+        const wasm = await buildBoot(path.join(PROJECT_ROOT, 'boot', 'tests', 'fn_test.si'))
+        const tmpPath = path.join(PROJECT_ROOT, '.wasi-alpha-boot.wasm')
+        await fs.writeFile(tmpPath, wasm)
+
+        const strataDir = path.join(PROJECT_ROOT, 'src', 'strata')
+        const files = (await fs.readdir(strataDir))
+            .filter(f => f.endsWith('.si'))
+            .sort()
+        let bundle = ''
+        for (const f of files) {
+            bundle += await fs.readFile(path.join(strataDir, f), 'utf-8')
+            bundle += '\n'
+        }
+
+        // Silicon program: loop over ASCII 65..90 ('A'..'Z'),
+        // building a 1-byte iovec each iteration and calling
+        // WASI fd_write.  After the loop, emit a real newline.
+        // Exercises @loop, @local, @if-less assignment, @WASM::*
+        // memory ops, multi-segment WASI extern, and string-free
+        // byte-level output.
+        const userProg = [
+            '@extern wasi_snapshot_preview1::fd_write:Int',
+            '  fd:Int, iovs:Int, iovs_len:Int, nwritten:Int;',
+            '',
+            '@fn _start:Void := {',
+            '  @local i := 65;',
+            '  @local buf := 1024;',
+            '  @local iovs := 2048;',
+            '  @local written := 2064;',
+            '  &@loop (i <= 90), {',
+            '    &WASM::i32_store8 buf, i;',
+            '    &WASM::i32_store iovs, buf;',
+            '    &WASM::i32_store (iovs + 4), 1;',
+            '    &wasi_snapshot_preview1::fd_write 1, iovs, 1, written;',
+            '    i = i + 1',
+            '  };',
+            '  &WASM::i32_store8 buf, 10;',
+            '  &WASM::i32_store iovs, buf;',
+            '  &WASM::i32_store (iovs + 4), 1;',
+            '  &wasi_snapshot_preview1::fd_write 1, iovs, 1, written',
+            '};',
+        ].join('\n') + '\n'
+
+        const alphaWasm = path.join(PROJECT_ROOT, '.wasi-alpha.wasm')
+        try {
+            const compileRes = spawnSync('wasmer', ['run', tmpPath], {
+                input: Buffer.from(bundle + userProg, 'utf-8'),
+                maxBuffer: 64 * 1024 * 1024,
+            })
+            expect(compileRes.status).toBe(0)
+            const wat = (compileRes.stdout ?? Buffer.alloc(0)).toString('utf-8')
+
+            const compiled = await watToWasm(wat)
+            await fs.writeFile(alphaWasm, Buffer.from(compiled.buffer))
+
+            const runRes = spawnSync('wasmer', ['run', alphaWasm], {
+                maxBuffer: 64 * 1024 * 1024,
+            })
+            expect(runRes.status).toBe(0)
+            const stdout = (runRes.stdout ?? Buffer.alloc(0)).toString('utf-8')
+            const wantText = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ\n'
+            if (stdout !== wantText) {
+                throw new Error(
+                    `WASI alphabet stdout mismatch.\n` +
+                    `Expected: ${JSON.stringify(wantText)}\n` +
+                    `Got:      ${JSON.stringify(stdout)}\n` +
+                    `WAT:\n${wat}`,
+                )
+            }
+        } finally {
+            await fs.unlink(tmpPath).catch(() => {})
+            await fs.unlink(alphaWasm).catch(() => {})
+        }
+    }, 60000)
+
     test('boot/tests/fn_test.si: Silicon-bootstrap-compiled WASI program prints via fd_write', async () => {
         if (!wasmerAvailable()) {
             console.log('  (skipped: wasmer not on PATH)')
