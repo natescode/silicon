@@ -1,7 +1,6 @@
-# JSON serializer — reads one fixture from stdin and writes its
-# parse-only AST as JSON to stdout.  The bun-side test runs one
-# wasmer invocation per fixture so cumulative parser state (@vars,
-# heap growth) doesn't carry across fixtures.
+# JSON serializer driver — reads one fixture from stdin and writes its
+# parse-only AST as JSON to stdout.  Used by the corpus harness which
+# spawns one wasmer process per input file.
 
 @use '../std/io.si';
 @use '../std/arena.si';

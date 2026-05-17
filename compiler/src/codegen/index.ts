@@ -13,6 +13,7 @@ import { join, dirname } from 'path'
 import { fileURLToPath } from 'url'
 import { lowerProgram, emitModule } from '../ir'
 import type { LowerOptions } from '../ir/lower'
+import type { IRModule } from '../ir/nodes'
 import type { Program } from '../ast/astNodes'
 import type { ElaboratorRegistry } from '../elaborator/registry'
 import type { FunctionSig } from '../types/typechecker'
@@ -71,6 +72,47 @@ function stripHostPrintImports(wat: string): string {
  * Calls lowerProgram → emitModule with the inlined Silicon runtime.
  * Throws IRLowerError on any IR lowering failure.
  */
+/**
+ * Compute a safe heap start address from the lowered IR's data
+ * segments.  std.wat's default `$heap` initialiser of 1024 was fine
+ * when modules had a handful of small string literals, but the boot
+ * tree (multi-fixture parser harness) easily exceeds that and the
+ * heap then overwrites string-literal data, silently corrupting
+ * source bytes the parser reads back.
+ *
+ * Walks every IRDataSegment, sums its inline-escaped byte length,
+ * and returns the smallest 16-byte-aligned address strictly past the
+ * highest occupied byte — with a 256-byte safety margin.  Always at
+ * least the std.wat default of 1024 so simple programs don't shift.
+ */
+function computeHeapBase(irModule: IRModule): number {
+    let maxEnd = 0
+    for (const seg of irModule.dataSegments) {
+        // The `encoded` field is the WAT inline-string form with
+        // \xx escapes for non-printable bytes.  Count real bytes.
+        let bytes = 0
+        const s = seg.encoded
+        for (let i = 0; i < s.length; i++) {
+            if (s[i] === '\\') { bytes++; i += 2 }
+            else bytes++
+        }
+        const end = seg.offset + bytes
+        if (end > maxEnd) maxEnd = end
+    }
+    const SAFETY_PAD = 256
+    const ALIGN = 16
+    const minHeap = Math.max(1024, maxEnd + SAFETY_PAD)
+    return Math.ceil(minHeap / ALIGN) * ALIGN
+}
+
+/** Rewrite std.wat's `(global $heap …)` initialiser to `base`. */
+function setHeapBase(stdWat: string, base: number): string {
+    return stdWat.replace(
+        /\(global \$heap \(mut i32\) \(i32\.const \d+\)\)/,
+        `(global $heap (mut i32) (i32.const ${base}))`,
+    )
+}
+
 export function compileToWat(
     program: Program,
     registry: ElaboratorRegistry,
@@ -81,5 +123,6 @@ export function compileToWat(
     const irModule = lowerProgram(program, registry, functionSigs, moduleRegistry, options)
     let std = loadStdWat()
     if (options.target === 'wasix') std = stripHostPrintImports(std)
+    std = setHeapBase(std, computeHeapBase(irModule))
     return emitModule(irModule, std)
 }

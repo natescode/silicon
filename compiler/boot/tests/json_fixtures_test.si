@@ -1,0 +1,53 @@
+# Curated multi-fixture JSON test.  Drives every Stage 0 AST shape
+# through one wasmer instance — proving the heap-base-from-data fix
+# from src/codegen/index.ts holds when many varied parses run in
+# the same module.
+
+@use '../std/io.si';
+@use '../parser/tokens.si';
+@use '../parser/lex.si';
+@use '../parser/ast.si';
+@use '../parser/parse.si';
+@use '../parser/json.si';
+
+@fn emit_for s:String := {
+  @local p := (&str_ptr s) + 4;
+  @local n := &str_len s;
+  @local toks := &lex p, n;
+  @local root := &parse p, n, toks;
+  &json_program root;
+  &write_str 1, '---';
+  &write_byte 1, 10;
+};
+
+@fn run := {
+  &emit_for '42;';
+  &emit_for '3.14;';
+  &emit_for '@true;';
+  &emit_for '@false;';
+  &emit_for 'x;';
+  &emit_for 'Color::Red;';
+  &emit_for 'a.b.c;';
+  &emit_for '1 + 2;';
+  &emit_for '1 + 2 + 3;';
+  &emit_for 'a == b;';
+  &emit_for '&add 1, 2;';
+  &emit_for '&@if 1, 0;';
+  &emit_for '&foo;';
+  &emit_for '{ 1; 2; 3 };';
+  &emit_for '{ };';
+  &emit_for '@let x := 42;';
+  &emit_for '@let x:Int := 42;';
+  &emit_for '@fn add a, b := a + b;';
+  &emit_for '@fn add a:Int, b:Int := { a + b };';
+  &emit_for '@var counter := 0;';
+  &emit_for '@extern print x:Int;';
+  &emit_for '$[1, 2, 3];';
+  &emit_for '$(1, 2);';
+  &emit_for '${a=1, b=2};';
+  &emit_for '$Circle r:Int;';
+  &emit_for 'x = 5;';
+  &wasi_snapshot_preview1::proc_exit 0;
+};
+
+&run;

@@ -245,13 +245,13 @@ describe('Phase 0 WASIX smoke test', () => {
         expect(matches).toBeGreaterThan(0)
     })
 
-    test('boot/tests/json_test.si: Silicon serializer matches Stage 0 AST JSON', async () => {
+    test('boot/tests/json_fixtures_test.si: 26 fixtures in one process match Stage 0', async () => {
         if (!wasmerAvailable()) {
             console.log('  (skipped: wasmer not on PATH)')
             return
         }
-        const wasm = await buildBoot(path.join(PROJECT_ROOT, 'boot', 'tests', 'json_test.si'))
-        const tmpPath = path.join(PROJECT_ROOT, '.json-smoke.wasm')
+        const wasm = await buildBoot(path.join(PROJECT_ROOT, 'boot', 'tests', 'json_fixtures_test.si'))
+        const tmpPath = path.join(PROJECT_ROOT, '.json-fixtures.wasm')
         await fs.writeFile(tmpPath, wasm)
 
         const stage0Parse = (await import('../src/parser')).default
@@ -259,7 +259,7 @@ describe('Phase 0 WASIX smoke test', () => {
         const { siliconGrammar } = await import('../src/grammar')
 
         // Fixtures must match the inputs hard-coded in
-        // boot/tests/json_test.si's `run` function (same order).
+        // boot/tests/json_fixtures_test.si's `run` function (same order).
         const fixtures = [
             // Literals
             '42;', '3.14;', '@true;', '@false;',
@@ -289,25 +289,27 @@ describe('Phase 0 WASIX smoke test', () => {
         ]
 
         try {
-            // One wasmer invocation per fixture so cumulative parser
-            // state (@vars, heap growth across many parses) can't bleed
-            // between cases.  Each invocation pipes the fixture source
-            // via stdin.
-            for (const src of fixtures) {
+            // Single wasmer process emits all fixtures separated by
+            // `---\n`.  The cumulative-state bug that previously forced
+            // a per-process loop was fixed by computing $heap from the
+            // data-segment extent — see src/codegen/index.ts.
+            const result = spawnSync('wasmer', ['run', tmpPath], {
+                maxBuffer: 64 * 1024 * 1024,
+            })
+            expect(result.status).toBe(0)
+            const stdout = (result.stdout ?? Buffer.alloc(0)).toString('utf-8')
+            const chunks = stdout.split('---\n').filter(c => c.length > 0)
+            expect(chunks.length).toBe(fixtures.length)
+
+            for (let i = 0; i < fixtures.length; i++) {
+                const src = fixtures[i]
                 const match = stage0Parse(src)
                 const stage0Ast = addToAstSemantics(siliconGrammar)(match).toAst()
                 const expected = JSON.stringify(stage0Ast, null, 2) + '\n'
-
-                const result = spawnSync('wasmer', ['run', tmpPath], {
-                    input: Buffer.from(src, 'utf-8'),
-                    maxBuffer: 64 * 1024 * 1024,
-                })
-                expect(result.status).toBe(0)
-                const stdout = (result.stdout ?? Buffer.alloc(0)).toString('utf-8')
-                if (stdout !== expected) {
+                if (chunks[i] !== expected) {
                     throw new Error(
                         `JSON mismatch for ${JSON.stringify(src)}\n` +
-                        `Expected:\n${expected}\nGot:\n${stdout}`,
+                        `Expected:\n${expected}\nGot:\n${chunks[i]}`,
                     )
                 }
             }
