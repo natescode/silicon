@@ -2,6 +2,8 @@
 
 Sigil is the official compiler for the Silicon programming language. Sigil compiles Silicon to WebAssembly (WASM). View the [Silicon language specification]().
 
+**Roadmap:** Sigil is in Stage 0 (TypeScript on Bun). The self-hosting plan — Silicon compiling Silicon, running under Wasmer/WASIX — lives in [`docs/bootstrap-plan.html`](docs/bootstrap-plan.html). The in-flight Stage 0 hardening work that precedes it is in [`docs/stage0-cleanup-plan.html`](docs/stage0-cleanup-plan.html). Architecture and contributor entry points: [`CLAUDE.md`](CLAUDE.md), [`docs/strata.md`](docs/strata.md), [`docs/compiler-api.md`](docs/compiler-api.md).
+
 
 ## Installation / Setup
 
