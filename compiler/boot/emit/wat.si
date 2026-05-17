@@ -183,6 +183,35 @@
     &@return 0;
   };
 
+  &@if (k == IR_LOOP), {
+    @local cond := &ir_field h, 1;
+    @local body := &ir_field h, 2;
+    &ew_str 'block'; &ew_byte 10;
+    &ew_str 'loop'; &ew_byte 10;
+    &emit_expr cond;
+    &ew_str 'i32.eqz'; &ew_byte 10;
+    &ew_str 'br_if 1'; &ew_byte 10;
+    # body may produce a stack value (if it's a single expression
+    # rather than a block of statements); drop unconditionally
+    # so the loop stays well-typed.
+    &emit_expr body;
+    @local bk := &ir_kind body;
+    @local needs_drop := 1;
+    &@if (bk == IR_NULL),       { needs_drop = 0; };
+    &@if (bk == IR_LOCAL_SET),  { needs_drop = 0; };
+    &@if (bk == IR_GLOBAL_SET), { needs_drop = 0; };
+    &@if (bk == IR_BLOCK),      { needs_drop = 0; };
+    &@if (bk == IR_RETURN),     { needs_drop = 0; };
+    &@if (bk == IR_BREAK),      { needs_drop = 0; };
+    &@if (bk == IR_CONTINUE),   { needs_drop = 0; };
+    &@if (bk == IR_LOOP),       { needs_drop = 0; };
+    &@if (needs_drop == 1), { &ew_str 'drop'; &ew_byte 10; };
+    &ew_str 'br 0'; &ew_byte 10;
+    &ew_str 'end'; &ew_byte 10;
+    &ew_str 'end'; &ew_byte 10;
+    &@return 0;
+  };
+
   &@if (k == IR_IF), {
     @local cond := &ir_field h, 1;
     @local then_h := &ir_field h, 2;
@@ -239,6 +268,7 @@
         &@if (ck == IR_RETURN),     { needs_drop = 0; };
         &@if (ck == IR_BREAK),      { needs_drop = 0; };
         &@if (ck == IR_CONTINUE),   { needs_drop = 0; };
+        &@if (ck == IR_LOOP),       { needs_drop = 0; };
         &@if (needs_drop == 1), { &ew_str 'drop'; &ew_byte 10; };
       };
       i = i + 1;

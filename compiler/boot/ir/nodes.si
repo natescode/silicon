@@ -234,11 +234,13 @@
   &vec_get IR_VEC, (handle + 4 + i)
 };
 
-# ir_loop — `[IR_LOOP, body_h]`.  Body is usually an IR_BLOCK but
-# any IR handle is accepted.
-@fn ir_loop:Int body:Int := {
+# ir_loop — `[IR_LOOP, cond_h, body_h]`.  While-style: at the top
+# of each iteration the cond is evaluated; if zero, the loop
+# exits.  Body is usually an IR_BLOCK.
+@fn ir_loop:Int cond:Int, body:Int := {
   @local h := &vec_len IR_VEC;
   IR_VEC = &vec_push IR_VEC, IR_LOOP;
+  IR_VEC = &vec_push IR_VEC, cond;
   IR_VEC = &vec_push IR_VEC, body;
   h
 };

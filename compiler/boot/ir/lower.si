@@ -242,6 +242,7 @@
 @fn lit_extern_ptr2:Int   := { (&str_ptr 'extern')   + 4 };
 @fn lit_export_ptr2:Int   := { (&str_ptr 'export')   + 4 };
 @fn lit_at_if_ptr:Int     := { (&str_ptr '@if')      + 4 };
+@fn lit_at_loop_ptr:Int   := { (&str_ptr '@loop')    + 4 };
 
 @fn lower_span_eq_lit:Int off:Int, len:Int, lit_ptr:Int, lit_len:Int := {
   @local ok := 1;
@@ -380,6 +381,17 @@
           &@if (cond != IR_NONE), {
             &@if (then_h != IR_NONE), {
               &@return (&ir_if cond, then_h, else_h);
+            };
+          };
+        };
+      };
+      &@if ((&lower_span_eq_lit nm_off, nm_len, (&lit_at_loop_ptr), 5) == 1), {
+        &@if (n_args == 2), {
+          @local cond := &lower_expr (&ast_field P_AST, node, 3);
+          @local body := &lower_expr (&ast_field P_AST, node, 4);
+          &@if (cond != IR_NONE), {
+            &@if (body != IR_NONE), {
+              &@return (&ir_loop cond, body);
             };
           };
         };

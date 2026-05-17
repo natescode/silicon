@@ -383,6 +383,58 @@ describe('Phase 0 WASIX smoke test', () => {
               fn: 'sum2', args: [17, 25], want: 42 },
             { prog: '@fn swap_use a:Int, b:Int := {\n  @local t := a;\n  a = b;\n  b = t;\n  a - b\n};',
               fn: 'swap_use', args: [10, 30], want: 20 },
+            // @loop — slice 18.
+            { prog: '@fn sumTo n:Int := {\n' +
+                    '  @local s := 0;\n' +
+                    '  @local i := 1;\n' +
+                    '  &@loop (i <= n), {\n' +
+                    '    s = s + i;\n' +
+                    '    i = i + 1\n' +
+                    '  };\n' +
+                    '  s\n' +
+                    '};',
+              fn: 'sumTo', args: [10],  want: 55 },
+            { prog: '@fn sumTo n:Int := {\n' +
+                    '  @local s := 0;\n' +
+                    '  @local i := 1;\n' +
+                    '  &@loop (i <= n), {\n' +
+                    '    s = s + i;\n' +
+                    '    i = i + 1\n' +
+                    '  };\n' +
+                    '  s\n' +
+                    '};',
+              fn: 'sumTo', args: [100], want: 5050 },
+            // Iterative factorial — proves @loop + @local mutation work
+            // for non-trivial state machines.
+            { prog: '@fn factIter n:Int := {\n' +
+                    '  @local r := 1;\n' +
+                    '  @local i := 2;\n' +
+                    '  &@loop (i <= n), {\n' +
+                    '    r = r * i;\n' +
+                    '    i = i + 1\n' +
+                    '  };\n' +
+                    '  r\n' +
+                    '};',
+              fn: 'factIter', args: [6], want: 720 },
+            // gcd via Euclidean algorithm — exercises @loop + assignment-from-expr.
+            { prog: '@fn gcd a:Int, b:Int := {\n' +
+                    '  &@loop (b != 0), {\n' +
+                    '    @local t := b;\n' +
+                    '    b = a - ((a / b) * b);\n' +
+                    '    a = t\n' +
+                    '  };\n' +
+                    '  a\n' +
+                    '};',
+              fn: 'gcd', args: [48, 18], want: 6 },
+            { prog: '@fn gcd a:Int, b:Int := {\n' +
+                    '  &@loop (b != 0), {\n' +
+                    '    @local t := b;\n' +
+                    '    b = a - ((a / b) * b);\n' +
+                    '    a = t\n' +
+                    '  };\n' +
+                    '  a\n' +
+                    '};',
+              fn: 'gcd', args: [1071, 462], want: 21 },
         ]
 
         try {
