@@ -127,6 +127,19 @@
 (export "scratch_alloc" (func $scratch_alloc))
 
 ;; ------------------------------------------------------------------
+;; $str_ptr / $str_len — String → Int bridges.
+;; Strings are length-prefixed UTF-8 buffers; the typechecker treats
+;; them as a distinct type but at the WASM level they're just i32
+;; pointers.  $str_ptr is identity (returns the supplied pointer);
+;; $str_len reads the 4-byte length header at offset 0.
+;; ------------------------------------------------------------------
+(func $str_ptr (param $s i32) (result i32)
+  (local.get $s))
+
+(func $str_len (param $s i32) (result i32)
+  (i32.load (local.get $s)))
+
+;; ------------------------------------------------------------------
 ;; $arr_len — read the length stored in a prefixed array/string.
 ;; ------------------------------------------------------------------
 (func $arr_len (param $ptr i32) (result i32)

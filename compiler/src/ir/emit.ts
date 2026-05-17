@@ -197,7 +197,13 @@ export function emitStmt(s: IRStmt): string {
             return `(local.set $${s.name} ${emitExpr(s.value)})`
         case 'GlobalSet':
             return `(global.set $${s.name} ${emitExpr(s.value)})`
-        case 'ExprStmt':
-            return emitExpr(s.expr)
+        case 'ExprStmt': {
+            // Non-void expressions used as statements leak a value on the
+            // WASM stack; insert an explicit (drop ...) so the module
+            // validates.  Void calls (e.g. WASI proc_exit) emit unchanged.
+            const watExpr = emitExpr(s.expr)
+            if (watExpr === '') return ''
+            return s.expr.wasmType === 'void' ? watExpr : `(drop ${watExpr})`
+        }
     }
 }

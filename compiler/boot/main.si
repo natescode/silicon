@@ -1,0 +1,24 @@
+# Phase 0 smoke test — hello-world over WASI fd_write + proc_exit.
+#
+# Compile with:
+#   bun run scripts/build-boot.ts
+# Run with:
+#   wasmer run boot.wasm
+#
+# Expected output: "hello, wasix\n" on stdout, exit code 0.
+#
+# How it works
+# ------------
+# WASI fd_write takes an `iovs` array — a list of (buf_ptr, buf_len) pairs.
+# write_str builds a single-element iovs in scratch memory, calls fd_write,
+# and the host writes our bytes to stdout.  proc_exit terminates with the
+# given exit code.
+#
+# Top-level statements land in `$__start`, which `--target=wasix` exports
+# as `_start` — the function wasmer invokes automatically.
+
+@use 'std/io.si';
+
+&write_str 1, 'hello, wasix';
+&write_byte 1, 10;                       # '\n' — Silicon strings have no escapes
+&wasi_snapshot_preview1::proc_exit 0;

@@ -184,3 +184,5 @@ dist
 
 # Finder (MacOS) folder config
 .DS_Store
+boot.wasm
+boot.wat

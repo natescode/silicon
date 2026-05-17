@@ -35,6 +35,37 @@ export function loadStdWat(): string {
 }
 
 /**
+ * Strip the `env::print` / `env::read` imports and any helper functions
+ * that reference them from std.wat.  Boot programs (target=wasix) run
+ * under a WASI host that doesn't provide these; the host-embed targets
+ * still want them so the playground / Bun runners keep working.
+ */
+function stripHostPrintImports(wat: string): string {
+    let out = wat
+        .replace(/^\(import "env" "print".*\)$\r?\n/m, '')
+        .replace(/^\(import "env" "read".*\)$\r?\n/m, '')
+    // Strip the four print helpers (each is a top-level (func ...) that
+    // references $print or $read).  Walk paren depth so we land on the
+    // matching close-paren regardless of internal structure.
+    for (const name of ['$print_int', '$print_bool', '$print_float', '$print_string']) {
+        const startMarker = `(func ${name}`
+        const start = out.indexOf(startMarker)
+        if (start < 0) continue
+        let depth = 0
+        let i = start
+        for (; i < out.length; i++) {
+            const c = out[i]
+            if (c === '(') depth++
+            else if (c === ')') { depth--; if (depth === 0) { i++; break } }
+        }
+        // Also gobble the trailing newline.
+        while (i < out.length && (out[i] === '\r' || out[i] === '\n')) i++
+        out = out.slice(0, start) + out.slice(i)
+    }
+    return out
+}
+
+/**
  * Compile a type-checked Silicon program to a WAT string.
  *
  * Calls lowerProgram → emitModule with the inlined Silicon runtime.
@@ -48,5 +79,7 @@ export function compileToWat(
     options: LowerOptions = {},
 ): string {
     const irModule = lowerProgram(program, registry, functionSigs, moduleRegistry, options)
-    return emitModule(irModule, loadStdWat())
+    let std = loadStdWat()
+    if (options.target === 'wasix') std = stripHostPrintImports(std)
+    return emitModule(irModule, std)
 }

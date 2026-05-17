@@ -1,0 +1,51 @@
+# boot::std::io — WASI I/O wrappers.
+#
+# Thin Silicon wrappers over the verbose wasi_snapshot_preview1 module so the
+# boot programs read like ordinary code.
+#
+# Note: the final expression in each block is the function's return value
+# (no trailing `;` on the last line).
+
+# write_bytes(fd, ptr, len) — write `len` bytes starting at `ptr` to `fd`.
+# Internally builds a 1-element iovs array on scratch memory and calls fd_write.
+# Returns the WASI errno (0 on success).
+@fn write_bytes:Int fd:Int, ptr:Int, len:Int := {
+  @local iovs := &scratch_alloc 8;        # one iov: (ptr:i32, len:i32)
+  &WASM::i32_store iovs, ptr;
+  &WASM::i32_store (iovs + 4), len;
+  @local nwritten := &scratch_alloc 4;     # host writes bytes-written here
+  &wasi_snapshot_preview1::fd_write fd, iovs, 1, nwritten
+};
+
+# write_str(fd, s) — write a Silicon string literal (length-prefixed UTF-8)
+# to `fd`.  Reads the 4-byte length header, then writes the payload bytes
+# starting at (s + 4).
+@fn write_str:Int fd:Int, s:String := {
+  @local raw := &str_ptr s;
+  @local len := &str_len s;
+  &write_bytes fd, (raw + 4), len
+};
+
+# write_byte(fd, b) — write a single byte to `fd`.  Useful for newlines
+# and ASCII control bytes since Silicon string literals don't carry escapes.
+# Allocates 4 bytes (not 1) so the heap stays 4-byte aligned for following
+# i32 stores in subsequent scratch buffers.
+@fn write_byte:Int fd:Int, b:Int := {
+  @local buf := &scratch_alloc 4;
+  &WASM::i32_store8 buf, b;
+  &write_bytes fd, buf, 1
+};
+
+# read_bytes(fd, ptr, max_len) — read up to `max_len` bytes from `fd` into
+# the buffer at `ptr`.  Returns the number of bytes actually read (0 on EOF,
+# -1 on errno != 0).
+@fn read_bytes:Int fd:Int, ptr:Int, max_len:Int := {
+  @local iovs := &scratch_alloc 8;
+  &WASM::i32_store iovs, ptr;
+  &WASM::i32_store (iovs + 4), max_len;
+  @local nread := &scratch_alloc 4;
+  @local errno := &wasi_snapshot_preview1::fd_read fd, iovs, 1, nread;
+  &@match errno,
+    0, { &WASM::i32_load nread },
+    { 0 - 1 }
+};

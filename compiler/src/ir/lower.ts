@@ -601,8 +601,13 @@ function lowerFunctionCall(n: any, ctx: LowerCtx): IRExpr {
         const resolvedInstr = resolveIntrinsicWasmInstr(name)
         const args = (n.args || []).map((a: any) => lowerExpr(a, ctx))
         const inferT = n.inferredType as SiliconType | undefined
-        const wt = resolveWasmType(inferT, 'i32')
-        return { kind: 'Call', wasmType: wt, callee: resolvedInstr ?? name, callKind: 'instr', args }
+        // WASM store / drop instructions are void at the WASM level — pin their
+        // wasmType so downstream emit doesn't try to (drop ...) their non-result.
+        const instr = resolvedInstr ?? name
+        const isVoidInstr = instr === 'i32.store' || instr === 'i32.store8'
+            || instr === 'f32.store' || instr === 'drop'
+        const wt = isVoidInstr ? 'void' : resolveWasmType(inferT, 'i32')
+        return { kind: 'Call', wasmType: wt, callee: instr, callKind: 'instr', args }
     }
 
     // Module namespaced call: web::console_log_str, Draw::fill_rect, etc.
