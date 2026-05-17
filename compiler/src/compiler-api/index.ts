@@ -125,6 +125,8 @@ export interface IRBuilders {
         params: WasmValType[],
         result?: WasmValType,
     ): IRImport
+    /** Build an IRLocal value (used by pendingLocals.push for @local hoisting). */
+    makeLocal(name: string, wasmType: WasmValType): IRLocal
     /** Explicit no-op lowering result — return from a def expander that emits nothing. */
     null(): null
 }
@@ -229,6 +231,7 @@ export function createCompilerAPI(ctx: CtxShape, fns: LowerFns): CompilerAPI {
         makeGlobal:      (name, wasmType, mutable, init)       => ({ kind: 'Global', name, wasmType, mutable, init }),
         makeFunction:    (name, params, returnType, locals, body) => ({ kind: 'Function', name, params, returnType, locals, body }),
         makeImport:      (env, field, name, params, result)    => ({ kind: 'Import', env, field, name, params, result }),
+        makeLocal:       (name, wasmType)                      => ({ name, wasmType }),
         null:            ()                                    => null,
     }
 

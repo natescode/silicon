@@ -36,6 +36,7 @@ import { getIRKind } from '../ir/irKinds'
 import { loadBuiltinStrata } from '../strata/index'
 import { builtinExpanders } from '../strata/expanders'
 import { builtinDefExpanders } from '../strata/defExpanders'
+import { isRichBody, compileBodyToDefExpander, compileBodyToExpanderFn } from './strataBody'
 import parse from '../parser'
 import addToAstSemantics from '../ast/toAst'
 import siliconGrammar from '../grammar/SiliconGrammar'
@@ -89,13 +90,20 @@ export function buildStrataRegistry(
   }
 
   // Phase D: register built-in IR expanders (control-flow strata lowering hooks).
+  // Only register if a strata-defined rich body hasn't already claimed this intrinsic —
+  // rich bodies win so users can override built-in behaviour from Silicon.
   for (const [intrinsic, fn] of Object.entries(builtinExpanders)) {
-    registerExpander(registry, intrinsic, fn)
+    if (!registry.expanders.has(intrinsic)) {
+      registerExpander(registry, intrinsic, fn)
+    }
   }
 
   // Phase E: register built-in definition expanders (definition-kind lowering hooks).
+  // Same rule as Phase D — strata rich bodies override built-in TS expanders.
   for (const [codegenKind, exp] of Object.entries(builtinDefExpanders)) {
-    registerDefExpander(registry, codegenKind, exp)
+    if (!registry.defExpanders.has(codegenKind)) {
+      registerDefExpander(registry, codegenKind, exp)
+    }
   }
 
   return registry
@@ -157,6 +165,19 @@ function registerElaboration(registry: ElaboratorRegistry, elab: Elaboration): v
       allowsBinding: codegenKind !== 'extern' && codegenKind !== 'export',
       allowsGenerics: codegenKind === 'function',
     })
+  }
+
+  // Rich body: contains &Compiler:: calls or @local bindings.  Compile the
+  // body into a closure and register it.  Definition-kind bodies override
+  // the hardcoded TS def expander (if any); other bodies become an
+  // IRExpanderFn keyed on the intrinsic.
+  if (isRichBody(elab.semantics)) {
+    const nodeParamName = elab.nodeParamName
+    if (codegenKind) {
+      registry.defExpanders.set(codegenKind, compileBodyToDefExpander(elab.semantics, nodeParamName))
+    } else if (baseNode.data?.intrinsic) {
+      registry.expanders.set(baseNode.data.intrinsic, compileBodyToExpanderFn(elab.semantics, nodeParamName))
+    }
   }
 }
 
