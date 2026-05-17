@@ -329,14 +329,85 @@ export function createCompilerAPI(ctx: CtxShape, fns: LowerFns): CompilerAPI {
         },
         expandMatchChain: (rawArgs, inferredType) => {
             if (rawArgs.length < 3) return ir.makeNop()
-            const discExpr = fns.lowerExpr(rawArgs[0], ctx)
+            const discNode = rawArgs[0]
+            const discExpr = fns.lowerExpr(discNode, ctx)
             const wt: WasmType = (inferredType && inferredType.kind !== 'Unknown')
                 ? (wasmTypeOf(inferredType) as WasmType)
                 : 'i32'
 
+            // For VariantDecl patterns we need the discriminant's sum type
+            // to map variant name → tag and to construct field-load offsets.
+            // The typechecker stamps `inferredType` on the discriminant AST.
+            const discType: any = discNode?.inferredType
+            const isSumDisc = discType && discType.kind === 'Sum'
+            // SumOf stores variants as "TypeName::VariantName" strings.
+            const variantTag = (variantName: string): number => {
+                if (!isSumDisc) return -1
+                const full = `${discType.name}::${variantName}`
+                const idx = (discType.variants as string[]).indexOf(full)
+                return idx
+            }
+
+            // Unwrap an arg node down to a VariantDecl, or undefined.
+            const unwrapVariant = (node: any): any | undefined => {
+                let cur = node
+                while (cur && typeof cur === 'object') {
+                    if (cur.type === 'VariantDecl') return cur
+                    if (cur.expression) { cur = cur.expression; continue }
+                    if (cur.value && cur.type !== 'BinaryOp') { cur = cur.value; continue }
+                    return undefined
+                }
+                return undefined
+            }
+
             const buildNested = (i: number): IRExpr => {
                 if (i >= rawArgs.length) return ir.makeUnreachable()
                 if (i + 1 >= rawArgs.length) return fns.lowerExpr(rawArgs[i], ctx)
+                const patNode = rawArgs[i]
+                const variant = unwrapVariant(patNode)
+
+                if (variant && isSumDisc) {
+                    // Variant pattern: cond = (i32.eq (i32.load disc) (i32.const tag))
+                    // arm = (block [bind fields ...] (arm body))
+                    const tag = variantTag(variant.name)
+                    const loadTag: IRExpr = {
+                        kind: 'Call',
+                        wasmType: 'i32',
+                        callee: 'i32.load',
+                        callKind: 'instr',
+                        args: [discExpr],
+                    } as any
+                    const cond = ir.makeBinOp('i32.eq', loadTag, ir.makeConst(tag, 'i32'), 'i32')
+
+                    // Build field-binding stmts: @local f := i32.load offset=(idx+1)*4 (disc)
+                    const fields = (variant.fields || []) as any[]
+                    const stmts: IRStmt[] = []
+                    for (let fi = 0; fi < fields.length; fi++) {
+                        const fname: string = fields[fi].name
+                        const offset = (fi + 1) * 4
+                        const loadField: IRExpr = {
+                            kind: 'Call',
+                            wasmType: 'i32',
+                            callee: 'i32.load',
+                            callKind: 'instr',
+                            args: [
+                                ir.makeBinOp('i32.add', discExpr, ir.makeConst(offset, 'i32'), 'i32'),
+                            ],
+                        } as any
+                        // Register field as a function-scoped local (hoisted).
+                        ctx.pendingLocals.push({ name: fname, wasmType: 'i32' })
+                        ctx.locals.set(fname, 'i32')
+                        stmts.push(ir.makeLocalSet(fname, loadField))
+                    }
+                    const armBody = fns.lowerExpr(rawArgs[i + 1], ctx)
+                    const armBlock = stmts.length > 0
+                        ? ir.makeBlock(stmts, armBody, wt)
+                        : armBody
+
+                    return ir.makeIf(cond, armBlock, buildNested(i + 2), wt)
+                }
+
+                // Non-variant pattern: original equality-arm logic.
                 const pat = fns.lowerExpr(rawArgs[i], ctx)
                 const res = fns.lowerExpr(rawArgs[i + 1], ctx)
                 const eqInstr = fns.exprWasmType(discExpr) === 'f32' ? 'f32.eq' : 'i32.eq'

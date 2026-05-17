@@ -233,8 +233,14 @@ function isSumKeyword(kw: string): boolean {
     return kw === '@type_sum' || kw === '@enum'
 }
 
+/** `@type` declares a sum type with payload-carrying variants. */
+function isRecordSumKeyword(kw: string): boolean {
+    return kw === '@type'
+}
+
 function isTypeDeclKeyword(kw: string): boolean {
-    return kw === '@type_alias' || kw === '@type_distinct' || isSumKeyword(kw)
+    return kw === '@type_alias' || kw === '@type_distinct'
+        || isSumKeyword(kw) || isRecordSumKeyword(kw)
 }
 
 function preRegisterDefinitions(elements: any[], ctx: Ctx): void {
@@ -304,6 +310,11 @@ function preRegisterTypeDecl(def: any, ctx: Ctx): void {
         return
     }
 
+    if (isRecordSumKeyword(kw)) {
+        preRegisterRecordSumType(def, ctx)
+        return
+    }
+
     // The RHS of a type declaration is the type annotation on the name
     // (e.g. `@type_alias age = Int` parses `Int` as the binding typename)
     // OR the binding expression if the annotation is absent.
@@ -353,6 +364,72 @@ function preRegisterSumType(def: any, ctx: Ctx): void {
         ctx.symbols.set(key, sumType)
         ctx.immutable.add(key)
     }
+}
+
+/**
+ * Register an `@type` declaration with payload-carrying variants.
+ * Each VariantDecl in the binding becomes (1) a member of the sum type and
+ * (2) a callable constructor function returning a value of that sum type.
+ */
+function preRegisterRecordSumType(def: any, ctx: Ctx): void {
+    const name: string = def.name.name
+    const binding = Array.isArray(def.binding) ? def.binding[0] : def.binding
+    const bindingExpr = binding?.expression ?? binding
+
+    const variants = extractRecordSumVariants(bindingExpr)
+    if (variants.length === 0) {
+        ctx.errors.push({
+            kind: 'UnknownType',
+            message: `'${name}' @type has no variants`,
+            sourceLocation: def.sourceLocation,
+        })
+        return
+    }
+
+    // Register the sum type itself.  Variant names are stored as Name::Variant
+    // to keep parity with @enum.
+    const variantNames = variants.map(v => `${name}::${v.name}`)
+    const sumType = SumOf(name, variantNames)
+    ctx.typeAliases.set(name, sumType)
+
+    // For each variant, register a constructor function `&Variant fields...`
+    // returning the parent sum type.
+    for (const v of variants) {
+        const paramTypes = v.fields.map(f =>
+            parseTypeName(f.typeName, ctx.typeAliases) ?? TypeUnknown)
+        ctx.functions.set(v.name, { params: paramTypes, result: sumType })
+        ctx.symbols.set(v.name, FunctionOf(paramTypes, sumType))
+        ctx.immutable.add(v.name)
+    }
+}
+
+interface RecordVariantSummary {
+    name: string
+    fields: { name: string; typeName: string }[]
+}
+
+function extractRecordSumVariants(expr: any): RecordVariantSummary[] {
+    if (!expr || typeof expr !== 'object') return []
+    if (expr.expression) return extractRecordSumVariants(expr.expression)
+    if (expr.type === 'ExpressionEnd' && expr.kind === 'variantDecl') {
+        return extractRecordSumVariants(expr.value)
+    }
+    if (expr.value && expr.type !== 'BinaryOp' && expr.type !== 'VariantDecl') {
+        return extractRecordSumVariants(expr.value)
+    }
+    if (expr.type === 'BinaryOp' && expr.operator === '|') {
+        return [...extractRecordSumVariants(expr.left), ...extractRecordSumVariants(expr.right)]
+    }
+    if (expr.type === 'VariantDecl') {
+        return [{
+            name: expr.name,
+            fields: (expr.fields || []).map((f: any) => ({
+                name: f.name,
+                typeName: f.typeAnnotation?.typename ?? 'Int',
+            })),
+        }]
+    }
+    return []
 }
 
 /**
@@ -650,7 +727,80 @@ function checkBinaryOp(b: any, ctx: Ctx): SiliconType {
     }
 }
 
+/**
+ * Unwrap an arg node to find a VariantDecl (or undefined).  Patterns appear
+ * inside ExpressionStart > ExpressionEnd > VariantDecl wrappers.
+ */
+function unwrapVariantDecl(node: any): any | undefined {
+    let cur = node
+    while (cur && typeof cur === 'object') {
+        if (cur.type === 'VariantDecl') return cur
+        if (cur.expression) { cur = cur.expression; continue }
+        if (cur.value && cur.type !== 'BinaryOp') { cur = cur.value; continue }
+        return undefined
+    }
+    return undefined
+}
+
+/**
+ * Special-cased @match arg walker: pattern positions that carry a VariantDecl
+ * introduce per-field bindings visible to the arm body.  Returns the per-arg
+ * SiliconType list (same shape as a regular args map).
+ *
+ * Layout: args = [discriminant, pat0, arm0, pat1, arm1, ..., (default)?]
+ */
+function checkMatchArgs(args: any[], ctx: Ctx): SiliconType[] {
+    const out: SiliconType[] = []
+    if (args.length === 0) return out
+
+    const discT = checkNode(args[0], ctx)
+    out.push(discT)                                        // discriminant
+    const hasDefault = (args.length - 1) % 2 === 1         // total even -> trailing default
+    const armsEnd = hasDefault ? args.length - 1 : args.length
+
+    for (let i = 1; i < armsEnd; i += 2) {
+        const patNode = args[i]
+        const armNode = args[i + 1]
+        const variant = unwrapVariantDecl(patNode)
+
+        if (variant) {
+            // VariantDecl pattern: the pattern's "type" is the discriminant's
+            // sum type (it picks one tag from it).  Bind each field as an Int
+            // local in a child scope before checking the arm body.
+            out.push(discT)
+            const armT = withScope(ctx, inner => {
+                for (const f of variant.fields || []) {
+                    const fname: string = f.name
+                    inner.symbols.set(fname, TypeInt)
+                }
+                return armNode !== undefined ? checkNode(armNode, inner) : TypeUnknown
+            })
+            out.push(armT)
+        } else {
+            out.push(checkNode(patNode, ctx))
+            out.push(armNode !== undefined ? checkNode(armNode, ctx) : TypeUnknown)
+        }
+    }
+
+    if (hasDefault) out.push(checkNode(args[args.length - 1], ctx))
+    return out
+}
+
+function isMatchCall(call: any): boolean {
+    if (!call.isBuiltin) return false
+    const name = typeof call.name === 'string'
+        ? call.name
+        : (call.name && Array.isArray(call.name.path) ? call.name.path.join('::') : '')
+    return name === '@match'
+}
+
 function checkFunctionCall(call: any, ctx: Ctx): SiliconType {
+    // @match has scoped pattern bindings — handle it before the generic walk.
+    if (isMatchCall(call)) {
+        const matchArgTypes = checkMatchArgs(call.args || [], ctx)
+        return typeOfMatchCall(matchArgTypes, call.sourceLocation, ctx)
+    }
+
     // Type-check every argument regardless of whether we know the signature,
     // so inner type errors still surface.
     const argTypes: SiliconType[] = (call.args || []).map((a: any) => checkNode(a, ctx))

@@ -144,8 +144,8 @@ export interface FunctionCall {
 
 export interface ExpressionEnd {
     type: 'ExpressionEnd'
-    kind: 'literal' | 'namespace' | 'block' | 'paren'
-    value: Literal | Namespace | Block | ExpressionStart
+    kind: 'literal' | 'namespace' | 'block' | 'paren' | 'variantDecl'
+    value: Literal | Namespace | Block | ExpressionStart | VariantDecl
     sourceLocation?: SourceLocation
     // Populated by the type checker. SiliconType (opaque here to avoid cycles).
     inferredType?: any
@@ -232,6 +232,25 @@ export interface TypedIdentifier {
     name: string
     typeAnnotation?: TypeAnnotation
     sourceLocation?: SourceLocation
+}
+
+/**
+ * `$Variant field:Type, ...` — sum-type variant declarator.
+ * Appears inside `@type` bindings (and `@match` arm patterns).  The `$`
+ * prefix marks it as a data-shape declarator, distinct from a runtime call.
+ *
+ * In declaration position (under `@type`), `fields` carry type annotations
+ * and the elaborator generates a constructor function for the variant.
+ * In pattern position (under `@match`), `fields` are bare identifiers that
+ * bind the destructured field values; the typechecker rejects payloads
+ * that carry type annotations in pattern position.
+ */
+export interface VariantDecl {
+    type: 'VariantDecl'
+    name: string                  // variant identifier, e.g. 'Circle'
+    fields: TypedIdentifier[]     // typed in declaration; untyped in pattern
+    sourceLocation?: SourceLocation
+    inferredType?: any
 }
 
 export interface TypeAnnotation {
@@ -324,8 +343,12 @@ export const ASTFactory = {
         return { type: 'FunctionCall', name, isBuiltin, args }
     },
 
-    expressionEnd(kind: 'literal' | 'namespace' | 'block' | 'paren', value: Literal | Namespace | Block | ExpressionStart): ExpressionEnd {
+    expressionEnd(kind: 'literal' | 'namespace' | 'block' | 'paren' | 'variantDecl', value: Literal | Namespace | Block | ExpressionStart | VariantDecl): ExpressionEnd {
         return { type: 'ExpressionEnd', kind, value }
+    },
+
+    variantDecl(name: string, fields: TypedIdentifier[]): VariantDecl {
+        return { type: 'VariantDecl', name, fields }
     },
 
     literal(kind: string, value: any): Literal {

@@ -17,9 +17,11 @@ Silicon {
   ExpressionEnd =
     | Literal -- literal
     | FunctionCall -- functionCall
+    | VariantDecl -- variantDecl
     | namespace -- namespace
     | Block -- block
     | "(" ExpressionStart ")" -- paren
+  VariantDecl = "$" identifier ListOf<typedIdentifier, ",">  -- declaration
   Block = "{" (Item ";")* ExpressionStart? "}"
   BinOp = operatorToken
   operatorToken = operatorChar+  -- op

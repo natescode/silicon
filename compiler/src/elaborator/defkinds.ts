@@ -15,7 +15,7 @@
  */
 export type CodegenKind =
     | 'function' | 'global' | 'local' | 'extern'
-    | 'type_alias' | 'type_distinct' | 'type_sum'
+    | 'type_alias' | 'type_distinct' | 'type_sum' | 'type_record'
     | 'export' | 'platform'
 
 export interface DefKindEntry {

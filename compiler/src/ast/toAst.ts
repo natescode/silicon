@@ -221,6 +221,16 @@ export default function addToAstSemantics(siliconGrammar: ohm.Grammar): ohm.Sema
             return exp.toAst()
         },
 
+        ExpressionEnd_variantDecl(vd) {
+            return vd.toAst()
+        },
+
+        VariantDecl_declaration(_dollar, ident, fields) {
+            const name = ident.sourceString
+            const fieldList: any[] = fields.asIteration().children.map((f: any) => f.toAst())
+            return ASTFactory.variantDecl(name, fieldList)
+        },
+
         Binding(_colonEq, exp) {
             return ASTFactory.binding(exp.toAst())
         },

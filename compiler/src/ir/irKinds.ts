@@ -32,7 +32,8 @@ export const irKinds: Record<string, IRKind> = {
     def_extern:        { name: 'IR::def_extern',        codegenKind: 'extern',         description: 'Def-kind: import (@extern)' },
     def_type_alias:    { name: 'IR::def_type_alias',    codegenKind: 'type_alias',     description: 'Def-kind: transparent type alias (@type_alias)' },
     def_type_distinct: { name: 'IR::def_type_distinct', codegenKind: 'type_distinct',  description: 'Def-kind: opaque distinct type (@type_distinct)' },
-    def_type_sum:      { name: 'IR::def_type_sum',      codegenKind: 'type_sum',       description: 'Def-kind: sum type / enum (@type_sum)' },
+    def_type_sum:      { name: 'IR::def_type_sum',      codegenKind: 'type_sum',       description: 'Def-kind: payload-free sum type (@enum / @type_sum)' },
+    def_type_record:   { name: 'IR::def_type_record',   codegenKind: 'type_record',    description: 'Def-kind: sum type with variant payloads (@type)' },
     def_local:         { name: 'IR::def_local',         codegenKind: 'local',          description: 'Def-kind: block-local variable (@local)' },
 
     // -------------------------------------------------------------------------

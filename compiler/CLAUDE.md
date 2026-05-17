@@ -72,7 +72,7 @@ Grammar changes are last-resort and need a discussion first.
 ## Sum Types Today
 
 - `@enum` — payload-free tagged variants, each variant is an immutable i32 global (`Red := 0`, `Green := 1`, …). `@type_sum` is the legacy spelling; both keywords behave identically.
-- `@type` (sum-with-payloads / tagged record) — spec only. Requires grammar work; tracked in bootstrap-plan Phase −1.A.
+- `@type Shape := $Circle r:Int | $Rectangle w:Int, h:Int;` — sum-with-payloads. The `$Variant` form marks a variant declarator (data-shape sigil); each variant becomes a constructor function returning the sum type, with pad-to-max record layout `[tag:i32, field0:i32, ..., field<max-1>:i32]` zero-init in unused slots. Pattern destructure in `@match` binds the fields by name.
 - `@type_alias`, `@type_distinct` — declared and accepted by the typechecker.
 
 ## Test Structure
