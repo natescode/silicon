@@ -650,8 +650,8 @@
   @local cg_len := &registry_dk_cg_len dk;
   # The defkind codegen-kind must be "function" — anything else
   # (global, extern, type_*, export, platform) is skipped here.
-  &@if ((&hook_allows_params cg_off, cg_len) == 0), {
-    &@if ((&hook_allows_binding cg_off, cg_len) == 1), {
+  &@if ((&lower_hook_allows_params cg_off, cg_len) == 0), {
+    &@if ((&lower_hook_allows_binding cg_off, cg_len) == 1), {
       # global / others — defer
       &@return IR_NONE;
     };
@@ -1021,7 +1021,7 @@
   ok
 };
 
-@fn hook_allows_params:Int hk_off:Int, hk_len:Int := {
+@fn lower_hook_allows_params:Int hk_off:Int, hk_len:Int := {
   @local r := 0;
   &@if ((&lower_span_eq_lit hk_off, hk_len, (&lit_function_ptr2), 8) == 1),
     { r = 1; };
@@ -1030,7 +1030,7 @@
   r
 };
 
-@fn hook_allows_binding:Int hk_off:Int, hk_len:Int := {
+@fn lower_hook_allows_binding:Int hk_off:Int, hk_len:Int := {
   @local r := 1;
   &@if ((&lower_span_eq_lit hk_off, hk_len, (&lit_extern_ptr2), 6) == 1),
     { r = 0; };

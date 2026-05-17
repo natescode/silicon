@@ -844,6 +844,73 @@ describe('Phase 0 WASIX smoke test', () => {
         }
     }, 60000)
 
+    test('boot/tests/fn_test.si: bootstrap compiles ITS OWN SOURCE TREE end-to-end (Stage 1 candidate)', async () => {
+        if (!wasmerAvailable()) {
+            console.log('  (skipped: wasmer not on PATH)')
+            return
+        }
+        const wasm = await buildBoot(path.join(PROJECT_ROOT, 'boot', 'tests', 'fn_test.si'))
+        const tmpPath = path.join(PROJECT_ROOT, '.self-host-boot.wasm')
+        await fs.writeFile(tmpPath, wasm)
+
+        const strataDir = path.join(PROJECT_ROOT, 'src', 'strata')
+        const files = (await fs.readdir(strataDir))
+            .filter(f => f.endsWith('.si'))
+            .sort()
+        let bundle = ''
+        for (const f of files) {
+            bundle += await fs.readFile(path.join(strataDir, f), 'utf-8')
+            bundle += '\n'
+        }
+
+        const wasiStub = [
+            '@extern wasi_snapshot_preview1::fd_write:Int',
+            '  fd:Int, iovs_ptr:Int, iovs_len:Int, nwritten_out:Int;',
+            '@extern wasi_snapshot_preview1::fd_read:Int',
+            '  fd:Int, iovs_ptr:Int, iovs_len:Int, nread_out:Int;',
+        ].join('\n') + '\n'
+
+        // The full bootstrap source tree, ordered so each file's @use
+        // dependencies are already in scope by concatenation.
+        const sources = [
+            'boot/std/io.si',
+            'boot/std/arena.si',
+            'boot/std/vec.si',
+            'boot/parser/tokens.si',
+            'boot/parser/lex.si',
+            'boot/parser/ast.si',
+            'boot/parser/parse.si',
+            'boot/strata/registry.si',
+            'boot/strata/loader.si',
+            'boot/elab/elaborator.si',
+            'boot/ir/nodes.si',
+            'boot/elab/body.si',
+            'boot/ir/lower.si',
+            'boot/emit/wat.si',
+        ]
+        const pieces = await Promise.all(
+            sources.map(p => fs.readFile(path.join(PROJECT_ROOT, p), 'utf-8')),
+        )
+        const userProg = wasiStub + pieces.join('')
+
+        try {
+            const compileRes = spawnSync('wasmer', ['run', tmpPath], {
+                input: Buffer.from(bundle + userProg, 'utf-8'),
+                maxBuffer: 64 * 1024 * 1024,
+            })
+            expect(compileRes.status).toBe(0)
+            const wat = (compileRes.stdout ?? Buffer.alloc(0)).toString('utf-8')
+            const compiled = await watToWasm(wat)
+            await WebAssembly.compile(compiled.buffer)
+            // ~38 KiB for the whole pipeline.  Loose bounds so future
+            // changes don't trip the test for size drift alone.
+            expect(compiled.buffer.byteLength).toBeGreaterThan(20000)
+            expect(compiled.buffer.byteLength).toBeLessThan(150000)
+        } finally {
+            await fs.unlink(tmpPath).catch(() => {})
+        }
+    }, 60000)
+
     test('boot/tests/fn_test.si: bootstrap compiles strata loader + registry standalone', async () => {
         if (!wasmerAvailable()) {
             console.log('  (skipped: wasmer not on PATH)')
