@@ -83,6 +83,111 @@
 @let LOWER_ELAB_NP_LEN:Int    := 7;
 @let LOWER_ELAB_SEMANTICS:Int := 8;
 
+# lower_program — walks top-level elements and produces a vec of
+# IR_FUNCTION handles for every @fn definition.  Other top-level
+# kinds (elaborations, doc comments, top-level @let / @var) are
+# skipped for now — those land alongside global / lazy-fn lowering.
+@fn lower_program:Int prog:Int := {
+  @local out := &vec_new;
+  @local n := &ast_field P_AST, prog, 1;
+  @local i := 0;
+  &@loop (i < n), {
+    @local elem := &ast_field P_AST, prog, (2 + i);
+    @local k := &ast_kind P_AST, elem;
+    &@if (k == AST_DEFINITION), {
+      @local h := &lower_definition elem;
+      &@if (h != IR_NONE), { out = &vec_push out, h; };
+    };
+    i = i + 1;
+  };
+  out
+};
+
+# Lower a single AST_DEFINITION to an IR_FUNCTION if it's a @fn
+# (or @let with a binding — Stage 0 treats @let as a thunk).
+# Returns IR_NONE for anything we don't yet lower.
+@fn lower_definition:Int def:Int := {
+  @local kw_off  := &ast_field P_AST, def, 1;
+  @local kw_len  := &ast_field P_AST, def, 2;
+  @local nm_off  := &ast_field P_AST, def, 3;
+  @local nm_len  := &ast_field P_AST, def, 4;
+  @local n_params := &ast_field P_AST, def, 7;
+  @local binding  := &ast_field P_AST, def, (8 + n_params);
+
+  # Only @fn and @let for now.  Stage 0 lowers @let X := expr; as a
+  # zero-arg function so call sites use `call $X`; we match.
+  @local dk := &registry_dk_lookup kw_off, kw_len;
+  &@if (dk < 0), { &@return IR_NONE; };
+  @local cg_off := &registry_dk_cg_off dk;
+  @local cg_len := &registry_dk_cg_len dk;
+  # The defkind codegen-kind must be "function" — anything else
+  # (global, extern, type_*, export, platform) is skipped here.
+  &@if ((&hook_allows_params cg_off, cg_len) == 0), {
+    &@if ((&hook_allows_binding cg_off, cg_len) == 1), {
+      # global / others — defer
+      &@return IR_NONE;
+    };
+  };
+
+  &@if (binding < 0), { &@return IR_NONE; };
+
+  # Fresh scope per function; bind every param to its index.
+  &scope_reset;
+  @local pi := 0;
+  &@loop (pi < n_params), {
+    @local pnode := &ast_field P_AST, def, (8 + pi);
+    # AST_PARAMETER [kind, name_off, name_len, type_off, type_len]
+    &@if ((&ast_kind P_AST, pnode) == AST_PARAMETER), {
+      @local pn_off := &ast_field P_AST, pnode, 1;
+      @local pn_len := &ast_field P_AST, pnode, 2;
+      &scope_push pn_off, pn_len, pi;
+    };
+    pi = pi + 1;
+  };
+
+  @local body_h := &lower_expr binding;
+  &@if (body_h == IR_NONE), { &@return IR_NONE; };
+  &ir_function nm_off, nm_len, n_params, body_h
+};
+
+# hook_allows_params / hook_allows_binding live in boot/elab/elaborator.si
+# — pull just the literal-pointer helpers we need here without forcing
+# the elaborator to be @use'd transitively.
+@fn lit_function_ptr2:Int := { (&str_ptr 'function') + 4 };
+@fn lit_extern_ptr2:Int   := { (&str_ptr 'extern')   + 4 };
+@fn lit_export_ptr2:Int   := { (&str_ptr 'export')   + 4 };
+
+@fn lower_span_eq_lit:Int off:Int, len:Int, lit_ptr:Int, lit_len:Int := {
+  @local ok := 1;
+  &@if (len != lit_len), { ok = 0; };
+  @local i := 0;
+  &@loop ((ok * (i < len)) == 1), {
+    @local a := &WASM::i32_load8_u (P_SRC + off + i);
+    @local b := &WASM::i32_load8_u (lit_ptr + i);
+    &@if (a != b), { ok = 0; };
+    i = i + 1;
+  };
+  ok
+};
+
+@fn hook_allows_params:Int hk_off:Int, hk_len:Int := {
+  @local r := 0;
+  &@if ((&lower_span_eq_lit hk_off, hk_len, (&lit_function_ptr2), 8) == 1),
+    { r = 1; };
+  &@if ((&lower_span_eq_lit hk_off, hk_len, (&lit_extern_ptr2),   6) == 1),
+    { r = 1; };
+  r
+};
+
+@fn hook_allows_binding:Int hk_off:Int, hk_len:Int := {
+  @local r := 1;
+  &@if ((&lower_span_eq_lit hk_off, hk_len, (&lit_extern_ptr2), 6) == 1),
+    { r = 0; };
+  &@if ((&lower_span_eq_lit hk_off, hk_len, (&lit_export_ptr2), 6) == 1),
+    { r = 0; };
+  r
+};
+
 @fn lower_expr:Int node:Int := {
   &@if (node < 0), { &@return IR_NONE; };
   @local k := &ast_kind P_AST, node;

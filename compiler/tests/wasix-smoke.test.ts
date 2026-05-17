@@ -314,6 +314,72 @@ describe('Phase 0 WASIX smoke test', () => {
         }
     })
 
+    test('boot/tests/fn_test.si: @fn definitions compile and execute end-to-end', async () => {
+        if (!wasmerAvailable()) {
+            console.log('  (skipped: wasmer not on PATH)')
+            return
+        }
+        const wasm = await buildBoot(path.join(PROJECT_ROOT, 'boot', 'tests', 'fn_test.si'))
+        const tmpPath = path.join(PROJECT_ROOT, '.fn-smoke.wasm')
+        await fs.writeFile(tmpPath, wasm)
+
+        const strataDir = path.join(PROJECT_ROOT, 'src', 'strata')
+        const files = (await fs.readdir(strataDir))
+            .filter(f => f.endsWith('.si'))
+            .sort()
+        let bundle = ''
+        for (const f of files) {
+            bundle += await fs.readFile(path.join(strataDir, f), 'utf-8')
+            bundle += '\n'
+        }
+
+        // (Silicon program, export name, args, expected result).
+        const cases: Array<{ prog: string; fn: string; args: number[]; want: number }> = [
+            { prog: '@fn add a:Int, b:Int := { a + b };',
+              fn: 'add', args: [20, 22], want: 42 },
+            { prog: '@fn sub a:Int, b:Int := { a - b };',
+              fn: 'sub', args: [100, 58], want: 42 },
+            { prog: '@fn poly a:Int, b:Int, c:Int := { (a * b) + c };',
+              fn: 'poly', args: [6, 7, 0], want: 42 },
+            { prog: '@fn doubleIt x:Int := { x + x };',
+              fn: 'doubleIt', args: [21], want: 42 },
+            { prog: '@fn fortytwo := { 42 };',
+              fn: 'fortytwo', args: [], want: 42 },
+            { prog: '@fn cmp a:Int, b:Int := { a < b };',
+              fn: 'cmp', args: [3, 5], want: 1 },
+            { prog: '@fn cmp a:Int, b:Int := { a < b };',
+              fn: 'cmp', args: [5, 3], want: 0 },
+        ]
+
+        try {
+            for (const c of cases) {
+                const result = spawnSync('wasmer', ['run', tmpPath], {
+                    input: Buffer.from(bundle + c.prog + '\n', 'utf-8'),
+                    maxBuffer: 64 * 1024 * 1024,
+                })
+                expect(result.status).toBe(0)
+                const wat = (result.stdout ?? Buffer.alloc(0)).toString('utf-8')
+                const compiled = await watToWasm(wat)
+                const { instance } = await WebAssembly.instantiate(compiled.buffer, {})
+                const f = (instance.exports as any)[c.fn] as (...a: number[]) => number
+                if (typeof f !== 'function') {
+                    throw new Error(
+                        `No export ${c.fn} for ${JSON.stringify(c.prog)}\nWAT:\n${wat}`,
+                    )
+                }
+                const got = f(...c.args)
+                if (got !== c.want) {
+                    throw new Error(
+                        `${c.fn}(${c.args.join(', ')}) for ${JSON.stringify(c.prog)}\n` +
+                        `Expected: ${c.want}\nGot: ${got}\nWAT:\n${wat}`,
+                    )
+                }
+            }
+        } finally {
+            await fs.unlink(tmpPath).catch(() => {})
+        }
+    })
+
     test('boot/tests/scope_test.si: variable references resolve to local.get', async () => {
         if (!wasmerAvailable()) {
             console.log('  (skipped: wasmer not on PATH)')

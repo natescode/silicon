@@ -1,0 +1,40 @@
+# Function-definition end-to-end test.  Lowers + emits a complete
+# WAT module from the strata bundle plus user @fn definitions.
+
+@use '../std/io.si';
+@use '../std/arena.si';
+@use '../parser/tokens.si';
+@use '../parser/lex.si';
+@use '../parser/ast.si';
+@use '../parser/parse.si';
+@use '../strata/registry.si';
+@use '../strata/loader.si';
+@use '../ir/nodes.si';
+@use '../elab/body.si';
+@use '../ir/lower.si';
+@use '../emit/wat.si';
+
+@fn run := {
+  @local cap := 65536;
+  @local buf := &arena_alloc cap;
+  @local total := 0;
+  &@loop 1, {
+    @local n := &read_bytes 0, (buf + total), (cap - total);
+    &@if (n <= 0), { &@break };
+    total = total + n;
+    &@if (total >= cap), { &@break };
+  };
+
+  @local toks := &lex buf, total;
+  @local prog := &parse buf, total, toks;
+  &registry_init;
+  &load_strata prog;
+  &ir_init;
+  &scope_init;
+
+  @local fns := &lower_program prog;
+  &emit_program fns;
+  &wasi_snapshot_preview1::proc_exit 0;
+};
+
+&run;

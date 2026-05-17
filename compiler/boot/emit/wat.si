@@ -73,15 +73,53 @@
 #       <instructions>
 #     )
 #   )
-#
-# Caller is responsible for ensuring the IR tree produces exactly
-# one i32 on the stack (today every covered kind does).  Empty
-# blocks would underflow — add `i32.const 0` if you need a sentinel.
 @fn emit_module result_h:Int := {
   &ew_str '(module'; &ew_byte 10;
   &ew_str '  (func $main (export "main") (result i32)'; &ew_byte 10;
   &emit_expr result_h;
   &ew_str '  )'; &ew_byte 10;
+  &ew_str ')'; &ew_byte 10;
+};
+
+# Emit one IR_FUNCTION record:
+#
+#   (func $name (export "name") (param i32)* (result i32)
+#     <body instructions>
+#   )
+#
+# All params are i32 today; the result is also i32.  Type strata
+# come later — when they do, this just looks up param/result types
+# from the typed AST rather than hard-coding i32.
+@fn emit_function fn_h:Int := {
+  @local nm_off := &ir_function_name_off fn_h;
+  @local nm_len := &ir_function_name_len fn_h;
+  @local n_params := &ir_function_n_params fn_h;
+  @local body := &ir_function_body fn_h;
+
+  &ew_str '  (func $';
+  &write_bytes 1, (P_SRC + nm_off), nm_len;
+  &ew_str ' (export "';
+  &write_bytes 1, (P_SRC + nm_off), nm_len;
+  &ew_str '")';
+  @local i := 0;
+  &@loop (i < n_params), {
+    &ew_str ' (param i32)';
+    i = i + 1;
+  };
+  &ew_str ' (result i32)'; &ew_byte 10;
+  &emit_expr body;
+  &ew_str '  )'; &ew_byte 10;
+};
+
+# Emit a complete module from a vec<i32> of IR_FUNCTION handles.
+@fn emit_program functions:Int := {
+  &ew_str '(module'; &ew_byte 10;
+  @local n := &vec_len functions;
+  @local i := 0;
+  &@loop (i < n), {
+    &emit_function (&vec_get functions, i);
+    i = i + 1;
+  };
   &ew_str ')'; &ew_byte 10;
 };
 
