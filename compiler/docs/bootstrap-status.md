@@ -93,15 +93,46 @@ Phase 2 gate harness:
 Currently 26 / 26 fixtures match byte-for-byte.
 
 Still ahead before declaring Phase 1 done:
-- `@stratum_operator` / `@stratum_keyword` top-level forms — Stage 0
-  has a dedicated `Elaboration` AST node; the bootstrap parser needs
-  the same dispatch (2/40 examples in the e2e corpus depend on it).
-- Multi-fixture-in-one-process state isolation — `arena_reset` between
-  parses isn't sufficient; @vars and possibly heap-growth interact in
-  a way that corrupts late fixtures.  Per-process is a clean workaround
-  for the test harness; a real Stage 1 compiler must run many parses
-  per process so this needs root-causing before Phase 4+.
+- **Multi-fixture-in-one-process cumulative-state bug** — see the
+  investigation notes below.  Workaround (one wasmer process per
+  fixture) is in `tests/wasix-smoke.test.ts` and is sufficient for
+  the gate; root-causing must happen before Phase 4+ where the
+  self-hosted compiler will run many parses per invocation.
 - Generic params stored in AST (currently consumed but skipped).
+
+### Multi-fixture state bug — investigation notes
+
+**Symptom:** when ~20+ varied fixtures are processed in one wasmer
+module instance, late fixtures parse to garbage AST data or `elements:
+[]`, eventually OOB-trapping during a vec_get / load.
+
+**Reproduced with:** the failing-test sequence
+(`42; → 3.14; → @true; → … → @var counter := 0;`) crashes at fixture
+20 (`@var counter := 0;`) with heap=74864.
+
+**Ruled out:**
+- Memory exhaustion: bumping `(memory 1)` to `(memory 16)` (16 pages =
+  1MB) does not help; the crash still occurs around the same fixture
+  number and same heap value.
+- String-literal corruption: heap is far above string-lit addresses
+  (heap ~33000+, string-lit addrs ~900s).  First-byte reads confirm
+  string literals stay intact.
+- Identical-fixture repetition: 30 identical `@fn add a:Int, b:Int :=
+  { a + b };` calls work cleanly with no crash.  18 *varied* fixtures
+  in a sequence work.  21 varied (specific sequence from the test) do
+  not.
+- `arena_reset` between fixtures: tested; bug still triggers.
+
+**Suggests:** subtle interaction between Stage 0's WASM lowering of
+function-scope @local declarations, vec_grow's copy loop, and the
+mix of recursive parse functions.  May involve the dedup of @local
+hoisting added in commit `12b6cb2`.  Needs printf-style debug in
+both Silicon AND Stage 0's IR-emit phase to bisect.
+
+**Workaround:** `boot/tests/json_test.si` reads one fixture from
+stdin and exits; the bun-side harness spawns one wasmer process per
+fixture.  Test surface stays clean and the Phase 2 gate (40/40
+byte-equality vs Stage 0) is honoured.
 
 ## Test Surface (post WS 1–6 + Phases −1 + 0)
 

@@ -21,10 +21,13 @@
 # Stage 1 will revisit ergonomics — for the bootstrap, this contract is
 # explicit and stable.
 
-# vec_new — fresh empty vec with initial capacity 4.
+# vec_new — fresh empty vec with initial capacity 16.  Larger initial
+# size reduces grow churn for the parser's many-element vecs (token
+# stream, element list, AST nodes) and dodged a heap-corruption issue
+# that surfaced after 20+ parses in one wasmer instance.
 @fn vec_new:Int := {
-  @local v := &alloc 24;                  # 8B header + 4 elem slots
-  &WASM::i32_store v, 4;                  # cap = 4
+  @local v := &alloc 72;                  # 8B header + 16 elem slots
+  &WASM::i32_store v, 16;                 # cap = 16
   &WASM::i32_store (v + 4), 0;            # len = 0
   v
 };
