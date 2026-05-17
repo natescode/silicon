@@ -10,6 +10,7 @@ import { elaborate, buildStrataRegistry } from './elaborator'
 import { typecheck, formatTypeError } from './types'
 import { siliconGrammar } from './grammar'
 import { resolveUses } from './modules/useResolver'
+import { toDiagnostic, parseDiagnostic, renderJson, renderPretty, type Diagnostic } from './errors/diagnostic'
 
 const help = `Sigil: the Official Silicon compiler
 
@@ -27,6 +28,11 @@ Flags:
                         wasix          — Wasmer-WASIX runtime; the module
                                          exports _start so 'wasmer run' picks
                                          it up automatically.
+
+Diagnostics:
+  Errors are emitted as structured Diagnostic records (see
+  src/errors/diagnostic.ts).  Default format is JSON for tool-friendliness;
+  pass --pretty for the disposable human renderer (Stage 1 will replace it).
 
 Source includes:
   @use 'helper.si';   inside a .si file, includes helper.si (relative to
@@ -46,7 +52,13 @@ Examples:
   sgl --strata lib/math.si --strata lib/strings.si main.si
 `
 
-async function compileFile(filename: string, strataFiles: string[], emitWasm: boolean, target: LowerTarget) {
+async function compileFile(
+    filename: string,
+    strataFiles: string[],
+    emitWasm: boolean,
+    target: LowerTarget,
+    pretty: boolean,
+) {
     const rawSource = await fs.readFile(filename, 'utf-8')
     const entryAbs = path.resolve(filename)
     const { source } = resolveUses(rawSource, entryAbs)
@@ -56,18 +68,23 @@ async function compileFile(filename: string, strataFiles: string[], emitWasm: bo
         strataFiles.map(f => fs.readFile(f, 'utf-8'))
     )
 
-    const match = parse(source)
-    const ast: ASTNode = addToAstSemantics(siliconGrammar)(match).toAst()
+    function emitDiagnostics(diags: Diagnostic[]): never {
+        const rendered = pretty ? renderPretty(diags) : renderJson(diags)
+        console.error(rendered)
+        process.exit(1)
+    }
+
+    let match
+    try { match = parse(source) }
+    catch (err) { emitDiagnostics([parseDiagnostic(err as Error, entryAbs)]) }
+
+    const ast: ASTNode = addToAstSemantics(siliconGrammar)(match!).toAst()
     const registry = buildStrataRegistry(ast as Program, extraSources)
     const { program: elaboratedAST } = elaborate(ast as Program, registry)
     const { program: typedAST, errors: typeErrors, functions } = typecheck(elaboratedAST, registry)
 
     if (typeErrors.length > 0) {
-        console.error('Type errors:')
-        for (const err of typeErrors) {
-            console.error('  ' + formatTypeError(err))
-        }
-        process.exit(1)
+        emitDiagnostics(typeErrors.map(e => toDiagnostic(e, entryAbs)))
     }
 
     const wat: string = compileToWat(typedAST, registry, functions, undefined, { target })
@@ -89,6 +106,7 @@ const strataFiles: string[] = []
 let mainFile: string | undefined
 let emitWasm = false
 let target: LowerTarget = 'host'
+let pretty = false
 
 function parseTarget(value: string): LowerTarget {
     if (value === 'host' || value === 'wasix') return value
@@ -104,6 +122,8 @@ for (let i = 0; i < args.length; i++) {
         strataFiles.push(next)
     } else if (arg === '--wasm') {
         emitWasm = true
+    } else if (arg === '--pretty') {
+        pretty = true
     } else if (arg === '--target') {
         const next = args[++i]
         if (!next) { console.error('--target requires a value'); process.exit(1) }
@@ -123,7 +143,7 @@ if (!mainFile) {
 }
 
 try {
-    await compileFile(mainFile, strataFiles, emitWasm, target)
+    await compileFile(mainFile, strataFiles, emitWasm, target, pretty)
 } catch (e) {
     console.error(`\x1b[31mError: ${e}\x1b[39m`)
     process.exit(1)
