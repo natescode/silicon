@@ -688,6 +688,77 @@
   &jw_byte 125;
 };
 
+# ── Elaboration ──────────────────────────────────────────────────────
+
+@fn json_elaboration depth:Int, node:Int := {
+  @local elab_kind := &ast_field P_AST, node, 1;
+  @local name_off  := &ast_field P_AST, node, 2;
+  @local name_len  := &ast_field P_AST, node, 3;
+  @local sym_off   := &ast_field P_AST, node, 4;
+  @local sym_len   := &ast_field P_AST, node, 5;
+  @local np_off    := &ast_field P_AST, node, 6;
+  @local np_len    := &ast_field P_AST, node, 7;
+  @local semantics := &ast_field P_AST, node, 8;
+
+  &jw_str '{';
+  &jw_byte 10;
+  &jw_indent (depth + 1);
+  &jw_string_lit 'type';
+  &jw_str ': ';
+  &jw_string_lit 'Elaboration';
+  &jw_str ',';
+  &jw_byte 10;
+  &jw_indent (depth + 1);
+  &jw_string_lit 'kind';
+  &jw_str ': ';
+  &@if (elab_kind == ELAB_OPERATOR),
+    { &jw_string_lit 'operator'; },
+    { &jw_string_lit 'keyword'; };
+  &jw_str ',';
+  &jw_byte 10;
+  &jw_indent (depth + 1);
+  &jw_string_lit 'name';
+  &jw_str ': ';
+  &jw_string_span name_off, name_len;
+  &jw_str ',';
+  &jw_byte 10;
+  &jw_indent (depth + 1);
+  &jw_string_lit 'symbol';
+  &jw_str ': ';
+  # Stage 0 stores symbol as a StringLiteral object with the unquoted
+  # payload as `value`.
+  &jw_str '{';
+  &jw_byte 10;
+  &jw_indent (depth + 2);
+  &jw_string_lit 'type';
+  &jw_str ': ';
+  &jw_string_lit 'StringLiteral';
+  &jw_str ',';
+  &jw_byte 10;
+  &jw_indent (depth + 2);
+  &jw_string_lit 'value';
+  &jw_str ': ';
+  &jw_string_span sym_off, sym_len;
+  &jw_byte 10;
+  &jw_indent (depth + 1);
+  &jw_byte 125;                                 # close symbol object
+  &jw_str ',';
+  &jw_byte 10;
+  &jw_indent (depth + 1);
+  &jw_string_lit 'nodeParamName';
+  &jw_str ': ';
+  &jw_string_span np_off, np_len;
+  &jw_str ',';
+  &jw_byte 10;
+  &jw_indent (depth + 1);
+  &jw_string_lit 'semantics';
+  &jw_str ': ';
+  &json_node (depth + 1), semantics;
+  &jw_byte 10;
+  &jw_indent depth;
+  &jw_byte 125;
+};
+
 # Mutual recursion forward decl is implicit (Silicon resolves by name).
 @fn json_node depth:Int, node:Int := {
   @local k := &ast_kind P_AST, node;
@@ -705,6 +776,7 @@
   &@if (k == AST_OBJECT_LIT),  { &json_object_lit depth, node; &@return 0; };
   &@if (k == AST_ASSIGNMENT),  { &json_assignment depth, node; &@return 0; };
   &@if (k == AST_VARIANT),     { &json_variant_decl depth, node; &@return 0; };
+  &@if (k == AST_ELABORATION), { &json_elaboration depth, node; &@return 0; };
   # Unsupported kind — emit a stub so output stays well-formed.
   &jw_string_lit 'unsupported';
   0

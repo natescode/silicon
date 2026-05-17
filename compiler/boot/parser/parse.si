@@ -417,6 +417,8 @@
 # literal payload starting at (str_ptr s) + 4.
 @fn lit_true_ptr:Int  := { (&str_ptr '@true')  + 4 };
 @fn lit_false_ptr:Int := { (&str_ptr '@false') + 4 };
+@fn lit_op_ptr:Int    := { (&str_ptr '@stratum_operator') + 4 };
+@fn lit_kw_ptr:Int    := { (&str_ptr '@stratum_keyword')  + 4 };
 
 # parse_expression_end — one ExpressionEnd: literal, namespace, call,
 # parenthesised expression, block, or $-literal.
@@ -601,6 +603,64 @@
   node
 };
 
+# parse_elaboration — `@stratum_operator NAME ( 'sym', NodeName ) = { ... }`
+# or `@stratum_keyword NAME ( 'name', NodeName ) = { ... }`.  Caller has
+# already verified the leading TOK_KEYWORD is one of the stratum forms
+# (via span_eq) and supplies elab_kind (0 = operator, 1 = keyword).
+@fn parse_elaboration:Int elab_kind:Int := {
+  &p_advance;                                  # consume @stratum_*
+
+  # Stratum name (an identifier).
+  @local name_off := 0;
+  @local name_len := 0;
+  &@if ((&p_peek_kind) == TOK_IDENT), {
+    name_off = &p_peek_off;
+    name_len = &p_peek_len;
+    &p_advance;
+  };
+
+  # Consume `(`.
+  &@if ((&p_peek_kind) == TOK_LPAREN), { &p_advance; };
+
+  # Symbol string literal — strip the surrounding quotes.
+  @local sym_off := 0;
+  @local sym_len := 0;
+  &@if ((&p_peek_kind) == TOK_STR), {
+    @local raw_off := &p_peek_off;
+    @local raw_len := &p_peek_len;
+    sym_off = raw_off + 1;
+    sym_len = raw_len - 2;
+    &p_advance;
+  };
+
+  # Comma.
+  &@if ((&p_peek_kind) == TOK_COMMA), { &p_advance; };
+
+  # Node-param identifier.
+  @local np_off := 0;
+  @local np_len := 0;
+  &@if ((&p_peek_kind) == TOK_IDENT), {
+    np_off = &p_peek_off;
+    np_len = &p_peek_len;
+    &p_advance;
+  };
+
+  # Consume `)`.
+  &@if ((&p_peek_kind) == TOK_RPAREN), { &p_advance; };
+
+  # Consume `=` (single Eq, not :=).
+  &@if ((&p_peek_kind) == TOK_EQ), { &p_advance; };
+
+  # Body is a Block.
+  @local semantics := AST_NONE;
+  &@if ((&p_peek_kind) == TOK_LBRACE), { semantics = &parse_block; };
+
+  @local node := &vec_offset P_AST;
+  P_AST = &ast_elaboration P_AST, elab_kind, name_off, name_len,
+            sym_off, sym_len, np_off, np_len, semantics;
+  node
+};
+
 # parse_element_inner — one Item or trailing-expression, WITHOUT
 # consuming the optional trailing `;`.  Used by parse_block (which
 # needs to inspect the post-element token to decide statement vs
@@ -609,10 +669,14 @@
   @local k := &p_peek_kind;
   &@if (k == TOK_DOC),     { &@return (&parse_doc_comment); };
   &@if (k == TOK_KEYWORD), {
-    # @true / @false are keyword-formed expressions, not definitions.
-    # Dispatch to parse_expression_start so the bool-lit branch fires.
     @local off := &p_peek_off;
     @local len := &p_peek_len;
+    # Stratum-defining keywords get their own form (Elaboration).
+    &@if ((&span_eq off, len, (&lit_op_ptr), 17) == 1),
+      { &@return (&parse_elaboration ELAB_OPERATOR); };
+    &@if ((&span_eq off, len, (&lit_kw_ptr), 16) == 1),
+      { &@return (&parse_elaboration ELAB_KEYWORD); };
+    # @true / @false are keyword-formed expressions, not definitions.
     @local is_bool := (&span_eq off, len, (&lit_true_ptr), 5)
                     | (&span_eq off, len, (&lit_false_ptr), 6);
     &@if (is_bool == 1), { &@return (&parse_expression_start); };

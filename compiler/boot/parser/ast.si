@@ -229,6 +229,30 @@
   &vec_push a, type_len
 };
 
+# AST_ELABORATION  `@stratum_operator Plus ('+', Node) = { ... }`
+#   [kind, elab_kind, name_off, name_len,
+#    sym_off, sym_len, node_off, node_len, semantics_idx]
+# elab_kind: 0 = operator, 1 = keyword.
+# sym_off/sym_len cover the STRING PAYLOAD (between the surrounding `'`s).
+@let AST_ELABORATION:Int := 18;
+@let ELAB_OPERATOR:Int  := 0;
+@let ELAB_KEYWORD:Int   := 1;
+@fn ast_elaboration:Int ast:Int, elab_kind:Int,
+                          name_off:Int, name_len:Int,
+                          sym_off:Int, sym_len:Int,
+                          np_off:Int, np_len:Int,
+                          semantics:Int := {
+  @local a := &vec_push ast, AST_ELABORATION;
+  a = &vec_push a, elab_kind;
+  a = &vec_push a, name_off;
+  a = &vec_push a, name_len;
+  a = &vec_push a, sym_off;
+  a = &vec_push a, sym_len;
+  a = &vec_push a, np_off;
+  a = &vec_push a, np_len;
+  &vec_push a, semantics
+};
+
 # ── Patching helpers ─────────────────────────────────────────────────
 # Sometimes a node's child count isn't known until after the children
 # are pushed (variable-arity nodes built in-place).  ast_patch_at sets
