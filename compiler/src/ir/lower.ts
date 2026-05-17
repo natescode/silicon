@@ -108,6 +108,12 @@ const lowerFns: LowerFns = {
     lowerExpr,
     lowerBlock,
     lowerParam,
+    lowerParams,
+    lowerFunctionBody,
+    resolveFunctionReturnType,
+    lowerGlobalInit,
+    lowerExternParams,
+    lowerExternResult,
     unwrapNode: unwrap,
     exprWasmType,
     watId,
@@ -251,17 +257,9 @@ function lowerDefinition(node: any, ctx: LowerCtx): any {
     const defExp = ctx.registry.defExpanders.get(hook)
     if (defExp) return defExp.expand(node, name, ctx.$compiler!)
 
-    switch (hook) {
-        case 'function': return lowerFunction(node, name, ctx)
-        case 'global':   return lowerGlobal(node, name, ctx)
-        case 'extern':   return lowerExtern(node, name, ctx)
-        // Type alias / distinct produce no WAT — handled by type checker.
-        case 'type_alias':
-        case 'type_distinct':
-            return null
-        default:
-            throw new IRLowerError(`Unknown definition keyword: ${node.keyword ?? hook}`)
-    }
+    // No defExpander registered — type aliases produce no WAT, anything else is an error.
+    if (hook === 'type_alias' || hook === 'type_distinct') return null
+    throw new IRLowerError(`Unknown definition keyword: ${node.keyword ?? hook}`)
 }
 
 /** Lower a single function parameter AST node to IRParam, or null for literal/untyped params. */
@@ -270,27 +268,36 @@ export function lowerParam(p: any): IRParam | null {
     return { name: watId(p.name), wasmType: siliconTypeNameToWasm(p.typeAnnotation.typename) }
 }
 
-function lowerFunction(node: any, name: string, ctx: LowerCtx): IRFunction {
-    const params: IRParam[] = []
-    const paramLocals: Map<string, WasmValType> = new Map()
+// ---------------------------------------------------------------------------
+// Phase-5 strata helpers
+// Bounded TS routines that rich Silicon strata orchestrate over.  Each one
+// encapsulates a chunk of lowering state-management that's awkward to express
+// in the body interpreter (list iteration, child contexts, type refinement).
+// ---------------------------------------------------------------------------
 
+/** Iterate node.params and return one IRParam per typed, non-literal entry. */
+export function lowerParams(node: any): IRParam[] {
+    const params: IRParam[] = []
     for (const p of node.params || []) {
         const param = lowerParam(p)
-        if (!param) continue
-        params.push(param)
-        paramLocals.set(param.name, param.wasmType)
+        if (param) params.push(param)
     }
+    return params
+}
 
-    // Determine return type.
-    let returnType: WasmType = 'void'
-    if (node.name?.typeAnnotation?.typename) {
-        returnType = siliconTypeNameToWasm(node.name.typeAnnotation.typename)
-    } else {
-        const sig = ctx.functions.get(name)
-        if (sig && sig.result.kind !== 'Unknown') {
-            returnType = wasmTypeOf(sig.result) as WasmType
-        }
-    }
+/**
+ * Create a child lowering context with the given params added to locals,
+ * lower the function's binding expression in that child context, and return
+ * the body + the locals collected during lowering.  Mirrors what the old
+ * lowerFunction did between child-ctx creation and the IRFunction emit.
+ */
+export function lowerFunctionBody(
+    node: any,
+    params: IRParam[],
+    ctx: LowerCtx,
+): { body: IRExpr | undefined; locals: IRLocal[] } {
+    const paramLocals = new Map<string, WasmValType>()
+    for (const p of params) paramLocals.set(p.name, p.wasmType)
 
     const childCtx: LowerCtx = {
         ...ctx,
@@ -305,58 +312,74 @@ function lowerFunction(node: any, name: string, ctx: LowerCtx): IRFunction {
     if (binding) {
         const expr = binding.expression ?? binding
         body = lowerExpr(expr, childCtx)
-        // Refine return type from inferred if not annotated.
-        if (returnType === 'void' && body) {
-            const bt = exprWasmType(body)
-            if (bt !== 'void') returnType = bt
-        }
     }
-
-    ctx.globals.set(name, 'i32') // function pointers are i32 (table index)
-
-    return {
-        kind: 'Function',
-        name,
-        params,
-        returnType,
-        locals: childCtx.pendingLocals,
-        body,
-    }
+    return { body, locals: childCtx.pendingLocals }
 }
 
-function lowerGlobal(node: any, name: string, ctx: LowerCtx): IRGlobal {
-    let wasmType: WasmValType = 'i32'
+/**
+ * Resolve a function's return type from (in priority order):
+ *   1. explicit annotation on the function name
+ *   2. the typechecker's recorded FunctionSig
+ *   3. the lowered body's wasmType (refinement)
+ */
+export function resolveFunctionReturnType(
+    node: any,
+    name: string,
+    body: IRExpr | undefined,
+    ctx: LowerCtx,
+): WasmType {
     if (node.name?.typeAnnotation?.typename) {
-        wasmType = siliconTypeNameToWasm(node.name.typeAnnotation.typename)
+        return siliconTypeNameToWasm(node.name.typeAnnotation.typename)
     }
+    const sig = ctx.functions.get(name)
+    if (sig && sig.result.kind !== 'Unknown') {
+        return wasmTypeOf(sig.result) as WasmType
+    }
+    if (body) {
+        const bt = exprWasmType(body)
+        if (bt !== 'void') return bt
+    }
+    return 'void'
+}
 
+/**
+ * Lower a @var initialiser to an IRExpr + final wasmType.  Falls back to
+ * `(const 0 : defaultType)` when no binding is provided, and refines the
+ * type from the lowered init expression when one is.
+ */
+export function lowerGlobalInit(
+    node: any,
+    defaultType: WasmValType,
+    ctx: LowerCtx,
+): { init: IRExpr; wasmType: WasmValType } {
+    let wasmType = defaultType
     const binding = Array.isArray(node.binding) ? node.binding[0] : node.binding
-    let init: IRExpr = { kind: 'Const', wasmType, value: 0 }
     if (binding) {
         const expr = binding.expression ?? binding
-        init = lowerExpr(expr, ctx)
-        // Refine wasmType from the init expression.
+        const init = lowerExpr(expr, ctx)
         const it = exprWasmType(init)
         if (it !== 'void') wasmType = it
+        return { init, wasmType }
     }
-
-    ctx.globals.set(name, wasmType)
-    ctx.varNames.add(name)
-    return { kind: 'Global', name, wasmType, mutable: true, init }
+    return { init: { kind: 'Const', wasmType, value: 0 }, wasmType }
 }
 
-function lowerExtern(node: any, name: string, _ctx: LowerCtx): IRImport {
+/** Iterate node.params and return one WasmValType per typed, non-literal entry. */
+export function lowerExternParams(node: any): WasmValType[] {
     const params: WasmValType[] = []
     for (const p of node.params || []) {
         if (p.isLiteral || !p.typeAnnotation) continue
         params.push(siliconTypeNameToWasm(p.typeAnnotation.typename))
     }
-    let result: WasmValType | undefined
+    return params
+}
+
+/** Extract the result type of an @extern from its name's type annotation. */
+export function lowerExternResult(node: any): WasmValType | undefined {
     if (node.name?.typeAnnotation?.typename) {
-        result = siliconTypeNameToWasm(node.name.typeAnnotation.typename)
+        return siliconTypeNameToWasm(node.name.typeAnnotation.typename)
     }
-    // Plain @extern always imports from the "env" host namespace.
-    return { kind: 'Import', env: 'env', field: name, name, params, result }
+    return undefined
 }
 
 // ---------------------------------------------------------------------------

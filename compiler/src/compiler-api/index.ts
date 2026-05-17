@@ -48,9 +48,28 @@ interface CtxShape {
 // ─────────────────────────────────────────────────────────────────────────────
 
 export interface LowerFns {
-    lowerExpr:   (node: any, ctx: any) => IRExpr
-    lowerBlock:  (node: any, ctx: any) => IRBlock
-    lowerParam:  (param: any) => IRParam | null
+    lowerExpr:    (node: any, ctx: any) => IRExpr
+    lowerBlock:   (node: any, ctx: any) => IRBlock
+    lowerParam:   (param: any) => IRParam | null
+    lowerParams:  (node: any) => IRParam[]
+    lowerFunctionBody: (
+        node: any,
+        params: IRParam[],
+        ctx: any,
+    ) => { body: IRExpr | undefined; locals: IRLocal[] }
+    resolveFunctionReturnType: (
+        node: any,
+        name: string,
+        body: IRExpr | undefined,
+        ctx: any,
+    ) => WasmType
+    lowerGlobalInit: (
+        node: any,
+        defaultType: WasmValType,
+        ctx: any,
+    ) => { init: IRExpr; wasmType: WasmValType }
+    lowerExternParams: (node: any) => WasmValType[]
+    lowerExternResult: (node: any) => WasmValType | undefined
     unwrapNode:  (node: any) => any
     exprWasmType:(expr: IRExpr) => WasmType
     watId:       (name: string) => string
@@ -156,6 +175,18 @@ export interface CompilerAPI {
     lowerBlock(node: any): IRBlock
     /** Lower a single function parameter to IRParam, or null for literal / untyped params. */
     lowerParam(param: any): IRParam | null
+    /** Iterate node.params and lower each entry; literal/untyped params are skipped. */
+    lowerParams(node: any): IRParam[]
+    /** Lower a function's binding expression in a child scope; returns body + collected locals. */
+    lowerFunctionBody(node: any, params: IRParam[]): { body: IRExpr | undefined; locals: IRLocal[] }
+    /** Resolve a function's return type from annotation, function sig, or body refinement. */
+    resolveFunctionReturnType(node: any, name: string, body?: IRExpr): WasmType
+    /** Lower a @var initialiser, returning the init expression and its (possibly refined) wasmType. */
+    lowerGlobalInit(node: any, defaultType: WasmValType): { init: IRExpr; wasmType: WasmValType }
+    /** Iterate the parameters of an @extern and return their WASM types in order. */
+    lowerExternParams(node: any): WasmValType[]
+    /** Extract the result wasmType of an @extern declaration, or undefined if void. */
+    lowerExternResult(node: any): WasmValType | undefined
     /** Unwrap AST wrapper nodes (Element, Item, Statement) to the inner node. */
     unwrapNode(node: any): any
 
@@ -246,10 +277,16 @@ export function createCompilerAPI(ctx: CtxShape, fns: LowerFns): CompilerAPI {
         resolveExprType: (expr)       => fns.exprWasmType(expr),
         isVarName:       (name)       => ctx.varNames.has(name),
 
-        lowerExpr:  (node)  => fns.lowerExpr(node, ctx),
-        lowerBlock: (node)  => fns.lowerBlock(node, ctx),
-        lowerParam: (param) => fns.lowerParam(param),
-        unwrapNode: (node)  => fns.unwrapNode(node),
+        lowerExpr:    (node)          => fns.lowerExpr(node, ctx),
+        lowerBlock:   (node)          => fns.lowerBlock(node, ctx),
+        lowerParam:   (param)         => fns.lowerParam(param),
+        lowerParams:  (node)          => fns.lowerParams(node),
+        lowerFunctionBody:        (node, params)        => fns.lowerFunctionBody(node, params, ctx),
+        resolveFunctionReturnType:(node, name, body)    => fns.resolveFunctionReturnType(node, name, body, ctx),
+        lowerGlobalInit:          (node, defaultType)   => fns.lowerGlobalInit(node, defaultType, ctx),
+        lowerExternParams:        (node)                => fns.lowerExternParams(node),
+        lowerExternResult:        (node)                => fns.lowerExternResult(node),
+        unwrapNode:   (node)          => fns.unwrapNode(node),
 
         watId:           (name)        => fns.watId(name),
         freshId:         (prefix = 'tmp') => `${prefix}_${ctx.freshIdCounter.n++}`,
