@@ -520,6 +520,26 @@ describe('Phase 0 WASIX smoke test', () => {
                     '  &@toInt (&@toFloat (&@toInt (&@toFloat x)))\n' +
                     '};',
               fn: 'rt2', args: [1000000], want: 1000000 },
+            // &WASM::* user-level intrinsics — slice 25.
+            // Store one byte, read it back.
+            { prog: '@fn memOp p:Int := {\n' +
+                    '  &WASM::i32_store8 p, 65;\n' +
+                    '  &WASM::i32_load8_u p\n' +
+                    '};',
+              fn: 'memOp', args: [256], want: 65 },
+            // Store an i32 at a 4-byte-aligned address, read back.
+            { prog: '@fn store_read p:Int, v:Int := {\n' +
+                    '  &WASM::i32_store p, v;\n' +
+                    '  &WASM::i32_load p\n' +
+                    '};',
+              fn: 'store_read', args: [512, 0xCAFEBABE | 0], want: 0xCAFEBABE | 0 },
+            // WASM:: also exposes the same arithmetic ops as binops.
+            { prog: '@fn wasmAdd a:Int, b:Int := { &WASM::i32_add a, b };',
+              fn: 'wasmAdd', args: [40, 2], want: 42 },
+            { prog: '@fn wasmEqz x:Int := { &WASM::i32_eqz x };',
+              fn: 'wasmEqz', args: [0], want: 1 },
+            { prog: '@fn wasmEqz x:Int := { &WASM::i32_eqz x };',
+              fn: 'wasmEqz', args: [7], want: 0 },
         ]
 
         // Strings produce a pointer to a length-prefixed UTF-8 block
@@ -577,8 +597,17 @@ describe('Phase 0 WASIX smoke test', () => {
                 })
                 expect(result.status).toBe(0)
                 const wat = (result.stdout ?? Buffer.alloc(0)).toString('utf-8')
-                const compiled = await watToWasm(wat)
-                const { instance } = await WebAssembly.instantiate(compiled.buffer, {})
+                let compiled: { buffer: ArrayBuffer }
+                let instance: WebAssembly.Instance
+                try {
+                    compiled = await watToWasm(wat)
+                    ;({ instance } = await WebAssembly.instantiate(compiled.buffer, {}))
+                } catch (e: any) {
+                    throw new Error(
+                        `Wasm build failed for ${JSON.stringify(c.prog)}\n` +
+                        `Error: ${e.message}\nWAT:\n${wat}`,
+                    )
+                }
                 const f = (instance.exports as any)[c.fn] as (...a: number[]) => number
                 if (typeof f !== 'function') {
                     throw new Error(

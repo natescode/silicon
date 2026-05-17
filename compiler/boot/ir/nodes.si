@@ -50,6 +50,10 @@
 @let IR_CALL:Int        := 15;
 @let IR_LOOP:Int        := 16;
 
+# IR_STORE [kind, op, addr_h, val_h]  — void; emits as
+# `<addr>; <val>; <op_mnemonic>`.
+@let IR_STORE:Int       := 19;
+
 # IR_FUNCTION  [kind, name_off, name_len, n_params, n_locals, body_h]
 @let IR_FUNCTION:Int    := 17;
 
@@ -93,6 +97,18 @@
 # Conversion unops between i32 and f32.
 @let IR_OP_F32_CONVERT_I32_S:Int := 30;
 @let IR_OP_I32_TRUNC_F32_S:Int   := 31;
+
+# Memory load ops (unary — take a pointer, return an i32).
+@let IR_OP_I32_LOAD:Int     := 40;
+@let IR_OP_I32_LOAD8_U:Int  := 41;
+@let IR_OP_I32_LOAD8_S:Int  := 42;
+@let IR_OP_I32_LOAD16_U:Int := 43;
+@let IR_OP_I32_LOAD16_S:Int := 44;
+
+# Memory store ops (binary, void — take a pointer + value).
+@let IR_OP_I32_STORE:Int    := 50;
+@let IR_OP_I32_STORE8:Int   := 51;
+@let IR_OP_I32_STORE16:Int  := 52;
 
 # Sentinel for "no IR handle" (e.g. missing else arm on IR_IF).
 @let IR_NONE:Int := 0 - 1;
@@ -252,6 +268,16 @@
 @fn ir_call_argc:Int     handle:Int := { &vec_get IR_VEC, (handle + 3) };
 @fn ir_call_arg:Int      handle:Int, i:Int := {
   &vec_get IR_VEC, (handle + 4 + i)
+};
+
+# ir_store — `[IR_STORE, op, addr_h, val_h]`.  Void result.
+@fn ir_store:Int op:Int, mem_addr:Int, val:Int := {
+  @local h := &vec_len IR_VEC;
+  IR_VEC = &vec_push IR_VEC, IR_STORE;
+  IR_VEC = &vec_push IR_VEC, op;
+  IR_VEC = &vec_push IR_VEC, mem_addr;
+  IR_VEC = &vec_push IR_VEC, val;
+  h
 };
 
 # ir_loop — `[IR_LOOP, cond_h, body_h]`.  While-style: at the top

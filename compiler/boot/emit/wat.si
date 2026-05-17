@@ -94,6 +94,17 @@
   &@if (op == IR_OP_I32_EQZ),           { &ew_str 'i32.eqz'; };
   &@if (op == IR_OP_F32_CONVERT_I32_S), { &ew_str 'f32.convert_i32_s'; };
   &@if (op == IR_OP_I32_TRUNC_F32_S),   { &ew_str 'i32.trunc_f32_s'; };
+  &@if (op == IR_OP_I32_LOAD),          { &ew_str 'i32.load'; };
+  &@if (op == IR_OP_I32_LOAD8_U),       { &ew_str 'i32.load8_u'; };
+  &@if (op == IR_OP_I32_LOAD8_S),       { &ew_str 'i32.load8_s'; };
+  &@if (op == IR_OP_I32_LOAD16_U),      { &ew_str 'i32.load16_u'; };
+  &@if (op == IR_OP_I32_LOAD16_S),      { &ew_str 'i32.load16_s'; };
+};
+
+@fn emit_store_mnemonic op:Int := {
+  &@if (op == IR_OP_I32_STORE),   { &ew_str 'i32.store'; };
+  &@if (op == IR_OP_I32_STORE8),  { &ew_str 'i32.store8'; };
+  &@if (op == IR_OP_I32_STORE16), { &ew_str 'i32.store16'; };
 };
 
 # Wrap an expression's emission in a complete WAT module:
@@ -213,11 +224,10 @@
     &@if ((&ir_kind f) == IR_EXTERN), { &emit_extern f; };
     i = i + 1;
   };
-  # Memory if we have any string literals.
+  # Always declare memory — load/store ops need it and the cost
+  # of one unused page is negligible.
+  &ew_str '  (memory (export "memory") 1)'; &ew_byte 10;
   @local n_lit := &litpool_count;
-  &@if (n_lit > 0), {
-    &ew_str '  (memory (export "memory") 1)'; &ew_byte 10;
-  };
   # Globals.
   @local g_n := &global_count;
   @local gi := 0;
@@ -317,6 +327,17 @@
     &@return 0;
   };
 
+  &@if (k == IR_STORE), {
+    @local op := &ir_field h, 1;
+    @local store_addr := &ir_field h, 2;
+    @local store_val  := &ir_field h, 3;
+    &emit_expr store_addr;
+    &emit_expr store_val;
+    &emit_store_mnemonic op;
+    &ew_byte 10;
+    &@return 0;
+  };
+
   &@if (k == IR_RETURN), {
     @local v := &ir_field h, 1;
     &emit_expr v;
@@ -362,6 +383,7 @@
     &@if (bk == IR_BREAK),      { needs_drop = 0; };
     &@if (bk == IR_CONTINUE),   { needs_drop = 0; };
     &@if (bk == IR_LOOP),       { needs_drop = 0; };
+    &@if (bk == IR_STORE),      { needs_drop = 0; };
     &@if (needs_drop == 1), { &ew_str 'drop'; &ew_byte 10; };
     &ew_str 'br $cont_'; &ew_write_int id; &ew_byte 10;
     &ew_str 'end'; &ew_byte 10;
@@ -437,6 +459,7 @@
         &@if (ck == IR_BREAK),      { needs_drop = 0; };
         &@if (ck == IR_CONTINUE),   { needs_drop = 0; };
         &@if (ck == IR_LOOP),       { needs_drop = 0; };
+        &@if (ck == IR_STORE),      { needs_drop = 0; };
         &@if (needs_drop == 1), { &ew_str 'drop'; &ew_byte 10; };
       };
       i = i + 1;

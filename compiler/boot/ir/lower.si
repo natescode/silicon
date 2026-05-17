@@ -407,6 +407,118 @@
 @fn lit_at_continue_ptr:Int := { (&str_ptr '@continue') + 4 };
 @fn lit_at_tofloat_ptr:Int  := { (&str_ptr '@toFloat')  + 4 };
 @fn lit_at_toint_ptr:Int    := { (&str_ptr '@toInt')    + 4 };
+@fn lit_wasm_seg_ptr:Int    := { (&str_ptr 'WASM')      + 4 };
+
+# Literal pointers + length pairs for every WASM op we dispatch.
+@fn lit_i32_add2_ptr:Int     := { (&str_ptr 'i32_add')     + 4 };
+@fn lit_i32_sub2_ptr:Int     := { (&str_ptr 'i32_sub')     + 4 };
+@fn lit_i32_mul2_ptr:Int     := { (&str_ptr 'i32_mul')     + 4 };
+@fn lit_i32_eqz2_ptr:Int     := { (&str_ptr 'i32_eqz')     + 4 };
+@fn lit_i32_load_ptr:Int     := { (&str_ptr 'i32_load')    + 4 };
+@fn lit_i32_load8u_ptr:Int   := { (&str_ptr 'i32_load8_u') + 4 };
+@fn lit_i32_load8s_ptr:Int   := { (&str_ptr 'i32_load8_s') + 4 };
+@fn lit_i32_load16u_ptr:Int  := { (&str_ptr 'i32_load16_u') + 4 };
+@fn lit_i32_load16s_ptr:Int  := { (&str_ptr 'i32_load16_s') + 4 };
+@fn lit_i32_store_ptr:Int    := { (&str_ptr 'i32_store')   + 4 };
+@fn lit_i32_store8_ptr:Int   := { (&str_ptr 'i32_store8')  + 4 };
+@fn lit_i32_store16_ptr:Int  := { (&str_ptr 'i32_store16') + 4 };
+
+# lower_wasm_intrinsic — given the second namespace segment of a
+# `&WASM::xxx ...` call, route to the right IR builder.  Returns
+# IR_NONE for unknown intrinsics so the caller can fall through.
+@fn lower_wasm_intrinsic:Int op_off:Int, op_len:Int, call:Int, n_args:Int := {
+  # Binary arithmetic (re-uses the body interpreter's op codes).
+  &@if ((&lower_span_eq_lit op_off, op_len, (&lit_i32_add2_ptr), 7) == 1), {
+    &@if (n_args == 2), {
+      @local a := &lower_expr (&ast_field P_AST, call, 3);
+      @local b := &lower_expr (&ast_field P_AST, call, 4);
+      &@if ((a != IR_NONE) * (b != IR_NONE) == 1),
+        { &@return (&ir_binop IR_OP_I32_ADD, a, b); };
+    };
+  };
+  &@if ((&lower_span_eq_lit op_off, op_len, (&lit_i32_sub2_ptr), 7) == 1), {
+    &@if (n_args == 2), {
+      @local a := &lower_expr (&ast_field P_AST, call, 3);
+      @local b := &lower_expr (&ast_field P_AST, call, 4);
+      &@if ((a != IR_NONE) * (b != IR_NONE) == 1),
+        { &@return (&ir_binop IR_OP_I32_SUB, a, b); };
+    };
+  };
+  &@if ((&lower_span_eq_lit op_off, op_len, (&lit_i32_mul2_ptr), 7) == 1), {
+    &@if (n_args == 2), {
+      @local a := &lower_expr (&ast_field P_AST, call, 3);
+      @local b := &lower_expr (&ast_field P_AST, call, 4);
+      &@if ((a != IR_NONE) * (b != IR_NONE) == 1),
+        { &@return (&ir_binop IR_OP_I32_MUL, a, b); };
+    };
+  };
+  &@if ((&lower_span_eq_lit op_off, op_len, (&lit_i32_eqz2_ptr), 7) == 1), {
+    &@if (n_args == 1), {
+      @local a := &lower_expr (&ast_field P_AST, call, 3);
+      &@if (a != IR_NONE), { &@return (&ir_unop IR_OP_I32_EQZ, a); };
+    };
+  };
+
+  # Memory loads (unary: take an i32 ptr, return an i32 value).
+  &@if ((&lower_span_eq_lit op_off, op_len, (&lit_i32_load_ptr), 8) == 1), {
+    &@if (n_args == 1), {
+      @local a := &lower_expr (&ast_field P_AST, call, 3);
+      &@if (a != IR_NONE), { &@return (&ir_unop IR_OP_I32_LOAD, a); };
+    };
+  };
+  &@if ((&lower_span_eq_lit op_off, op_len, (&lit_i32_load8u_ptr), 11) == 1), {
+    &@if (n_args == 1), {
+      @local a := &lower_expr (&ast_field P_AST, call, 3);
+      &@if (a != IR_NONE), { &@return (&ir_unop IR_OP_I32_LOAD8_U, a); };
+    };
+  };
+  &@if ((&lower_span_eq_lit op_off, op_len, (&lit_i32_load8s_ptr), 11) == 1), {
+    &@if (n_args == 1), {
+      @local a := &lower_expr (&ast_field P_AST, call, 3);
+      &@if (a != IR_NONE), { &@return (&ir_unop IR_OP_I32_LOAD8_S, a); };
+    };
+  };
+  &@if ((&lower_span_eq_lit op_off, op_len, (&lit_i32_load16u_ptr), 12) == 1), {
+    &@if (n_args == 1), {
+      @local a := &lower_expr (&ast_field P_AST, call, 3);
+      &@if (a != IR_NONE), { &@return (&ir_unop IR_OP_I32_LOAD16_U, a); };
+    };
+  };
+  &@if ((&lower_span_eq_lit op_off, op_len, (&lit_i32_load16s_ptr), 12) == 1), {
+    &@if (n_args == 1), {
+      @local a := &lower_expr (&ast_field P_AST, call, 3);
+      &@if (a != IR_NONE), { &@return (&ir_unop IR_OP_I32_LOAD16_S, a); };
+    };
+  };
+
+  # Memory stores (binary, void: take ptr + value).
+  &@if ((&lower_span_eq_lit op_off, op_len, (&lit_i32_store_ptr), 9) == 1), {
+    &@if (n_args == 2), {
+      @local a := &lower_expr (&ast_field P_AST, call, 3);
+      @local v := &lower_expr (&ast_field P_AST, call, 4);
+      &@if ((a != IR_NONE) * (v != IR_NONE) == 1),
+        { &@return (&ir_store IR_OP_I32_STORE, a, v); };
+    };
+  };
+  &@if ((&lower_span_eq_lit op_off, op_len, (&lit_i32_store8_ptr), 10) == 1), {
+    &@if (n_args == 2), {
+      @local a := &lower_expr (&ast_field P_AST, call, 3);
+      @local v := &lower_expr (&ast_field P_AST, call, 4);
+      &@if ((a != IR_NONE) * (v != IR_NONE) == 1),
+        { &@return (&ir_store IR_OP_I32_STORE8, a, v); };
+    };
+  };
+  &@if ((&lower_span_eq_lit op_off, op_len, (&lit_i32_store16_ptr), 11) == 1), {
+    &@if (n_args == 2), {
+      @local a := &lower_expr (&ast_field P_AST, call, 3);
+      @local v := &lower_expr (&ast_field P_AST, call, 4);
+      &@if ((a != IR_NONE) * (v != IR_NONE) == 1),
+        { &@return (&ir_store IR_OP_I32_STORE16, a, v); };
+    };
+  };
+
+  IR_NONE
+};
 
 @fn lower_span_eq_lit:Int off:Int, len:Int, lit_ptr:Int, lit_len:Int := {
   @local ok := 1;
@@ -547,6 +659,21 @@
     @local n_args := &ast_field P_AST, node, 2;
     &@if ((&ast_kind P_AST, callee) != AST_NAMESPACE), { &@return IR_NONE; };
     @local n_segs := &ast_field P_AST, callee, 1;
+
+    # &WASM::op a, b — direct WASM-instruction dispatch from user
+    # code (the parser/lexer use these for byte-level memory access).
+    &@if (n_segs == 2), {
+      @local s0_off := &ast_field P_AST, callee, 2;
+      @local s0_len := &ast_field P_AST, callee, 3;
+      @local is_wasm := &lower_span_eq_lit s0_off, s0_len, (&lit_wasm_seg_ptr), 4;
+      &@if (is_wasm == 1), {
+        @local op_off := &ast_field P_AST, callee, 4;
+        @local op_len := &ast_field P_AST, callee, 5;
+        @local r := &lower_wasm_intrinsic op_off, op_len, node, n_args;
+        &@if (r != IR_NONE), { &@return r; };
+      };
+    };
+
     &@if (n_segs != 1), { &@return IR_NONE; };
     @local nm_off := &ast_field P_AST, callee, 2;
     @local nm_len := &ast_field P_AST, callee, 3;
