@@ -1,0 +1,35 @@
+# Lexer token kinds for the bootstrap parser.
+#
+# Each TOK_* is a zero-arg `@let` function returning the kind's Int code.
+# Bare reference (`TOK_EOF`) lowers to `(call $TOK_EOF)` — cheap but lets
+# the typechecker treat the value as a plain Int, which `==` / `!=` /
+# arithmetic accept.  `@enum` variants would carry the Sum type and need
+# casts every time we mix them with byte values.
+
+@let TOK_EOF:Int        := 0;
+@let TOK_IDENT:Int      := 1;
+@let TOK_KEYWORD:Int    := 2;   # @xxx
+@let TOK_DOC:Int        := 3;   # ## to end-of-line
+@let TOK_STR:Int        := 4;   # 'payload'
+@let TOK_NUM_DEC:Int    := 5;
+@let TOK_NUM_HEX:Int    := 6;
+@let TOK_NUM_BIN:Int    := 7;
+@let TOK_NUM_OCT:Int    := 8;
+@let TOK_NUM_FLOAT:Int  := 9;
+@let TOK_NS_SEP:Int     := 10;  # :: or .
+@let TOK_AMP:Int        := 11;  # &
+@let TOK_DOLLAR:Int     := 12;  # $
+@let TOK_BACKSLASH:Int  := 13;  # \
+@let TOK_AT:Int         := 14;  # bare @ (Stage 1 only emits Keyword)
+@let TOK_LBRACE:Int     := 15;
+@let TOK_RBRACE:Int     := 16;
+@let TOK_LPAREN:Int     := 17;
+@let TOK_RPAREN:Int     := 18;
+@let TOK_LBRACK:Int     := 19;
+@let TOK_RBRACK:Int     := 20;
+@let TOK_COMMA:Int      := 21;
+@let TOK_SEMI:Int       := 22;
+@let TOK_COLON:Int      := 23;  # : not part of :=
+@let TOK_EQ:Int         := 24;  # = not part of ==
+@let TOK_COLONEQ:Int    := 25;  # :=
+@let TOK_OPERATOR:Int   := 26;

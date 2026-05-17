@@ -661,14 +661,26 @@ function checkDefinition(d: any, ctx: Ctx): SiliconType {
 // Expressions
 // ---------------------------------------------------------------------------
 
+/** Bool and Int share the i32 wasmType.  In arithmetic / bitwise / user-op
+ *  positions we treat a Bool operand as if it were Int so byte-level code
+ *  (lexers, packed bit checks) doesn't have to wrap every comparison in
+ *  `@if c, { 1 }, { 0 }`.  Equality / ordering / `||` still *return* Bool;
+ *  this only widens what they're allowed to *accept*. */
+function coerceBoolToInt(t: SiliconType): SiliconType {
+    return t.kind === 'Bool' ? TypeInt : t
+}
+
 function checkBinaryOp(b: any, ctx: Ctx): SiliconType {
-    const leftT = checkNode(b.left, ctx)
-    const rightT = checkNode(b.right, ctx)
+    const leftRaw  = checkNode(b.left, ctx)
+    const rightRaw = checkNode(b.right, ctx)
 
     // Propagate Unknown without cascading additional errors.
-    if (leftT.kind === 'Unknown' || rightT.kind === 'Unknown') {
+    if (leftRaw.kind === 'Unknown' || rightRaw.kind === 'Unknown') {
         return TypeUnknown
     }
+
+    const leftT  = coerceBoolToInt(leftRaw)
+    const rightT = coerceBoolToInt(rightRaw)
 
     switch (b.operator) {
         // Arithmetic — both sides must be the same numeric type.
@@ -678,7 +690,7 @@ function checkBinaryOp(b: any, ctx: Ctx): SiliconType {
         case '/':
         case '%':
             if (!isNumeric(leftT) || !isNumeric(rightT) || !typeEquals(leftT, rightT)) {
-                ctx.errors.push(invalidOperator(b.operator, leftT, rightT, b.sourceLocation))
+                ctx.errors.push(invalidOperator(b.operator, leftRaw, rightRaw, b.sourceLocation))
                 return TypeUnknown
             }
             return leftT

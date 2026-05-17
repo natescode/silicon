@@ -1,0 +1,300 @@
+# Hand-written lexer for Silicon — bootstrap-plan §Phase 1.2.
+#
+#   lex(src_ptr, src_len) -> vec_i32
+#
+# Returns a vec of (kind, offset, length) triples — no token-string
+# allocation.  Caller indexes into the source buffer for token text.
+# Final token is always (TOK_EOF, src_len, 0).
+#
+# The lexer is one straight-line LL(1) walk over the source bytes.
+# `#` line comments and whitespace are skipped between tokens; `##` opens
+# a doc comment that runs to end-of-line.
+
+@use '../std/vec.si';
+@use 'tokens.si';
+
+# ----------------------------------------------------------------------
+# Byte classification — all return 0/1 i32 so they compose with bitwise
+# `|` and multiplication for AND/OR without needing the @and keyword.
+# ----------------------------------------------------------------------
+
+# in_range(b, lo, hi) — 1 iff lo <= b <= hi.
+@fn in_range:Int b:Int, lo:Int, hi:Int := {
+  (b >= lo) * (b <= hi)
+};
+
+@fn is_digit:Int b:Int  := { &in_range b, 48, 57 };       # 0..9
+@fn is_hex:Int   b:Int  := {
+  (&is_digit b) | (&in_range b, 65, 70) | (&in_range b, 97, 102)
+};
+@fn is_alpha:Int b:Int  := {
+  (&in_range b, 65, 90) | (&in_range b, 97, 122)          # A..Z | a..z
+};
+@fn is_alnum:Int b:Int  := { (&is_alpha b) | (&is_digit b) };
+@fn is_ident_start:Int b:Int := { (&is_alpha b) | (b == 95) };  # _ allowed
+@fn is_ident_cont:Int  b:Int := { (&is_alnum b) | (b == 95) };
+@fn is_ws:Int b:Int := {
+  (b == 32) | (b == 9) | (b == 10) | (b == 13)            # space, tab, LF, CR
+};
+
+# operatorGlyph from the Ohm grammar: = < > ! + - * / % ^ | ~ ?
+@fn is_op_char:Int b:Int := {
+  (b == 61) | (b == 60) | (b == 62) | (b == 33) |
+  (b == 43) | (b == 45) | (b == 42) | (b == 47) |
+  (b == 37) | (b == 94) | (b == 124) | (b == 126) | (b == 63)
+};
+
+# ----------------------------------------------------------------------
+# Source buffer access
+# ----------------------------------------------------------------------
+
+# byte_at(ptr, len, i) — load byte i, or -1 past EOF.
+@fn byte_at:Int ptr:Int, len:Int, i:Int := {
+  &@if (i >= len),
+    { 0 - 1 },
+    { &WASM::i32_load8_u (ptr + i) }
+};
+
+# ----------------------------------------------------------------------
+# Token emission
+# ----------------------------------------------------------------------
+
+# Push a (kind, offset, length) triple onto the token vec; returns the
+# (possibly relocated) vec pointer.  Callers must rebind.
+@fn push_tok:Int toks:Int, kind:Int, off:Int, len:Int := {
+  @local t1 := &vec_push toks, kind;
+  @local t2 := &vec_push t1, off;
+  &vec_push t2, len
+};
+
+# ----------------------------------------------------------------------
+# Sub-lexers — each consumes from `start` and returns the new cursor.
+# ----------------------------------------------------------------------
+
+# Skip whitespace and `#` line comments (but NOT `##` doc comments).
+@fn skip_trivia:Int ptr:Int, len:Int, pos:Int := {
+  @local i := pos;
+  &@loop 1, {
+    @local b := &byte_at ptr, len, i;
+    &@if (b < 0), { &@break };
+    &@if (&is_ws b),
+      { i = i + 1; },
+      {
+        @local is_hash := (b == 35);
+        @local next    := &byte_at ptr, len, (i + 1);
+        @local is_doc  := (is_hash * (next == 35));
+        &@if ((is_hash == 1) * (is_doc == 0)),
+          {
+            # Skip to end-of-line.
+            i = i + 1;
+            &@loop 1, {
+              @local c := &byte_at ptr, len, i;
+              &@if (c < 0), { &@break };
+              &@if (c == 10), { &@break };
+              i = i + 1;
+            };
+          },
+          { &@break };
+      };
+  };
+  i
+};
+
+@fn scan_ident:Int ptr:Int, len:Int, start:Int := {
+  @local i := start;
+  &@loop 1, {
+    @local b := &byte_at ptr, len, i;
+    &@if (b < 0), { &@break };
+    &@if (&is_ident_cont b), { i = i + 1; }, { &@break };
+  };
+  i
+};
+
+@fn scan_op:Int ptr:Int, len:Int, start:Int := {
+  @local i := start;
+  &@loop 1, {
+    @local b := &byte_at ptr, len, i;
+    &@if (b < 0), { &@break };
+    &@if (&is_op_char b), { i = i + 1; }, { &@break };
+  };
+  i
+};
+
+@fn scan_num_end:Int ptr:Int, len:Int, start:Int := {
+  # Consume any alnum + `_` byte — covers decimal/hex digits AND the
+  # 0x/0b/0c prefix letters in one pass.  Kind classification happens
+  # at the call site by inspecting the leading bytes.
+  @local i := start;
+  &@loop 1, {
+    @local b := &byte_at ptr, len, i;
+    &@if (b < 0), { &@break };
+    @local accept := (&is_alnum b) | (b == 95);
+    &@if accept, { i = i + 1; }, { &@break };
+  };
+  i
+};
+
+# Lex a '...' string literal.  Returns cursor AFTER closing quote.
+@fn scan_string_end:Int ptr:Int, len:Int, start:Int := {
+  @local i := start;
+  i = i + 1;                                              # consume opening '
+  &@loop 1, {
+    @local b := &byte_at ptr, len, i;
+    &@if (b < 0), { &@break };
+    &@if (b == 39), { i = i + 1; &@break };               # closing '
+    i = i + 1;
+  };
+  i
+};
+
+# Lex a `##` doc comment to end-of-line.  `start` points at first '#'.
+@fn scan_doc_end:Int ptr:Int, len:Int, start:Int := {
+  @local i := start + 2;
+  &@loop 1, {
+    @local b := &byte_at ptr, len, i;
+    &@if (b < 0), { &@break };
+    &@if (b == 10), { &@break };
+    i = i + 1;
+  };
+  i
+};
+
+# ----------------------------------------------------------------------
+# Main lexer dispatch.
+# ----------------------------------------------------------------------
+
+@fn lex:Int ptr:Int, len:Int := {
+  @local toks := &vec_new;
+  @local i    := 0;
+
+  &@loop 1, {
+    i = &skip_trivia ptr, len, i;
+    @local b := &byte_at ptr, len, i;
+    &@if (b < 0), { &@break };
+
+    # Each matching branch &@continue's so single-byte branches like `&`
+    # don't fall through to the operator-run case at the bottom.
+
+    # ---- single-byte sigils & punctuation ----
+    &@if (b == 38), { toks = &push_tok toks, TOK_AMP,       i, 1; i = i + 1; &@continue };  # &
+    &@if (b == 36), { toks = &push_tok toks, TOK_DOLLAR,    i, 1; i = i + 1; &@continue };  # $
+    &@if (b == 92), { toks = &push_tok toks, TOK_BACKSLASH, i, 1; i = i + 1; &@continue };  # \
+    &@if (b == 123),{ toks = &push_tok toks, TOK_LBRACE,    i, 1; i = i + 1; &@continue };  # {
+    &@if (b == 125),{ toks = &push_tok toks, TOK_RBRACE,    i, 1; i = i + 1; &@continue };  # }
+    &@if (b == 40), { toks = &push_tok toks, TOK_LPAREN,    i, 1; i = i + 1; &@continue };  # (
+    &@if (b == 41), { toks = &push_tok toks, TOK_RPAREN,    i, 1; i = i + 1; &@continue };  # )
+    &@if (b == 91), { toks = &push_tok toks, TOK_LBRACK,    i, 1; i = i + 1; &@continue };  # [
+    &@if (b == 93), { toks = &push_tok toks, TOK_RBRACK,    i, 1; i = i + 1; &@continue };  # ]
+    &@if (b == 44), { toks = &push_tok toks, TOK_COMMA,     i, 1; i = i + 1; &@continue };  # ,
+    &@if (b == 59), { toks = &push_tok toks, TOK_SEMI,      i, 1; i = i + 1; &@continue };  # ;
+    &@if (b == 46), { toks = &push_tok toks, TOK_NS_SEP,    i, 1; i = i + 1; &@continue };  # .
+
+    # ---- `:` | `::` | `:=` ----
+    &@if (b == 58), {
+      @local next := &byte_at ptr, len, (i + 1);
+      &@if (next == 58),
+        { toks = &push_tok toks, TOK_NS_SEP,  i, 2; i = i + 2; },
+        { &@if (next == 61),
+            { toks = &push_tok toks, TOK_COLONEQ, i, 2; i = i + 2; },
+            { toks = &push_tok toks, TOK_COLON,   i, 1; i = i + 1; } };
+      &@continue;
+    };
+
+    # ---- `=` — single Eq, or part of an op run (== / => / =< …) ----
+    &@if (b == 61), {
+      @local next := &byte_at ptr, len, (i + 1);
+      &@if (&is_op_char next),
+        {
+          @local end := &scan_op ptr, len, i;
+          toks = &push_tok toks, TOK_OPERATOR, i, (end - i);
+          i = end;
+        },
+        { toks = &push_tok toks, TOK_EQ, i, 1; i = i + 1; };
+      &@continue;
+    };
+
+    # ---- `##` doc comment.  Single `#` was eaten by skip_trivia. ----
+    &@if (b == 35), {
+      @local next := &byte_at ptr, len, (i + 1);
+      &@if (next == 35),
+        {
+          @local end := &scan_doc_end ptr, len, i;
+          toks = &push_tok toks, TOK_DOC, i, (end - i);
+          i = end;
+        },
+        { i = i + 1; };
+      &@continue;
+    };
+
+    # ---- `@keyword` or bare `@` ----
+    &@if (b == 64), {
+      @local next := &byte_at ptr, len, (i + 1);
+      &@if (&is_ident_start next),
+        {
+          @local end := &scan_ident ptr, len, (i + 1);
+          toks = &push_tok toks, TOK_KEYWORD, i, (end - i);
+          i = end;
+        },
+        {
+          toks = &push_tok toks, TOK_AT, i, 1;
+          i = i + 1;
+        };
+      &@continue;
+    };
+
+    # ---- string literal ----
+    &@if (b == 39), {
+      @local end := &scan_string_end ptr, len, i;
+      toks = &push_tok toks, TOK_STR, i, (end - i);
+      i = end;
+      &@continue;
+    };
+
+    # ---- identifier ----
+    &@if (&is_ident_start b), {
+      @local end := &scan_ident ptr, len, i;
+      toks = &push_tok toks, TOK_IDENT, i, (end - i);
+      i = end;
+      &@continue;
+    };
+
+    # ---- number ----
+    &@if (&is_digit b), {
+      @local end := &scan_num_end ptr, len, i;
+      @local maybeDot := &byte_at ptr, len, end;
+      @local afterDot := &byte_at ptr, len, (end + 1);
+      @local isFloat  := (maybeDot == 46) * (&is_digit afterDot);
+      &@if (isFloat == 1),
+        {
+          end = &scan_num_end ptr, len, (end + 1);
+          toks = &push_tok toks, TOK_NUM_FLOAT, i, (end - i);
+        },
+        {
+          @local kind := TOK_NUM_DEC;
+          @local b1 := &byte_at ptr, len, i;
+          @local b2 := &byte_at ptr, len, (i + 1);
+          &@if ((b1 == 48) * (b2 == 120) == 1), { kind = TOK_NUM_HEX; };  # 0x
+          &@if ((b1 == 48) * (b2 == 98)  == 1), { kind = TOK_NUM_BIN; };  # 0b
+          &@if ((b1 == 48) * (b2 == 99)  == 1), { kind = TOK_NUM_OCT; };  # 0c
+          toks = &push_tok toks, kind, i, (end - i);
+        };
+      i = end;
+      &@continue;
+    };
+
+    # ---- operator run (covers + - * / % < > ! ^ | ~ ?; `=` handled above) ----
+    &@if (&is_op_char b), {
+      @local end := &scan_op ptr, len, i;
+      toks = &push_tok toks, TOK_OPERATOR, i, (end - i);
+      i = end;
+      &@continue;
+    };
+
+    # Unrecognised byte — skip so the lexer never gets stuck.
+    i = i + 1;
+  };
+
+  # Always emit an explicit Eof so parsers can rely on its presence.
+  toks = &push_tok toks, TOK_EOF, len, 0;
+  toks
+};

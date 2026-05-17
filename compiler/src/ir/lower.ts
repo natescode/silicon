@@ -748,7 +748,12 @@ function lowerAsStmt(node: any, ctx: LowerCtx): IRStmt | null {
         if (node.name?.typeAnnotation?.typename) {
             wasmType = siliconTypeNameToWasm(node.name.typeAnnotation.typename)
         }
-        ctx.pendingLocals.push({ name, wasmType })
+        // Hoist by name: multiple `@local x := ...` in different branches
+        // (lexer / parser dispatch loops do this heavily) collapse to a
+        // single `(local $x i32)` declaration in the function preamble.
+        if (!ctx.locals.has(name)) {
+            ctx.pendingLocals.push({ name, wasmType })
+        }
         ctx.locals.set(name, wasmType)
 
         const binding = Array.isArray(node.binding) ? node.binding[0] : node.binding

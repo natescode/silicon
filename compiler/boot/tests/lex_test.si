@@ -1,0 +1,111 @@
+# Lexer unit test — covers every token kind the parser will consume.
+#
+# Pass: prints "lex OK <n>" and exits 0.
+# Fail: prints "lex FAIL <code>" and exits 1 where <code> identifies the
+# failed assertion (1..n).
+
+@use '../std/io.si';
+@use '../std/vec.si';
+@use '../parser/tokens.si';
+@use '../parser/lex.si';
+
+@fn put_int n:Int := {
+  @local hundreds := (n / 100);
+  @local tens     := ((n / 10) % 10);
+  @local ones     := (n % 10);
+  &@if (hundreds > 0),     { &write_byte 1, (hundreds + 48); };
+  &@if (((hundreds > 0) | (tens > 0)) == 1), { &write_byte 1, (tens + 48); };
+  &write_byte 1, (ones + 48);
+};
+
+@fn die code:Int := {
+  &write_str 1, 'lex FAIL ';
+  &put_int code;
+  &write_byte 1, 10;
+  &wasi_snapshot_preview1::proc_exit 1;
+};
+
+@fn tok_kind:Int  toks:Int, ti:Int := { &vec_get toks, (ti * 3) };
+@fn tok_off:Int   toks:Int, ti:Int := { &vec_get toks, (ti * 3 + 1) };
+@fn tok_len:Int   toks:Int, ti:Int := { &vec_get toks, (ti * 3 + 2) };
+@fn tok_count:Int toks:Int := { ((&vec_len toks) / 3) };
+
+@fn lex_str:Int s:String := {
+  @local p := (&str_ptr s) + 4;
+  @local n := &str_len s;
+  &lex p, n
+};
+
+# expect(toks, idx, kind, code) — die `code` if token at idx doesn't have kind.
+@fn expect toks:Int, idx:Int, kind:Int, code:Int := {
+  &@if ((&tok_kind toks, idx) != kind), { &die code; };
+};
+
+@fn run := {
+  # ── 1. Definition with assignment ─────────────────────────────────
+  # `@let x := 42;`  → Keyword, Ident, ColonEq, NumDec, Semi, Eof
+  @local t1 := &lex_str '@let x := 42;';
+  &@if ((&tok_count t1) != 6), { &die 1; };
+  &expect t1, 0, TOK_KEYWORD, 2;
+  &expect t1, 1, TOK_IDENT,   3;
+  &expect t1, 2, TOK_COLONEQ, 4;
+  &expect t1, 3, TOK_NUM_DEC, 5;
+  &expect t1, 4, TOK_SEMI,    6;
+  &expect t1, 5, TOK_EOF,     7;
+
+  # ── 2. All bracket / punct tokens ─────────────────────────────────
+  # `{}()[],;` → LBrace, RBrace, LParen, RParen, LBrack, RBrack, Comma, Semi, Eof
+  @local t2 := &lex_str '{}()[],;';
+  &@if ((&tok_count t2) != 9), { &die 10; };
+  &expect t2, 0, TOK_LBRACE, 11;
+  &expect t2, 1, TOK_RBRACE, 12;
+  &expect t2, 2, TOK_LPAREN, 13;
+  &expect t2, 3, TOK_RPAREN, 14;
+  &expect t2, 4, TOK_LBRACK, 15;
+  &expect t2, 5, TOK_RBRACK, 16;
+  &expect t2, 6, TOK_COMMA,  17;
+  &expect t2, 7, TOK_SEMI,   18;
+
+  # ── 3. Sigil tokens & operator run ────────────────────────────────
+  # `&add 1 + 2` → Amp, Ident, NumDec, Operator, NumDec, Eof
+  @local t3 := &lex_str '&add 1 + 2';
+  &@if ((&tok_count t3) != 6), { &die 20; };
+  &expect t3, 0, TOK_AMP,      21;
+  &expect t3, 1, TOK_IDENT,    22;
+  &expect t3, 2, TOK_NUM_DEC,  23;
+  &expect t3, 3, TOK_OPERATOR, 24;
+  &expect t3, 4, TOK_NUM_DEC,  25;
+
+  # ── 4. Number variants ────────────────────────────────────────────
+  # `0xff 0b1010 0c77 3.14 42` → NumHex, NumBin, NumOct, NumFloat, NumDec, Eof
+  @local t4 := &lex_str '0xff 0b1010 0c77 3.14 42';
+  &@if ((&tok_count t4) != 6), { &die 30; };
+  &expect t4, 0, TOK_NUM_HEX,   31;
+  &expect t4, 1, TOK_NUM_BIN,   32;
+  &expect t4, 2, TOK_NUM_OCT,   33;
+  &expect t4, 3, TOK_NUM_FLOAT, 34;
+  &expect t4, 4, TOK_NUM_DEC,   35;
+
+  # ── 5. Namespace separators ───────────────────────────────────────
+  # `Color::Red` → Ident, NsSep, Ident, Eof
+  @local t5 := &lex_str 'Color::Red';
+  &@if ((&tok_count t5) != 4), { &die 40; };
+  &expect t5, 0, TOK_IDENT, 41;
+  &expect t5, 1, TOK_NS_SEP, 42;
+  &expect t5, 2, TOK_IDENT, 43;
+
+  # ── 6. Doc comment without leading whitespace (single-line input;
+  #      Silicon string literals don't allow embedded newlines) ──────
+  # `## doc here` → Doc, Eof (doc runs to end of input)
+  @local t6 := &lex_str '## doc here';
+  &@if ((&tok_count t6) != 2), { &die 60; };
+  &expect t6, 0, TOK_DOC, 61;
+  &expect t6, 1, TOK_EOF, 62;
+
+  &write_str 1, 'lex OK ';
+  &put_int 6;
+  &write_byte 1, 10;
+  &wasi_snapshot_preview1::proc_exit 0;
+};
+
+&run;

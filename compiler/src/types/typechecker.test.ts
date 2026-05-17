@@ -166,13 +166,17 @@ test('Int + String is a type error', () => {
     expect(errors[0].kind).toBe('InvalidOperator')
 })
 
-test('Bool + Bool is a type error (arithmetic not defined on Bool)', () => {
+test('Bool + Bool coerces to Int (lexer/bit-pack ergonomics)', () => {
+    // At the WASM level Bool === Int (both are i32).  Since bootstrap-plan
+    // §Phase 1 needs to write byte-level dispatchers like
+    //   (b == 35) * (next == 35)
+    // the typechecker silently coerces Bool to Int in arithmetic / bitwise
+    // positions.  Equality and ordering operators still return Bool.
     const left = ASTFactory.expressionStart('expressionEnd', boolExpEnd(true))
     const bin = ASTFactory.binOp(left, '+', boolExpEnd(false))
     const exp = ASTFactory.expressionStart('binOp', bin)
     const { errors } = typecheck(wrapItem(exp))
-    expect(errors.length).toBeGreaterThan(0)
-    expect(errors[0].kind).toBe('InvalidOperator')
+    expect(errors).toEqual([])
 })
 
 // ------------------------------------------------------------------
