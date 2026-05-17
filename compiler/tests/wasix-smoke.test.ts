@@ -314,6 +314,56 @@ describe('Phase 0 WASIX smoke test', () => {
         }
     })
 
+    test('boot/tests/emit_test.si: end-to-end emits WAT instructions from Silicon expressions', async () => {
+        if (!wasmerAvailable()) {
+            console.log('  (skipped: wasmer not on PATH)')
+            return
+        }
+        const wasm = await buildBoot(path.join(PROJECT_ROOT, 'boot', 'tests', 'emit_test.si'))
+        const tmpPath = path.join(PROJECT_ROOT, '.emit-smoke.wasm')
+        await fs.writeFile(tmpPath, wasm)
+
+        const strataDir = path.join(PROJECT_ROOT, 'src', 'strata')
+        const files = (await fs.readdir(strataDir))
+            .filter(f => f.endsWith('.si'))
+            .sort()
+        let bundle = ''
+        for (const f of files) {
+            bundle += await fs.readFile(path.join(strataDir, f), 'utf-8')
+            bundle += '\n'
+        }
+
+        const cases: Array<[string, string[]]> = [
+            ['42;',          ['i32.const 42']],
+            ['1 + 2;',       ['i32.const 1', 'i32.const 2', 'i32.add']],
+            ['10 * 3;',      ['i32.const 10', 'i32.const 3', 'i32.mul']],
+            ['(1 + 2) * 3;', ['i32.const 1', 'i32.const 2', 'i32.add', 'i32.const 3', 'i32.mul']],
+            ['5 < 7;',       ['i32.const 5', 'i32.const 7', 'i32.lt_s']],
+            ['{ 1; 2 + 3 };', ['i32.const 1', 'i32.const 2', 'i32.const 3', 'i32.add']],
+            ['{ };',         []],
+        ]
+
+        try {
+            for (const [src, expectedLines] of cases) {
+                const result = spawnSync('wasmer', ['run', tmpPath], {
+                    input: Buffer.from(bundle + src + '\n', 'utf-8'),
+                    maxBuffer: 64 * 1024 * 1024,
+                })
+                expect(result.status).toBe(0)
+                const stdout = (result.stdout ?? Buffer.alloc(0)).toString('utf-8')
+                const expected = expectedLines.length === 0 ? '' : expectedLines.join('\n') + '\n'
+                if (stdout !== expected) {
+                    throw new Error(
+                        `Emit mismatch for ${JSON.stringify(src)}\n` +
+                        `Expected:\n${expected}\nGot:\n${stdout}`,
+                    )
+                }
+            }
+        } finally {
+            await fs.unlink(tmpPath).catch(() => {})
+        }
+    })
+
     test('boot/tests/lower_test.si: end-to-end lowers arithmetic expressions to IR', async () => {
         if (!wasmerAvailable()) {
             console.log('  (skipped: wasmer not on PATH)')

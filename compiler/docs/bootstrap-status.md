@@ -193,6 +193,9 @@ Still ahead for Phase 4:
 | IR record layout + builders for fixed-shape kinds    | **Landed** | ~165 |
 | Variable-arity builders (Block / Call / Loop)        | **Landed** | (in `nodes.si`) |
 | Expression lowerer (IntLit / BoolLit / BinaryOp / Block) | **Landed** | ~85 |
+| WAT emitter — i32 binops + unops + blocks + consts   | **Landed** | ~120 |
+| End-to-end gate: Silicon source → WAT instructions   | **Landed** | — |
+| Module wrapper / function header / exports           | Pending | — |
 | IR → JSON dumper                                     | Pending | — |
 | Phase 6 gate: IR-JSON byte-equal vs Stage 0          | Pending | — |
 

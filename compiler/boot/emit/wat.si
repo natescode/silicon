@@ -1,0 +1,116 @@
+# WAT emitter — Phase 7 slice 1.
+#
+# Walks an IR tree and writes a linearized stack-machine instruction
+# sequence to stdout, one instruction per line.  Today's coverage:
+#
+#   IR_NULL        → (nothing emitted)
+#   IR_I32_CONST   → i32.const <value>
+#   IR_BINOP       → emit_expr(left); emit_expr(right); <op-mnemonic>
+#   IR_UNOP        → emit_expr(operand); <op-mnemonic>
+#   IR_BLOCK       → emit each child in order
+#
+# No `drop` insertion between block items — that requires type info
+# the type checker doesn't yet produce.  No module wrapper, no
+# function definitions, no locals — those land alongside the
+# lowerer slices for @fn / @let / @local.
+
+@use '../std/io.si';
+@use '../ir/nodes.si';
+
+@fn ew_str s:String := { &write_str  1, s; };
+@fn ew_byte b:Int   := { &write_byte 1, b; };
+
+# Compact base-10 writer for non-negative ints up to 99,999,999.
+@fn ew_write_int v:Int := {
+  &@if (v < 0), { &ew_byte 45; v = 0 - v; };
+  @local d7 := v / 10000000;
+  @local d6 := (v / 1000000) - (d7 * 10);
+  @local d5 := (v / 100000)  - ((d7 * 100) + (d6 * 10));
+  @local d4 := (v / 10000)   - ((d7 * 1000) + (d6 * 100) + (d5 * 10));
+  @local d3 := (v / 1000)    - ((d7 * 10000) + (d6 * 1000) + (d5 * 100) + (d4 * 10));
+  @local d2 := (v / 100)     - ((d7 * 100000) + (d6 * 10000) + (d5 * 1000) + (d4 * 100) + (d3 * 10));
+  @local d1 := (v / 10)      - ((d7 * 1000000) + (d6 * 100000) + (d5 * 10000) + (d4 * 1000) + (d3 * 100) + (d2 * 10));
+  @local d0 := v             - ((d7 * 10000000) + (d6 * 1000000) + (d5 * 100000) + (d4 * 10000) + (d3 * 1000) + (d2 * 100) + (d1 * 10));
+  @local seen := 0;
+  &@if (d7 > 0), { &ew_byte (48 + d7); seen = 1; };
+  &@if ((seen == 1) + (d6 > 0) > 0), { &ew_byte (48 + d6); seen = 1; };
+  &@if ((seen == 1) + (d5 > 0) > 0), { &ew_byte (48 + d5); seen = 1; };
+  &@if ((seen == 1) + (d4 > 0) > 0), { &ew_byte (48 + d4); seen = 1; };
+  &@if ((seen == 1) + (d3 > 0) > 0), { &ew_byte (48 + d3); seen = 1; };
+  &@if ((seen == 1) + (d2 > 0) > 0), { &ew_byte (48 + d2); seen = 1; };
+  &@if ((seen == 1) + (d1 > 0) > 0), { &ew_byte (48 + d1); seen = 1; };
+  &ew_byte (48 + d0);
+};
+
+# Op mnemonics — `i32.<...>` for each IR_OP_* value.
+@fn emit_binop_mnemonic op:Int := {
+  &@if (op == IR_OP_I32_ADD),    { &ew_str 'i32.add'; };
+  &@if (op == IR_OP_I32_SUB),    { &ew_str 'i32.sub'; };
+  &@if (op == IR_OP_I32_MUL),    { &ew_str 'i32.mul'; };
+  &@if (op == IR_OP_I32_DIV_S),  { &ew_str 'i32.div_s'; };
+  &@if (op == IR_OP_I32_REM_S),  { &ew_str 'i32.rem_s'; };
+  &@if (op == IR_OP_I32_EQ),     { &ew_str 'i32.eq'; };
+  &@if (op == IR_OP_I32_NE),     { &ew_str 'i32.ne'; };
+  &@if (op == IR_OP_I32_LT_S),   { &ew_str 'i32.lt_s'; };
+  &@if (op == IR_OP_I32_LE_S),   { &ew_str 'i32.le_s'; };
+  &@if (op == IR_OP_I32_GT_S),   { &ew_str 'i32.gt_s'; };
+  &@if (op == IR_OP_I32_GE_S),   { &ew_str 'i32.ge_s'; };
+  &@if (op == IR_OP_I32_AND),    { &ew_str 'i32.and'; };
+  &@if (op == IR_OP_I32_OR),     { &ew_str 'i32.or'; };
+  &@if (op == IR_OP_I32_XOR),    { &ew_str 'i32.xor'; };
+  &@if (op == IR_OP_I32_SHL),    { &ew_str 'i32.shl'; };
+  &@if (op == IR_OP_I32_SHR_S),  { &ew_str 'i32.shr_s'; };
+};
+
+@fn emit_unop_mnemonic op:Int := {
+  &@if (op == IR_OP_I32_EQZ), { &ew_str 'i32.eqz'; };
+};
+
+# Recursive expression emitter.  Writes one instruction per line in
+# postfix/stack-machine order; the result lives on top of the stack
+# when emission completes.
+@fn emit_expr h:Int := {
+  &@if (h < 0), { &@return 0; };
+  @local k := &ir_kind h;
+
+  &@if (k == IR_NULL), { &@return 0; };
+
+  &@if (k == IR_I32_CONST), {
+    &ew_str 'i32.const ';
+    &ew_write_int (&ir_field h, 1);
+    &ew_byte 10;
+    &@return 0;
+  };
+
+  &@if (k == IR_BINOP), {
+    @local op := &ir_field h, 1;
+    @local l  := &ir_field h, 2;
+    @local r  := &ir_field h, 3;
+    &emit_expr l;
+    &emit_expr r;
+    &emit_binop_mnemonic op;
+    &ew_byte 10;
+    &@return 0;
+  };
+
+  &@if (k == IR_UNOP), {
+    @local op := &ir_field h, 1;
+    @local operand := &ir_field h, 2;
+    &emit_expr operand;
+    &emit_unop_mnemonic op;
+    &ew_byte 10;
+    &@return 0;
+  };
+
+  &@if (k == IR_BLOCK), {
+    @local n := &ir_block_count h;
+    @local i := 0;
+    &@loop (i < n), {
+      &emit_expr (&ir_block_child h, i);
+      i = i + 1;
+    };
+    &@return 0;
+  };
+
+  0
+};
