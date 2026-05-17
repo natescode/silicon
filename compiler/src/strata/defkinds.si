@@ -48,6 +48,10 @@
   &IR::def_type_sum;
 };
 
+@stratum_keyword EnumDef ('@enum', Node) = {
+  &IR::def_type_sum;
+};
+
 @stratum_keyword LocalDef ('@local', Node) = {
   &IR::def_local;
   @local wasmType := &Compiler::resolveType Node.name.typeAnnotation;

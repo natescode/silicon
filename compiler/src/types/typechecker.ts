@@ -228,13 +228,22 @@ function extractDefinitionNode(el: any): any {
  * Two sub-passes are needed: type declarations are collected first so that
  * subsequent function/variable annotations can reference user-defined type names.
  */
+/** `@enum` is an alias for the enum-only form of `@type_sum`. */
+function isSumKeyword(kw: string): boolean {
+    return kw === '@type_sum' || kw === '@enum'
+}
+
+function isTypeDeclKeyword(kw: string): boolean {
+    return kw === '@type_alias' || kw === '@type_distinct' || isSumKeyword(kw)
+}
+
 function preRegisterDefinitions(elements: any[], ctx: Ctx): void {
     // Sub-pass 1: collect @type_alias and @type_distinct declarations.
     for (const el of elements) {
         const def = extractDefinitionNode(el)
         if (!def || !def.name?.name) continue
         const kw: string = def.keyword ?? ''
-        if (kw === '@type_alias' || kw === '@type_distinct' || kw === '@type_sum') {
+        if (isTypeDeclKeyword(kw)) {
             preRegisterTypeDecl(def, ctx)
         }
     }
@@ -247,7 +256,7 @@ function preRegisterDefinitions(elements: any[], ctx: Ctx): void {
         const kw: string = def.keyword ?? ''
         // Type declarations were handled above; skip them here.
         // @export references an existing name — never defines new params.
-        if (kw === '@type_alias' || kw === '@type_distinct' || kw === '@type_sum' || kw === '@export') continue
+        if (isTypeDeclKeyword(kw) || kw === '@export') continue
 
         const paramTypes: SiliconType[] = []
         for (const p of def.params || []) {
@@ -290,7 +299,7 @@ function preRegisterTypeDecl(def: any, ctx: Ctx): void {
     const name: string = def.name.name
     const kw: string = def.keyword ?? ''
 
-    if (kw === '@type_sum') {
+    if (isSumKeyword(kw)) {
         preRegisterSumType(def, ctx)
         return
     }
@@ -493,7 +502,7 @@ function checkDefinition(d: any, ctx: Ctx): SiliconType {
 
     // Type declarations and export markers are handled at pre-registration time
     // or by the IR; they have no body to check and must not overwrite existing sigs.
-    if (keyword === '@type_alias' || keyword === '@type_distinct' || keyword === '@type_sum' || keyword === '@export') {
+    if (isTypeDeclKeyword(keyword) || keyword === '@export') {
         return TypeUnknown
     }
 
