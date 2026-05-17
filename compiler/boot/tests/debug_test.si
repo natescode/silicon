@@ -1,0 +1,31 @@
+@use '../std/io.si';
+@use '../parser/tokens.si';
+@use '../parser/lex.si';
+@use '../parser/ast.si';
+@use '../parser/parse.si';
+@use '../parser/json.si';
+
+@fn full s:String := {
+  @local p := (&str_ptr s) + 4;
+  @local n := &str_len s;
+  @local toks := &lex p, n;
+  @local root := &parse p, n, toks;
+  &json_program root;
+};
+
+@fn run := {
+  &full '@fn add a:Int, b:Int := { a + b };';
+  &full '@fn add a:Int, b:Int := { a + b };';
+  &full '@fn add a:Int, b:Int := { a + b };';
+  &full '@fn add a:Int, b:Int := { a + b };';
+  &full '@fn add a:Int, b:Int := { a + b };';
+  &full '@fn add a:Int, b:Int := { a + b };';
+  &full '@fn add a:Int, b:Int := { a + b };';
+  &full '@fn add a:Int, b:Int := { a + b };';
+  &full '@fn add a:Int, b:Int := { a + b };';
+  &full '@fn add a:Int, b:Int := { a + b };';
+  &full '$Circle r:Int;';
+  &wasi_snapshot_preview1::proc_exit 0;
+};
+
+&run;

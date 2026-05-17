@@ -61,7 +61,8 @@ ready for Phase 1.
 | AST encoding (`boot/parser/ast.si`)                      | **Landed** | ~180 |
 | Parser (`boot/parser/parse.si`)                          | **Landed** | ~500 |
 | AST → JSON serializer (`boot/parser/json.si`)            | **Landed** (15 kinds) | ~620 |
-| Corpus equivalence harness vs Stage 0                    | **Landed** (26 fixtures) | — |
+| Curated fixture suite (`boot/tests/json_test.si`)        | **Landed** (26/26 byte-equal) | — |
+| Corpus harness against `src/e2e/examples/*.si`           | **Landed** (38/40 byte-equal) | — |
 
 What's covered today:
 - Lexer: all 27 token kinds.
@@ -92,13 +93,15 @@ Phase 2 gate harness:
 Currently 26 / 26 fixtures match byte-for-byte.
 
 Still ahead before declaring Phase 1 done:
+- `@stratum_operator` / `@stratum_keyword` top-level forms — Stage 0
+  has a dedicated `Elaboration` AST node; the bootstrap parser needs
+  the same dispatch (2/40 examples in the e2e corpus depend on it).
 - Multi-fixture-in-one-process state isolation — `arena_reset` between
   parses isn't sufficient; @vars and possibly heap-growth interact in
   a way that corrupts late fixtures.  Per-process is a clean workaround
   for the test harness; a real Stage 1 compiler must run many parses
   per process so this needs root-causing before Phase 4+.
 - Generic params stored in AST (currently consumed but skipped).
-- Grow the corpus to cover every shape in `src/e2e/examples/*.si`.
 
 ## Test Surface (post WS 1–6 + Phases −1 + 0)
 

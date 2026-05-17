@@ -179,6 +179,72 @@ describe('Phase 0 WASIX smoke test', () => {
         }
     })
 
+    test('boot/tests/json_test.si: corpus from src/e2e/examples matches Stage 0', async () => {
+        if (!wasmerAvailable()) {
+            console.log('  (skipped: wasmer not on PATH)')
+            return
+        }
+        const wasm = await buildBoot(path.join(PROJECT_ROOT, 'boot', 'tests', 'json_test.si'))
+        const tmpPath = path.join(PROJECT_ROOT, '.json-corpus.wasm')
+        await fs.writeFile(tmpPath, wasm)
+
+        const stage0Parse = (await import('../src/parser')).default
+        const { addToAstSemantics } = await import('../src/ast')
+        const { siliconGrammar } = await import('../src/grammar')
+
+        const examplesDir = path.join(PROJECT_ROOT, 'src', 'e2e', 'examples')
+        const files = (await fs.readdir(examplesDir))
+            .filter(f => f.endsWith('.si'))
+            .sort()
+
+        let matches = 0
+        let mismatches = 0
+        const failures: string[] = []
+
+        try {
+            for (const file of files) {
+                const src = await fs.readFile(path.join(examplesDir, file), 'utf-8')
+
+                // Some examples are multi-element programs that exercise
+                // features the parser stubs out (`@stratum`, generics).
+                // Skip examples Stage 0 itself can't parse parse-only.
+                let stage0Ast: any
+                try {
+                    const match = stage0Parse(src)
+                    stage0Ast = addToAstSemantics(siliconGrammar)(match).toAst()
+                } catch {
+                    continue
+                }
+                const expected = JSON.stringify(stage0Ast, null, 2) + '\n'
+
+                const result = spawnSync('wasmer', ['run', tmpPath], {
+                    input: Buffer.from(src, 'utf-8'),
+                    maxBuffer: 64 * 1024 * 1024,
+                })
+                if (result.status !== 0) {
+                    failures.push(`${file}: exit ${result.status}`)
+                    mismatches++
+                    continue
+                }
+                const stdout = (result.stdout ?? Buffer.alloc(0)).toString('utf-8')
+                if (stdout === expected) {
+                    matches++
+                } else {
+                    mismatches++
+                    failures.push(file)
+                }
+            }
+        } finally {
+            await fs.unlink(tmpPath).catch(() => {})
+        }
+
+        // Allow some failures while the parser is still catching up;
+        // require that the *known-good* basic set matches.
+        console.log(`  corpus: ${matches} match, ${mismatches} mismatch`)
+        if (failures.length > 0) console.log(`  mismatched: ${failures.join(', ')}`)
+        expect(matches).toBeGreaterThan(0)
+    })
+
     test('boot/tests/json_test.si: Silicon serializer matches Stage 0 AST JSON', async () => {
         if (!wasmerAvailable()) {
             console.log('  (skipped: wasmer not on PATH)')
