@@ -112,6 +112,21 @@
   (local.get $base))
 
 ;; ------------------------------------------------------------------
+;; $scratch_alloc — bump-allocate `$n` bytes of writable scratch space
+;; and return its base address. Equivalent to `$alloc $n` with the
+;; intent annotated: the buffer is meant to be passed to an extern
+;; declared with an out-pointer (the host writes into it).
+;;
+;; Full out-pointer convention is documented in docs/extern-out-pointer.md.
+;; Lifetime: scratch addresses live until the next arena_reset
+;; (currently a no-op — Stage 0 leaks at end-of-compile). Stage 1's
+;; arena reset will reclaim them between compile passes.
+;; ------------------------------------------------------------------
+(func $scratch_alloc (param $n i32) (result i32)
+  (call $alloc (local.get $n)))
+(export "scratch_alloc" (func $scratch_alloc))
+
+;; ------------------------------------------------------------------
 ;; $arr_len — read the length stored in a prefixed array/string.
 ;; ------------------------------------------------------------------
 (func $arr_len (param $ptr i32) (result i32)
