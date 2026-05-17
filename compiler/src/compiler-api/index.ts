@@ -17,6 +17,22 @@ import type { FunctionSig } from '../types/typechecker'
 import type { ModuleRegistry } from '../modules/registry'
 import { resolveIntrinsicWasmInstr } from '../intrinsics'
 import { wasmTypeOf } from '../types/types'
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Errors raised from inside CompilerAPI calls (e.g. assertDefined, error)
+// ─────────────────────────────────────────────────────────────────────────────
+
+export class CompilerAPIError extends Error {
+    constructor(msg: string) { super(`[strata] ${msg}`) }
+}
+
+function formatLoc(node: any): string {
+    const loc = node?.sourceLocation
+    if (!loc) return ''
+    if (loc.line != null && loc.col != null) return ` (line ${loc.line}, col ${loc.col})`
+    if (loc.start != null) return ` (offset ${loc.start})`
+    return ''
+}
 import type {
     WasmValType, WasmType,
     IRExpr, IRStmt,
@@ -203,8 +219,10 @@ export interface CompilerAPI {
     arg(node: any, index: number): any
     /** Lower an expression if defined, otherwise return undefined (preserves IRIf void/typed distinction). */
     lowerExprIfDefined(node: any): IRExpr | undefined
-    /** Throw an IRLowerError if `value` is null/undefined. Used by strata bodies for guards. */
+    /** Throw a CompilerAPIError if `value` is null/undefined. Used by strata bodies for guards. */
     assertDefined(value: any, msg: string): void
+    /** Throw a CompilerAPIError with optional source location from `node`. */
+    error(msg: string, node?: any): never
     /** Build the nested if/else chain for @match. Encapsulates the recursion the body interpreter can't express. */
     expandMatchChain(rawArgs: any[], inferredType: any): IRExpr
 }
@@ -304,7 +322,10 @@ export function createCompilerAPI(ctx: CtxShape, fns: LowerFns): CompilerAPI {
         arg:             (node, index) => node?.[index],
         lowerExprIfDefined: (node) => node == null ? undefined : fns.lowerExpr(node, ctx),
         assertDefined: (value, msg) => {
-            if (value == null) throw new Error(`[strata body] ${msg}`)
+            if (value == null) throw new CompilerAPIError(msg)
+        },
+        error: (msg, node) => {
+            throw new CompilerAPIError(`${msg}${formatLoc(node)}`)
         },
         expandMatchChain: (rawArgs, inferredType) => {
             if (rawArgs.length < 3) return ir.makeNop()

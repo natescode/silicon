@@ -173,23 +173,31 @@ export function lowerProgram(
         ctx.registry.defExpanders.get(hook)?.preScan?.(node, ctx.$compiler!)
     }
 
+    // Append an IR node (or array of nodes) into the right module bucket.
+    function append(result: any): void {
+        if (!result) return
+        if (Array.isArray(result)) {
+            for (const item of result) append(item)
+            return
+        }
+        if (result.kind === 'Function') functions.push(result)
+        else if (result.kind === 'Global') globals.push(result)
+        else if (result.kind === 'Import') imports.push(result)
+        else if (result.kind === 'Export') irExports.push(result)
+    }
+
     for (const el of program.elements as any[]) {
         const node = unwrap(el)
         if (!node) continue
+        if (node.type === 'Definition') append(lowerDefinition(node, ctx))
+    }
 
-        if (node.type === 'Definition') {
-            const result = lowerDefinition(node, ctx)
-            if (result) {
-                if (result.kind === 'Function') functions.push(result)
-                else if (result.kind === 'Global') globals.push(result)
-                else if (result.kind === 'Import') imports.push(result)
-                else if (result.kind === 'Export') irExports.push(result)
-                else if (Array.isArray(result)) {
-                    // Sum type: multiple globals
-                    for (const g of result) globals.push(g)
-                }
-            }
-        }
+    // Post-expand pass — each registered defExpander gets one final chance to
+    // emit module-level items derived from cross-definition state (e.g. an
+    // init function or a registry table built from every def seen so far).
+    for (const exp of ctx.registry.defExpanders.values()) {
+        const post = exp.postExpand?.(ctx.$compiler!)
+        if (post !== undefined) append(post)
     }
 
     // Collect top-level non-definition expression statements into $__start.
