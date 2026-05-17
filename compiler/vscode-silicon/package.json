@@ -1,0 +1,55 @@
+{
+  "name": "vscode-silicon",
+  "displayName": "Silicon",
+  "description": "Syntax highlighting and Sigil Dark theme for the Silicon programming language.",
+  "version": "0.1.0",
+  "publisher": "natescode",
+  "license": "MIT",
+  "engines": {
+    "vscode": "^1.70.0"
+  },
+  "categories": [
+    "Programming Languages",
+    "Themes"
+  ],
+  "keywords": [
+    "silicon",
+    "sigil",
+    "wasm",
+    "wasi"
+  ],
+  "icon": "icon.png",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/natescode/sigil"
+  },
+  "contributes": {
+    "languages": [
+      {
+        "id": "silicon",
+        "aliases": [
+          "Silicon",
+          "silicon"
+        ],
+        "extensions": [
+          ".si"
+        ],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "silicon",
+        "scopeName": "source.silicon",
+        "path": "./syntaxes/silicon.tmLanguage.json"
+      }
+    ],
+    "themes": [
+      {
+        "label": "Sigil Dark",
+        "uiTheme": "vs-dark",
+        "path": "./themes/sigil-dark-color-theme.json"
+      }
+    ]
+  }
+}
