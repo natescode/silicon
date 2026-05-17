@@ -113,6 +113,21 @@
   (local.get $base))
 
 ;; ------------------------------------------------------------------
+;; $scratch_alloc — bump-allocate `$n` bytes of writable scratch space
+;; and return its base address. Equivalent to `$alloc $n` with the
+;; intent annotated: the buffer is meant to be passed to an extern
+;; declared with an out-pointer (the host writes into it).
+;;
+;; Full out-pointer convention is documented in docs/extern-out-pointer.md.
+;; Lifetime: scratch addresses live until the next arena_reset
+;; (currently a no-op — Stage 0 leaks at end-of-compile). Stage 1's
+;; arena reset will reclaim them between compile passes.
+;; ------------------------------------------------------------------
+(func $scratch_alloc (param $n i32) (result i32)
+  (call $alloc (local.get $n)))
+(export "scratch_alloc" (func $scratch_alloc))
+
+;; ------------------------------------------------------------------
 ;; $arr_len — read the length stored in a prefixed array/string.
 ;; ------------------------------------------------------------------
 (func $arr_len (param $ptr i32) (result i32)
@@ -127,6 +142,17 @@
     (i32.add
       (local.get $ptr)
       (i32.add (i32.const 4) (i32.mul (local.get $index) (i32.const 4))))))
+
+;; ------------------------------------------------------------------
+;; $arr_store_i32 — write an i32 value to the Nth element of a prefixed array.
+;;   offset = ptr + 4 + (index * 4)
+;; ------------------------------------------------------------------
+(func $arr_store_i32 (param $ptr i32) (param $index i32) (param $value i32)
+  (i32.store
+    (i32.add
+      (local.get $ptr)
+      (i32.add (i32.const 4) (i32.mul (local.get $index) (i32.const 4))))
+    (local.get $value)))
 
 ;; ------------------------------------------------------------------
 ;; $arr_load_f32 — read the Nth f32 element of a prefixed f32 array.
@@ -173,7 +199,7 @@
       (br $next))))
 
 ;; ------------------------------------------------------------------
-;; $str_concat — concatenate two Silicon UTF-16 LE strings.
+;; $str_concat — concatenate two Silicon UTF-8 strings.
 ;; Both $a and $b are i32 pointers to length-prefixed buffers.
 ;; Returns a new heap-allocated string containing $a followed by $b.
 ;; ------------------------------------------------------------------
@@ -223,8 +249,13 @@
 
   (local.get $dst))
 
+(func $main (result i32)
+(local $addr i32)
+(i32.const 42)
+)
 (func $__start 
 (local $addr i32)
-(i32.const 5)
+
 )
+(export "_start" (func $__start))
 )

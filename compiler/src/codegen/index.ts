@@ -12,10 +12,13 @@ import { readFileSync } from 'fs'
 import { join, dirname } from 'path'
 import { fileURLToPath } from 'url'
 import { lowerProgram, emitModule } from '../ir'
+import type { LowerOptions } from '../ir/lower'
 import type { Program } from '../ast/astNodes'
 import type { ElaboratorRegistry } from '../elaborator/registry'
 import type { FunctionSig } from '../types/typechecker'
 import type { ModuleRegistry } from '../modules/registry'
+
+export type { LowerTarget, LowerOptions } from '../ir/lower'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
@@ -42,7 +45,8 @@ export function compileToWat(
     registry: ElaboratorRegistry,
     functionSigs: Map<string, FunctionSig>,
     moduleRegistry?: ModuleRegistry,
+    options: LowerOptions = {},
 ): string {
-    const irModule = lowerProgram(program, registry, functionSigs, moduleRegistry)
+    const irModule = lowerProgram(program, registry, functionSigs, moduleRegistry, options)
     return emitModule(irModule, loadStdWat())
 }

@@ -2,9 +2,32 @@
   "type": "Program",
   "elements": [
     {
-      "type": "IntLiteral",
-      "value": "5",
-      "base": "decimal",
+      "type": "Definition",
+      "keyword": "@let",
+      "name": {
+        "type": "TypedIdentifier",
+        "name": "main"
+      },
+      "params": [],
+      "binding": {
+        "type": "Binding",
+        "expression": {
+          "type": "Block",
+          "items": [],
+          "trailing": {
+            "type": "IntLiteral",
+            "value": "42",
+            "base": "decimal",
+            "inferredType": {
+              "kind": "Int"
+            }
+          },
+          "inferredType": {
+            "kind": "Int"
+          }
+        }
+      },
+      "hook": "function",
       "inferredType": {
         "kind": "Int"
       }

@@ -130,12 +130,24 @@ export class IRLowerError extends Error {
  * The `program` must have been through the type checker so that expression
  * nodes carry `inferredType`.
  */
+/** Compilation target. Stage 0's default is the host-embed runner used by
+ *  the existing test suite; 'wasix' adds the `_start` export Wasmer-WASIX
+ *  invokes by name (bootstrap-plan Phase -1.E). */
+export type LowerTarget = 'host' | 'wasix'
+
+export interface LowerOptions {
+    /** Target runtime — controls emit-time conventions (e.g. _start export). */
+    target?: LowerTarget
+}
+
 export function lowerProgram(
     program: any,
     registry: ElaboratorRegistry,
     functionSigs: Map<string, FunctionSig>,
     moduleRegistry?: ModuleRegistry,
+    options: LowerOptions = {},
 ): IRModule {
+    const target: LowerTarget = options.target ?? 'host'
     const ctx: LowerCtx = {
         locals: new Map(),
         globals: new Map(),
@@ -213,7 +225,12 @@ export function lowerProgram(
         const stmt = lowerAsStmt(node, startCtx)
         if (stmt) startStmts.push(stmt)
     }
-    if (startStmts.length > 0) {
+    // WASIX runners (wasmer run) invoke the function exported as `_start`.
+    // We always synthesise $__start so the module-init wrapper exists; on the
+    // 'wasix' target we additionally export it under the WASIX-mandated name.
+    // Empty $__start is fine: WASIX semantics treat it as the "no-op init".
+    const hasStartBody = startStmts.length > 0
+    if (hasStartBody || target === 'wasix') {
         functions.push({
             kind: 'Function',
             name: '__start',
@@ -222,6 +239,9 @@ export function lowerProgram(
             locals: startCtx.pendingLocals,
             body: { kind: 'Block', wasmType: 'void', stmts: startStmts },
         })
+    }
+    if (target === 'wasix') {
+        irExports.push({ kind: 'Export', what: 'function', internalName: '__start', alias: '_start' })
     }
 
     // Append auto-generated imports from module calls (web::*, Draw::*, …).
