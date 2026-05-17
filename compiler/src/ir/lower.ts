@@ -15,7 +15,7 @@
 import { wasmTypeOf } from '../types/types'
 import { type SiliconType } from '../types/types'
 import { type ElaboratorRegistry, lookupTypedOperator, lookupKeyword, lookupTypedKeyword, lookupDefKindEntry } from '../elaborator/registry'
-import { getWasmIntrinsic } from '../intrinsics'
+import { resolveIntrinsicWasmInstr } from '../intrinsics'
 import type { FunctionSig } from '../types/typechecker'
 import type { ModuleRegistry } from '../modules/registry'
 import type {
@@ -501,8 +501,8 @@ function lowerBinaryOp(n: any, ctx: LowerCtx): IRExpr {
         throw new IRLowerError(`No stratum registered for operator '${op}'`)
     }
 
-    // Control-flow operators: || maps to WASM::control_or (short-circuit evaluation).
-    if (intrinsic === 'WASM::control_or') {
+    // Control-flow operators: || maps to IR::control_or (short-circuit evaluation).
+    if (intrinsic === 'IR::control_or' || intrinsic === 'WASM::control_or') {
         return {
             kind: 'If',
             wasmType: 'i32',
@@ -512,10 +512,10 @@ function lowerBinaryOp(n: any, ctx: LowerCtx): IRExpr {
         }
     }
 
-    const intr = getWasmIntrinsic(intrinsic)
-    if (!intr) throw new IRLowerError(`No WasmIntrinsic for '${intrinsic}'`)
+    const wasmInstr = resolveIntrinsicWasmInstr(intrinsic)
+    if (!wasmInstr) throw new IRLowerError(`No WasmIntrinsic for '${intrinsic}'`)
 
-    const primary: IRExpr = { kind: 'BinOp', wasmType: resultWt, instr: intr.wasmInstr, left, right }
+    const primary: IRExpr = { kind: 'BinOp', wasmType: resultWt, instr: wasmInstr, left, right }
 
     // Multi-step strata: first step is the BinOp; subsequent steps chain on the stack.
     const template = stratum.data?.bodyTemplate ?? []
@@ -525,10 +525,10 @@ function lowerBinaryOp(n: any, ctx: LowerCtx): IRExpr {
     const stmts: IRStmt[] = [{ kind: 'ExprStmt', expr: primary }]
     let lastWt: WasmType = resultWt
     for (const step of extraSteps) {
-        const stepIntr = getWasmIntrinsic(step.intrinsic)
-        if (!stepIntr) throw new IRLowerError(`No WasmIntrinsic for extra step '${step.intrinsic}'`)
-        lastWt = step.intrinsic.includes('f32') ? 'f32' : 'i32'
-        stmts.push({ kind: 'ExprStmt', expr: { kind: 'Call', wasmType: lastWt as WasmValType, callee: stepIntr.wasmInstr, callKind: 'instr', args: [] } })
+        const stepInstr = resolveIntrinsicWasmInstr(step.intrinsic ?? '')
+        if (!stepInstr) throw new IRLowerError(`No WasmIntrinsic for extra step '${step.intrinsic}'`)
+        lastWt = (step.intrinsic ?? '').includes('f32') ? 'f32' : 'i32'
+        stmts.push({ kind: 'ExprStmt', expr: { kind: 'Call', wasmType: lastWt as WasmValType, callee: stepInstr, callKind: 'instr', args: [] } })
     }
     const trailing = (stmts.pop() as IRExprStmt).expr
     return { kind: 'Block', wasmType: lastWt, stmts, trailing }
@@ -541,13 +541,13 @@ function lowerFunctionCall(n: any, ctx: LowerCtx): IRExpr {
         return lowerBuiltinCall(name, n.args || [], ctx, n.inferredType)
     }
 
-    // WASM intrinsic direct call (e.g. &WASM::i32_add 1, 2).
+    // WASM/IR intrinsic direct call (e.g. &WASM::i32_add 1, 2 or &IR::i32_add 1, 2).
     if (name.startsWith('WASM::') || name.startsWith('IR::')) {
-        const intr = getWasmIntrinsic(name)
+        const resolvedInstr = resolveIntrinsicWasmInstr(name)
         const args = (n.args || []).map((a: any) => lowerExpr(a, ctx))
         const inferT = n.inferredType as SiliconType | undefined
         const wt = resolveWasmType(inferT, 'i32')
-        return { kind: 'Call', wasmType: wt, callee: intr?.wasmInstr ?? name, callKind: 'instr', args }
+        return { kind: 'Call', wasmType: wt, callee: resolvedInstr ?? name, callKind: 'instr', args }
     }
 
     // Module namespaced call: web::console_log_str, Draw::fill_rect, etc.
@@ -617,12 +617,12 @@ function lowerBuiltinCall(name: string, rawArgs: any[], ctx: LowerCtx, inferredT
     }
 
     // Generic builtin (e.g. @toInt, @toFloat, user-defined keyword strata).
-    const intr = intrinsic ? getWasmIntrinsic(intrinsic) : undefined
+    const wasmInstr = intrinsic ? resolveIntrinsicWasmInstr(intrinsic) : undefined
     const args = rawArgs.map((a: any) => lowerExpr(a, ctx))
     const wt = resolveWasmType(inferredType as SiliconType | undefined,
-        intr ? (intrinsic.includes('f32') ? 'f32' : 'i32') : 'i32')
-    if (intr) {
-        return { kind: 'Call', wasmType: wt, callee: intr.wasmInstr, callKind: 'instr', args }
+        wasmInstr ? (intrinsic.includes('f32') ? 'f32' : 'i32') : 'i32')
+    if (wasmInstr) {
+        return { kind: 'Call', wasmType: wt, callee: wasmInstr, callKind: 'instr', args }
     }
     // Unknown builtin — call by name (user-defined stratum that calls a Silicon function).
     const kwName = watId(name.replace(/^@/, ''))

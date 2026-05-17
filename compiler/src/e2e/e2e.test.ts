@@ -1216,19 +1216,19 @@ test("Round 24: nested @loop — inner @break uses inner label", () => {
 test("Round 24: @break registered in registry as keyword stratum", () => {
     const { registry } = elaborate(ASTFactory.program([]))
     expect(registry.keywords['@break']).toBeDefined()
-    expect(registry.keywords['@break'].data.intrinsic).toBe('WASM::control_break')
+    expect(registry.keywords['@break'].data.intrinsic).toBe('IR::control_break')
 });
 
 test("Round 24: @continue registered in registry as keyword stratum", () => {
     const { registry } = elaborate(ASTFactory.program([]))
     expect(registry.keywords['@continue']).toBeDefined()
-    expect(registry.keywords['@continue'].data.intrinsic).toBe('WASM::control_continue')
+    expect(registry.keywords['@continue'].data.intrinsic).toBe('IR::control_continue')
 });
 
 test("Round 24: @loop registered in registry as keyword stratum", () => {
     const { registry } = elaborate(ASTFactory.program([]))
     expect(registry.keywords['@loop']).toBeDefined()
-    expect(registry.keywords['@loop'].data.intrinsic).toBe('WASM::control_loop')
+    expect(registry.keywords['@loop'].data.intrinsic).toBe('IR::control_loop')
 });
 
 test("Round 24: count_loop.si example compiles successfully", () => {
@@ -1362,25 +1362,25 @@ test("Round 26: bitwise | does not promote to f32 (always emits i32.or)", () => 
 test("Round 26: | operator registered in registry as StrataType.Operator", () => {
     const { registry } = elaborate(ASTFactory.program([]))
     expect(registry.operators['|']).toBeDefined()
-    expect(registry.operators['|'].data.intrinsic).toBe('WASM::i32_or')
+    expect(registry.operators['|'].data.intrinsic).toBe('IR::i32_or')
 });
 
 test("Round 26: ^ operator registered in registry as StrataType.Operator", () => {
     const { registry } = elaborate(ASTFactory.program([]))
     expect(registry.operators['^']).toBeDefined()
-    expect(registry.operators['^'].data.intrinsic).toBe('WASM::i32_xor')
+    expect(registry.operators['^'].data.intrinsic).toBe('IR::i32_xor')
 });
 
 test("Round 26: << operator registered in registry as StrataType.Operator", () => {
     const { registry } = elaborate(ASTFactory.program([]))
     expect(registry.operators['<<']).toBeDefined()
-    expect(registry.operators['<<'].data.intrinsic).toBe('WASM::i32_shl')
+    expect(registry.operators['<<'].data.intrinsic).toBe('IR::i32_shl')
 });
 
 test("Round 26: >> operator registered in registry as StrataType.Operator", () => {
     const { registry } = elaborate(ASTFactory.program([]))
     expect(registry.operators['>>']).toBeDefined()
-    expect(registry.operators['>>'].data.intrinsic).toBe('WASM::i32_shr_s')
+    expect(registry.operators['>>'].data.intrinsic).toBe('IR::i32_shr_s')
 });
 
 test("Round 26: body template for | has argRefs [left, right]", () => {
@@ -1444,7 +1444,7 @@ test("Round 27: @return with no arg emits bare return", () => {
 test("Round 27: @return registered in registry as keyword stratum", () => {
     const { registry } = elaborate(ASTFactory.program([]))
     expect(registry.keywords['@return']).toBeDefined()
-    expect(registry.keywords['@return'].data.intrinsic).toBe('WASM::control_return')
+    expect(registry.keywords['@return'].data.intrinsic).toBe('IR::control_return')
 });
 
 test("Round 27: @toFloat — cast_to_float.si compiles successfully", () => {
@@ -1479,7 +1479,7 @@ test("Round 27: @toFloat promotes type — explicit cast then float add", () => 
 test("Round 27: @toFloat registered in registry as keyword stratum", () => {
     const { registry } = elaborate(ASTFactory.program([]))
     expect(registry.keywords['@toFloat']).toBeDefined()
-    expect(registry.keywords['@toFloat'].data.intrinsic).toBe('WASM::f32_convert_i32_s')
+    expect(registry.keywords['@toFloat'].data.intrinsic).toBe('IR::f32_convert_i32_s')
 });
 
 test("Round 27: @toInt — cast_to_int.si compiles successfully", () => {
@@ -1503,7 +1503,7 @@ test("Round 27: @toInt on a Float param emits i32.trunc_f32_s", () => {
 test("Round 27: @toInt registered in registry as keyword stratum", () => {
     const { registry } = elaborate(ASTFactory.program([]))
     expect(registry.keywords['@toInt']).toBeDefined()
-    expect(registry.keywords['@toInt'].data.intrinsic).toBe('WASM::i32_trunc_f32_s')
+    expect(registry.keywords['@toInt'].data.intrinsic).toBe('IR::i32_trunc_f32_s')
 });
 
 test("Round 27: @toInt result type is i32 — can add with int param", () => {
@@ -1627,7 +1627,7 @@ test("Round 34: bodyTemplate for '+' is a 1-element array", () => {
     const bt = registry.operators['+']?.data?.bodyTemplate
     expect(Array.isArray(bt)).toBe(true)
     expect(bt?.length).toBe(1)
-    expect(bt?.[0]?.intrinsic).toBe('WASM::i32_add')
+    expect(bt?.[0]?.intrinsic).toBe('IR::i32_add')
 })
 
 // ============================================================================

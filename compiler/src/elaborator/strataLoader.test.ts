@@ -47,7 +47,7 @@ test("buildStrataRegistry: registers bitwise operators", () => {
     const registry = buildStrataRegistry(ASTFactory.program([]))
     for (const op of ['|', '^', '<<', '>>']) {
         expect(registry.operators[op]).toBeDefined()
-        expect(registry.operators[op].data?.intrinsic).toMatch(/^WASM::i32_/)
+        expect(registry.operators[op].data?.intrinsic).toMatch(/^IR::i32_/)
     }
 })
 
@@ -61,7 +61,7 @@ test("buildStrataRegistry: registers @if as Control stratum", () => {
     const entry = registry.keywords['@if']
     expect(entry).toBeDefined()
     expect(entry.type).toBe(StrataType.Control)
-    expect(entry.data?.intrinsic).toBe('WASM::control_if')
+    expect(entry.data?.intrinsic).toBe('IR::control_if')
 })
 
 test("buildStrataRegistry: registers @loop as Control stratum", () => {
@@ -69,24 +69,24 @@ test("buildStrataRegistry: registers @loop as Control stratum", () => {
     const entry = registry.keywords['@loop']
     expect(entry).toBeDefined()
     expect(entry.type).toBe(StrataType.Control)
-    expect(entry.data?.intrinsic).toBe('WASM::control_loop')
+    expect(entry.data?.intrinsic).toBe('IR::control_loop')
 })
 
 test("buildStrataRegistry: registers @break and @continue", () => {
     const registry = buildStrataRegistry(ASTFactory.program([]))
-    expect(registry.keywords['@break']?.data?.intrinsic).toBe('WASM::control_break')
-    expect(registry.keywords['@continue']?.data?.intrinsic).toBe('WASM::control_continue')
+    expect(registry.keywords['@break']?.data?.intrinsic).toBe('IR::control_break')
+    expect(registry.keywords['@continue']?.data?.intrinsic).toBe('IR::control_continue')
 })
 
 test("buildStrataRegistry: registers @return", () => {
     const registry = buildStrataRegistry(ASTFactory.program([]))
-    expect(registry.keywords['@return']?.data?.intrinsic).toBe('WASM::control_return')
+    expect(registry.keywords['@return']?.data?.intrinsic).toBe('IR::control_return')
 })
 
 test("buildStrataRegistry: registers @toInt and @toFloat cast strata", () => {
     const registry = buildStrataRegistry(ASTFactory.program([]))
-    expect(registry.keywords['@toInt']?.data?.intrinsic).toBe('WASM::i32_trunc_f32_s')
-    expect(registry.keywords['@toFloat']?.data?.intrinsic).toBe('WASM::f32_convert_i32_s')
+    expect(registry.keywords['@toInt']?.data?.intrinsic).toBe('IR::i32_trunc_f32_s')
+    expect(registry.keywords['@toFloat']?.data?.intrinsic).toBe('IR::f32_convert_i32_s')
 })
 
 // ---------------------------------------------------------------------------
@@ -121,7 +121,7 @@ test("buildStrataRegistry: @extern does not allow binding", () => {
 test("buildStrataRegistry: StrataNode.data has intrinsic but no body property", () => {
     const registry = buildStrataRegistry(ASTFactory.program([]))
     const plus = registry.operators['+']
-    expect(plus.data?.intrinsic).toBe('WASM::i32_add')
+    expect(plus.data?.intrinsic).toBe('IR::i32_add')
     // The raw body AST must not be stored — only derived data.
     expect((plus.data as any)?.body).toBeUndefined()
 })
@@ -253,58 +253,58 @@ test("buildStrataRegistry: user-defined strata with unknown intrinsic have undef
 
 test("buildStrataRegistry: '+' primary is the Int (i32) variant", () => {
     const registry = buildStrataRegistry(ASTFactory.program([]))
-    expect(registry.operators['+']?.data?.intrinsic).toBe('WASM::i32_add')
+    expect(registry.operators['+']?.data?.intrinsic).toBe('IR::i32_add')
     expect(registry.operators['+']?.type).not.toBe(StrataType.Constraint)
 })
 
 test("buildStrataRegistry: '+' has a Float overload tagged as Constraint", () => {
     const registry = buildStrataRegistry(ASTFactory.program([]))
     const floatOp = lookupTypedOperator(registry, '+', 'Float')
-    expect(floatOp?.data?.intrinsic).toBe('WASM::f32_add')
+    expect(floatOp?.data?.intrinsic).toBe('IR::f32_add')
     expect(floatOp?.type).toBe(StrataType.Constraint)
 })
 
 test("buildStrataRegistry: '-' has a Float overload (f32.sub)", () => {
     const registry = buildStrataRegistry(ASTFactory.program([]))
     const floatOp = lookupTypedOperator(registry, '-', 'Float')
-    expect(floatOp?.data?.intrinsic).toBe('WASM::f32_sub')
+    expect(floatOp?.data?.intrinsic).toBe('IR::f32_sub')
 })
 
 test("buildStrataRegistry: '*' has a Float overload (f32.mul)", () => {
     const registry = buildStrataRegistry(ASTFactory.program([]))
     const floatOp = lookupTypedOperator(registry, '*', 'Float')
-    expect(floatOp?.data?.intrinsic).toBe('WASM::f32_mul')
+    expect(floatOp?.data?.intrinsic).toBe('IR::f32_mul')
 })
 
 test("buildStrataRegistry: '/' has a Float overload (f32.div)", () => {
     const registry = buildStrataRegistry(ASTFactory.program([]))
     const floatOp = lookupTypedOperator(registry, '/', 'Float')
-    expect(floatOp?.data?.intrinsic).toBe('WASM::f32_div')
+    expect(floatOp?.data?.intrinsic).toBe('IR::f32_div')
 })
 
 test("buildStrataRegistry: '<' has a Float overload (f32.lt)", () => {
     const registry = buildStrataRegistry(ASTFactory.program([]))
     const floatOp = lookupTypedOperator(registry, '<', 'Float')
-    expect(floatOp?.data?.intrinsic).toBe('WASM::f32_lt')
+    expect(floatOp?.data?.intrinsic).toBe('IR::f32_lt')
 })
 
 test("buildStrataRegistry: '==' has a Float overload (f32.eq)", () => {
     const registry = buildStrataRegistry(ASTFactory.program([]))
     const floatOp = lookupTypedOperator(registry, '==', 'Float')
-    expect(floatOp?.data?.intrinsic).toBe('WASM::f32_eq')
+    expect(floatOp?.data?.intrinsic).toBe('IR::f32_eq')
 })
 
 test("buildStrataRegistry: bitwise '|' has no Float overload (no f32 counterpart)", () => {
     const registry = buildStrataRegistry(ASTFactory.program([]))
     // Typed lookup falls back to Int primary for bitwise ops.
     const floatOp = lookupTypedOperator(registry, '|', 'Float')
-    expect(floatOp?.data?.intrinsic).toBe('WASM::i32_or')
+    expect(floatOp?.data?.intrinsic).toBe('IR::i32_or')
 })
 
 test("buildStrataRegistry: lookupTypedOperator returns primary for unknown typeKind", () => {
     const registry = buildStrataRegistry(ASTFactory.program([]))
     const result = lookupTypedOperator(registry, '+', 'Bool')
-    expect(result?.data?.intrinsic).toBe('WASM::i32_add')
+    expect(result?.data?.intrinsic).toBe('IR::i32_add')
 })
 
 test("buildStrataRegistry: user-defined typed overload is registered under compound key", () => {
@@ -340,38 +340,38 @@ test("buildStrataRegistry: multi-step strata body extracts all steps as an array
 test("buildStrataRegistry: '>' has a Float overload (f32.gt)", () => {
     const registry = buildStrataRegistry(ASTFactory.program([]))
     const floatOp = lookupTypedOperator(registry, '>', 'Float')
-    expect(floatOp?.data?.intrinsic).toBe('WASM::f32_gt')
+    expect(floatOp?.data?.intrinsic).toBe('IR::f32_gt')
 })
 
 test("buildStrataRegistry: '<=' has a Float overload (f32.le)", () => {
     const registry = buildStrataRegistry(ASTFactory.program([]))
     const floatOp = lookupTypedOperator(registry, '<=', 'Float')
-    expect(floatOp?.data?.intrinsic).toBe('WASM::f32_le')
+    expect(floatOp?.data?.intrinsic).toBe('IR::f32_le')
 })
 
 test("buildStrataRegistry: '>=' has a Float overload (f32.ge)", () => {
     const registry = buildStrataRegistry(ASTFactory.program([]))
     const floatOp = lookupTypedOperator(registry, '>=', 'Float')
-    expect(floatOp?.data?.intrinsic).toBe('WASM::f32_ge')
+    expect(floatOp?.data?.intrinsic).toBe('IR::f32_ge')
 })
 
 test("buildStrataRegistry: '!=' has a Float overload (f32.ne)", () => {
     const registry = buildStrataRegistry(ASTFactory.program([]))
     const floatOp = lookupTypedOperator(registry, '!=', 'Float')
-    expect(floatOp?.data?.intrinsic).toBe('WASM::f32_ne')
+    expect(floatOp?.data?.intrinsic).toBe('IR::f32_ne')
 })
 
 test("buildStrataRegistry: '%' has no Float overload (WASM has no f32 modulo)", () => {
     const registry = buildStrataRegistry(ASTFactory.program([]))
     // Falls back to Int primary since no Float variant is registered.
     const floatOp = lookupTypedOperator(registry, '%', 'Float')
-    expect(floatOp?.data?.intrinsic).toBe('WASM::i32_rem_s')
+    expect(floatOp?.data?.intrinsic).toBe('IR::i32_rem_s')
 })
 
 test("buildStrataRegistry: bitwise '<<' falls back to Int primary for Float lookup", () => {
     const registry = buildStrataRegistry(ASTFactory.program([]))
     const floatOp = lookupTypedOperator(registry, '<<', 'Float')
-    expect(floatOp?.data?.intrinsic).toBe('WASM::i32_shl')
+    expect(floatOp?.data?.intrinsic).toBe('IR::i32_shl')
 })
 
 // ---------------------------------------------------------------------------
@@ -382,26 +382,26 @@ test("buildStrataRegistry: @toFloat registers typed variant @toFloat:Int", () =>
     const registry = buildStrataRegistry(ASTFactory.program([]))
     // @toFloat converts Int → Float, so it registers under the 'Int' typeKind.
     const typed = lookupTypedKeyword(registry, '@toFloat', 'Int')
-    expect(typed?.data?.intrinsic).toBe('WASM::f32_convert_i32_s')
+    expect(typed?.data?.intrinsic).toBe('IR::f32_convert_i32_s')
 })
 
 test("buildStrataRegistry: @toInt registers typed variant @toInt:Float", () => {
     const registry = buildStrataRegistry(ASTFactory.program([]))
     // @toInt converts Float → Int, so it registers under the 'Float' typeKind.
     const typed = lookupTypedKeyword(registry, '@toInt', 'Float')
-    expect(typed?.data?.intrinsic).toBe('WASM::i32_trunc_f32_s')
+    expect(typed?.data?.intrinsic).toBe('IR::i32_trunc_f32_s')
 })
 
 test("buildStrataRegistry: @toFloat plain entry still exists (backward compat)", () => {
     const registry = buildStrataRegistry(ASTFactory.program([]))
-    expect(registry.keywords['@toFloat']?.data?.intrinsic).toBe('WASM::f32_convert_i32_s')
+    expect(registry.keywords['@toFloat']?.data?.intrinsic).toBe('IR::f32_convert_i32_s')
 })
 
 test("buildStrataRegistry: lookupTypedKeyword falls back to plain entry for unknown typeKind", () => {
     const registry = buildStrataRegistry(ASTFactory.program([]))
     // @toFloat has no 'Bool' variant — should fall back to the plain entry.
     const fallback = lookupTypedKeyword(registry, '@toFloat', 'Bool')
-    expect(fallback?.data?.intrinsic).toBe('WASM::f32_convert_i32_s')
+    expect(fallback?.data?.intrinsic).toBe('IR::f32_convert_i32_s')
 })
 
 test("buildStrataRegistry: @export is registered as Metadata stratum", () => {
@@ -420,11 +420,11 @@ test("buildStrataRegistry: @export is registered in defKinds with codegenKind 'e
     expect(defKind.allowsBinding).toBe(false)
 })
 
-test("buildStrataRegistry: || operator has WASM::control_or intrinsic (strata-driven)", () => {
+test("buildStrataRegistry: || operator has IR::control_or intrinsic (strata-driven)", () => {
     const registry = buildStrataRegistry(ASTFactory.program([]))
     // || is registered as an operator stratum, not hardcoded — verify via intrinsic.
     const entry = registry.operators['||']
-    expect(entry?.data?.intrinsic).toBe('WASM::control_or')
+    expect(entry?.data?.intrinsic).toBe('IR::control_or')
     expect(entry?.type).toBe(StrataType.Control)
 })
 
@@ -436,14 +436,14 @@ test("buildStrataRegistry: populates registry.expanders with built-in control-fl
     const registry = buildStrataRegistry(ASTFactory.program([]))
     // All 8 built-in expanders must be registered.
     const expected = [
-        'WASM::control_if',
-        'WASM::control_loop',
-        'WASM::control_break',
-        'WASM::control_continue',
-        'WASM::control_return',
-        'WASM::control_and',
-        'WASM::control_or',
-        'WASM::control_match',
+        'IR::control_if',
+        'IR::control_loop',
+        'IR::control_break',
+        'IR::control_continue',
+        'IR::control_return',
+        'IR::control_and',
+        'IR::control_or',
+        'IR::control_match',
     ]
     for (const intrinsic of expected) {
         expect(registry.expanders.has(intrinsic)).toBe(true)
@@ -452,7 +452,7 @@ test("buildStrataRegistry: populates registry.expanders with built-in control-fl
 
 test("buildStrataRegistry: expanders are callable functions", () => {
     const registry = buildStrataRegistry(ASTFactory.program([]))
-    const ifExpander = registry.expanders.get('WASM::control_if')
+    const ifExpander = registry.expanders.get('IR::control_if')
     expect(typeof ifExpander).toBe('function')
 })
 

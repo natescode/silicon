@@ -68,25 +68,26 @@ export interface SourceLocation {
 
 
 /**
- * Derive the correct StrataType from a WASM intrinsic name and the syntactic
+ * Derive the correct StrataType from an intrinsic name and the syntactic
  * kind of the strata definition (operator vs keyword).
  *
  * Naming conventions used:
- *   WASM::control_*          → StrataType.Control    (if, loop, match, break, return, …)
- *   IR::def_*                → StrataType.Definition  (let, fn, var, extern, local, type_*)
- *   IR::meta_*               → StrataType.Metadata    (export, test, doc, …)
- *   WASM::i32_* / WASM::f32_* → StrataType.Operator
- *   (no intrinsic)           → falls back to syntactic kind
+ *   WASM::control_* / IR::control_*  → StrataType.Control    (if, loop, match, break, return, …)
+ *   IR::def_*                         → StrataType.Definition  (let, fn, var, extern, local, type_*)
+ *   IR::meta_*                        → StrataType.Metadata    (export, test, doc, …)
+ *   WASM::i32_* / WASM::f32_*        → StrataType.Operator
+ *   IR::i32_* / IR::f32_*            → StrataType.Operator
+ *   (no intrinsic)                    → falls back to syntactic kind
  */
 export function strataTypeFromIntrinsic(
     intrinsic: string | undefined,
     kind: 'operator' | 'keyword',
 ): StrataType {
     if (intrinsic) {
-        if (/^WASM::control_/.test(intrinsic)) return StrataType.Control
-        if (/^IR::def_/.test(intrinsic))        return StrataType.Definition
-        if (/^IR::meta_/.test(intrinsic))       return StrataType.Metadata
-        if (/^WASM::(i32|f32)_/.test(intrinsic)) return StrataType.Operator
+        if (/^(WASM|IR)::control_/.test(intrinsic))   return StrataType.Control
+        if (/^IR::def_/.test(intrinsic))               return StrataType.Definition
+        if (/^IR::meta_/.test(intrinsic))              return StrataType.Metadata
+        if (/^(WASM|IR)::(i32|f32)_/.test(intrinsic)) return StrataType.Operator
     }
     return kind === 'operator' ? StrataType.Operator : StrataType.Keyword
 }

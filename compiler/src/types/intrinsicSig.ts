@@ -25,11 +25,13 @@ export interface TypeSig {
 }
 
 /**
- * Derive a TypeSig from a WASM intrinsic name. Returns undefined when the
- * name is not recognised (e.g. control-flow ops that have no surface type).
+ * Derive a TypeSig from an intrinsic name (`WASM::foo` or `IR::foo`).
+ * Returns undefined when the name is not recognised (e.g. control-flow ops
+ * that have no surface type).  IR::foo is treated identically to WASM::foo
+ * — both refer to the same underlying instruction with the same type signature.
  */
 export function intrinsicSignature(fullName: string): TypeSig | undefined {
-    const m = fullName.match(/^WASM::(.+)$/)
+    const m = fullName.match(/^(?:WASM|IR)::(.+)$/)
     if (!m) return undefined
     const short = m[1]
 

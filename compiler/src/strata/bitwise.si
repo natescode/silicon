@@ -1,15 +1,15 @@
 @stratum_operator BitOr ('|', Node) = {
-  &WASM::i32_or Node.left, Node.right;
+  &IR::i32_or Node.left, Node.right;
 };
 
 @stratum_operator BitXor ('^', Node) = {
-  &WASM::i32_xor Node.left, Node.right;
+  &IR::i32_xor Node.left, Node.right;
 };
 
 @stratum_operator Shl ('<<', Node) = {
-  &WASM::i32_shl Node.left, Node.right;
+  &IR::i32_shl Node.left, Node.right;
 };
 
 @stratum_operator Shr ('>>', Node) = {
-  &WASM::i32_shr_s Node.left, Node.right;
+  &IR::i32_shr_s Node.left, Node.right;
 };

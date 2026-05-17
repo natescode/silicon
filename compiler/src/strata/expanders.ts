@@ -111,12 +111,12 @@ const expandMatch: IRExpanderFn = (rawArgs, ctx, lower, inferredType) => {
 // ---------------------------------------------------------------------------
 
 export const builtinExpanders: Record<string, IRExpanderFn> = {
-    'WASM::control_if':       expandIf,
-    'WASM::control_loop':     expandLoop,
-    'WASM::control_break':    expandBreak,
-    'WASM::control_continue': expandContinue,
-    'WASM::control_return':   expandReturn,
-    'WASM::control_and':      expandAnd,
-    'WASM::control_or':       expandOr,
-    'WASM::control_match':    expandMatch,
+    'IR::control_if':       expandIf,
+    'IR::control_loop':     expandLoop,
+    'IR::control_break':    expandBreak,
+    'IR::control_continue': expandContinue,
+    'IR::control_return':   expandReturn,
+    'IR::control_and':      expandAnd,
+    'IR::control_or':       expandOr,
+    'IR::control_match':    expandMatch,
 }

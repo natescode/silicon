@@ -128,3 +128,15 @@ export function getWasmIntrinsic(name: string): WasmIntrinsic | undefined {
     if (!m) return undefined
     return wasmIntrinsics[m[1]]
 }
+
+/**
+ * Resolve an intrinsic name (either `WASM::foo` or `IR::foo`) to its WAT
+ * instruction string.  IR::foo is an alias for WASM::foo at the instruction
+ * level — strata use `IR::` to signal that the construct lives at the IR
+ * layer, while the underlying WAT instruction is the same.
+ */
+export function resolveIntrinsicWasmInstr(name: string): string | undefined {
+    if (name.startsWith('WASM::')) return wasmIntrinsics[name.slice(6)]?.wasmInstr
+    if (name.startsWith('IR::'))   return wasmIntrinsics[name.slice(4)]?.wasmInstr
+    return undefined
+}

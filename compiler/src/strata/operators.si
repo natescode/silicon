@@ -1,83 +1,83 @@
 @stratum_operator Plus ('+', Node) = {
-  &WASM::i32_add Node.left, Node.right;
+  &IR::i32_add Node.left, Node.right;
 };
 
 @stratum_operator Minus ('-', Node) = {
-  &WASM::i32_sub Node.left, Node.right;
+  &IR::i32_sub Node.left, Node.right;
 };
 
 @stratum_operator Multiply ('*', Node) = {
-  &WASM::i32_mul Node.left, Node.right;
+  &IR::i32_mul Node.left, Node.right;
 };
 
 @stratum_operator Divide ('/', Node) = {
-  &WASM::i32_div_s Node.left, Node.right;
+  &IR::i32_div_s Node.left, Node.right;
 };
 
 @stratum_operator Modulo ('%', Node) = {
-  &WASM::i32_rem_s Node.left, Node.right;
+  &IR::i32_rem_s Node.left, Node.right;
 };
 
 @stratum_operator Equal ('==', Node) = {
-  &WASM::i32_eq Node.left, Node.right;
+  &IR::i32_eq Node.left, Node.right;
 };
 
 @stratum_operator NotEqual ('!=', Node) = {
-  &WASM::i32_ne Node.left, Node.right;
+  &IR::i32_ne Node.left, Node.right;
 };
 
 @stratum_operator LessThan ('<', Node) = {
-  &WASM::i32_lt_s Node.left, Node.right;
+  &IR::i32_lt_s Node.left, Node.right;
 };
 
 @stratum_operator GreaterThan ('>', Node) = {
-  &WASM::i32_gt_s Node.left, Node.right;
+  &IR::i32_gt_s Node.left, Node.right;
 };
 
 @stratum_operator LessThanOrEqual ('<=', Node) = {
-  &WASM::i32_le_s Node.left, Node.right;
+  &IR::i32_le_s Node.left, Node.right;
 };
 
 @stratum_operator GreaterThanOrEqual ('>=', Node) = {
-  &WASM::i32_ge_s Node.left, Node.right;
+  &IR::i32_ge_s Node.left, Node.right;
 };
 
 @stratum_operator PlusFloat ('+', Node) = {
-  &WASM::f32_add Node.left, Node.right;
+  &IR::f32_add Node.left, Node.right;
 };
 
 @stratum_operator MinusFloat ('-', Node) = {
-  &WASM::f32_sub Node.left, Node.right;
+  &IR::f32_sub Node.left, Node.right;
 };
 
 @stratum_operator MultiplyFloat ('*', Node) = {
-  &WASM::f32_mul Node.left, Node.right;
+  &IR::f32_mul Node.left, Node.right;
 };
 
 @stratum_operator DivideFloat ('/', Node) = {
-  &WASM::f32_div Node.left, Node.right;
+  &IR::f32_div Node.left, Node.right;
 };
 
 @stratum_operator EqualFloat ('==', Node) = {
-  &WASM::f32_eq Node.left, Node.right;
+  &IR::f32_eq Node.left, Node.right;
 };
 
 @stratum_operator NotEqualFloat ('!=', Node) = {
-  &WASM::f32_ne Node.left, Node.right;
+  &IR::f32_ne Node.left, Node.right;
 };
 
 @stratum_operator LessThanFloat ('<', Node) = {
-  &WASM::f32_lt Node.left, Node.right;
+  &IR::f32_lt Node.left, Node.right;
 };
 
 @stratum_operator GreaterThanFloat ('>', Node) = {
-  &WASM::f32_gt Node.left, Node.right;
+  &IR::f32_gt Node.left, Node.right;
 };
 
 @stratum_operator LessThanOrEqualFloat ('<=', Node) = {
-  &WASM::f32_le Node.left, Node.right;
+  &IR::f32_le Node.left, Node.right;
 };
 
 @stratum_operator GreaterThanOrEqualFloat ('>=', Node) = {
-  &WASM::f32_ge Node.left, Node.right;
+  &IR::f32_ge Node.left, Node.right;
 };

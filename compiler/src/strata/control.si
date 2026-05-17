@@ -1,11 +1,11 @@
 @stratum_keyword Break ('@break', Node) = {
-  &WASM::control_break;
+  &IR::control_break;
 };
 
 @stratum_keyword Continue ('@continue', Node) = {
-  &WASM::control_continue;
+  &IR::control_continue;
 };
 
 @stratum_keyword Return ('@return', Node) = {
-  &WASM::control_return;
+  &IR::control_return;
 };

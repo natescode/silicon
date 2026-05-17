@@ -1,7 +1,7 @@
 @stratum_keyword ToFloat ('@toFloat', Node) = {
-  &WASM::f32_convert_i32_s;
+  &IR::f32_convert_i32_s;
 };
 
 @stratum_keyword ToInt ('@toInt', Node) = {
-  &WASM::i32_trunc_f32_s;
+  &IR::i32_trunc_f32_s;
 };

@@ -335,7 +335,7 @@ test("elaborate registers @if as keyword stratum with control_if intrinsic", () 
   const { registry } = elaborate(program)
   const entry = registry.keywords['@if']
   expect(entry).toBeDefined()
-  expect(entry.data.intrinsic).toBe('WASM::control_if')
+  expect(entry.data.intrinsic).toBe('IR::control_if')
 })
 
 test("elaborate registers @loop as keyword stratum with control_loop intrinsic", () => {
@@ -343,7 +343,7 @@ test("elaborate registers @loop as keyword stratum with control_loop intrinsic",
   const { registry } = elaborate(program)
   const entry = registry.keywords['@loop']
   expect(entry).toBeDefined()
-  expect(entry.data.intrinsic).toBe('WASM::control_loop')
+  expect(entry.data.intrinsic).toBe('IR::control_loop')
 })
 
 // Test 10: builtin elaborators for various operators

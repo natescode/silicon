@@ -1,11 +1,11 @@
 @stratum_operator Or ('||', Node) = {
-  &WASM::control_or;
+  &IR::control_or;
 };
 
 @stratum_keyword Not ('@not', Node) = {
-  &WASM::i32_eqz;
+  &IR::i32_eqz;
 };
 
 @stratum_keyword And ('@and', Node) = {
-  &WASM::control_and;
+  &IR::control_and;
 };
