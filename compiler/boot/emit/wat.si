@@ -78,10 +78,22 @@
   &@if (op == IR_OP_I32_XOR),    { &ew_str 'i32.xor'; };
   &@if (op == IR_OP_I32_SHL),    { &ew_str 'i32.shl'; };
   &@if (op == IR_OP_I32_SHR_S),  { &ew_str 'i32.shr_s'; };
+  &@if (op == IR_OP_F32_ADD),    { &ew_str 'f32.add'; };
+  &@if (op == IR_OP_F32_SUB),    { &ew_str 'f32.sub'; };
+  &@if (op == IR_OP_F32_MUL),    { &ew_str 'f32.mul'; };
+  &@if (op == IR_OP_F32_DIV),    { &ew_str 'f32.div'; };
+  &@if (op == IR_OP_F32_EQ),     { &ew_str 'f32.eq'; };
+  &@if (op == IR_OP_F32_NE),     { &ew_str 'f32.ne'; };
+  &@if (op == IR_OP_F32_LT),     { &ew_str 'f32.lt'; };
+  &@if (op == IR_OP_F32_LE),     { &ew_str 'f32.le'; };
+  &@if (op == IR_OP_F32_GT),     { &ew_str 'f32.gt'; };
+  &@if (op == IR_OP_F32_GE),     { &ew_str 'f32.ge'; };
 };
 
 @fn emit_unop_mnemonic op:Int := {
-  &@if (op == IR_OP_I32_EQZ), { &ew_str 'i32.eqz'; };
+  &@if (op == IR_OP_I32_EQZ),           { &ew_str 'i32.eqz'; };
+  &@if (op == IR_OP_F32_CONVERT_I32_S), { &ew_str 'f32.convert_i32_s'; };
+  &@if (op == IR_OP_I32_TRUNC_F32_S),   { &ew_str 'i32.trunc_f32_s'; };
 };
 
 # Wrap an expression's emission in a complete WAT module:

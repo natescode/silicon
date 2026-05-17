@@ -509,6 +509,17 @@ describe('Phase 0 WASIX smoke test', () => {
                     '@fn addG x:Int := { acc = acc + x; acc };\n' +
                     '@fn run := { &addG 3; &addG 2; &addG 8 };',
               fn: 'run', args: [], want: 20 },     // 7+3+2+8
+            // @toFloat / @toInt round-trip — slice 23.
+            { prog: '@fn roundTrip x:Int := { &@toInt (&@toFloat x) };',
+              fn: 'roundTrip', args: [42], want: 42 },
+            { prog: '@fn roundTrip x:Int := { &@toInt (&@toFloat x) };',
+              fn: 'roundTrip', args: [-7], want: -7 },
+            // Two-step round trip should also be identity for values that
+            // fit cleanly in f32 (i.e. up to 24-bit ints).
+            { prog: '@fn rt2 x:Int := {\n' +
+                    '  &@toInt (&@toFloat (&@toInt (&@toFloat x)))\n' +
+                    '};',
+              fn: 'rt2', args: [1000000], want: 1000000 },
         ]
 
         // Externs need imports provided to instantiate; tracked

@@ -78,6 +78,22 @@
 @let IR_OP_I32_SHR_S:Int  := 16;
 @let IR_OP_I32_EQZ:Int    := 17;   # unop
 
+# Float ops — same numbering convention; emit mnemonics in wat.si.
+@let IR_OP_F32_ADD:Int    := 20;
+@let IR_OP_F32_SUB:Int    := 21;
+@let IR_OP_F32_MUL:Int    := 22;
+@let IR_OP_F32_DIV:Int    := 23;
+@let IR_OP_F32_EQ:Int     := 24;
+@let IR_OP_F32_NE:Int     := 25;
+@let IR_OP_F32_LT:Int     := 26;
+@let IR_OP_F32_LE:Int     := 27;
+@let IR_OP_F32_GT:Int     := 28;
+@let IR_OP_F32_GE:Int     := 29;
+
+# Conversion unops between i32 and f32.
+@let IR_OP_F32_CONVERT_I32_S:Int := 30;
+@let IR_OP_I32_TRUNC_F32_S:Int   := 31;
+
 # Sentinel for "no IR handle" (e.g. missing else arm on IR_IF).
 @let IR_NONE:Int := 0 - 1;
 

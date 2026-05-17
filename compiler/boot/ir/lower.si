@@ -346,6 +346,8 @@
 @fn lit_at_return_ptr:Int   := { (&str_ptr '@return')   + 4 };
 @fn lit_at_break_ptr:Int    := { (&str_ptr '@break')    + 4 };
 @fn lit_at_continue_ptr:Int := { (&str_ptr '@continue') + 4 };
+@fn lit_at_tofloat_ptr:Int  := { (&str_ptr '@toFloat')  + 4 };
+@fn lit_at_toint_ptr:Int    := { (&str_ptr '@toInt')    + 4 };
 
 @fn lower_span_eq_lit:Int off:Int, len:Int, lit_ptr:Int, lit_len:Int := {
   @local ok := 1;
@@ -524,6 +526,22 @@
       };
       &@if ((&lower_span_eq_lit nm_off, nm_len, (&lit_at_continue_ptr), 9) == 1), {
         &@if (n_args == 0), { &@return (&ir_continue); };
+      };
+      &@if ((&lower_span_eq_lit nm_off, nm_len, (&lit_at_tofloat_ptr), 8) == 1), {
+        &@if (n_args == 1), {
+          @local v := &lower_expr (&ast_field P_AST, node, 3);
+          &@if (v != IR_NONE), {
+            &@return (&ir_unop IR_OP_F32_CONVERT_I32_S, v);
+          };
+        };
+      };
+      &@if ((&lower_span_eq_lit nm_off, nm_len, (&lit_at_toint_ptr), 6) == 1), {
+        &@if (n_args == 1), {
+          @local v := &lower_expr (&ast_field P_AST, node, 3);
+          &@if (v != IR_NONE), {
+            &@return (&ir_unop IR_OP_I32_TRUNC_F32_S, v);
+          };
+        };
       };
       &@return IR_NONE;
     };
