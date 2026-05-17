@@ -1,6 +1,7 @@
 # Silicon for VS Code
 
-Syntax highlighting and the **Sigil Dark** color theme for the
+Syntax highlighting, the **Sigil Dark** color theme, and a
+**language server** for the
 [Silicon programming language](https://github.com/natescode/sigil) — a
 bootstrappable language that targets WebAssembly Text Format (WAT)
 and runs under WASI.
@@ -20,6 +21,19 @@ and runs under WASI.
   full UI surface (editor, sidebar, tabs, status bar, terminal).
 - **Language configuration** (`language-configuration.json`) —
   bracket pairs, auto-closing single quotes, line-comment toggle.
+- **Language server client** (`client/`) — spawns `lsp-silicon` and
+  wires diagnostics, document symbols (outline / breadcrumb),
+  go-to-definition, and hover for any `.si` file in the workspace.
+
+## Language server settings
+
+| Setting | Default | What it does |
+| --- | --- | --- |
+| `silicon.lsp.enabled` | `true` | Turn the language server on / off. |
+| `silicon.lsp.serverPath` | `""` | Absolute path to `lsp-silicon/src/index.ts`. Leave empty to auto-resolve relative to the workspace root. |
+
+Command: **`Silicon: Restart LSP`** in the command palette
+(`Ctrl/Cmd-Shift-P`) restarts the server without reloading the window.
 
 ## Install (local development)
 

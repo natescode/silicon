@@ -4,4 +4,5 @@
 **/.gitignore
 **/tsconfig.json
 **/.eslintrc.*
+client/src/**
 node_modules/**
