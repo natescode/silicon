@@ -314,6 +314,55 @@ describe('Phase 0 WASIX smoke test', () => {
         }
     })
 
+    test('boot/tests/scope_test.si: variable references resolve to local.get', async () => {
+        if (!wasmerAvailable()) {
+            console.log('  (skipped: wasmer not on PATH)')
+            return
+        }
+        const wasm = await buildBoot(path.join(PROJECT_ROOT, 'boot', 'tests', 'scope_test.si'))
+        const tmpPath = path.join(PROJECT_ROOT, '.scope-smoke.wasm')
+        await fs.writeFile(tmpPath, wasm)
+
+        const strataDir = path.join(PROJECT_ROOT, 'src', 'strata')
+        const files = (await fs.readdir(strataDir))
+            .filter(f => f.endsWith('.si'))
+            .sort()
+        let bundle = ''
+        for (const f of files) {
+            bundle += await fs.readFile(path.join(strataDir, f), 'utf-8')
+            bundle += '\n'
+        }
+
+        // (input expression, expected stack-machine lines).
+        const cases: Array<[string, string[]]> = [
+            ['x;',           ['local.get 0']],
+            ['a + b;',       ['local.get 0', 'local.get 1', 'i32.add']],
+            ['(a * b) + c;', ['local.get 0', 'local.get 1', 'i32.mul', 'local.get 2', 'i32.add']],
+            ['a + a;',       ['local.get 0', 'local.get 0', 'i32.add']],
+            ['{ a; b };',    ['local.get 0', 'local.get 1']],
+        ]
+
+        try {
+            for (const [src, expectedLines] of cases) {
+                const result = spawnSync('wasmer', ['run', tmpPath], {
+                    input: Buffer.from(bundle + src + '\n', 'utf-8'),
+                    maxBuffer: 64 * 1024 * 1024,
+                })
+                expect(result.status).toBe(0)
+                const stdout = (result.stdout ?? Buffer.alloc(0)).toString('utf-8')
+                const expected = expectedLines.join('\n') + '\n'
+                if (stdout !== expected) {
+                    throw new Error(
+                        `Scope mismatch for ${JSON.stringify(src)}\n` +
+                        `Expected:\n${expected}\nGot:\n${stdout}`,
+                    )
+                }
+            }
+        } finally {
+            await fs.unlink(tmpPath).catch(() => {})
+        }
+    })
+
     test('boot/tests/module_test.si: full Silicon-bootstrap pipeline produces an executable wasm', async () => {
         if (!wasmerAvailable()) {
             console.log('  (skipped: wasmer not on PATH)')

@@ -101,6 +101,23 @@
     &@return 0;
   };
 
+  &@if (k == IR_LOCAL_GET), {
+    &ew_str 'local.get ';
+    &ew_write_int (&ir_field h, 1);
+    &ew_byte 10;
+    &@return 0;
+  };
+
+  &@if (k == IR_LOCAL_SET), {
+    @local idx := &ir_field h, 1;
+    @local val := &ir_field h, 2;
+    &emit_expr val;
+    &ew_str 'local.set ';
+    &ew_write_int idx;
+    &ew_byte 10;
+    &@return 0;
+  };
+
   &@if (k == IR_BINOP), {
     @local op := &ir_field h, 1;
     @local l  := &ir_field h, 2;

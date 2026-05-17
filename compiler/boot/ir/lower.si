@@ -21,6 +21,59 @@
 @use '../ir/nodes.si';
 @use '../elab/body.si';
 
+# ── Locals scope (parallel vecs) ────────────────────────────────────
+# scope_push appends (name_off, name_len, local_idx).  scope_lookup
+# does a linear scan in reverse-insertion order so the most recently
+# pushed binding for a name wins — basic shadowing.
+@var LSCOPE_NAME_OFF:Int := 0;
+@var LSCOPE_NAME_LEN:Int := 0;
+@var LSCOPE_IDX:Int      := 0;
+
+@fn scope_init := {
+  LSCOPE_NAME_OFF = &vec_new;
+  LSCOPE_NAME_LEN = &vec_new;
+  LSCOPE_IDX      = &vec_new;
+};
+
+@fn scope_push name_off:Int, name_len:Int, local_idx:Int := {
+  LSCOPE_NAME_OFF = &vec_push LSCOPE_NAME_OFF, name_off;
+  LSCOPE_NAME_LEN = &vec_push LSCOPE_NAME_LEN, name_len;
+  LSCOPE_IDX      = &vec_push LSCOPE_IDX,      local_idx;
+};
+
+# scope_reset clears the entire scope between function definitions.
+# Per-function scope-popping requires vec_truncate, which isn't in
+# std/vec.si yet — we'll add it when functions need shadowing.
+@fn scope_reset := {
+  LSCOPE_NAME_OFF = &vec_new;
+  LSCOPE_NAME_LEN = &vec_new;
+  LSCOPE_IDX      = &vec_new;
+};
+
+# Resolve a span against the scope; returns the bound local_idx or -1.
+@fn scope_lookup:Int q_off:Int, q_len:Int := {
+  @local n := &vec_len LSCOPE_NAME_OFF;
+  @local i := n;
+  @local found := 0 - 1;
+  &@loop ((found < 0) * (i > 0) == 1), {
+    i = i - 1;
+    @local n_off := &vec_get LSCOPE_NAME_OFF, i;
+    @local n_len := &vec_get LSCOPE_NAME_LEN, i;
+    &@if (n_len == q_len), {
+      @local ok := 1;
+      @local j := 0;
+      &@loop ((ok * (j < n_len)) == 1), {
+        @local a := &WASM::i32_load8_u (P_SRC + n_off + j);
+        @local b := &WASM::i32_load8_u (P_SRC + q_off + j);
+        &@if (a != b), { ok = 0; };
+        j = j + 1;
+      };
+      &@if (ok == 1), { found = &vec_get LSCOPE_IDX, i; };
+    };
+  };
+  found
+};
+
 @let LOWER_BINOP_OP_OFF:Int := 1;
 @let LOWER_BINOP_OP_LEN:Int := 2;
 @let LOWER_BINOP_LEFT:Int   := 3;
@@ -42,6 +95,20 @@
   &@if (k == AST_BOOL_LIT), {
     @local v := &ast_field P_AST, node, 1;
     &@return (&ir_i32_const v);
+  };
+
+  &@if (k == AST_NAMESPACE), {
+    # Single-segment identifier — look up in the scope.  Multi-segment
+    # namespaces (Module::value, record.field) need a separate path
+    # that lands once we have @use / @type lowering.
+    @local n_segs := &ast_field P_AST, node, 1;
+    &@if (n_segs == 1), {
+      @local s_off := &ast_field P_AST, node, 2;
+      @local s_len := &ast_field P_AST, node, 3;
+      @local idx := &scope_lookup s_off, s_len;
+      &@if (idx >= 0), { &@return (&ir_local_get idx); };
+    };
+    &@return IR_NONE;
   };
 
   &@if (k == AST_BLOCK), {
