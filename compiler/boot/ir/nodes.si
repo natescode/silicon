@@ -252,18 +252,21 @@
   &vec_get IR_VEC, (handle + 2 + i)
 };
 
-# ir_call — `[IR_CALL, name_ptr, name_len, n_args, arg0, arg1, ...]`.
+# ir_call — `[IR_CALL, name_ptr, name_len, produces_value, n_args,
+#            arg0, arg1, ...]`.
 # `name_ptr` is an ABSOLUTE byte pointer into linear memory.  Single-
 # segment callees pass `P_SRC + nm_off`; multi-segment callees write
 # their mangled bytes (e.g. "wasi_snapshot_preview1_fd_write") to
-# arena scratch and pass that pointer.  This uniform shape avoids
-# a separate `is_pool` flag on the record.
-@fn ir_call:Int name_ptr:Int, name_len:Int, args:Int := {
+# the name pool and pass an encoded handle.
+# `produces_value` is 1 when the callee returns an i32, 0 when void.
+@fn ir_call:Int name_ptr:Int, name_len:Int,
+               produces_value:Int, args:Int := {
   @local h := &vec_len IR_VEC;
   @local n := &vec_len args;
   IR_VEC = &vec_push IR_VEC, IR_CALL;
   IR_VEC = &vec_push IR_VEC, name_ptr;
   IR_VEC = &vec_push IR_VEC, name_len;
+  IR_VEC = &vec_push IR_VEC, produces_value;
   IR_VEC = &vec_push IR_VEC, n;
   @local i := 0;
   &@loop (i < n), {
@@ -273,11 +276,12 @@
   h
 };
 
-@fn ir_call_name_ptr:Int handle:Int := { &vec_get IR_VEC, (handle + 1) };
-@fn ir_call_name_len:Int handle:Int := { &vec_get IR_VEC, (handle + 2) };
-@fn ir_call_argc:Int     handle:Int := { &vec_get IR_VEC, (handle + 3) };
-@fn ir_call_arg:Int      handle:Int, i:Int := {
-  &vec_get IR_VEC, (handle + 4 + i)
+@fn ir_call_name_ptr:Int       handle:Int := { &vec_get IR_VEC, (handle + 1) };
+@fn ir_call_name_len:Int       handle:Int := { &vec_get IR_VEC, (handle + 2) };
+@fn ir_call_produces_value:Int handle:Int := { &vec_get IR_VEC, (handle + 3) };
+@fn ir_call_argc:Int           handle:Int := { &vec_get IR_VEC, (handle + 4) };
+@fn ir_call_arg:Int            handle:Int, i:Int := {
+  &vec_get IR_VEC, (handle + 5 + i)
 };
 
 # ir_store — `[IR_STORE, op, addr_h, val_h]`.  Void result.

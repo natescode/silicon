@@ -75,6 +75,82 @@
 @fn global_name_len:Int i:Int := { &vec_get GSCOPE_NAME_LEN, i };
 @fn global_init_val:Int i:Int := { &vec_get GSCOPE_INIT_VAL, i };
 
+# ── Function signature table ───────────────────────────────────────
+# Tracks (name → has_result) for every user-defined function and
+# extern lowered so far, plus a hardcoded set of std-prelude void
+# helpers ($heap_set is the only currently-emitted one).  Lookup is
+# linear; reverse-insertion order so the most-recent definition wins.
+@var FN_SIG_OFF:Int := 0;     # vec<i32>: name byte offset (P_SRC or pool, see below)
+@var FN_SIG_LEN:Int := 0;     # vec<i32>: name byte length
+@var FN_SIG_IN_POOL:Int := 0; # vec<i32>: 1 → off is a pool handle, 0 → P_SRC ptr
+@var FN_SIG_RESULT:Int := 0;  # vec<i32>: 1 → produces i32, 0 → void
+
+@fn fn_sig_init := {
+  FN_SIG_OFF      = &vec_new;
+  FN_SIG_LEN      = &vec_new;
+  FN_SIG_IN_POOL  = &vec_new;
+  FN_SIG_RESULT   = &vec_new;
+};
+
+@fn fn_sig_register name_off:Int, name_len:Int, in_pool:Int, has_result:Int := {
+  FN_SIG_OFF     = &vec_push FN_SIG_OFF,     name_off;
+  FN_SIG_LEN     = &vec_push FN_SIG_LEN,     name_len;
+  FN_SIG_IN_POOL = &vec_push FN_SIG_IN_POOL, in_pool;
+  FN_SIG_RESULT  = &vec_push FN_SIG_RESULT,  has_result;
+};
+
+# Compare two name spans for byte-equality.  Each span can live
+# either in P_SRC (in_pool=0, off is a P_SRC offset) or in the
+# NAME_POOL (in_pool=1, off is a pool index).  Reading bytes goes
+# through the appropriate accessor.
+@fn fn_sig_byte:Int off:Int, in_pool:Int, i:Int := {
+  &@if (in_pool == 0), { &@return (&WASM::i32_load8_u (P_SRC + off + i)); };
+  # pool: byte at index off+i (NAME_POOL[off+i] is the byte value).
+  &vec_get NAME_POOL, (off + i)
+};
+
+@fn fn_sig_lookup:Int q_off:Int, q_len:Int, q_in_pool:Int := {
+  @local n := &vec_len FN_SIG_OFF;
+  @local i := n;
+  @local found := 0 - 1;
+  &@loop ((found < 0) * (i > 0) == 1), {
+    i = i - 1;
+    @local n_len := &vec_get FN_SIG_LEN, i;
+    &@if (n_len == q_len), {
+      @local n_off := &vec_get FN_SIG_OFF, i;
+      @local n_pool := &vec_get FN_SIG_IN_POOL, i;
+      @local ok := 1;
+      @local j := 0;
+      &@loop ((ok * (j < q_len)) == 1), {
+        @local a := &fn_sig_byte n_off, n_pool, j;
+        @local b := &fn_sig_byte q_off, q_in_pool, j;
+        &@if (a != b), { ok = 0; };
+        j = j + 1;
+      };
+      &@if (ok == 1), { found = &vec_get FN_SIG_RESULT, i; };
+    };
+  };
+  found
+};
+
+# Pre-register std-prelude voids.  We can't use a string literal
+# pointer directly because fn_sig_lookup reads bytes from P_SRC
+# or NAME_POOL, not from boot.wasm's static data section.  Push
+# the bytes into NAME_POOL once at startup.
+@fn fn_sig_register_prelude_voids := {
+  @local start := &vec_len NAME_POOL;
+  # "heap_set" — 8 bytes.
+  NAME_POOL = &vec_push NAME_POOL, 104;  # h
+  NAME_POOL = &vec_push NAME_POOL, 101;  # e
+  NAME_POOL = &vec_push NAME_POOL, 97;   # a
+  NAME_POOL = &vec_push NAME_POOL, 112;  # p
+  NAME_POOL = &vec_push NAME_POOL, 95;   # _
+  NAME_POOL = &vec_push NAME_POOL, 115;  # s
+  NAME_POOL = &vec_push NAME_POOL, 101;  # e
+  NAME_POOL = &vec_push NAME_POOL, 116;  # t
+  &fn_sig_register start, 8, 1, 0;
+};
+
 # ── String-literal pool ────────────────────────────────────────────
 # Each literal is laid out in linear memory as a 4-byte LE length
 # header followed by the UTF-8 bytes.  We track the (source_off,
@@ -295,6 +371,25 @@
           &@if ((b0 == 58) * (b1 == 58) == 1), { sep_pos = sj; };
           sj = sj + 1;
         };
+        # Register the extern in the signature table.  Multi-segment
+        # names register both forms (raw `mod::fn` is what user code
+        # typically writes; the mangled `mod_fn` matches what call
+        # sites resolve to via the mangled-name pool path).  For a
+        # single-segment extern, we only register the bare name.
+        &fn_sig_register nm_off, nm_len, 0, has_result;
+        &@if (sep_pos >= 0), {
+          # Push the mangled name into NAME_POOL so it can be
+          # looked up by the pool path.
+          @local pool_start := &vec_len NAME_POOL;
+          @local k := 0;
+          &@loop (k < nm_len), {
+            @local bb := &WASM::i32_load8_u (P_SRC + nm_off + k);
+            &@if ((k == sep_pos) + (k == (sep_pos + 1)) > 0), { bb = 95; };
+            NAME_POOL = &vec_push NAME_POOL, bb;
+            k = k + 1;
+          };
+          &fn_sig_register pool_start, nm_len, 1, has_result;
+        };
         @local h := &ir_extern nm_off, nm_len, n_params, has_result, sep_pos;
         out = &vec_push out, h;
       };
@@ -317,7 +412,7 @@
 # to function scope before lowering the body.
 @fn lit_at_local2_ptr:Int := { (&str_ptr '@local') + 4 };
 
-@fn collect_locals node:Int, names_off:Int, names_len:Int := {
+@fn collect_locals node:Int := {
   &@if (node < 0), { &@return 0; };
   @local k := &ast_kind P_AST, node;
 
@@ -327,16 +422,16 @@
     &@if ((&lower_span_eq_lit kw_off, kw_len, (&lit_at_local2_ptr), 6) == 1), {
       @local nm_off := &ast_field P_AST, node, 3;
       @local nm_len := &ast_field P_AST, node, 4;
-      &vec_push names_off, nm_off;
-      &vec_push names_len, nm_len;
+      # Mutate the function-scope hoist vecs directly — pass-by-value
+      # made the original (names_off, names_len) params useless since
+      # vec_push's reallocation result couldn't be propagated back to
+      # the caller.
+      LOCAL_HOIST_OFF = &vec_push LOCAL_HOIST_OFF, nm_off;
+      LOCAL_HOIST_LEN = &vec_push LOCAL_HOIST_LEN, nm_len;
     };
-    # Recurse into the binding so locals declared inside blocks
-    # (which are themselves bindings) are still hoisted.
     @local n_params := &ast_field P_AST, node, 7;
     @local binding := &ast_field P_AST, node, (8 + n_params);
-    &@if (binding >= 0), {
-      &collect_locals binding, names_off, names_len;
-    };
+    &@if (binding >= 0), { &collect_locals binding; };
     &@return 0;
   };
 
@@ -345,18 +440,18 @@
     @local has_trailing := &ast_field P_AST, node, 2;
     @local i := 0;
     &@loop (i < n_stmts), {
-      &collect_locals (&ast_field P_AST, node, (3 + i)), names_off, names_len;
+      &collect_locals (&ast_field P_AST, node, (3 + i));
       i = i + 1;
     };
     &@if (has_trailing == 1), {
-      &collect_locals (&ast_field P_AST, node, (3 + n_stmts)), names_off, names_len;
+      &collect_locals (&ast_field P_AST, node, (3 + n_stmts));
     };
     &@return 0;
   };
 
   &@if (k == AST_BIN_OP), {
-    &collect_locals (&ast_field P_AST, node, 3), names_off, names_len;
-    &collect_locals (&ast_field P_AST, node, 4), names_off, names_len;
+    &collect_locals (&ast_field P_AST, node, 3);
+    &collect_locals (&ast_field P_AST, node, 4);
     &@return 0;
   };
 
@@ -364,14 +459,14 @@
     @local n_args := &ast_field P_AST, node, 2;
     @local i := 0;
     &@loop (i < n_args), {
-      &collect_locals (&ast_field P_AST, node, (3 + i)), names_off, names_len;
+      &collect_locals (&ast_field P_AST, node, (3 + i));
       i = i + 1;
     };
     &@return 0;
   };
 
   &@if (k == AST_ASSIGNMENT), {
-    &collect_locals (&ast_field P_AST, node, 2), names_off, names_len;
+    &collect_locals (&ast_field P_AST, node, 2);
     &@return 0;
   };
 
@@ -425,7 +520,7 @@
   # unique slot index immediately after the params.
   LOCAL_HOIST_OFF = &vec_new;
   LOCAL_HOIST_LEN = &vec_new;
-  &collect_locals binding, LOCAL_HOIST_OFF, LOCAL_HOIST_LEN;
+  &collect_locals binding;
   @local n_locals := &vec_len LOCAL_HOIST_OFF;
   @local li := 0;
   &@loop (li < n_locals), {
@@ -439,13 +534,46 @@
   &@if (body_h == IR_NONE), { &@return IR_NONE; };
 
   # Default to i32 result; if the function's type annotation says
-  # `Void`, emit (no result).  Stage 1 type inference will replace
-  # this default with the actual inferred type.
+  # `Void`, emit (no result).  When no annotation is present, infer
+  # void from the body's last expression — if it's a void op (store,
+  # local-set, etc., or a call to a known-void function), the
+  # function is void too.  Stage 1 type inference replaces both
+  # of these heuristics with the actual inferred type.
   @local ty_off := &ast_field P_AST, def, 5;
   @local ty_len := &ast_field P_AST, def, 6;
   @local has_res := 1;
   &@if ((ty_len == 4) * ((&lower_span_eq_lit ty_off, ty_len, (&lit_void_ptr), 4)) == 1),
     { has_res = 0; };
+  &@if (ty_len == 0), {
+    # No annotation — sniff the body's tail.  For an IR_BLOCK,
+    # check the LAST child; for any other kind, check the kind
+    # directly.  body_tail_produces_value mirrors the same
+    # node_produces_value logic the emitter uses.
+    @local tail := body_h;
+    &@if ((&ir_kind body_h) == IR_BLOCK), {
+      @local nc := &ir_block_count body_h;
+      &@if (nc > 0), { tail = &ir_block_child body_h, (nc - 1); };
+      &@if (nc == 0), { tail = (0 - 1); };
+    };
+    @local produces := 1;
+    &@if (tail < 0), { produces = 0; };
+    &@if (tail >= 0), {
+      @local tk := &ir_kind tail;
+      &@if (tk == IR_NULL),       { produces = 0; };
+      &@if (tk == IR_LOCAL_SET),  { produces = 0; };
+      &@if (tk == IR_GLOBAL_SET), { produces = 0; };
+      &@if (tk == IR_STORE),      { produces = 0; };
+      &@if (tk == IR_RETURN),     { produces = 0; };
+      &@if (tk == IR_BREAK),      { produces = 0; };
+      &@if (tk == IR_CONTINUE),   { produces = 0; };
+      &@if (tk == IR_LOOP),       { produces = 0; };
+      &@if (tk == IR_CALL),       {
+        &@if ((&ir_call_produces_value tail) == 0), { produces = 0; };
+      };
+    };
+    &@if (produces == 0), { has_res = 0; };
+  };
+  &fn_sig_register nm_off, nm_len, 0, has_res;
   &ir_function nm_off, nm_len, n_params, n_locals, body_h, has_res
 };
 
@@ -804,7 +932,9 @@
 
   &@if (k == AST_NAMESPACE), {
     # Single-segment identifier — look up in the local scope first,
-    # then the module-global scope.  Multi-segment namespaces
+    # then the module-global scope.  If neither matches, assume the
+    # name refers to a zero-arg function (Stage 0's @let-as-thunk
+    # convention) and emit a no-arg call.  Multi-segment namespaces
     # (Module::value, record.field) still return IR_NONE.
     @local n_segs := &ast_field P_AST, node, 1;
     &@if (n_segs == 1), {
@@ -814,6 +944,12 @@
       &@if (idx >= 0), { &@return (&ir_local_get idx); };
       @local gidx := &global_lookup s_off, s_len;
       &@if (gidx >= 0), { &@return (&ir_global_get gidx); };
+      # Fallback: zero-arg call to a function with this name.
+      # produces_value defaults to 1 if unknown; sig table lookup
+      # tells us when the callee is void.
+      @local pv := &fn_sig_lookup s_off, s_len, 0;
+      &@if (pv < 0), { pv = 1; };
+      &@return (&ir_call (P_SRC + s_off), s_len, pv, (&vec_new));
     };
     &@return IR_NONE;
   };
@@ -906,6 +1042,11 @@
     &@if (n_segs >= 2), {
       @local mangled_len := &mangled_name_len callee;
       @local pool_handle := &name_pool_push_mangled callee;
+      # The pool_handle is a NEGATIVE encoded value; the underlying
+      # pool offset is (-h)-2.  Use that for the fn_sig lookup.
+      @local pool_start := (0 - pool_handle) - 2;
+      @local pv := &fn_sig_lookup pool_start, mangled_len, 1;
+      &@if (pv < 0), { pv = 1; };       # unknown → assume i32 result
       @local arg_handles2 := &vec_new;
       @local ai2 := 0;
       &@loop (ai2 < n_args), {
@@ -914,7 +1055,7 @@
         arg_handles2 = &vec_push arg_handles2, ah2;
         ai2 = ai2 + 1;
       };
-      &@return (&ir_call pool_handle, mangled_len, arg_handles2);
+      &@return (&ir_call pool_handle, mangled_len, pv, arg_handles2);
     };
 
     &@if (n_segs != 1), { &@return IR_NONE; };
@@ -1034,7 +1175,9 @@
       arg_handles = &vec_push arg_handles, ah;
       ai = ai + 1;
     };
-    &@return (&ir_call (P_SRC + nm_off), nm_len, arg_handles);
+    @local pv := &fn_sig_lookup nm_off, nm_len, 0;
+    &@if (pv < 0), { pv = 1; };         # unknown → assume i32 result
+    &@return (&ir_call (P_SRC + nm_off), nm_len, pv, arg_handles);
   };
 
   &@if (k == AST_BIN_OP), {

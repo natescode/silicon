@@ -363,8 +363,9 @@
 };
 
 # For each IR kind, returns 1 if the emit pushes a value onto
-# the WAT stack and 0 if it doesn't (or it's the responsibility
-# of the construct itself to leave nothing).
+# the WAT stack and 0 if it doesn't.  IR_CALL is special-cased
+# inline by `node_produces_value` since the answer depends on the
+# specific call's callee signature.
 @fn ir_kind_produces_value:Int k:Int := {
   &@if (k == IR_NULL),       { &@return 0; };
   &@if (k == IR_LOCAL_SET),  { &@return 0; };
@@ -375,6 +376,28 @@
   &@if (k == IR_CONTINUE),   { &@return 0; };
   &@if (k == IR_LOOP),       { &@return 0; };
   1
+};
+
+# Per-node value-production check that also inspects IR_CALL's
+# stored produces_value field and IR_IF's branch shape.
+@fn node_produces_value:Int h:Int := {
+  &@if (h < 0), { &@return 0; };
+  @local k := &ir_kind h;
+  &@if (k == IR_CALL), { &@return (&ir_call_produces_value h); };
+  &@if (k == IR_IF), {
+    @local then_h := &ir_field h, 2;
+    @local else_h := &ir_field h, 3;
+    &@if (else_h == IR_NONE), { &@return 0; };
+    @local tp := &node_produces_value then_h;
+    @local ep := &node_produces_value else_h;
+    &@return (tp * ep);
+  };
+  &@if (k == IR_BLOCK), {
+    @local nc := &ir_block_count h;
+    &@if (nc == 0), { &@return 0; };
+    &@return (&node_produces_value (&ir_block_child h, (nc - 1)));
+  };
+  &ir_kind_produces_value k
 };
 
 # Emit a body in void context — every produced value is dropped.
@@ -389,14 +412,14 @@
     &@loop (i < n), {
       @local child := &ir_block_child h, i;
       &emit_expr child;
-      &@if ((&ir_kind_produces_value (&ir_kind child)) == 1),
+      &@if ((&node_produces_value child) == 1),
         { &ew_str 'drop'; &ew_byte 10; };
       i = i + 1;
     };
     &@return 0;
   };
   &emit_expr h;
-  &@if ((&ir_kind_produces_value k) == 1),
+  &@if ((&node_produces_value h) == 1),
     { &ew_str 'drop'; &ew_byte 10; };
   0
 };
@@ -550,19 +573,34 @@
     @local cond := &ir_field h, 1;
     @local then_h := &ir_field h, 2;
     @local else_h := &ir_field h, 3;
+    # An if is value-producing only when BOTH arms produce a value.
+    # Missing-else or any void arm degrades to a statement-form if.
+    @local then_p := &node_produces_value then_h;
+    @local else_p := 0;
+    &@if (else_h != IR_NONE), { else_p = &node_produces_value else_h; };
+    @local result_form := then_p * else_p;
     &emit_expr cond;
-    &ew_str 'if (result i32)'; &ew_byte 10;
-    &emit_expr then_h;
-    &ew_str 'else'; &ew_byte 10;
-    # Missing else arm — push a sentinel zero so the if's result
-    # type stays well-defined.
-    &@if (else_h == IR_NONE), {
-      &ew_str 'i32.const 0'; &ew_byte 10;
-    };
-    &@if (else_h != IR_NONE), {
+    &@if (result_form == 1), {
+      &ew_str 'if (result i32)'; &ew_byte 10;
+      &emit_expr then_h;
+      &ew_str 'else'; &ew_byte 10;
       &emit_expr else_h;
+      &ew_str 'end'; &ew_byte 10;
     };
-    &ew_str 'end'; &ew_byte 10;
+    &@if (result_form == 0), {
+      # Statement-form: emit `if ... [else ...] end` (no result).
+      # If either arm produces a value, drop it so the block ends
+      # with an empty stack.
+      &ew_str 'if'; &ew_byte 10;
+      &emit_expr then_h;
+      &@if (then_p == 1), { &ew_str 'drop'; &ew_byte 10; };
+      &@if (else_h != IR_NONE), {
+        &ew_str 'else'; &ew_byte 10;
+        &emit_expr else_h;
+        &@if (else_p == 1), { &ew_str 'drop'; &ew_byte 10; };
+      };
+      &ew_str 'end'; &ew_byte 10;
+    };
     &@return 0;
   };
 
@@ -603,20 +641,8 @@
       # (if any) must be dropped so the block's result type is
       # only the trailing expression.
       &@if (i < (n - 1)), {
-        @local ck := &ir_kind child;
-        # Kinds that produce no stack value: IR_NULL, IR_LOCAL_SET,
-        # IR_GLOBAL_SET, IR_RETURN, IR_BREAK, IR_CONTINUE.  Everything
-        # else gets a `drop`.
-        @local needs_drop := 1;
-        &@if (ck == IR_NULL),       { needs_drop = 0; };
-        &@if (ck == IR_LOCAL_SET),  { needs_drop = 0; };
-        &@if (ck == IR_GLOBAL_SET), { needs_drop = 0; };
-        &@if (ck == IR_RETURN),     { needs_drop = 0; };
-        &@if (ck == IR_BREAK),      { needs_drop = 0; };
-        &@if (ck == IR_CONTINUE),   { needs_drop = 0; };
-        &@if (ck == IR_LOOP),       { needs_drop = 0; };
-        &@if (ck == IR_STORE),      { needs_drop = 0; };
-        &@if (needs_drop == 1), { &ew_str 'drop'; &ew_byte 10; };
+        &@if ((&node_produces_value child) == 1),
+          { &ew_str 'drop'; &ew_byte 10; };
       };
       i = i + 1;
     };

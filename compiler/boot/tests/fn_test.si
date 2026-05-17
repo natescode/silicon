@@ -34,6 +34,8 @@
   &global_init;
   &litpool_init;
   &name_pool_init;
+  &fn_sig_init;
+  &fn_sig_register_prelude_voids;
   &ew_init;
 
   @local fns := &lower_program prog;

@@ -844,6 +844,61 @@ describe('Phase 0 WASIX smoke test', () => {
         }
     }, 60000)
 
+    test('boot/tests/fn_test.si: bootstrap compiles boot/parser/lex.si into validating standalone wasm', async () => {
+        if (!wasmerAvailable()) {
+            console.log('  (skipped: wasmer not on PATH)')
+            return
+        }
+        const wasm = await buildBoot(path.join(PROJECT_ROOT, 'boot', 'tests', 'fn_test.si'))
+        const tmpPath = path.join(PROJECT_ROOT, '.lex-boot.wasm')
+        await fs.writeFile(tmpPath, wasm)
+
+        const strataDir = path.join(PROJECT_ROOT, 'src', 'strata')
+        const files = (await fs.readdir(strataDir))
+            .filter(f => f.endsWith('.si'))
+            .sort()
+        let bundle = ''
+        for (const f of files) {
+            bundle += await fs.readFile(path.join(strataDir, f), 'utf-8')
+            bundle += '\n'
+        }
+
+        const wasiStub = [
+            '@extern wasi_snapshot_preview1::fd_write:Int',
+            '  fd:Int, iovs_ptr:Int, iovs_len:Int, nwritten_out:Int;',
+            '@extern wasi_snapshot_preview1::fd_read:Int',
+            '  fd:Int, iovs_ptr:Int, iovs_len:Int, nread_out:Int;',
+        ].join('\n') + '\n'
+
+        const io   = await fs.readFile(path.join(PROJECT_ROOT, 'boot', 'std', 'io.si'),    'utf-8')
+        const arena = await fs.readFile(path.join(PROJECT_ROOT, 'boot', 'std', 'arena.si'), 'utf-8')
+        const vec  = await fs.readFile(path.join(PROJECT_ROOT, 'boot', 'std', 'vec.si'),   'utf-8')
+        const toks = await fs.readFile(path.join(PROJECT_ROOT, 'boot', 'parser', 'tokens.si'), 'utf-8')
+        const lex  = await fs.readFile(path.join(PROJECT_ROOT, 'boot', 'parser', 'lex.si'),    'utf-8')
+
+        const userProg = wasiStub + io + arena + vec + toks + lex
+
+        try {
+            const compileRes = spawnSync('wasmer', ['run', tmpPath], {
+                input: Buffer.from(bundle + userProg, 'utf-8'),
+                maxBuffer: 64 * 1024 * 1024,
+            })
+            expect(compileRes.status).toBe(0)
+            const wat = (compileRes.stdout ?? Buffer.alloc(0)).toString('utf-8')
+            // Both wabt (strict validate) and the JS WebAssembly engine
+            // (the cranelift-equivalent validator) must accept it.
+            const compiled = await watToWasm(wat)
+            await WebAssembly.compile(compiled.buffer)
+            // Don't run — lexer requires source bytes in memory and we
+            // just want to know the module is structurally valid.
+            // Size sanity-check: should be on the order of 3-4 KB.
+            expect(compiled.buffer.byteLength).toBeGreaterThan(2000)
+            expect(compiled.buffer.byteLength).toBeLessThan(20000)
+        } finally {
+            await fs.unlink(tmpPath).catch(() => {})
+        }
+    }, 60000)
+
     test('boot/tests/fn_test.si: bootstrap-compiled io.si library + _start prints via write_str', async () => {
         if (!wasmerAvailable()) {
             console.log('  (skipped: wasmer not on PATH)')
