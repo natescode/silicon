@@ -1,0 +1,391 @@
+# Body template extractor — Phase 4 slice 5.
+#
+# Mirrors src/elaborator/strataLoader.ts's extractBodyTemplate.  For
+# each operator/keyword stratum's body, walks every top-level item and
+# extracts the first FunctionCall.  Each step becomes one of:
+#
+#   { "call": "IR::xxx",   "args": ["left", "right", ...] }   # IR/WASM intrinsic
+#   { "call": "user_fn",   "args": [...] }                    # single-segment user fn
+#
+# Items whose first FunctionCall is a multi-segment non-IR/WASM
+# namespace (e.g. &Compiler::ctx) are silently skipped — they're
+# consumed by the body interpreter in a later slice, not by the
+# template-based codegen path.
+#
+# Output:
+#   {
+#     "operators": [
+#       { "op": "+", "steps": [{ "call": "IR::i32_add", "args": ["left", "right"] }] },
+#       ...
+#     ],
+#     "keywords": [
+#       { "kw": "@if", "steps": [{ "call": "IR::control_if", "args": [] }] },
+#       ...
+#     ]
+#   }
+#
+# argRefs compare each arg's embedded Namespace against
+# `<nodeParamName>.left` / `<nodeParamName>.right` — anything else
+# is "unknown".
+
+@use '../std/io.si';
+@use '../std/vec.si';
+@use '../parser/ast.si';
+@use '../parser/parse.si';
+@use './registry.si';
+
+@let TPL_ELAB_NP_OFF:Int    := 6;
+@let TPL_ELAB_NP_LEN:Int    := 7;
+@let TPL_ELAB_SEMANTICS:Int := 8;
+
+# ── Literal byte sequences ──────────────────────────────────────────
+@fn lit_ir3_ptr:Int   := { (&str_ptr 'IR')    + 4 };
+@fn lit_wasm3_ptr:Int := { (&str_ptr 'WASM')  + 4 };
+@fn lit_left_ptr:Int  := { (&str_ptr 'left')  + 4 };
+@fn lit_right_ptr:Int := { (&str_ptr 'right') + 4 };
+
+@fn span_eq_lit3:Int off:Int, len:Int, lit_ptr:Int, lit_len:Int := {
+  @local ok := 1;
+  &@if (len != lit_len), { ok = 0; };
+  @local i := 0;
+  &@loop ((ok * (i < len)) == 1), {
+    @local a := &WASM::i32_load8_u (P_SRC + off + i);
+    @local b := &WASM::i32_load8_u (lit_ptr + i);
+    &@if (a != b), { ok = 0; };
+    i = i + 1;
+  };
+  ok
+};
+
+# Compare two source-buffer spans.
+@fn span_eq_span:Int a_off:Int, a_len:Int, b_off:Int, b_len:Int := {
+  @local ok := 1;
+  &@if (a_len != b_len), { ok = 0; };
+  @local i := 0;
+  &@loop ((ok * (i < a_len)) == 1), {
+    @local x := &WASM::i32_load8_u (P_SRC + a_off + i);
+    @local y := &WASM::i32_load8_u (P_SRC + b_off + i);
+    &@if (x != y), { ok = 0; };
+    i = i + 1;
+  };
+  ok
+};
+
+# ── findFunctionCall — first AST_CALL anywhere in node. ─────────────
+@fn find_call:Int node:Int := {
+  &@if (node < 0), { &@return AST_NONE; };
+  @local k := &ast_kind P_AST, node;
+  &@if (k == AST_CALL), { &@return node; };
+
+  &@if (k == AST_BLOCK), {
+    @local n_stmts := &ast_field P_AST, node, 1;
+    @local has_trailing := &ast_field P_AST, node, 2;
+    @local i := 0;
+    &@loop (i < n_stmts), {
+      @local r := &find_call (&ast_field P_AST, node, (3 + i));
+      &@if (r != AST_NONE), { &@return r; };
+      i = i + 1;
+    };
+    &@if (has_trailing == 1), {
+      @local rt := &find_call (&ast_field P_AST, node, (3 + n_stmts));
+      &@if (rt != AST_NONE), { &@return rt; };
+    };
+  };
+
+  &@if (k == AST_BIN_OP), {
+    @local r1 := &find_call (&ast_field P_AST, node, 3);
+    &@if (r1 != AST_NONE), { &@return r1; };
+    @local r2 := &find_call (&ast_field P_AST, node, 4);
+    &@if (r2 != AST_NONE), { &@return r2; };
+  };
+
+  &@if (k == AST_ASSIGNMENT), {
+    @local r1 := &find_call (&ast_field P_AST, node, 1);
+    &@if (r1 != AST_NONE), { &@return r1; };
+    @local r2 := &find_call (&ast_field P_AST, node, 2);
+    &@if (r2 != AST_NONE), { &@return r2; };
+  };
+
+  &@if (k == AST_DEFINITION), {
+    @local n_params := &ast_field P_AST, node, 7;
+    @local binding := &ast_field P_AST, node, (8 + n_params);
+    &@if (binding >= 0), {
+      @local rb := &find_call binding;
+      &@if (rb != AST_NONE), { &@return rb; };
+    };
+  };
+
+  AST_NONE
+};
+
+# ── findNamespace — first AST_NAMESPACE anywhere in node. ───────────
+@fn find_namespace:Int node:Int := {
+  &@if (node < 0), { &@return AST_NONE; };
+  @local k := &ast_kind P_AST, node;
+  &@if (k == AST_NAMESPACE), { &@return node; };
+
+  &@if (k == AST_CALL), {
+    @local n_args := &ast_field P_AST, node, 2;
+    @local i := 0;
+    &@loop (i < n_args), {
+      @local r := &find_namespace (&ast_field P_AST, node, (3 + i));
+      &@if (r != AST_NONE), { &@return r; };
+      i = i + 1;
+    };
+  };
+
+  AST_NONE
+};
+
+# ── argRef classification: returns 0=left, 1=right, 2=unknown. ──────
+@fn classify_argref:Int arg:Int, np_off:Int, np_len:Int := {
+  @local ns := &find_namespace arg;
+  &@if (ns == AST_NONE), { &@return 2; };
+  @local n_segs := &ast_field P_AST, ns, 1;
+  &@if (n_segs != 2), { &@return 2; };
+  @local s0_off := &ast_field P_AST, ns, 2;
+  @local s0_len := &ast_field P_AST, ns, 3;
+  &@if ((&span_eq_span s0_off, s0_len, np_off, np_len) == 0), { &@return 2; };
+  @local s1_off := &ast_field P_AST, ns, 4;
+  @local s1_len := &ast_field P_AST, ns, 5;
+  &@if ((&span_eq_lit3 s1_off, s1_len, (&lit_left_ptr),  4) == 1), { &@return 0; };
+  &@if ((&span_eq_lit3 s1_off, s1_len, (&lit_right_ptr), 5) == 1), { &@return 1; };
+  2
+};
+
+# ── Output helpers ──────────────────────────────────────────────────
+@fn tw_byte b:Int := { &write_byte 1, b; };
+@fn tw_str  s:String := { &write_str  1, s; };
+@fn tw_quoted_span off:Int, len:Int := {
+  &tw_byte 34;
+  &write_bytes 1, (P_SRC + off), len;
+  &tw_byte 34;
+};
+
+# Emit a namespace as "seg0::seg1::..." (quoted), or a single-segment
+# bare name (quoted).  For single segments, no `::` separator.
+@fn tw_emit_callee ns:Int := {
+  @local n_segs := &ast_field P_AST, ns, 1;
+  &tw_byte 34;
+  @local i := 0;
+  &@loop (i < n_segs), {
+    &@if (i > 0), { &tw_byte 58; &tw_byte 58; };
+    @local off := &ast_field P_AST, ns, (2 + (2 * i));
+    @local len := &ast_field P_AST, ns, (3 + (2 * i));
+    &write_bytes 1, (P_SRC + off), len;
+    i = i + 1;
+  };
+  &tw_byte 34;
+};
+
+# Emit one step's args array: ["left", "right", "unknown", ...]
+@fn tw_emit_args call:Int, np_off:Int, np_len:Int := {
+  @local n_args := &ast_field P_AST, call, 2;
+  &tw_byte 91;                                      # [
+  @local i := 0;
+  &@loop (i < n_args), {
+    &@if (i > 0), { &tw_byte 44; &tw_byte 32; };
+    @local arg := &ast_field P_AST, call, (3 + i);
+    @local cls := &classify_argref arg, np_off, np_len;
+    &@if (cls == 0), { &tw_str '"left"'; };
+    &@if (cls == 1), { &tw_str '"right"'; };
+    &@if (cls == 2), { &tw_str '"unknown"'; };
+    i = i + 1;
+  };
+  &tw_byte 93;                                      # ]
+};
+
+# Emit the steps array for one elaboration's body block (or other
+# expression).  Returns the number of steps emitted.
+#
+# Walks body.items; for each item finds the first FunctionCall; emits
+# a step iff the callee is WASM::* / IR::* (intrinsic) or a
+# single-segment namespace (userFunc).  Multi-segment non-IR/WASM
+# callees (e.g. Compiler::ctx) are skipped.
+@fn tw_emit_steps:Int semantics:Int, np_off:Int, np_len:Int := {
+  &tw_byte 91;                                      # [
+  &@if (semantics < 0), { &tw_byte 93; &@return 0; };
+  &@if ((&ast_kind P_AST, semantics) != AST_BLOCK), {
+    &tw_byte 93;
+    &@return 0;
+  };
+  @local n_stmts := &ast_field P_AST, semantics, 1;
+  @local has_trailing := &ast_field P_AST, semantics, 2;
+  @local total := n_stmts;
+  &@if (has_trailing == 1), { total = total + 1; };
+  @local emitted := 0;
+  @local i := 0;
+  &@loop (i < total), {
+    @local item := &ast_field P_AST, semantics, (3 + i);
+    @local fc := &find_call item;
+    &@if (fc != AST_NONE), {
+      @local callee := &ast_field P_AST, fc, 1;
+      &@if ((&ast_kind P_AST, callee) == AST_NAMESPACE), {
+        @local n_segs := &ast_field P_AST, callee, 1;
+        @local s0_off := &ast_field P_AST, callee, 2;
+        @local s0_len := &ast_field P_AST, callee, 3;
+        @local is_ir   := &span_eq_lit3 s0_off, s0_len, (&lit_ir3_ptr),   2;
+        @local is_wasm := &span_eq_lit3 s0_off, s0_len, (&lit_wasm3_ptr), 4;
+        @local accept := 0;
+        &@if ((is_ir + is_wasm) > 0), { accept = 1; };
+        &@if ((n_segs == 1) * (accept == 0) == 1), { accept = 1; };
+        &@if (accept == 1), {
+          &@if (emitted > 0), { &tw_byte 44; };
+          &tw_byte 32;
+          &tw_str '{ "call": ';
+          &tw_emit_callee callee;
+          &tw_str ', "args": ';
+          &tw_emit_args fc, np_off, np_len;
+          &tw_str ' }';
+          emitted = emitted + 1;
+        };
+      };
+    };
+    i = i + 1;
+  };
+  &@if (emitted > 0), { &tw_byte 32; };
+  &tw_byte 93;                                      # ]
+  emitted
+};
+
+# ── Sort (stable selection sort over registry symbols) ──────────────
+@fn span_cmp3:Int a_off:Int, a_len:Int, b_off:Int, b_len:Int := {
+  @local n := a_len;
+  &@if (b_len < n), { n = b_len; };
+  @local i := 0;
+  @local res := 0;
+  &@loop ((res == 0) * (i < n) == 1), {
+    @local ab := &WASM::i32_load8_u (P_SRC + a_off + i);
+    @local bb := &WASM::i32_load8_u (P_SRC + b_off + i);
+    &@if (ab < bb), { res = 0 - 1; };
+    &@if (ab > bb), { res = 1; };
+    i = i + 1;
+  };
+  &@if ((res == 0) * (a_len < b_len) == 1), { res = 0 - 1; };
+  &@if ((res == 0) * (a_len > b_len) == 1), { res = 1; };
+  res
+};
+
+@fn build_sorted_indices3:Int n:Int, kind:Int := {
+  @local order := &vec_new;
+  @local i := 0;
+  &@loop (i < n), {
+    order = &vec_push order, i;
+    i = i + 1;
+  };
+  @local j := 0;
+  &@loop (j < n), {
+    @local min_idx := j;
+    @local k := j + 1;
+    &@loop (k < n), {
+      @local a := &vec_get order, k;
+      @local b := &vec_get order, min_idx;
+      @local cmp := 0;
+      &@if (kind == 0),
+        { cmp = &span_cmp3 (&registry_op_sym_off a), (&registry_op_sym_len a),
+                           (&registry_op_sym_off b), (&registry_op_sym_len b); };
+      &@if (kind == 1),
+        { cmp = &span_cmp3 (&registry_kw_sym_off a), (&registry_kw_sym_len a),
+                           (&registry_kw_sym_off b), (&registry_kw_sym_len b); };
+      &@if (cmp < 0), { min_idx = k; };
+      &@if (cmp == 0), {
+        @local ak := &vec_get order, k;
+        @local am := &vec_get order, min_idx;
+        &@if (ak < am), { min_idx = k; };
+      };
+      k = k + 1;
+    };
+    &@if (min_idx != j), {
+      @local tmp := &vec_get order, j;
+      &vec_set order, j, (&vec_get order, min_idx);
+      &vec_set order, min_idx, tmp;
+    };
+    j = j + 1;
+  };
+  order
+};
+
+# ── Main dump ───────────────────────────────────────────────────────
+@fn templates_dump_json := {
+  &tw_byte 123; &tw_byte 10;                       # {
+
+  # operators
+  &tw_str '  "operators": [';
+  @local n_op := &registry_op_count;
+  @local op_order := &build_sorted_indices3 n_op, 0;
+  @local printed := 0;
+  @local prev_off := 0 - 1;
+  @local prev_len := 0;
+  @local i := 0;
+  &@loop (i < n_op), {
+    @local idx := &vec_get op_order, i;
+    @local off := &registry_op_sym_off idx;
+    @local len := &registry_op_sym_len idx;
+    @local same := 0;
+    &@if (prev_off >= 0), {
+      @local c := &span_cmp3 off, len, prev_off, prev_len;
+      &@if (c == 0), { same = 1; };
+    };
+    &@if (same == 0), {
+      &@if (printed > 0), { &tw_byte 44; };
+      &tw_byte 10;
+      &tw_str '    { "op": ';
+      &tw_quoted_span off, len;
+      &tw_str ', "steps": ';
+      @local elab := &registry_op_elab idx;
+      @local sem := &ast_field P_AST, elab, TPL_ELAB_SEMANTICS;
+      @local np_off := &ast_field P_AST, elab, TPL_ELAB_NP_OFF;
+      @local np_len := &ast_field P_AST, elab, TPL_ELAB_NP_LEN;
+      &tw_emit_steps sem, np_off, np_len;
+      &tw_str ' }';
+      printed = printed + 1;
+      prev_off = off;
+      prev_len = len;
+    };
+    i = i + 1;
+  };
+  &@if (printed > 0), { &tw_byte 10; &tw_str '  '; };
+  &tw_byte 93;
+  &tw_byte 44; &tw_byte 10;
+
+  # keywords
+  &tw_str '  "keywords": [';
+  @local n_kw := &registry_kw_count;
+  @local kw_order := &build_sorted_indices3 n_kw, 1;
+  printed = 0;
+  prev_off = 0 - 1;
+  prev_len = 0;
+  i = 0;
+  &@loop (i < n_kw), {
+    @local idx := &vec_get kw_order, i;
+    @local off := &registry_kw_sym_off idx;
+    @local len := &registry_kw_sym_len idx;
+    @local same := 0;
+    &@if (prev_off >= 0), {
+      @local c := &span_cmp3 off, len, prev_off, prev_len;
+      &@if (c == 0), { same = 1; };
+    };
+    &@if (same == 0), {
+      &@if (printed > 0), { &tw_byte 44; };
+      &tw_byte 10;
+      &tw_str '    { "kw": ';
+      &tw_quoted_span off, len;
+      &tw_str ', "steps": ';
+      @local elab := &registry_kw_elab idx;
+      @local sem := &ast_field P_AST, elab, TPL_ELAB_SEMANTICS;
+      @local np_off := &ast_field P_AST, elab, TPL_ELAB_NP_OFF;
+      @local np_len := &ast_field P_AST, elab, TPL_ELAB_NP_LEN;
+      &tw_emit_steps sem, np_off, np_len;
+      &tw_str ' }';
+      printed = printed + 1;
+      prev_off = off;
+      prev_len = len;
+    };
+    i = i + 1;
+  };
+  &@if (printed > 0), { &tw_byte 10; &tw_str '  '; };
+  &tw_byte 93;
+  &tw_byte 10;
+
+  &tw_byte 125; &tw_byte 10;                       # }
+};

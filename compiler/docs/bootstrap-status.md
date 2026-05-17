@@ -101,9 +101,9 @@ Still ahead for Phase 3:
 | Defkind constraint validation (params / binding)     | **Landed** | (in elaborator) |
 | BinaryOp.semantics resolution + recursive walker     | **Landed** | ~80 |
 | Per-stratum intrinsic extractor (`extractIntrinsicFromBody`) | **Landed** | ~240 |
+| Body template extractor (per-step `{call, args}`)    | **Landed** | ~340 |
 | Phase 4 gate: elaboration JSON byte-equal vs Stage 0 | **Landed** | — |
 | Body interpreter (`&Compiler::*` surface)            | Pending | ~250 (estimated) |
-| Body template extractor (per-step intrinsic + argRefs) | Pending — slice 4 covers the first-intrinsic case; full template is a follow-up |
 | Generics-not-allowed validation                      | Deferred — parser doesn't yet store generic params on Definitions |
 
 What lands today:
@@ -128,6 +128,21 @@ What lands today:
   allowed.  The bun-side dump classifies Stage 0's error
   messages into the same codes via substring match — gate
   currently exercises all three.
+- Body template extractor (`boot/strata/templates_json.si`,
+  ~340 LoC): mirrors Stage 0's `extractBodyTemplate`.  For every
+  stratum, walks its body items; for each item finds the first
+  FunctionCall and emits a `{call, args}` step.  `call` is the
+  full `IR::xxx` / `WASM::xxx` namespace path or a bare
+  user-function name; `args` classifies each arg's embedded
+  Namespace against `<nodeParamName>.left` / `<nodeParamName>.right`
+  / `"unknown"`.  Multi-segment non-IR/WASM callees (e.g.
+  `&Compiler::ctx`) are silently skipped — those are consumed by
+  the body interpreter (later slice), not the template-based
+  codegen path.  Gate test `templates_test.si` rebuilds the same
+  shape from Stage 0's `data.bodyTemplate` and diffs byte-equal
+  across all 17 ops + 23 keywords (including the two-step bodies
+  for `@local` and `@platform`, and the single user-function step
+  for `++` → `str_concat`).
 - Per-stratum intrinsic extractor (`boot/strata/intrinsics_json.si`,
   ~240 LoC): for every registered operator and keyword, recurses
   through the stratum's body and finds the first `&IR::*` or

@@ -314,6 +314,86 @@ describe('Phase 0 WASIX smoke test', () => {
         }
     })
 
+    test('boot/tests/templates_test.si: per-stratum body templates byte-equal Stage 0', async () => {
+        if (!wasmerAvailable()) {
+            console.log('  (skipped: wasmer not on PATH)')
+            return
+        }
+        const wasm = await buildBoot(path.join(PROJECT_ROOT, 'boot', 'tests', 'templates_test.si'))
+        const tmpPath = path.join(PROJECT_ROOT, '.tpl-smoke.wasm')
+        await fs.writeFile(tmpPath, wasm)
+
+        const strataDir = path.join(PROJECT_ROOT, 'src', 'strata')
+        const files = (await fs.readdir(strataDir))
+            .filter(f => f.endsWith('.si'))
+            .sort()
+        let bundle = ''
+        for (const f of files) {
+            bundle += await fs.readFile(path.join(strataDir, f), 'utf-8')
+            bundle += '\n'
+        }
+
+        type Step = { call: string; args: string[] }
+        const reg = buildStrataRegistry(({ type: 'Program', elements: [] } as any))
+        const bareSorted = (table: Record<string, any>): Array<[string, Step[]]> => {
+            const seen = new Map<string, Step[]>()
+            for (const k of Object.keys(table)) {
+                const bare = k.includes(':') ? k.slice(0, k.indexOf(':')) : k
+                if (seen.has(bare)) continue
+                const tpl = table[k]?.data?.bodyTemplate ?? []
+                const steps: Step[] = tpl.map((s: any) => ({
+                    call: s.intrinsic ?? s.userFunc ?? '',
+                    args: (s.argRefs ?? []) as string[],
+                }))
+                seen.set(bare, steps)
+            }
+            return Array.from(seen.entries()).sort((a, b) => a[0] < b[0] ? -1 : 1)
+        }
+        const ops = bareSorted(reg.operators)
+        const kws = bareSorted(reg.keywords)
+        const stepStr = (s: Step): string => {
+            const args = s.args.length === 0
+                ? '[]'
+                : '[' + s.args.map(a => `"${a}"`).join(', ') + ']'
+            return `{ "call": "${s.call}", "args": ${args} }`
+        }
+        const stepsStr = (steps: Step[]): string =>
+            steps.length === 0
+                ? '[]'
+                : '[ ' + steps.map(stepStr).join(', ') + ' ]'
+        const lines: string[] = ['{']
+        lines.push('  "operators": [')
+        ops.forEach(([k, steps], i) => {
+            const sep = i < ops.length - 1 ? ',' : ''
+            lines.push(`    { "op": "${k}", "steps": ${stepsStr(steps)} }${sep}`)
+        })
+        lines.push('  ],')
+        lines.push('  "keywords": [')
+        kws.forEach(([k, steps], i) => {
+            const sep = i < kws.length - 1 ? ',' : ''
+            lines.push(`    { "kw": "${k}", "steps": ${stepsStr(steps)} }${sep}`)
+        })
+        lines.push('  ]')
+        lines.push('}')
+        const expected = lines.join('\n') + '\n'
+
+        try {
+            const result = spawnSync('wasmer', ['run', tmpPath], {
+                input: Buffer.from(bundle, 'utf-8'),
+                maxBuffer: 64 * 1024 * 1024,
+            })
+            expect(result.status).toBe(0)
+            const stdout = (result.stdout ?? Buffer.alloc(0)).toString('utf-8')
+            if (stdout !== expected) {
+                throw new Error(
+                    `Body template mismatch\nExpected:\n${expected}\nGot:\n${stdout}`,
+                )
+            }
+        } finally {
+            await fs.unlink(tmpPath).catch(() => {})
+        }
+    })
+
     test('boot/tests/intrinsics_test.si: per-stratum intrinsic map byte-equal Stage 0', async () => {
         if (!wasmerAvailable()) {
             console.log('  (skipped: wasmer not on PATH)')
