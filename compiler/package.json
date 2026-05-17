@@ -23,7 +23,9 @@
     "@types/bun": "latest",
     "@types/node": "^20.14.2",
     "fast-check": "^4.8.0",
-    "ohm-js": "^17.1.0"
+    "ohm-js": "^17.1.0",
+    "vscode-oniguruma": "^2.0.1",
+    "vscode-textmate": "^9.3.2"
   },
   "peerDependencies": {
     "typescript": "^5.0.0"
