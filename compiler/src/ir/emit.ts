@@ -191,6 +191,28 @@ function emitArrayLiteral(args: IRExpr[]): string {
 // Statement emitters
 // ---------------------------------------------------------------------------
 
+/** Mirror of ir/lower.ts's exprWasmType, restricted to the void test
+ *  emitStmt needs.  Defined here to avoid a circular import. */
+function isVoidIR(e: IRExpr): boolean {
+    switch (e.kind) {
+        case 'Loop':
+        case 'Break':
+        case 'Continue':
+        case 'Return':
+        case 'Nop':
+        case 'Unreachable':
+            return true
+        case 'Block':
+        case 'If':
+        case 'Call':
+        case 'BinOp':
+        case 'Const':
+        case 'LocalGet':
+        case 'GlobalGet':
+            return (e as any).wasmType === 'void'
+    }
+}
+
 export function emitStmt(s: IRStmt): string {
     switch (s.kind) {
         case 'LocalSet':
@@ -200,10 +222,11 @@ export function emitStmt(s: IRStmt): string {
         case 'ExprStmt': {
             // Non-void expressions used as statements leak a value on the
             // WASM stack; insert an explicit (drop ...) so the module
-            // validates.  Void calls (e.g. WASI proc_exit) emit unchanged.
+            // validates.  Void calls (proc_exit, store, drop, structured
+            // control flow like Loop/Break/Return) emit unchanged.
             const watExpr = emitExpr(s.expr)
             if (watExpr === '') return ''
-            return s.expr.wasmType === 'void' ? watExpr : `(drop ${watExpr})`
+            return isVoidIR(s.expr) ? watExpr : `(drop ${watExpr})`
         }
     }
 }

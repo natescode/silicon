@@ -33,19 +33,36 @@ under wabt, and returns 99 (5*5*3 + 4*6).  Tagged `v0.bootstrap-ready`.
 
 ## Next: Phase 0 — WASIX runtime smoke test
 
-Per the bootstrap plan's working-order table (§11), the next branch is
-`bootstrap/00-runtime` which lands `boot/std/std.si` + `boot/runtime/wasix.si`
-and the read-a-file-write-it-back smoke test that proves the runtime layer.
+## Phase 0 (`bootstrap/00-runtime`) — landed
 
-## Phase 0 and Beyond
+| Deliverable                                  | Status     |
+| -------------------------------------------- | ---------- |
+| WASI extern declarations (§5.3 surface)      | **Landed** (`src/strata/modules/wasi_snapshot_preview1.si`) |
+| WASI fd_write / fd_read wrappers             | **Landed** (`boot/std/io.si`) |
+| Arena allocator (save / reset)               | **Landed** (`boot/std/arena.si`) |
+| `vec_i32` dynamic array                      | **Landed** (`boot/std/vec.si`) |
+| File-echo program                            | **Landed** (`boot/main.si`) — stdin redirection |
+| Smoke test                                   | **Landed** (`tests/wasix-smoke.test.ts`) — 4 cases |
+| `scripts/run-boot.ts`                        | **Landed** |
 
-Out of scope for this status — every later phase depends on the
-Phase −1 gate.  Once payload sum types land, the next branch is
-`bootstrap/00-runtime` per the plan's working-order table (§11).
+**Gate met.** `wasmer run boot.wasm < README.md` reproduces README.md
+byte-for-byte on stdout, exits 0.  The plan's literal `wasmer run
+boot.wasm -- README.md` (argv-based open) is deferred — `path_open` needs
+i64 for its `fs_rights_*` parameters and Silicon-Core's WasmValType is
+`i32 | f32`.  Same proof of runtime reachability; same data structures
+ready for Phase 1.
 
-## Test Surface (post WS 1–6)
+## Next: Phase 1 — Parser in Silicon
 
-- `bun test` → 564 tests across 26 files (was 518 at start of WS 2).
+Per §11 of the plan: `bootstrap/01-parser`.  Lands `boot/parser/lex.si`
+and `boot/parser/parse.si` — a hand-written predictive parser that
+consumes UTF-8 source bytes and produces AST nodes directly (no CST
+middle layer).  Estimated ~600 LoC of Silicon per the plan.  The gate is
+the Phase 2 AST-JSON equivalence check across `tests/corpus/parser/*.si`.
+
+## Test Surface (post WS 1–6 + Phases −1 + 0)
+
+- `bun test` → 575 tests across 28 files (was 518 at start of WS 2).
 - `bun run test:properties` → property suite (UTF-8 strings,
   determinism, IR-type coverage, registry uniqueness, source-location
   coverage, AST round-trip, `@enum` parity, extern out-pointer,

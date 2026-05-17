@@ -8,58 +8,67 @@ that will eventually compile itself.  Today it contains only the
 
 ```
 boot/
-├── main.si           # entry program — currently the hello-WASI smoke test
+├── main.si             # stdin → stdout echo (Phase 0 gate)
 ├── std/
-│   └── io.si         # thin Silicon wrappers over WASI fd_write / fd_read
-└── runtime/          # (empty — populated as later phases land)
+│   ├── io.si           # WASI fd_write / fd_read wrappers
+│   ├── arena.si        # bump-pointer allocator with reset
+│   └── vec.si          # vec_i32 dynamic array
+├── tests/
+│   ├── arena_test.si   # alloc / alloc / reset / alloc → same addr
+│   └── vec_test.si     # push 10 → grow twice → sum is 45
+└── runtime/            # (empty — populated as later phases land)
 ```
 
 ## Building and running
 
 ```bash
-bun run boot:build         # compile boot/main.si → boot.wat + boot.wasm
-bun run boot:run           # build, then `wasmer run boot.wasm`
+bun run boot:build                    # compile boot/main.si → boot.wat + boot.wasm
+bun run boot:run                      # build, then `wasmer run boot.wasm`
+wasmer run boot.wasm < some-file.txt  # echo a file's contents to stdout
 ```
 
-Or directly:
+The echo program reads stdin in 4 KiB chunks and writes them back to stdout
+until EOF, then exits with status 0.  Verified byte-exact on `README.md`.
+
+To run a different entry (e.g. one of the unit tests):
 
 ```bash
-bun run scripts/build-boot.ts
+bun run scripts/build-boot.ts boot/tests/arena_test.si
 wasmer run boot.wasm
+# → arena OK
 ```
-
-Expected output:
-
-```
-hello, wasix
-```
-
-Exit code 0.
 
 ## How Phase 0 works
 
-`boot/main.si` is three top-level statements:
+`boot/main.si` defines an echo loop that calls into `boot/std/io.si`:
 
 ```silicon
-&write_str 1, 'hello, wasix';
-&write_byte 1, 10;
-&wasi_snapshot_preview1::proc_exit 0;
+@fn echo_stdin := {
+  @local BUF_SIZE := 4096;
+  @local buf      := &arena_alloc BUF_SIZE;
+
+  &@loop 1, {
+    @local mark := &arena_save;
+    @local n    := &read_bytes 0, buf, BUF_SIZE;
+    &@if (n <= 0), { &@break };
+    &write_bytes 1, buf, n;
+    &arena_reset mark;
+  };
+
+  &wasi_snapshot_preview1::proc_exit 0;
+};
+
+&echo_stdin;
 ```
 
-`write_str` and `write_byte` live in `boot/std/io.si` and wrap the WASI
-`fd_write` syscall:
+`read_bytes` / `write_bytes` build an iovs struct in scratch memory and
+call `fd_read` / `fd_write` from the `wasi_snapshot_preview1` module.
+`arena_save` / `arena_reset` rewind the bump pointer each iteration so
+the scratch iovs don't accumulate.
 
-1. Allocate scratch memory for an `iovs` struct (8 bytes: `(ptr, len)`)
-   via `&scratch_alloc` from `std.wat`.
-2. Store the buffer pointer and length into the iovs.
-3. Allocate scratch space for the host to write `nwritten` into
-   (out-pointer convention from bootstrap-plan Phase −1.F).
-4. Call `&wasi_snapshot_preview1::fd_write fd, iovs, 1, nwritten` —
-   lowered to `(import "wasi_snapshot_preview1" "fd_write" ...)`.
-
-Top-level statements land in the generated `$__start` function, which
-`--target=wasix` exports as `_start` — the symbol wasmer's WASI runner
-invokes automatically.
+Top-level `&echo_stdin` lands in `$__start`, which `--target=wasix`
+exports as `_start` — the symbol wasmer's WASI runner invokes
+automatically.
 
 ## Notes
 
@@ -75,15 +84,34 @@ invokes automatically.
   `src/strata/modules/wasi_snapshot_preview1.si`; the loader makes it
   reachable as `&wasi_snapshot_preview1::<name>` and emits the imports
   under the matching env namespace.
+- `@let x := expr` at top level becomes a *function* `$x`, not a one-shot
+  binding evaluated at module init.  To get eager local bindings, wrap
+  the body in an `@fn` and invoke it from `$__start`.
+
+## Known limitations (next iteration)
+
+- **i64 in `path_open`.**  WASI `path_open` takes two `fs_rights_*`
+  parameters as u64.  Silicon-Core's WasmValType is `i32 | f32` only —
+  no i64 yet.  Hence the Phase 0 gate is met via stdin redirection
+  (`wasmer run boot.wasm < file.txt`) rather than via argv-based file
+  open.  Wiring i64 through the IR (and adding `WASM::i64_*`
+  intrinsics) unlocks `path_open`, `args_get`, real argv handling, and
+  most of the WASIX surface beyond fd I/O.
+- **No boolean short-circuit `&&` operator.**  The `&` sigil is reserved
+  for function calls, so the keyword form `&@and a, b` does the work.
+  `||` is an operator and works as expected.
 
 ## Tests
 
-`tests/wasix-smoke.test.ts` builds boot.wasm and invokes wasmer.  It
-skips cleanly when wasmer isn't on PATH.
+`tests/wasix-smoke.test.ts` builds boot.wasm and invokes wasmer for the
+echo program plus the arena and vec unit tests.  It skips cleanly when
+wasmer isn't on PATH.
 
 ## Status
 
-- [x] WASIX runtime reachable from Silicon (Phase 0 gate green)
-- [ ] Arena allocator implemented in Silicon (Phase 0 stretch)
-- [ ] `vec_i32` dynamic array helpers (Phase 0 stretch)
-- [ ] Open / read a real file via `path_open` + `fd_read` (next iteration)
+- [x] WASIX runtime reachable from Silicon
+- [x] Arena allocator with save/reset (`boot/std/arena.si`)
+- [x] `vec_i32` dynamic array with grow-by-doubling (`boot/std/vec.si`)
+- [x] File-echo gate: `wasmer run boot.wasm < README.md` reproduces
+      README.md byte-for-byte on stdout, exits 0
+- [ ] argv-based file open via `path_open` — blocked on i64

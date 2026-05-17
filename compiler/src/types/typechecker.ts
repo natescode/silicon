@@ -202,6 +202,9 @@ function preRegisterStdFunctions(ctx: Ctx): void {
         { name: 'scratch_alloc',  params: [TypeInt],                     result: TypeInt },
         { name: 'str_ptr',        params: [TypeString],                  result: TypeInt },
         { name: 'str_len',        params: [TypeString],                  result: TypeInt },
+        // Arena bump-pointer helpers — boot/std/arena.si wraps these.
+        { name: 'heap_get',       params: [],                            result: TypeInt },
+        { name: 'heap_set',       params: [TypeInt],                     result: TypeUnknown },
     ]
     for (const { name, params, result } of defs) {
         ctx.functions.set(name, { params, result })

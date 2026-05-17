@@ -1,0 +1,44 @@
+# vec_i32 unit test.
+#
+# Push 10 i32s into a fresh vec (initial cap 4 → grows to 8 → grows to 16),
+# read them back, sum them, and assert the sum is 45 (0+1+2+...+9).
+# Also asserts len ends at 10 and cap ends at 16.
+
+@use '../std/io.si';
+@use '../std/vec.si';
+
+@fn print_int_byte b:Int := {
+  # Print a single ASCII digit byte.  '0' is 48 = 0x30.
+  &write_byte 1, (b + 48);
+};
+
+@fn run_vec_test := {
+  @local v := &vec_new;
+
+  # Push 0..9.  Rebind v each time in case vec_push grows + relocates.
+  @local i := 0;
+  &@loop (i < 10), {
+    v = &vec_push v, i;
+    i = i + 1;
+  };
+
+  # Sum every element back out.
+  @local sum := 0;
+  @local j := 0;
+  &@loop (j < (&vec_len v)), {
+    sum = sum + (&vec_get v, j);
+    j = j + 1;
+  };
+
+  # Expected: len=10, cap=16, sum=45.
+  # `&` is reserved as the call sigil; use the @and keyword for boolean AND.
+  @local ok := &@and ((&vec_len v) == 10),
+                (&@and ((&vec_cap v) == 16), (sum == 45));
+  &@if ok,
+    { &write_str 1, 'vec OK' },
+    { &write_str 1, 'vec FAIL' };
+  &write_byte 1, 10;
+  &wasi_snapshot_preview1::proc_exit 0;
+};
+
+&run_vec_test;

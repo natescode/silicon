@@ -140,6 +140,21 @@
   (i32.load (local.get $s)))
 
 ;; ------------------------------------------------------------------
+;; $heap_get / $heap_set — read and rewrite the bump pointer.
+;; The arena reset pattern (cleanup-plan §3, bootstrap §Phase 0) is
+;;   base := heap_get
+;;   ... do work that allocates ...
+;;   heap_set base   ;; everything allocated after the save is dropped
+;; Use with care: addresses returned after the save become invalid once
+;; the reset is performed.
+;; ------------------------------------------------------------------
+(func $heap_get (result i32)
+  (global.get $heap))
+
+(func $heap_set (param $h i32)
+  (global.set $heap (local.get $h)))
+
+;; ------------------------------------------------------------------
 ;; $arr_len — read the length stored in a prefixed array/string.
 ;; ------------------------------------------------------------------
 (func $arr_len (param $ptr i32) (result i32)

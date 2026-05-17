@@ -1,24 +1,34 @@
-# Phase 0 smoke test — hello-world over WASI fd_write + proc_exit.
+# Phase 0 main — read stdin, echo to stdout.
 #
-# Compile with:
-#   bun run scripts/build-boot.ts
-# Run with:
-#   wasmer run boot.wasm
+# Build:  bun run boot:build
+# Run:    wasmer run boot.wasm < some-file.txt
 #
-# Expected output: "hello, wasix\n" on stdout, exit code 0.
-#
-# How it works
-# ------------
-# WASI fd_write takes an `iovs` array — a list of (buf_ptr, buf_len) pairs.
-# write_str builds a single-element iovs in scratch memory, calls fd_write,
-# and the host writes our bytes to stdout.  proc_exit terminates with the
-# given exit code.
-#
-# Top-level statements land in `$__start`, which `--target=wasix` exports
-# as `_start` — the function wasmer invokes automatically.
+# The bootstrap-plan §Phase 0 gate originally specified
+# `wasmer run boot.wasm -- README.md` (argv-based file open).  That path
+# needs `path_open`, whose `fs_rights_base` / `fs_rights_inheriting`
+# parameters are u64 — Silicon-Core's type system is i32 / f32 only, so
+# we side-step it for now and echo stdin instead.  Same proof that the
+# WASI runtime is reachable and useful; argv + path_open land once i64
+# support is plumbed through the IR.
 
 @use 'std/io.si';
+@use 'std/arena.si';
 
-&write_str 1, 'hello, wasix';
-&write_byte 1, 10;                       # '\n' — Silicon strings have no escapes
-&wasi_snapshot_preview1::proc_exit 0;
+@fn echo_stdin := {
+  @local BUF_SIZE := 4096;
+  @local buf      := &arena_alloc BUF_SIZE;
+
+  &@loop 1, {
+    # arena_save / reset around each read so the scratch iovs from
+    # write_bytes / read_bytes don't grow the heap unbounded.
+    @local mark := &arena_save;
+    @local n    := &read_bytes 0, buf, BUF_SIZE;
+    &@if (n <= 0), { &@break };                  # EOF or error
+    &write_bytes 1, buf, n;
+    &arena_reset mark;
+  };
+
+  &wasi_snapshot_preview1::proc_exit 0;
+};
+
+&echo_stdin;

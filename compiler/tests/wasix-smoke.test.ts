@@ -1,10 +1,16 @@
 /**
  * Phase 0 WASIX smoke test — bootstrap-plan §Phase 0.
  *
- * Compiles boot/main.si with --target=wasix, assembles the WAT to WASM
- * via wabt, runs it under wasmer, and asserts the gate from the plan:
+ * Compiles each .si entry with --target=wasix, assembles the WAT to WASM
+ * via wabt, runs the resulting module under wasmer, and asserts:
  *
- *   wasmer run boot.wasm  →  prints "hello, wasix\n" to stdout, exits 0.
+ *   - boot/main.si echoes stdin → stdout byte-for-byte (the file-echo
+ *     gate, adapted to use stdin rather than argv-based path_open because
+ *     WASI path_open needs i64 rights args and Silicon-Core is i32/f32).
+ *   - boot/tests/arena_test.si prints "arena OK" — alloc / alloc / reset
+ *     / alloc lands at the original address.
+ *   - boot/tests/vec_test.si prints "vec OK" — push 10 items, grow twice,
+ *     read back, sum equals 45.
  *
  * Wasmer is required; the test skips with a clear message when it's not
  * on PATH so the rest of the suite stays green on machines without it.
@@ -78,7 +84,7 @@ describe('Phase 0 WASIX smoke test', () => {
         expect(wat).toContain('(import "wasi_snapshot_preview1" "proc_exit"')
     })
 
-    test('wasmer run boot.wasm prints "hello, wasix\\n" and exits 0', async () => {
+    test('boot/main.si echoes stdin → stdout byte-for-byte', async () => {
         if (!wasmerAvailable()) {
             console.log('  (skipped: wasmer not on PATH)')
             return
@@ -89,10 +95,51 @@ describe('Phase 0 WASIX smoke test', () => {
         await fs.writeFile(tmpPath, wasm)
 
         try {
+            // Use README.md as the input — large enough to span multiple
+            // 4KB chunks, mixed content, deterministic on disk.
+            const input = await fs.readFile(path.join(PROJECT_ROOT, 'README.md'))
+            const result = spawnSync('wasmer', ['run', tmpPath], {
+                input,
+                encoding: 'buffer',
+                maxBuffer: 64 * 1024 * 1024,
+            })
+            expect(result.status).toBe(0)
+            const stdout = (result.stdout ?? Buffer.alloc(0)) as Buffer
+            expect(stdout.equals(input)).toBe(true)
+        } finally {
+            await fs.unlink(tmpPath).catch(() => {})
+        }
+    })
+
+    test('boot/tests/arena_test.si: alloc/alloc/reset/alloc returns same addr', async () => {
+        if (!wasmerAvailable()) {
+            console.log('  (skipped: wasmer not on PATH)')
+            return
+        }
+        const wasm = await buildBoot(path.join(PROJECT_ROOT, 'boot', 'tests', 'arena_test.si'))
+        const tmpPath = path.join(PROJECT_ROOT, '.arena-smoke.wasm')
+        await fs.writeFile(tmpPath, wasm)
+        try {
             const result = spawnSync('wasmer', ['run', tmpPath], { encoding: 'buffer' })
             expect(result.status).toBe(0)
-            const stdout = result.stdout?.toString('binary') ?? ''
-            expect(stdout).toBe('hello, wasix\n')
+            expect(result.stdout?.toString('utf-8')).toBe('arena OK\n')
+        } finally {
+            await fs.unlink(tmpPath).catch(() => {})
+        }
+    })
+
+    test('boot/tests/vec_test.si: push 10, grow twice, sum is 45', async () => {
+        if (!wasmerAvailable()) {
+            console.log('  (skipped: wasmer not on PATH)')
+            return
+        }
+        const wasm = await buildBoot(path.join(PROJECT_ROOT, 'boot', 'tests', 'vec_test.si'))
+        const tmpPath = path.join(PROJECT_ROOT, '.vec-smoke.wasm')
+        await fs.writeFile(tmpPath, wasm)
+        try {
+            const result = spawnSync('wasmer', ['run', tmpPath], { encoding: 'buffer' })
+            expect(result.status).toBe(0)
+            expect(result.stdout?.toString('utf-8')).toBe('vec OK\n')
         } finally {
             await fs.unlink(tmpPath).catch(() => {})
         }
