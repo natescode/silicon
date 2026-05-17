@@ -6,6 +6,7 @@
   "scripts": {
     "test": "bun test",
     "test:properties": "bun test --timeout 60000 tests/properties",
+    "test:fuzz": "bun test --timeout 120000 tests/fuzz",
     "compile": "bun run src/index.ts",
     "sgl": "bun run src/sigil_cli.ts",
     "build-types": "bunx ohm generateBundles --withTypes src/silicon-simple.ohm",
