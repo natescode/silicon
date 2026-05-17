@@ -844,6 +844,89 @@ describe('Phase 0 WASIX smoke test', () => {
         }
     }, 60000)
 
+    test('STAGE 2 == STAGE 1: self-host fixed-point — stage1.wasm and stage2.wasm are byte-equal', async () => {
+        if (!wasmerAvailable()) {
+            console.log('  (skipped: wasmer not on PATH)')
+            return
+        }
+        const boot = await buildBoot(path.join(PROJECT_ROOT, 'boot', 'tests', 'fn_test.si'))
+        const bootPath = path.join(PROJECT_ROOT, '.fp-stage0.wasm')
+        await fs.writeFile(bootPath, boot)
+
+        // Build the stage1 source bundle (everything stage1.wasm
+        // needs as a complete Silicon program).
+        const strataDir = path.join(PROJECT_ROOT, 'src', 'strata')
+        const strataFiles = (await fs.readdir(strataDir))
+            .filter(f => f.endsWith('.si'))
+            .sort()
+        let bundle = ''
+        for (const f of strataFiles) {
+            bundle += await fs.readFile(path.join(strataDir, f), 'utf-8') + '\n'
+        }
+        const wasiStub = [
+            '@extern wasi_snapshot_preview1::fd_write:Int',
+            '  fd:Int, iovs_ptr:Int, iovs_len:Int, nwritten_out:Int;',
+            '@extern wasi_snapshot_preview1::fd_read:Int',
+            '  fd:Int, iovs_ptr:Int, iovs_len:Int, nread_out:Int;',
+        ].join('\n') + '\n'
+        const stage1Sources = [
+            'boot/std/io.si', 'boot/std/arena.si', 'boot/std/vec.si',
+            'boot/parser/tokens.si', 'boot/parser/lex.si',
+            'boot/parser/ast.si', 'boot/parser/parse.si',
+            'boot/strata/registry.si', 'boot/strata/loader.si',
+            'boot/elab/elaborator.si', 'boot/ir/nodes.si',
+            'boot/elab/body.si', 'boot/ir/lower.si',
+            'boot/emit/wat.si', 'boot/stage1.si',
+        ]
+        const stage1Bundle = wasiStub + (await Promise.all(
+            stage1Sources.map(p => fs.readFile(path.join(PROJECT_ROOT, p), 'utf-8')),
+        )).join('')
+        const compilerInput = Buffer.from(bundle + stage1Bundle, 'utf-8')
+
+        const stage1Path = path.join(PROJECT_ROOT, '.fp-stage1.wasm')
+        const stage2Path = path.join(PROJECT_ROOT, '.fp-stage2.wasm')
+        try {
+            // 1. boot.wasm compiles stage1 source → stage1.wat → stage1.wasm
+            const r1 = spawnSync('wasmer', ['run', bootPath], {
+                input: compilerInput, maxBuffer: 64 * 1024 * 1024,
+            })
+            expect(r1.status).toBe(0)
+            const stage1Wat = (r1.stdout ?? Buffer.alloc(0)).toString('utf-8')
+            const stage1Bin = await watToWasm(stage1Wat)
+            await fs.writeFile(stage1Path, Buffer.from(stage1Bin.buffer))
+
+            // 2. stage1.wasm compiles SAME stage1 source → stage2.wat → stage2.wasm
+            const r2 = spawnSync('wasmer', ['run', stage1Path], {
+                input: compilerInput, maxBuffer: 64 * 1024 * 1024,
+            })
+            expect(r2.status).toBe(0)
+            const stage2Wat = (r2.stdout ?? Buffer.alloc(0)).toString('utf-8')
+            const stage2Bin = await watToWasm(stage2Wat)
+            await fs.writeFile(stage2Path, Buffer.from(stage2Bin.buffer))
+
+            // 3. Fixed-point assertions: stage 1 == stage 2 at every
+            //    representation level the build produces.
+            if (stage1Wat !== stage2Wat) {
+                throw new Error(
+                    `Stage 1 WAT != Stage 2 WAT (${stage1Wat.length} vs ${stage2Wat.length} bytes) — not a fixed point.`,
+                )
+            }
+            const s1 = await fs.readFile(stage1Path)
+            const s2 = await fs.readFile(stage2Path)
+            if (Buffer.compare(s1, s2) !== 0) {
+                throw new Error(
+                    `stage1.wasm != stage2.wasm (${s1.length} vs ${s2.length} bytes)`,
+                )
+            }
+            expect(s1.length).toBe(s2.length)
+            expect(s1.length).toBeGreaterThan(20000)
+        } finally {
+            await fs.unlink(bootPath).catch(() => {})
+            await fs.unlink(stage1Path).catch(() => {})
+            await fs.unlink(stage2Path).catch(() => {})
+        }
+    }, 120000)
+
     test('STAGE 1: bootstrap-compiled compiler produces byte-identical WAT to the TS-built bootstrap', async () => {
         if (!wasmerAvailable()) {
             console.log('  (skipped: wasmer not on PATH)')
