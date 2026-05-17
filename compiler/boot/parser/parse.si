@@ -476,16 +476,25 @@
   };
 };
 
-# parse_param_literal — one ParamLiteral.  Today we model parameters
-# as namespace nodes carrying the typed-identifier slot.  Stage-2 will
-# need a richer schema; for the parser's purposes this is enough.
+# parse_param_literal — one ParamLiteral, emitting AST_PARAMETER
+# (name + optional TypeAnnotation) so the serializer can match
+# Stage 0's `Parameter` JSON shape.
+#
+# Captures peek_off / peek_len into LOCALS first, then advances and
+# calls parse_optional_type.  Inlining the peek calls inside the
+# constructor call let parse_optional_type's `&p_advance` execute
+# BEFORE the peek args were read, leaving the captured offsets
+# pointing at a later token (the `:` or even past it).  Subtle.
 @fn parse_param_literal:Int := {
   &@if ((&p_peek_kind) != TOK_IDENT), { &@return AST_NONE; };
-  @local node := &parse_namespace;
-  # Optional `:TypeName` — consumed and recorded in P_TYPE_* but the
-  # parameter AST node itself doesn't yet carry its annotation.  The
-  # Phase 2 AST polish lands this properly.
+  @local name_off := &p_peek_off;
+  @local name_len := &p_peek_len;
+  &p_advance;
   &parse_optional_type;
+  @local type_off := P_TYPE_OFF;
+  @local type_len := P_TYPE_LEN;
+  @local node := &vec_offset P_AST;
+  P_AST = &ast_parameter P_AST, name_off, name_len, type_off, type_len;
   node
 };
 
@@ -631,13 +640,20 @@
   P_CUR  = 0;
 
   # First pass: parse elements, collecting their indices in a temp vec.
+  # Doc comments (## …) are stripped here so the AST matches Stage 0,
+  # which discards them at toAst time.  The parser still creates the
+  # node so a future doc-preserving mode can keep it.
   @local elems := &vec_new;
   &@loop 1, {
     @local k := &p_peek_kind;
     &@if (k == TOK_EOF), { &@break };
     @local elem := &parse_element;
     &@if (elem == AST_NONE), { &p_advance; },
-                              { elems = &vec_push elems, elem; };
+      {
+        @local keep := 1;
+        &@if ((&ast_kind P_AST, elem) == AST_DOC_COMMENT), { keep = 0; };
+        &@if (keep == 1), { elems = &vec_push elems, elem; };
+      };
   };
 
   # Emit the program header + elem list.

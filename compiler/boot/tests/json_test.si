@@ -1,38 +1,30 @@
-# JSON serializer smoke test driven by hardcoded inputs.  Reads no
-# stdin so the test stays purely deterministic.  The driver prints
-# the JSON for each fixture; the bun-side test diffs each chunk
-# against Stage 0's matching output.
-#
-# Output format:
-#   <fixture>\n<json>\n---\n  for each fixture
-# The bun side splits on '\n---\n'.
+# JSON serializer — reads one fixture from stdin and writes its
+# parse-only AST as JSON to stdout.  The bun-side test runs one
+# wasmer invocation per fixture so cumulative parser state (@vars,
+# heap growth) doesn't carry across fixtures.
 
 @use '../std/io.si';
+@use '../std/arena.si';
 @use '../parser/tokens.si';
 @use '../parser/lex.si';
 @use '../parser/ast.si';
 @use '../parser/parse.si';
 @use '../parser/json.si';
 
-@fn emit_for s:String := {
-  @local p := (&str_ptr s) + 4;
-  @local n := &str_len s;
-  @local toks := &lex p, n;
-  @local root := &parse p, n, toks;
-  &json_program root;
-  &write_str 1, '---';
-  &write_byte 1, 10;
-};
-
 @fn run := {
-  &emit_for '42;';
-  &emit_for '3.14;';
-  &emit_for 'x;';
-  &emit_for 'Color::Red;';
-  &emit_for '1 + 2;';
-  &emit_for '1 + 2 + 3;';
-  &emit_for '&add 1, 2;';
-  &emit_for '&@if 1, 0;';
+  @local cap := 65536;
+  @local buf := &arena_alloc cap;
+  @local total := 0;
+  &@loop 1, {
+    @local n := &read_bytes 0, (buf + total), (cap - total);
+    &@if (n <= 0), { &@break };
+    total = total + n;
+    &@if (total >= cap), { &@break };
+  };
+
+  @local toks := &lex buf, total;
+  @local root := &parse buf, total, toks;
+  &json_program root;
   &wasi_snapshot_preview1::proc_exit 0;
 };
 

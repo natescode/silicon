@@ -60,8 +60,8 @@ ready for Phase 1.
 | Lexer (`boot/parser/lex.si`)                             | **Landed** | ~280 |
 | AST encoding (`boot/parser/ast.si`)                      | **Landed** | ~180 |
 | Parser (`boot/parser/parse.si`)                          | **Landed** | ~500 |
-| AST → JSON serializer (`boot/parser/json.si`)            | **Landed** (8 kinds) | ~280 |
-| Corpus equivalence harness vs Stage 0                    | Partial (8 fixtures) | — |
+| AST → JSON serializer (`boot/parser/json.si`)            | **Landed** (15 kinds) | ~620 |
+| Corpus equivalence harness vs Stage 0                    | **Landed** (26 fixtures) | — |
 
 What's covered today:
 - Lexer: all 27 token kinds.
@@ -69,24 +69,36 @@ What's covered today:
   expressions (flat left-fold), function calls (`&name` and
   `&@keyword`), paren groups, blocks, definitions
   (`@kw name [: Type] [params] [:= binding]`), `$[]` / `$()` / `${}`
-  literals, variant declarators (`$Variant fields`), doc comments,
-  assignments.
+  literals, variant declarators (`$Variant fields`), doc comments
+  (stripped from `Program.elements` to match Stage 0), assignments,
+  proper `Parameter` AST nodes for definition args.
 - Serializer + Phase 2 gate (byte-exact JSON match vs Stage 0):
-  IntLiteral, FloatLiteral, StringLiteral, BooleanLiteral, Namespace,
-  BinaryOp, FunctionCall (user + builtin), Program.
+  Program, Definition (with TypedIdentifier name, optional
+  TypeAnnotation, Parameter[] params, Binding expression), Block
+  (with optional trailing), IntLiteral, FloatLiteral, StringLiteral,
+  BooleanLiteral, Namespace, BinaryOp, FunctionCall (user + builtin),
+  ArrayLiteral, TupleLiteral, ObjectLiteral (with KeyValuePair +
+  TypedIdentifier key), Assignment, VariantDecl.
 
 Phase 2 gate harness:
-- `boot/tests/json_test.si` runs the parser+serializer on 8 fixtures.
-- `tests/wasix-smoke.test.ts` produces Stage 0's `toAst() →
-  JSON.stringify(_, null, 2)` output for the same inputs and asserts
-  byte-equality.  Currently 8 / 8 fixtures match.
+- `boot/tests/json_test.si` reads one fixture from stdin and writes
+  its JSON to stdout.
+- `tests/wasix-smoke.test.ts` runs `wasmer run boot.wasm` once per
+  fixture (26 fixtures covering every Stage-0-emitted AST kind) and
+  asserts byte-equality against `JSON.stringify(stage0Ast, null, 2)`.
+  Per-process isolation sidesteps cumulative parser-state issues that
+  surface with 20+ parses in one module instance.
 
-Still ahead:
-- Definition, Block, Assignment, Variant, ArrayLiteral, TupleLiteral,
-  ObjectLiteral, DocComment, KeyValuePair, TypedIdentifier, Parameter
-  serializer cases (the rest of Stage 0's parse-only AST surface).
-- Grow the corpus to cover every shape in `src/e2e/examples/*.si`.
+Currently 26 / 26 fixtures match byte-for-byte.
+
+Still ahead before declaring Phase 1 done:
+- Multi-fixture-in-one-process state isolation — `arena_reset` between
+  parses isn't sufficient; @vars and possibly heap-growth interact in
+  a way that corrupts late fixtures.  Per-process is a clean workaround
+  for the test harness; a real Stage 1 compiler must run many parses
+  per process so this needs root-causing before Phase 4+.
 - Generic params stored in AST (currently consumed but skipped).
+- Grow the corpus to cover every shape in `src/e2e/examples/*.si`.
 
 ## Test Surface (post WS 1–6 + Phases −1 + 0)
 

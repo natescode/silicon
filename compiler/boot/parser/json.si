@@ -315,18 +315,397 @@
   &jw_byte 125;
 };
 
+# ── Composite types: TypedIdentifier, TypeAnnotation, Binding ───────
+
+@fn json_type_annotation depth:Int, type_off:Int, type_len:Int := {
+  &jw_str '{';
+  &jw_byte 10;
+  &jw_indent (depth + 1);
+  &jw_string_lit 'type';
+  &jw_str ': ';
+  &jw_string_lit 'TypeAnnotation';
+  &jw_str ',';
+  &jw_byte 10;
+  &jw_indent (depth + 1);
+  &jw_string_lit 'typename';
+  &jw_str ': ';
+  &jw_string_span type_off, type_len;
+  &jw_byte 10;
+  &jw_indent depth;
+  &jw_byte 125;
+};
+
+# json_typed_identifier — emits { type:"TypedIdentifier", name,
+# typeAnnotation? }.  When type_len == 0, the annotation key is
+# omitted to match Stage 0's `typedIdentifier` semantic action.
+@fn json_typed_identifier depth:Int, name_off:Int, name_len:Int,
+                            type_off:Int, type_len:Int := {
+  &jw_str '{';
+  &jw_byte 10;
+  &jw_indent (depth + 1);
+  &jw_string_lit 'type';
+  &jw_str ': ';
+  &jw_string_lit 'TypedIdentifier';
+  &jw_str ',';
+  &jw_byte 10;
+  &jw_indent (depth + 1);
+  &jw_string_lit 'name';
+  &jw_str ': ';
+  &jw_string_span name_off, name_len;
+  &@if (type_len > 0), {
+    &jw_str ',';
+    &jw_byte 10;
+    &jw_indent (depth + 1);
+    &jw_string_lit 'typeAnnotation';
+    &jw_str ': ';
+    &json_type_annotation (depth + 1), type_off, type_len;
+  };
+  &jw_byte 10;
+  &jw_indent depth;
+  &jw_byte 125;
+};
+
+# json_parameter — { type:"Parameter", name, typeAnnotation, isLiteral }.
+@fn json_parameter depth:Int, node:Int := {
+  @local name_off := &ast_field P_AST, node, 1;
+  @local name_len := &ast_field P_AST, node, 2;
+  @local type_off := &ast_field P_AST, node, 3;
+  @local type_len := &ast_field P_AST, node, 4;
+  &jw_str '{';
+  &jw_byte 10;
+  &jw_indent (depth + 1);
+  &jw_string_lit 'type';
+  &jw_str ': ';
+  &jw_string_lit 'Parameter';
+  &jw_str ',';
+  &jw_byte 10;
+  &jw_indent (depth + 1);
+  &jw_string_lit 'name';
+  &jw_str ': ';
+  &jw_string_span name_off, name_len;
+  &@if (type_len > 0), {
+    &jw_str ',';
+    &jw_byte 10;
+    &jw_indent (depth + 1);
+    &jw_string_lit 'typeAnnotation';
+    &jw_str ': ';
+    &json_type_annotation (depth + 1), type_off, type_len;
+  };
+  &jw_str ',';
+  &jw_byte 10;
+  &jw_indent (depth + 1);
+  &jw_string_lit 'isLiteral';
+  &jw_str ': false';
+  &jw_byte 10;
+  &jw_indent depth;
+  &jw_byte 125;
+};
+
+# json_binding — { type:"Binding", expression }.
+@fn json_binding depth:Int, expr_node:Int := {
+  &jw_str '{';
+  &jw_byte 10;
+  &jw_indent (depth + 1);
+  &jw_string_lit 'type';
+  &jw_str ': ';
+  &jw_string_lit 'Binding';
+  &jw_str ',';
+  &jw_byte 10;
+  &jw_indent (depth + 1);
+  &jw_string_lit 'expression';
+  &jw_str ': ';
+  &json_node (depth + 1), expr_node;
+  &jw_byte 10;
+  &jw_indent depth;
+  &jw_byte 125;
+};
+
+# ── Definitions ──────────────────────────────────────────────────────
+
+@fn json_definition depth:Int, node:Int := {
+  @local kw_off   := &ast_field P_AST, node, 1;
+  @local kw_len   := &ast_field P_AST, node, 2;
+  @local name_off := &ast_field P_AST, node, 3;
+  @local name_len := &ast_field P_AST, node, 4;
+  @local type_off := &ast_field P_AST, node, 5;
+  @local type_len := &ast_field P_AST, node, 6;
+  @local n_params := &ast_field P_AST, node, 7;
+
+  &jw_str '{';
+  &jw_byte 10;
+  &jw_indent (depth + 1);
+  &jw_string_lit 'type';
+  &jw_str ': ';
+  &jw_string_lit 'Definition';
+  &jw_str ',';
+  &jw_byte 10;
+  &jw_indent (depth + 1);
+  &jw_string_lit 'keyword';
+  &jw_str ': ';
+  &jw_string_span kw_off, kw_len;
+  &jw_str ',';
+  &jw_byte 10;
+  &jw_indent (depth + 1);
+  &jw_string_lit 'name';
+  &jw_str ': ';
+  &json_typed_identifier (depth + 1), name_off, name_len, type_off, type_len;
+  &jw_str ',';
+  &jw_byte 10;
+  &jw_indent (depth + 1);
+  &jw_string_lit 'params';
+  &jw_str ': [';
+  &@if (n_params > 0), { &jw_byte 10; };
+  @local i := 0;
+  &@loop (i < n_params), {
+    @local p := &ast_field P_AST, node, (8 + i);
+    &jw_indent (depth + 2);
+    &json_parameter (depth + 2), p;
+    &@if ((i + 1) < n_params), { &jw_str ','; };
+    &jw_byte 10;
+    i = i + 1;
+  };
+  &@if (n_params > 0), { &jw_indent (depth + 1); };
+  &jw_byte 93;                                  # ]
+  @local binding := &ast_field P_AST, node, (8 + n_params);
+  &@if (binding != AST_NONE), {
+    &jw_str ',';
+    &jw_byte 10;
+    &jw_indent (depth + 1);
+    &jw_string_lit 'binding';
+    &jw_str ': ';
+    &json_binding (depth + 1), binding;
+  };
+  &jw_byte 10;
+  &jw_indent depth;
+  &jw_byte 125;
+};
+
+# ── Block ────────────────────────────────────────────────────────────
+
+@fn json_block depth:Int, node:Int := {
+  @local n_stmts := &ast_field P_AST, node, 1;
+  @local has_tr  := &ast_field P_AST, node, 2;
+  &jw_str '{';
+  &jw_byte 10;
+  &jw_indent (depth + 1);
+  &jw_string_lit 'type';
+  &jw_str ': ';
+  &jw_string_lit 'Block';
+  &jw_str ',';
+  &jw_byte 10;
+  &jw_indent (depth + 1);
+  &jw_string_lit 'items';
+  &jw_str ': [';
+  &@if (n_stmts > 0), { &jw_byte 10; };
+  @local i := 0;
+  &@loop (i < n_stmts), {
+    @local s := &ast_field P_AST, node, (3 + i);
+    &jw_indent (depth + 2);
+    &json_node (depth + 2), s;
+    &@if ((i + 1) < n_stmts), { &jw_str ','; };
+    &jw_byte 10;
+    i = i + 1;
+  };
+  &@if (n_stmts > 0), { &jw_indent (depth + 1); };
+  &jw_byte 93;
+  &@if (has_tr == 1), {
+    &jw_str ',';
+    &jw_byte 10;
+    &jw_indent (depth + 1);
+    &jw_string_lit 'trailing';
+    &jw_str ': ';
+    @local trailing := &ast_field P_AST, node, (3 + n_stmts);
+    &json_node (depth + 1), trailing;
+  };
+  &jw_byte 10;
+  &jw_indent depth;
+  &jw_byte 125;
+};
+
+# ── Array / Tuple / Object literals ──────────────────────────────────
+
+@fn json_collection_lit depth:Int, node:Int, type_name:String, key:String := {
+  @local n := &ast_field P_AST, node, 1;
+  &jw_str '{';
+  &jw_byte 10;
+  &jw_indent (depth + 1);
+  &jw_string_lit 'type';
+  &jw_str ': ';
+  &jw_string_lit type_name;
+  &jw_str ',';
+  &jw_byte 10;
+  &jw_indent (depth + 1);
+  &jw_string_lit key;
+  &jw_str ': [';
+  &@if (n > 0), { &jw_byte 10; };
+  @local i := 0;
+  &@loop (i < n), {
+    @local e := &ast_field P_AST, node, (2 + i);
+    &jw_indent (depth + 2);
+    &json_node (depth + 2), e;
+    &@if ((i + 1) < n), { &jw_str ','; };
+    &jw_byte 10;
+    i = i + 1;
+  };
+  &@if (n > 0), { &jw_indent (depth + 1); };
+  &jw_byte 93;
+  &jw_byte 10;
+  &jw_indent depth;
+  &jw_byte 125;
+};
+
+@fn json_array_lit depth:Int, node:Int := {
+  &json_collection_lit depth, node, 'ArrayLiteral', 'elements';
+};
+
+@fn json_tuple_lit depth:Int, node:Int := {
+  &json_collection_lit depth, node, 'TupleLiteral', 'elements';
+};
+
+# json_object_lit — { type:"ObjectLiteral", properties: [KeyValuePair,...] }
+@fn json_object_lit depth:Int, node:Int := {
+  @local n := &ast_field P_AST, node, 1;
+  &jw_str '{';
+  &jw_byte 10;
+  &jw_indent (depth + 1);
+  &jw_string_lit 'type';
+  &jw_str ': ';
+  &jw_string_lit 'ObjectLiteral';
+  &jw_str ',';
+  &jw_byte 10;
+  &jw_indent (depth + 1);
+  &jw_string_lit 'properties';
+  &jw_str ': [';
+  &@if (n > 0), { &jw_byte 10; };
+  # Each pair occupies 3 cells: key_off, key_len, val_idx.
+  @local i := 0;
+  &@loop (i < n), {
+    @local key_off := &ast_field P_AST, node, (2 + (i * 3));
+    @local key_len := &ast_field P_AST, node, (3 + (i * 3));
+    @local val     := &ast_field P_AST, node, (4 + (i * 3));
+    &jw_indent (depth + 2);
+    &jw_str '{';
+    &jw_byte 10;
+    &jw_indent (depth + 3);
+    &jw_string_lit 'type';
+    &jw_str ': ';
+    &jw_string_lit 'KeyValuePair';
+    &jw_str ',';
+    &jw_byte 10;
+    &jw_indent (depth + 3);
+    &jw_string_lit 'key';
+    &jw_str ': ';
+    &json_typed_identifier (depth + 3), key_off, key_len, 0, 0;
+    &jw_str ',';
+    &jw_byte 10;
+    &jw_indent (depth + 3);
+    &jw_string_lit 'value';
+    &jw_str ': ';
+    &json_node (depth + 3), val;
+    &jw_byte 10;
+    &jw_indent (depth + 2);
+    &jw_byte 125;
+    &@if ((i + 1) < n), { &jw_str ','; };
+    &jw_byte 10;
+    i = i + 1;
+  };
+  &@if (n > 0), { &jw_indent (depth + 1); };
+  &jw_byte 93;
+  &jw_byte 10;
+  &jw_indent depth;
+  &jw_byte 125;
+};
+
+# ── Assignment ───────────────────────────────────────────────────────
+
+@fn json_assignment depth:Int, node:Int := {
+  @local target := &ast_field P_AST, node, 1;
+  @local value  := &ast_field P_AST, node, 2;
+  &jw_str '{';
+  &jw_byte 10;
+  &jw_indent (depth + 1);
+  &jw_string_lit 'type';
+  &jw_str ': ';
+  &jw_string_lit 'Assignment';
+  &jw_str ',';
+  &jw_byte 10;
+  &jw_indent (depth + 1);
+  &jw_string_lit 'target';
+  &jw_str ': ';
+  &json_node (depth + 1), target;
+  &jw_str ',';
+  &jw_byte 10;
+  &jw_indent (depth + 1);
+  &jw_string_lit 'value';
+  &jw_str ': ';
+  &json_node (depth + 1), value;
+  &jw_byte 10;
+  &jw_indent depth;
+  &jw_byte 125;
+};
+
+# ── VariantDecl ──────────────────────────────────────────────────────
+
+@fn json_variant_decl depth:Int, node:Int := {
+  @local name_off := &ast_field P_AST, node, 1;
+  @local name_len := &ast_field P_AST, node, 2;
+  @local n_fields := &ast_field P_AST, node, 3;
+  &jw_str '{';
+  &jw_byte 10;
+  &jw_indent (depth + 1);
+  &jw_string_lit 'type';
+  &jw_str ': ';
+  &jw_string_lit 'VariantDecl';
+  &jw_str ',';
+  &jw_byte 10;
+  &jw_indent (depth + 1);
+  &jw_string_lit 'name';
+  &jw_str ': ';
+  &jw_string_span name_off, name_len;
+  &jw_str ',';
+  &jw_byte 10;
+  &jw_indent (depth + 1);
+  &jw_string_lit 'fields';
+  &jw_str ': [';
+  &@if (n_fields > 0), { &jw_byte 10; };
+  @local i := 0;
+  &@loop (i < n_fields), {
+    # Each field occupies 4 cells: name_off, name_len, type_off, type_len.
+    @local f_off    := &ast_field P_AST, node, (4 + (i * 4));
+    @local f_len    := &ast_field P_AST, node, (5 + (i * 4));
+    @local f_toff   := &ast_field P_AST, node, (6 + (i * 4));
+    @local f_tlen   := &ast_field P_AST, node, (7 + (i * 4));
+    &jw_indent (depth + 2);
+    &json_typed_identifier (depth + 2), f_off, f_len, f_toff, f_tlen;
+    &@if ((i + 1) < n_fields), { &jw_str ','; };
+    &jw_byte 10;
+    i = i + 1;
+  };
+  &@if (n_fields > 0), { &jw_indent (depth + 1); };
+  &jw_byte 93;
+  &jw_byte 10;
+  &jw_indent depth;
+  &jw_byte 125;
+};
+
 # Mutual recursion forward decl is implicit (Silicon resolves by name).
 @fn json_node depth:Int, node:Int := {
   @local k := &ast_kind P_AST, node;
-  &@if (k == AST_INT_LIT),    { &json_int_lit depth, node; &@return 0; };
-  &@if (k == AST_BOOL_LIT),   { &json_bool_lit depth, node; &@return 0; };
-  &@if (k == AST_FLOAT_LIT),  { &json_float_lit depth, node; &@return 0; };
-  &@if (k == AST_STRING_LIT), { &json_string_lit depth, node; &@return 0; };
-  &@if (k == AST_NAMESPACE),  { &json_namespace depth, node; &@return 0; };
-  &@if (k == AST_BIN_OP),     { &json_bin_op depth, node; &@return 0; };
-  &@if (k == AST_CALL),       { &json_function_call depth, node; &@return 0; };
-  # Unsupported kind for this serializer slice — emit a stub so the
-  # output is at least well-formed JSON.
+  &@if (k == AST_INT_LIT),     { &json_int_lit depth, node; &@return 0; };
+  &@if (k == AST_BOOL_LIT),    { &json_bool_lit depth, node; &@return 0; };
+  &@if (k == AST_FLOAT_LIT),   { &json_float_lit depth, node; &@return 0; };
+  &@if (k == AST_STRING_LIT),  { &json_string_lit depth, node; &@return 0; };
+  &@if (k == AST_NAMESPACE),   { &json_namespace depth, node; &@return 0; };
+  &@if (k == AST_BIN_OP),      { &json_bin_op depth, node; &@return 0; };
+  &@if (k == AST_CALL),        { &json_function_call depth, node; &@return 0; };
+  &@if (k == AST_BLOCK),       { &json_block depth, node; &@return 0; };
+  &@if (k == AST_DEFINITION),  { &json_definition depth, node; &@return 0; };
+  &@if (k == AST_ARRAY_LIT),   { &json_array_lit depth, node; &@return 0; };
+  &@if (k == AST_TUPLE_LIT),   { &json_tuple_lit depth, node; &@return 0; };
+  &@if (k == AST_OBJECT_LIT),  { &json_object_lit depth, node; &@return 0; };
+  &@if (k == AST_ASSIGNMENT),  { &json_assignment depth, node; &@return 0; };
+  &@if (k == AST_VARIANT),     { &json_variant_decl depth, node; &@return 0; };
+  # Unsupported kind — emit a stub so output stays well-formed.
   &jw_string_lit 'unsupported';
   0
 };

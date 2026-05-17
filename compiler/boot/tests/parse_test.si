@@ -165,10 +165,9 @@
   &@if ((&ast_kind P_AST, elem15) != AST_VARIANT), { &die 150; };
   &@if ((&ast_field P_AST, elem15, 3) != 1), { &die 151; };
 
-  # ── Case 16: doc comment `## hello\n42;` ──────────────────────────
+  # ── Case 16: doc comments are stripped from elements (Stage 0 parity)
   @local prog16 := &parse_str '## hello';
-  @local elem16 := &ast_field P_AST, prog16, 2;
-  &@if ((&ast_kind P_AST, elem16) != AST_DOC_COMMENT), { &die 160; };
+  &@if ((&ast_field P_AST, prog16, 1) != 0), { &die 160; };
 
   # ── Case 17: assignment `x = 5;` (mutating an @var) ───────────────
   @local prog17 := &parse_str 'x = 5;';

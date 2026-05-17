@@ -195,34 +195,53 @@ describe('Phase 0 WASIX smoke test', () => {
         // Fixtures must match the inputs hard-coded in
         // boot/tests/json_test.si's `run` function (same order).
         const fixtures = [
-            '42;',
-            '3.14;',
-            'x;',
-            'Color::Red;',
-            '1 + 2;',
-            '1 + 2 + 3;',
-            '&add 1, 2;',
-            '&@if 1, 0;',
+            // Literals
+            '42;', '3.14;', '@true;', '@false;',
+            // Namespaces
+            'x;', 'Color::Red;', 'a.b.c;',
+            // Binary expressions
+            '1 + 2;', '1 + 2 + 3;', 'a == b;',
+            // Function calls
+            '&add 1, 2;', '&@if 1, 0;', '&foo;',
+            // Block
+            '{ 1; 2; 3 };', '{ };',
+            // Definitions
+            '@let x := 42;',
+            '@let x:Int := 42;',
+            '@fn add a, b := a + b;',
+            '@fn add a:Int, b:Int := { a + b };',
+            '@var counter := 0;',
+            '@extern print x:Int;',
+            // $-literals
+            '$[1, 2, 3];',
+            '$(1, 2);',
+            '${a=1, b=2};',
+            // Variant
+            '$Circle r:Int;',
+            // Assignment
+            'x = 5;',
         ]
 
         try {
-            const result = spawnSync('wasmer', ['run', tmpPath], {
-                maxBuffer: 64 * 1024 * 1024,
-            })
-            expect(result.status).toBe(0)
-            const stdout = (result.stdout ?? Buffer.alloc(0)).toString('utf-8')
-            const chunks = stdout.split('---\n').filter(c => c.length > 0)
-            expect(chunks.length).toBe(fixtures.length)
-
-            for (let i = 0; i < fixtures.length; i++) {
-                const src = fixtures[i]
+            // One wasmer invocation per fixture so cumulative parser
+            // state (@vars, heap growth across many parses) can't bleed
+            // between cases.  Each invocation pipes the fixture source
+            // via stdin.
+            for (const src of fixtures) {
                 const match = stage0Parse(src)
                 const stage0Ast = addToAstSemantics(siliconGrammar)(match).toAst()
                 const expected = JSON.stringify(stage0Ast, null, 2) + '\n'
-                if (chunks[i] !== expected) {
+
+                const result = spawnSync('wasmer', ['run', tmpPath], {
+                    input: Buffer.from(src, 'utf-8'),
+                    maxBuffer: 64 * 1024 * 1024,
+                })
+                expect(result.status).toBe(0)
+                const stdout = (result.stdout ?? Buffer.alloc(0)).toString('utf-8')
+                if (stdout !== expected) {
                     throw new Error(
                         `JSON mismatch for ${JSON.stringify(src)}\n` +
-                        `Expected:\n${expected}\nGot:\n${chunks[i]}`,
+                        `Expected:\n${expected}\nGot:\n${stdout}`,
                     )
                 }
             }

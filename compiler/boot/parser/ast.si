@@ -217,6 +217,18 @@
   &vec_push a, value
 };
 
+# AST_PARAMETER [kind, name_off, name_len, type_off, type_len]
+# type_off=0 / type_len=0 means "no annotation".
+@let AST_PARAMETER:Int := 17;
+@fn ast_parameter:Int ast:Int, name_off:Int, name_len:Int,
+                       type_off:Int, type_len:Int := {
+  @local a := &vec_push ast, AST_PARAMETER;
+  a = &vec_push a, name_off;
+  a = &vec_push a, name_len;
+  a = &vec_push a, type_off;
+  &vec_push a, type_len
+};
+
 # ── Patching helpers ─────────────────────────────────────────────────
 # Sometimes a node's child count isn't known until after the children
 # are pushed (variable-arity nodes built in-place).  ast_patch_at sets
