@@ -91,6 +91,30 @@
     i = i + 1;
   };
   &@if (n_err > 0), { &jw_str '  '; };
+  &jw_byte 93; &jw_byte 44; &jw_byte 10;            # ],
+
+  # binops
+  &jw_str '  "binops": [';
+  @local n_bin := &elab_bin_count;
+  &@if (n_bin > 0), { &jw_byte 10; };
+  i = 0;
+  &@loop (i < n_bin), {
+    @local bn  := &elab_bin_node i;
+    @local res := &elab_bin_resolved i;
+    @local op_off := &ast_field P_AST, bn, 1;
+    @local op_len := &ast_field P_AST, bn, 2;
+    &jw_str '    { "op": ';
+    &jw_quoted_span op_off, op_len;
+    &jw_str ', "resolved": ';
+    # 1 → true, 0 → false (single-byte strings).
+    &@if (res == 1), { &jw_str 'true'; };
+    &@if (res == 0), { &jw_str 'false'; };
+    &jw_str ' }';
+    &@if ((i + 1) < n_bin), { &jw_byte 44; };
+    &jw_byte 10;
+    i = i + 1;
+  };
+  &@if (n_bin > 0), { &jw_str '  '; };
   &jw_byte 93; &jw_byte 10;                         # ]
 
   &jw_byte 125; &jw_byte 10;                        # }

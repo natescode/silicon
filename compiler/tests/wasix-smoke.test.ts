@@ -345,6 +345,9 @@ describe('Phase 0 WASIX smoke test', () => {
             '@bogus thing := 0;',                // unknown keyword (0)
             '@var oops a, b := 0;',              // global doesn't take params (1)
             '@extern badext x:Int := 0;',        // extern doesn't take binding (2)
+            // top-level binops — slice 3 resolution
+            '1 + 2;',
+            'a == b;',
         ].join('\n') + '\n'
         const input = bundle + userProg
 
@@ -373,12 +376,60 @@ describe('Phase 0 WASIX smoke test', () => {
         })
         lines.push('  ],')
         if (errors.length === 0) {
-            lines.push('  "errors": []')
+            lines.push('  "errors": [],')
         } else {
             lines.push('  "errors": [')
             errors.forEach((e, i) => {
                 const sep = i < errors.length - 1 ? ',' : ''
                 lines.push(`    { "keyword": "${e.keyword}", "code": ${classify(e.message)} }${sep}`)
+            })
+            lines.push('  ],')
+        }
+        // Walk the elaborated AST in preorder, matching boot/elab/elaborator.si
+        // walk_expr order: BinOp (self) → left → right; Call: callee →
+        // args; Block: statements → trailing; Definition bindings; etc.
+        type Bin = { op: string; resolved: boolean }
+        const bins: Bin[] = []
+        const visit = (n: any): void => {
+            if (!n || typeof n !== 'object') return
+            switch (n.type) {
+                case 'BinaryOp':
+                    bins.push({ op: n.operator, resolved: !!n.semantics })
+                    visit(n.left)
+                    visit(n.right)
+                    return
+                case 'FunctionCall':
+                    visit(n.name)
+                    for (const a of n.args ?? []) visit(a)
+                    return
+                case 'Block':
+                    for (const it of n.items ?? []) visit(it)
+                    if (n.trailing) visit(n.trailing)
+                    return
+                case 'Assignment':
+                    visit(n.target)
+                    visit(n.value)
+                    return
+                case 'ArrayLiteral':
+                case 'TupleLiteral':
+                    for (const e of n.elements ?? []) visit(e)
+                    return
+                case 'ObjectLiteral':
+                    for (const p of n.pairs ?? []) visit(p.value)
+                    return
+                case 'Definition':
+                    if (n.binding) visit(n.binding.expression ?? n.binding)
+                    return
+            }
+        }
+        for (const el of (elab.elements as any[])) visit(el)
+        if (bins.length === 0) {
+            lines.push('  "binops": []')
+        } else {
+            lines.push('  "binops": [')
+            bins.forEach((b, i) => {
+                const sep = i < bins.length - 1 ? ',' : ''
+                lines.push(`    { "op": "${b.op}", "resolved": ${b.resolved} }${sep}`)
             })
             lines.push('  ]')
         }

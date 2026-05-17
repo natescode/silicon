@@ -52,6 +52,10 @@
 @var E_ERR_LEN:Int  := 0;   # vec<i32> of error keyword spans (len)
 @var E_ERR_CODE:Int := 0;   # vec<i32> of ELAB_ERR_* codes
 
+# BinaryOp resolution side table (Phase 4 slice 3).
+@var E_BIN_NODE:Int   := 0; # vec<i32> of AST_BIN_OP node indices in walk order
+@var E_BIN_RESOLVED:Int := 0; # vec<i32> of 1 = resolved against registry, 0 = unresolved
+
 @fn elab_init := {
   E_DEF_IDX  = &vec_new;
   E_HOOK_OFF = &vec_new;
@@ -59,6 +63,8 @@
   E_ERR_OFF  = &vec_new;
   E_ERR_LEN  = &vec_new;
   E_ERR_CODE = &vec_new;
+  E_BIN_NODE     = &vec_new;
+  E_BIN_RESOLVED = &vec_new;
 };
 
 @fn elab_def_count:Int       := { &vec_len E_DEF_IDX };
@@ -69,6 +75,9 @@
 @fn elab_err_off:Int i:Int   := { &vec_get E_ERR_OFF, i };
 @fn elab_err_len:Int i:Int   := { &vec_get E_ERR_LEN, i };
 @fn elab_err_code:Int i:Int  := { &vec_get E_ERR_CODE, i };
+@fn elab_bin_count:Int       := { &vec_len E_BIN_NODE };
+@fn elab_bin_node:Int i:Int  := { &vec_get E_BIN_NODE, i };
+@fn elab_bin_resolved:Int i:Int := { &vec_get E_BIN_RESOLVED, i };
 
 @fn elab_push_err off:Int, len:Int, code:Int := {
   E_ERR_OFF  = &vec_push E_ERR_OFF,  off;
@@ -120,13 +129,97 @@
 
 # ── Walk ─────────────────────────────────────────────────────────────
 
+# walk_expr — recursive expression walker.  For every AST_BIN_OP it
+# encounters, resolves the operator symbol against the registry's
+# operator table and records (node_idx, resolved?) in the side table.
+@fn walk_expr node:Int := {
+  &@if (node < 0), { &@return 0; };
+  @local k := &ast_kind P_AST, node;
+
+  &@if (k == AST_BIN_OP), {
+    @local op_off := &ast_field P_AST, node, 1;
+    @local op_len := &ast_field P_AST, node, 2;
+    @local left   := &ast_field P_AST, node, 3;
+    @local right  := &ast_field P_AST, node, 4;
+    @local resolved := 0;
+    @local hit := &registry_op_lookup op_off, op_len;
+    &@if (hit >= 0), { resolved = 1; };
+    E_BIN_NODE     = &vec_push E_BIN_NODE,     node;
+    E_BIN_RESOLVED = &vec_push E_BIN_RESOLVED, resolved;
+    &walk_expr left;
+    &walk_expr right;
+  };
+
+  &@if (k == AST_CALL), {
+    @local callee := &ast_field P_AST, node, 1;
+    @local n_args := &ast_field P_AST, node, 2;
+    &walk_expr callee;
+    @local i := 0;
+    &@loop (i < n_args), {
+      &walk_expr (&ast_field P_AST, node, (3 + i));
+      i = i + 1;
+    };
+  };
+
+  &@if (k == AST_BLOCK), {
+    @local n_stmts := &ast_field P_AST, node, 1;
+    @local has_trailing := &ast_field P_AST, node, 2;
+    @local i := 0;
+    &@loop (i < n_stmts), {
+      &walk_expr (&ast_field P_AST, node, (3 + i));
+      i = i + 1;
+    };
+    &@if (has_trailing == 1), {
+      &walk_expr (&ast_field P_AST, node, (3 + n_stmts));
+    };
+  };
+
+  &@if (k == AST_ASSIGNMENT), {
+    &walk_expr (&ast_field P_AST, node, 1);
+    &walk_expr (&ast_field P_AST, node, 2);
+  };
+
+  &@if (k == AST_ARRAY_LIT), {
+    @local n := &ast_field P_AST, node, 1;
+    @local i := 0;
+    &@loop (i < n), {
+      &walk_expr (&ast_field P_AST, node, (2 + i));
+      i = i + 1;
+    };
+  };
+
+  &@if (k == AST_TUPLE_LIT), {
+    @local n := &ast_field P_AST, node, 1;
+    @local i := 0;
+    &@loop (i < n), {
+      &walk_expr (&ast_field P_AST, node, (2 + i));
+      i = i + 1;
+    };
+  };
+
+  &@if (k == AST_OBJECT_LIT), {
+    # Pairs are laid out as [key_off, key_len, val_idx] triples
+    # starting at offset 2.  Walk only the value side.
+    @local n := &ast_field P_AST, node, 1;
+    @local i := 0;
+    &@loop (i < n), {
+      &walk_expr (&ast_field P_AST, node, (2 + (3 * i) + 2));
+      i = i + 1;
+    };
+  };
+
+  0
+};
+
 # elaborate_program — walks the program's top-level elements; for each
 # AST_DEFINITION, looks up its keyword in the defKinds table.  Hook
 # spans get appended to (E_DEF_IDX, E_HOOK_OFF, E_HOOK_LEN); unknown
-# keywords get appended to (E_ERR_OFF, E_ERR_LEN).
+# keywords get appended to (E_ERR_OFF, E_ERR_LEN).  Binding expressions
+# are recursed via walk_expr so every BinaryOp gets resolved against
+# the operator registry.
 #
 # The caller must `&registry_init` + `&load_strata prog` first so the
-# defKinds table is populated.
+# registry tables are populated.
 @fn elaborate_program:Int prog:Int := {
   @local n := &ast_field P_AST, prog, 1;
   @local i := 0;
@@ -156,8 +249,16 @@
         &@if ((binding_idx >= 0) * ((&hook_allows_binding cg_off, cg_len) == 0) == 1), {
           &elab_push_err kw_off, kw_len, ELAB_ERR_BINDING;
         };
+        # Recurse into the binding expression so BinaryOps inside it
+        # resolve against the operator registry.
+        &@if (binding_idx >= 0), { &walk_expr binding_idx; };
       };
     };
+    # Top-level expression statements are wrapped as their own elements;
+    # walk them so binops at the top level also resolve.
+    &@if (k != AST_DEFINITION),
+      { &@if (k != AST_ELABORATION),
+          { &@if (k != AST_DOC_COMMENT), { &walk_expr elem; }; }; };
     i = i + 1;
   };
   &elab_def_count

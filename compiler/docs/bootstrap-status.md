@@ -99,9 +99,9 @@ Still ahead for Phase 3:
 | ---------------------------------------------------- | ------ | ----------- |
 | Elaborator walker — Definition.hook stamping         | **Landed** | ~95 |
 | Defkind constraint validation (params / binding)     | **Landed** | (in elaborator) |
+| BinaryOp.semantics resolution + recursive walker     | **Landed** | ~80 |
 | Phase 4 gate: elaboration JSON byte-equal vs Stage 0 | **Landed** | — |
 | Body interpreter (`&Compiler::*` surface)            | Pending | ~250 (estimated) |
-| BinaryOp.semantics resolution                        | Pending | small |
 | Generics-not-allowed validation                      | Deferred — parser doesn't yet store generic params on Definitions |
 
 What lands today:
@@ -126,6 +126,15 @@ What lands today:
   allowed.  The bun-side dump classifies Stage 0's error
   messages into the same codes via substring match — gate
   currently exercises all three.
+- BinaryOp.semantics: `walk_expr` recurses through Definitions'
+  binding expressions and top-level expression statements,
+  visiting `AST_BIN_OP`, `AST_CALL`, `AST_BLOCK`,
+  `AST_ASSIGNMENT`, `AST_ARRAY_LIT`, `AST_TUPLE_LIT`,
+  `AST_OBJECT_LIT`.  Each binop's operator span is looked up in
+  the registry and the (node-idx, resolved?) pair is recorded
+  in the side table.  Dump appends a `"binops"` array; bun-side
+  test mirrors the same preorder walk over Stage 0's
+  elaborated AST and diffs byte-for-byte.
 
 Still ahead for Phase 4:
 - Body interpreter — port `src/elaborator/strataBody.ts` (~250
