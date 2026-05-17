@@ -1,0 +1,22 @@
+# JSON serializer smoke test.  Parses a small input and writes the
+# canonical Stage-0-shaped JSON to stdout.  The bun-side test diffs
+# against an expected string.
+
+@use '../std/io.si';
+@use '../parser/tokens.si';
+@use '../parser/lex.si';
+@use '../parser/ast.si';
+@use '../parser/parse.si';
+@use '../parser/json.si';
+
+@fn run := {
+  # Single fixture: `42;` — exercises Program + IntLiteral.
+  @local p := (&str_ptr '42;') + 4;
+  @local n := &str_len '42;';
+  @local toks := &lex p, n;
+  @local root := &parse p, n, toks;
+  &json_program root;
+  &wasi_snapshot_preview1::proc_exit 0;
+};
+
+&run;

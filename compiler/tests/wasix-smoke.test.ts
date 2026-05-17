@@ -178,4 +178,32 @@ describe('Phase 0 WASIX smoke test', () => {
             await fs.unlink(tmpPath).catch(() => {})
         }
     })
+
+    test('boot/tests/json_test.si: Silicon serializer matches Stage 0 AST JSON', async () => {
+        if (!wasmerAvailable()) {
+            console.log('  (skipped: wasmer not on PATH)')
+            return
+        }
+        const wasm = await buildBoot(path.join(PROJECT_ROOT, 'boot', 'tests', 'json_test.si'))
+        const tmpPath = path.join(PROJECT_ROOT, '.json-smoke.wasm')
+        await fs.writeFile(tmpPath, wasm)
+
+        // What Stage 0 produces from the same `42;` input — the
+        // parse-only AST (no elaborate / typecheck).
+        const stage0Parse = (await import('../src/parser')).default
+        const { addToAstSemantics } = await import('../src/ast')
+        const { siliconGrammar } = await import('../src/grammar')
+        const match = stage0Parse('42;')
+        const stage0Ast = addToAstSemantics(siliconGrammar)(match).toAst()
+        const expected = JSON.stringify(stage0Ast, null, 2) + '\n'
+
+        try {
+            const result = spawnSync('wasmer', ['run', tmpPath], { encoding: 'buffer' })
+            expect(result.status).toBe(0)
+            const stdout = result.stdout?.toString('utf-8') ?? ''
+            expect(stdout).toBe(expected)
+        } finally {
+            await fs.unlink(tmpPath).catch(() => {})
+        }
+    })
 })

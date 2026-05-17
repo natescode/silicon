@@ -22,7 +22,7 @@ import { dirname, resolve, isAbsolute } from 'path'
  * Match `@use 'path';` (with optional whitespace) at start-of-line or after
  * whitespace, NOT inside a `#` line comment.  Group 1 is the path string.
  */
-const USE_RE = /^[ \t]*@use[ \t]+'([^'\n\r]+)'[ \t]*;[ \t]*$/gm
+const USE_RE = /^[ \t]*@use[ \t]+'([^'\n\r]+)'[ \t]*;[ \t]*(?:#[^\n\r]*)?$/gm
 
 /** Strip `#` line comments from a source line (but keep them in multi-line
  *  string literals — which Silicon doesn't have, so the simple approach works).
