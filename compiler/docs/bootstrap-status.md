@@ -18,34 +18,24 @@ Tracks progress against `docs/bootstrap-plan.html` and
 
 | Item | Feature                                       | Status     | Branch                                 |
 | ---- | --------------------------------------------- | ---------- | -------------------------------------- |
-| A    | Sum types with payloads                       | **Blocked** | grammar can't express variant payload params inline — needs design discussion |
-| B    | Pattern destructure in `@match`               | **Blocked** | depends on A                            |
-| C    | Multi-file `@use 'path.si'` includes          | **Landed** | `bootstrap/-1-c-use-includes`           |
-| D    | UTF-8 source bytes                            | **Landed** | folded into WS 2                        |
-| E    | WASIX `_start` export (`--target=wasix`)      | **Landed** | `bootstrap/-1-e-wasix-start`            |
-| F    | Out-pointer `@extern` calling convention      | **Landed** | `bootstrap/-1-f-extern-outptr`          |
-| G    | `@type_alias` lowering (optional)             | **Existing** | already accepted by the typechecker (declaration only) |
+| A    | Sum types with payloads (`$Variant field:Type`) | **Landed** | `bootstrap/-1-a-payload-types`        |
+| B    | Pattern destructure in `@match`                 | **Landed** | `bootstrap/-1-a-payload-types`        |
+| C    | Multi-file `@use 'path.si'` includes            | **Landed** | `bootstrap/-1-c-use-includes`         |
+| D    | UTF-8 source bytes                              | **Landed** | folded into WS 2                       |
+| E    | WASIX `_start` export (`--target=wasix`)        | **Landed** | `bootstrap/-1-e-wasix-start`          |
+| F    | Out-pointer `@extern` calling convention        | **Landed** | `bootstrap/-1-f-extern-outptr`        |
+| G    | `@type_alias` lowering (optional)               | **Existing** | already accepted by the typechecker (declaration only) |
 
-**Phase −1 gate not yet met.**  The plan's gate requires "A miniature
-AST-node fixture compiles end-to-end: declare a sum type with payloads,
-build a value via constructor, destructure via `@match`, return one
-field."  That requires items A + B, which are blocked on the grammar
-constraint documented in `CLAUDE.md`.
+**Phase −1 gate met.**  The Shape fixture from cleanup-plan §3.4
+(`@type Shape := $Circle r:Int | $Rectangle w:Int, h:Int;` + an `area`
+function that destructures via `@match`) compiles end-to-end, instantiates
+under wabt, and returns 99 (5*5*3 + 4*6).  Tagged `v0.bootstrap-ready`.
 
-## Outstanding Phase −1 Work
+## Next: Phase 0 — WASIX runtime smoke test
 
-Items A and B (sum types with payloads + destructure) are the only
-remaining blockers for tagging `v0.bootstrap-ready`.  Two paths forward:
-
-1. **Grammar extension** — relax `Definition` to allow variant payload
-   syntax (`Red r:Int | Green g:Int`).  Smallest change: a new
-   `SumBinding` production used only when `defKw == '@type'`.
-2. **Encode payloads via existing syntax** — model variants as
-   sibling definitions or via object-literal-style payloads (e.g.
-   `Red := $variant { name='Red', fields=$['r' = Int] }`).
-   Less ergonomic but stays inside the existing grammar.
-
-Both options need a design discussion before implementation begins.
+Per the bootstrap plan's working-order table (§11), the next branch is
+`bootstrap/00-runtime` which lands `boot/std/std.si` + `boot/runtime/wasix.si`
+and the read-a-file-write-it-back smoke test that proves the runtime layer.
 
 ## Phase 0 and Beyond
 
