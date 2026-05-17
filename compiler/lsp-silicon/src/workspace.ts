@@ -133,17 +133,32 @@ export class Workspace {
         const symbols = buildSymbolIndex(uri, text)
         const uses = extractUsesFromText(text, file)
 
-        // Suppress E0004 "unbound identifier" diagnostics when the
-        // name is defined in one of the @use'd files we've already
-        // loaded.  Until the typechecker becomes cross-file-aware in
-        // the LSP, those are false positives — the user has declared
-        // the dependency explicitly.  Every other diagnostic is kept.
+        // Suppress diagnostics that arise purely because the per-file
+        // typechecker can't see symbols imported via @use.  Until the
+        // LSP grows cross-file typechecking, these are false positives
+        // the user can't act on — the dependency was declared
+        // explicitly with @use 'path.si'.  Every other diagnostic is
+        // kept.
+        //
+        // Two patterns covered:
+        //   E0004 — direct reference to an @use'd name.
+        //   E0002 — a mismatch whose `expected` or `actual` is the
+        //           Unknown sentinel `<unknown>`, which the
+        //           typechecker assigns to anything it couldn't
+        //           resolve.  We only apply this suppression when the
+        //           file actually has @use directives, so single-file
+        //           code still surfaces real Unknown-in-mismatch bugs.
         const visibleNames = this.namesFromUses(uses)
+        const hasUses = uses.length > 0
         const filteredDiags = diags.filter(d => {
-            if (d.code !== 'E0004') return true
-            const m = d.message.match(/unbound identifier ['"`]([^'"`]+)['"`]/i)
-            if (!m) return true
-            return !visibleNames.has(m[1])
+            if (d.code === 'E0004') {
+                const m = d.message.match(/unbound identifier ['"`]([^'"`]+)['"`]/i)
+                if (m && visibleNames.has(m[1])) return false
+            }
+            if (d.code === 'E0002' && hasUses && /<unknown>/.test(d.message)) {
+                return false
+            }
+            return true
         })
 
         const analysis: DocAnalysis = {
