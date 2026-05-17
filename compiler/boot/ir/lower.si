@@ -94,8 +94,41 @@
   LITPOOL_NEXT = LITPOOL_BASE;
 };
 
+# Compute the effective byte length of a string literal after
+# resolving `\n`, `\t`, `\r`, `\\`, `\'`, `\0`.  Unknown escapes
+# pass through literally (the `\` stays).
+@fn literal_decoded_len:Int s_off:Int, s_len:Int := {
+  @local out := 0;
+  @local i := 0;
+  &@loop (i < s_len), {
+    @local b := &WASM::i32_load8_u (P_SRC + s_off + i);
+    @local handled := 0;
+    &@if ((b == 92) * (i < (s_len - 1)) == 1), {
+      @local b2 := &WASM::i32_load8_u (P_SRC + s_off + i + 1);
+      @local recognised := 0;
+      &@if (b2 == 110), { recognised = 1; };   # n
+      &@if (b2 == 116), { recognised = 1; };   # t
+      &@if (b2 == 114), { recognised = 1; };   # r
+      &@if (b2 == 92),  { recognised = 1; };   # \
+      &@if (b2 == 39),  { recognised = 1; };   # '
+      &@if (b2 == 48),  { recognised = 1; };   # 0
+      &@if (recognised == 1), {
+        out = out + 1;
+        i = i + 2;
+        handled = 1;
+      };
+    };
+    &@if (handled == 0), {
+      out = out + 1;
+      i = i + 1;
+    };
+  };
+  out
+};
+
 # Intern a string literal: returns its memory base address (where the
-# 4-byte length header starts).
+# 4-byte length header starts).  Identical literals (compared by raw
+# source bytes) share an address.
 @fn litpool_intern:Int s_off:Int, s_len:Int := {
   @local n := &vec_len LITPOOL_OFF;
   @local i := 0;
@@ -121,8 +154,9 @@
   LITPOOL_OFF  = &vec_push LITPOOL_OFF,  s_off;
   LITPOOL_LEN  = &vec_push LITPOOL_LEN,  s_len;
   LITPOOL_ADDR = &vec_push LITPOOL_ADDR, new_addr;
-  # 4-byte length header + content; align next slot to 4 bytes.
-  @local bump := 4 + s_len;
+  # Header (4) + decoded payload bytes; round up to 4-byte alignment.
+  @local decoded := &literal_decoded_len s_off, s_len;
+  @local bump := 4 + decoded;
   @local align := bump - ((bump / 4) * 4);
   &@if (align != 0), { bump = bump + (4 - align); };
   LITPOOL_NEXT = LITPOOL_NEXT + bump;

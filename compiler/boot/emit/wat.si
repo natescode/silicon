@@ -238,17 +238,37 @@
   &ew_str '  (data (i32.const ';
   &ew_write_int seg_addr;
   &ew_str ') "';
-  # Length header (little-endian u32).
-  &emit_byte_escaped (src_len - ((src_len / 256) * 256));
-  &emit_byte_escaped ((src_len / 256) - ((src_len / 65536) * 256));
-  &emit_byte_escaped ((src_len / 65536) - ((src_len / 16777216) * 256));
-  &emit_byte_escaped (src_len / 16777216);
-  # Content bytes.
+  # Length header reflects the DECODED length so the runtime
+  # `&str_len` reads the right byte count.
+  @local dlen := &literal_decoded_len src_off, src_len;
+  &emit_byte_escaped (dlen - ((dlen / 256) * 256));
+  &emit_byte_escaped ((dlen / 256) - ((dlen / 65536) * 256));
+  &emit_byte_escaped ((dlen / 65536) - ((dlen / 16777216) * 256));
+  &emit_byte_escaped (dlen / 16777216);
+  # Content bytes: resolve `\n` / `\t` / `\r` / `\\` / `\'` / `\0`
+  # into single bytes; unknown escapes pass through with the `\`.
   @local i := 0;
   &@loop (i < src_len), {
     @local b := &WASM::i32_load8_u (P_SRC + src_off + i);
-    &emit_byte_escaped b;
-    i = i + 1;
+    @local handled := 0;
+    &@if ((b == 92) * (i < (src_len - 1)) == 1), {
+      @local b2 := &WASM::i32_load8_u (P_SRC + src_off + i + 1);
+      @local recognised := 1;
+      &@if (b2 == 110),     { &emit_byte_escaped 10;  };   # \n
+      &@if (b2 == 116),     { &emit_byte_escaped 9;   };   # \t
+      &@if (b2 == 114),     { &emit_byte_escaped 13;  };   # \r
+      &@if (b2 == 92),      { &emit_byte_escaped 92;  };   # \\
+      &@if (b2 == 39),      { &emit_byte_escaped 39;  };   # \'
+      &@if (b2 == 48),      { &emit_byte_escaped 0;   };   # \0
+      &@if ((b2 != 110) * (b2 != 116) * (b2 != 114) *
+            (b2 != 92)  * (b2 != 39)  * (b2 != 48) == 1),
+        { recognised = 0; };
+      &@if (recognised == 1), { i = i + 2; handled = 1; };
+    };
+    &@if (handled == 0), {
+      &emit_byte_escaped b;
+      i = i + 1;
+    };
   };
   &ew_str '")'; &ew_byte 10;
 };

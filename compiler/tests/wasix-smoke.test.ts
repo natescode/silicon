@@ -582,6 +582,15 @@ describe('Phase 0 WASIX smoke test', () => {
             { prog: "@fn a := { 'shared' };\n" +
                     "@fn b := { 'shared' };",
               fn: 'b', args: [], wantLen: 6, wantText: 'shared' },
+            // Escape sequences — slice 30.
+            { prog: "@fn s := { 'hi\\n' };",
+              fn: 's', args: [], wantLen: 3, wantText: 'hi\n' },
+            { prog: "@fn s := { 'a\\tb' };",
+              fn: 's', args: [], wantLen: 3, wantText: 'a\tb' },
+            { prog: "@fn s := { 'one\\\\two' };",
+              fn: 's', args: [], wantLen: 7, wantText: 'one\\two' },
+            { prog: "@fn s := { 'x\\0y' };",
+              fn: 's', args: [], wantLen: 3, wantText: 'x\0y' },
         ]
 
         // Externs need imports provided to instantiate; tracked
@@ -783,11 +792,11 @@ describe('Phase 0 WASIX smoke test', () => {
             '  fd:Int, iovs:Int, iovs_len:Int, nwritten:Int;',
             '',
             '@fn _start:Void := {',
-            "  @local msg := 'hi';",
+            "  @local msg := 'hello\\n';",  // \n → real newline
             '  @local iovs := 1024;',
             '  @local written := 1040;',
             '  &WASM::i32_store iovs, (msg + 4);',
-            '  &WASM::i32_store (iovs + 4), 2;',
+            '  &WASM::i32_store (iovs + 4), 6;',
             '  &wasi_snapshot_preview1::fd_write 1, iovs, 1, written',
             '};',
         ].join('\n') + '\n'
@@ -813,9 +822,9 @@ describe('Phase 0 WASIX smoke test', () => {
             })
             expect(runRes.status).toBe(0)
             const stdout = (runRes.stdout ?? Buffer.alloc(0)).toString('utf-8')
-            if (stdout !== 'hi') {
+            if (stdout !== 'hello\n') {
                 throw new Error(
-                    `WASI hello stdout mismatch.  Expected "hi", got ${JSON.stringify(stdout)}.\nWAT:\n${wat}`,
+                    `WASI hello stdout mismatch.  Expected "hello\\n", got ${JSON.stringify(stdout)}.\nWAT:\n${wat}`,
                 )
             }
         } finally {
