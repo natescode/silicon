@@ -52,6 +52,35 @@ i64 for its `fs_rights_*` parameters and Silicon-Core's WasmValType is
 `i32 | f32`.  Same proof of runtime reachability; same data structures
 ready for Phase 1.
 
+## Phase 3 (`bootstrap/03-strata`) — in flight
+
+| Slice                                                | Status | LoC Silicon |
+| ---------------------------------------------------- | ------ | ----------- |
+| Registry data structure (`boot/strata/registry.si`)  | **Landed** | ~120 |
+| AST walker / loader (`boot/strata/loader.si`)        | **Landed** | ~40 |
+| Strata loader smoke test (full built-in bundle)      | **Landed** | — |
+
+What lands today:
+- Operator and keyword tables (parallel `vec_i32` of `sym_off`,
+  `sym_len`, `elab_idx`).
+- `load_strata(prog)` walks `Program.elements`, registers each
+  `AST_ELABORATION` by `(elab_kind, symbol-span, elab-node-idx)`.
+- Linear-scan `registry_op_lookup` / `registry_kw_lookup`.
+- Smoke test feeds `cat src/strata/*.si` to the Silicon loader and
+  asserts `ops=N kws=M` matches Stage 0's text-derived counts.
+  Currently **27 operators + 23 keywords**, matching exactly.
+
+Still ahead for Phase 3:
+- Two-pass `@use` resolution (Stage 1 collapses everything into a
+  single bundle today; the dependency-graph walk is post-Stage-3
+  per the plan).
+- DefKind table and `defExpanders` map — currently TS-side only.
+- IR-kind table — currently a hard-coded `Record<string, IRKind>`
+  in `src/ir/irKinds.ts`; Phase 3 wants it open-tagged so user
+  strata can register new IR kinds without a TS patch.
+- Capability stub (`required_caps: i32`) — Phase 1 grants
+  `0xFFFFFFFF` everywhere; the policy check lands post-Stage-3.
+
 ## Phase 1 (`bootstrap/01-parser`) — in flight
 
 | Slice                                                    | Status | LoC Silicon |

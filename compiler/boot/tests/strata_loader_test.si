@@ -1,0 +1,79 @@
+# Strata loader test — reads a strata source from stdin, runs the
+# loader, and writes a summary report to stdout.  The bun-side test
+# diffs the report against an expected value.
+#
+# Report format (one line):
+#   ops=<count> kws=<count> first_op=<sym> first_kw=<sym>
+# Symbol bytes are written verbatim from P_SRC.
+
+@use '../std/io.si';
+@use '../std/arena.si';
+@use '../parser/tokens.si';
+@use '../parser/lex.si';
+@use '../parser/ast.si';
+@use '../parser/parse.si';
+@use '../strata/registry.si';
+@use '../strata/loader.si';
+
+@fn put_int n:Int := {
+  @local hundreds := (n / 100);
+  @local tens     := ((n / 10) % 10);
+  @local ones     := (n % 10);
+  &@if (hundreds > 0),     { &write_byte 1, (hundreds + 48); };
+  &@if (((hundreds > 0) | (tens > 0)) == 1), { &write_byte 1, (tens + 48); };
+  &write_byte 1, (ones + 48);
+};
+
+@fn run := {
+  # 1. Read source from stdin.
+  @local cap := 65536;
+  @local buf := &arena_alloc cap;
+  @local total := 0;
+  &@loop 1, {
+    @local n := &read_bytes 0, (buf + total), (cap - total);
+    &@if (n <= 0), { &@break };
+    total = total + n;
+    &@if (total >= cap), { &@break };
+  };
+
+  # 2. Lex + parse + load strata.
+  @local toks := &lex buf, total;
+  @local prog := &parse buf, total, toks;
+  &registry_init;
+  &load_strata prog;
+
+  # 3. Report — counts + first-symbol bytes for spot-check + lookup
+  # smoke (round-trip the first operator/keyword's bytes).
+  &write_str 1, 'ops=';
+  &put_int (&registry_op_count);
+  &write_str 1, ' kws=';
+  &put_int (&registry_kw_count);
+  @local has_op := (&registry_op_count) > 0;
+  &@if (has_op == 1), {
+    &write_str 1, ' first_op=';
+    @local op_off := &registry_op_sym_off 0;
+    @local op_len := &registry_op_sym_len 0;
+    &write_bytes 1, (P_SRC + op_off), op_len;
+    # Lookup round-trip: looking up first-op's bytes must return its
+    # AST_ELABORATION index.
+    @local expect := &registry_op_elab 0;
+    @local got    := &registry_op_lookup op_off, op_len;
+    &write_str 1, ' op_lookup_ok=';
+    &@if (got == expect), { &write_byte 1, 49; }, { &write_byte 1, 48; };
+  };
+  @local has_kw := (&registry_kw_count) > 0;
+  &@if (has_kw == 1), {
+    &write_str 1, ' first_kw=';
+    @local kw_off := &registry_kw_sym_off 0;
+    @local kw_len := &registry_kw_sym_len 0;
+    &write_bytes 1, (P_SRC + kw_off), kw_len;
+    @local kexpect := &registry_kw_elab 0;
+    @local kgot    := &registry_kw_lookup kw_off, kw_len;
+    &write_str 1, ' kw_lookup_ok=';
+    &@if (kgot == kexpect), { &write_byte 1, 49; }, { &write_byte 1, 48; };
+  };
+  &write_byte 1, 10;
+  &wasi_snapshot_preview1::proc_exit 0;
+};
+
+&run;

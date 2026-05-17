@@ -1,0 +1,43 @@
+# Strata loader — walks a parsed Silicon AST_PROGRAM and registers
+# every AST_ELABORATION node it finds into the operator / keyword
+# registry from boot/strata/registry.si.
+#
+# The plan's "two-pass" design (scan for @use, load deps, scan again
+# with DSL hooks registered) lands once the DSL StrataType is wired
+# (post-Stage-3 per the plan).  Stage 1 just walks once.
+
+@use '../std/vec.si';
+@use '../parser/ast.si';
+@use '../parser/parse.si';
+@use './registry.si';
+
+# Field offsets within an AST_ELABORATION record:
+#   [kind, elab_kind, name_off, name_len, sym_off, sym_len,
+#    np_off, np_len, semantics]
+@let ELAB_FIELD_KIND:Int     := 1;       # 0 = operator, 1 = keyword
+@let ELAB_FIELD_SYM_OFF:Int  := 4;
+@let ELAB_FIELD_SYM_LEN:Int  := 5;
+
+# load_strata — walk the program's elements; for each AST_ELABORATION,
+# dispatch to the operator or keyword table based on elab_kind.
+# Caller must `&registry_init` first.
+@fn load_strata:Int prog:Int := {
+  @local n := &ast_field P_AST, prog, 1;
+  @local i := 0;
+  @local registered := 0;
+  &@loop (i < n), {
+    @local elem := &ast_field P_AST, prog, (2 + i);
+    @local kind := &ast_kind P_AST, elem;
+    &@if (kind == AST_ELABORATION), {
+      @local ek      := &ast_field P_AST, elem, ELAB_FIELD_KIND;
+      @local sym_off := &ast_field P_AST, elem, ELAB_FIELD_SYM_OFF;
+      @local sym_len := &ast_field P_AST, elem, ELAB_FIELD_SYM_LEN;
+      &@if (ek == ELAB_OPERATOR),
+        { &registry_add_operator sym_off, sym_len, elem; },
+        { &registry_add_keyword  sym_off, sym_len, elem; };
+      registered = registered + 1;
+    };
+    i = i + 1;
+  };
+  registered
+};

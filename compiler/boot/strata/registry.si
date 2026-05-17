@@ -1,0 +1,115 @@
+# Strata registry — bootstrap-plan §Phase 3.
+#
+# Loads operator and keyword strata definitions from a parsed AST.
+# Each entry maps a source-byte span (symbol or keyword text) to the
+# AST_ELABORATION node it came from.  Later phases (4+) look up
+# operators by `+`-style symbol and keywords by `@name`-style symbol
+# to find the stratum to expand.
+#
+# Storage shape — three parallel vec_i32 per table:
+#   <table>_sym_off:    source offset of the symbol's first byte
+#   <table>_sym_len:    byte length of the symbol
+#   <table>_elab:       AST index of the Elaboration node
+#
+# Index of the Nth entry: <table>_*[N].  vec_len/3-style "entry count"
+# is just vec_len of the elab vec.
+#
+# Lookup is a linear scan — for Stage 1's ~50 strata the cost is
+# negligible.  Phase 4 may swap in a hash table once profiling
+# justifies it.
+
+@use '../std/vec.si';
+@use '../parser/ast.si';
+@use '../parser/parse.si';                     # for P_SRC and P_AST
+
+# ── Per-table state (module-level @vars; Stage 1 has one registry
+# instance per compilation, so globals are fine).
+@var R_OP_SYM_OFF:Int := 0;
+@var R_OP_SYM_LEN:Int := 0;
+@var R_OP_ELAB:Int    := 0;
+
+@var R_KW_SYM_OFF:Int := 0;
+@var R_KW_SYM_LEN:Int := 0;
+@var R_KW_ELAB:Int    := 0;
+
+# registry_init — call before populating.  Fresh vecs, ready for push.
+@fn registry_init := {
+  R_OP_SYM_OFF = &vec_new;
+  R_OP_SYM_LEN = &vec_new;
+  R_OP_ELAB    = &vec_new;
+  R_KW_SYM_OFF = &vec_new;
+  R_KW_SYM_LEN = &vec_new;
+  R_KW_ELAB    = &vec_new;
+};
+
+@fn registry_add_operator sym_off:Int, sym_len:Int, elab:Int := {
+  R_OP_SYM_OFF = &vec_push R_OP_SYM_OFF, sym_off;
+  R_OP_SYM_LEN = &vec_push R_OP_SYM_LEN, sym_len;
+  R_OP_ELAB    = &vec_push R_OP_ELAB, elab;
+};
+
+@fn registry_add_keyword sym_off:Int, sym_len:Int, elab:Int := {
+  R_KW_SYM_OFF = &vec_push R_KW_SYM_OFF, sym_off;
+  R_KW_SYM_LEN = &vec_push R_KW_SYM_LEN, sym_len;
+  R_KW_ELAB    = &vec_push R_KW_ELAB, elab;
+};
+
+# Entry counts.
+@fn registry_op_count:Int := { &vec_len R_OP_ELAB };
+@fn registry_kw_count:Int := { &vec_len R_KW_ELAB };
+
+# Lookup helpers — return the Elaboration AST index for the matching
+# symbol, or AST_NONE (-1).  Linear scan; symbols are compared against
+# the source bytes at (P_SRC + sym_off..sym_off+sym_len).
+@fn registry_op_lookup:Int query_off:Int, query_len:Int := {
+  @local n := &registry_op_count;
+  @local i := 0;
+  @local found := 0 - 1;                       # AST_NONE
+  &@loop ((found < 0) * (i < n) == 1), {
+    @local sym_off := &vec_get R_OP_SYM_OFF, i;
+    @local sym_len := &vec_get R_OP_SYM_LEN, i;
+    @local ok := 1;
+    &@if (sym_len != query_len), { ok = 0; };
+    @local k := 0;
+    &@loop ((ok * (k < sym_len)) == 1), {
+      @local sb := &WASM::i32_load8_u (P_SRC + sym_off + k);
+      @local qb := &WASM::i32_load8_u (P_SRC + query_off + k);
+      &@if (sb != qb), { ok = 0; };
+      k = k + 1;
+    };
+    &@if (ok == 1), { found = &vec_get R_OP_ELAB, i; };
+    i = i + 1;
+  };
+  found
+};
+
+@fn registry_kw_lookup:Int query_off:Int, query_len:Int := {
+  @local n := &registry_kw_count;
+  @local i := 0;
+  @local found := 0 - 1;
+  &@loop ((found < 0) * (i < n) == 1), {
+    @local sym_off := &vec_get R_KW_SYM_OFF, i;
+    @local sym_len := &vec_get R_KW_SYM_LEN, i;
+    @local ok := 1;
+    &@if (sym_len != query_len), { ok = 0; };
+    @local k := 0;
+    &@loop ((ok * (k < sym_len)) == 1), {
+      @local sb := &WASM::i32_load8_u (P_SRC + sym_off + k);
+      @local qb := &WASM::i32_load8_u (P_SRC + query_off + k);
+      &@if (sb != qb), { ok = 0; };
+      k = k + 1;
+    };
+    &@if (ok == 1), { found = &vec_get R_KW_ELAB, i; };
+    i = i + 1;
+  };
+  found
+};
+
+# Field readers for entries (used by JSON dump / verification tests).
+@fn registry_op_sym_off:Int i:Int := { &vec_get R_OP_SYM_OFF, i };
+@fn registry_op_sym_len:Int i:Int := { &vec_get R_OP_SYM_LEN, i };
+@fn registry_op_elab:Int    i:Int := { &vec_get R_OP_ELAB, i };
+
+@fn registry_kw_sym_off:Int i:Int := { &vec_get R_KW_SYM_OFF, i };
+@fn registry_kw_sym_len:Int i:Int := { &vec_get R_KW_SYM_LEN, i };
+@fn registry_kw_elab:Int    i:Int := { &vec_get R_KW_ELAB, i };

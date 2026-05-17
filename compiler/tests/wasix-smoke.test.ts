@@ -245,6 +245,47 @@ describe('Phase 0 WASIX smoke test', () => {
         expect(matches).toBeGreaterThan(0)
     })
 
+    test('boot/tests/strata_loader_test.si: registry counts match Stage 0 across all built-in strata', async () => {
+        if (!wasmerAvailable()) {
+            console.log('  (skipped: wasmer not on PATH)')
+            return
+        }
+        const wasm = await buildBoot(path.join(PROJECT_ROOT, 'boot', 'tests', 'strata_loader_test.si'))
+        const tmpPath = path.join(PROJECT_ROOT, '.strata-smoke.wasm')
+        await fs.writeFile(tmpPath, wasm)
+
+        // Concatenate every built-in stratum file as the loader input.
+        const strataDir = path.join(PROJECT_ROOT, 'src', 'strata')
+        const files = (await fs.readdir(strataDir))
+            .filter(f => f.endsWith('.si'))
+            .sort()
+        let bundle = ''
+        for (const f of files) {
+            bundle += await fs.readFile(path.join(strataDir, f), 'utf-8')
+            bundle += '\n'
+        }
+
+        // Stage 0 counts — derived from text so the test stays in sync
+        // with whatever strata land in the bundle.
+        const stage0Ops = (bundle.match(/^@stratum_operator/gm) ?? []).length
+        const stage0Kws = (bundle.match(/^@stratum_keyword/gm)  ?? []).length
+
+        try {
+            const result = spawnSync('wasmer', ['run', tmpPath], {
+                input: Buffer.from(bundle, 'utf-8'),
+                maxBuffer: 64 * 1024 * 1024,
+            })
+            expect(result.status).toBe(0)
+            const stdout = (result.stdout ?? Buffer.alloc(0)).toString('utf-8').trim()
+            // Format: "ops=N kws=M first_op=… op_lookup_ok=1 first_kw=… kw_lookup_ok=1"
+            expect(stdout).toMatch(new RegExp(`^ops=${stage0Ops} kws=${stage0Kws} `))
+            expect(stdout).toContain('op_lookup_ok=1')
+            expect(stdout).toContain('kw_lookup_ok=1')
+        } finally {
+            await fs.unlink(tmpPath).catch(() => {})
+        }
+    })
+
     test('boot/tests/json_fixtures_test.si: 26 fixtures in one process match Stage 0', async () => {
         if (!wasmerAvailable()) {
             console.log('  (skipped: wasmer not on PATH)')
