@@ -183,7 +183,7 @@
       (br $next))))
 
 ;; ------------------------------------------------------------------
-;; $str_concat — concatenate two Silicon UTF-16 LE strings.
+;; $str_concat — concatenate two Silicon UTF-8 strings.
 ;; Both $a and $b are i32 pointers to length-prefixed buffers.
 ;; Returns a new heap-allocated string containing $a followed by $b.
 ;; ------------------------------------------------------------------

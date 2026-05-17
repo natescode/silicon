@@ -72,22 +72,20 @@ function createStringAlloc(): StringAlloc {
     return { nextOffset: 4, segments: [], cache: new Map() }
 }
 
+const STRING_ENCODER = new TextEncoder()
+
 /** Allocate a string in the static data region; returns its base address.
- *  Strings are encoded as UTF-16 LE (2 bytes per code unit) so JS can decode
- *  them directly with TextDecoder('utf-16le'). The length prefix stores the
- *  byte count (byteLen = charCount * 2 for BMP characters). */
+ *  Strings are encoded as UTF-8. Layout: [byte_len:i32 LE][utf8 bytes...].
+ *  Hosts decode with TextDecoder('utf-8'); the bootstrap parser reads source
+ *  bytes via fd_read and compares against UTF-8 string literals with no
+ *  encoding step. */
 function allocString(sa: StringAlloc, s: string): number {
     if (sa.cache.has(s)) return sa.cache.get(s)!
-    // UTF-16 LE: each JS char is one 16-bit code unit stored little-endian.
-    const byteLen = s.length * 2
+    const payload = STRING_ENCODER.encode(s)
+    const byteLen = payload.length
     const base = sa.nextOffset
-    const charBytes: number[] = []
-    for (let i = 0; i < s.length; i++) {
-        const code = s.charCodeAt(i)
-        charBytes.push(code & 0xff, (code >> 8) & 0xff)
-    }
     const lenBytes = [byteLen & 0xff, (byteLen >> 8) & 0xff, (byteLen >> 16) & 0xff, (byteLen >> 24) & 0xff]
-    const all = [...lenBytes, ...charBytes]
+    const all = [...lenBytes, ...payload]
     const encoded = all.map(b => {
         if (b >= 0x20 && b <= 0x7e && b !== 0x22 && b !== 0x5c) return String.fromCharCode(b)
         return '\\' + b.toString(16).padStart(2, '0')
