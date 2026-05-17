@@ -1,0 +1,183 @@
+# IR record layout — Phase 6 prerequisite for the body interpreter.
+#
+# Every IR node lives in a single flat vec<i32> arena (`IR_VEC`) as
+# `[kind, field0, field1, ...]`.  A handle is the node's index into
+# `IR_VEC`.  Variable-arity nodes (Block, Function) store an arity
+# prefix immediately after `kind`, followed by that many child
+# handles.
+#
+# Fixed-shape kinds:
+#   IR_NULL            [kind]
+#   IR_I32_CONST       [kind, value]
+#   IR_F32_CONST       [kind, bits]                       # float bit-pattern
+#   IR_BINOP           [kind, op, left, right]            # op = IR_OP_* constant
+#   IR_UNOP            [kind, op, operand]
+#   IR_LOCAL_GET       [kind, local_idx]
+#   IR_LOCAL_SET       [kind, local_idx, value]
+#   IR_GLOBAL_GET      [kind, global_idx]
+#   IR_GLOBAL_SET      [kind, global_idx, value]
+#   IR_IF              [kind, cond, then_h, else_h]       # else may be IR_NULL
+#   IR_RETURN          [kind, value_h_or_-1]
+#   IR_BREAK           [kind]
+#   IR_CONTINUE        [kind]
+#
+# Variable-arity kinds:
+#   IR_BLOCK           [kind, n, child0, child1, ...]
+#   IR_CALL            [kind, callee_idx, n_args, arg0, arg1, ...]
+#   IR_LOOP            [kind, body_h]                     # body usually IR_BLOCK
+#
+# This first slice ships only the fixed-shape kinds; variable-arity
+# builders land alongside lowering when codegen needs them.
+
+@use '../std/vec.si';
+
+# ── Kinds ────────────────────────────────────────────────────────────
+# Reserved: 0 = "no node" sentinel.
+@let IR_NULL:Int        := 1;
+@let IR_I32_CONST:Int   := 2;
+@let IR_F32_CONST:Int   := 3;
+@let IR_BINOP:Int       := 4;
+@let IR_UNOP:Int        := 5;
+@let IR_LOCAL_GET:Int   := 6;
+@let IR_LOCAL_SET:Int   := 7;
+@let IR_GLOBAL_GET:Int  := 8;
+@let IR_GLOBAL_SET:Int  := 9;
+@let IR_IF:Int          := 10;
+@let IR_RETURN:Int      := 11;
+@let IR_BREAK:Int       := 12;
+@let IR_CONTINUE:Int    := 13;
+@let IR_BLOCK:Int       := 14;
+@let IR_CALL:Int        := 15;
+@let IR_LOOP:Int        := 16;
+
+# Op codes for IR_BINOP / IR_UNOP — mirror the WASM op names used in
+# Stage 0's IR.  Order matters only for parity with future emit
+# tables; the integer values themselves are opaque.
+@let IR_OP_I32_ADD:Int    := 1;
+@let IR_OP_I32_SUB:Int    := 2;
+@let IR_OP_I32_MUL:Int    := 3;
+@let IR_OP_I32_DIV_S:Int  := 4;
+@let IR_OP_I32_REM_S:Int  := 5;
+@let IR_OP_I32_EQ:Int     := 6;
+@let IR_OP_I32_NE:Int     := 7;
+@let IR_OP_I32_LT_S:Int   := 8;
+@let IR_OP_I32_LE_S:Int   := 9;
+@let IR_OP_I32_GT_S:Int   := 10;
+@let IR_OP_I32_GE_S:Int   := 11;
+@let IR_OP_I32_AND:Int    := 12;
+@let IR_OP_I32_OR:Int     := 13;
+@let IR_OP_I32_XOR:Int    := 14;
+@let IR_OP_I32_SHL:Int    := 15;
+@let IR_OP_I32_SHR_S:Int  := 16;
+@let IR_OP_I32_EQZ:Int    := 17;   # unop
+
+# Sentinel for "no IR handle" (e.g. missing else arm on IR_IF).
+@let IR_NONE:Int := 0 - 1;
+
+# ── Arena ────────────────────────────────────────────────────────────
+@var IR_VEC:Int := 0;
+
+@fn ir_init := { IR_VEC = &vec_new; };
+
+@fn ir_len:Int := { &vec_len IR_VEC };
+
+# Read a field of the IR node at `handle`.  Field 0 is the kind.
+@fn ir_kind:Int handle:Int := { &vec_get IR_VEC, handle };
+@fn ir_field:Int handle:Int, idx:Int := { &vec_get IR_VEC, (handle + idx) };
+
+# ── Builders ─────────────────────────────────────────────────────────
+
+@fn ir_null:Int := {
+  @local h := &vec_len IR_VEC;
+  IR_VEC = &vec_push IR_VEC, IR_NULL;
+  h
+};
+
+@fn ir_i32_const:Int value:Int := {
+  @local h := &vec_len IR_VEC;
+  IR_VEC = &vec_push IR_VEC, IR_I32_CONST;
+  IR_VEC = &vec_push IR_VEC, value;
+  h
+};
+
+@fn ir_f32_const:Int bits:Int := {
+  @local h := &vec_len IR_VEC;
+  IR_VEC = &vec_push IR_VEC, IR_F32_CONST;
+  IR_VEC = &vec_push IR_VEC, bits;
+  h
+};
+
+@fn ir_binop:Int op:Int, left:Int, right:Int := {
+  @local h := &vec_len IR_VEC;
+  IR_VEC = &vec_push IR_VEC, IR_BINOP;
+  IR_VEC = &vec_push IR_VEC, op;
+  IR_VEC = &vec_push IR_VEC, left;
+  IR_VEC = &vec_push IR_VEC, right;
+  h
+};
+
+@fn ir_unop:Int op:Int, operand:Int := {
+  @local h := &vec_len IR_VEC;
+  IR_VEC = &vec_push IR_VEC, IR_UNOP;
+  IR_VEC = &vec_push IR_VEC, op;
+  IR_VEC = &vec_push IR_VEC, operand;
+  h
+};
+
+@fn ir_local_get:Int local_idx:Int := {
+  @local h := &vec_len IR_VEC;
+  IR_VEC = &vec_push IR_VEC, IR_LOCAL_GET;
+  IR_VEC = &vec_push IR_VEC, local_idx;
+  h
+};
+
+@fn ir_local_set:Int local_idx:Int, value:Int := {
+  @local h := &vec_len IR_VEC;
+  IR_VEC = &vec_push IR_VEC, IR_LOCAL_SET;
+  IR_VEC = &vec_push IR_VEC, local_idx;
+  IR_VEC = &vec_push IR_VEC, value;
+  h
+};
+
+@fn ir_global_get:Int global_idx:Int := {
+  @local h := &vec_len IR_VEC;
+  IR_VEC = &vec_push IR_VEC, IR_GLOBAL_GET;
+  IR_VEC = &vec_push IR_VEC, global_idx;
+  h
+};
+
+@fn ir_global_set:Int global_idx:Int, value:Int := {
+  @local h := &vec_len IR_VEC;
+  IR_VEC = &vec_push IR_VEC, IR_GLOBAL_SET;
+  IR_VEC = &vec_push IR_VEC, global_idx;
+  IR_VEC = &vec_push IR_VEC, value;
+  h
+};
+
+@fn ir_if:Int cond:Int, then_h:Int, else_h:Int := {
+  @local h := &vec_len IR_VEC;
+  IR_VEC = &vec_push IR_VEC, IR_IF;
+  IR_VEC = &vec_push IR_VEC, cond;
+  IR_VEC = &vec_push IR_VEC, then_h;
+  IR_VEC = &vec_push IR_VEC, else_h;
+  h
+};
+
+@fn ir_return:Int value_h:Int := {
+  @local h := &vec_len IR_VEC;
+  IR_VEC = &vec_push IR_VEC, IR_RETURN;
+  IR_VEC = &vec_push IR_VEC, value_h;
+  h
+};
+
+@fn ir_break:Int := {
+  @local h := &vec_len IR_VEC;
+  IR_VEC = &vec_push IR_VEC, IR_BREAK;
+  h
+};
+
+@fn ir_continue:Int := {
+  @local h := &vec_len IR_VEC;
+  IR_VEC = &vec_push IR_VEC, IR_CONTINUE;
+  h
+};

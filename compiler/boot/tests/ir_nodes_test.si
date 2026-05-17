@@ -1,0 +1,86 @@
+# IR record layout — unit test for builders + accessors.
+# Constructs a small graph and prints `ok` if every read-back matches
+# expectations.  No Stage 0 comparison yet — that lands once the
+# body interpreter is wired and we can emit IR-JSON for the corpus.
+
+@use '../std/io.si';
+@use '../ir/nodes.si';
+
+@fn assert_eq:Int label:String, expected:Int, actual:Int := {
+  &@if (expected != actual), {
+    &write_str  1, 'FAIL ';
+    &write_str  1, label;
+    &write_str  1, ' expected=';
+    # Tiny base-10 int writer: handles only non-negative values <= 9999.
+    @local v := expected;
+    @local d3 := v / 1000;
+    @local d2 := (v - (d3 * 1000)) / 100;
+    @local d1 := (v - (d3 * 1000) - (d2 * 100)) / 10;
+    @local d0 := v - (d3 * 1000) - (d2 * 100) - (d1 * 10);
+    &@if (d3 > 0), { &write_byte 1, (48 + d3); };
+    &@if ((d3 > 0) + (d2 > 0) > 0), { &write_byte 1, (48 + d2); };
+    &@if ((d3 > 0) + (d2 > 0) + (d1 > 0) > 0), { &write_byte 1, (48 + d1); };
+    &write_byte 1, (48 + d0);
+    &write_str  1, ' actual=';
+    v = actual;
+    d3 = v / 1000;
+    d2 = (v - (d3 * 1000)) / 100;
+    d1 = (v - (d3 * 1000) - (d2 * 100)) / 10;
+    d0 = v - (d3 * 1000) - (d2 * 100) - (d1 * 10);
+    &@if (d3 > 0), { &write_byte 1, (48 + d3); };
+    &@if ((d3 > 0) + (d2 > 0) > 0), { &write_byte 1, (48 + d2); };
+    &@if ((d3 > 0) + (d2 > 0) + (d1 > 0) > 0), { &write_byte 1, (48 + d1); };
+    &write_byte 1, (48 + d0);
+    &write_byte 1, 10;
+    &wasi_snapshot_preview1::proc_exit 1;
+  };
+  0
+};
+
+@fn run := {
+  &ir_init;
+
+  # IR_NULL
+  @local h_null := &ir_null;
+  &assert_eq 'null.kind', IR_NULL, (&ir_kind h_null);
+
+  # IR_I32_CONST(42)
+  @local h_42 := &ir_i32_const 42;
+  &assert_eq '42.kind',  IR_I32_CONST, (&ir_kind h_42);
+  &assert_eq '42.value', 42,            (&ir_field h_42, 1);
+
+  # IR_I32_CONST(7)
+  @local h_7 := &ir_i32_const 7;
+  &assert_eq '7.kind',  IR_I32_CONST, (&ir_kind h_7);
+  &assert_eq '7.value', 7,             (&ir_field h_7, 1);
+
+  # IR_BINOP(add, 42, 7)
+  @local h_add := &ir_binop IR_OP_I32_ADD, h_42, h_7;
+  &assert_eq 'add.kind',  IR_BINOP,         (&ir_kind h_add);
+  &assert_eq 'add.op',    IR_OP_I32_ADD,    (&ir_field h_add, 1);
+  &assert_eq 'add.left',  h_42,             (&ir_field h_add, 2);
+  &assert_eq 'add.right', h_7,              (&ir_field h_add, 3);
+
+  # Verify the two leaf consts are still intact after building the parent.
+  &assert_eq '42.value-post', 42, (&ir_field h_42, 1);
+  &assert_eq '7.value-post',  7,  (&ir_field h_7,  1);
+
+  # IR_IF(eqz(42), const(1), null)
+  @local h_eqz := &ir_unop IR_OP_I32_EQZ, h_42;
+  @local h_1   := &ir_i32_const 1;
+  @local h_nul := &ir_null;
+  @local h_if  := &ir_if h_eqz, h_1, h_nul;
+  &assert_eq 'if.kind', IR_IF, (&ir_kind h_if);
+  &assert_eq 'if.cond', h_eqz, (&ir_field h_if, 1);
+  &assert_eq 'if.then', h_1,   (&ir_field h_if, 2);
+  &assert_eq 'if.else', h_nul, (&ir_field h_if, 3);
+  &assert_eq 'eqz.kind',    IR_UNOP,       (&ir_kind h_eqz);
+  &assert_eq 'eqz.op',      IR_OP_I32_EQZ, (&ir_field h_eqz, 1);
+  &assert_eq 'eqz.operand', h_42,          (&ir_field h_eqz, 2);
+
+  &write_str 1, 'ok';
+  &write_byte 1, 10;
+  &wasi_snapshot_preview1::proc_exit 0;
+};
+
+&run;

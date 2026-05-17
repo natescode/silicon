@@ -185,6 +185,36 @@ Still ahead for Phase 4:
 - Constraint validation on Definitions: enforce `allowsParams`,
   `allowsBinding`, `allowsGenerics` flags.
 
+## Phase 6 prelude — IR record layout (`bootstrap/03-strata` cont.)
+
+| Slice                                                | Status | LoC Silicon |
+| ---------------------------------------------------- | ------ | ----------- |
+| IR record layout + builders for fixed-shape kinds    | **Landed** | ~165 |
+| Variable-arity builders (Block / Call / Loop)        | Pending | — |
+| Lowering walker (`boot/ir/lower.si`)                 | Pending | — |
+| IR → JSON dumper                                     | Pending | — |
+| Phase 6 gate: IR-JSON byte-equal vs Stage 0          | Pending | — |
+
+What lands today:
+- `boot/ir/nodes.si` (~165 LoC) — arena (`IR_VEC`) + builders for the
+  fixed-shape IR kinds (`IR_NULL`, `IR_I32_CONST`, `IR_F32_CONST`,
+  `IR_BINOP`, `IR_UNOP`, `IR_LOCAL_GET` / `_SET`, `IR_GLOBAL_GET` /
+  `_SET`, `IR_IF`, `IR_RETURN`, `IR_BREAK`, `IR_CONTINUE`) and 17
+  op-codes for binop/unop.
+- Handles are integer indices into the arena vec; field 0 is the
+  kind, fields 1+ are payload.
+- Round-trip unit test (`boot/tests/ir_nodes_test.si`) builds a
+  graph (`(if (eqz 42) 1 null)` with an enclosing `42 + 7`),
+  reads back every field, and prints `ok`.
+
+Still ahead:
+- Variable-arity builders (`IR_BLOCK`, `IR_CALL`, `IR_LOOP` with
+  body block) — needed once the body interpreter starts emitting
+  sequences.
+- Lowering walker that consumes the typed AST and dispatches by
+  codegen kind.
+- IR-JSON dump on both sides for the Phase 6 byte-equal gate.
+
 ## Phase 1 (`bootstrap/01-parser`) — in flight
 
 | Slice                                                    | Status | LoC Silicon |
