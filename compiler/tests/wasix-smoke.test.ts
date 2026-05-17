@@ -435,6 +435,38 @@ describe('Phase 0 WASIX smoke test', () => {
                     '  a\n' +
                     '};',
               fn: 'gcd', args: [1071, 462], want: 21 },
+            // @return / @break — slice 19.
+            { prog: '@fn safeDiv a:Int, b:Int := {\n' +
+                    '  &@if (b == 0), { &@return 0 };\n' +
+                    '  a / b\n' +
+                    '};',
+              fn: 'safeDiv', args: [42, 6], want: 7 },
+            { prog: '@fn safeDiv a:Int, b:Int := {\n' +
+                    '  &@if (b == 0), { &@return 0 };\n' +
+                    '  a / b\n' +
+                    '};',
+              fn: 'safeDiv', args: [42, 0], want: 0 },
+            // findFirst — return early from a loop via @return.
+            { prog: '@fn findFirst limit:Int := {\n' +
+                    '  @local i := 0;\n' +
+                    '  &@loop (i < limit), {\n' +
+                    '    &@if ((i * i) > 50), { &@return i };\n' +
+                    '    i = i + 1\n' +
+                    '  };\n' +
+                    '  0 - 1\n' +
+                    '};',
+              fn: 'findFirst', args: [20], want: 8 },
+            { prog: '@fn findFirst limit:Int := {\n' +
+                    '  @local i := 0;\n' +
+                    '  &@loop (i < limit), {\n' +
+                    '    &@if ((i * i) > 50), { &@return i };\n' +
+                    '    i = i + 1\n' +
+                    '  };\n' +
+                    '  0 - 1\n' +
+                    '};',
+              fn: 'findFirst', args: [5], want: -1 },
+            // @break / @continue need proper depth tracking once they
+            // can nest inside @if — deferred until labeled br lands.
         ]
 
         try {

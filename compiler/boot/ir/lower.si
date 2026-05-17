@@ -243,6 +243,9 @@
 @fn lit_export_ptr2:Int   := { (&str_ptr 'export')   + 4 };
 @fn lit_at_if_ptr:Int     := { (&str_ptr '@if')      + 4 };
 @fn lit_at_loop_ptr:Int   := { (&str_ptr '@loop')    + 4 };
+@fn lit_at_return_ptr:Int   := { (&str_ptr '@return')   + 4 };
+@fn lit_at_break_ptr:Int    := { (&str_ptr '@break')    + 4 };
+@fn lit_at_continue_ptr:Int := { (&str_ptr '@continue') + 4 };
 
 @fn lower_span_eq_lit:Int off:Int, len:Int, lit_ptr:Int, lit_len:Int := {
   @local ok := 1;
@@ -395,6 +398,22 @@
             };
           };
         };
+      };
+      &@if ((&lower_span_eq_lit nm_off, nm_len, (&lit_at_return_ptr), 7) == 1), {
+        &@if (n_args == 1), {
+          @local v := &lower_expr (&ast_field P_AST, node, 3);
+          &@if (v != IR_NONE), { &@return (&ir_return v); };
+        };
+        # @return with no arg — produces a sentinel zero and returns.
+        &@if (n_args == 0), {
+          &@return (&ir_return (&ir_i32_const 0));
+        };
+      };
+      &@if ((&lower_span_eq_lit nm_off, nm_len, (&lit_at_break_ptr), 6) == 1), {
+        &@if (n_args == 0), { &@return (&ir_break); };
+      };
+      &@if ((&lower_span_eq_lit nm_off, nm_len, (&lit_at_continue_ptr), 9) == 1), {
+        &@if (n_args == 0), { &@return (&ir_continue); };
       };
       &@return IR_NONE;
     };

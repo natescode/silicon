@@ -183,6 +183,27 @@
     &@return 0;
   };
 
+  &@if (k == IR_RETURN), {
+    @local v := &ir_field h, 1;
+    &emit_expr v;
+    &ew_str 'return'; &ew_byte 10;
+    &@return 0;
+  };
+
+  # @break / @continue are loop-targeted.  WASM uses relative depths:
+  # the innermost loop is depth 0.  We assume the loop's emit-shape
+  # `block (loop ...)` always wraps a `@break` with one block-level
+  # above the loop (depth 1) and a `@continue` with the loop itself
+  # being depth 0.
+  &@if (k == IR_BREAK), {
+    &ew_str 'br 1'; &ew_byte 10;
+    &@return 0;
+  };
+  &@if (k == IR_CONTINUE), {
+    &ew_str 'br 0'; &ew_byte 10;
+    &@return 0;
+  };
+
   &@if (k == IR_LOOP), {
     @local cond := &ir_field h, 1;
     @local body := &ir_field h, 2;
