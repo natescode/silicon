@@ -176,6 +176,26 @@
     &@return 0;
   };
 
+  &@if (k == IR_IF), {
+    @local cond := &ir_field h, 1;
+    @local then_h := &ir_field h, 2;
+    @local else_h := &ir_field h, 3;
+    &emit_expr cond;
+    &ew_str 'if (result i32)'; &ew_byte 10;
+    &emit_expr then_h;
+    &ew_str 'else'; &ew_byte 10;
+    # Missing else arm — push a sentinel zero so the if's result
+    # type stays well-defined.
+    &@if (else_h == IR_NONE), {
+      &ew_str 'i32.const 0'; &ew_byte 10;
+    };
+    &@if (else_h != IR_NONE), {
+      &emit_expr else_h;
+    };
+    &ew_str 'end'; &ew_byte 10;
+    &@return 0;
+  };
+
   &@if (k == IR_CALL), {
     @local n := &ir_call_argc h;
     @local i := 0;

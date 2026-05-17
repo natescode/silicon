@@ -359,6 +359,21 @@ describe('Phase 0 WASIX smoke test', () => {
             { prog: '@fn k := { 42 };\n' +
                     '@fn k2 := { &k + &k };',
               fn: 'k2', args: [], want: 84 },
+            // @if lowering — slice 16.
+            { prog: '@fn pick c:Int, a:Int, b:Int := { &@if c, a, b };',
+              fn: 'pick', args: [1, 10, 20], want: 10 },
+            { prog: '@fn pick c:Int, a:Int, b:Int := { &@if c, a, b };',
+              fn: 'pick', args: [0, 10, 20], want: 20 },
+            { prog: '@fn abs x:Int := { &@if (x < 0), (0 - x), x };',
+              fn: 'abs', args: [7],   want: 7 },
+            { prog: '@fn abs x:Int := { &@if (x < 0), (0 - x), x };',
+              fn: 'abs', args: [-7],  want: 7 },
+            { prog: '@fn max a:Int, b:Int := { &@if (a > b), a, b };',
+              fn: 'max', args: [3, 11], want: 11 },
+            { prog: '@fn fact n:Int := { &@if (n < 2), 1, (n * (&fact (n - 1))) };',
+              fn: 'fact', args: [5],  want: 120 },
+            { prog: '@fn fact n:Int := { &@if (n < 2), 1, (n * (&fact (n - 1))) };',
+              fn: 'fact', args: [10], want: 3628800 },
         ]
 
         try {

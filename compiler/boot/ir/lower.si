@@ -156,6 +156,7 @@
 @fn lit_function_ptr2:Int := { (&str_ptr 'function') + 4 };
 @fn lit_extern_ptr2:Int   := { (&str_ptr 'extern')   + 4 };
 @fn lit_export_ptr2:Int   := { (&str_ptr 'export')   + 4 };
+@fn lit_at_if_ptr:Int     := { (&str_ptr '@if')      + 4 };
 
 @fn lower_span_eq_lit:Int off:Int, len:Int, lit_ptr:Int, lit_len:Int := {
   @local ok := 1;
@@ -236,17 +237,33 @@
   &@if (k == AST_CALL), {
     @local callee := &ast_field P_AST, node, 1;
     @local n_args := &ast_field P_AST, node, 2;
-    # Only handle bare-name calls today: callee must be a
-    # single-segment Namespace whose first byte is NOT `@`
-    # (keyword calls like &@if go through the body interpreter
-    # once the Compiler::* surface is wired).
     &@if ((&ast_kind P_AST, callee) != AST_NAMESPACE), { &@return IR_NONE; };
     @local n_segs := &ast_field P_AST, callee, 1;
     &@if (n_segs != 1), { &@return IR_NONE; };
     @local nm_off := &ast_field P_AST, callee, 2;
     @local nm_len := &ast_field P_AST, callee, 3;
     @local first_byte := &WASM::i32_load8_u (P_SRC + nm_off);
-    &@if (first_byte == 64), { &@return IR_NONE; };   # `@`
+
+    # Keyword call (&@if, &@loop, ...).  Hardcoded dispatch until
+    # the Compiler::* surface is wired and rich bodies can run.
+    &@if (first_byte == 64), {
+      &@if ((&lower_span_eq_lit nm_off, nm_len, (&lit_at_if_ptr), 3) == 1), {
+        &@if ((n_args < 2) + (n_args > 3) == 0), {
+          @local cond := &lower_expr (&ast_field P_AST, node, 3);
+          @local then_h := &lower_expr (&ast_field P_AST, node, 4);
+          @local else_h := IR_NONE;
+          &@if (n_args == 3), {
+            else_h = &lower_expr (&ast_field P_AST, node, 5);
+          };
+          &@if (cond != IR_NONE), {
+            &@if (then_h != IR_NONE), {
+              &@return (&ir_if cond, then_h, else_h);
+            };
+          };
+        };
+      };
+      &@return IR_NONE;
+    };
 
     @local arg_handles := &vec_new;
     @local ai := 0;
