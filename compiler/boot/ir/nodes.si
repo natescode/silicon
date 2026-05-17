@@ -53,6 +53,10 @@
 # IR_FUNCTION  [kind, name_off, name_len, n_params, n_locals, body_h]
 @let IR_FUNCTION:Int    := 17;
 
+# IR_EXTERN    [kind, name_off, name_len, n_params, has_result]
+# Imports a host function under module "env" with the given name.
+@let IR_EXTERN:Int      := 18;
+
 # Op codes for IR_BINOP / IR_UNOP — mirror the WASM op names used in
 # Stage 0's IR.  Order matters only for parity with future emit
 # tables; the integer values themselves are opaque.
@@ -266,3 +270,20 @@
 @fn ir_function_n_params:Int handle:Int := { &vec_get IR_VEC, (handle + 3) };
 @fn ir_function_n_locals:Int handle:Int := { &vec_get IR_VEC, (handle + 4) };
 @fn ir_function_body:Int     handle:Int := { &vec_get IR_VEC, (handle + 5) };
+
+# ir_extern — `[IR_EXTERN, name_off, name_len, n_params, has_result]`
+@fn ir_extern:Int name_off:Int, name_len:Int,
+                  n_params:Int, has_result:Int := {
+  @local h := &vec_len IR_VEC;
+  IR_VEC = &vec_push IR_VEC, IR_EXTERN;
+  IR_VEC = &vec_push IR_VEC, name_off;
+  IR_VEC = &vec_push IR_VEC, name_len;
+  IR_VEC = &vec_push IR_VEC, n_params;
+  IR_VEC = &vec_push IR_VEC, has_result;
+  h
+};
+
+@fn ir_extern_name_off:Int  handle:Int := { &vec_get IR_VEC, (handle + 1) };
+@fn ir_extern_name_len:Int  handle:Int := { &vec_get IR_VEC, (handle + 2) };
+@fn ir_extern_n_params:Int  handle:Int := { &vec_get IR_VEC, (handle + 3) };
+@fn ir_extern_has_result:Int handle:Int := { &vec_get IR_VEC, (handle + 4) };

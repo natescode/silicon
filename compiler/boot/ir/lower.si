@@ -135,7 +135,8 @@
 # IR_FUNCTION handles for every @fn definition.  Other top-level
 # kinds (elaborations, doc comments, top-level @let / @var) are
 # skipped for now — those land alongside global / lazy-fn lowering.
-@fn lit_at_var_ptr:Int := { (&str_ptr '@var') + 4 };
+@fn lit_at_var_ptr:Int     := { (&str_ptr '@var')    + 4 };
+@fn lit_at_extern_ptr:Int  := { (&str_ptr '@extern') + 4 };
 
 @fn lower_program:Int prog:Int := {
   @local out := &vec_new;
@@ -172,7 +173,7 @@
     i = i + 1;
   };
 
-  # Second pass: lower @fn / @let definitions.
+  # Second pass: lower @fn / @let / @extern definitions.
   i = 0;
   &@loop (i < n), {
     @local elem := &ast_field P_AST, prog, (2 + i);
@@ -180,7 +181,19 @@
     &@if (k == AST_DEFINITION), {
       @local kw_off := &ast_field P_AST, elem, 1;
       @local kw_len := &ast_field P_AST, elem, 2;
-      &@if ((&lower_span_eq_lit kw_off, kw_len, (&lit_at_var_ptr), 4) == 0), {
+      @local is_var := &lower_span_eq_lit kw_off, kw_len, (&lit_at_var_ptr),    4;
+      @local is_ext := &lower_span_eq_lit kw_off, kw_len, (&lit_at_extern_ptr), 7;
+      &@if (is_ext == 1), {
+        @local nm_off := &ast_field P_AST, elem, 3;
+        @local nm_len := &ast_field P_AST, elem, 4;
+        @local ty_len := &ast_field P_AST, elem, 6;
+        @local n_params := &ast_field P_AST, elem, 7;
+        @local has_result := 0;
+        &@if (ty_len > 0), { has_result = 1; };
+        @local h := &ir_extern nm_off, nm_len, n_params, has_result;
+        out = &vec_push out, h;
+      };
+      &@if ((is_var + is_ext) == 0), {
         @local h := &lower_definition elem;
         &@if (h != IR_NONE), { out = &vec_push out, h; };
       };

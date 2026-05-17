@@ -136,12 +136,39 @@
   &ew_str '  )'; &ew_byte 10;
 };
 
-# Emit a complete module: declares each @var as a mutable global
-# `(global $g_N (mut i32) (i32.const <init>))`, then emits every
-# function (each gets its own export).  Globals are looked up by
-# integer index — same convention IR_GLOBAL_GET uses.
+# Emit one IR_EXTERN as
+#   (import "env" "name" (func $name (param i32)* (result i32)?))
+@fn emit_extern fn_h:Int := {
+  @local nm_off := &ir_extern_name_off fn_h;
+  @local nm_len := &ir_extern_name_len fn_h;
+  @local n_params := &ir_extern_n_params fn_h;
+  @local has_result := &ir_extern_has_result fn_h;
+  &ew_str '  (import "env" "';
+  &write_bytes 1, (P_SRC + nm_off), nm_len;
+  &ew_str '" (func $';
+  &write_bytes 1, (P_SRC + nm_off), nm_len;
+  @local i := 0;
+  &@loop (i < n_params), {
+    &ew_str ' (param i32)';
+    i = i + 1;
+  };
+  &@if (has_result == 1), { &ew_str ' (result i32)'; };
+  &ew_str '))'; &ew_byte 10;
+};
+
+# Emit a complete module: imports must come first in the WAT
+# section ordering (WASM convention).  Then globals, then funcs.
 @fn emit_program functions:Int := {
   &ew_str '(module'; &ew_byte 10;
+  # Imports first.
+  @local n := &vec_len functions;
+  @local i := 0;
+  &@loop (i < n), {
+    @local f := &vec_get functions, i;
+    &@if ((&ir_kind f) == IR_EXTERN), { &emit_extern f; };
+    i = i + 1;
+  };
+  # Then globals.
   @local g_n := &global_count;
   @local gi := 0;
   &@loop (gi < g_n), {
@@ -152,10 +179,11 @@
     &ew_str '))'; &ew_byte 10;
     gi = gi + 1;
   };
-  @local n := &vec_len functions;
-  @local i := 0;
+  # Then functions.
+  i = 0;
   &@loop (i < n), {
-    &emit_function (&vec_get functions, i);
+    @local f := &vec_get functions, i;
+    &@if ((&ir_kind f) == IR_FUNCTION), { &emit_function f; };
     i = i + 1;
   };
   &ew_str ')'; &ew_byte 10;

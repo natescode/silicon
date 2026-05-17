@@ -511,6 +511,32 @@ describe('Phase 0 WASIX smoke test', () => {
               fn: 'run', args: [], want: 20 },     // 7+3+2+8
         ]
 
+        // Externs need imports provided to instantiate; tracked
+        // separately so the harness can pass an `env` object.
+        const externCases: Array<{
+            prog: string; fn: string; args: number[]; want: number;
+            imports: Record<string, (...a: number[]) => number>;
+        }> = [
+            {
+                prog: '@extern host_add:Int a:Int, b:Int;\n' +
+                      '@fn use_host x:Int := { &host_add x, 100 };',
+                fn: 'use_host', args: [7], want: 107,
+                imports: { host_add: (a: number, b: number) => a + b },
+            },
+            {
+                prog: '@extern host_mul:Int a:Int, b:Int;\n' +
+                      '@extern host_inc:Int x:Int;\n' +
+                      '@fn combo a:Int, b:Int := {\n' +
+                      '  &host_inc (&host_mul a, b)\n' +
+                      '};',
+                fn: 'combo', args: [3, 4], want: 13,
+                imports: {
+                    host_mul: (a: number, b: number) => a * b,
+                    host_inc: (x: number) => x + 1,
+                },
+            },
+        ]
+
         try {
             for (const c of cases) {
                 const result = spawnSync('wasmer', ['run', tmpPath], {
@@ -527,6 +553,27 @@ describe('Phase 0 WASIX smoke test', () => {
                         `No export ${c.fn} for ${JSON.stringify(c.prog)}\nWAT:\n${wat}`,
                     )
                 }
+                const got = f(...c.args)
+                if (got !== c.want) {
+                    throw new Error(
+                        `${c.fn}(${c.args.join(', ')}) for ${JSON.stringify(c.prog)}\n` +
+                        `Expected: ${c.want}\nGot: ${got}\nWAT:\n${wat}`,
+                    )
+                }
+            }
+            for (const c of externCases) {
+                const result = spawnSync('wasmer', ['run', tmpPath], {
+                    input: Buffer.from(bundle + c.prog + '\n', 'utf-8'),
+                    maxBuffer: 64 * 1024 * 1024,
+                })
+                expect(result.status).toBe(0)
+                const wat = (result.stdout ?? Buffer.alloc(0)).toString('utf-8')
+                const compiled = await watToWasm(wat)
+                const { instance } = await WebAssembly.instantiate(
+                    compiled.buffer,
+                    { env: c.imports },
+                )
+                const f = (instance.exports as any)[c.fn] as (...a: number[]) => number
                 const got = f(...c.args)
                 if (got !== c.want) {
                     throw new Error(
