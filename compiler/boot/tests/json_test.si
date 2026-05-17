@@ -1,6 +1,11 @@
-# JSON serializer smoke test.  Parses a small input and writes the
-# canonical Stage-0-shaped JSON to stdout.  The bun-side test diffs
-# against an expected string.
+# JSON serializer smoke test driven by hardcoded inputs.  Reads no
+# stdin so the test stays purely deterministic.  The driver prints
+# the JSON for each fixture; the bun-side test diffs each chunk
+# against Stage 0's matching output.
+#
+# Output format:
+#   <fixture>\n<json>\n---\n  for each fixture
+# The bun side splits on '\n---\n'.
 
 @use '../std/io.si';
 @use '../parser/tokens.si';
@@ -9,13 +14,25 @@
 @use '../parser/parse.si';
 @use '../parser/json.si';
 
-@fn run := {
-  # Single fixture: `42;` — exercises Program + IntLiteral.
-  @local p := (&str_ptr '42;') + 4;
-  @local n := &str_len '42;';
+@fn emit_for s:String := {
+  @local p := (&str_ptr s) + 4;
+  @local n := &str_len s;
   @local toks := &lex p, n;
   @local root := &parse p, n, toks;
   &json_program root;
+  &write_str 1, '---';
+  &write_byte 1, 10;
+};
+
+@fn run := {
+  &emit_for '42;';
+  &emit_for '3.14;';
+  &emit_for 'x;';
+  &emit_for 'Color::Red;';
+  &emit_for '1 + 2;';
+  &emit_for '1 + 2 + 3;';
+  &emit_for '&add 1, 2;';
+  &emit_for '&@if 1, 0;';
   &wasi_snapshot_preview1::proc_exit 0;
 };
 

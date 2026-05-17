@@ -188,20 +188,44 @@ describe('Phase 0 WASIX smoke test', () => {
         const tmpPath = path.join(PROJECT_ROOT, '.json-smoke.wasm')
         await fs.writeFile(tmpPath, wasm)
 
-        // What Stage 0 produces from the same `42;` input — the
-        // parse-only AST (no elaborate / typecheck).
         const stage0Parse = (await import('../src/parser')).default
         const { addToAstSemantics } = await import('../src/ast')
         const { siliconGrammar } = await import('../src/grammar')
-        const match = stage0Parse('42;')
-        const stage0Ast = addToAstSemantics(siliconGrammar)(match).toAst()
-        const expected = JSON.stringify(stage0Ast, null, 2) + '\n'
+
+        // Fixtures must match the inputs hard-coded in
+        // boot/tests/json_test.si's `run` function (same order).
+        const fixtures = [
+            '42;',
+            '3.14;',
+            'x;',
+            'Color::Red;',
+            '1 + 2;',
+            '1 + 2 + 3;',
+            '&add 1, 2;',
+            '&@if 1, 0;',
+        ]
 
         try {
-            const result = spawnSync('wasmer', ['run', tmpPath], { encoding: 'buffer' })
+            const result = spawnSync('wasmer', ['run', tmpPath], {
+                maxBuffer: 64 * 1024 * 1024,
+            })
             expect(result.status).toBe(0)
-            const stdout = result.stdout?.toString('utf-8') ?? ''
-            expect(stdout).toBe(expected)
+            const stdout = (result.stdout ?? Buffer.alloc(0)).toString('utf-8')
+            const chunks = stdout.split('---\n').filter(c => c.length > 0)
+            expect(chunks.length).toBe(fixtures.length)
+
+            for (let i = 0; i < fixtures.length; i++) {
+                const src = fixtures[i]
+                const match = stage0Parse(src)
+                const stage0Ast = addToAstSemantics(siliconGrammar)(match).toAst()
+                const expected = JSON.stringify(stage0Ast, null, 2) + '\n'
+                if (chunks[i] !== expected) {
+                    throw new Error(
+                        `JSON mismatch for ${JSON.stringify(src)}\n` +
+                        `Expected:\n${expected}\nGot:\n${chunks[i]}`,
+                    )
+                }
+            }
         } finally {
             await fs.unlink(tmpPath).catch(() => {})
         }

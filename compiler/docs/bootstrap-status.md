@@ -54,30 +54,39 @@ ready for Phase 1.
 
 ## Phase 1 (`bootstrap/01-parser`) — in flight
 
-| Slice                                         | Status | LoC of Silicon |
-| --------------------------------------------- | ------ | --------------- |
-| Token kinds (`boot/parser/tokens.si`)         | **Landed** | ~30 |
-| Lexer (`boot/parser/lex.si`)                  | **Landed** | ~280 |
-| AST encoding (`boot/parser/ast.si`)           | **Landed** | ~110 |
-| Parser core (`boot/parser/parse.si`)          | **Landed** | ~320 |
-| AST → JSON serializer                         | Not started | — |
-| Corpus equivalence harness vs Stage 0         | Not started | — |
+| Slice                                                    | Status | LoC Silicon |
+| -------------------------------------------------------- | ------ | ----------- |
+| Token kinds (`boot/parser/tokens.si`)                    | **Landed** | ~30 |
+| Lexer (`boot/parser/lex.si`)                             | **Landed** | ~280 |
+| AST encoding (`boot/parser/ast.si`)                      | **Landed** | ~180 |
+| Parser (`boot/parser/parse.si`)                          | **Landed** | ~500 |
+| AST → JSON serializer (`boot/parser/json.si`)            | **Landed** (8 kinds) | ~280 |
+| Corpus equivalence harness vs Stage 0                    | Partial (8 fixtures) | — |
 
-What `parse.si` covers today:
-- Integer / float / string literals, namespaces (with `::` / `.`),
-  binary expressions (flat left-fold), function calls (`&name args`
-  and `&@keyword args`), paren-grouped expressions, multi-element
-  programs, blocks (`{ stmts ; trailing }`), definitions
-  (`@kw name [: Type] params := binding`).
+What's covered today:
+- Lexer: all 27 token kinds.
+- Parser: int / float / string / bool literals, namespaces, binary
+  expressions (flat left-fold), function calls (`&name` and
+  `&@keyword`), paren groups, blocks, definitions
+  (`@kw name [: Type] [params] [:= binding]`), `$[]` / `$()` / `${}`
+  literals, variant declarators (`$Variant fields`), doc comments,
+  assignments.
+- Serializer + Phase 2 gate (byte-exact JSON match vs Stage 0):
+  IntLiteral, FloatLiteral, StringLiteral, BooleanLiteral, Namespace,
+  BinaryOp, FunctionCall (user + builtin), Program.
 
-Still ahead in the parser proper:
-- Sum-type variant declarators (`$Variant fields`), array / object /
-  tuple literals, bool literals (`@true`/`@false`), doc comments
-  (`##`), generic params (consumed but not stored).
+Phase 2 gate harness:
+- `boot/tests/json_test.si` runs the parser+serializer on 8 fixtures.
+- `tests/wasix-smoke.test.ts` produces Stage 0's `toAst() →
+  JSON.stringify(_, null, 2)` output for the same inputs and asserts
+  byte-equality.  Currently 8 / 8 fixtures match.
 
-After parser completion:
-- AST-JSON serializer matching Stage 0's format → that's the Phase 2
-  gate ("AST JSON equivalence with Stage 0 across the corpus").
+Still ahead:
+- Definition, Block, Assignment, Variant, ArrayLiteral, TupleLiteral,
+  ObjectLiteral, DocComment, KeyValuePair, TypedIdentifier, Parameter
+  serializer cases (the rest of Stage 0's parse-only AST surface).
+- Grow the corpus to cover every shape in `src/e2e/examples/*.si`.
+- Generic params stored in AST (currently consumed but skipped).
 
 ## Test Surface (post WS 1–6 + Phases −1 + 0)
 

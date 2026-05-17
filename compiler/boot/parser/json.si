@@ -149,11 +149,182 @@
   &jw_byte 125;
 };
 
+@fn json_string_lit depth:Int, node:Int := {
+  @local off := &ast_field P_AST, node, 1;
+  @local len := &ast_field P_AST, node, 2;
+  &jw_str '{';
+  &jw_byte 10;
+  &jw_indent (depth + 1);
+  &jw_string_lit 'type';
+  &jw_str ': ';
+  &jw_string_lit 'StringLiteral';
+  &jw_str ',';
+  &jw_byte 10;
+  &jw_indent (depth + 1);
+  &jw_string_lit 'value';
+  &jw_str ': ';
+  &jw_string_span off, len;
+  &jw_byte 10;
+  &jw_indent depth;
+  &jw_byte 125;
+};
+
+@fn json_float_lit depth:Int, node:Int := {
+  @local off := &ast_field P_AST, node, 1;
+  @local len := &ast_field P_AST, node, 2;
+  &jw_str '{';
+  &jw_byte 10;
+  &jw_indent (depth + 1);
+  &jw_string_lit 'type';
+  &jw_str ': ';
+  &jw_string_lit 'FloatLiteral';
+  &jw_str ',';
+  &jw_byte 10;
+  &jw_indent (depth + 1);
+  &jw_string_lit 'value';
+  &jw_str ': ';
+  &jw_string_span off, len;
+  &jw_byte 10;
+  &jw_indent depth;
+  &jw_byte 125;
+};
+
+@fn json_namespace depth:Int, node:Int := {
+  @local segs := &ast_field P_AST, node, 1;
+  &jw_str '{';
+  &jw_byte 10;
+  &jw_indent (depth + 1);
+  &jw_string_lit 'type';
+  &jw_str ': ';
+  &jw_string_lit 'Namespace';
+  &jw_str ',';
+  &jw_byte 10;
+  &jw_indent (depth + 1);
+  &jw_string_lit 'path';
+  &jw_str ': [';
+  &@if (segs > 0), { &jw_byte 10; };
+  @local i := 0;
+  &@loop (i < segs), {
+    # Silicon has no operator precedence — `2 + i * 2` parses as
+    # `(2 + i) * 2` (left-fold).  Explicit parens force the right
+    # arithmetic.
+    @local off := &ast_field P_AST, node, (2 + (i * 2));
+    @local len := &ast_field P_AST, node, (3 + (i * 2));
+    &jw_indent (depth + 2);
+    &jw_string_span off, len;
+    &@if ((i + 1) < segs), { &jw_str ','; };
+    &jw_byte 10;
+    i = i + 1;
+  };
+  &@if (segs > 0), { &jw_indent (depth + 1); };
+  &jw_byte 93;                                  # ]
+  &jw_byte 10;
+  &jw_indent depth;
+  &jw_byte 125;
+};
+
+@fn json_bin_op depth:Int, node:Int := {
+  @local op_off := &ast_field P_AST, node, 1;
+  @local op_len := &ast_field P_AST, node, 2;
+  @local left   := &ast_field P_AST, node, 3;
+  @local right  := &ast_field P_AST, node, 4;
+  &jw_str '{';
+  &jw_byte 10;
+  &jw_indent (depth + 1);
+  &jw_string_lit 'type';
+  &jw_str ': ';
+  &jw_string_lit 'BinaryOp';
+  &jw_str ',';
+  &jw_byte 10;
+  &jw_indent (depth + 1);
+  &jw_string_lit 'left';
+  &jw_str ': ';
+  &json_node (depth + 1), left;
+  &jw_str ',';
+  &jw_byte 10;
+  &jw_indent (depth + 1);
+  &jw_string_lit 'operator';
+  &jw_str ': ';
+  &jw_string_span op_off, op_len;
+  &jw_str ',';
+  &jw_byte 10;
+  &jw_indent (depth + 1);
+  &jw_string_lit 'right';
+  &jw_str ': ';
+  &json_node (depth + 1), right;
+  &jw_byte 10;
+  &jw_indent depth;
+  &jw_byte 125;
+};
+
+# Stage 0's FunctionCall is { type, name (Namespace), isBuiltin, args[] }.
+# `name.path[0]` carrying a leading '@' marks a builtin (e.g. `&@if`).
+@fn json_function_call depth:Int, node:Int := {
+  @local callee := &ast_field P_AST, node, 1;
+  @local n_args := &ast_field P_AST, node, 2;
+  # Determine isBuiltin: peek at the first source byte of the callee's
+  # first segment.
+  @local first_off := &ast_field P_AST, callee, 2;
+  @local is_builtin := 0;
+  &@if ((&WASM::i32_load8_u (P_SRC + first_off)) == 64), { is_builtin = 1; };
+
+  &jw_str '{';
+  &jw_byte 10;
+  &jw_indent (depth + 1);
+  &jw_string_lit 'type';
+  &jw_str ': ';
+  &jw_string_lit 'FunctionCall';
+  &jw_str ',';
+  &jw_byte 10;
+  &jw_indent (depth + 1);
+  &jw_string_lit 'name';
+  &jw_str ': ';
+  # Stage 0 stores `name` as a bare string for builtins (`&@if` →
+  # name="@if") and as a Namespace object for user calls.
+  &@if (is_builtin == 1),
+    {
+      @local first_len := &ast_field P_AST, callee, 3;
+      &jw_string_span first_off, first_len;
+    },
+    { &json_namespace (depth + 1), callee; };
+  &jw_str ',';
+  &jw_byte 10;
+  &jw_indent (depth + 1);
+  &jw_string_lit 'isBuiltin';
+  &jw_str ': ';
+  &@if (is_builtin == 1), { &jw_str 'true'; }, { &jw_str 'false'; };
+  &jw_str ',';
+  &jw_byte 10;
+  &jw_indent (depth + 1);
+  &jw_string_lit 'args';
+  &jw_str ': [';
+  &@if (n_args > 0), { &jw_byte 10; };
+  @local i := 0;
+  &@loop (i < n_args), {
+    @local arg := &ast_field P_AST, node, (3 + i);
+    &jw_indent (depth + 2);
+    &json_node (depth + 2), arg;
+    &@if ((i + 1) < n_args), { &jw_str ','; };
+    &jw_byte 10;
+    i = i + 1;
+  };
+  &@if (n_args > 0), { &jw_indent (depth + 1); };
+  &jw_byte 93;
+  &jw_byte 10;
+  &jw_indent depth;
+  &jw_byte 125;
+};
+
 # Mutual recursion forward decl is implicit (Silicon resolves by name).
 @fn json_node depth:Int, node:Int := {
   @local k := &ast_kind P_AST, node;
   &@if (k == AST_INT_LIT),    { &json_int_lit depth, node; &@return 0; };
   &@if (k == AST_BOOL_LIT),   { &json_bool_lit depth, node; &@return 0; };
+  &@if (k == AST_FLOAT_LIT),  { &json_float_lit depth, node; &@return 0; };
+  &@if (k == AST_STRING_LIT), { &json_string_lit depth, node; &@return 0; };
+  &@if (k == AST_NAMESPACE),  { &json_namespace depth, node; &@return 0; };
+  &@if (k == AST_BIN_OP),     { &json_bin_op depth, node; &@return 0; };
+  &@if (k == AST_CALL),       { &json_function_call depth, node; &@return 0; };
   # Unsupported kind for this serializer slice — emit a stub so the
   # output is at least well-formed JSON.
   &jw_string_lit 'unsupported';

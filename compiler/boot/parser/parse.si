@@ -127,7 +127,14 @@
   @local count_slot := node + 1;
   P_AST = &ast_namespace_start P_AST;          # placeholder n_segs=0
 
-  P_AST = &ast_namespace_seg P_AST, (&p_peek_off), (&p_peek_len);
+  # Read off/len into locals BEFORE the call.  Inlining `(&p_peek_off)`
+  # / `(&p_peek_len)` directly in the call args caused the Silicon
+  # codegen to mis-evaluate them when assignment to P_AST happens —
+  # likely an arg-evaluation-order interaction.  Capturing first is
+  # both safer and more readable.
+  @local off1 := &p_peek_off;
+  @local len1 := &p_peek_len;
+  P_AST = &ast_namespace_seg P_AST, off1, len1;
   @local segs := 1;
   &p_advance;
 
@@ -135,7 +142,9 @@
     &@if ((&p_peek_kind) != TOK_NS_SEP), { &@break };
     &p_advance;
     &@if ((&p_peek_kind) != TOK_IDENT), { &@break };
-    P_AST = &ast_namespace_seg P_AST, (&p_peek_off), (&p_peek_len);
+    @local off2 := &p_peek_off;
+    @local len2 := &p_peek_len;
+    P_AST = &ast_namespace_seg P_AST, off2, len2;
     segs = segs + 1;
     &p_advance;
   };
