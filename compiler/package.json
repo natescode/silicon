@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "test": "bun test",
+    "test:properties": "bun test --timeout 60000 tests/properties",
     "compile": "bun run src/index.ts",
     "sgl": "bun run src/sigil_cli.ts",
     "build-types": "bunx ohm generateBundles --withTypes src/silicon-simple.ohm",
@@ -16,6 +17,7 @@
     "@ohm-js/cli": "^2.0.0",
     "@types/bun": "latest",
     "@types/node": "^20.14.2",
+    "fast-check": "^4.8.0",
     "ohm-js": "^17.1.0"
   },
   "peerDependencies": {

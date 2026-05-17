@@ -18,7 +18,11 @@
       "PowerShell(Get-Content *)",
       "Bash(git stash *)",
       "Bash(curl -s -X POST http://localhost:3001/compile -H 'Content-Type: application/json' -d '{ *)",
-      "Bash(bun -e \"const d=await Bun.stdin.text\\(\\); const r=JSON.parse\\(d\\); if\\(!r.success\\){console.log\\('ERROR:', r.error\\)}else{console.log\\('OK'\\); console.log\\(JSON.stringify\\(r.exports,null,2\\)\\)}\")"
+      "Bash(bun -e \"const d=await Bun.stdin.text\\(\\); const r=JSON.parse\\(d\\); if\\(!r.success\\){console.log\\('ERROR:', r.error\\)}else{console.log\\('OK'\\); console.log\\(JSON.stringify\\(r.exports,null,2\\)\\)}\")",
+      "Bash(git *)",
+      "Bash(awk 'NR>=1760 && NR<=1820' src/e2e/e2e.test.ts)",
+      "Bash(bun add *)",
+      "Bash(dir C:\\\\repos\\\\sigil\\\\tests)"
     ]
   }
 }

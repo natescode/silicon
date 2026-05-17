@@ -100,9 +100,10 @@ function loadModuleFile(filePath: string, name: string, kind: 'env' | 'user'): M
 export function loadModules(projectDir: string = process.cwd()): ModuleRegistry {
     const registry: ModuleRegistry = new Map()
 
-    // Phase A: built-in env modules.
+    // Phase A: built-in env modules. Sorted so registry insertion order
+    // (and therefore WAT emit order downstream) is filesystem-independent.
     if (existsSync(BUILTIN_MODULES_DIR)) {
-        for (const filename of readdirSync(BUILTIN_MODULES_DIR)) {
+        for (const filename of readdirSync(BUILTIN_MODULES_DIR).sort()) {
             // Only Silicon source files — skip .wat, .json, etc.
             if (extname(filename) !== '.si') continue
             const modName = basename(filename, '.si')
@@ -112,9 +113,10 @@ export function loadModules(projectDir: string = process.cwd()): ModuleRegistry 
     }
 
     // Phase B: user modules (env modules take priority — skip duplicates).
+    // Sorted for the same reason.
     const userModulesDir = join(projectDir, 'modules')
     if (existsSync(userModulesDir)) {
-        for (const name of readdirSync(userModulesDir)) {
+        for (const name of readdirSync(userModulesDir).sort()) {
             if (registry.has(name.replace(/\.si$/, ''))) continue  // env wins
 
             const entryPath = join(userModulesDir, name)

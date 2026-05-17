@@ -215,6 +215,16 @@
 
   <div class="done"><span class="lbl">Done when</span> &nbsp; All five properties pass with a 60s budget, CI gate green, and a writeup in <code>tests/properties/README.md</code> listing what each property defends against.</div>
 
+  <div class="card ok">
+    <p><strong>Status:</strong> <span class="tag green">Landed</span></p>
+    <ul>
+      <li>All five properties implemented in <code>tests/properties/</code> and passing under <code>bun run test:properties</code> (60s budget per property).</li>
+      <li>CI workflow <code>.github/workflows/properties.yml</code> runs the suite on every push / PR to <code>main</code>.</li>
+      <li>Source-location property is scaffolded in coverage-report mode; flip <code>PROMOTE_TO_STRICT</code> when WS 4 wires Ohm spans into <code>toAst.ts</code>.</li>
+      <li>Writeup at <code>tests/properties/README.md</code> ties each property to the bootstrap dependency it defends.</li>
+    </ul>
+  </div>
+
   <!-- ─── WS 2 ─── -->
   <div class="ws-head"><span class="ws-num">WS 2</span><span class="ws-name">UTF-8 String Migration</span></div>
   <div class="meta-row">
