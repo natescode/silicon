@@ -191,8 +191,8 @@ Still ahead for Phase 4:
 | Slice                                                | Status | LoC Silicon |
 | ---------------------------------------------------- | ------ | ----------- |
 | IR record layout + builders for fixed-shape kinds    | **Landed** | ~165 |
-| Variable-arity builders (Block / Call / Loop)        | Pending | — |
-| Expression lowerer (IntLit / BoolLit / BinaryOp)     | **Landed** | ~60 |
+| Variable-arity builders (Block / Call / Loop)        | **Landed** | (in `nodes.si`) |
+| Expression lowerer (IntLit / BoolLit / BinaryOp / Block) | **Landed** | ~85 |
 | IR → JSON dumper                                     | Pending | — |
 | Phase 6 gate: IR-JSON byte-equal vs Stage 0          | Pending | — |
 

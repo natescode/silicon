@@ -342,6 +342,13 @@ describe('Phase 0 WASIX smoke test', () => {
             ['8 == 8;',  'kind=4 op=6 left=2:8 right=2:8'],
             ['12 / 3;',  'kind=4 op=4 left=2:12 right=2:3'],
             ['15 % 4;',  'kind=4 op=5 left=2:15 right=2:4'],
+            // Blocks — IR_BLOCK kind = 14.  Children: 2 = IR_I32_CONST,
+            // 4 = IR_BINOP, 14 = IR_BLOCK (nested).
+            ['{ };',          'kind=14 n=0'],
+            ['{ 99 };',       'kind=14 n=1 child[0]=2'],
+            ['{ 1; 2; 3 };',  'kind=14 n=3 child[0]=2 child[1]=2 child[2]=2'],
+            ['{ 1; 2 + 3 };', 'kind=14 n=2 child[0]=2 child[1]=4'],
+            ['{ { 1 }; 2 };', 'kind=14 n=2 child[0]=14 child[1]=2'],
             // String concat (++) is a user fn — interpreter returns IR_NONE
             // and the test program emits the `no-ir` sentinel.
         ]

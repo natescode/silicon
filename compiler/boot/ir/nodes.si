@@ -181,3 +181,57 @@
   IR_VEC = &vec_push IR_VEC, IR_CONTINUE;
   h
 };
+
+# ── Variable-arity builders ─────────────────────────────────────────
+
+# ir_block — takes a vec<i32> of IR handles, produces an IR_BLOCK
+# record `[IR_BLOCK, n, child0, child1, ...]`.  The caller owns the
+# children vec and may discard it after this call.
+@fn ir_block:Int children:Int := {
+  @local h := &vec_len IR_VEC;
+  @local n := &vec_len children;
+  IR_VEC = &vec_push IR_VEC, IR_BLOCK;
+  IR_VEC = &vec_push IR_VEC, n;
+  @local i := 0;
+  &@loop (i < n), {
+    IR_VEC = &vec_push IR_VEC, (&vec_get children, i);
+    i = i + 1;
+  };
+  h
+};
+
+# Block-record field accessors.
+@fn ir_block_count:Int handle:Int := { &vec_get IR_VEC, (handle + 1) };
+@fn ir_block_child:Int handle:Int, i:Int := {
+  &vec_get IR_VEC, (handle + 2 + i)
+};
+
+# ir_call — `[IR_CALL, callee_idx, n_args, arg0, arg1, ...]`.
+@fn ir_call:Int callee_idx:Int, args:Int := {
+  @local h := &vec_len IR_VEC;
+  @local n := &vec_len args;
+  IR_VEC = &vec_push IR_VEC, IR_CALL;
+  IR_VEC = &vec_push IR_VEC, callee_idx;
+  IR_VEC = &vec_push IR_VEC, n;
+  @local i := 0;
+  &@loop (i < n), {
+    IR_VEC = &vec_push IR_VEC, (&vec_get args, i);
+    i = i + 1;
+  };
+  h
+};
+
+@fn ir_call_callee:Int handle:Int := { &vec_get IR_VEC, (handle + 1) };
+@fn ir_call_argc:Int   handle:Int := { &vec_get IR_VEC, (handle + 2) };
+@fn ir_call_arg:Int    handle:Int, i:Int := {
+  &vec_get IR_VEC, (handle + 3 + i)
+};
+
+# ir_loop — `[IR_LOOP, body_h]`.  Body is usually an IR_BLOCK but
+# any IR handle is accepted.
+@fn ir_loop:Int body:Int := {
+  @local h := &vec_len IR_VEC;
+  IR_VEC = &vec_push IR_VEC, IR_LOOP;
+  IR_VEC = &vec_push IR_VEC, body;
+  h
+};

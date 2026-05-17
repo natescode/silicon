@@ -49,16 +49,16 @@
   &load_strata prog;
   &ir_init;
 
-  # Find the first AST_BIN_OP element in the program.  The user-test
-  # tail of stdin is expected to put one expression statement after
-  # all the strata definitions.
+  # Find the first AST_BIN_OP or AST_BLOCK element in the program.
+  # The user-test tail of stdin is expected to put one such
+  # expression statement after all the strata definitions.
   @local n_elems := &ast_field P_AST, prog, 1;
   @local i := 0;
   @local target := AST_NONE;
   &@loop ((target == AST_NONE) * (i < n_elems) == 1), {
     @local elem := &ast_field P_AST, prog, (2 + i);
     @local k := &ast_kind P_AST, elem;
-    &@if (k == AST_BIN_OP), { target = elem; };
+    &@if ((k == AST_BIN_OP) + (k == AST_BLOCK) > 0), { target = elem; };
     i = i + 1;
   };
 
@@ -83,6 +83,19 @@
   };
   &@if (k == IR_I32_CONST), {
     &write_str 1, ' value=';  &lw_write_int (&ir_field h, 1);
+  };
+  &@if (k == IR_BLOCK), {
+    @local n_children := &ir_block_count h;
+    &write_str 1, ' n='; &lw_write_int n_children;
+    @local ci := 0;
+    &@loop (ci < n_children), {
+      @local ch := &ir_block_child h, ci;
+      &write_str 1, ' child[';
+      &lw_write_int ci;
+      &write_str 1, ']=';
+      &lw_write_int (&ir_kind ch);
+      ci = ci + 1;
+    };
   };
   &write_byte 1, 10;
 

@@ -14,6 +14,7 @@
 # handle (string literals, calls, blocks, definitions, ...).
 # Those land in follow-up slices alongside the type-checker port.
 
+@use '../std/vec.si';
 @use '../parser/ast.si';
 @use '../parser/parse.si';
 @use '../strata/registry.si';
@@ -41,6 +42,23 @@
   &@if (k == AST_BOOL_LIT), {
     @local v := &ast_field P_AST, node, 1;
     &@return (&ir_i32_const v);
+  };
+
+  &@if (k == AST_BLOCK), {
+    @local n_stmts := &ast_field P_AST, node, 1;
+    @local has_trailing := &ast_field P_AST, node, 2;
+    @local children := &vec_new;
+    @local i := 0;
+    &@loop (i < n_stmts), {
+      @local h := &lower_expr (&ast_field P_AST, node, (3 + i));
+      &@if (h != IR_NONE), { children = &vec_push children, h; };
+      i = i + 1;
+    };
+    &@if (has_trailing == 1), {
+      @local th := &lower_expr (&ast_field P_AST, node, (3 + n_stmts));
+      &@if (th != IR_NONE), { children = &vec_push children, th; };
+    };
+    &@return (&ir_block children);
   };
 
   &@if (k == AST_BIN_OP), {
