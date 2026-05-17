@@ -430,9 +430,21 @@
       i = i + 1;
     };
     &ew_str 'call $';
-    @local nm_off := &ir_call_name_off h;
+    @local nm_ptr := &ir_call_name_ptr h;
     @local nm_len := &ir_call_name_len h;
-    &write_bytes 1, (P_SRC + nm_off), nm_len;
+    # Encoded pool handle (negative) means the name lives in the
+    # mangled-name pool, one byte per i32 slot.  Stream the bytes
+    # through write_byte so we don't need linear-memory addresses.
+    &@if (nm_ptr >= 0), {
+      &write_bytes 1, nm_ptr, nm_len;
+    };
+    &@if (nm_ptr < 0), {
+      @local bi := 0;
+      &@loop (bi < nm_len), {
+        &write_byte 1, (&pool_byte_at nm_ptr, bi);
+        bi = bi + 1;
+      };
+    };
     &ew_byte 10;
     &@return 0;
   };

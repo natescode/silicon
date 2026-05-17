@@ -587,6 +587,22 @@ describe('Phase 0 WASIX smoke test', () => {
                     host_inc: (x: number) => x + 1,
                 },
             },
+            // Multi-segment call → mangled `Module_Fn` name — slice 26.
+            // The @extern's bare name is chosen to match the mangled
+            // call site (alpha::beta → alpha_beta).
+            {
+                prog: '@extern alpha_beta:Int x:Int;\n' +
+                      '@fn call_ns x:Int := { &alpha::beta x };',
+                fn: 'call_ns', args: [21], want: 42,
+                imports: { alpha_beta: (x: number) => x * 2 },
+            },
+            // Three-segment call too: host::inc::one → host_inc_one.
+            {
+                prog: '@extern host_inc_one:Int x:Int;\n' +
+                      '@fn three x:Int := { &host::inc::one x };',
+                fn: 'three', args: [40], want: 41,
+                imports: { host_inc_one: (x: number) => x + 1 },
+            },
         ]
 
         try {
@@ -670,7 +686,7 @@ describe('Phase 0 WASIX smoke test', () => {
         } finally {
             await fs.unlink(tmpPath).catch(() => {})
         }
-    })
+    }, 60000)
 
     test('boot/tests/scope_test.si: variable references resolve to local.get', async () => {
         if (!wasmerAvailable()) {

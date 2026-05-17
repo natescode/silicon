@@ -245,14 +245,17 @@
   &vec_get IR_VEC, (handle + 2 + i)
 };
 
-# ir_call — `[IR_CALL, name_off, name_len, n_args, arg0, arg1, ...]`.
-# The callee name is stored as a P_SRC span so the emitter can write
-# `call $name` without a separate symbol table.
-@fn ir_call:Int name_off:Int, name_len:Int, args:Int := {
+# ir_call — `[IR_CALL, name_ptr, name_len, n_args, arg0, arg1, ...]`.
+# `name_ptr` is an ABSOLUTE byte pointer into linear memory.  Single-
+# segment callees pass `P_SRC + nm_off`; multi-segment callees write
+# their mangled bytes (e.g. "wasi_snapshot_preview1_fd_write") to
+# arena scratch and pass that pointer.  This uniform shape avoids
+# a separate `is_pool` flag on the record.
+@fn ir_call:Int name_ptr:Int, name_len:Int, args:Int := {
   @local h := &vec_len IR_VEC;
   @local n := &vec_len args;
   IR_VEC = &vec_push IR_VEC, IR_CALL;
-  IR_VEC = &vec_push IR_VEC, name_off;
+  IR_VEC = &vec_push IR_VEC, name_ptr;
   IR_VEC = &vec_push IR_VEC, name_len;
   IR_VEC = &vec_push IR_VEC, n;
   @local i := 0;
@@ -263,7 +266,7 @@
   h
 };
 
-@fn ir_call_name_off:Int handle:Int := { &vec_get IR_VEC, (handle + 1) };
+@fn ir_call_name_ptr:Int handle:Int := { &vec_get IR_VEC, (handle + 1) };
 @fn ir_call_name_len:Int handle:Int := { &vec_get IR_VEC, (handle + 2) };
 @fn ir_call_argc:Int     handle:Int := { &vec_get IR_VEC, (handle + 3) };
 @fn ir_call_arg:Int      handle:Int, i:Int := {

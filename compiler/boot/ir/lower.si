@@ -409,6 +409,59 @@
 @fn lit_at_toint_ptr:Int    := { (&str_ptr '@toInt')    + 4 };
 @fn lit_wasm_seg_ptr:Int    := { (&str_ptr 'WASM')      + 4 };
 
+# ── Mangled-name pool (i32 slots, one byte per slot). ──────────────
+# Each mangled name reserves a contiguous run of slots; ir_call gets
+# the run's starting INDEX (encoded as -idx-2 so emit can tell it
+# apart from a real linear-memory pointer).  Sentinels:
+#   ir_call.name_ptr >= 0          → absolute linear-memory pointer
+#                                    (single-segment case: P_SRC + off)
+#   ir_call.name_ptr <= -2         → mangled-pool slot index = -(p) - 2
+# Length is stored in ir_call.name_len exactly as for the absolute
+# pointer case.
+@var NAME_POOL:Int := 0;
+
+@fn name_pool_init := { NAME_POOL = &vec_new; };
+
+# Compute the total length of a multi-segment namespace mangled with
+# `_` separators.
+@fn mangled_name_len:Int callee:Int := {
+  @local n_segs := &ast_field P_AST, callee, 1;
+  @local total := 0;
+  @local i := 0;
+  &@loop (i < n_segs), {
+    @local seg_len := &ast_field P_AST, callee, (3 + (2 * i));
+    total = total + seg_len;
+    i = i + 1;
+  };
+  total + (n_segs - 1)
+};
+
+# Push the segments (joined by `_`) into the pool; return the
+# encoded handle (negative).  Caller pairs this with mangled_name_len.
+@fn name_pool_push_mangled:Int callee:Int := {
+  @local start := &vec_len NAME_POOL;
+  @local n_segs := &ast_field P_AST, callee, 1;
+  @local i := 0;
+  &@loop (i < n_segs), {
+    @local seg_off := &ast_field P_AST, callee, (2 + (2 * i));
+    @local seg_len := &ast_field P_AST, callee, (3 + (2 * i));
+    &@if (i > 0), { NAME_POOL = &vec_push NAME_POOL, 95; };   # `_`
+    @local j := 0;
+    &@loop (j < seg_len), {
+      @local b := &WASM::i32_load8_u (P_SRC + seg_off + j);
+      NAME_POOL = &vec_push NAME_POOL, b;
+      j = j + 1;
+    };
+    i = i + 1;
+  };
+  (0 - start) - 2
+};
+
+@fn pool_byte_at:Int handle:Int, k:Int := {
+  @local start := (0 - handle) - 2;
+  &vec_get NAME_POOL, (start + k)
+};
+
 # Literal pointers + length pairs for every WASM op we dispatch.
 @fn lit_i32_add2_ptr:Int     := { (&str_ptr 'i32_add')     + 4 };
 @fn lit_i32_sub2_ptr:Int     := { (&str_ptr 'i32_sub')     + 4 };
@@ -674,6 +727,23 @@
       };
     };
 
+    # Multi-segment user call: `&mod::fn a, b` → call $mod_fn (segments
+    # joined with underscores).  Used today for things like
+    # `&wasi_snapshot_preview1::fd_write fd, iovs, n, written`.
+    &@if (n_segs >= 2), {
+      @local mangled_len := &mangled_name_len callee;
+      @local pool_handle := &name_pool_push_mangled callee;
+      @local arg_handles2 := &vec_new;
+      @local ai2 := 0;
+      &@loop (ai2 < n_args), {
+        @local ah2 := &lower_expr (&ast_field P_AST, node, (3 + ai2));
+        &@if (ah2 == IR_NONE), { &@return IR_NONE; };
+        arg_handles2 = &vec_push arg_handles2, ah2;
+        ai2 = ai2 + 1;
+      };
+      &@return (&ir_call pool_handle, mangled_len, arg_handles2);
+    };
+
     &@if (n_segs != 1), { &@return IR_NONE; };
     @local nm_off := &ast_field P_AST, callee, 2;
     @local nm_len := &ast_field P_AST, callee, 3;
@@ -751,7 +821,7 @@
       arg_handles = &vec_push arg_handles, ah;
       ai = ai + 1;
     };
-    &@return (&ir_call nm_off, nm_len, arg_handles);
+    &@return (&ir_call (P_SRC + nm_off), nm_len, arg_handles);
   };
 
   &@if (k == AST_BIN_OP), {
