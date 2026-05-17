@@ -20,6 +20,24 @@
 @fn ew_str s:String := { &write_str  1, s; };
 @fn ew_byte b:Int   := { &write_byte 1, b; };
 
+# ── Loop-label stack ────────────────────────────────────────────────
+# Each IR_LOOP pushes a fresh id; @break / @continue emit `br $exit_N`
+# / `br $cont_N` against the top.  Using labels (not relative depths)
+# means intervening `if` / `block` nesting doesn't shift the target.
+@var EW_LOOP_IDS:Int   := 0;
+@var EW_NEXT_LOOP:Int  := 0;
+
+@fn ew_init := {
+  EW_LOOP_IDS  = &vec_new;
+  EW_NEXT_LOOP = 0;
+};
+
+@fn ew_loop_top:Int := {
+  @local n := &vec_len EW_LOOP_IDS;
+  &@if (n == 0), { &@return 0 - 1; };
+  &vec_get EW_LOOP_IDS, (n - 1)
+};
+
 # Compact base-10 writer for non-negative ints up to 99,999,999.
 @fn ew_write_int v:Int := {
   &@if (v < 0), { &ew_byte 45; v = 0 - v; };
@@ -190,31 +208,33 @@
     &@return 0;
   };
 
-  # @break / @continue are loop-targeted.  WASM uses relative depths:
-  # the innermost loop is depth 0.  We assume the loop's emit-shape
-  # `block (loop ...)` always wraps a `@break` with one block-level
-  # above the loop (depth 1) and a `@continue` with the loop itself
-  # being depth 0.
+  # @break / @continue target the innermost enclosing loop via a
+  # WAT label so intervening if/block nesting doesn't matter.
   &@if (k == IR_BREAK), {
-    &ew_str 'br 1'; &ew_byte 10;
+    @local id := &ew_loop_top;
+    &@if (id < 0), { &@return 0; };           # @break outside any loop
+    &ew_str 'br $exit_'; &ew_write_int id; &ew_byte 10;
     &@return 0;
   };
   &@if (k == IR_CONTINUE), {
-    &ew_str 'br 0'; &ew_byte 10;
+    @local id := &ew_loop_top;
+    &@if (id < 0), { &@return 0; };
+    &ew_str 'br $cont_'; &ew_write_int id; &ew_byte 10;
     &@return 0;
   };
 
   &@if (k == IR_LOOP), {
     @local cond := &ir_field h, 1;
     @local body := &ir_field h, 2;
-    &ew_str 'block'; &ew_byte 10;
-    &ew_str 'loop'; &ew_byte 10;
+    @local id := EW_NEXT_LOOP;
+    EW_NEXT_LOOP = EW_NEXT_LOOP + 1;
+    EW_LOOP_IDS = &vec_push EW_LOOP_IDS, id;
+
+    &ew_str 'block $exit_'; &ew_write_int id; &ew_byte 10;
+    &ew_str 'loop $cont_';  &ew_write_int id; &ew_byte 10;
     &emit_expr cond;
     &ew_str 'i32.eqz'; &ew_byte 10;
-    &ew_str 'br_if 1'; &ew_byte 10;
-    # body may produce a stack value (if it's a single expression
-    # rather than a block of statements); drop unconditionally
-    # so the loop stays well-typed.
+    &ew_str 'br_if $exit_'; &ew_write_int id; &ew_byte 10;
     &emit_expr body;
     @local bk := &ir_kind body;
     @local needs_drop := 1;
@@ -227,9 +247,20 @@
     &@if (bk == IR_CONTINUE),   { needs_drop = 0; };
     &@if (bk == IR_LOOP),       { needs_drop = 0; };
     &@if (needs_drop == 1), { &ew_str 'drop'; &ew_byte 10; };
-    &ew_str 'br 0'; &ew_byte 10;
+    &ew_str 'br $cont_'; &ew_write_int id; &ew_byte 10;
     &ew_str 'end'; &ew_byte 10;
     &ew_str 'end'; &ew_byte 10;
+
+    # Pop the loop id off the stack.  vec.si has no pop; we shrink
+    # the vec by re-creating it with the last element dropped.
+    @local sn := &vec_len EW_LOOP_IDS;
+    @local new_ids := &vec_new;
+    @local i := 0;
+    &@loop (i < (sn - 1)), {
+      new_ids = &vec_push new_ids, (&vec_get EW_LOOP_IDS, i);
+      i = i + 1;
+    };
+    EW_LOOP_IDS = new_ids;
     &@return 0;
   };
 

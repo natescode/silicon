@@ -465,8 +465,30 @@ describe('Phase 0 WASIX smoke test', () => {
                     '  0 - 1\n' +
                     '};',
               fn: 'findFirst', args: [5], want: -1 },
-            // @break / @continue need proper depth tracking once they
-            // can nest inside @if — deferred until labeled br lands.
+            // @break with labeled br — slice 20.
+            { prog: '@fn sumUntil arr_sum:Int := {\n' +
+                    '  @local s := 0;\n' +
+                    '  @local i := 0;\n' +
+                    '  &@loop 1, {\n' +
+                    '    &@if (i >= arr_sum), { &@break };\n' +
+                    '    s = s + i;\n' +
+                    '    i = i + 1\n' +
+                    '  };\n' +
+                    '  s\n' +
+                    '};',
+              fn: 'sumUntil', args: [11], want: 55 },   // 0+1+...+10
+            // @continue skipping odd numbers.
+            { prog: '@fn sumEven n:Int := {\n' +
+                    '  @local s := 0;\n' +
+                    '  @local i := 0;\n' +
+                    '  &@loop (i < n), {\n' +
+                    '    i = i + 1;\n' +
+                    '    &@if ((i - ((i / 2) * 2)) != 0), { &@continue };\n' +
+                    '    s = s + i\n' +
+                    '  };\n' +
+                    '  s\n' +
+                    '};',
+              fn: 'sumEven', args: [10], want: 30 },    // 2+4+6+8+10
         ]
 
         try {

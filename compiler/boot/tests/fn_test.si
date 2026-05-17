@@ -31,6 +31,7 @@
   &load_strata prog;
   &ir_init;
   &scope_init;
+  &ew_init;
 
   @local fns := &lower_program prog;
   &emit_program fns;
