@@ -196,6 +196,7 @@
 # skipped for now — those land alongside global / lazy-fn lowering.
 @fn lit_at_var_ptr:Int     := { (&str_ptr '@var')    + 4 };
 @fn lit_at_extern_ptr:Int  := { (&str_ptr '@extern') + 4 };
+@fn lit_void_ptr:Int       := { (&str_ptr 'Void')    + 4 };
 
 @fn lower_program:Int prog:Int := {
   @local out := &vec_new;
@@ -402,7 +403,16 @@
 
   @local body_h := &lower_expr binding;
   &@if (body_h == IR_NONE), { &@return IR_NONE; };
-  &ir_function nm_off, nm_len, n_params, n_locals, body_h
+
+  # Default to i32 result; if the function's type annotation says
+  # `Void`, emit (no result).  Stage 1 type inference will replace
+  # this default with the actual inferred type.
+  @local ty_off := &ast_field P_AST, def, 5;
+  @local ty_len := &ast_field P_AST, def, 6;
+  @local has_res := 1;
+  &@if ((ty_len == 4) * ((&lower_span_eq_lit ty_off, ty_len, (&lit_void_ptr), 4)) == 1),
+    { has_res = 0; };
+  &ir_function nm_off, nm_len, n_params, n_locals, body_h, has_res
 };
 
 # hook_allows_params / hook_allows_binding live in boot/elab/elaborator.si

@@ -54,7 +54,9 @@
 # `<addr>; <val>; <op_mnemonic>`.
 @let IR_STORE:Int       := 19;
 
-# IR_FUNCTION  [kind, name_off, name_len, n_params, n_locals, body_h]
+# IR_FUNCTION  [kind, name_off, name_len, n_params, n_locals,
+#               body_h, has_result]
+# has_result = 0 → (no result), 1 → (result i32).
 @let IR_FUNCTION:Int    := 17;
 
 # IR_EXTERN    [kind, name_off, name_len, n_params, has_result,
@@ -304,7 +306,8 @@
 # without a separate symbol table.  n_locals counts hoisted @local
 # decls; all locals are i32 for now.
 @fn ir_function:Int name_off:Int, name_len:Int,
-                    n_params:Int, n_locals:Int, body:Int := {
+                    n_params:Int, n_locals:Int,
+                    body:Int, has_result:Int := {
   @local h := &vec_len IR_VEC;
   IR_VEC = &vec_push IR_VEC, IR_FUNCTION;
   IR_VEC = &vec_push IR_VEC, name_off;
@@ -312,14 +315,16 @@
   IR_VEC = &vec_push IR_VEC, n_params;
   IR_VEC = &vec_push IR_VEC, n_locals;
   IR_VEC = &vec_push IR_VEC, body;
+  IR_VEC = &vec_push IR_VEC, has_result;
   h
 };
 
-@fn ir_function_name_off:Int handle:Int := { &vec_get IR_VEC, (handle + 1) };
-@fn ir_function_name_len:Int handle:Int := { &vec_get IR_VEC, (handle + 2) };
-@fn ir_function_n_params:Int handle:Int := { &vec_get IR_VEC, (handle + 3) };
-@fn ir_function_n_locals:Int handle:Int := { &vec_get IR_VEC, (handle + 4) };
-@fn ir_function_body:Int     handle:Int := { &vec_get IR_VEC, (handle + 5) };
+@fn ir_function_name_off:Int   handle:Int := { &vec_get IR_VEC, (handle + 1) };
+@fn ir_function_name_len:Int   handle:Int := { &vec_get IR_VEC, (handle + 2) };
+@fn ir_function_n_params:Int   handle:Int := { &vec_get IR_VEC, (handle + 3) };
+@fn ir_function_n_locals:Int   handle:Int := { &vec_get IR_VEC, (handle + 4) };
+@fn ir_function_body:Int       handle:Int := { &vec_get IR_VEC, (handle + 5) };
+@fn ir_function_has_result:Int handle:Int := { &vec_get IR_VEC, (handle + 6) };
 
 # ir_extern — `[IR_EXTERN, name_off, name_len, n_params, has_result,
 #                sep_pos]`

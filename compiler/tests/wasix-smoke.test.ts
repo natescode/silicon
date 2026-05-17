@@ -755,6 +755,76 @@ describe('Phase 0 WASIX smoke test', () => {
         }
     }, 60000)
 
+    test('boot/tests/fn_test.si: Silicon-bootstrap-compiled WASI program prints via fd_write', async () => {
+        if (!wasmerAvailable()) {
+            console.log('  (skipped: wasmer not on PATH)')
+            return
+        }
+        const wasm = await buildBoot(path.join(PROJECT_ROOT, 'boot', 'tests', 'fn_test.si'))
+        const tmpPath = path.join(PROJECT_ROOT, '.wasi-hello-boot.wasm')
+        await fs.writeFile(tmpPath, wasm)
+
+        const strataDir = path.join(PROJECT_ROOT, 'src', 'strata')
+        const files = (await fs.readdir(strataDir))
+            .filter(f => f.endsWith('.si'))
+            .sort()
+        let bundle = ''
+        for (const f of files) {
+            bundle += await fs.readFile(path.join(strataDir, f), 'utf-8')
+            bundle += '\n'
+        }
+
+        // Silicon program: declare WASI import, build iovec at fixed
+        // memory addrs, point it at the string literal's payload bytes
+        // (msg + 4 to skip the 4-byte length header), call fd_write
+        // to write 2 bytes ("hi") to fd 1.
+        const userProg = [
+            '@extern wasi_snapshot_preview1::fd_write:Int',
+            '  fd:Int, iovs:Int, iovs_len:Int, nwritten:Int;',
+            '',
+            '@fn _start:Void := {',
+            "  @local msg := 'hi';",
+            '  @local iovs := 1024;',
+            '  @local written := 1040;',
+            '  &WASM::i32_store iovs, (msg + 4);',
+            '  &WASM::i32_store (iovs + 4), 2;',
+            '  &wasi_snapshot_preview1::fd_write 1, iovs, 1, written',
+            '};',
+        ].join('\n') + '\n'
+
+        const helloWat = path.join(PROJECT_ROOT, '.wasi-hello.wat')
+        const helloWasm = path.join(PROJECT_ROOT, '.wasi-hello.wasm')
+        try {
+            // Step 1: compile Silicon → WAT via boot.wasm under wasmer.
+            const compileRes = spawnSync('wasmer', ['run', tmpPath], {
+                input: Buffer.from(bundle + userProg, 'utf-8'),
+                maxBuffer: 64 * 1024 * 1024,
+            })
+            expect(compileRes.status).toBe(0)
+            const wat = (compileRes.stdout ?? Buffer.alloc(0)).toString('utf-8')
+
+            // Step 2: WAT → wasm via wabt.
+            const compiled = await watToWasm(wat)
+            await fs.writeFile(helloWasm, Buffer.from(compiled.buffer))
+
+            // Step 3: run hello.wasm under wasmer with WASI enabled.
+            const runRes = spawnSync('wasmer', ['run', helloWasm], {
+                maxBuffer: 64 * 1024 * 1024,
+            })
+            expect(runRes.status).toBe(0)
+            const stdout = (runRes.stdout ?? Buffer.alloc(0)).toString('utf-8')
+            if (stdout !== 'hi') {
+                throw new Error(
+                    `WASI hello stdout mismatch.  Expected "hi", got ${JSON.stringify(stdout)}.\nWAT:\n${wat}`,
+                )
+            }
+        } finally {
+            await fs.unlink(tmpPath).catch(() => {})
+            await fs.unlink(helloWat).catch(() => {})
+            await fs.unlink(helloWasm).catch(() => {})
+        }
+    }, 60000)
+
     test('boot/tests/scope_test.si: variable references resolve to local.get', async () => {
         if (!wasmerAvailable()) {
             console.log('  (skipped: wasmer not on PATH)')
