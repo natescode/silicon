@@ -84,8 +84,15 @@ export class Workspace {
         let program: Program | undefined
         let registry: ElaboratorRegistry | undefined
 
+        // Strip @use 'path.si'; directives before parsing.  Stage 0's
+        // grammar doesn't recognise @use — it's resolved by the
+        // useResolver preprocessor before parse() in the normal CLI
+        // flow.  For per-document LSP analysis we replace the directive
+        // with same-length whitespace so error line/column offsets in
+        // diagnostics still match the original source.
+        const parserInput = stripUseDirectives(text)
         try {
-            const match = parse(text)
+            const match = parse(parserInput)
             program = addToAstSemantics(siliconGrammar)(match).toAst() as Program
         } catch (e) {
             diags.push(safeParseDiagnostic(e, file))
@@ -126,11 +133,39 @@ export class Workspace {
         const symbols = buildSymbolIndex(uri, text)
         const uses = extractUsesFromText(text, file)
 
+        // Suppress E0004 "unbound identifier" diagnostics when the
+        // name is defined in one of the @use'd files we've already
+        // loaded.  Until the typechecker becomes cross-file-aware in
+        // the LSP, those are false positives — the user has declared
+        // the dependency explicitly.  Every other diagnostic is kept.
+        const visibleNames = this.namesFromUses(uses)
+        const filteredDiags = diags.filter(d => {
+            if (d.code !== 'E0004') return true
+            const m = d.message.match(/unbound identifier ['"`]([^'"`]+)['"`]/i)
+            if (!m) return true
+            return !visibleNames.has(m[1])
+        })
+
         const analysis: DocAnalysis = {
-            uri, text, program, registry, diagnostics: diags, symbols, uses,
+            uri, text, program, registry,
+            diagnostics: filteredDiags, symbols, uses,
         }
         this.docs.set(uri, analysis)
         return analysis
+    }
+
+    /** Names exported by any of the @use'd files currently in cache. */
+    private namesFromUses(uses: string[]): Set<string> {
+        const out = new Set<string>()
+        for (const u of uses) {
+            const a = this.docs.get(u)
+            if (!a) continue
+            for (const s of a.symbols) {
+                if (s.kind === 'local' || s.kind === 'param') continue
+                out.add(s.name)
+            }
+        }
+        return out
     }
 
     get(uri: string): DocAnalysis | undefined { return this.docs.get(uri) }
@@ -170,6 +205,20 @@ export class Workspace {
             }
         }
     }
+}
+
+/**
+ * Replace every `@use '...';` directive with same-length whitespace.
+ * Keeps line + column offsets stable so diagnostics from the parser /
+ * elaborator / typechecker still point at the right positions in the
+ * original document.  Trailing semicolon and any inline `# comment` are
+ * absorbed too if they're on the same line as the directive.
+ */
+function stripUseDirectives(text: string): string {
+    return text.replace(
+        /@use\s+'[^']*'\s*;?[ \t]*(?:#[^\n\r]*)?/g,
+        (match) => match.replace(/[^\n\r]/g, ' '),
+    )
 }
 
 /**

@@ -34,10 +34,13 @@ export function registerDiagnostics(
     }
 
     documents.onDidOpen(({ document }) => {
-        publish(document)
-        // Prime any @use'd files so cross-file go-to-def works without
-        // the user having to open every dependency first.
+        // First analysis loads the document so primeUses can read its
+        // @use graph; the second re-runs with the dependencies in
+        // cache so cross-file unbound-identifier suppression takes
+        // effect on the very first publishDiagnostics.
+        workspace.update(document.uri, document.getText())
         workspace.primeUses(document.uri)
+        publish(document)
     })
     documents.onDidChangeContent(({ document }) => schedule(document))
     documents.onDidSave(({ document }) => publish(document))
