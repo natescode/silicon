@@ -1,0 +1,65 @@
+# Expression lowerer — Phase 6 slice 1.
+#
+# Translates a typed-AST expression into an IR record.  Today's
+# coverage:
+#
+#   AST_INT_LIT   → IR_I32_CONST(value)
+#   AST_BOOL_LIT  → IR_I32_CONST(0|1)
+#   AST_BIN_OP    → resolve operator stratum in the registry,
+#                   recursively lower left + right, then invoke
+#                   the body interpreter (boot/elab/body.si) with
+#                   BI_NODE_LEFT / BI_NODE_RIGHT bound.
+#
+# Returns IR_NONE for any AST node kind the lowerer doesn't yet
+# handle (string literals, calls, blocks, definitions, ...).
+# Those land in follow-up slices alongside the type-checker port.
+
+@use '../parser/ast.si';
+@use '../parser/parse.si';
+@use '../strata/registry.si';
+@use '../ir/nodes.si';
+@use '../elab/body.si';
+
+@let LOWER_BINOP_OP_OFF:Int := 1;
+@let LOWER_BINOP_OP_LEN:Int := 2;
+@let LOWER_BINOP_LEFT:Int   := 3;
+@let LOWER_BINOP_RIGHT:Int  := 4;
+
+@let LOWER_ELAB_NP_OFF:Int    := 6;
+@let LOWER_ELAB_NP_LEN:Int    := 7;
+@let LOWER_ELAB_SEMANTICS:Int := 8;
+
+@fn lower_expr:Int node:Int := {
+  &@if (node < 0), { &@return IR_NONE; };
+  @local k := &ast_kind P_AST, node;
+
+  &@if (k == AST_INT_LIT), {
+    @local v := &ast_field P_AST, node, 1;
+    &@return (&ir_i32_const v);
+  };
+
+  &@if (k == AST_BOOL_LIT), {
+    @local v := &ast_field P_AST, node, 1;
+    &@return (&ir_i32_const v);
+  };
+
+  &@if (k == AST_BIN_OP), {
+    @local op_off := &ast_field P_AST, node, LOWER_BINOP_OP_OFF;
+    @local op_len := &ast_field P_AST, node, LOWER_BINOP_OP_LEN;
+    @local left_n  := &ast_field P_AST, node, LOWER_BINOP_LEFT;
+    @local right_n := &ast_field P_AST, node, LOWER_BINOP_RIGHT;
+
+    @local left_h  := &lower_expr left_n;
+    @local right_h := &lower_expr right_n;
+
+    @local elab := &registry_op_lookup op_off, op_len;
+    &@if (elab < 0), { &@return IR_NONE; };
+    @local sem  := &ast_field P_AST, elab, LOWER_ELAB_SEMANTICS;
+    @local np_o := &ast_field P_AST, elab, LOWER_ELAB_NP_OFF;
+    @local np_l := &ast_field P_AST, elab, LOWER_ELAB_NP_LEN;
+    &bi_set_node left_h, right_h;
+    &@return (&interpret_body sem, np_o, np_l);
+  };
+
+  IR_NONE
+};

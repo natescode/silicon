@@ -192,7 +192,7 @@ Still ahead for Phase 4:
 | ---------------------------------------------------- | ------ | ----------- |
 | IR record layout + builders for fixed-shape kinds    | **Landed** | ~165 |
 | Variable-arity builders (Block / Call / Loop)        | Pending | — |
-| Lowering walker (`boot/ir/lower.si`)                 | Pending | — |
+| Expression lowerer (IntLit / BoolLit / BinaryOp)     | **Landed** | ~60 |
 | IR → JSON dumper                                     | Pending | — |
 | Phase 6 gate: IR-JSON byte-equal vs Stage 0          | Pending | — |
 

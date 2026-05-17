@@ -314,6 +314,58 @@ describe('Phase 0 WASIX smoke test', () => {
         }
     })
 
+    test('boot/tests/lower_test.si: end-to-end lowers arithmetic expressions to IR', async () => {
+        if (!wasmerAvailable()) {
+            console.log('  (skipped: wasmer not on PATH)')
+            return
+        }
+        const wasm = await buildBoot(path.join(PROJECT_ROOT, 'boot', 'tests', 'lower_test.si'))
+        const tmpPath = path.join(PROJECT_ROOT, '.lower-smoke.wasm')
+        await fs.writeFile(tmpPath, wasm)
+
+        const strataDir = path.join(PROJECT_ROOT, 'src', 'strata')
+        const files = (await fs.readdir(strataDir))
+            .filter(f => f.endsWith('.si'))
+            .sort()
+        let bundle = ''
+        for (const f of files) {
+            bundle += await fs.readFile(path.join(strataDir, f), 'utf-8')
+            bundle += '\n'
+        }
+
+        // Each row: (input expression, expected stdout line).
+        const cases: Array<[string, string]> = [
+            ['1 + 2;',   'kind=4 op=1 left=2:1 right=2:2'],
+            ['10 * 3;',  'kind=4 op=3 left=2:10 right=2:3'],
+            ['5 < 7;',   'kind=4 op=8 left=2:5 right=2:7'],
+            ['9 - 4;',   'kind=4 op=2 left=2:9 right=2:4'],
+            ['8 == 8;',  'kind=4 op=6 left=2:8 right=2:8'],
+            ['12 / 3;',  'kind=4 op=4 left=2:12 right=2:3'],
+            ['15 % 4;',  'kind=4 op=5 left=2:15 right=2:4'],
+            // String concat (++) is a user fn — interpreter returns IR_NONE
+            // and the test program emits the `no-ir` sentinel.
+        ]
+
+        try {
+            for (const [src, expected] of cases) {
+                const result = spawnSync('wasmer', ['run', tmpPath], {
+                    input: Buffer.from(bundle + src + '\n', 'utf-8'),
+                    maxBuffer: 64 * 1024 * 1024,
+                })
+                expect(result.status).toBe(0)
+                const stdout = (result.stdout ?? Buffer.alloc(0)).toString('utf-8').trim()
+                if (stdout !== expected) {
+                    throw new Error(
+                        `Lower mismatch for ${JSON.stringify(src)}\n` +
+                        `Expected: ${expected}\nGot:      ${stdout}`,
+                    )
+                }
+            }
+        } finally {
+            await fs.unlink(tmpPath).catch(() => {})
+        }
+    })
+
     test('boot/tests/body_test.si: body interpreter dispatches IR::* intrinsics', async () => {
         if (!wasmerAvailable()) {
             console.log('  (skipped: wasmer not on PATH)')
