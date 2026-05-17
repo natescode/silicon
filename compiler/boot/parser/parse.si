@@ -200,6 +200,13 @@
     &@if (k == TOK_RBRACK), { &@break };
     &@if (k == TOK_COMMA),  { &@break };       # leading separator
     &@if (k == TOK_EOF),    { &@break };
+    # An operator immediately after the callee means the call has
+    # no args and the operator belongs to the surrounding expression
+    # (e.g. `&k + &k` parses as BinaryOp(+, &k, &k)).  Operators
+    # appearing *between* args are consumed by parse_expression_start
+    # as part of that arg's binop chain — they only terminate the
+    # arg list when they're the very next token.
+    &@if (k == TOK_OPERATOR), { &@break };
     @local arg := &parse_expression_start;
     arg_idxs = &vec_push arg_idxs, arg;
     &@if ((&p_peek_kind) == TOK_COMMA), { &p_advance; }, { &@break };

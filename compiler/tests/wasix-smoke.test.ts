@@ -349,6 +349,16 @@ describe('Phase 0 WASIX smoke test', () => {
               fn: 'cmp', args: [3, 5], want: 1 },
             { prog: '@fn cmp a:Int, b:Int := { a < b };',
               fn: 'cmp', args: [5, 3], want: 0 },
+            // Function-call lowering — slice 15.
+            { prog: '@fn double x:Int := { x + x };\n' +
+                    '@fn quad x:Int := { &double (&double x) };',
+              fn: 'quad', args: [5], want: 20 },
+            { prog: '@fn id x:Int := { x };\n' +
+                    '@fn use2 a:Int, b:Int := { (&id a) + (&id b) };',
+              fn: 'use2', args: [17, 25], want: 42 },
+            { prog: '@fn k := { 42 };\n' +
+                    '@fn k2 := { &k + &k };',
+              fn: 'k2', args: [], want: 84 },
         ]
 
         try {

@@ -233,6 +233,32 @@
     &@return (&ir_block children);
   };
 
+  &@if (k == AST_CALL), {
+    @local callee := &ast_field P_AST, node, 1;
+    @local n_args := &ast_field P_AST, node, 2;
+    # Only handle bare-name calls today: callee must be a
+    # single-segment Namespace whose first byte is NOT `@`
+    # (keyword calls like &@if go through the body interpreter
+    # once the Compiler::* surface is wired).
+    &@if ((&ast_kind P_AST, callee) != AST_NAMESPACE), { &@return IR_NONE; };
+    @local n_segs := &ast_field P_AST, callee, 1;
+    &@if (n_segs != 1), { &@return IR_NONE; };
+    @local nm_off := &ast_field P_AST, callee, 2;
+    @local nm_len := &ast_field P_AST, callee, 3;
+    @local first_byte := &WASM::i32_load8_u (P_SRC + nm_off);
+    &@if (first_byte == 64), { &@return IR_NONE; };   # `@`
+
+    @local arg_handles := &vec_new;
+    @local ai := 0;
+    &@loop (ai < n_args), {
+      @local ah := &lower_expr (&ast_field P_AST, node, (3 + ai));
+      &@if (ah == IR_NONE), { &@return IR_NONE; };
+      arg_handles = &vec_push arg_handles, ah;
+      ai = ai + 1;
+    };
+    &@return (&ir_call nm_off, nm_len, arg_handles);
+  };
+
   &@if (k == AST_BIN_OP), {
     @local op_off := &ast_field P_AST, node, LOWER_BINOP_OP_OFF;
     @local op_len := &ast_field P_AST, node, LOWER_BINOP_OP_LEN;

@@ -176,6 +176,21 @@
     &@return 0;
   };
 
+  &@if (k == IR_CALL), {
+    @local n := &ir_call_argc h;
+    @local i := 0;
+    &@loop (i < n), {
+      &emit_expr (&ir_call_arg h, i);
+      i = i + 1;
+    };
+    &ew_str 'call $';
+    @local nm_off := &ir_call_name_off h;
+    @local nm_len := &ir_call_name_len h;
+    &write_bytes 1, (P_SRC + nm_off), nm_len;
+    &ew_byte 10;
+    &@return 0;
+  };
+
   &@if (k == IR_BLOCK), {
     @local n := &ir_block_count h;
     @local i := 0;
