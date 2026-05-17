@@ -59,7 +59,8 @@ ready for Phase 1.
 | Registry data structure (`boot/strata/registry.si`)  | **Landed** | ~170 |
 | AST walker / loader (`boot/strata/loader.si`)        | **Landed** | ~140 |
 | DefKind detection via `&IR::def_*` / `&IR::meta_*`   | **Landed** | (in loader) |
-| Strata loader smoke test (full built-in bundle)      | **Landed** | — |
+| Registry JSON dumper (`boot/strata/registry_json.si`) | **Landed** | ~190 |
+| Phase 3 gate test (byte-exact JSON diff vs Stage 0)  | **Landed** | — |
 
 What lands today:
 - Operator, keyword, and **defkind** tables (parallel `vec_i32`).
@@ -70,11 +71,16 @@ What lands today:
   suffix and pushes a `(keyword → codegenKind)` row to the defkind
   table.
 - Linear-scan `registry_op_lookup` / `registry_kw_lookup`.
-- Smoke test feeds `cat src/strata/*.si` to the Silicon loader and
-  asserts `ops=N kws=M defkinds=K` matches Stage 0's
-  `buildStrataRegistry().defKinds` count.
-  Currently **27 operators + 23 keywords + 12 defkinds**, matching
-  Stage 0 value-for-value (`@let=function`, `@var=global`, `@enum=type_sum`, …).
+- Smoke test feeds `cat src/strata/*.si` to the Silicon loader,
+  which emits a sorted JSON document with `operators`, `keywords`,
+  and `defKinds`.  The test rebuilds the same registry via Stage 0's
+  `buildStrataRegistry`, formats the same shape, and diffs
+  byte-for-byte.  Currently **17 bare operators + 23 keywords +
+  12 defkinds** match exactly (`@let=function`, `@var=global`,
+  `@enum=type_sum`, …).  Typed variants like `+:Int` / `+:Float`
+  collapse to a single `+` entry on both sides — the Silicon
+  registry won't track typed variants until the body interpreter
+  lands in Phase 4.
 
 Still ahead for Phase 3:
 - Two-pass `@use` resolution (Stage 1 collapses everything into a

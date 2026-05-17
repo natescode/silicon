@@ -245,7 +245,7 @@ describe('Phase 0 WASIX smoke test', () => {
         expect(matches).toBeGreaterThan(0)
     })
 
-    test('boot/tests/strata_loader_test.si: registry counts match Stage 0 across all built-in strata', async () => {
+    test('boot/tests/strata_loader_test.si: registry JSON byte-equals Stage 0 dump', async () => {
         if (!wasmerAvailable()) {
             console.log('  (skipped: wasmer not on PATH)')
             return
@@ -265,16 +265,37 @@ describe('Phase 0 WASIX smoke test', () => {
             bundle += '\n'
         }
 
-        // Stage 0 counts — derived from text so the test stays in sync
-        // with whatever strata land in the bundle.
-        const stage0Ops = (bundle.match(/^@stratum_operator/gm) ?? []).length
-        const stage0Kws = (bundle.match(/^@stratum_keyword/gm)  ?? []).length
-        // Stage 0 defKinds count is whatever buildStrataRegistry produces.
+        // Build the Stage 0 reference dump from the same bundle the
+        // Silicon loader will see.  Same sort, same dedup, same shape
+        // as boot/strata/registry_json.si emits.
         const { buildStrataRegistry } = await import('../src/elaborator')
         const { ASTFactory } = await import('../src/ast/astNodes')
-        const stage0DefKinds = Object.keys(
-            buildStrataRegistry(ASTFactory.program([])).defKinds,
-        ).length
+        const reg = buildStrataRegistry(ASTFactory.program([]))
+        const bareSorted = (table: Record<string, unknown>): string[] => {
+            const s = new Set<string>()
+            for (const k of Object.keys(table)) {
+                s.add(k.includes(':') ? k.slice(0, k.indexOf(':')) : k)
+            }
+            return Array.from(s).sort()
+        }
+        const ops = bareSorted(reg.operators)
+        const kws = bareSorted(reg.keywords)
+        const dks = Object.keys(reg.defKinds).sort()
+        const lines: string[] = ['{']
+        lines.push('  "operators": [')
+        ops.forEach((s, i) => lines.push(`    "${s}"${i < ops.length - 1 ? ',' : ''}`))
+        lines.push('  ],')
+        lines.push('  "keywords": [')
+        kws.forEach((s, i) => lines.push(`    "${s}"${i < kws.length - 1 ? ',' : ''}`))
+        lines.push('  ],')
+        lines.push('  "defKinds": {')
+        dks.forEach((kw, i) => {
+            const cg = (reg.defKinds as any)[kw].codegenKind
+            lines.push(`    "${kw}": "${cg}"${i < dks.length - 1 ? ',' : ''}`)
+        })
+        lines.push('  }')
+        lines.push('}')
+        const expected = lines.join('\n') + '\n'
 
         try {
             const result = spawnSync('wasmer', ['run', tmpPath], {
@@ -282,13 +303,12 @@ describe('Phase 0 WASIX smoke test', () => {
                 maxBuffer: 64 * 1024 * 1024,
             })
             expect(result.status).toBe(0)
-            const stdout = (result.stdout ?? Buffer.alloc(0)).toString('utf-8').trim()
-            // Format starts with: "ops=N kws=M defkinds=K first_op=…"
-            expect(stdout).toMatch(new RegExp(
-                `^ops=${stage0Ops} kws=${stage0Kws} defkinds=${stage0DefKinds} `,
-            ))
-            expect(stdout).toContain('op_lookup_ok=1')
-            expect(stdout).toContain('kw_lookup_ok=1')
+            const stdout = (result.stdout ?? Buffer.alloc(0)).toString('utf-8')
+            if (stdout !== expected) {
+                throw new Error(
+                    `Strata registry JSON mismatch\nExpected:\n${expected}\nGot:\n${stdout}`,
+                )
+            }
         } finally {
             await fs.unlink(tmpPath).catch(() => {})
         }
