@@ -314,6 +314,71 @@ describe('Phase 0 WASIX smoke test', () => {
         }
     })
 
+    test('boot/tests/intrinsics_test.si: per-stratum intrinsic map byte-equal Stage 0', async () => {
+        if (!wasmerAvailable()) {
+            console.log('  (skipped: wasmer not on PATH)')
+            return
+        }
+        const wasm = await buildBoot(path.join(PROJECT_ROOT, 'boot', 'tests', 'intrinsics_test.si'))
+        const tmpPath = path.join(PROJECT_ROOT, '.intr-smoke.wasm')
+        await fs.writeFile(tmpPath, wasm)
+
+        const strataDir = path.join(PROJECT_ROOT, 'src', 'strata')
+        const files = (await fs.readdir(strataDir))
+            .filter(f => f.endsWith('.si'))
+            .sort()
+        let bundle = ''
+        for (const f of files) {
+            bundle += await fs.readFile(path.join(strataDir, f), 'utf-8')
+            bundle += '\n'
+        }
+
+        const reg = buildStrataRegistry(({ type: 'Program', elements: [] } as any))
+        const bareSorted = (table: Record<string, any>): Array<[string, string | null]> => {
+            const seen = new Map<string, string | null>()
+            for (const k of Object.keys(table)) {
+                const bare = k.includes(':') ? k.slice(0, k.indexOf(':')) : k
+                // First entry wins — matches Silicon's stable-sort + dedup.
+                if (!seen.has(bare)) seen.set(bare, table[k]?.data?.intrinsic ?? null)
+            }
+            return Array.from(seen.entries()).sort((a, b) => a[0] < b[0] ? -1 : 1)
+        }
+        const ops = bareSorted(reg.operators)
+        const kws = bareSorted(reg.keywords)
+        const intrJson = (v: string | null): string => v === null ? 'null' : `"${v}"`
+        const lines: string[] = ['{']
+        lines.push('  "operators": [')
+        ops.forEach(([k, v], i) => {
+            const sep = i < ops.length - 1 ? ',' : ''
+            lines.push(`    { "op": "${k}", "intrinsic": ${intrJson(v)} }${sep}`)
+        })
+        lines.push('  ],')
+        lines.push('  "keywords": [')
+        kws.forEach(([k, v], i) => {
+            const sep = i < kws.length - 1 ? ',' : ''
+            lines.push(`    { "kw": "${k}", "intrinsic": ${intrJson(v)} }${sep}`)
+        })
+        lines.push('  ]')
+        lines.push('}')
+        const expected = lines.join('\n') + '\n'
+
+        try {
+            const result = spawnSync('wasmer', ['run', tmpPath], {
+                input: Buffer.from(bundle, 'utf-8'),
+                maxBuffer: 64 * 1024 * 1024,
+            })
+            expect(result.status).toBe(0)
+            const stdout = (result.stdout ?? Buffer.alloc(0)).toString('utf-8')
+            if (stdout !== expected) {
+                throw new Error(
+                    `Intrinsics dump mismatch\nExpected:\n${expected}\nGot:\n${stdout}`,
+                )
+            }
+        } finally {
+            await fs.unlink(tmpPath).catch(() => {})
+        }
+    })
+
     test('boot/tests/elaborator_test.si: definition hooks byte-equal Stage 0 elaboration', async () => {
         if (!wasmerAvailable()) {
             console.log('  (skipped: wasmer not on PATH)')

@@ -1,0 +1,34 @@
+# Per-stratum intrinsic dump — Phase 4 slice 4 gate.
+# Reads a strata bundle from stdin, runs the loader, then emits
+# the (op | kw) → intrinsic map as sorted JSON.
+
+@use '../std/io.si';
+@use '../std/arena.si';
+@use '../parser/tokens.si';
+@use '../parser/lex.si';
+@use '../parser/ast.si';
+@use '../parser/parse.si';
+@use '../strata/registry.si';
+@use '../strata/loader.si';
+@use '../strata/intrinsics_json.si';
+
+@fn run := {
+  @local cap := 65536;
+  @local buf := &arena_alloc cap;
+  @local total := 0;
+  &@loop 1, {
+    @local n := &read_bytes 0, (buf + total), (cap - total);
+    &@if (n <= 0), { &@break };
+    total = total + n;
+    &@if (total >= cap), { &@break };
+  };
+
+  @local toks := &lex buf, total;
+  @local prog := &parse buf, total, toks;
+  &registry_init;
+  &load_strata prog;
+  &intrinsics_dump_json;
+  &wasi_snapshot_preview1::proc_exit 0;
+};
+
+&run;

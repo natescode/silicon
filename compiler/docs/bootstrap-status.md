@@ -100,8 +100,10 @@ Still ahead for Phase 3:
 | Elaborator walker — Definition.hook stamping         | **Landed** | ~95 |
 | Defkind constraint validation (params / binding)     | **Landed** | (in elaborator) |
 | BinaryOp.semantics resolution + recursive walker     | **Landed** | ~80 |
+| Per-stratum intrinsic extractor (`extractIntrinsicFromBody`) | **Landed** | ~240 |
 | Phase 4 gate: elaboration JSON byte-equal vs Stage 0 | **Landed** | — |
 | Body interpreter (`&Compiler::*` surface)            | Pending | ~250 (estimated) |
+| Body template extractor (per-step intrinsic + argRefs) | Pending — slice 4 covers the first-intrinsic case; full template is a follow-up |
 | Generics-not-allowed validation                      | Deferred — parser doesn't yet store generic params on Definitions |
 
 What lands today:
@@ -126,6 +128,18 @@ What lands today:
   allowed.  The bun-side dump classifies Stage 0's error
   messages into the same codes via substring match — gate
   currently exercises all three.
+- Per-stratum intrinsic extractor (`boot/strata/intrinsics_json.si`,
+  ~240 LoC): for every registered operator and keyword, recurses
+  through the stratum's body and finds the first `&IR::*` or
+  `&WASM::*` call.  Emits a sorted, deduped map mirroring Stage 0's
+  `StrataNode.data.intrinsic` exactly (17 operators + 23 keywords,
+  with `++` → `null` as the only operator without an IR/WASM call).
+  Selection sort now carries a tie-breaker on original registration
+  index so the dedup keeps first-registered-wins — matching Stage 0
+  where `==` resolves to `IR::i32_eq` (Equal), not `IR::f32_eq`
+  (EqualFloat).  Bun-side `intrinsics_test.si` gate diffs the dump
+  byte-for-byte against `buildStrataRegistry().operators` /
+  `.keywords` projected to bare keys.
 - BinaryOp.semantics: `walk_expr` recurses through Definitions'
   binding expressions and top-level expression statements,
   visiting `AST_BIN_OP`, `AST_CALL`, `AST_BLOCK`,
