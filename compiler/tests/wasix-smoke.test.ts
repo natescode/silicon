@@ -1170,15 +1170,35 @@ describe('Phase 0 WASIX smoke test', () => {
 
     // PHASE 4b: stage1.wasm reads source from a file path via positional argv.
     //
-    // Skipped under wasmer 2.x: every path_open call against a --mapdir
-    // preopen returns errno 44 (NOTCAPABLE), regardless of the rights
-    // value requested (tried 0, FD_READ, FD_READ|FD_SEEK|FD_TELL).  The
-    // wasm-side machinery is verified working — `bun run scripts/build-
-    // stage1.ts` produces valid WAT containing the path_open import with
-    // i64 rights params, and find_preopen_dir correctly returns fd 3
-    // for the mapped preopen.  The runtime simply refuses to grant rights
-    // to mapped dirs.  To re-enable: upgrade to wasmer >= 3.x or switch
-    // to wasmtime; the test should then pass unchanged.
+    // Skipped pending a working WASI runtime:
+    //
+    //   wasmer 2.1.0 — path_open against a --mapdir preopen returns errno
+    //     44 NOTCAPABLE regardless of the rights value requested (tried 0,
+    //     FD_READ, FD_READ|FD_SEEK|FD_TELL|FD_FILESTAT_GET).
+    //
+    //   wasmer 7.1.0 — path_open succeeds with rights = FD_READ|FD_SEEK|
+    //     FD_TELL (38), but two follow-on bugs block the test:
+    //     (a) fd_read on the resulting fd returns Errno::unknown and
+    //         nread=0 (also fd_write to fd 1 returns Errno::unknown,
+    //         making panic messages silent), and
+    //     (b) wasmer 7 on Windows produces empty stdout when invoked
+    //         with an absolute path to the wasm file (the spawnSync
+    //         calls in this file all use path.resolve / path.join).
+    //         Reproducer: `wasmer run "$(pwd)/stage1.wasm" -- --usage`
+    //         exits 0 with no output, while `wasmer run stage1.wasm
+    //         -- --usage` works.
+    //
+    // The wasm-side machinery is verified correct:
+    //   - `bun run scripts/build-stage1.ts` produces valid WAT with the
+    //     path_open import declaring `(param i64) (param i64)` for the
+    //     rights flags.
+    //   - find_preopen_dir returns fd 3 for the mapped preopen.
+    //   - open_file_for_read with rights = 38 succeeds in standalone
+    //     diagnostic programs under both wasmer 2.x and wasmer 7.x.
+    //   - The byte-equal self-host gate still passes.
+    //
+    // Re-enable when wasmer >= 8.x (or wasmtime) is on PATH; the test
+    // should pass without code changes.
     test.skip('PHASE 4b: stage1.wasm reads source via positional path arg', async () => {
         if (!wasmerAvailable()) {
             console.log('  (skipped: wasmer not on PATH)')

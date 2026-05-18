@@ -43,17 +43,23 @@
 #   dirflags              — 1 = follow symlinks
 #   path_ptr, path_len    — UTF-8 path within dirfd
 #   oflags                — 0 = open existing (no create / trunc)
-#   fs_rights_base        — FD_READ | FD_SEEK | FD_TELL | FD_FILESTAT_GET
-#                            = 0x2 | 0x4 | 0x20 | 0x200000 = 0x200026
-#                            Encoded as i64 below.
-#   fs_rights_inheriting  — 0 (no inherited rights needed for a regular file)
+#   fs_rights_base        — FD_READ | FD_SEEK | FD_TELL = 0x2 | 0x4 | 0x20
+#                            = 38.  Requesting only what we need (the
+#                            preopen's inheriting rights are a strict
+#                            subset of `all rights`, so any bit not
+#                            granted to the dirfd raises errno 44
+#                            NOTCAPABLE on wasmer ≥ 3.x).
+#   fs_rights_inheriting  — 38 same as base; the read loop never
+#                            reopens fds so inheriting is unused but
+#                            must still be a subset of the dirfd's
+#                            inheriting rights to satisfy the runtime.
 #   fdflags               — 0 (no special open flags)
 #   fd_out                — out-pointer (4 bytes) that receives the opened fd
 @fn open_file_for_read:Int dir_fd:Int, path_ptr:Int, path_len:Int := {
   @local fd_out := &scratch_alloc 4;
   @local rc := &wasi_snapshot_preview1::path_open
     dir_fd, 1, path_ptr, path_len, 0,
-    (&@toInt64 2097190), (&@toInt64 0),
+    (&@toInt64 38), (&@toInt64 38),
     0, fd_out;
   &@match rc,
     0, { &WASM::i32_load fd_out },
