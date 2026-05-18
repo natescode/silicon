@@ -184,7 +184,6 @@ dist
 
 # Finder (MacOS) folder config
 .DS_Store
-boot.wasm
-boot.wat
-stage1.wasm
-stage1.wat
+
+# Build / test artifacts (boot.wasm, stage1.wasm, smoke-test temp files).
+wasm-bin/

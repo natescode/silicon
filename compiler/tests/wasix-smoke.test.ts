@@ -20,6 +20,7 @@
 import { test, expect, describe } from 'bun:test'
 import { spawnSync } from 'node:child_process'
 import * as fs from 'node:fs/promises'
+import { mkdirSync } from 'node:fs'
 import * as path from 'node:path'
 import parse from '../src/parser'
 import { addToAstSemantics, type Program } from '../src/ast'
@@ -32,6 +33,10 @@ import { loadModules } from '../src/modules'
 import { resolveUses } from '../src/modules/useResolver'
 
 const PROJECT_ROOT = path.resolve(import.meta.dirname, '..')
+const WASM_BIN = path.join(PROJECT_ROOT, 'wasm-bin')
+// Ensure wasm-bin/ exists for every temp artifact path below.  Sync so
+// the constant initialisation order doesn't matter to the describe blocks.
+mkdirSync(WASM_BIN, { recursive: true })
 
 function wasmtimeAvailable(): boolean {
     const probe = spawnSync('wasmtime', ['--version'], { encoding: 'utf-8' })
@@ -92,7 +97,7 @@ describe('Phase 0 WASIX smoke test', () => {
         }
 
         const wasm = await buildBoot(path.join(PROJECT_ROOT, 'boot', 'main.si'))
-        const tmpPath = path.join(PROJECT_ROOT, '.boot-smoke.wasm')
+        const tmpPath = path.join(WASM_BIN, 'boot-smoke.wasm')
         await fs.writeFile(tmpPath, wasm)
 
         try {
@@ -118,7 +123,7 @@ describe('Phase 0 WASIX smoke test', () => {
             return
         }
         const wasm = await buildBoot(path.join(PROJECT_ROOT, 'boot', 'tests', 'arena_test.si'))
-        const tmpPath = path.join(PROJECT_ROOT, '.arena-smoke.wasm')
+        const tmpPath = path.join(WASM_BIN, 'arena-smoke.wasm')
         await fs.writeFile(tmpPath, wasm)
         try {
             const result = spawnSync('wasmtime', [tmpPath], { encoding: 'buffer' })
@@ -135,7 +140,7 @@ describe('Phase 0 WASIX smoke test', () => {
             return
         }
         const wasm = await buildBoot(path.join(PROJECT_ROOT, 'boot', 'tests', 'vec_test.si'))
-        const tmpPath = path.join(PROJECT_ROOT, '.vec-smoke.wasm')
+        const tmpPath = path.join(WASM_BIN, 'vec-smoke.wasm')
         await fs.writeFile(tmpPath, wasm)
         try {
             const result = spawnSync('wasmtime', [tmpPath], { encoding: 'buffer' })
@@ -152,7 +157,7 @@ describe('Phase 0 WASIX smoke test', () => {
             return
         }
         const wasm = await buildBoot(path.join(PROJECT_ROOT, 'boot', 'tests', 'lex_test.si'))
-        const tmpPath = path.join(PROJECT_ROOT, '.lex-smoke.wasm')
+        const tmpPath = path.join(WASM_BIN, 'lex-smoke.wasm')
         await fs.writeFile(tmpPath, wasm)
         try {
             const result = spawnSync('wasmtime', [tmpPath], { encoding: 'buffer' })
@@ -169,7 +174,7 @@ describe('Phase 0 WASIX smoke test', () => {
             return
         }
         const wasm = await buildBoot(path.join(PROJECT_ROOT, 'boot', 'tests', 'parse_test.si'))
-        const tmpPath = path.join(PROJECT_ROOT, '.parse-smoke.wasm')
+        const tmpPath = path.join(WASM_BIN, 'parse-smoke.wasm')
         await fs.writeFile(tmpPath, wasm)
         try {
             const result = spawnSync('wasmtime', [tmpPath], { encoding: 'buffer' })
@@ -186,7 +191,7 @@ describe('Phase 0 WASIX smoke test', () => {
             return
         }
         const wasm = await buildBoot(path.join(PROJECT_ROOT, 'boot', 'tests', 'json_test.si'))
-        const tmpPath = path.join(PROJECT_ROOT, '.json-corpus.wasm')
+        const tmpPath = path.join(WASM_BIN, 'json-corpus.wasm')
         await fs.writeFile(tmpPath, wasm)
 
         const stage0Parse = (await import('../src/parser')).default
@@ -252,7 +257,7 @@ describe('Phase 0 WASIX smoke test', () => {
             return
         }
         const wasm = await buildBoot(path.join(PROJECT_ROOT, 'boot', 'tests', 'strata_loader_test.si'))
-        const tmpPath = path.join(PROJECT_ROOT, '.strata-smoke.wasm')
+        const tmpPath = path.join(WASM_BIN, 'strata-smoke.wasm')
         await fs.writeFile(tmpPath, wasm)
 
         // Concatenate every built-in stratum file as the loader input.
@@ -321,7 +326,7 @@ describe('Phase 0 WASIX smoke test', () => {
             return
         }
         const wasm = await buildBoot(path.join(PROJECT_ROOT, 'boot', 'tests', 'fn_test.si'))
-        const tmpPath = path.join(PROJECT_ROOT, '.fn-smoke.wasm')
+        const tmpPath = path.join(WASM_BIN, 'fn-smoke.wasm')
         await fs.writeFile(tmpPath, wasm)
 
         const strataDir = path.join(PROJECT_ROOT, 'src', 'strata')
@@ -771,7 +776,7 @@ describe('Phase 0 WASIX smoke test', () => {
             return
         }
         const wasm = await buildBoot(path.join(PROJECT_ROOT, 'boot', 'tests', 'fn_test.si'))
-        const tmpPath = path.join(PROJECT_ROOT, '.wasi-alpha-boot.wasm')
+        const tmpPath = path.join(WASM_BIN, 'wasi-alpha-boot.wasm')
         await fs.writeFile(tmpPath, wasm)
 
         const strataDir = path.join(PROJECT_ROOT, 'src', 'strata')
@@ -813,7 +818,7 @@ describe('Phase 0 WASIX smoke test', () => {
             '};',
         ].join('\n') + '\n'
 
-        const alphaWasm = path.join(PROJECT_ROOT, '.wasi-alpha.wasm')
+        const alphaWasm = path.join(WASM_BIN, 'wasi-alpha.wasm')
         try {
             const compileRes = spawnSync('wasmtime', [tmpPath], {
                 input: Buffer.from(bundle + userProg, 'utf-8'),
@@ -851,14 +856,14 @@ describe('Phase 0 WASIX smoke test', () => {
             return
         }
         // Ensure boot.wasm exists for the build-stage1 script.
-        const bootPath = path.join(PROJECT_ROOT, 'boot.wasm')
+        const bootPath = path.join(WASM_BIN, 'boot.wasm')
         const wasm = await buildBoot(path.join(PROJECT_ROOT, 'boot', 'tests', 'fn_test.si'))
         await fs.writeFile(bootPath, wasm)
 
-        const stage1Wasm = path.join(PROJECT_ROOT, 'stage1.wasm')
-        const helloSrc = path.join(PROJECT_ROOT, '.script-hello.si')
-        const helloWat = path.join(PROJECT_ROOT, '.script-hello.wat')
-        const helloWasm = path.join(PROJECT_ROOT, '.script-hello.wasm')
+        const stage1Wasm = path.join(WASM_BIN, 'stage1.wasm')
+        const helloSrc = path.join(WASM_BIN, 'script-hello.si')
+        const helloWat = path.join(WASM_BIN, 'script-hello.wat')
+        const helloWasm = path.join(WASM_BIN, 'script-hello.wasm')
         try {
             const buildRes = spawnSync('bun', ['run', 'scripts/build-stage1.ts'],
                 { cwd: PROJECT_ROOT, maxBuffer: 64 * 1024 * 1024 })
@@ -904,7 +909,7 @@ describe('Phase 0 WASIX smoke test', () => {
             return
         }
         const boot = await buildBoot(path.join(PROJECT_ROOT, 'boot', 'tests', 'fn_test.si'))
-        const bootPath = path.join(PROJECT_ROOT, '.fp-stage0.wasm')
+        const bootPath = path.join(WASM_BIN, 'fp-stage0.wasm')
         await fs.writeFile(bootPath, boot)
 
         // Build the stage1 source bundle (everything stage1.wasm
@@ -966,8 +971,8 @@ describe('Phase 0 WASIX smoke test', () => {
         const bootInput   = Buffer.from(bundle + stage1Bundle, 'utf-8')
         const stage1Input = Buffer.from(stage1Bundle, 'utf-8')
 
-        const stage1Path = path.join(PROJECT_ROOT, '.fp-stage1.wasm')
-        const stage2Path = path.join(PROJECT_ROOT, '.fp-stage2.wasm')
+        const stage1Path = path.join(WASM_BIN, 'fp-stage1.wasm')
+        const stage2Path = path.join(WASM_BIN, 'fp-stage2.wasm')
         try {
             // 1. boot.wasm compiles stage1 source → stage1.wat → stage1.wasm
             const r1 = spawnSync('wasmtime', [bootPath], {
@@ -1015,7 +1020,7 @@ describe('Phase 0 WASIX smoke test', () => {
             console.log('  (skipped: wasmtime not on PATH)')
             return
         }
-        const stage1Path = path.join(PROJECT_ROOT, 'stage1.wasm')
+        const stage1Path = path.join(WASM_BIN, 'stage1.wasm')
         try { await fs.access(stage1Path) }
         catch {
             console.log('  (skipped: stage1.wasm missing — run scripts/build-stage1.ts)')
@@ -1052,7 +1057,7 @@ describe('Phase 0 WASIX smoke test', () => {
         expect(startMatches.length).toBe(1)
 
         const wasm = await watToWasm(wat)
-        const tmpPath = path.join(PROJECT_ROOT, '.delfina-smoke.wasm')
+        const tmpPath = path.join(WASM_BIN, 'delfina-smoke.wasm')
         await fs.writeFile(tmpPath, Buffer.from(wasm.buffer))
         try {
             const run = spawnSync('wasmtime', [tmpPath], { encoding: 'buffer' })
@@ -1068,7 +1073,7 @@ describe('Phase 0 WASIX smoke test', () => {
             console.log('  (skipped: wasmtime not on PATH)')
             return
         }
-        const stage1Path = path.join(PROJECT_ROOT, 'stage1.wasm')
+        const stage1Path = path.join(WASM_BIN, 'stage1.wasm')
         try { await fs.access(stage1Path) }
         catch {
             console.log('  (skipped: stage1.wasm missing — run scripts/build-stage1.ts)')
@@ -1107,7 +1112,7 @@ describe('Phase 0 WASIX smoke test', () => {
             console.log('  (skipped: wasmtime not on PATH)')
             return
         }
-        const stage1Path = path.join(PROJECT_ROOT, 'stage1.wasm')
+        const stage1Path = path.join(WASM_BIN, 'stage1.wasm')
         try { await fs.access(stage1Path) }
         catch {
             console.log('  (skipped: stage1.wasm missing)')
@@ -1129,7 +1134,7 @@ describe('Phase 0 WASIX smoke test', () => {
             console.log('  (skipped: wasmtime not on PATH)')
             return
         }
-        const stage1Path = path.join(PROJECT_ROOT, 'stage1.wasm')
+        const stage1Path = path.join(WASM_BIN, 'stage1.wasm')
         try { await fs.access(stage1Path) }
         catch {
             console.log('  (skipped: stage1.wasm missing)')
@@ -1149,7 +1154,7 @@ describe('Phase 0 WASIX smoke test', () => {
             console.log('  (skipped: wasmtime not on PATH)')
             return
         }
-        const stage1Path = path.join(PROJECT_ROOT, 'stage1.wasm')
+        const stage1Path = path.join(WASM_BIN, 'stage1.wasm')
         try { await fs.access(stage1Path) }
         catch {
             console.log('  (skipped: stage1.wasm missing)')
@@ -1185,10 +1190,10 @@ describe('Phase 0 WASIX smoke test', () => {
             console.log('  (skipped: wasmtime not on PATH)')
             return
         }
-        const stage1Path = path.join(PROJECT_ROOT, 'stage1.wasm')
+        const stage1Path = path.join(WASM_BIN, 'stage1.wasm')
         try { await fs.access(stage1Path) } catch { return }
 
-        const tmpDir = path.join(PROJECT_ROOT, '.phase4b-test')
+        const tmpDir = path.join(WASM_BIN, 'phase4b-test')
         await fs.mkdir(tmpDir, { recursive: true })
         const srcPath = path.join(tmpDir, 'hello.si')
         await fs.writeFile(srcPath, '@fn answer:Int := { 42 };\n')
@@ -1228,7 +1233,7 @@ describe('Phase 0 WASIX smoke test', () => {
             return
         }
         const boot = await buildBoot(path.join(PROJECT_ROOT, 'boot', 'tests', 'fn_test.si'))
-        const bootPath = path.join(PROJECT_ROOT, '.stage0-boot.wasm')
+        const bootPath = path.join(WASM_BIN, 'stage0-boot.wasm')
         await fs.writeFile(bootPath, boot)
 
         // Step 1: assemble the full bootstrap source + stage1 driver.
@@ -1279,7 +1284,7 @@ describe('Phase 0 WASIX smoke test', () => {
             stage1Sources.map(p => fs.readFile(path.join(PROJECT_ROOT, p), 'utf-8')),
         )).join('')
 
-        const stage1WasmPath = path.join(PROJECT_ROOT, '.stage1.wasm')
+        const stage1WasmPath = path.join(WASM_BIN, 'stage1.wasm')
         try {
             // Step 2: compile stage1 via boot.wasm.
             const compileRes = spawnSync('wasmtime', [bootPath], {
@@ -1334,7 +1339,7 @@ describe('Phase 0 WASIX smoke test', () => {
             return
         }
         const wasm = await buildBoot(path.join(PROJECT_ROOT, 'boot', 'tests', 'fn_test.si'))
-        const tmpPath = path.join(PROJECT_ROOT, '.self-host-boot.wasm')
+        const tmpPath = path.join(WASM_BIN, 'self-host-boot.wasm')
         await fs.writeFile(tmpPath, wasm)
 
         const strataDir = path.join(PROJECT_ROOT, 'src', 'strata')
@@ -1407,7 +1412,7 @@ describe('Phase 0 WASIX smoke test', () => {
             return
         }
         const wasm = await buildBoot(path.join(PROJECT_ROOT, 'boot', 'tests', 'fn_test.si'))
-        const tmpPath = path.join(PROJECT_ROOT, '.loader-boot.wasm')
+        const tmpPath = path.join(WASM_BIN, 'loader-boot.wasm')
         await fs.writeFile(tmpPath, wasm)
 
         const strataDir = path.join(PROJECT_ROOT, 'src', 'strata')
@@ -1470,7 +1475,7 @@ describe('Phase 0 WASIX smoke test', () => {
             return
         }
         const wasm = await buildBoot(path.join(PROJECT_ROOT, 'boot', 'tests', 'fn_test.si'))
-        const tmpPath = path.join(PROJECT_ROOT, '.parse-boot.wasm')
+        const tmpPath = path.join(WASM_BIN, 'parse-boot.wasm')
         await fs.writeFile(tmpPath, wasm)
 
         const strataDir = path.join(PROJECT_ROOT, 'src', 'strata')
@@ -1533,7 +1538,7 @@ describe('Phase 0 WASIX smoke test', () => {
             return
         }
         const wasm = await buildBoot(path.join(PROJECT_ROOT, 'boot', 'tests', 'fn_test.si'))
-        const tmpPath = path.join(PROJECT_ROOT, '.lex-boot.wasm')
+        const tmpPath = path.join(WASM_BIN, 'lex-boot.wasm')
         await fs.writeFile(tmpPath, wasm)
 
         const strataDir = path.join(PROJECT_ROOT, 'src', 'strata')
@@ -1594,7 +1599,7 @@ describe('Phase 0 WASIX smoke test', () => {
             return
         }
         const wasm = await buildBoot(path.join(PROJECT_ROOT, 'boot', 'tests', 'fn_test.si'))
-        const tmpPath = path.join(PROJECT_ROOT, '.wasi-io-boot.wasm')
+        const tmpPath = path.join(WASM_BIN, 'wasi-io-boot.wasm')
         await fs.writeFile(tmpPath, wasm)
 
         const strataDir = path.join(PROJECT_ROOT, 'src', 'strata')
@@ -1635,7 +1640,7 @@ describe('Phase 0 WASIX smoke test', () => {
             "@fn _start:Void := { &write_str 1, 'hello, world\\n' };",
         ].join('\n')
 
-        const outWasm = path.join(PROJECT_ROOT, '.wasi-io.wasm')
+        const outWasm = path.join(WASM_BIN, 'wasi-io.wasm')
         try {
             const compileRes = spawnSync('wasmtime', [tmpPath], {
                 input: Buffer.from(bundle + userProg, 'utf-8'),
@@ -1671,7 +1676,7 @@ describe('Phase 0 WASIX smoke test', () => {
             return
         }
         const wasm = await buildBoot(path.join(PROJECT_ROOT, 'boot', 'tests', 'fn_test.si'))
-        const tmpPath = path.join(PROJECT_ROOT, '.wasi-helper-boot.wasm')
+        const tmpPath = path.join(WASM_BIN, 'wasi-helper-boot.wasm')
         await fs.writeFile(tmpPath, wasm)
 
         const strataDir = path.join(PROJECT_ROOT, 'src', 'strata')
@@ -1718,7 +1723,7 @@ describe('Phase 0 WASIX smoke test', () => {
             '};',
         ].join('\n') + '\n'
 
-        const outWasm = path.join(PROJECT_ROOT, '.wasi-helper.wasm')
+        const outWasm = path.join(WASM_BIN, 'wasi-helper.wasm')
         try {
             const compileRes = spawnSync('wasmtime', [tmpPath], {
                 input: Buffer.from(bundle + userProg, 'utf-8'),
@@ -1753,7 +1758,7 @@ describe('Phase 0 WASIX smoke test', () => {
             return
         }
         const wasm = await buildBoot(path.join(PROJECT_ROOT, 'boot', 'tests', 'fn_test.si'))
-        const tmpPath = path.join(PROJECT_ROOT, '.wasi-hello-boot.wasm')
+        const tmpPath = path.join(WASM_BIN, 'wasi-hello-boot.wasm')
         await fs.writeFile(tmpPath, wasm)
 
         const strataDir = path.join(PROJECT_ROOT, 'src', 'strata')
@@ -1784,8 +1789,8 @@ describe('Phase 0 WASIX smoke test', () => {
             '};',
         ].join('\n') + '\n'
 
-        const helloWat = path.join(PROJECT_ROOT, '.wasi-hello.wat')
-        const helloWasm = path.join(PROJECT_ROOT, '.wasi-hello.wasm')
+        const helloWat = path.join(WASM_BIN, 'wasi-hello.wat')
+        const helloWasm = path.join(WASM_BIN, 'wasi-hello.wasm')
         try {
             // Step 1: compile Silicon → WAT via boot.wasm under wasmer.
             const compileRes = spawnSync('wasmtime', [tmpPath], {
@@ -1823,7 +1828,7 @@ describe('Phase 0 WASIX smoke test', () => {
             return
         }
         const wasm = await buildBoot(path.join(PROJECT_ROOT, 'boot', 'tests', 'scope_test.si'))
-        const tmpPath = path.join(PROJECT_ROOT, '.scope-smoke.wasm')
+        const tmpPath = path.join(WASM_BIN, 'scope-smoke.wasm')
         await fs.writeFile(tmpPath, wasm)
 
         const strataDir = path.join(PROJECT_ROOT, 'src', 'strata')
@@ -1872,7 +1877,7 @@ describe('Phase 0 WASIX smoke test', () => {
             return
         }
         const wasm = await buildBoot(path.join(PROJECT_ROOT, 'boot', 'tests', 'module_test.si'))
-        const tmpPath = path.join(PROJECT_ROOT, '.module-smoke.wasm')
+        const tmpPath = path.join(WASM_BIN, 'module-smoke.wasm')
         await fs.writeFile(tmpPath, wasm)
 
         const strataDir = path.join(PROJECT_ROOT, 'src', 'strata')
@@ -1929,7 +1934,7 @@ describe('Phase 0 WASIX smoke test', () => {
             return
         }
         const wasm = await buildBoot(path.join(PROJECT_ROOT, 'boot', 'tests', 'emit_test.si'))
-        const tmpPath = path.join(PROJECT_ROOT, '.emit-smoke.wasm')
+        const tmpPath = path.join(WASM_BIN, 'emit-smoke.wasm')
         await fs.writeFile(tmpPath, wasm)
 
         const strataDir = path.join(PROJECT_ROOT, 'src', 'strata')
@@ -1979,7 +1984,7 @@ describe('Phase 0 WASIX smoke test', () => {
             return
         }
         const wasm = await buildBoot(path.join(PROJECT_ROOT, 'boot', 'tests', 'lower_test.si'))
-        const tmpPath = path.join(PROJECT_ROOT, '.lower-smoke.wasm')
+        const tmpPath = path.join(WASM_BIN, 'lower-smoke.wasm')
         await fs.writeFile(tmpPath, wasm)
 
         const strataDir = path.join(PROJECT_ROOT, 'src', 'strata')
@@ -2039,7 +2044,7 @@ describe('Phase 0 WASIX smoke test', () => {
             return
         }
         const wasm = await buildBoot(path.join(PROJECT_ROOT, 'boot', 'tests', 'body_test.si'))
-        const tmpPath = path.join(PROJECT_ROOT, '.body-smoke.wasm')
+        const tmpPath = path.join(WASM_BIN, 'body-smoke.wasm')
         await fs.writeFile(tmpPath, wasm)
 
         const strataDir = path.join(PROJECT_ROOT, 'src', 'strata')
@@ -2136,7 +2141,7 @@ describe('Phase 0 WASIX smoke test', () => {
             return
         }
         const wasm = await buildBoot(path.join(PROJECT_ROOT, 'boot', 'tests', 'ir_nodes_test.si'))
-        const tmpPath = path.join(PROJECT_ROOT, '.ir-nodes.wasm')
+        const tmpPath = path.join(WASM_BIN, 'ir-nodes.wasm')
         await fs.writeFile(tmpPath, wasm)
         try {
             const result = spawnSync('wasmtime', [tmpPath], { maxBuffer: 1 << 20 })
@@ -2154,7 +2159,7 @@ describe('Phase 0 WASIX smoke test', () => {
             return
         }
         const wasm = await buildBoot(path.join(PROJECT_ROOT, 'boot', 'tests', 'templates_test.si'))
-        const tmpPath = path.join(PROJECT_ROOT, '.tpl-smoke.wasm')
+        const tmpPath = path.join(WASM_BIN, 'tpl-smoke.wasm')
         await fs.writeFile(tmpPath, wasm)
 
         const strataDir = path.join(PROJECT_ROOT, 'src', 'strata')
@@ -2260,7 +2265,7 @@ describe('Phase 0 WASIX smoke test', () => {
             return
         }
         const wasm = await buildBoot(path.join(PROJECT_ROOT, 'boot', 'tests', 'intrinsics_test.si'))
-        const tmpPath = path.join(PROJECT_ROOT, '.intr-smoke.wasm')
+        const tmpPath = path.join(WASM_BIN, 'intr-smoke.wasm')
         await fs.writeFile(tmpPath, wasm)
 
         const strataDir = path.join(PROJECT_ROOT, 'src', 'strata')
@@ -2325,7 +2330,7 @@ describe('Phase 0 WASIX smoke test', () => {
             return
         }
         const wasm = await buildBoot(path.join(PROJECT_ROOT, 'boot', 'tests', 'elaborator_test.si'))
-        const tmpPath = path.join(PROJECT_ROOT, '.elab-smoke.wasm')
+        const tmpPath = path.join(WASM_BIN, 'elab-smoke.wasm')
         await fs.writeFile(tmpPath, wasm)
 
         // Built-in strata bundle + a handful of user definitions covering
@@ -2464,7 +2469,7 @@ describe('Phase 0 WASIX smoke test', () => {
             return
         }
         const wasm = await buildBoot(path.join(PROJECT_ROOT, 'boot', 'tests', 'json_fixtures_test.si'))
-        const tmpPath = path.join(PROJECT_ROOT, '.json-fixtures.wasm')
+        const tmpPath = path.join(WASM_BIN, 'json-fixtures.wasm')
         await fs.writeFile(tmpPath, wasm)
 
         const stage0Parse = (await import('../src/parser')).default

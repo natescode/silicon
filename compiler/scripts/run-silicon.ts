@@ -38,10 +38,10 @@ async function main(): Promise<void> {
         ? args[1]
         : sourcePath.replace(/\.si$/, '.wat')
 
-    const stage1Path = path.join(PROJECT_ROOT, 'stage1.wasm')
+    const stage1Path = path.join(PROJECT_ROOT, 'wasm-bin', 'stage1.wasm')
     try { await fs.access(stage1Path) }
     catch {
-        console.error('stage1.wasm missing. Build it first:')
+        console.error('wasm-bin/stage1.wasm missing. Build it first:')
         console.error('  bun run scripts/build-stage1.ts')
         process.exit(1)
     }

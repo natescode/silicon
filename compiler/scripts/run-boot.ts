@@ -15,6 +15,7 @@ import { spawnSync } from 'node:child_process'
 import * as path from 'node:path'
 
 const PROJECT_ROOT = path.resolve(import.meta.dirname, '..')
+const BOOT_WASM = path.join('wasm-bin', 'boot.wasm')
 const argv = process.argv.slice(2)
 const dashDash = argv.indexOf('--')
 const entry = dashDash >= 0 ? argv.slice(0, dashDash) : argv
@@ -27,8 +28,8 @@ const build = spawnSync('bun', ['run', path.join('scripts', 'build-boot.ts'), en
 })
 if (build.status !== 0) process.exit(build.status ?? 1)
 
-console.log(`\nwasmtime boot.wasm ${wasmtimeArgs.join(' ')}`.trimEnd())
-const run = spawnSync('wasmtime', ['boot.wasm', ...(wasmtimeArgs.length ? ['--', ...wasmtimeArgs] : [])], {
+console.log(`\nwasmtime ${BOOT_WASM} ${wasmtimeArgs.join(' ')}`.trimEnd())
+const run = spawnSync('wasmtime', [BOOT_WASM, ...(wasmtimeArgs.length ? ['--', ...wasmtimeArgs] : [])], {
     cwd: PROJECT_ROOT,
     stdio: 'inherit',
 })

@@ -32,7 +32,8 @@ import * as path from 'node:path'
 import { watToWasm } from '../src/codegen/toWasm'
 
 const PROJECT_ROOT = path.resolve(import.meta.dirname, '..')
-const OUTPUT_PREFIX = process.argv[2] ?? path.join(PROJECT_ROOT, 'stage1')
+const WASM_BIN = path.join(PROJECT_ROOT, 'wasm-bin')
+const OUTPUT_PREFIX = process.argv[2] ?? path.join(WASM_BIN, 'stage1')
 
 // The order matters — files are concatenated and later @use'd
 // definitions become unreachable; this list is the bootstrap source
@@ -146,7 +147,8 @@ async function main(): Promise<void> {
     console.log(`  ↳ boot/embedded_bundle.si (${bundle.length} bytes embedded)`)
 
     // 2. Ensure boot.wasm exists (build if missing).
-    const bootPath = path.join(PROJECT_ROOT, 'boot.wasm')
+    await fs.mkdir(WASM_BIN, { recursive: true })
+    const bootPath = path.join(WASM_BIN, 'boot.wasm')
     let needBuild = false
     try { await fs.access(bootPath) } catch { needBuild = true }
     if (needBuild) {

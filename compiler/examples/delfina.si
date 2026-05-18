@@ -1,0 +1,12 @@
+# Show my beautiful girlfriend my language.
+#
+# wasmtime is a WASI runtime — there is no console_log.  Instead we
+# write to stdout (fd 1) via the WASI fd_write surface, wrapped in
+# boot/std/io.si :: write_str.
+@use '../boot/std/io.si';
+
+@let name:String := 'Delfina';
+
+## Print Delfina's name + newline to stdout.
+&write_str  1, name;
+&write_byte 1, 10;

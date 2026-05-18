@@ -22,9 +22,9 @@ boot/
 ## Building and running
 
 ```bash
-bun run boot:build                    # compile boot/main.si → boot.wat + boot.wasm
-bun run boot:run                      # build, then `wasmtime boot.wasm`
-wasmtime boot.wasm < some-file.txt    # echo a file's contents to stdout
+bun run boot:build                    # compile boot/main.si → wasm-bin/boot.{wat,wasm}
+bun run boot:run                      # build, then `wasmtime wasm-bin/boot.wasm`
+wasmtime wasm-bin/boot.wasm < some-file.txt    # echo a file's contents to stdout
 ```
 
 The echo program reads stdin in 4 KiB chunks and writes them back to stdout
@@ -34,7 +34,7 @@ To run a different entry (e.g. one of the unit tests):
 
 ```bash
 bun run scripts/build-boot.ts boot/tests/arena_test.si
-wasmtime boot.wasm
+wasmtime wasm-bin/boot.wasm
 # → arena OK
 ```
 
@@ -105,7 +105,7 @@ when wasmtime isn't on PATH.
 - [x] WASI runtime reachable from Silicon
 - [x] Arena allocator with save/reset (`boot/std/arena.si`)
 - [x] `vec_i32` dynamic array with grow-by-doubling (`boot/std/vec.si`)
-- [x] File-echo gate: `wasmtime boot.wasm < README.md` reproduces
+- [x] File-echo gate: `wasmtime wasm-bin/boot.wasm < README.md` reproduces
       README.md byte-for-byte on stdout, exits 0
 - [x] argv-based file open via `path_open` (Silicon-Core i64 +
       `boot/std/fs.si`; see `boot/cli.si` for the dispatcher)

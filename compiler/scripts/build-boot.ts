@@ -55,15 +55,17 @@ async function build(entryPath: string): Promise<void> {
         process.exit(1)
     }
     const wat = compileToWat(typed, registry, functions, moduleRegistry, { target: 'wasix' })
-    const watPath = path.join(PROJECT_ROOT, 'boot.wat')
+    const outDir = path.join(PROJECT_ROOT, 'wasm-bin')
+    await fs.mkdir(outDir, { recursive: true })
+    const watPath = path.join(outDir, 'boot.wat')
     await fs.writeFile(watPath, wat)
     console.log(`  → ${path.relative(PROJECT_ROOT, watPath)}`)
 
     const binary = await watToWasm(wat)
-    const wasmPath = path.join(PROJECT_ROOT, 'boot.wasm')
+    const wasmPath = path.join(outDir, 'boot.wasm')
     await fs.writeFile(wasmPath, binary)
     console.log(`  → ${path.relative(PROJECT_ROOT, wasmPath)} (${binary.byteLength} bytes)`)
-    console.log(`\nRun with: wasmtime boot.wasm`)
+    console.log(`\nRun with: wasmtime ${path.relative(PROJECT_ROOT, wasmPath)}`)
 }
 
 const entry = process.argv[2] ?? DEFAULT_ENTRY
