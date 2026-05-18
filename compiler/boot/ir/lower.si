@@ -495,6 +495,36 @@
   h
 };
 
+# try_dispatch_def_via_body_rich — parallel hook for AST_DEFINITION
+# nodes (vs the AST_CALL form above).  Looks up the keyword's
+# strata, sets nodeParamName → def_node, runs body_rich.  Returns
+# IR_NONE when no strata is registered or when the body produces
+# nothing useful for a definition (IR_NULL — what trivial keywords
+# like @platform end with — is filtered to IR_NONE so the caller
+# doesn't push a stray IR_NULL into the module's function list).
+# Real def-keyword wiring lands once body_rich grows
+# Compiler::ir::makeGlobal / makeFunction / makeImport / makeExport
+# constructors that produce module-level IR nodes.
+@fn try_dispatch_def_via_body_rich:Int def_node:Int, kw_off:Int, kw_len:Int := {
+  @local elab := &registry_kw_lookup kw_off, kw_len;
+  &@if (elab < 0), { &@return IR_NONE; };
+  @local sem    := &ast_field P_AST, elab, 8;
+  @local np_off := &ast_field P_AST, elab, 6;
+  @local np_len := &ast_field P_AST, elab, 7;
+  @local sv_off := BS_NAME_OFF;
+  @local sv_len := BS_NAME_LEN;
+  @local sv_val := BS_VALUE;
+  &bs_init;
+  &bs_push np_off, np_len, def_node;
+  @local h := &br_interpret_body sem;
+  BS_NAME_OFF = sv_off;
+  BS_NAME_LEN = sv_len;
+  BS_VALUE    = sv_val;
+  &@if (h == IR_NONE), { &@return IR_NONE; };
+  &@if ((&ir_kind h) == IR_NULL), { &@return IR_NONE; };
+  h
+};
+
 # register_extern_sigs — pre-register an @extern AST_DEFINITION's bare
 # and (if namespaced) mangled name in the fn_sig table so later tail-
 # type inference and call-site lookups can resolve produces_value
@@ -716,6 +746,20 @@
       };
       &@if ((is_var + is_ext) == 0), {
         @local h := &lower_definition elem;
+        # Body-rich fallback for definitions whose hardcoded path
+        # returns IR_NONE.  When body_rich's Compiler::ir::make{
+        # Function, Global, Import, Export} constructors land,
+        # individual definition keywords will start dispatching
+        # through this path; until then it's a no-op (body_rich
+        # returns IR_NONE for unimplemented makeX calls).  Trivial
+        # def keywords (@platform, @enum, @type_*, @type_alias,
+        # @type_distinct) whose bodies end in &IR::null produce an
+        # IR_NULL handle that try_dispatch_def_via_body_rich filters
+        # out, so we don't accidentally push it into `out`.
+        &@if (h == IR_NONE), {
+          @local hd := &try_dispatch_def_via_body_rich elem, kw_off, kw_len;
+          &@if (hd != IR_NONE), { h = hd; };
+        };
         &@if (h != IR_NONE), { out = &vec_push out, h; };
       };
     };
