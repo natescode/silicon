@@ -1102,7 +1102,7 @@ describe('Phase 0 WASIX smoke test', () => {
         expect(wasm.buffer.byteLength).toBeGreaterThan(100)
     }, 60000)
 
-    test('PHASE 4a: stage1.wasm CLI — --usage prints help to stdout and exits 0', async () => {
+    test('PHASE 4a: stage1.wasm CLI — --help prints help to stdout and exits 0', async () => {
         if (!wasmtimeAvailable()) {
             console.log('  (skipped: wasmtime not on PATH)')
             return
@@ -1113,9 +1113,7 @@ describe('Phase 0 WASIX smoke test', () => {
             console.log('  (skipped: stage1.wasm missing)')
             return
         }
-        // `--usage` instead of `--help` because wasmer 2.x intercepts
-        // `--help` even after `--`.  See boot/cli.si comment.
-        const r = spawnSync('wasmtime', [stage1Path, '--usage'], {
+        const r = spawnSync('wasmtime', [stage1Path, '--help'], {
             input: '',
             maxBuffer: 64 * 1024 * 1024,
         })
@@ -1123,7 +1121,7 @@ describe('Phase 0 WASIX smoke test', () => {
         const out = (r.stdout ?? Buffer.alloc(0)).toString('utf-8')
         expect(out).toContain('sigil — Silicon bootstrap compiler')
         expect(out).toContain('Flags:')
-        expect(out).toContain('--usage')
+        expect(out).toContain('--help')
     }, 30000)
 
     test('PHASE 4a: stage1.wasm CLI — unknown flag exits non-zero with stderr message', async () => {
