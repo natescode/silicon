@@ -393,10 +393,43 @@
       };
     };
     # Other multi-segment calls — check the fn_sig pool entry
-    # (registered by the @extern pre-pass).  Default 1.
+    # (registered by the @extern pre-pass in lower_program below).
+    # Hits an extern → use its actual has_result.  Misses → fall
+    # back to "produces a value" so callers don't lose stack
+    # discipline when the callee is unknown (e.g. an extern
+    # declared in a sibling module that wasn't bundled).
+    @local mpv := &multi_seg_tail_lookup node;
+    &@if (mpv >= 0), { &@return mpv; };
     &@return 1;
   };
   1
+};
+
+# Helper for ast_tail_produces_value: given a multi-segment AST_CALL
+# whose callee is an AST_NAMESPACE, build the mangled name into
+# NAME_POOL, consult fn_sig_lookup, then REWIND NAME_POOL so we
+# don't leave the scratch bytes behind.  Returns -1 if not found.
+#
+# Safe because: (1) name_pool_push_mangled is the only writer in the
+# bootstrap and we call no other code between push and rewind;
+# (2) any prior pool handles point at offsets < pool_before, which
+# are untouched by the rewind.
+@fn multi_seg_tail_lookup:Int call_node:Int := {
+  @local callee := &ast_field P_AST, call_node, 1;
+  &@if ((&ast_kind P_AST, callee) != AST_NAMESPACE), { &@return 0 - 1; };
+  @local n_segs := &ast_field P_AST, callee, 1;
+  &@if (n_segs < 2), { &@return 0 - 1; };
+  @local pool_before := &vec_len NAME_POOL;
+  @local handle := &name_pool_push_mangled callee;
+  @local pool_start := (0 - handle) - 2;
+  @local mangled_len := (&vec_len NAME_POOL) - pool_start;
+  @local pv := &fn_sig_lookup pool_start, mangled_len, 1;
+  # Rewind NAME_POOL header (slot at NAME_POOL+4 is the len field, see
+  # boot/std/vec.si).  The bytes after the new length stay in linear
+  # memory but are unreachable from any handle, so subsequent vec_push
+  # operations overwrite them as expected.
+  &WASM::i32_store (NAME_POOL + 4), pool_before;
+  pv
 };
 
 # ir_produces_value — recursively decide whether the IR at `h`
@@ -429,6 +462,50 @@
     &@return (&ir_produces_value (&ir_block_child h, (nc - 1)));
   };
   1
+};
+
+# register_extern_sigs — pre-register an @extern AST_DEFINITION's bare
+# and (if namespaced) mangled name in the fn_sig table so later tail-
+# type inference and call-site lookups can resolve produces_value
+# correctly regardless of source order.  Mirrors the registration
+# logic embedded in pass 2's extern handling (lines registering
+# `&fn_sig_register nm_off, nm_len, …` and the mangled-name push) —
+# duplicated invocation in pass 2 stays harmless because lookups
+# return the most-recent match.
+@fn register_extern_sigs elem:Int := {
+  @local nm_off := &ast_field P_AST, elem, 3;
+  @local nm_len := &ast_field P_AST, elem, 4;
+  @local ty_off := &ast_field P_AST, elem, 5;
+  @local ty_len := &ast_field P_AST, elem, 6;
+  @local result_type := &type_name_to_kind ty_off, ty_len;
+  @local has_result := 0;
+  &@if (result_type != TYPE_VOID), { has_result = 1; };
+  # Find the `::` separator (-1 if single-segment).
+  @local sep_pos := 0 - 1;
+  @local sj := 0;
+  &@loop ((sep_pos < 0) * (sj < (nm_len - 1)) == 1), {
+    @local b0 := &WASM::i32_load8_u (P_SRC + nm_off + sj);
+    @local b1 := &WASM::i32_load8_u (P_SRC + nm_off + sj + 1);
+    &@if ((b0 == 58) * (b1 == 58) == 1), { sep_pos = sj; };
+    sj = sj + 1;
+  };
+  &fn_sig_register nm_off, nm_len, 0, has_result;
+  &@if (sep_pos >= 0), {
+    # Mangle "<mod>::<fn>" → "<mod>_<fn>" into NAME_POOL.
+    @local pool_start := &vec_len NAME_POOL;
+    @local k := 0;
+    &@loop (k < nm_len), {
+      @local bb := &WASM::i32_load8_u (P_SRC + nm_off + k);
+      @local push_byte := 1;
+      &@if (k == sep_pos), { bb = 95; };             # first ':' -> '_'
+      &@if (k == (sep_pos + 1)), { push_byte = 0; }; # second ':' -> skip
+      &@if (push_byte == 1), {
+        NAME_POOL = &vec_push NAME_POOL, bb;
+      };
+      k = k + 1;
+    };
+    &fn_sig_register pool_start, (nm_len - 1), 1, has_result;
+  };
 };
 
 @fn lower_program:Int prog:Int := {
@@ -466,12 +543,39 @@
     i = i + 1;
   };
 
+  # Pass 1.5a: pre-register EXTERN signatures (bare + mangled names)
+  # in fn_sig before any function body's tail-type is inferred.  Was
+  # previously deferred to pass 2, which meant any @fn whose tail is
+  # a multi-segment extern call (e.g. `&proc_exit code`) saw an
+  # unregistered sig, defaulted to "produces a value", and the
+  # caller emitted a spurious `drop` after the void call — strict
+  # wat2wasm and wasmtime both reject the result.  Pre-registering
+  # here lets multi_seg_tail_lookup (used by ast_tail_produces_value
+  # below) find the actual has_result.
+  #
+  # Pass 2's extern handling still re-registers the same signatures;
+  # fn_sig_lookup is most-recent-wins so the redundant entries are
+  # harmless.  The NAME_POOL bytes pushed here are also re-pushed in
+  # pass 2 at a different offset — pool bloat but no output change.
+  i = 0;
+  &@loop (i < n), {
+    @local elem := &ast_field P_AST, prog, (2 + i);
+    @local k := &ast_kind P_AST, elem;
+    &@if (k == AST_DEFINITION), {
+      @local kw_off := &ast_field P_AST, elem, 1;
+      @local kw_len := &ast_field P_AST, elem, 2;
+      @local is_ext := &lower_span_eq_lit kw_off, kw_len, (&lit_at_extern_ptr), 7;
+      &@if (is_ext == 1), {
+        &register_extern_sigs elem;
+      };
+    };
+    i = i + 1;
+  };
+
   # Pass 1.5: register every @fn / @let with its inferred (or
   # annotated) return type so cross-function calls — including
   # forward references and calls to syntactically-void helpers —
   # resolve produces_value correctly during pass-2 lowering.
-  # @extern is pre-registered when handled in pass 2 because it
-  # never references other functions.
   i = 0;
   &@loop (i < n), {
     @local elem := &ast_field P_AST, prog, (2 + i);
