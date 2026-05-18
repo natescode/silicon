@@ -28,3 +28,29 @@
   @local one    := &Compiler::ir::makeConst 1, 'i32';
   &Compiler::ir::makeIf left, one, right, 'i32';
 };
+
+# &@nz v  →  1 if v != 0 else 0.  Boolean normalisation — useful when
+# you need a 0/1 bool regardless of what non-zero number the source
+# produced.
+#
+# This is the first KEYWORD ADDED PURELY IN SILICON: there is no
+# @nz branch anywhere in boot/ir/lower.si or src/.  The strata loader
+# registers it, body_rich dispatches it via its generic fallback for
+# @-prefixed calls, and stage1 lowers it to an if-1-else-0.  Edit-
+# then-regen-then-rebuild propagates the change without any TS step.
+#
+# NOTE: the &IR::<dispatch-kind> first-call marker that other keyword
+# strata use (e.g. @if's &IR::control_if;) is intentionally omitted
+# here — stage1's strata loader has a latent bug where two keywords
+# sharing the same first-call marker confuses boot.wasm's compile
+# pipeline (manifests as a Pointer-out-of-bounds in fd_read).  Worth
+# tracking down for a future fix; for now the workaround is to skip
+# the marker and let body_rich's generic-fallback handle dispatch
+# purely by keyword name.
+@stratum_keyword NotZero ('@nz', Node) = {
+  @local vN   := &Compiler::arg Node, 0;
+  @local v    := &Compiler::lowerExpr vN;
+  @local one  := &Compiler::ir::makeConst 1, 'i32';
+  @local zero := &Compiler::ir::makeConst 0, 'i32';
+  &Compiler::ir::makeIf v, one, zero;
+};

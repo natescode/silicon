@@ -1126,6 +1126,12 @@ describe('Phase 0 WASIX smoke test', () => {
         // IR_NONE and the @local binding was uninitialized.  Lock in
         // the short-circuit-bool fix.
         { path: 'boot/tests/vec_test.si',       expect: 'vec OK' },
+        // nz_keyword_test exercises a keyword defined entirely in
+        // Silicon (boot/strata/builtin/logic.si:NotZero — has NO
+        // branch in boot/ir/lower.si).  Routes through body_rich's
+        // generic @-keyword fallback.  This is the proof that adding
+        // expression-form keywords in pure Silicon works end-to-end.
+        { path: 'boot/tests/nz_keyword_test.si', expect: 'nz OK' },
     ]
     for (const fx of STAGE1_PIPELINE_FIXTURES) {
         test(`STAGE 1 PIPELINE: ${fx.path} compiles via stage1.wasm + strict watToWasm + runs`, async () => {

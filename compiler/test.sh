@@ -128,6 +128,7 @@ DEFAULT_TESTS=(
   "boot/tests/ir_nodes_test.si"
   "boot/tests/body_scope_test.si"
   "boot/tests/body_rich_test.si"
+  "boot/tests/nz_keyword_test.si"
 )
 
 if [ $# -gt 0 ]; then
