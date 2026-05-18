@@ -2284,6 +2284,24 @@ describe('Phase 0 WASIX smoke test', () => {
         }
     })
 
+    test('boot/tests/check_binop_test.si: Phase 2 slice 2e-ii — checkNode BinaryOp', async () => {
+        if (!wasmtimeAvailable()) {
+            console.log('  (skipped: wasmtime not on PATH)')
+            return
+        }
+        const wasm = await buildBoot(path.join(PROJECT_ROOT, 'boot', 'tests', 'check_binop_test.si'))
+        const tmpPath = path.join(WASM_BIN, 'check_binop.wasm')
+        await fs.writeFile(tmpPath, wasm)
+        try {
+            const result = spawnSync('wasmtime', [tmpPath], { maxBuffer: 1 << 20 })
+            expect(result.status).toBe(0)
+            const stdout = (result.stdout ?? Buffer.alloc(0)).toString('utf-8').trim()
+            expect(stdout).toBe('check-binop OK')
+        } finally {
+            await fs.unlink(tmpPath).catch(() => {})
+        }
+    })
+
     test('boot/tests/check_literals_test.si: Phase 2 slice 2e-i — checkNode skeleton + literals + Namespace', async () => {
         if (!wasmtimeAvailable()) {
             console.log('  (skipped: wasmtime not on PATH)')

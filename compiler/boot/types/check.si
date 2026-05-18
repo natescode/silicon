@@ -35,6 +35,7 @@
   &@if (k == AST_STRING_LIT), { r = TYPE_STRING_H; };
   &@if (k == AST_BOOL_LIT),   { r = TYPE_BOOL_H; };
   &@if (k == AST_NAMESPACE),  { r = &check_namespace node; };
+  &@if (k == AST_BIN_OP),     { r = &check_binary_op node; };
 
   r
 };
@@ -76,4 +77,130 @@
     t = TYPE_UNKNOWN_H;
   };
   t
+};
+
+# ── Operator classifiers ─────────────────────────────────────────
+#
+# Each takes a P_SRC byte span (op_off, op_len) and returns 1 if the
+# operator belongs to the class.  Kept as data instead of a switch so
+# tables can grow with the surface language without restructuring
+# check_binary_op.
+
+@fn op_span_eq:Int op_off:Int, op_len:Int, lit:String := {
+  @local lp := (&str_ptr lit) + 4;
+  @local ll := &str_len lit;
+  @local ok := 1;
+  &@if (op_len != ll), { ok = 0; };
+  @local i := 0;
+  &@loop ((ok * (i < op_len)) == 1), {
+    &@if ((&WASM::i32_load8_u (P_SRC + op_off + i)) != (&WASM::i32_load8_u (lp + i))), { ok = 0; };
+    i = i + 1;
+  };
+  ok
+};
+
+# Arith: +, -, *, /, %, and bitwise &, |, ^, <<, >>.
+@fn op_is_arith:Int op_off:Int, op_len:Int := {
+  @local r := 0;
+  &@if ((&op_span_eq op_off, op_len, '+')  == 1), { r = 1; };
+  &@if ((&op_span_eq op_off, op_len, '-')  == 1), { r = 1; };
+  &@if ((&op_span_eq op_off, op_len, '*')  == 1), { r = 1; };
+  &@if ((&op_span_eq op_off, op_len, '/')  == 1), { r = 1; };
+  &@if ((&op_span_eq op_off, op_len, '%')  == 1), { r = 1; };
+  &@if ((&op_span_eq op_off, op_len, '&')  == 1), { r = 1; };
+  &@if ((&op_span_eq op_off, op_len, '|')  == 1), { r = 1; };
+  &@if ((&op_span_eq op_off, op_len, '^')  == 1), { r = 1; };
+  &@if ((&op_span_eq op_off, op_len, '<<') == 1), { r = 1; };
+  &@if ((&op_span_eq op_off, op_len, '>>') == 1), { r = 1; };
+  r
+};
+
+# Comparisons: ==, !=, <, >, <=, >=.
+@fn op_is_compare:Int op_off:Int, op_len:Int := {
+  @local r := 0;
+  &@if ((&op_span_eq op_off, op_len, '==') == 1), { r = 1; };
+  &@if ((&op_span_eq op_off, op_len, '!=') == 1), { r = 1; };
+  &@if ((&op_span_eq op_off, op_len, '<')  == 1), { r = 1; };
+  &@if ((&op_span_eq op_off, op_len, '>')  == 1), { r = 1; };
+  &@if ((&op_span_eq op_off, op_len, '<=') == 1), { r = 1; };
+  &@if ((&op_span_eq op_off, op_len, '>=') == 1), { r = 1; };
+  r
+};
+
+# == and != accept any equality-comparable pair (Bool, String, etc).
+@fn op_is_eq_or_ne:Int op_off:Int, op_len:Int := {
+  @local r := 0;
+  &@if ((&op_span_eq op_off, op_len, '==') == 1), { r = 1; };
+  &@if ((&op_span_eq op_off, op_len, '!=') == 1), { r = 1; };
+  r
+};
+
+@fn op_is_concat:Int op_off:Int, op_len:Int := {
+  &op_span_eq op_off, op_len, '++'
+};
+
+# AST_BIN_OP [kind, op_off, op_len, left, right]
+#
+# Strategy:
+#   1. Recurse on both operands.
+#   2. If either is TYPE_UNKNOWN, propagate Unknown silently (the
+#      sub-expression already pushed any relevant errors).
+#   3. Require both operands to be the same type — mismatch pushes
+#      EK_INVALID_OPERATOR.
+#   4. Dispatch by operator category:
+#      - Arith on numeric → operand type
+#      - Compare(<,>,<=,>=) on numeric → Bool
+#      - Compare(==,!=) on any equality-comparable → Bool
+#      - ++ on String → String
+#      - anything else → EK_INVALID_OPERATOR + Unknown
+@fn check_binary_op:Int node:Int := {
+  @local op_off := &ast_field P_AST, node, 1;
+  @local op_len := &ast_field P_AST, node, 2;
+  @local left   := &ast_field P_AST, node, 3;
+  @local right  := &ast_field P_AST, node, 4;
+
+  @local lt := &check_node left;
+  @local rt := &check_node right;
+  @local r  := TYPE_UNKNOWN_H;
+
+  &@if (((lt == TYPE_UNKNOWN_H) | (rt == TYPE_UNKNOWN_H)) == 0), {
+    &@if (lt != rt), {
+      &err_invalid_operator op_off, op_len, lt, rt, op_off, op_len;
+    };
+    &@if (lt == rt), {
+      # ── Arith / bitwise ────────────────────────────────────
+      &@if ((&op_is_arith op_off, op_len) == 1), {
+        &@if ((&is_numeric lt) == 1), { r = lt; };
+        &@if ((&is_numeric lt) == 0), {
+          &err_invalid_operator op_off, op_len, lt, rt, op_off, op_len;
+        };
+      };
+
+      # ── Comparisons ────────────────────────────────────────
+      &@if ((&op_is_compare op_off, op_len) == 1), {
+        &@if ((&op_is_eq_or_ne op_off, op_len) == 1), {
+          &@if ((&is_equality_comparable lt) == 1), { r = TYPE_BOOL_H; };
+          &@if ((&is_equality_comparable lt) == 0), {
+            &err_invalid_operator op_off, op_len, lt, rt, op_off, op_len;
+          };
+        };
+        &@if ((&op_is_eq_or_ne op_off, op_len) == 0), {
+          &@if ((&is_comparable lt) == 1), { r = TYPE_BOOL_H; };
+          &@if ((&is_comparable lt) == 0), {
+            &err_invalid_operator op_off, op_len, lt, rt, op_off, op_len;
+          };
+        };
+      };
+
+      # ── Concat ─────────────────────────────────────────────
+      &@if ((&op_is_concat op_off, op_len) == 1), {
+        &@if (lt == TYPE_STRING_H), { r = TYPE_STRING_H; };
+        &@if (lt != TYPE_STRING_H), {
+          &err_invalid_operator op_off, op_len, lt, rt, op_off, op_len;
+        };
+      };
+    };
+  };
+
+  r
 };

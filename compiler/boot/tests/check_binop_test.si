@@ -1,0 +1,81 @@
+# check_binop_test — slice 2e-ii BinaryOp type checking.
+#
+# Pass: "check-binop OK", exit 0.
+# Fail: "check-binop FAIL <code>", exit 1.
+
+@use '../std/io.si';
+@use '../parser/tokens.si';
+@use '../parser/lex.si';
+@use '../parser/ast.si';
+@use '../parser/parse.si';
+@use '../types/types.si';
+@use '../types/ctx.si';
+@use '../types/errors.si';
+@use '../types/check.si';
+
+@fn cb_put_int n:Int := {
+  @local hundreds := (n / 100);
+  @local tens     := ((n / 10) % 10);
+  @local ones     := (n % 10);
+  &@if (hundreds > 0),     { &write_byte 1, (hundreds + 48); };
+  &@if (((hundreds > 0) | (tens > 0)) == 1), { &write_byte 1, (tens + 48); };
+  &write_byte 1, (ones + 48);
+};
+
+@fn cb_die code:Int := {
+  &write_str 1, 'check-binop FAIL ';
+  &cb_put_int code;
+  &write_byte 1, 10;
+  &wasi_snapshot_preview1::proc_exit 1;
+};
+
+# Parse a Silicon source and return the index of the FIRST top-level
+# expression (which the parser wraps as a single-element program).
+@fn cb_parse_top:Int src:String := {
+  @local p := (&str_ptr src) + 4;
+  @local n := &str_len src;
+  @local toks := &lex p, n;
+  @local prog := &parse p, n, toks;
+  &ast_field P_AST, prog, 2
+};
+
+@fn run := {
+  &types_init;
+  &errors_init;
+  &ctx_init;
+
+  # ── Arith on (Int, Int) → Int ────────────────────────────
+  &@if ((&check_node (&cb_parse_top '1 + 2;')) != TYPE_INT_H), { &cb_die 10; };
+  &@if ((&check_node (&cb_parse_top '5 * 3;')) != TYPE_INT_H), { &cb_die 11; };
+  &@if ((&check_node (&cb_parse_top '7 % 4;')) != TYPE_INT_H), { &cb_die 12; };
+
+  # ── Arith on (Float, Float) → Float ──────────────────────
+  &@if ((&check_node (&cb_parse_top '1.5 + 2.5;')) != TYPE_FLOAT_H), { &cb_die 20; };
+  &@if ((&check_node (&cb_parse_top '3.14 / 2.0;')) != TYPE_FLOAT_H), { &cb_die 21; };
+
+  # ── Comparison numeric → Bool ────────────────────────────
+  &@if ((&check_node (&cb_parse_top '1 < 2;'))   != TYPE_BOOL_H), { &cb_die 30; };
+  &@if ((&check_node (&cb_parse_top '5 == 5;'))  != TYPE_BOOL_H), { &cb_die 31; };
+  &@if ((&check_node (&cb_parse_top '1.0 >= 0.5;')) != TYPE_BOOL_H), { &cb_die 32; };
+
+  # ── == on Bool → Bool ────────────────────────────────────
+  &@if ((&check_node (&cb_parse_top '@true == @false;')) != TYPE_BOOL_H), { &cb_die 40; };
+
+  # ── Mismatched operands push EK_INVALID_OPERATOR ─────────
+  @local errs_before := &err_count;
+  &@if ((&check_node (&cb_parse_top '1 + 1.0;')) != TYPE_UNKNOWN_H), { &cb_die 50; };
+  &@if ((&err_count) != (errs_before + 1)),                          { &cb_die 51; };
+  &@if ((&err_kind errs_before) != EK_INVALID_OPERATOR),             { &cb_die 52; };
+
+  # Unknown propagates silently — no NEW error for the inner +,
+  # only the outer mismatch's own diagnostic counts.
+  @local errs_before2 := &err_count;
+  &@if ((&check_node (&cb_parse_top '(1 + 1.0) + 5;')) != TYPE_UNKNOWN_H), { &cb_die 60; };
+  &@if ((&err_count) != (errs_before2 + 1)),                               { &cb_die 61; };
+
+  &write_str 1, 'check-binop OK';
+  &write_byte 1, 10;
+  &wasi_snapshot_preview1::proc_exit 0;
+};
+
+&run;
