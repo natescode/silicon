@@ -1,0 +1,120 @@
+# check_literals_test — exercises check_node (slice 2e-i) for the
+# four literal kinds plus AST_NAMESPACE bound/unbound resolution.
+#
+# Pass: "check-literals OK", exit 0.
+# Fail: "check-literals FAIL <code>", exit 1.
+
+@use '../std/io.si';
+@use '../parser/tokens.si';
+@use '../parser/lex.si';
+@use '../parser/ast.si';
+@use '../parser/parse.si';
+@use '../types/types.si';
+@use '../types/ctx.si';
+@use '../types/errors.si';
+@use '../types/preregister_defs.si';
+@use '../types/check.si';
+
+@fn cl_put_int n:Int := {
+  @local hundreds := (n / 100);
+  @local tens     := ((n / 10) % 10);
+  @local ones     := (n % 10);
+  &@if (hundreds > 0),     { &write_byte 1, (hundreds + 48); };
+  &@if (((hundreds > 0) | (tens > 0)) == 1), { &write_byte 1, (tens + 48); };
+  &write_byte 1, (ones + 48);
+};
+
+@fn cl_die code:Int := {
+  &write_str 1, 'check-literals FAIL ';
+  &cl_put_int code;
+  &write_byte 1, 10;
+  &wasi_snapshot_preview1::proc_exit 1;
+};
+
+@fn run := {
+  &types_init;
+  &errors_init;
+  &ctx_init;
+
+  # ── Direct literal type inference (no parsing needed) ──────
+  # Hand-build a few literal nodes via ast_int_lit etc, then ask
+  # check_node for their types.
+  @local ast := &vec_new;
+  @local int_lit_idx := &vec_offset ast;
+  ast = &ast_int_lit ast, 42;
+  @local bool_lit_idx := &vec_offset ast;
+  ast = &ast_bool_lit ast, 1;
+  P_AST = ast;
+
+  &@if ((&check_node int_lit_idx)  != TYPE_INT_H),  { &cl_die 10; };
+  &@if ((&check_node bool_lit_idx) != TYPE_BOOL_H), { &cl_die 11; };
+
+  # ── Round-trip via parser: source with each literal kind ───
+  # Source: `@let i:Int := 7; @let f:Float := 3.14; @let b:Bool := @true;`
+  # String literal omitted from THIS source to keep our outer string
+  # quote-free; sym table seeded for 's' manually below.
+  @local src := '@let i:Int := 7; @let f:Float := 3.14; @let b:Bool := @true;';
+  @local p   := (&str_ptr src) + 4;
+  @local n   := &str_len src;
+  @local toks := &lex p, n;
+  @local prog := &parse p, n, toks;
+  &preregister_defs prog;
+
+  # Manually seed `s:String` so the symbol table covers all four
+  # literal types for the namespace-lookup check below.
+  @local s_off := &tc_intern_str 's';
+  &sym_set s_off, 1, TYPE_STRING_H;
+
+  # Verify pre-registration: sym_lookup_str gives back the annotated
+  # type for each name (slice-2d-iii landed this).  Important:
+  # check_namespace will rely on these entries when it walks a
+  # reference to one of these names.
+  &@if ((&sym_lookup_str 'i') != TYPE_INT_H),    { &cl_die 20; };
+  &@if ((&sym_lookup_str 's') != TYPE_STRING_H), { &cl_die 21; };
+  &@if ((&sym_lookup_str 'f') != TYPE_FLOAT_H),  { &cl_die 22; };
+  &@if ((&sym_lookup_str 'b') != TYPE_BOOL_H),   { &cl_die 23; };
+
+  # ── Namespace resolution ─────────────────────────────────────
+  # Hand-build an AST_NAMESPACE that references "i" using the same
+  # P_SRC bytes the parser already saw.  The literal 'i' inside src
+  # is at offset 5 (`@let i...`).  Use index_of-style arithmetic:
+  # 5 is the 'i' after '@let '.
+  @local i_off := 5;
+  @local i_len := 1;
+  @local ns_i := &vec_offset P_AST;
+  P_AST = &ast_namespace_start P_AST;
+  P_AST = &ast_namespace_seg P_AST, i_off, i_len;
+  # Patch n_segs to 1 in-place.
+  &vec_set P_AST, (ns_i + 1), 1;
+
+  @local before_errs := &err_count;
+  &@if ((&check_node ns_i) != TYPE_INT_H), { &cl_die 30; };
+  &@if ((&err_count) != before_errs),      { &cl_die 31; };
+
+  # Unbound reference — "zzz" never declared.  Append literal bytes
+  # to P_SRC isn't possible from here (P_SRC is the original buffer),
+  # so fabricate a namespace pointing at a name we know IS in P_SRC
+  # but NOT bound: 'Int' itself, which appears at offset 7 and isn't
+  # a value (it's a type).  Confirm err_unbound is pushed.
+  #
+  # Actually — 'Int' isn't in the symbol table since types live in
+  # alias_lookup, so this is a valid unbound test.
+  @local int_off := 7;
+  @local int_len := 3;
+  @local ns_int := &vec_offset P_AST;
+  P_AST = &ast_namespace_start P_AST;
+  P_AST = &ast_namespace_seg P_AST, int_off, int_len;
+  &vec_set P_AST, (ns_int + 1), 1;
+
+  &@if ((&check_node ns_int) != TYPE_UNKNOWN_H), { &cl_die 40; };
+  &@if ((&err_count) != (before_errs + 1)),      { &cl_die 41; };
+  # The error's kind should be EK_UNBOUND.
+  @local last_err := before_errs;  # since count went from before_errs to before_errs+1
+  &@if ((&err_kind last_err) != EK_UNBOUND), { &cl_die 42; };
+
+  &write_str 1, 'check-literals OK';
+  &write_byte 1, 10;
+  &wasi_snapshot_preview1::proc_exit 0;
+};
+
+&run;

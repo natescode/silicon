@@ -1,0 +1,79 @@
+# boot/types/check.si — typechecker walk (Phase 2 slice 2e).
+#
+# Port of checkNode in src/types/typechecker.ts.  Recursive walk over
+# the AST that returns the inferred SiliconType for each node and
+# pushes diagnostics onto ERR_VEC when constraints fail.
+#
+# This slice (2e-i) ships the dispatcher skeleton plus the two
+# simplest node families: literals (Int / Float / String / Bool) and
+# Namespace references.  Everything else returns TYPE_UNKNOWN_H — a
+# poison value that later slices will replace as they fill in the
+# remaining AST kinds (BinaryOp, FunctionCall, Block, Assignment,
+# Definition, ArrayLit, TupleLit, ObjectLit, keyword calls).
+#
+# Returning TYPE_UNKNOWN_H from unhandled kinds rather than crashing
+# keeps the partial implementation usable: callers can run the
+# checker over real source today and observe the literal / Namespace
+# coverage, then iterate.
+
+@use './types.si';
+@use './ctx.si';
+@use './errors.si';
+@use '../parser/ast.si';
+@use '../parser/parse.si';
+
+# Forward declaration via direct call.  Silicon allows forward refs
+# inside the same file because parse builds the full top-level
+# function table before lowering picks signatures up.
+
+@fn check_node:Int node:Int := {
+  @local k := &ast_kind P_AST, node;
+  @local r := TYPE_UNKNOWN_H;
+
+  &@if (k == AST_INT_LIT),    { r = TYPE_INT_H; };
+  &@if (k == AST_FLOAT_LIT),  { r = TYPE_FLOAT_H; };
+  &@if (k == AST_STRING_LIT), { r = TYPE_STRING_H; };
+  &@if (k == AST_BOOL_LIT),   { r = TYPE_BOOL_H; };
+  &@if (k == AST_NAMESPACE),  { r = &check_namespace node; };
+
+  r
+};
+
+# AST_NAMESPACE [kind, n_segs, seg0_off, seg0_len, seg1_off, seg1_len, ...]
+#
+# Look up by the FULL joined span — the parser stores each segment's
+# (off, len) consecutively, and a multi-segment ref's effective
+# identifier is the byte run from the first segment's offset to the
+# last segment's end.  Single-segment names degenerate naturally.
+#
+# Miss → push EK_UNBOUND with the joined span as the name, returns
+# TYPE_UNKNOWN_H so propagation doesn't cascade.
+@fn check_namespace:Int node:Int := {
+  @local n_segs   := &ast_field P_AST, node, 1;
+  @local first_off := &ast_field P_AST, node, 2;
+  @local last_seg_off := &ast_field P_AST, node, (2 + ((n_segs - 1) * 2));
+  @local last_seg_len := &ast_field P_AST, node, (3 + ((n_segs - 1) * 2));
+  @local total_len := (last_seg_off + last_seg_len) - first_off;
+
+  # Symbol lookup expects TC_NAMES offsets; the symbol table was
+  # seeded with bytes via tc_intern_src, so any name in scope has
+  # those same bytes in TC_NAMES.  Use the *_bytes variant that
+  # takes a P_SRC pointer to avoid a stale-intern allocation per
+  # lookup — TC_NAMES grows fast otherwise.
+  @local p := P_SRC + first_off;
+  @local t := TYPE_NONE;
+  @local cnt := &sym_count;
+  @local i := cnt;
+  &@loop (((t == TYPE_NONE) * (i > 0)) == 1), {
+    i = i - 1;
+    &@if ((&tc_name_eq_bytes (&sym_name_off i), (&sym_name_len i), p, total_len) == 1), {
+      t = &sym_type i;
+    };
+  };
+
+  &@if (t == TYPE_NONE), {
+    &err_unbound first_off, total_len, first_off, total_len;
+    t = TYPE_UNKNOWN_H;
+  };
+  t
+};
