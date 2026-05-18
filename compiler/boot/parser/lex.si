@@ -135,12 +135,20 @@
 };
 
 # Lex a '...' string literal.  Returns cursor AFTER closing quote.
+#
+# Backslash escapes a single following byte so embedded `\'` does
+# NOT close the literal.  Decoding of `\n`, `\t`, etc. happens
+# later at lower / emit time (literal_decoded_len / emit_data_segment);
+# here we only need to skip past the escape so the scanner finds
+# the real closing quote.  Phase 2's embedded strata bundle relies
+# on this because it wraps source containing `'@let'` and friends.
 @fn scan_string_end:Int ptr:Int, len:Int, start:Int := {
   @local i := start;
   i = i + 1;                                              # consume opening '
   &@loop 1, {
     @local b := &byte_at ptr, len, i;
     &@if (b < 0), { &@break };
+    &@if (b == 92), { i = i + 2; &@continue };            # \X — skip both
     &@if (b == 39), { i = i + 1; &@break };               # closing '
     i = i + 1;
   };

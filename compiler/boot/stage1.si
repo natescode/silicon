@@ -23,6 +23,21 @@
   @local cap := 524288;
   @local buf := &arena_alloc cap;
   @local total := 0;
+
+  # Phase 2: copy the embedded strata bundle into the head of the
+  # buffer BEFORE reading stdin.  Together they become a single
+  # contiguous source the parser walks once.  The host no longer
+  # needs to prepend strata on stdin — the bundle is baked into
+  # this wasm at build time as a Silicon string literal.
+  @local b_ptr := (&str_ptr EMBEDDED_BUNDLE) + 4;
+  @local b_len := &str_len EMBEDDED_BUNDLE;
+  @local bi := 0;
+  &@loop (bi < b_len), {
+    &WASM::i32_store8 (buf + bi), (&WASM::i32_load8_u (b_ptr + bi));
+    bi = bi + 1;
+  };
+  total = b_len;
+
   &@loop 1, {
     @local n := &read_bytes 0, (buf + total), (cap - total);
     &@if (n <= 0), { &@break };

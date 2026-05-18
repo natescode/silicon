@@ -914,7 +914,12 @@ describe('Phase 0 WASIX smoke test', () => {
             .sort()
         let bundle = ''
         for (const f of strataFiles) {
-            bundle += await fs.readFile(path.join(strataDir, f), 'utf-8') + '\n'
+            const raw = await fs.readFile(path.join(strataDir, f), 'utf-8')
+            // Normalise line endings — scripts/build-stage1.ts does the
+            // same when generating boot/embedded_bundle.si, so the bytes
+            // the bundle contributes here MUST match the embedded copy
+            // for the byte-equal self-host gate to hold cross-platform.
+            bundle += raw.replace(/\r\n/g, '\n') + '\n'
         }
         const wasiStub = [
             '@extern wasi_snapshot_preview1::fd_write:Int',
@@ -924,6 +929,7 @@ describe('Phase 0 WASIX smoke test', () => {
         ].join('\n') + '\n'
         const stage1Sources = [
             'boot/std/io.si', 'boot/std/arena.si', 'boot/std/vec.si',
+            'boot/embedded_bundle.si',
             'boot/parser/tokens.si', 'boot/parser/lex.si',
             'boot/parser/ast.si', 'boot/parser/parse.si',
             'boot/strata/registry.si', 'boot/strata/loader.si',
@@ -934,14 +940,19 @@ describe('Phase 0 WASIX smoke test', () => {
         const stage1Bundle = wasiStub + (await Promise.all(
             stage1Sources.map(p => fs.readFile(path.join(PROJECT_ROOT, p), 'utf-8')),
         )).join('')
-        const compilerInput = Buffer.from(bundle + stage1Bundle, 'utf-8')
+        // After Phase 2, stage1.wasm embeds the strata bundle.  boot.wasm
+        // still doesn't, so we keep prepending `bundle` for the boot.wasm
+        // step.  For the stage1.wasm step we feed JUST the user portion —
+        // stage1 prepends its own embedded copy at runtime.
+        const bootInput   = Buffer.from(bundle + stage1Bundle, 'utf-8')
+        const stage1Input = Buffer.from(stage1Bundle, 'utf-8')
 
         const stage1Path = path.join(PROJECT_ROOT, '.fp-stage1.wasm')
         const stage2Path = path.join(PROJECT_ROOT, '.fp-stage2.wasm')
         try {
             // 1. boot.wasm compiles stage1 source → stage1.wat → stage1.wasm
             const r1 = spawnSync('wasmer', ['run', bootPath], {
-                input: compilerInput, maxBuffer: 64 * 1024 * 1024,
+                input: bootInput, maxBuffer: 64 * 1024 * 1024,
             })
             expect(r1.status).toBe(0)
             const stage1Wat = (r1.stdout ?? Buffer.alloc(0)).toString('utf-8')
@@ -950,7 +961,7 @@ describe('Phase 0 WASIX smoke test', () => {
 
             // 2. stage1.wasm compiles SAME stage1 source → stage2.wat → stage2.wasm
             const r2 = spawnSync('wasmer', ['run', stage1Path], {
-                input: compilerInput, maxBuffer: 64 * 1024 * 1024,
+                input: stage1Input, maxBuffer: 64 * 1024 * 1024,
             })
             expect(r2.status).toBe(0)
             const stage2Wat = (r2.stdout ?? Buffer.alloc(0)).toString('utf-8')
@@ -992,20 +1003,13 @@ describe('Phase 0 WASIX smoke test', () => {
             return
         }
 
-        // The bundle stage1 expects: strata + io.si (for &write_str /
-        // &write_byte) + delfina_smoke.si (the user-style source with
-        // bare top-level calls and no explicit @fn _start).  If
-        // stage1's Pass 3 synthesis works, the emitted WAT will have
-        // exactly one (func $_start (export "_start") ...) whose body
-        // is those top-level calls.
-        const strataDir = path.join(PROJECT_ROOT, 'src', 'strata')
-        const strataFiles = (await fs.readdir(strataDir))
-            .filter(f => f.endsWith('.si'))
-            .sort()
+        // After Phase 2, strata are embedded in stage1.wasm — we only
+        // need to prepend io.si (for &write_str / &write_byte; stdlib
+        // is NOT embedded) and the user source.  If stage1's Pass 3
+        // synthesis works, the emitted WAT will have exactly one
+        // (func $_start (export "_start") ...) whose body is the
+        // top-level calls from delfina_smoke.
         let bundle = ''
-        for (const f of strataFiles) {
-            bundle += await fs.readFile(path.join(strataDir, f), 'utf-8') + '\n'
-        }
         bundle += await fs.readFile(path.join(PROJECT_ROOT, 'boot', 'std', 'io.si'), 'utf-8') + '\n'
         bundle += await fs.readFile(path.join(PROJECT_ROOT, 'boot', 'tests', 'delfina_smoke.si'), 'utf-8') + '\n'
 
@@ -1033,6 +1037,45 @@ describe('Phase 0 WASIX smoke test', () => {
         }
     }, 60000)
 
+    test('PHASE 2: stage1.wasm compiles user source with NO host-side strata bundling', async () => {
+        if (!wasmerAvailable()) {
+            console.log('  (skipped: wasmer not on PATH)')
+            return
+        }
+        const stage1Path = path.join(PROJECT_ROOT, 'stage1.wasm')
+        try { await fs.access(stage1Path) }
+        catch {
+            console.log('  (skipped: stage1.wasm missing — run scripts/build-stage1.ts)')
+            return
+        }
+
+        // Feed JUST the user file to stage1.wasm — no strata, no
+        // stdlib, nothing.  If Phase 2's embedded bundle works, the
+        // operators / definition keywords resolve via stage1's
+        // baked-in EMBEDDED_BUNDLE rather than anything we
+        // concatenate here.
+        const userSrc = await fs.readFile(
+            path.join(PROJECT_ROOT, 'boot', 'tests', 'embedded_bundle_smoke.si'),
+            'utf-8',
+        )
+
+        const compile = spawnSync('wasmer', ['run', stage1Path], {
+            input: Buffer.from(userSrc, 'utf-8'),
+            maxBuffer: 64 * 1024 * 1024,
+        })
+        expect(compile.status).toBe(0)
+        const wat = (compile.stdout ?? Buffer.alloc(0)).toString('utf-8')
+
+        // Two checks: (a) the user's @fn made it into the WAT and
+        // (b) the WAT is wabt-parseable (proving the operator + the
+        // synthesised _start both lowered correctly with strata
+        // resolved from the embedded bundle).
+        expect(wat).toContain('(func $add ')
+        expect(wat).toContain('(func $_start ')
+        const wasm = await watToWasm(wat)
+        expect(wasm.buffer.byteLength).toBeGreaterThan(100)
+    }, 60000)
+
     test('STAGE 1: bootstrap-compiled compiler produces byte-identical WAT to the TS-built bootstrap', async () => {
         if (!wasmerAvailable()) {
             console.log('  (skipped: wasmer not on PATH)')
@@ -1049,7 +1092,8 @@ describe('Phase 0 WASIX smoke test', () => {
             .sort()
         let bundle = ''
         for (const f of strataFiles) {
-            bundle += await fs.readFile(path.join(strataDir, f), 'utf-8') + '\n'
+            const raw = await fs.readFile(path.join(strataDir, f), 'utf-8')
+            bundle += raw.replace(/\r\n/g, '\n') + '\n'
         }
         const wasiStub = [
             '@extern wasi_snapshot_preview1::fd_write:Int',
@@ -1059,6 +1103,7 @@ describe('Phase 0 WASIX smoke test', () => {
         ].join('\n') + '\n'
         const stage1Sources = [
             'boot/std/io.si', 'boot/std/arena.si', 'boot/std/vec.si',
+            'boot/embedded_bundle.si',
             'boot/parser/tokens.si', 'boot/parser/lex.si',
             'boot/parser/ast.si', 'boot/parser/parse.si',
             'boot/strata/registry.si', 'boot/strata/loader.si',

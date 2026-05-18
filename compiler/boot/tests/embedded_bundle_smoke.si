@@ -1,0 +1,17 @@
+# Phase 2 gate: this source compiles via stage1.wasm with NOTHING
+# prepended — no strata bundle, no stdlib, no WASI declarations.
+#
+# The program is intentionally tiny: a single integer constant
+# evaluated at top level, which the Phase 1 _start synthesis wraps
+# into the WASI entry.  No platform externs, no io.si calls.
+#
+# What this proves: stage1.wasm's embedded strata source (from
+# src/strata/*.si, baked in at build time as EMBEDDED_BUNDLE) is
+# correctly copied to the head of the source buffer at runtime and
+# parsed before stdin, so the operators / definition keywords used
+# below resolve via the registry without the caller bundling
+# anything.
+
+@fn add a:Int, b:Int := { a + b };
+
+&add 20, 22;
