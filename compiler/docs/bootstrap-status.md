@@ -1,7 +1,26 @@
 # Bootstrap & Cleanup Status
 
-Tracks progress against `docs/bootstrap-plan.html` and
-`docs/stage0-cleanup-plan.html`.  Updated as branches land.
+Tracks progress against `docs/bootstrap-plan.html`,
+`docs/stage0-cleanup-plan.html`, and the new
+`docs/silicon-only-bootstrap-plan.html` (the path to deleting TypeScript).
+Updated as branches land.
+
+## Silicon-only bootstrap (`docs/silicon-only-bootstrap-plan.html`)
+
+| Phase | Workstream                                              | Status      | Branch                       |
+| ----- | ------------------------------------------------------- | ----------- | ---------------------------- |
+| 1a    | Body interpreter — scope + path-eval scaffolding        | **Landed**  | `bootstrap/silicon-only`     |
+| 1b    | `Compiler::ir::*` constructors                          | Pending     | —                            |
+| 1c    | `Compiler::ctx::*` mutable surface                      | Pending     | —                            |
+| 1d    | Lowering helpers (`lowerExpr`, `arg`, `watId`, …)       | Pending     | —                            |
+| 1e    | Wire-up + byte-equal gate vs Stage 0 e2e corpus         | Pending     | —                            |
+| 2     | Typechecker port                                        | Pending     | —                            |
+| 3     | `@use` resolver + multi-file entry                      | Pending     | —                            |
+| 4     | WAT-to-WASM shell-out                                   | Pending     | —                            |
+| 5     | Shell-driven build + self-host loop                     | Pending     | —                            |
+| 6     | Silicon-side test runner                                | Pending     | —                            |
+| 7     | Delete TypeScript                                       | Blocked on 1–6 | —                         |
+
 
 ## TL;DR — Stage 1 is real and the bootstrap is a fixed point
 

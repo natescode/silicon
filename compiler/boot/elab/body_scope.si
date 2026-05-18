@@ -1,0 +1,154 @@
+# Strata body interpreter — Phase 1a scope + path-eval scaffolding.
+#
+# Companion to boot/elab/body.si, which today handles only the simple
+# template path used by built-in operator strata.  This file adds the
+# pieces a rich-body interpreter needs:
+#
+#   1. A per-body scope: name → i32 value (typically an IR handle, but
+#      callers can stash any integer — the scope is dumb about meaning).
+#   2. Multi-segment path evaluation against the scope, so an
+#      `AST_NAMESPACE` like `Node.name.typeAnnotation` can be resolved
+#      to a stored value or walked through AST fields.
+#   3. `@local x := expr` definition evaluation (used inside rich
+#      strata bodies to bind intermediate results).
+#
+# NOTE: nothing here is wired into boot/ir/lower.si yet.  Phase 1
+# slices 1b–1e add the Compiler::* surface and wire the new
+# interpret_body_rich entrypoint into lower.si.  Until then, this file
+# only contributes new helpers that callers (and tests) can exercise
+# directly.  The existing stage1 == stage2 byte-equal self-host gate
+# is unaffected because lower.si still walks its hard-coded branches.
+#
+# See docs/silicon-only-bootstrap-plan.html (Phase 1) for the staging
+# context.
+
+@use '../std/vec.si';
+@use '../parser/ast.si';
+@use '../parser/parse.si';
+
+# ── Scope storage ──────────────────────────────────────────────────────
+# Parallel vecs: name span (source-buffer-relative) + stored value.
+# Reverse-insertion-order lookup means the most-recent push wins, which
+# matches the shadowing rules of rich strata bodies' @local bindings.
+@var BS_NAME_OFF:Int := 0;
+@var BS_NAME_LEN:Int := 0;
+@var BS_VALUE:Int    := 0;
+
+@fn bs_init := {
+  BS_NAME_OFF = &vec_new;
+  BS_NAME_LEN = &vec_new;
+  BS_VALUE    = &vec_new;
+};
+
+@fn bs_len:Int := { &vec_len BS_NAME_OFF };
+
+# bs_push(name_off, name_len, value) — append one binding.
+@fn bs_push name_off:Int, name_len:Int, value:Int := {
+  BS_NAME_OFF = &vec_push BS_NAME_OFF, name_off;
+  BS_NAME_LEN = &vec_push BS_NAME_LEN, name_len;
+  BS_VALUE    = &vec_push BS_VALUE,    value;
+};
+
+# bs_truncate(mark) — drop every binding pushed since the matching
+# bs_len mark.  Used to scope @local bindings to a single body.
+@fn bs_truncate mark:Int := {
+  @local n := &vec_len BS_NAME_OFF;
+  &@loop (n > mark), {
+    # vec doesn't yet have a generic truncate; the next vec_push will
+    # walk the same len, so we patch the header directly via vec_set.
+    # vec_len reads (v + 4); writing to slot (-1) is illegal, so we
+    # rewind by reconstructing the header.  Cheaper than reallocating.
+    &WASM::i32_store (BS_NAME_OFF + 4), (n - 1);
+    &WASM::i32_store (BS_NAME_LEN + 4), (n - 1);
+    &WASM::i32_store (BS_VALUE    + 4), (n - 1);
+    n = n - 1;
+  };
+};
+
+# ── Span comparison against the source buffer ──────────────────────────
+# Duplicated locally so this file has no dep on body.si's internals.
+@fn bs_span_eq_span:Int a_off:Int, a_len:Int, b_off:Int, b_len:Int := {
+  @local ok := 1;
+  &@if (a_len != b_len), { ok = 0; };
+  @local i := 0;
+  &@loop ((ok * (i < a_len)) == 1), {
+    @local x := &WASM::i32_load8_u (P_SRC + a_off + i);
+    @local y := &WASM::i32_load8_u (P_SRC + b_off + i);
+    &@if (x != y), { ok = 0; };
+    i = i + 1;
+  };
+  ok
+};
+
+# bs_lookup(name_off, name_len) — most-recent binding's value, or
+# BS_NOT_FOUND if no entry matches.  Linear scan from the back.
+@let BS_NOT_FOUND:Int := 0 - 999999;
+
+@fn bs_lookup:Int name_off:Int, name_len:Int := {
+  @local n := &vec_len BS_NAME_OFF;
+  @local i := n - 1;
+  @local found := BS_NOT_FOUND;
+  &@loop ((found == BS_NOT_FOUND) * (i >= 0) == 1), {
+    @local off := &vec_get BS_NAME_OFF, i;
+    @local len := &vec_get BS_NAME_LEN, i;
+    &@if ((&bs_span_eq_span off, len, name_off, name_len) == 1), {
+      found = &vec_get BS_VALUE, i;
+    };
+    i = i - 1;
+  };
+  found
+};
+
+# ── Path eval against the scope ────────────────────────────────────────
+# An AST_NAMESPACE node represents a chain of identifiers like
+# `Node.name.typeAnnotation`.  For now bs_eval_path supports the
+# leading-segment lookup only — it resolves the FIRST segment against
+# the scope and returns the value.  Multi-segment field-walking
+# (treating later segments as AST field accessors) is added in
+# slice 1b once the Compiler::* surface needs it; today the lookup is
+# enough to test scope semantics in isolation.
+#
+# Returns BS_NOT_FOUND if the head identifier isn't bound.
+@fn bs_eval_path:Int ns_node:Int := {
+  &@if (ns_node < 0), { &@return BS_NOT_FOUND; };
+  &@if ((&ast_kind P_AST, ns_node) != AST_NAMESPACE),
+    { &@return BS_NOT_FOUND; };
+  @local n_segs := &ast_field P_AST, ns_node, 1;
+  &@if (n_segs < 1), { &@return BS_NOT_FOUND; };
+  @local s0_off := &ast_field P_AST, ns_node, 2;
+  @local s0_len := &ast_field P_AST, ns_node, 3;
+  &bs_lookup s0_off, s0_len
+};
+
+# ── @local-binding evaluation ──────────────────────────────────────────
+# Given an AST_DEFINITION node whose keyword is `@local`, push a binding
+# into the scope.  The bound value comes from the caller via `value` —
+# evaluating the binding's RHS belongs to the body interpreter (which
+# needs the full Compiler::* surface to do so).  Slice 1a only proves
+# the scope plumbing works.
+#
+# Returns 1 on success, 0 if the node isn't actually an @local
+# definition (caller should ignore non-matches).
+@fn bs_define_local:Int def_node:Int, value:Int := {
+  &@if (def_node < 0), { &@return 0; };
+  &@if ((&ast_kind P_AST, def_node) != AST_DEFINITION),
+    { &@return 0; };
+  @local kw_off := &ast_field P_AST, def_node, 1;
+  @local kw_len := &ast_field P_AST, def_node, 2;
+  # Keyword must be the literal '@local'.
+  @local local_ptr := (&str_ptr '@local') + 4;
+  @local ok := 1;
+  &@if (kw_len != 6), { ok = 0; };
+  @local i := 0;
+  &@loop ((ok * (i < kw_len)) == 1), {
+    @local a := &WASM::i32_load8_u (P_SRC + kw_off + i);
+    @local b := &WASM::i32_load8_u (local_ptr + i);
+    &@if (a != b), { ok = 0; };
+    i = i + 1;
+  };
+  &@if (ok == 0), { &@return 0; };
+  @local name_off := &ast_field P_AST, def_node, 3;
+  @local name_len := &ast_field P_AST, def_node, 4;
+  &bs_push name_off, name_len, value;
+  1
+};

@@ -1,0 +1,123 @@
+# body_scope unit test — Phase 1a slice of the rich-body interpreter.
+#
+# Exercises the scope helpers in boot/elab/body_scope.si in isolation,
+# using parser-produced source-buffer spans as scope keys.
+#
+# Pass: prints "body-scope OK", exits 0.
+# Fail: prints "body-scope FAIL <code>", exits 1.
+#
+# Build / run:
+#   bun run scripts/build-boot.ts boot/tests/body_scope_test.si
+#   wasmtime wasm-bin/boot.wasm
+
+@use '../std/io.si';
+@use '../std/vec.si';
+@use '../parser/tokens.si';
+@use '../parser/lex.si';
+@use '../parser/ast.si';
+@use '../parser/parse.si';
+@use '../elab/body_scope.si';
+
+@fn put_int n:Int := {
+  @local hundreds := (n / 100);
+  @local tens     := ((n / 10) % 10);
+  @local ones     := (n % 10);
+  &@if (hundreds > 0),     { &write_byte 1, (hundreds + 48); };
+  &@if (((hundreds > 0) | (tens > 0)) == 1), { &write_byte 1, (tens + 48); };
+  &write_byte 1, (ones + 48);
+};
+
+@fn die code:Int := {
+  &write_str 1, 'body-scope FAIL ';
+  &put_int code;
+  &write_byte 1, 10;
+  &wasi_snapshot_preview1::proc_exit 1;
+};
+
+@fn run := {
+  # Parse three top-level @let definitions purely so we have name spans
+  # that live inside P_SRC.  We don't care about the binding values —
+  # only the parser-recorded (name_off, name_len) for each definition.
+  @local src := '@let foo := 1; @let bar := 2; @let baz := 3;';
+  @local p := (&str_ptr src) + 4;
+  @local n := &str_len src;
+  @local toks := &lex p, n;
+  @local prog := &parse p, n, toks;
+
+  &@if ((&ast_kind P_AST, prog) != AST_PROGRAM), { &die 1; };
+  &@if ((&ast_field P_AST, prog, 1) != 3),       { &die 2; };
+
+  @local def_foo := &ast_field P_AST, prog, 2;
+  @local def_bar := &ast_field P_AST, prog, 3;
+  @local def_baz := &ast_field P_AST, prog, 4;
+
+  @local foo_off := &ast_field P_AST, def_foo, 3;
+  @local foo_len := &ast_field P_AST, def_foo, 4;
+  @local bar_off := &ast_field P_AST, def_bar, 3;
+  @local bar_len := &ast_field P_AST, def_bar, 4;
+  @local baz_off := &ast_field P_AST, def_baz, 3;
+  @local baz_len := &ast_field P_AST, def_baz, 4;
+
+  # ── Test 1: init + push + lookup ─────────────────────────────────
+  &bs_init;
+  &bs_push foo_off, foo_len, 100;
+  &bs_push bar_off, bar_len, 200;
+  &bs_push baz_off, baz_len, 300;
+
+  &@if ((&bs_lookup foo_off, foo_len) != 100), { &die 10; };
+  &@if ((&bs_lookup bar_off, bar_len) != 200), { &die 11; };
+  &@if ((&bs_lookup baz_off, baz_len) != 300), { &die 12; };
+
+  # ── Test 2: shadowing — most-recent push wins ────────────────────
+  &bs_push foo_off, foo_len, 999;
+  &@if ((&bs_lookup foo_off, foo_len) != 999), { &die 20; };
+  &@if ((&bs_lookup bar_off, bar_len) != 200), { &die 21; };
+
+  # ── Test 3: name not in scope returns BS_NOT_FOUND ───────────────
+  # def_foo's kw span is '@let' (4 bytes); doesn't match any pushed name.
+  @local kw_off := &ast_field P_AST, def_foo, 1;
+  @local kw_len := &ast_field P_AST, def_foo, 2;
+  &@if ((&bs_lookup kw_off, kw_len) != BS_NOT_FOUND), { &die 30; };
+
+  # ── Test 4: bs_truncate restores prior state ─────────────────────
+  @local mark := &bs_len;                    # = 4 after the foo shadow
+  &bs_push bar_off, bar_len, 7777;
+  &@if ((&bs_lookup bar_off, bar_len) != 7777), { &die 40; };
+  &bs_truncate mark;
+  &@if ((&bs_lookup bar_off, bar_len) != 200), { &die 41; };
+  &@if ((&bs_len) != mark),                    { &die 42; };
+
+  # ── Test 5: bs_eval_path resolves a single-segment namespace ─────
+  # Re-parse a bare identifier expression `foo;` — the resulting
+  # element is an AST_NAMESPACE whose first segment is 'foo'.  Use
+  # bs_eval_path against it and confirm we get back the shadowed value.
+  @local src2 := 'foo;';
+  @local p2 := (&str_ptr src2) + 4;
+  @local n2 := &str_len src2;
+  @local toks2 := &lex p2, n2;
+  @local prog2 := &parse p2, n2, toks2;
+  @local ns_elem := &ast_field P_AST, prog2, 2;
+  &@if ((&ast_kind P_AST, ns_elem) != AST_NAMESPACE), { &die 50; };
+
+  # Note: re-parsing reset P_SRC to src2's bytes, so foo_off/foo_len
+  # captured earlier no longer point at "foo" inside the live buffer.
+  # The scope's stored spans are likewise stale.  Reset and re-push
+  # with the new buffer's foo span before looking up.
+  @local foo2_off := &ast_field P_AST, ns_elem, 2;
+  @local foo2_len := &ast_field P_AST, ns_elem, 3;
+  &bs_init;
+  &bs_push foo2_off, foo2_len, 4242;
+  @local got := &bs_eval_path ns_elem;
+  &@if (got != 4242), { &die 51; };
+
+  # ── Test 6: bs_eval_path on an unbound name returns BS_NOT_FOUND ─
+  &bs_init;
+  @local got2 := &bs_eval_path ns_elem;
+  &@if (got2 != BS_NOT_FOUND), { &die 60; };
+
+  &write_str 1, 'body-scope OK';
+  &write_byte 1, 10;
+  &wasi_snapshot_preview1::proc_exit 0;
+};
+
+&run;
