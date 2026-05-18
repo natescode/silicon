@@ -1,0 +1,306 @@
+# boot/types/ctx.si — typechecker context tables (Phase 2 slice 2d-i).
+#
+# Port of the `Ctx` interface in src/types/typechecker.ts.  Holds the
+# four lookup tables the checking pass threads through every node:
+#
+#   functions    : name → FunctionSig (params + result)
+#   symbols      : name → SiliconType
+#   immutable    : Set<name>     (assignment-target check)
+#   type_aliases : name → SiliconType  (for parse_type_name)
+#
+# All four use the same identifier-storage scheme: a byte arena
+# (TC_NAMES) copied from either P_SRC spans or literal pointers.  Keys
+# in every table are `(name_off, name_len)` slices of TC_NAMES, which
+# lets compare-by-bytes work uniformly.  The intern call is responsible
+# for COPYING — once interned, a key survives independent of where the
+# source bytes came from.
+#
+# Scope save/restore for `symbols` uses the standard truncate-the-vec
+# pattern (cf. boot/elab/body_scope.si).  Inner bindings push new
+# records on top of the parent scope; on exit, the vec is trimmed back
+# to the saved length, revealing the original (now-unshadowed) outer
+# entries.  Matches the TS `new Map(saved); ... ; ctx.symbols = saved`
+# semantics: inner mutations are discarded, outer state survives.
+
+@use './types.si';
+@use '../std/vec.si';
+
+# ── TC_NAMES byte arena ────────────────────────────────────────────
+
+@var TC_NAMES:Int := 0;
+
+@fn tc_names_init := { TC_NAMES = &vec_new; };
+
+@fn tc_names_len:Int := { &vec_len TC_NAMES };
+
+# Intern a span of bytes from an arbitrary linear-memory pointer.
+# Returns the offset of the first byte inside TC_NAMES.
+@fn tc_intern:Int p:Int, n:Int := {
+  @local off := &vec_len TC_NAMES;
+  @local i := 0;
+  &@loop (i < n), {
+    TC_NAMES = &vec_push TC_NAMES, (&WASM::i32_load8_u (p + i));
+    i = i + 1;
+  };
+  off
+};
+
+# Intern from a P_SRC offset (most common case — names come from AST).
+@fn tc_intern_src:Int src_off:Int, n:Int := {
+  &tc_intern (P_SRC + src_off), n
+};
+
+# Intern a Silicon `String` literal (skip 4-byte length header).
+@fn tc_intern_str:Int s:String := {
+  &tc_intern ((&str_ptr s) + 4), (&str_len s)
+};
+
+# Compare two TC_NAMES spans.
+@fn tc_name_eq:Int a_off:Int, a_len:Int, b_off:Int, b_len:Int := {
+  @local ok := 1;
+  &@if (a_len != b_len), { ok = 0; };
+  @local i := 0;
+  &@loop ((ok * (i < a_len)) == 1), {
+    &@if ((&vec_get TC_NAMES, (a_off + i)) != (&vec_get TC_NAMES, (b_off + i))), { ok = 0; };
+    i = i + 1;
+  };
+  ok
+};
+
+# Compare a TC_NAMES span vs an arbitrary byte span.
+@fn tc_name_eq_bytes:Int a_off:Int, a_len:Int, b_p:Int, b_len:Int := {
+  @local ok := 1;
+  &@if (a_len != b_len), { ok = 0; };
+  @local i := 0;
+  &@loop ((ok * (i < a_len)) == 1), {
+    &@if ((&vec_get TC_NAMES, (a_off + i)) != (&WASM::i32_load8_u (b_p + i))), { ok = 0; };
+    i = i + 1;
+  };
+  ok
+};
+
+# Compare a TC_NAMES span vs a Silicon String literal.
+@fn tc_name_eq_str:Int a_off:Int, a_len:Int, s:String := {
+  &tc_name_eq_bytes a_off, a_len, ((&str_ptr s) + 4), (&str_len s)
+};
+
+# ── Functions table ────────────────────────────────────────────────
+#
+# Fixed 12-field records:
+#   [name_off, name_len, n_params, result_h, p0, p1, p2, p3, p4, p5, p6, p7]
+# Max 8 params (alloc_array, arr_store_i32, every WASI extern fits;
+# user code in boot/* has at most 5).  Adding more later is a single
+# constant bump + adapter to fn_get_param.
+
+@let FN_FIELDS:Int     := 12;
+@let FN_MAX_PARAMS:Int := 8;
+
+@var FN_VEC:Int := 0;
+
+@fn fn_table_init := { FN_VEC = &vec_new; };
+
+@fn fn_count:Int := { (&vec_len FN_VEC) / FN_FIELDS };
+
+@fn fn_field:Int id:Int, idx:Int := {
+  &vec_get FN_VEC, ((id * FN_FIELDS) + idx)
+};
+
+@fn fn_name_off:Int id:Int  := { &fn_field id, 0 };
+@fn fn_name_len:Int id:Int  := { &fn_field id, 1 };
+@fn fn_n_params:Int id:Int  := { &fn_field id, 2 };
+@fn fn_result:Int id:Int    := { &fn_field id, 3 };
+@fn fn_param:Int id:Int, k:Int := { &fn_field id, (4 + k) };
+
+# Append a function record.  `params_p` is a pointer to a packed
+# array of N <= FN_MAX_PARAMS i32 type handles in linear memory; pass
+# 0 + 0 when there are no params.
+@fn fn_register:Int name_off:Int, name_len:Int, n_params:Int, params_p:Int, result_h:Int := {
+  @local id := &fn_count;
+  FN_VEC = &vec_push FN_VEC, name_off;
+  FN_VEC = &vec_push FN_VEC, name_len;
+  FN_VEC = &vec_push FN_VEC, n_params;
+  FN_VEC = &vec_push FN_VEC, result_h;
+  @local k := 0;
+  &@loop (k < FN_MAX_PARAMS), {
+    @local h := 0;
+    &@if (k < n_params), { h = &WASM::i32_load (params_p + (k * 4)); };
+    FN_VEC = &vec_push FN_VEC, h;
+    k = k + 1;
+  };
+  id
+};
+
+# Lookup by name span (in TC_NAMES).  Returns id, or -1 if not found.
+@fn fn_lookup:Int name_off:Int, name_len:Int := {
+  @local found := 0 - 1;
+  @local n := &fn_count;
+  @local i := 0;
+  &@loop (((found < 0) * (i < n)) == 1), {
+    &@if ((&tc_name_eq (&fn_name_off i), (&fn_name_len i), name_off, name_len) == 1), {
+      found = i;
+    };
+    i = i + 1;
+  };
+  found
+};
+
+@fn fn_lookup_str:Int s:String := {
+  @local p := (&str_ptr s) + 4;
+  @local n := &str_len s;
+  @local found := 0 - 1;
+  @local cnt := &fn_count;
+  @local i := 0;
+  &@loop (((found < 0) * (i < cnt)) == 1), {
+    &@if ((&tc_name_eq_bytes (&fn_name_off i), (&fn_name_len i), p, n) == 1), {
+      found = i;
+    };
+    i = i + 1;
+  };
+  found
+};
+
+# ── Symbols table ─────────────────────────────────────────────────
+#
+# 3-field records: [name_off, name_len, type_h].  Lookup walks
+# end-to-start so newer (shadow) entries win over older parent-scope
+# entries.
+
+@let SYM_FIELDS:Int := 3;
+
+@var SYM_VEC:Int := 0;
+
+@fn sym_table_init := { SYM_VEC = &vec_new; };
+
+@fn sym_count:Int := { (&vec_len SYM_VEC) / SYM_FIELDS };
+
+@fn sym_field:Int id:Int, idx:Int := {
+  &vec_get SYM_VEC, ((id * SYM_FIELDS) + idx)
+};
+
+@fn sym_name_off:Int id:Int := { &sym_field id, 0 };
+@fn sym_name_len:Int id:Int := { &sym_field id, 1 };
+@fn sym_type:Int    id:Int  := { &sym_field id, 2 };
+
+@fn sym_set name_off:Int, name_len:Int, type_h:Int := {
+  SYM_VEC = &vec_push SYM_VEC, name_off;
+  SYM_VEC = &vec_push SYM_VEC, name_len;
+  SYM_VEC = &vec_push SYM_VEC, type_h;
+};
+
+# Lookup: walk back-to-front so inner-scope shadows win.  Returns the
+# type handle on hit, TYPE_NONE on miss.
+@fn sym_lookup:Int name_off:Int, name_len:Int := {
+  @local found := TYPE_NONE;
+  @local n := &sym_count;
+  @local i := n;
+  &@loop (((found == TYPE_NONE) * (i > 0)) == 1), {
+    i = i - 1;
+    &@if ((&tc_name_eq (&sym_name_off i), (&sym_name_len i), name_off, name_len) == 1), {
+      found = &sym_type i;
+    };
+  };
+  found
+};
+
+@fn sym_lookup_str:Int s:String := {
+  @local p := (&str_ptr s) + 4;
+  @local n := &str_len s;
+  @local found := TYPE_NONE;
+  @local cnt := &sym_count;
+  @local i := cnt;
+  &@loop (((found == TYPE_NONE) * (i > 0)) == 1), {
+    i = i - 1;
+    &@if ((&tc_name_eq_bytes (&sym_name_off i), (&sym_name_len i), p, n) == 1), {
+      found = &sym_type i;
+    };
+  };
+  found
+};
+
+# Scope save/restore.  Returns the current entry count so the caller
+# can hand it back to sym_scope_restore on exit.
+@fn sym_scope_save:Int := { &sym_count };
+
+@fn sym_scope_restore saved:Int := {
+  @local target_len := saved * SYM_FIELDS;
+  @local cur := &vec_len SYM_VEC;
+  &@loop (cur > target_len), {
+    cur = cur - 1;
+    &vec_set SYM_VEC, cur, 0;
+  };
+  &WASM::i32_store (SYM_VEC + 4), target_len;
+};
+
+# ── Immutable set ─────────────────────────────────────────────────
+#
+# 2-field records: [name_off, name_len].  Membership test only.
+
+@let IMM_FIELDS:Int := 2;
+
+@var IMM_VEC:Int := 0;
+
+@fn imm_table_init := { IMM_VEC = &vec_new; };
+
+@fn imm_count:Int := { (&vec_len IMM_VEC) / IMM_FIELDS };
+
+@fn imm_add name_off:Int, name_len:Int := {
+  IMM_VEC = &vec_push IMM_VEC, name_off;
+  IMM_VEC = &vec_push IMM_VEC, name_len;
+};
+
+@fn imm_has:Int name_off:Int, name_len:Int := {
+  @local found := 0;
+  @local n := &imm_count;
+  @local i := 0;
+  &@loop (((found == 0) * (i < n)) == 1), {
+    @local e_off := &vec_get IMM_VEC, (i * IMM_FIELDS);
+    @local e_len := &vec_get IMM_VEC, ((i * IMM_FIELDS) + 1);
+    &@if ((&tc_name_eq e_off, e_len, name_off, name_len) == 1), { found = 1; };
+    i = i + 1;
+  };
+  found
+};
+
+# ── Type alias table ──────────────────────────────────────────────
+#
+# 3-field records: [name_off, name_len, type_h].  Used by
+# parse_type_name (slice 2e) to resolve user-declared type names.
+
+@let ALIAS_FIELDS:Int := 3;
+
+@var ALIAS_VEC:Int := 0;
+
+@fn alias_table_init := { ALIAS_VEC = &vec_new; };
+
+@fn alias_count:Int := { (&vec_len ALIAS_VEC) / ALIAS_FIELDS };
+
+@fn alias_add name_off:Int, name_len:Int, type_h:Int := {
+  ALIAS_VEC = &vec_push ALIAS_VEC, name_off;
+  ALIAS_VEC = &vec_push ALIAS_VEC, name_len;
+  ALIAS_VEC = &vec_push ALIAS_VEC, type_h;
+};
+
+@fn alias_lookup:Int name_off:Int, name_len:Int := {
+  @local found := TYPE_NONE;
+  @local n := &alias_count;
+  @local i := 0;
+  &@loop (((found == TYPE_NONE) * (i < n)) == 1), {
+    @local e_off := &vec_get ALIAS_VEC, (i * ALIAS_FIELDS);
+    @local e_len := &vec_get ALIAS_VEC, ((i * ALIAS_FIELDS) + 1);
+    &@if ((&tc_name_eq e_off, e_len, name_off, name_len) == 1), {
+      found = &vec_get ALIAS_VEC, ((i * ALIAS_FIELDS) + 2);
+    };
+    i = i + 1;
+  };
+  found
+};
+
+# ── One-shot init for the whole context ──────────────────────────
+
+@fn ctx_init := {
+  &tc_names_init;
+  &fn_table_init;
+  &sym_table_init;
+  &imm_table_init;
+  &alias_table_init;
+};

@@ -1,0 +1,110 @@
+# ctx_test — exercises boot/types/ctx.si (Phase 2 slice 2d-i).
+#
+# Pass: "ctx OK", exit 0.
+# Fail: "ctx FAIL <code>", exit 1.
+
+@use '../std/io.si';
+@use '../types/types.si';
+@use '../types/ctx.si';
+
+@fn c_put_int n:Int := {
+  @local hundreds := (n / 100);
+  @local tens     := ((n / 10) % 10);
+  @local ones     := (n % 10);
+  &@if (hundreds > 0),     { &write_byte 1, (hundreds + 48); };
+  &@if (((hundreds > 0) | (tens > 0)) == 1), { &write_byte 1, (tens + 48); };
+  &write_byte 1, (ones + 48);
+};
+
+@fn c_die code:Int := {
+  &write_str 1, 'ctx FAIL ';
+  &c_put_int code;
+  &write_byte 1, 10;
+  &wasi_snapshot_preview1::proc_exit 1;
+};
+
+@fn run := {
+  &types_init;
+  &ctx_init;
+
+  &@if ((&fn_count) != 0),    { &c_die 1; };
+  &@if ((&sym_count) != 0),   { &c_die 2; };
+  &@if ((&imm_count) != 0),   { &c_die 3; };
+  &@if ((&alias_count) != 0), { &c_die 4; };
+
+  # ── Intern + compare ─────────────────────────────────────────
+  @local foo_o := &tc_intern_str 'foo';
+  @local foo_l := 3;
+  @local bar_o := &tc_intern_str 'bar';
+  @local bar_l := 3;
+  &@if ((&tc_name_eq foo_o, foo_l, foo_o, foo_l) != 1), { &c_die 10; };
+  &@if ((&tc_name_eq foo_o, foo_l, bar_o, bar_l) != 0), { &c_die 11; };
+  &@if ((&tc_name_eq_str foo_o, foo_l, 'foo') != 1),    { &c_die 12; };
+  &@if ((&tc_name_eq_str foo_o, foo_l, 'bar') != 0),    { &c_die 13; };
+
+  # Second intern of the same bytes yields a DIFFERENT offset (no
+  # dedup) but compare still returns equal.
+  @local foo2_o := &tc_intern_str 'foo';
+  &@if (foo2_o == foo_o), { &c_die 14; };
+  &@if ((&tc_name_eq foo_o, foo_l, foo2_o, foo_l) != 1), { &c_die 15; };
+
+  # ── Functions table ──────────────────────────────────────────
+  # add(a:Int, b:Int): Int
+  @local pbuf := &alloc (4 * FN_MAX_PARAMS);
+  &WASM::i32_store pbuf,       TYPE_INT_H;
+  &WASM::i32_store (pbuf + 4), TYPE_INT_H;
+  @local add_id := &fn_register foo_o, foo_l, 2, pbuf, TYPE_INT_H;
+  &@if (add_id != 0), { &c_die 20; };
+  &@if ((&fn_count) != 1), { &c_die 21; };
+  &@if ((&fn_n_params add_id) != 2),       { &c_die 22; };
+  &@if ((&fn_result   add_id) != TYPE_INT_H), { &c_die 23; };
+  &@if ((&fn_param add_id, 0) != TYPE_INT_H), { &c_die 24; };
+  &@if ((&fn_param add_id, 1) != TYPE_INT_H), { &c_die 25; };
+
+  # 0-arg function
+  @local nul_id := &fn_register bar_o, bar_l, 0, 0, TYPE_BOOL_H;
+  &@if ((&fn_n_params nul_id) != 0),         { &c_die 30; };
+  &@if ((&fn_result   nul_id) != TYPE_BOOL_H), { &c_die 31; };
+
+  &@if ((&fn_lookup foo_o, foo_l) != add_id), { &c_die 40; };
+  &@if ((&fn_lookup bar_o, bar_l) != nul_id), { &c_die 41; };
+  &@if ((&fn_lookup_str 'foo') != add_id),    { &c_die 42; };
+  &@if ((&fn_lookup_str 'baz') != (0 - 1)),   { &c_die 43; };
+
+  # ── Symbols table + scope save/restore ───────────────────────
+  &sym_set foo_o, foo_l, TYPE_INT_H;
+  &@if ((&sym_lookup foo_o, foo_l) != TYPE_INT_H), { &c_die 50; };
+  &@if ((&sym_lookup_str 'foo') != TYPE_INT_H),    { &c_die 51; };
+  &@if ((&sym_lookup_str 'bar') != TYPE_NONE),     { &c_die 52; };
+
+  @local saved := &sym_scope_save;
+  # Shadow `foo` in inner scope with a String binding.
+  &sym_set foo_o, foo_l, TYPE_STRING_H;
+  &sym_set bar_o, bar_l, TYPE_FLOAT_H;
+  &@if ((&sym_lookup foo_o, foo_l) != TYPE_STRING_H), { &c_die 60; };
+  &@if ((&sym_lookup bar_o, bar_l) != TYPE_FLOAT_H),  { &c_die 61; };
+
+  &sym_scope_restore saved;
+  &@if ((&sym_lookup foo_o, foo_l) != TYPE_INT_H), { &c_die 70; };
+  &@if ((&sym_lookup bar_o, bar_l) != TYPE_NONE),  { &c_die 71; };
+  &@if ((&sym_count) != 1), { &c_die 72; };
+
+  # ── Immutable set ────────────────────────────────────────────
+  &@if ((&imm_has foo_o, foo_l) != 0), { &c_die 80; };
+  &imm_add foo_o, foo_l;
+  &@if ((&imm_has foo_o, foo_l) != 1), { &c_die 81; };
+  &@if ((&imm_has bar_o, bar_l) != 0), { &c_die 82; };
+
+  # ── Type alias table ─────────────────────────────────────────
+  @local age_o := &tc_intern_str 'age';
+  &@if ((&alias_lookup age_o, 3) != TYPE_NONE), { &c_die 90; };
+  @local age_t := &type_new_distinct age_o, 3, TYPE_INT_H;
+  &alias_add age_o, 3, age_t;
+  &@if ((&alias_lookup age_o, 3) != age_t), { &c_die 91; };
+
+  &write_str 1, 'ctx OK';
+  &write_byte 1, 10;
+  &wasi_snapshot_preview1::proc_exit 0;
+};
+
+&run;
