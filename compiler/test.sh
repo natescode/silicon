@@ -39,7 +39,17 @@ cd "$PROJECT_ROOT"
 STAGE1="$PROJECT_ROOT/wasm-bin/stage1.wasm"
 [ -f "$STAGE1" ] || { echo "test.sh: $STAGE1 missing — run ./build.sh first" >&2; exit 2; }
 command -v wasmtime >/dev/null 2>&1 || { echo "test.sh: wasmtime missing" >&2; exit 127; }
-command -v wat2wasm >/dev/null 2>&1 || { echo "test.sh: wat2wasm missing" >&2; exit 127; }
+
+# Resolve wat2wasm with the same priority as build.sh: prefer the
+# project-local copy fetched by scripts/install-wat2wasm.sh; fall back
+# to PATH.  No PATH copy → tell the user the install script exists.
+if   [ -x "$PROJECT_ROOT/bin/wat2wasm" ];     then WAT2WASM="$PROJECT_ROOT/bin/wat2wasm"
+elif [ -x "$PROJECT_ROOT/bin/wat2wasm.exe" ]; then WAT2WASM="$PROJECT_ROOT/bin/wat2wasm.exe"
+elif command -v wat2wasm >/dev/null 2>&1;     then WAT2WASM="$(command -v wat2wasm)"
+else
+  echo "test.sh: wat2wasm missing — run ./scripts/install-wat2wasm.sh" >&2
+  exit 127
+fi
 
 WASI_STUB='@extern wasi_snapshot_preview1::fd_write:Int
   fd:Int, iovs_ptr:Int, iovs_len:Int, nwritten_out:Int;
@@ -92,7 +102,7 @@ run_one() {
     echo "  ✗ COMPILE FAIL $test_file"
     return 1
   fi
-  if ! wat2wasm "$wat_tmp" -o "$wasm_tmp" 2>/dev/null; then
+  if ! "$WAT2WASM" "$wat_tmp" -o "$wasm_tmp" 2>/dev/null; then
     echo "  ✗ ASSEMBLE FAIL $test_file"
     return 1
   fi

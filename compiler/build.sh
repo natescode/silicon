@@ -30,20 +30,33 @@ trap 'rm -f "$TMP_WAT" "$TMP_WASM"' EXIT
 
 cmd="${1:-build}"
 
-# ─── Tool checks ───────────────────────────────────────────────────────
-require() {
-  command -v "$1" >/dev/null 2>&1 || {
-    echo "build.sh: missing required tool '$1'" >&2
-    echo "  install via your package manager or:" >&2
-    case "$1" in
-      wasmtime) echo "    https://wasmtime.dev/install.sh" >&2 ;;
-      wat2wasm) echo "    https://github.com/WebAssembly/wabt/releases" >&2 ;;
-    esac
-    exit 127
-  }
+# ─── Tool resolution ───────────────────────────────────────────────────
+# Prefer project-local bin/ (populated by scripts/install-wat2wasm.sh)
+# so the Silicon-only pipeline works without polluting the user's PATH
+# or requiring system-wide wabt.  Falls back to PATH when bin/ is empty.
+resolve_wat2wasm() {
+  if   [ -x "$PROJECT_ROOT/bin/wat2wasm" ];     then echo "$PROJECT_ROOT/bin/wat2wasm"
+  elif [ -x "$PROJECT_ROOT/bin/wat2wasm.exe" ]; then echo "$PROJECT_ROOT/bin/wat2wasm.exe"
+  elif command -v wat2wasm >/dev/null 2>&1;     then command -v wat2wasm
+  else echo ''
+  fi
 }
-require wasmtime
-require wat2wasm
+
+command -v wasmtime >/dev/null 2>&1 || {
+  echo "build.sh: missing required tool 'wasmtime'" >&2
+  echo "  install via: https://wasmtime.dev/install.sh" >&2
+  exit 127
+}
+
+WAT2WASM="$(resolve_wat2wasm)"
+if [ -z "$WAT2WASM" ]; then
+  echo "build.sh: missing required tool 'wat2wasm'" >&2
+  echo "  fetch automatically to ./bin/ via:" >&2
+  echo "    ./scripts/install-wat2wasm.sh" >&2
+  echo "  or install wabt system-wide from:" >&2
+  echo "    https://github.com/WebAssembly/wabt/releases" >&2
+  exit 127
+fi
 
 [ -f "$SEED" ] || {
   echo "build.sh: seed compiler $SEED not found" >&2
@@ -128,8 +141,8 @@ build_stage1() {
   bundle="$(assemble_bundle)"
   echo "build.sh: compiling via stage1.wasm under wasmtime…"
   wasmtime --dir . "$SEED" <<<"$bundle" > "$TMP_WAT"
-  echo "build.sh: assembling WAT → WASM via wat2wasm…"
-  wat2wasm "$TMP_WAT" -o "$TMP_WASM"
+  echo "build.sh: assembling WAT → WASM via $WAT2WASM…"
+  "$WAT2WASM" "$TMP_WAT" -o "$TMP_WASM"
 }
 
 # ─── Subcommands ───────────────────────────────────────────────────────

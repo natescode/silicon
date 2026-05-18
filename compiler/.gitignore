@@ -191,3 +191,7 @@ dist
 # (rust-style: the prior compiler binary lives in git).
 wasm-bin/*
 !wasm-bin/stage1.wasm
+
+# bin/ holds tools fetched by scripts/install-wat2wasm.sh (downloaded
+# wat2wasm binary, etc.).  Not checked in — users run the installer.
+bin/

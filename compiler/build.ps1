@@ -27,15 +27,39 @@ $OutWasm = Join-Path $WasmBin    'stage1.wasm'
 $TmpWat  = [System.IO.Path]::GetTempFileName() + '.wat'
 $TmpWasm = [System.IO.Path]::GetTempFileName() + '.wasm'
 
-function Require-Tool($name, $hint) {
-  if (-not (Get-Command $name -ErrorAction SilentlyContinue)) {
-    Write-Error "build.ps1: missing required tool '$name'`n  install via: $hint"
+function Require-Wasmtime {
+  if (-not (Get-Command 'wasmtime' -ErrorAction SilentlyContinue)) {
+    Write-Error "build.ps1: missing required tool 'wasmtime'`n  install via: https://wasmtime.dev/install.sh"
     exit 127
   }
 }
 
-Require-Tool 'wasmtime' 'https://wasmtime.dev/install.sh (or choco install wasmtime)'
-Require-Tool 'wat2wasm' 'https://github.com/WebAssembly/wabt/releases (choco install wabt)'
+# Resolve wat2wasm — prefer the project-local copy fetched by
+# scripts/install-wat2wasm.ps1 over the system PATH.  Keeps the
+# Silicon-only pipeline working without polluting global state.
+function Resolve-Wat2Wasm {
+  $local = Join-Path $BinDir 'wat2wasm.exe'
+  if (Test-Path $local) { return $local }
+  $localNoExt = Join-Path $BinDir 'wat2wasm'
+  if (Test-Path $localNoExt) { return $localNoExt }
+  $onPath = Get-Command 'wat2wasm' -ErrorAction SilentlyContinue
+  if ($onPath) { return $onPath.Source }
+  return $null
+}
+
+$BinDir = Join-Path $ProjectRoot 'bin'
+Require-Wasmtime
+$Wat2Wasm = Resolve-Wat2Wasm
+if (-not $Wat2Wasm) {
+  Write-Error @"
+build.ps1: missing required tool 'wat2wasm'
+  fetch automatically to .\bin\ via:
+    .\scripts\install-wat2wasm.ps1
+  or install wabt system-wide from:
+    https://github.com/WebAssembly/wabt/releases
+"@
+  exit 127
+}
 
 if (-not (Test-Path $Seed)) {
   Write-Error "build.ps1: seed compiler $Seed not found.`n  Restore via git."
@@ -114,8 +138,8 @@ function Build-Stage1 {
   try {
     cmd /c "wasmtime --dir . `"$Seed`" < `"$bundleTmp`" > `"$TmpWat`""
     if ($LASTEXITCODE -ne 0) { throw "stage1.wasm compile failed (exit $LASTEXITCODE)" }
-    Write-Host 'build.ps1: assembling WAT → WASM via wat2wasm…'
-    wat2wasm $TmpWat -o $TmpWasm
+    Write-Host "build.ps1: assembling WAT → WASM via $Wat2Wasm…"
+    & $Wat2Wasm $TmpWat -o $TmpWasm
     if ($LASTEXITCODE -ne 0) { throw "wat2wasm failed (exit $LASTEXITCODE)" }
   } finally {
     Remove-Item -LiteralPath $bundleTmp -ErrorAction SilentlyContinue
