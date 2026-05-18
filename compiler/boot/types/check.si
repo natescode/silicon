@@ -36,6 +36,7 @@
   &@if (k == AST_BOOL_LIT),   { r = TYPE_BOOL_H; };
   &@if (k == AST_NAMESPACE),  { r = &check_namespace node; };
   &@if (k == AST_BIN_OP),     { r = &check_binary_op node; };
+  &@if (k == AST_CALL),       { r = &check_call node; };
 
   r
 };
@@ -199,6 +200,91 @@
           &err_invalid_operator op_off, op_len, lt, rt, op_off, op_len;
         };
       };
+    };
+  };
+
+  r
+};
+
+# ── FunctionCall ─────────────────────────────────────────────────
+#
+# AST_CALL [kind, callee, n_args, arg0, arg1, ...]
+#
+# `callee` is itself a node — usually AST_NAMESPACE, but the parser
+# can produce other kinds for higher-order forms.  Strategy:
+#
+#   1. Recurse on every arg first so their inner errors surface
+#      regardless of whether the call itself resolves.
+#   2. Inspect the callee.  If it's AST_NAMESPACE, look up the
+#      joined-span name in the fn table.
+#   3. On hit: validate arity + per-arg types; return result handle.
+#   4. On miss: return TYPE_UNKNOWN_H WITHOUT pushing an error.  The
+#      miss might be a keyword (@if, @match, …) handled in 2e-v, an
+#      intrinsic resolved by callee patterns, or a stratum-registered
+#      symbol not yet seeded.  False-positive unbound errors would
+#      mask real bugs; deferred until the broader walk is in place.
+
+@fn check_call_args node:Int, n_args:Int := {
+  @local i := 0;
+  &@loop (i < n_args), {
+    @local arg := &ast_field P_AST, node, (3 + i);
+    &check_node arg;
+    i = i + 1;
+  };
+};
+
+@fn check_call:Int node:Int := {
+  @local callee := &ast_field P_AST, node, 1;
+  @local n_args := &ast_field P_AST, node, 2;
+
+  # Walk args first so nested diagnostics fire even on resolution miss.
+  &check_call_args node, n_args;
+
+  @local r := TYPE_UNKNOWN_H;
+
+  # Callee must be an AST_NAMESPACE for the lookup path to apply.
+  &@if ((&ast_kind P_AST, callee) == AST_NAMESPACE), {
+    @local n_segs := &ast_field P_AST, callee, 1;
+    @local first_off := &ast_field P_AST, callee, 2;
+    @local last_off  := &ast_field P_AST, callee, (2 + ((n_segs - 1) * 2));
+    @local last_len  := &ast_field P_AST, callee, (3 + ((n_segs - 1) * 2));
+    @local name_len  := (last_off + last_len) - first_off;
+    @local name_p    := P_SRC + first_off;
+
+    # Linear scan of FN_VEC by raw bytes; mirrors fn_lookup but
+    # against a non-interned source span.
+    @local found := 0 - 1;
+    @local cnt := &fn_count;
+    @local i := 0;
+    &@loop (((found < 0) * (i < cnt)) == 1), {
+      &@if ((&tc_name_eq_bytes (&fn_name_off i), (&fn_name_len i), name_p, name_len) == 1), {
+        found = i;
+      };
+      i = i + 1;
+    };
+
+    &@if (found >= 0), {
+      @local n_params := &fn_n_params found;
+      # Arity check: not a hard error in TS (variadic-ish through
+      # default 0-arg call sites for void fns), but report any
+      # supplied arg that exceeds the declared count via a per-arg
+      # EK_MISMATCH against TYPE_UNKNOWN.  Simpler model for the
+      # bootstrap: count mismatch → no detailed error, types-of-
+      # supplied-args validated against parallel param slots up to
+      # min(n_args, n_params).
+      @local check_n := n_args;
+      &@if (check_n > n_params), { check_n = n_params; };
+      @local j := 0;
+      &@loop (j < check_n), {
+        @local arg := &ast_field P_AST, node, (3 + j);
+        @local at  := &check_node arg;
+        @local pt  := &fn_param found, j;
+        &@if (((at != TYPE_UNKNOWN_H) * ((pt != TYPE_UNKNOWN_H) * (at != pt))) == 1), {
+          &err_mismatch pt, at, first_off, name_len;
+        };
+        j = j + 1;
+      };
+      r = &fn_result found;
     };
   };
 
