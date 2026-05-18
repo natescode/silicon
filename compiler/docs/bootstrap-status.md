@@ -10,14 +10,13 @@ Updated as branches land.
 | Phase | Workstream                                              | Status      | Branch                       |
 | ----- | ------------------------------------------------------- | ----------- | ---------------------------- |
 | 1a    | Body interpreter — scope + path-eval scaffolding        | **Landed**  | `bootstrap/silicon-only`     |
-| 1b    | `Compiler::ir::*` constructors                          | Pending     | —                            |
+| 1b    | Rich-body dispatch + `Compiler::ir::*` constructors     | **Landed**  | `bootstrap/silicon-only`     |
 | 1c    | `Compiler::ctx::*` mutable surface                      | Pending     | —                            |
 | 1d    | Lowering helpers (`lowerExpr`, `arg`, `watId`, …)       | Pending     | —                            |
 | 1e    | Wire-up + byte-equal gate vs Stage 0 e2e corpus         | Pending     | —                            |
 | 2     | Typechecker port                                        | Pending     | —                            |
 | 3     | `@use` resolver + multi-file entry                      | Pending     | —                            |
-| 4     | WAT-to-WASM shell-out                                   | Pending     | —                            |
-| 5     | Shell-driven build + self-host loop                     | Pending     | —                            |
+| 4+5   | Shell build pipeline (build.sh / build.ps1) + wat2wasm shell-out | **Landed**  | `bootstrap/silicon-only`     |
 | 6     | Silicon-side test runner                                | Pending     | —                            |
 | 7     | Delete TypeScript                                       | Blocked on 1–6 | —                         |
 

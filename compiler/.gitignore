@@ -185,5 +185,9 @@ dist
 # Finder (MacOS) folder config
 .DS_Store
 
-# Build / test artifacts (boot.wasm, stage1.wasm, smoke-test temp files).
-wasm-bin/
+# Build / test artifacts (boot.wasm, smoke-test temp files).
+# stage1.wasm is the EXCEPTION — checked in as the bootstrap seed so a
+# clean clone can rebuild without first running any other toolchain
+# (rust-style: the prior compiler binary lives in git).
+wasm-bin/*
+!wasm-bin/stage1.wasm
