@@ -57,6 +57,10 @@ WASI_STUB='@extern wasi_snapshot_preview1::fd_write:Int
   fd:Int, iovs_ptr:Int, iovs_len:Int, nread_out:Int;
 @extern wasi_snapshot_preview1::proc_exit
   code:Int;
+@extern wasi_snapshot_preview1::args_get:Int
+  argv_ptr:Int, argv_buf:Int;
+@extern wasi_snapshot_preview1::args_sizes_get:Int
+  argc_out:Int, argv_buf_size_out:Int;
 '
 
 # ── Minimal @use resolver (depth-first, post-order, cycle-safe) ────
@@ -129,6 +133,7 @@ DEFAULT_TESTS=(
   "boot/tests/body_scope_test.si"
   "boot/tests/body_rich_test.si"
   "boot/tests/nz_keyword_test.si"
+  "boot/tests/const_keyword_test.si"
 )
 
 if [ $# -gt 0 ]; then

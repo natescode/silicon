@@ -1,0 +1,37 @@
+# const_keyword test — proves a DEFINITION-FORM keyword can be added
+# in pure Silicon.
+#
+# @const is defined in boot/strata/builtin/logic.si.  No branch in
+# boot/ir/lower.si or src/.  Dispatch path:
+#
+#   user source has @const X := 42;
+#     → parser produces AST_DEFINITION with kw=@const
+#     → lower_program pass 2 runs lower_definition → returns IR_NONE
+#       (no defkind registered for @const)
+#     → try_dispatch_def_via_body_rich runs body_rich on @const's
+#       strata body
+#     → body_rich dispatches &Compiler::ir::makeGlobal Node
+#     → body_rich's makeGlobal reads Node's name + binding,
+#       extracts the int-literal init, calls global_add
+#     → stage1 emits a regular (global $X (mut i32) (i32.const 42))
+#     → subsequent references to X resolve via GSCOPE → global.get
+
+@use '../std/io.si';
+
+@const ANSWER := 42;
+@const ZERO := 0;
+@const ONE_K := 1024;
+
+@fn _start:Void := {
+  # All three @const'd globals carry their int-literal inits via
+  # body_rich's makeGlobal → global_add path.  Stage1's @var has the
+  # same int/bool-literal-only init constraint; non-literal inits
+  # silently default to 0 (matches @var's behavior).
+  @local ok := &@and (ANSWER == 42),
+               (&@and (ZERO == 0), (ONE_K == 1024));
+  &@if ok,
+    { &write_str 1, 'const OK' },
+    { &write_str 1, 'const FAIL' };
+  &write_byte 1, 10;
+  &wasi_snapshot_preview1::proc_exit 0;
+};

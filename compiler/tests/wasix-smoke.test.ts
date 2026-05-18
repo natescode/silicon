@@ -1132,6 +1132,13 @@ describe('Phase 0 WASIX smoke test', () => {
         // generic @-keyword fallback.  This is the proof that adding
         // expression-form keywords in pure Silicon works end-to-end.
         { path: 'boot/tests/nz_keyword_test.si', expect: 'nz OK' },
+        // const_keyword_test exercises the first DEFINITION-FORM
+        // keyword defined purely in Silicon (boot/strata/builtin/
+        // logic.si:Const).  Routes through try_dispatch_def_via_
+        // body_rich, whose makeGlobal handler reads the bound def's
+        // (name_off, name_len, int-literal init) and side-effects
+        // global_add — emitting a normal (global $X (mut i32) ...).
+        { path: 'boot/tests/const_keyword_test.si', expect: 'const OK' },
     ]
     for (const fx of STAGE1_PIPELINE_FIXTURES) {
         test(`STAGE 1 PIPELINE: ${fx.path} compiles via stage1.wasm + strict watToWasm + runs`, async () => {

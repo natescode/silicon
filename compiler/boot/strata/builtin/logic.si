@@ -54,3 +54,26 @@
   @local zero := &Compiler::ir::makeConst 0, 'i32';
   &Compiler::ir::makeIf v, one, zero;
 };
+
+# @const name := <int-literal> — like @var but conceptually immutable.
+# First DEFINITION KEYWORD added purely in Silicon.  No branch in
+# lower.si: lower_definition's pass-2 hook (try_dispatch_def_via_
+# body_rich) routes it through body_rich, which dispatches the
+# &Compiler::ir::makeGlobal call into a side-effecting global_add.
+# Same int/bool-literal init constraint as stage1's hardcoded @var.
+#
+# Body intentionally omits the &IR::def_<kind> marker that other
+# def-keyword strata use (e.g. @var's &IR::def_global;).  TS Stage
+# 0's strata loader indexes defExpanders by codegen kind, not by
+# keyword — so registering @const with codegen kind "global" would
+# OVERWRITE @var's defExpander with @const's body, and any later
+# @var usage in Stage-0-compiled source would dispatch through
+# @const's body and call makeGlobal with one arg, producing an
+# IRGlobal(init=undefined) that emit then chokes on.  Skipping the
+# marker leaves Stage 0 with no @const dispatch (fine: Stage 0
+# compiles no @const usages), while stage1's
+# try_dispatch_def_via_body_rich finds the keyword by name via
+# registry_kw_lookup and runs body_rich as designed.
+@stratum_keyword Const ('@const', Node) = {
+  &Compiler::ir::makeGlobal Node;
+};

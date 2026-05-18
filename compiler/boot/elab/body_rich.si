@@ -39,6 +39,7 @@
 @fn br_lit_make_continue:Int := { (&str_ptr 'makeContinue') + 4 };
 @fn br_lit_make_return:Int   := { (&str_ptr 'makeReturn')   + 4 };
 @fn br_lit_make_loop:Int     := { (&str_ptr 'makeLoop')     + 4 };
+@fn br_lit_make_global:Int   := { (&str_ptr 'makeGlobal')   + 4 };
 @fn br_lit_null:Int := { (&str_ptr 'null') + 4 };
 
 # Compiler::* (2-segment) entry points.
@@ -104,10 +105,11 @@
 # br_extract_name_handle inspects an AST_NAMESPACE arg of shape
 # `<bound>.name` or `<bound>.name.name` (the TS-style TypedIdentifier
 # access pattern), where <bound> resolves to an AST_DEFINITION via
-# the body scope.  Pushes the def's name bytes into NAME_POOL and
-# returns the same negative pool-handle encoding name_pool_push_
-# mangled uses (-pool_start - 2).  Returns IR_NONE when the path
-# doesn't match the expected shape.
+# the body scope.  Returns the def's (name_off, name_len) packed as
+# a positive i32: (off << 12) | (len & 0xFFF).  Caps name length at
+# 4095 chars and source offset at 1 MiB — both ample for any real
+# identifier.  Decoders use br_name_handle_off / br_name_handle_len.
+# Returns IR_NONE when the path doesn't match.
 @fn br_extract_name_handle:Int arg_ns:Int := {
   &@if (arg_ns < 0), { &@return IR_NONE; };
   &@if ((&ast_kind P_AST, arg_ns) != AST_NAMESPACE), { &@return IR_NONE; };
@@ -120,14 +122,14 @@
   &@if ((&ast_kind P_AST, def) != AST_DEFINITION), { &@return IR_NONE; };
   @local nm_off := &ast_field P_AST, def, 3;
   @local nm_len := &ast_field P_AST, def, 4;
-  @local pool_start := &vec_len NAME_POOL;
-  @local i := 0;
-  &@loop (i < nm_len), {
-    NAME_POOL = &vec_push NAME_POOL, (&WASM::i32_load8_u (P_SRC + nm_off + i));
-    i = i + 1;
-  };
-  (0 - pool_start) - 2
+  # Pack (off << 12) | len.  Stays positive so callers can distinguish
+  # this from NAME_POOL handles (which are negative).
+  (nm_off * 4096) + nm_len
 };
+
+# Decoders for the packed name-handle.  Read once at the use site.
+@fn br_name_handle_off:Int h:Int := { h / 4096 };
+@fn br_name_handle_len:Int h:Int := { h - ((h / 4096) * 4096) };
 
 # br_extract_type_kind inspects an AST_NAMESPACE arg of shape
 # `<bound>.name.typeAnnotation` (or `<bound>.typeAnnotation` —
@@ -309,6 +311,42 @@
         @local cond := &br_eval_expr (&ast_field P_AST, call_node, 4);
         @local body := &br_eval_expr (&ast_field P_AST, call_node, 5);
         &@return (&ir_loop cond, body);
+      };
+      &@return IR_NONE;
+    };
+
+    # Compiler::ir::makeGlobal Node  →  side-effect: register a global
+    # in stage1's GSCOPE via lower.si's global_add.  Returns IR_NONE
+    # because stage1 doesn't represent globals as IR_VEC nodes.
+    #
+    # Shape constraint matches stage1's current global-init support:
+    # the @local init expression on the AST_DEFINITION must be a
+    # plain int / bool literal.  Non-literal inits silently bind 0
+    # (same fallback the hardcoded @var pass-1 path uses).
+    #
+    # The arg is the bound nodeParamName (evaluates to the
+    # AST_DEFINITION via the body scope's Node binding), not a
+    # name handle.  This avoids the lowerGlobalInit "record"
+    # plumbing the TS strata body uses and keeps the @const-style
+    # body trivial.
+    &@if ((&br_span_eq_lit s2_off, s2_len, (&br_lit_make_global), 10) == 1), {
+      &@if (n_args >= 1), {
+        @local def := &br_eval_expr (&ast_field P_AST, call_node, 3);
+        &@if (def < 0), { &@return IR_NONE; };
+        &@if ((&ast_kind P_AST, def) != AST_DEFINITION), { &@return IR_NONE; };
+        @local g_nm_off := &ast_field P_AST, def, 3;
+        @local g_nm_len := &ast_field P_AST, def, 4;
+        @local g_n_params := &ast_field P_AST, def, 7;
+        @local g_binding  := &ast_field P_AST, def, (8 + g_n_params);
+        @local g_init_val := 0;
+        &@if (g_binding >= 0), {
+          @local bk := &ast_kind P_AST, g_binding;
+          &@if (bk == AST_INT_LIT),
+            { g_init_val = &ast_field P_AST, g_binding, 1; };
+          &@if (bk == AST_BOOL_LIT),
+            { g_init_val = &ast_field P_AST, g_binding, 1; };
+        };
+        &global_add g_nm_off, g_nm_len, g_init_val;
       };
       &@return IR_NONE;
     };
