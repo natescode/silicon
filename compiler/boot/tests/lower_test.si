@@ -15,6 +15,8 @@
 @use '../strata/loader.si';
 @use '../ir/nodes.si';
 @use '../elab/body.si';
+@use '../elab/body_scope.si';
+@use '../elab/body_rich.si';
 @use '../ir/lower.si';
 
 @fn lw_write_int v:Int := {

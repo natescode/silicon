@@ -1467,11 +1467,44 @@
           &@return (&ir_return (&ir_i32_const 0));
         };
       };
+      # @break / @continue — Phase 1e proof-of-concept: dispatch via
+      # the rich-body interpreter in body_rich.si when the registry
+      # has the stratum (i.e. for any user program that bundles the
+      # built-in strata).  The strata bodies for these two keywords
+      # take no @Compiler::arg / Compiler::lowerExpr calls — the only
+      # IR-producing step is the trailing &Compiler::ir::make{Break,
+      # Continue} that body_rich knows how to dispatch — so the IR
+      # output is byte-identical to the hardcoded path below.  When
+      # the registry doesn't have the stratum (bare boot fixtures
+      # that don't carry the embedded bundle), we fall through to
+      # the hardcoded path.
+      #
+      # Keywords whose strata bodies need Compiler::arg /
+      # Compiler::lowerExpr / Compiler::ctx::* stay on the hardcoded
+      # path until those Compiler::* entry points land (Phase 1c+1d).
       &@if ((&lower_span_eq_lit nm_off, nm_len, (&lit_at_break_ptr), 6) == 1), {
-        &@if (n_args == 0), { &@return (&ir_break); };
+        &@if (n_args == 0), {
+          @local elab_b := &registry_kw_lookup nm_off, nm_len;
+          &@if (elab_b >= 0), {
+            @local sem_b := &ast_field P_AST, elab_b, 8;
+            &bs_init;
+            @local h_b := &br_interpret_body sem_b;
+            &@if (h_b != IR_NONE), { &@return h_b; };
+          };
+          &@return (&ir_break);
+        };
       };
       &@if ((&lower_span_eq_lit nm_off, nm_len, (&lit_at_continue_ptr), 9) == 1), {
-        &@if (n_args == 0), { &@return (&ir_continue); };
+        &@if (n_args == 0), {
+          @local elab_c := &registry_kw_lookup nm_off, nm_len;
+          &@if (elab_c >= 0), {
+            @local sem_c := &ast_field P_AST, elab_c, 8;
+            &bs_init;
+            @local h_c := &br_interpret_body sem_c;
+            &@if (h_c != IR_NONE), { &@return h_c; };
+          };
+          &@return (&ir_continue);
+        };
       };
       &@if ((&lower_span_eq_lit nm_off, nm_len, (&lit_at_tofloat_ptr), 8) == 1), {
         &@if (n_args == 1), {

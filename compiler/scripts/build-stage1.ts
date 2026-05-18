@@ -57,6 +57,8 @@ const STAGE1_FILES = [
     'boot/elab/elaborator.si',
     'boot/ir/nodes.si',
     'boot/elab/body.si',
+    'boot/elab/body_scope.si',   // scope vec for rich strata bodies
+    'boot/elab/body_rich.si',    // Compiler::ir::* dispatch for rich bodies
     'boot/ir/lower.si',
     'boot/emit/wat.si',
     'boot/cli.si',               // depends on argv.si + io.si + fs.si helpers
