@@ -40,6 +40,9 @@
   &@if (k == AST_BLOCK),      { r = &check_block node; };
   &@if (k == AST_ASSIGNMENT), { r = &check_assignment node; };
   &@if (k == AST_DEFINITION), { r = &check_inline_def node; };
+  &@if (k == AST_ARRAY_LIT),  { r = &check_array_lit node; };
+  &@if (k == AST_TUPLE_LIT),  { r = &check_tuple_lit node; };
+  &@if (k == AST_OBJECT_LIT), { r = &check_object_lit node; };
 
   r
 };
@@ -539,5 +542,59 @@
   };
   &@if (is_var == 0), { &imm_add n_off, nm_len; };
 
+  TYPE_UNKNOWN_H
+};
+
+# ── Array literal ──────────────────────────────────────────────
+#
+# AST_ARRAY_LIT [kind, n_elems, elem0, elem1, ...]
+#
+# Walk every element.  First element's type is the array's element
+# type; subsequent mismatches push EK_HETEROGENEOUS but keep walking
+# so every offender surfaces.  Empty arrays produce Array<Unknown>.
+
+@fn check_array_lit:Int node:Int := {
+  @local n_elems := &ast_field P_AST, node, 1;
+  @local first_t := TYPE_UNKNOWN_H;
+  @local i := 0;
+  &@loop (i < n_elems), {
+    @local e := &ast_field P_AST, node, (2 + i);
+    @local et := &check_node e;
+    &@if (i == 0), { first_t = et; };
+    &@if ((i > 0) * ((first_t != TYPE_UNKNOWN_H) * ((et != TYPE_UNKNOWN_H) * (et != first_t))) == 1), {
+      &err_heterogeneous first_t, et, 0, 0;
+    };
+    i = i + 1;
+  };
+  &type_new_array first_t
+};
+
+# ── Tuple / Object literals ────────────────────────────────────
+#
+# These have no first-class representation in the current
+# SiliconType ADT (tuples are surface-only via @tuple syntax;
+# objects are typically struct-shaped).  Walk children for inner
+# errors and return TYPE_UNKNOWN_H — the checker doesn't constrain
+# these constructs yet and the lowering pass handles them.
+
+@fn check_tuple_lit:Int node:Int := {
+  @local n_elems := &ast_field P_AST, node, 1;
+  @local i := 0;
+  &@loop (i < n_elems), {
+    &check_node (&ast_field P_AST, node, (2 + i));
+    i = i + 1;
+  };
+  TYPE_UNKNOWN_H
+};
+
+# AST_OBJECT_LIT [kind, n_pairs, key0_off, key0_len, val0_idx, key1_off, ...]
+@fn check_object_lit:Int node:Int := {
+  @local n_pairs := &ast_field P_AST, node, 1;
+  @local i := 0;
+  &@loop (i < n_pairs), {
+    @local v := &ast_field P_AST, node, (4 + (i * 3));
+    &check_node v;
+    i = i + 1;
+  };
   TYPE_UNKNOWN_H
 };
