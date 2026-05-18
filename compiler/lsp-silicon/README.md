@@ -5,6 +5,13 @@ Language Server Protocol implementation for the
 Standalone Node package so it works in any editor that speaks LSP
 (vim, emacs, helix, neovim, sublime, zed, vscode).
 
+> **TODO: extract to its own repository.** This package only lives in
+> the `sigil` monorepo for development convenience while the compiler
+> frontend it imports from `../src/` is still churning.  Once the
+> backend switches to `stage1.wasm` (see Architecture below), it has
+> no further reason to share a tree with the compiler — move to
+> `natescode/lsp-silicon`, publish to npm.
+
 Plan: [`docs/language-server-plan.html`](../docs/language-server-plan.html).
 
 ## v1 alpha capabilities

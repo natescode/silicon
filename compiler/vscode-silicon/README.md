@@ -6,6 +6,12 @@ Syntax highlighting, the **Sigil Dark** color theme, and a
 bootstrappable language that targets WebAssembly Text Format (WAT)
 and runs under WASI.
 
+> **TODO: extract to its own repository.** Lives in the `sigil`
+> monorepo today because the grammar and theme still iterate
+> alongside the compiler.  Move to `natescode/vscode-silicon` before
+> the first Marketplace publish — VSIX builds shouldn't depend on
+> the compiler tree.
+
 ## What's in here
 
 - **Silicon language grammar** (`syntaxes/silicon.tmLanguage.json`) —
