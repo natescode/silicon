@@ -19,8 +19,11 @@
 @use './types.si';
 @use './ctx.si';
 @use './errors.si';
+@use './preregister_std.si';
+@use './preregister_defs.si';
 @use '../parser/ast.si';
 @use '../parser/parse.si';
+@use '../std/io.si';
 
 # Forward declaration via direct call.  Silicon allows forward refs
 # inside the same file because parse builds the full top-level
@@ -597,4 +600,36 @@
     i = i + 1;
   };
   TYPE_UNKNOWN_H
+};
+
+# ── Public entrypoint ─────────────────────────────────────────
+#
+# Wraps ctx_init + preregister_std + preregister_defs + the
+# top-level walk in one call.  Returns the error count so callers
+# can decide whether to print diagnostics, exit non-zero, etc.
+@fn typecheck_program:Int prog:Int := {
+  &types_init;
+  &errors_init;
+  &ctx_init;
+  &preregister_std;
+  &preregister_defs prog;
+  @local n_el := &ast_field P_AST, prog, 1;
+  @local i := 0;
+  &@loop (i < n_el), {
+    &check_node (&ast_field P_AST, prog, (2 + i));
+    i = i + 1;
+  };
+  &err_count
+};
+
+# Stream every recorded type error to fd as one line each, format
+# "[Kind] message\n" — matches the TS formatTypeError output.
+@fn typecheck_print_errors fd:Int := {
+  @local n := &err_count;
+  @local i := 0;
+  &@loop (i < n), {
+    &err_write_msg fd, i;
+    &write_byte fd, 10;
+    i = i + 1;
+  };
 };

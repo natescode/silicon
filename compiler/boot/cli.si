@@ -37,6 +37,13 @@
 @fn cli_path_ptr:Int   := { CLI_PATH_PTR };
 @fn cli_path_len:Int   := { CLI_PATH_LEN };
 
+# `--typecheck` enables the Silicon-side typechecker pass between
+# parse and lower.  Off by default so today's pipeline keeps the
+# byte-equal self-host gate; opt-in flag prints any diagnostics to
+# stderr without failing the build.
+@var CLI_TYPECHECK:Int := 0;
+@fn cli_typecheck:Int  := { CLI_TYPECHECK };
+
 @fn cli_print_usage := {
   &write_str 1, 'sigil — Silicon bootstrap compiler\n';
   &write_str 1, '\n';
@@ -48,6 +55,9 @@
   &write_str 1, '\n';
   &write_str 1, 'Flags:\n';
   &write_str 1, '  --help                 Print this message and exit.\n';
+  &write_str 1, '  --typecheck            Run the Silicon-side typechecker pass before\n';
+  &write_str 1, '                         lower; prints diagnostics to stderr but does\n';
+  &write_str 1, '                         not fail the build (yet).\n';
   &write_str 1, '  --emit=wasix|host      Target runtime.  Accepted but currently a no-op\n';
   &write_str 1, '                         (stage1 always synthesises a _start wrapper).\n';
   &write_str 1, '  --diagnostics=pretty   Diagnostic renderer.  Only `pretty` today.\n';
@@ -84,6 +94,10 @@
   &@if (&argv_eq_lit p, l, '--help'), {
     &cli_print_usage;
     &wasi_snapshot_preview1::proc_exit 0;
+  };
+  &@if (&argv_eq_lit p, l, '--typecheck'), {
+    CLI_TYPECHECK = 1;
+    &@return 1;
   };
   &@if (&argv_starts_with p, l, '--emit='),         { &@return 1; };
   &@if (&argv_starts_with p, l, '--diagnostics='),  { &@return 1; };

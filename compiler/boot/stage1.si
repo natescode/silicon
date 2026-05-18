@@ -87,6 +87,17 @@
 
   @local toks := &lex buf, total;
   @local prog := &parse buf, total, toks;
+
+  # Phase 2 slice 2f — opt-in Silicon-side typechecker.  Runs in
+  # parallel with the legacy lowering pass: diagnostics go to
+  # stderr but never abort the build today, so the byte-equal
+  # self-host gate keeps holding.  Users gain visibility via
+  # `stage1.wasm --typecheck ...`.
+  &@if ((&cli_typecheck) == 1), {
+    &typecheck_program prog;
+    &typecheck_print_errors 2;
+  };
+
   &registry_init;
   &load_strata prog;
   &ir_init;
