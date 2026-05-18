@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What This Is
 
-**Sigil** is a compiler for the **Silicon programming language**, targeting WebAssembly Text Format (WAT). The runtime is **Bun** (not Node.js).
+**Sigil** is a compiler for the **Silicon programming language**, targeting WebAssembly Text Format (WAT). The host runtime for the TS compiler is **Bun** (not Node.js). The wasm runtime used by the bootstrap tests and by `scripts/run-silicon.ts` is **wasmtime** (the WASI reference implementation). Wasmer's WASI compat layer has known bugs at both 2.x (mapped-dir rights) and 7.x (post-`path_open` fd corruption + Windows absolute-path stdout) — wasmtime is the supported target.
 
 **Status:** Stage 0 (TypeScript). Self-hosting in Silicon is planned per `docs/bootstrap-plan.html`; the in-flight Stage 0 hardening work is in `docs/stage0-cleanup-plan.html`.
 

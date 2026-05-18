@@ -1,15 +1,14 @@
 # Phase 0 main — read stdin, echo to stdout.
 #
 # Build:  bun run boot:build
-# Run:    wasmer run boot.wasm < some-file.txt
+# Run:    wasmtime boot.wasm < some-file.txt
 #
-# The bootstrap-plan §Phase 0 gate originally specified
-# `wasmer run boot.wasm -- README.md` (argv-based file open).  That path
-# needs `path_open`, whose `fs_rights_base` / `fs_rights_inheriting`
-# parameters are u64 — Silicon-Core's type system is i32 / f32 only, so
-# we side-step it for now and echo stdin instead.  Same proof that the
-# WASI runtime is reachable and useful; argv + path_open land once i64
-# support is plumbed through the IR.
+# The bootstrap-plan §Phase 0 gate originally specified an argv-based
+# file open.  That path now works via `path_open` in stage1.wasm
+# (`wasmtime --dir ./src::src stage1.wasm src/hello.si`) — see
+# `boot/std/fs.si` + `boot/cli.si`.  This Phase 0 file continues to use
+# the stdin-echo form because it predates the i64 work and the gate it
+# proves (WASI fd_read/fd_write reachable from Silicon) is unchanged.
 
 @use 'std/io.si';
 @use 'std/arena.si';

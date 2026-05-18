@@ -4,8 +4,14 @@
  *
  * Concatenates the built-in strata bundle in front of the user source
  * so stage1 can resolve operators/keywords/defkinds, pipes the result
- * through stage1.wasm under wasmer, and writes the WAT to disk.
+ * through stage1.wasm under wasmtime, and writes the WAT to disk.
  * Optionally also runs wat2wasm to produce a wasm artifact.
+ *
+ * Runtime: wasmtime (the WASI reference implementation).  Wasmer 2.x
+ * has a known mapped-dir rights bug that blocks Phase 4b's path_open
+ * end-to-end test, and wasmer 7.x has post-path_open fd corruption
+ * plus a Windows absolute-path stdout bug.  Wasmtime ≥ 14 is the
+ * minimum.
  *
  * Usage:
  *   bun run scripts/run-silicon.ts <source.si>                 # → source.wat
@@ -51,7 +57,7 @@ async function main(): Promise<void> {
     }
     const userSrc = await fs.readFile(sourcePath, 'utf-8')
 
-    const r = spawnSync('wasmer', ['run', stage1Path], {
+    const r = spawnSync('wasmtime', [stage1Path], {
         input: Buffer.from(bundle + userSrc, 'utf-8'),
         maxBuffer: 64 * 1024 * 1024,
     })

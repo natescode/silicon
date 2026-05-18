@@ -23,8 +23,8 @@ boot/
 
 ```bash
 bun run boot:build                    # compile boot/main.si → boot.wat + boot.wasm
-bun run boot:run                      # build, then `wasmer run boot.wasm`
-wasmer run boot.wasm < some-file.txt  # echo a file's contents to stdout
+bun run boot:run                      # build, then `wasmtime boot.wasm`
+wasmtime boot.wasm < some-file.txt    # echo a file's contents to stdout
 ```
 
 The echo program reads stdin in 4 KiB chunks and writes them back to stdout
@@ -34,7 +34,7 @@ To run a different entry (e.g. one of the unit tests):
 
 ```bash
 bun run scripts/build-boot.ts boot/tests/arena_test.si
-wasmer run boot.wasm
+wasmtime boot.wasm
 # → arena OK
 ```
 
@@ -67,8 +67,8 @@ call `fd_read` / `fd_write` from the `wasi_snapshot_preview1` module.
 the scratch iovs don't accumulate.
 
 Top-level `&echo_stdin` lands in `$__start`, which `--target=wasix`
-exports as `_start` — the symbol wasmer's WASI runner invokes
-automatically.
+exports as `_start` — the symbol the WASI runner (wasmtime, wasmer, …)
+invokes automatically.
 
 ## Notes
 
@@ -78,8 +78,8 @@ automatically.
   alignment, `write_byte` allocates 4 bytes per call so the next iovs
   buffer stays 4-byte aligned.
 - `--target=wasix` also strips `(import "env" "print" …)` and the
-  helpers that call it from `std.wat`, so wasmer's WASI host doesn't
-  see any unresolved imports.
+  helpers that call it from `std.wat`, so the WASI host doesn't see
+  any unresolved imports.
 - The WASI surface is declared once in
   `src/strata/modules/wasi_snapshot_preview1.si`; the loader makes it
   reachable as `&wasi_snapshot_preview1::<name>` and emits the imports
@@ -90,28 +90,22 @@ automatically.
 
 ## Known limitations (next iteration)
 
-- **i64 in `path_open`.**  WASI `path_open` takes two `fs_rights_*`
-  parameters as u64.  Silicon-Core's WasmValType is `i32 | f32` only —
-  no i64 yet.  Hence the Phase 0 gate is met via stdin redirection
-  (`wasmer run boot.wasm < file.txt`) rather than via argv-based file
-  open.  Wiring i64 through the IR (and adding `WASM::i64_*`
-  intrinsics) unlocks `path_open`, `args_get`, real argv handling, and
-  most of the WASIX surface beyond fd I/O.
 - **No boolean short-circuit `&&` operator.**  The `&` sigil is reserved
   for function calls, so the keyword form `&@and a, b` does the work.
   `||` is an operator and works as expected.
 
 ## Tests
 
-`tests/wasix-smoke.test.ts` builds boot.wasm and invokes wasmer for the
-echo program plus the arena and vec unit tests.  It skips cleanly when
-wasmer isn't on PATH.
+`tests/wasix-smoke.test.ts` builds boot.wasm and invokes wasmtime for
+the echo program plus the arena and vec unit tests.  It skips cleanly
+when wasmtime isn't on PATH.
 
 ## Status
 
-- [x] WASIX runtime reachable from Silicon
+- [x] WASI runtime reachable from Silicon
 - [x] Arena allocator with save/reset (`boot/std/arena.si`)
 - [x] `vec_i32` dynamic array with grow-by-doubling (`boot/std/vec.si`)
-- [x] File-echo gate: `wasmer run boot.wasm < README.md` reproduces
+- [x] File-echo gate: `wasmtime boot.wasm < README.md` reproduces
       README.md byte-for-byte on stdout, exits 0
-- [ ] argv-based file open via `path_open` — blocked on i64
+- [x] argv-based file open via `path_open` (Silicon-Core i64 +
+      `boot/std/fs.si`; see `boot/cli.si` for the dispatcher)

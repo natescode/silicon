@@ -1,13 +1,14 @@
 /**
- * WASIX _start export — Phase −1.E of bootstrap plan.
+ * WASI _start export — Phase −1.E of bootstrap plan.
  *
- * Wasmer's WASIX runner invokes the function exported as exactly `_start`.
- * Stage 0 always synthesises `$__start` as the module-init wrapper; under
- * `--target=wasix` we additionally export it under the WASIX-mandated name
- * so `wasmer run sigil.wasm` runs the program without an --invoke flag.
+ * The WASI runner (wasmtime, wasmer, etc.) invokes the function exported
+ * as exactly `_start`.  Stage 0 always synthesises `$__start` as the
+ * module-init wrapper; under `--target=wasix` we additionally export it
+ * under the WASI-mandated name so `wasmtime sigil.wasm` runs the program
+ * without an --invoke flag.
  *
- * Tests here exercise the compile-time wiring only. The "wasmer actually
- * picks up _start" check lives in the Phase 0 WASIX smoke test.
+ * Tests here exercise the compile-time wiring only. The "runtime
+ * actually picks up _start" check lives in the Phase 0 WASIX smoke test.
  */
 
 import { test, expect, describe } from 'bun:test'

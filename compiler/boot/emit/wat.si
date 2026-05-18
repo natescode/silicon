@@ -208,7 +208,10 @@
   &ew_str '    (global.set $heap (local.get $new_heap))'; &ew_byte 10;
   &ew_str '    (local.get $a))'; &ew_byte 10;
 
-  &ew_str '  (func $scratch_alloc (param $n i32) (result i32) (call $alloc (local.get $n)))'; &ew_byte 10;
+  # scratch_alloc rounds $n up to the next multiple of 4 so successive
+  # bumps stay 4-byte-aligned — wasmtime traps on unaligned WASI struct
+  # stores (e.g. fd_prestat_get's prestat write).  `(n + 3) & -4`.
+  &ew_str '  (func $scratch_alloc (param $n i32) (result i32) (call $alloc (i32.and (i32.add (local.get $n) (i32.const 3)) (i32.const -4))))'; &ew_byte 10;
   &ew_str '  (func $str_ptr (param $s i32) (result i32) (local.get $s))'; &ew_byte 10;
   &ew_str '  (func $str_len (param $s i32) (result i32) (i32.load (local.get $s)))'; &ew_byte 10;
   &ew_str '  (func $heap_get (result i32) (global.get $heap))'; &ew_byte 10;

@@ -117,13 +117,21 @@
 ;; intent annotated: the buffer is meant to be passed to an extern
 ;; declared with an out-pointer (the host writes into it).
 ;;
+;; Rounds `$n` up to the next multiple of 4 so successive allocations
+;; preserve 4-byte alignment.  WASI structs (e.g. prestat, iovec) are
+;; i32-aligned; strict runtimes like wasmtime trap if an i32 store
+;; lands on an unaligned address.  Stage 0 historically left tail
+;; padding to the caller (passing odd sizes for byte buffers worked
+;; on lax runtimes but broke under wasmtime's fd_prestat_get path);
+;; padding here removes the footgun across all callers.
+;;
 ;; Full out-pointer convention is documented in docs/extern-out-pointer.md.
 ;; Lifetime: scratch addresses live until the next arena_reset
 ;; (currently a no-op — Stage 0 leaks at end-of-compile). Stage 1's
 ;; arena reset will reclaim them between compile passes.
 ;; ------------------------------------------------------------------
 (func $scratch_alloc (param $n i32) (result i32)
-  (call $alloc (local.get $n)))
+  (call $alloc (i32.and (i32.add (local.get $n) (i32.const 3)) (i32.const -4))))
 (export "scratch_alloc" (func $scratch_alloc))
 
 ;; ------------------------------------------------------------------

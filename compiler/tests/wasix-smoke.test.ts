@@ -2,18 +2,19 @@
  * Phase 0 WASIX smoke test — bootstrap-plan §Phase 0.
  *
  * Compiles each .si entry with --target=wasix, assembles the WAT to WASM
- * via wabt, runs the resulting module under wasmer, and asserts:
+ * via wabt, runs the resulting module under wasmtime, and asserts:
  *
- *   - boot/main.si echoes stdin → stdout byte-for-byte (the file-echo
- *     gate, adapted to use stdin rather than argv-based path_open because
- *     WASI path_open needs i64 rights args and Silicon-Core is i32/f32).
+ *   - boot/main.si echoes stdin → stdout byte-for-byte.
  *   - boot/tests/arena_test.si prints "arena OK" — alloc / alloc / reset
  *     / alloc lands at the original address.
  *   - boot/tests/vec_test.si prints "vec OK" — push 10 items, grow twice,
  *     read back, sum equals 45.
  *
- * Wasmer is required; the test skips with a clear message when it's not
+ * Wasmtime is required; the test skips with a clear message when it's not
  * on PATH so the rest of the suite stays green on machines without it.
+ * Runtime choice rationale: wasmtime is the WASI reference implementation
+ * — wasmer 2.x has a mapdir rights bug that blocks Phase 4b, wasmer 7.x
+ * has post-path_open fd corruption + Windows absolute-path bugs.
  */
 
 import { test, expect, describe } from 'bun:test'
@@ -32,8 +33,8 @@ import { resolveUses } from '../src/modules/useResolver'
 
 const PROJECT_ROOT = path.resolve(import.meta.dirname, '..')
 
-function wasmerAvailable(): boolean {
-    const probe = spawnSync('wasmer', ['--version'], { encoding: 'utf-8' })
+function wasmtimeAvailable(): boolean {
+    const probe = spawnSync('wasmtime', ['--version'], { encoding: 'utf-8' })
     return probe.status === 0
 }
 
@@ -85,8 +86,8 @@ describe('Phase 0 WASIX smoke test', () => {
     })
 
     test('boot/main.si echoes stdin → stdout byte-for-byte', async () => {
-        if (!wasmerAvailable()) {
-            console.log('  (skipped: wasmer not on PATH)')
+        if (!wasmtimeAvailable()) {
+            console.log('  (skipped: wasmtime not on PATH)')
             return
         }
 
@@ -98,7 +99,7 @@ describe('Phase 0 WASIX smoke test', () => {
             // Use README.md as the input — large enough to span multiple
             // 4KB chunks, mixed content, deterministic on disk.
             const input = await fs.readFile(path.join(PROJECT_ROOT, 'README.md'))
-            const result = spawnSync('wasmer', ['run', tmpPath], {
+            const result = spawnSync('wasmtime', [tmpPath], {
                 input,
                 encoding: 'buffer',
                 maxBuffer: 64 * 1024 * 1024,
@@ -112,15 +113,15 @@ describe('Phase 0 WASIX smoke test', () => {
     })
 
     test('boot/tests/arena_test.si: alloc/alloc/reset/alloc returns same addr', async () => {
-        if (!wasmerAvailable()) {
-            console.log('  (skipped: wasmer not on PATH)')
+        if (!wasmtimeAvailable()) {
+            console.log('  (skipped: wasmtime not on PATH)')
             return
         }
         const wasm = await buildBoot(path.join(PROJECT_ROOT, 'boot', 'tests', 'arena_test.si'))
         const tmpPath = path.join(PROJECT_ROOT, '.arena-smoke.wasm')
         await fs.writeFile(tmpPath, wasm)
         try {
-            const result = spawnSync('wasmer', ['run', tmpPath], { encoding: 'buffer' })
+            const result = spawnSync('wasmtime', [tmpPath], { encoding: 'buffer' })
             expect(result.status).toBe(0)
             expect(result.stdout?.toString('utf-8')).toBe('arena OK\n')
         } finally {
@@ -129,15 +130,15 @@ describe('Phase 0 WASIX smoke test', () => {
     })
 
     test('boot/tests/vec_test.si: push 10, grow twice, sum is 45', async () => {
-        if (!wasmerAvailable()) {
-            console.log('  (skipped: wasmer not on PATH)')
+        if (!wasmtimeAvailable()) {
+            console.log('  (skipped: wasmtime not on PATH)')
             return
         }
         const wasm = await buildBoot(path.join(PROJECT_ROOT, 'boot', 'tests', 'vec_test.si'))
         const tmpPath = path.join(PROJECT_ROOT, '.vec-smoke.wasm')
         await fs.writeFile(tmpPath, wasm)
         try {
-            const result = spawnSync('wasmer', ['run', tmpPath], { encoding: 'buffer' })
+            const result = spawnSync('wasmtime', [tmpPath], { encoding: 'buffer' })
             expect(result.status).toBe(0)
             expect(result.stdout?.toString('utf-8')).toBe('vec OK\n')
         } finally {
@@ -146,15 +147,15 @@ describe('Phase 0 WASIX smoke test', () => {
     })
 
     test('boot/tests/lex_test.si: lexer produces expected token streams', async () => {
-        if (!wasmerAvailable()) {
-            console.log('  (skipped: wasmer not on PATH)')
+        if (!wasmtimeAvailable()) {
+            console.log('  (skipped: wasmtime not on PATH)')
             return
         }
         const wasm = await buildBoot(path.join(PROJECT_ROOT, 'boot', 'tests', 'lex_test.si'))
         const tmpPath = path.join(PROJECT_ROOT, '.lex-smoke.wasm')
         await fs.writeFile(tmpPath, wasm)
         try {
-            const result = spawnSync('wasmer', ['run', tmpPath], { encoding: 'buffer' })
+            const result = spawnSync('wasmtime', [tmpPath], { encoding: 'buffer' })
             expect(result.status).toBe(0)
             expect(result.stdout?.toString('utf-8')).toBe('lex OK 6\n')
         } finally {
@@ -163,15 +164,15 @@ describe('Phase 0 WASIX smoke test', () => {
     })
 
     test('boot/tests/parse_test.si: parser produces expected AST shapes', async () => {
-        if (!wasmerAvailable()) {
-            console.log('  (skipped: wasmer not on PATH)')
+        if (!wasmtimeAvailable()) {
+            console.log('  (skipped: wasmtime not on PATH)')
             return
         }
         const wasm = await buildBoot(path.join(PROJECT_ROOT, 'boot', 'tests', 'parse_test.si'))
         const tmpPath = path.join(PROJECT_ROOT, '.parse-smoke.wasm')
         await fs.writeFile(tmpPath, wasm)
         try {
-            const result = spawnSync('wasmer', ['run', tmpPath], { encoding: 'buffer' })
+            const result = spawnSync('wasmtime', [tmpPath], { encoding: 'buffer' })
             expect(result.status).toBe(0)
             expect(result.stdout?.toString('utf-8')).toBe('parse OK 17\n')
         } finally {
@@ -180,8 +181,8 @@ describe('Phase 0 WASIX smoke test', () => {
     })
 
     test('boot/tests/json_test.si: corpus from src/e2e/examples matches Stage 0', async () => {
-        if (!wasmerAvailable()) {
-            console.log('  (skipped: wasmer not on PATH)')
+        if (!wasmtimeAvailable()) {
+            console.log('  (skipped: wasmtime not on PATH)')
             return
         }
         const wasm = await buildBoot(path.join(PROJECT_ROOT, 'boot', 'tests', 'json_test.si'))
@@ -217,7 +218,7 @@ describe('Phase 0 WASIX smoke test', () => {
                 }
                 const expected = JSON.stringify(stage0Ast, null, 2) + '\n'
 
-                const result = spawnSync('wasmer', ['run', tmpPath], {
+                const result = spawnSync('wasmtime', [tmpPath], {
                     input: Buffer.from(src, 'utf-8'),
                     maxBuffer: 64 * 1024 * 1024,
                 })
@@ -246,8 +247,8 @@ describe('Phase 0 WASIX smoke test', () => {
     })
 
     test('boot/tests/strata_loader_test.si: registry JSON byte-equals Stage 0 dump', async () => {
-        if (!wasmerAvailable()) {
-            console.log('  (skipped: wasmer not on PATH)')
+        if (!wasmtimeAvailable()) {
+            console.log('  (skipped: wasmtime not on PATH)')
             return
         }
         const wasm = await buildBoot(path.join(PROJECT_ROOT, 'boot', 'tests', 'strata_loader_test.si'))
@@ -298,7 +299,7 @@ describe('Phase 0 WASIX smoke test', () => {
         const expected = lines.join('\n') + '\n'
 
         try {
-            const result = spawnSync('wasmer', ['run', tmpPath], {
+            const result = spawnSync('wasmtime', [tmpPath], {
                 input: Buffer.from(bundle, 'utf-8'),
                 maxBuffer: 64 * 1024 * 1024,
             })
@@ -315,8 +316,8 @@ describe('Phase 0 WASIX smoke test', () => {
     })
 
     test('boot/tests/fn_test.si: @fn definitions compile and execute end-to-end', async () => {
-        if (!wasmerAvailable()) {
-            console.log('  (skipped: wasmer not on PATH)')
+        if (!wasmtimeAvailable()) {
+            console.log('  (skipped: wasmtime not on PATH)')
             return
         }
         const wasm = await buildBoot(path.join(PROJECT_ROOT, 'boot', 'tests', 'fn_test.si'))
@@ -662,7 +663,7 @@ describe('Phase 0 WASIX smoke test', () => {
 
         try {
             for (const c of cases) {
-                const result = spawnSync('wasmer', ['run', tmpPath], {
+                const result = spawnSync('wasmtime', [tmpPath], {
                     input: Buffer.from(bundle + c.prog + '\n', 'utf-8'),
                     maxBuffer: 64 * 1024 * 1024,
                 })
@@ -694,7 +695,7 @@ describe('Phase 0 WASIX smoke test', () => {
                 }
             }
             for (const c of stringCases) {
-                const result = spawnSync('wasmer', ['run', tmpPath], {
+                const result = spawnSync('wasmtime', [tmpPath], {
                     input: Buffer.from(bundle + c.prog + '\n', 'utf-8'),
                     maxBuffer: 64 * 1024 * 1024,
                 })
@@ -718,7 +719,7 @@ describe('Phase 0 WASIX smoke test', () => {
                 }
             }
             for (const c of externCases) {
-                const result = spawnSync('wasmer', ['run', tmpPath], {
+                const result = spawnSync('wasmtime', [tmpPath], {
                     input: Buffer.from(bundle + c.prog + '\n', 'utf-8'),
                     maxBuffer: 64 * 1024 * 1024,
                 })
@@ -739,7 +740,7 @@ describe('Phase 0 WASIX smoke test', () => {
                 }
             }
             for (const c of moduleExternCases) {
-                const result = spawnSync('wasmer', ['run', tmpPath], {
+                const result = spawnSync('wasmtime', [tmpPath], {
                     input: Buffer.from(bundle + c.prog + '\n', 'utf-8'),
                     maxBuffer: 64 * 1024 * 1024,
                 })
@@ -765,8 +766,8 @@ describe('Phase 0 WASIX smoke test', () => {
     }, 60000)
 
     test('boot/tests/fn_test.si: bootstrap compiles a WASI loop that prints the alphabet', async () => {
-        if (!wasmerAvailable()) {
-            console.log('  (skipped: wasmer not on PATH)')
+        if (!wasmtimeAvailable()) {
+            console.log('  (skipped: wasmtime not on PATH)')
             return
         }
         const wasm = await buildBoot(path.join(PROJECT_ROOT, 'boot', 'tests', 'fn_test.si'))
@@ -814,7 +815,7 @@ describe('Phase 0 WASIX smoke test', () => {
 
         const alphaWasm = path.join(PROJECT_ROOT, '.wasi-alpha.wasm')
         try {
-            const compileRes = spawnSync('wasmer', ['run', tmpPath], {
+            const compileRes = spawnSync('wasmtime', [tmpPath], {
                 input: Buffer.from(bundle + userProg, 'utf-8'),
                 maxBuffer: 64 * 1024 * 1024,
             })
@@ -824,7 +825,7 @@ describe('Phase 0 WASIX smoke test', () => {
             const compiled = await watToWasm(wat)
             await fs.writeFile(alphaWasm, Buffer.from(compiled.buffer))
 
-            const runRes = spawnSync('wasmer', ['run', alphaWasm], {
+            const runRes = spawnSync('wasmtime', [alphaWasm], {
                 maxBuffer: 64 * 1024 * 1024,
             })
             expect(runRes.status).toBe(0)
@@ -845,8 +846,8 @@ describe('Phase 0 WASIX smoke test', () => {
     }, 60000)
 
     test('scripts/build-stage1.ts + scripts/run-silicon.ts compile & run a WASI hello via stage1', async () => {
-        if (!wasmerAvailable()) {
-            console.log('  (skipped: wasmer not on PATH)')
+        if (!wasmtimeAvailable()) {
+            console.log('  (skipped: wasmtime not on PATH)')
             return
         }
         // Ensure boot.wasm exists for the build-stage1 script.
@@ -885,7 +886,7 @@ describe('Phase 0 WASIX smoke test', () => {
             )
             expect(runScriptRes.status).toBe(0)
 
-            const wasiRes = spawnSync('wasmer', ['run', helloWasm],
+            const wasiRes = spawnSync('wasmtime', [helloWasm],
                 { maxBuffer: 64 * 1024 * 1024 })
             expect(wasiRes.status).toBe(0)
             const stdout = (wasiRes.stdout ?? Buffer.alloc(0)).toString('utf-8')
@@ -898,8 +899,8 @@ describe('Phase 0 WASIX smoke test', () => {
     }, 120000)
 
     test('STAGE 2 == STAGE 1: self-host fixed-point — stage1.wasm and stage2.wasm are byte-equal', async () => {
-        if (!wasmerAvailable()) {
-            console.log('  (skipped: wasmer not on PATH)')
+        if (!wasmtimeAvailable()) {
+            console.log('  (skipped: wasmtime not on PATH)')
             return
         }
         const boot = await buildBoot(path.join(PROJECT_ROOT, 'boot', 'tests', 'fn_test.si'))
@@ -969,7 +970,7 @@ describe('Phase 0 WASIX smoke test', () => {
         const stage2Path = path.join(PROJECT_ROOT, '.fp-stage2.wasm')
         try {
             // 1. boot.wasm compiles stage1 source → stage1.wat → stage1.wasm
-            const r1 = spawnSync('wasmer', ['run', bootPath], {
+            const r1 = spawnSync('wasmtime', [bootPath], {
                 input: bootInput, maxBuffer: 64 * 1024 * 1024,
             })
             expect(r1.status).toBe(0)
@@ -978,7 +979,7 @@ describe('Phase 0 WASIX smoke test', () => {
             await fs.writeFile(stage1Path, Buffer.from(stage1Bin.buffer))
 
             // 2. stage1.wasm compiles SAME stage1 source → stage2.wat → stage2.wasm
-            const r2 = spawnSync('wasmer', ['run', stage1Path], {
+            const r2 = spawnSync('wasmtime', [stage1Path], {
                 input: stage1Input, maxBuffer: 64 * 1024 * 1024,
             })
             expect(r2.status).toBe(0)
@@ -1010,8 +1011,8 @@ describe('Phase 0 WASIX smoke test', () => {
     }, 120000)
 
     test('PHASE 1: stage1.wasm wraps top-level statements in synthesised _start (delfina_smoke)', async () => {
-        if (!wasmerAvailable()) {
-            console.log('  (skipped: wasmer not on PATH)')
+        if (!wasmtimeAvailable()) {
+            console.log('  (skipped: wasmtime not on PATH)')
             return
         }
         const stage1Path = path.join(PROJECT_ROOT, 'stage1.wasm')
@@ -1038,7 +1039,7 @@ describe('Phase 0 WASIX smoke test', () => {
         bundle += await fs.readFile(path.join(PROJECT_ROOT, 'boot', 'tests', 'delfina_smoke.si'), 'utf-8') + '\n'
         bundle += await fs.readFile(path.join(PROJECT_ROOT, 'boot', 'std', 'io.si'), 'utf-8') + '\n'
 
-        const compile = spawnSync('wasmer', ['run', stage1Path], {
+        const compile = spawnSync('wasmtime', [stage1Path], {
             input: Buffer.from(bundle, 'utf-8'),
             maxBuffer: 64 * 1024 * 1024,
         })
@@ -1054,7 +1055,7 @@ describe('Phase 0 WASIX smoke test', () => {
         const tmpPath = path.join(PROJECT_ROOT, '.delfina-smoke.wasm')
         await fs.writeFile(tmpPath, Buffer.from(wasm.buffer))
         try {
-            const run = spawnSync('wasmer', ['run', tmpPath], { encoding: 'buffer' })
+            const run = spawnSync('wasmtime', [tmpPath], { encoding: 'buffer' })
             expect(run.status).toBe(0)
             expect(run.stdout?.toString('utf-8')).toBe('Delfina\n')
         } finally {
@@ -1063,8 +1064,8 @@ describe('Phase 0 WASIX smoke test', () => {
     }, 60000)
 
     test('PHASE 2: stage1.wasm compiles user source with NO host-side strata bundling', async () => {
-        if (!wasmerAvailable()) {
-            console.log('  (skipped: wasmer not on PATH)')
+        if (!wasmtimeAvailable()) {
+            console.log('  (skipped: wasmtime not on PATH)')
             return
         }
         const stage1Path = path.join(PROJECT_ROOT, 'stage1.wasm')
@@ -1084,7 +1085,7 @@ describe('Phase 0 WASIX smoke test', () => {
             'utf-8',
         )
 
-        const compile = spawnSync('wasmer', ['run', stage1Path], {
+        const compile = spawnSync('wasmtime', [stage1Path], {
             input: Buffer.from(userSrc, 'utf-8'),
             maxBuffer: 64 * 1024 * 1024,
         })
@@ -1102,8 +1103,8 @@ describe('Phase 0 WASIX smoke test', () => {
     }, 60000)
 
     test('PHASE 4a: stage1.wasm CLI — --usage prints help to stdout and exits 0', async () => {
-        if (!wasmerAvailable()) {
-            console.log('  (skipped: wasmer not on PATH)')
+        if (!wasmtimeAvailable()) {
+            console.log('  (skipped: wasmtime not on PATH)')
             return
         }
         const stage1Path = path.join(PROJECT_ROOT, 'stage1.wasm')
@@ -1114,7 +1115,7 @@ describe('Phase 0 WASIX smoke test', () => {
         }
         // `--usage` instead of `--help` because wasmer 2.x intercepts
         // `--help` even after `--`.  See boot/cli.si comment.
-        const r = spawnSync('wasmer', ['run', stage1Path, '--', '--usage'], {
+        const r = spawnSync('wasmtime', [stage1Path, '--usage'], {
             input: '',
             maxBuffer: 64 * 1024 * 1024,
         })
@@ -1126,8 +1127,8 @@ describe('Phase 0 WASIX smoke test', () => {
     }, 30000)
 
     test('PHASE 4a: stage1.wasm CLI — unknown flag exits non-zero with stderr message', async () => {
-        if (!wasmerAvailable()) {
-            console.log('  (skipped: wasmer not on PATH)')
+        if (!wasmtimeAvailable()) {
+            console.log('  (skipped: wasmtime not on PATH)')
             return
         }
         const stage1Path = path.join(PROJECT_ROOT, 'stage1.wasm')
@@ -1136,7 +1137,7 @@ describe('Phase 0 WASIX smoke test', () => {
             console.log('  (skipped: stage1.wasm missing)')
             return
         }
-        const r = spawnSync('wasmer', ['run', stage1Path, '--', '--bogus'], {
+        const r = spawnSync('wasmtime', [stage1Path, '--bogus'], {
             input: '',
             maxBuffer: 64 * 1024 * 1024,
         })
@@ -1146,8 +1147,8 @@ describe('Phase 0 WASIX smoke test', () => {
     }, 30000)
 
     test('PHASE 4a: stage1.wasm CLI — no args still compiles stdin normally', async () => {
-        if (!wasmerAvailable()) {
-            console.log('  (skipped: wasmer not on PATH)')
+        if (!wasmtimeAvailable()) {
+            console.log('  (skipped: wasmtime not on PATH)')
             return
         }
         const stage1Path = path.join(PROJECT_ROOT, 'stage1.wasm')
@@ -1158,7 +1159,7 @@ describe('Phase 0 WASIX smoke test', () => {
         }
         // No `--` and no args; argv = [argv0] only.  The compile
         // pipeline runs on whatever's on stdin.
-        const r = spawnSync('wasmer', ['run', stage1Path], {
+        const r = spawnSync('wasmtime', [stage1Path], {
             input: '@fn add a:Int, b:Int := { a + b };\n@fn main := { &add 1, 2 };\n',
             maxBuffer: 64 * 1024 * 1024,
         })
@@ -1170,38 +1171,20 @@ describe('Phase 0 WASIX smoke test', () => {
 
     // PHASE 4b: stage1.wasm reads source from a file path via positional argv.
     //
-    // Skipped pending a working WASI runtime:
+    // End-to-end exercise of the i64 + path_open work:
+    //   - boot/std/fs.si:find_preopen_dir locates the --dir preopen fd.
+    //   - boot/std/fs.si:open_file_for_read calls path_open with
+    //     fs_rights_base = FD_READ|FD_SEEK|FD_TELL (=38) as i64.
+    //   - boot/cli.si treats a non-`--` argv entry as the source path
+    //     and sets SOURCE_FD.
+    //   - boot/stage1.si reads from &source_fd instead of fd 0.
     //
-    //   wasmer 2.1.0 — path_open against a --mapdir preopen returns errno
-    //     44 NOTCAPABLE regardless of the rights value requested (tried 0,
-    //     FD_READ, FD_READ|FD_SEEK|FD_TELL|FD_FILESTAT_GET).
-    //
-    //   wasmer 7.1.0 — path_open succeeds with rights = FD_READ|FD_SEEK|
-    //     FD_TELL (38), but two follow-on bugs block the test:
-    //     (a) fd_read on the resulting fd returns Errno::unknown and
-    //         nread=0 (also fd_write to fd 1 returns Errno::unknown,
-    //         making panic messages silent), and
-    //     (b) wasmer 7 on Windows produces empty stdout when invoked
-    //         with an absolute path to the wasm file (the spawnSync
-    //         calls in this file all use path.resolve / path.join).
-    //         Reproducer: `wasmer run "$(pwd)/stage1.wasm" -- --usage`
-    //         exits 0 with no output, while `wasmer run stage1.wasm
-    //         -- --usage` works.
-    //
-    // The wasm-side machinery is verified correct:
-    //   - `bun run scripts/build-stage1.ts` produces valid WAT with the
-    //     path_open import declaring `(param i64) (param i64)` for the
-    //     rights flags.
-    //   - find_preopen_dir returns fd 3 for the mapped preopen.
-    //   - open_file_for_read with rights = 38 succeeds in standalone
-    //     diagnostic programs under both wasmer 2.x and wasmer 7.x.
-    //   - The byte-equal self-host gate still passes.
-    //
-    // Re-enable when wasmer >= 8.x (or wasmtime) is on PATH; the test
-    // should pass without code changes.
-    test.skip('PHASE 4b: stage1.wasm reads source via positional path arg', async () => {
-        if (!wasmerAvailable()) {
-            console.log('  (skipped: wasmer not on PATH)')
+    // Gate: path-mode WAT byte-equals stdin-mode WAT for the same
+    // source file — proves the full chain works AND that the
+    // synthesised _start wrapping behaves the same regardless of input.
+    test('PHASE 4b: stage1.wasm reads source via positional path arg', async () => {
+        if (!wasmtimeAvailable()) {
+            console.log('  (skipped: wasmtime not on PATH)')
             return
         }
         const stage1Path = path.join(PROJECT_ROOT, 'stage1.wasm')
@@ -1215,13 +1198,12 @@ describe('Phase 0 WASIX smoke test', () => {
         try {
             // Compare path-mode WAT against stdin-mode WAT — they must
             // produce byte-identical output for the same source.
-            const stdinR = spawnSync('wasmer', ['run', stage1Path], {
+            const stdinR = spawnSync('wasmtime', [stage1Path], {
                 input: await fs.readFile(srcPath, 'utf-8'),
                 maxBuffer: 64 * 1024 * 1024,
             })
-            const pathR = spawnSync('wasmer',
-                ['run', '--mapdir', `tests:${tmpDir}`, stage1Path,
-                 '--', 'hello.si'],
+            const pathR = spawnSync('wasmtime',
+                ['--dir', `${tmpDir}::tests`, stage1Path, 'hello.si'],
                 { maxBuffer: 64 * 1024 * 1024 })
 
             expect(stdinR.status).toBe(0)
@@ -1234,26 +1216,17 @@ describe('Phase 0 WASIX smoke test', () => {
         }
     }, 30000)
 
-    // STAGE 1 boot-vs-stage1 output diff test — DISABLED under wasmer 2.x.
+    // STAGE 1 boot-vs-stage1 output diff test.
     //
-    // The test writes a freshly-compiled .stage1.wasm and then runs it via
-    // `wasmer run`.  Starting at Phase 4a (~49 KB stage1 binary), wasmer 2.x
-    // panics during JIT-compilation of certain freshly-written wasm files
-    // ("The range start is bigger than current length" in memory_view.rs).
-    // The panic is filename-dependent: identical MD5 content runs fine
-    // under one filename and panics under another, even after
-    // `wasmer cache clean` and with `--disable-cache`.  The
-    // production stage1.wasm (in the repo root) doesn't trip it because
-    // wasmer's internal first-use path treats it differently.
-    //
-    // The STAGE 2 == STAGE 1 byte-equal self-host test still verifies the
-    // bootstrap pipeline end-to-end (and the boot-vs-stage1 byte equality
-    // is a stricter property than this test's "outputs match on a small
-    // program"); keeping the STAGE 1 test disabled here costs no coverage.
-    // To re-enable: upgrade to wasmer >= 3.x where the JIT bug is fixed.
-    test.skip('STAGE 1: bootstrap-compiled compiler produces byte-identical WAT to the TS-built bootstrap', async () => {
-        if (!wasmerAvailable()) {
-            console.log('  (skipped: wasmer not on PATH)')
+    // Originally disabled under wasmer 2.x due to a JIT-compilation bug
+    // (filename-dependent "range start is bigger than current length"
+    // panic on freshly-written wasm files).  Should work under wasmtime
+    // — re-enabling now that the runtime migration has landed.  If it
+    // turns out to be flaky on CI, revert this to test.skip with a
+    // wasmtime-specific note.
+    test('STAGE 1: bootstrap-compiled compiler produces byte-identical WAT to the TS-built bootstrap', async () => {
+        if (!wasmtimeAvailable()) {
+            console.log('  (skipped: wasmtime not on PATH)')
             return
         }
         const boot = await buildBoot(path.join(PROJECT_ROOT, 'boot', 'tests', 'fn_test.si'))
@@ -1311,7 +1284,7 @@ describe('Phase 0 WASIX smoke test', () => {
         const stage1WasmPath = path.join(PROJECT_ROOT, '.stage1.wasm')
         try {
             // Step 2: compile stage1 via boot.wasm.
-            const compileRes = spawnSync('wasmer', ['run', bootPath], {
+            const compileRes = spawnSync('wasmtime', [bootPath], {
                 input: Buffer.from(bundle + stage1Bundle, 'utf-8'),
                 maxBuffer: 64 * 1024 * 1024,
             })
@@ -1327,13 +1300,13 @@ describe('Phase 0 WASIX smoke test', () => {
                 '@fn main := { &add 20, 22 };\n'
             const userBuf = Buffer.from(userProg, 'utf-8')
 
-            const bootRun = spawnSync('wasmer', ['run', bootPath], {
+            const bootRun = spawnSync('wasmtime', [bootPath], {
                 input: userBuf, maxBuffer: 64 * 1024 * 1024,
             })
             expect(bootRun.status).toBe(0)
             const bootOut = (bootRun.stdout ?? Buffer.alloc(0)).toString('utf-8')
 
-            const stage1Run = spawnSync('wasmer', ['run', stage1WasmPath], {
+            const stage1Run = spawnSync('wasmtime', [stage1WasmPath], {
                 input: userBuf, maxBuffer: 64 * 1024 * 1024,
             })
             expect(stage1Run.status).toBe(0)
@@ -1358,8 +1331,8 @@ describe('Phase 0 WASIX smoke test', () => {
     }, 90000)
 
     test('boot/tests/fn_test.si: bootstrap compiles ITS OWN SOURCE TREE end-to-end (Stage 1 candidate)', async () => {
-        if (!wasmerAvailable()) {
-            console.log('  (skipped: wasmer not on PATH)')
+        if (!wasmtimeAvailable()) {
+            console.log('  (skipped: wasmtime not on PATH)')
             return
         }
         const wasm = await buildBoot(path.join(PROJECT_ROOT, 'boot', 'tests', 'fn_test.si'))
@@ -1413,7 +1386,7 @@ describe('Phase 0 WASIX smoke test', () => {
         const userProg = wasiStub + pieces.join('')
 
         try {
-            const compileRes = spawnSync('wasmer', ['run', tmpPath], {
+            const compileRes = spawnSync('wasmtime', [tmpPath], {
                 input: Buffer.from(bundle + userProg, 'utf-8'),
                 maxBuffer: 64 * 1024 * 1024,
             })
@@ -1431,8 +1404,8 @@ describe('Phase 0 WASIX smoke test', () => {
     }, 60000)
 
     test('boot/tests/fn_test.si: bootstrap compiles strata loader + registry standalone', async () => {
-        if (!wasmerAvailable()) {
-            console.log('  (skipped: wasmer not on PATH)')
+        if (!wasmtimeAvailable()) {
+            console.log('  (skipped: wasmtime not on PATH)')
             return
         }
         const wasm = await buildBoot(path.join(PROJECT_ROOT, 'boot', 'tests', 'fn_test.si'))
@@ -1477,7 +1450,7 @@ describe('Phase 0 WASIX smoke test', () => {
         const userProg = wasiStub + pieces.join('')
 
         try {
-            const compileRes = spawnSync('wasmer', ['run', tmpPath], {
+            const compileRes = spawnSync('wasmtime', [tmpPath], {
                 input: Buffer.from(bundle + userProg, 'utf-8'),
                 maxBuffer: 64 * 1024 * 1024,
             })
@@ -1494,8 +1467,8 @@ describe('Phase 0 WASIX smoke test', () => {
     }, 60000)
 
     test('boot/tests/fn_test.si: bootstrap compiles boot/parser/parse.si standalone (lex+ast+parse+std)', async () => {
-        if (!wasmerAvailable()) {
-            console.log('  (skipped: wasmer not on PATH)')
+        if (!wasmtimeAvailable()) {
+            console.log('  (skipped: wasmtime not on PATH)')
             return
         }
         const wasm = await buildBoot(path.join(PROJECT_ROOT, 'boot', 'tests', 'fn_test.si'))
@@ -1538,7 +1511,7 @@ describe('Phase 0 WASIX smoke test', () => {
         const userProg = wasiStub + pieces.join('')
 
         try {
-            const compileRes = spawnSync('wasmer', ['run', tmpPath], {
+            const compileRes = spawnSync('wasmtime', [tmpPath], {
                 input: Buffer.from(bundle + userProg, 'utf-8'),
                 maxBuffer: 64 * 1024 * 1024,
             })
@@ -1557,8 +1530,8 @@ describe('Phase 0 WASIX smoke test', () => {
     }, 60000)
 
     test('boot/tests/fn_test.si: bootstrap compiles boot/parser/lex.si into validating standalone wasm', async () => {
-        if (!wasmerAvailable()) {
-            console.log('  (skipped: wasmer not on PATH)')
+        if (!wasmtimeAvailable()) {
+            console.log('  (skipped: wasmtime not on PATH)')
             return
         }
         const wasm = await buildBoot(path.join(PROJECT_ROOT, 'boot', 'tests', 'fn_test.si'))
@@ -1597,7 +1570,7 @@ describe('Phase 0 WASIX smoke test', () => {
         const userProg = wasiStub + io + arena + vec + toks + lex
 
         try {
-            const compileRes = spawnSync('wasmer', ['run', tmpPath], {
+            const compileRes = spawnSync('wasmtime', [tmpPath], {
                 input: Buffer.from(bundle + userProg, 'utf-8'),
                 maxBuffer: 64 * 1024 * 1024,
             })
@@ -1618,8 +1591,8 @@ describe('Phase 0 WASIX smoke test', () => {
     }, 60000)
 
     test('boot/tests/fn_test.si: bootstrap-compiled io.si library + _start prints via write_str', async () => {
-        if (!wasmerAvailable()) {
-            console.log('  (skipped: wasmer not on PATH)')
+        if (!wasmtimeAvailable()) {
+            console.log('  (skipped: wasmtime not on PATH)')
             return
         }
         const wasm = await buildBoot(path.join(PROJECT_ROOT, 'boot', 'tests', 'fn_test.si'))
@@ -1666,7 +1639,7 @@ describe('Phase 0 WASIX smoke test', () => {
 
         const outWasm = path.join(PROJECT_ROOT, '.wasi-io.wasm')
         try {
-            const compileRes = spawnSync('wasmer', ['run', tmpPath], {
+            const compileRes = spawnSync('wasmtime', [tmpPath], {
                 input: Buffer.from(bundle + userProg, 'utf-8'),
                 maxBuffer: 64 * 1024 * 1024,
             })
@@ -1676,7 +1649,7 @@ describe('Phase 0 WASIX smoke test', () => {
             const compiled = await watToWasm(wat)
             await fs.writeFile(outWasm, Buffer.from(compiled.buffer))
 
-            const runRes = spawnSync('wasmer', ['run', outWasm], {
+            const runRes = spawnSync('wasmtime', [outWasm], {
                 maxBuffer: 64 * 1024 * 1024,
             })
             expect(runRes.status).toBe(0)
@@ -1695,8 +1668,8 @@ describe('Phase 0 WASIX smoke test', () => {
     }, 60000)
 
     test('boot/tests/fn_test.si: bootstrap-compiled WASI program calls helper functions', async () => {
-        if (!wasmerAvailable()) {
-            console.log('  (skipped: wasmer not on PATH)')
+        if (!wasmtimeAvailable()) {
+            console.log('  (skipped: wasmtime not on PATH)')
             return
         }
         const wasm = await buildBoot(path.join(PROJECT_ROOT, 'boot', 'tests', 'fn_test.si'))
@@ -1749,7 +1722,7 @@ describe('Phase 0 WASIX smoke test', () => {
 
         const outWasm = path.join(PROJECT_ROOT, '.wasi-helper.wasm')
         try {
-            const compileRes = spawnSync('wasmer', ['run', tmpPath], {
+            const compileRes = spawnSync('wasmtime', [tmpPath], {
                 input: Buffer.from(bundle + userProg, 'utf-8'),
                 maxBuffer: 64 * 1024 * 1024,
             })
@@ -1759,7 +1732,7 @@ describe('Phase 0 WASIX smoke test', () => {
             const compiled = await watToWasm(wat)
             await fs.writeFile(outWasm, Buffer.from(compiled.buffer))
 
-            const runRes = spawnSync('wasmer', ['run', outWasm], {
+            const runRes = spawnSync('wasmtime', [outWasm], {
                 maxBuffer: 64 * 1024 * 1024,
             })
             expect(runRes.status).toBe(0)
@@ -1777,8 +1750,8 @@ describe('Phase 0 WASIX smoke test', () => {
     }, 60000)
 
     test('boot/tests/fn_test.si: Silicon-bootstrap-compiled WASI program prints via fd_write', async () => {
-        if (!wasmerAvailable()) {
-            console.log('  (skipped: wasmer not on PATH)')
+        if (!wasmtimeAvailable()) {
+            console.log('  (skipped: wasmtime not on PATH)')
             return
         }
         const wasm = await buildBoot(path.join(PROJECT_ROOT, 'boot', 'tests', 'fn_test.si'))
@@ -1817,7 +1790,7 @@ describe('Phase 0 WASIX smoke test', () => {
         const helloWasm = path.join(PROJECT_ROOT, '.wasi-hello.wasm')
         try {
             // Step 1: compile Silicon → WAT via boot.wasm under wasmer.
-            const compileRes = spawnSync('wasmer', ['run', tmpPath], {
+            const compileRes = spawnSync('wasmtime', [tmpPath], {
                 input: Buffer.from(bundle + userProg, 'utf-8'),
                 maxBuffer: 64 * 1024 * 1024,
             })
@@ -1829,7 +1802,7 @@ describe('Phase 0 WASIX smoke test', () => {
             await fs.writeFile(helloWasm, Buffer.from(compiled.buffer))
 
             // Step 3: run hello.wasm under wasmer with WASI enabled.
-            const runRes = spawnSync('wasmer', ['run', helloWasm], {
+            const runRes = spawnSync('wasmtime', [helloWasm], {
                 maxBuffer: 64 * 1024 * 1024,
             })
             expect(runRes.status).toBe(0)
@@ -1847,8 +1820,8 @@ describe('Phase 0 WASIX smoke test', () => {
     }, 60000)
 
     test('boot/tests/scope_test.si: variable references resolve to local.get', async () => {
-        if (!wasmerAvailable()) {
-            console.log('  (skipped: wasmer not on PATH)')
+        if (!wasmtimeAvailable()) {
+            console.log('  (skipped: wasmtime not on PATH)')
             return
         }
         const wasm = await buildBoot(path.join(PROJECT_ROOT, 'boot', 'tests', 'scope_test.si'))
@@ -1876,7 +1849,7 @@ describe('Phase 0 WASIX smoke test', () => {
 
         try {
             for (const [src, expectedLines] of cases) {
-                const result = spawnSync('wasmer', ['run', tmpPath], {
+                const result = spawnSync('wasmtime', [tmpPath], {
                     input: Buffer.from(bundle + src + '\n', 'utf-8'),
                     maxBuffer: 64 * 1024 * 1024,
                 })
@@ -1896,8 +1869,8 @@ describe('Phase 0 WASIX smoke test', () => {
     })
 
     test('boot/tests/module_test.si: full Silicon-bootstrap pipeline produces an executable wasm', async () => {
-        if (!wasmerAvailable()) {
-            console.log('  (skipped: wasmer not on PATH)')
+        if (!wasmtimeAvailable()) {
+            console.log('  (skipped: wasmtime not on PATH)')
             return
         }
         const wasm = await buildBoot(path.join(PROJECT_ROOT, 'boot', 'tests', 'module_test.si'))
@@ -1928,7 +1901,7 @@ describe('Phase 0 WASIX smoke test', () => {
 
         try {
             for (const [src, expectedValue] of cases) {
-                const result = spawnSync('wasmer', ['run', tmpPath], {
+                const result = spawnSync('wasmtime', [tmpPath], {
                     input: Buffer.from(bundle + src + '\n', 'utf-8'),
                     maxBuffer: 64 * 1024 * 1024,
                 })
@@ -1953,8 +1926,8 @@ describe('Phase 0 WASIX smoke test', () => {
     })
 
     test('boot/tests/emit_test.si: end-to-end emits WAT instructions from Silicon expressions', async () => {
-        if (!wasmerAvailable()) {
-            console.log('  (skipped: wasmer not on PATH)')
+        if (!wasmtimeAvailable()) {
+            console.log('  (skipped: wasmtime not on PATH)')
             return
         }
         const wasm = await buildBoot(path.join(PROJECT_ROOT, 'boot', 'tests', 'emit_test.si'))
@@ -1983,7 +1956,7 @@ describe('Phase 0 WASIX smoke test', () => {
 
         try {
             for (const [src, expectedLines] of cases) {
-                const result = spawnSync('wasmer', ['run', tmpPath], {
+                const result = spawnSync('wasmtime', [tmpPath], {
                     input: Buffer.from(bundle + src + '\n', 'utf-8'),
                     maxBuffer: 64 * 1024 * 1024,
                 })
@@ -2003,8 +1976,8 @@ describe('Phase 0 WASIX smoke test', () => {
     })
 
     test('boot/tests/lower_test.si: end-to-end lowers arithmetic expressions to IR', async () => {
-        if (!wasmerAvailable()) {
-            console.log('  (skipped: wasmer not on PATH)')
+        if (!wasmtimeAvailable()) {
+            console.log('  (skipped: wasmtime not on PATH)')
             return
         }
         const wasm = await buildBoot(path.join(PROJECT_ROOT, 'boot', 'tests', 'lower_test.si'))
@@ -2044,7 +2017,7 @@ describe('Phase 0 WASIX smoke test', () => {
 
         try {
             for (const [src, expected] of cases) {
-                const result = spawnSync('wasmer', ['run', tmpPath], {
+                const result = spawnSync('wasmtime', [tmpPath], {
                     input: Buffer.from(bundle + src + '\n', 'utf-8'),
                     maxBuffer: 64 * 1024 * 1024,
                 })
@@ -2063,8 +2036,8 @@ describe('Phase 0 WASIX smoke test', () => {
     })
 
     test('boot/tests/body_test.si: body interpreter dispatches IR::* intrinsics', async () => {
-        if (!wasmerAvailable()) {
-            console.log('  (skipped: wasmer not on PATH)')
+        if (!wasmtimeAvailable()) {
+            console.log('  (skipped: wasmtime not on PATH)')
             return
         }
         const wasm = await buildBoot(path.join(PROJECT_ROOT, 'boot', 'tests', 'body_test.si'))
@@ -2143,7 +2116,7 @@ describe('Phase 0 WASIX smoke test', () => {
         const expected = expectedLines.join('\n') + '\n'
 
         try {
-            const result = spawnSync('wasmer', ['run', tmpPath], {
+            const result = spawnSync('wasmtime', [tmpPath], {
                 input: Buffer.from(bundle, 'utf-8'),
                 maxBuffer: 64 * 1024 * 1024,
             })
@@ -2160,15 +2133,15 @@ describe('Phase 0 WASIX smoke test', () => {
     })
 
     test('boot/tests/ir_nodes_test.si: IR record builders + accessors round-trip', async () => {
-        if (!wasmerAvailable()) {
-            console.log('  (skipped: wasmer not on PATH)')
+        if (!wasmtimeAvailable()) {
+            console.log('  (skipped: wasmtime not on PATH)')
             return
         }
         const wasm = await buildBoot(path.join(PROJECT_ROOT, 'boot', 'tests', 'ir_nodes_test.si'))
         const tmpPath = path.join(PROJECT_ROOT, '.ir-nodes.wasm')
         await fs.writeFile(tmpPath, wasm)
         try {
-            const result = spawnSync('wasmer', ['run', tmpPath], { maxBuffer: 1 << 20 })
+            const result = spawnSync('wasmtime', [tmpPath], { maxBuffer: 1 << 20 })
             expect(result.status).toBe(0)
             const stdout = (result.stdout ?? Buffer.alloc(0)).toString('utf-8').trim()
             expect(stdout).toBe('ok')
@@ -2178,8 +2151,8 @@ describe('Phase 0 WASIX smoke test', () => {
     })
 
     test('boot/tests/templates_test.si: per-stratum body templates byte-equal Stage 0', async () => {
-        if (!wasmerAvailable()) {
-            console.log('  (skipped: wasmer not on PATH)')
+        if (!wasmtimeAvailable()) {
+            console.log('  (skipped: wasmtime not on PATH)')
             return
         }
         const wasm = await buildBoot(path.join(PROJECT_ROOT, 'boot', 'tests', 'templates_test.si'))
@@ -2267,7 +2240,7 @@ describe('Phase 0 WASIX smoke test', () => {
         const expected = lines.join('\n') + '\n'
 
         try {
-            const result = spawnSync('wasmer', ['run', tmpPath], {
+            const result = spawnSync('wasmtime', [tmpPath], {
                 input: Buffer.from(bundle, 'utf-8'),
                 maxBuffer: 64 * 1024 * 1024,
             })
@@ -2284,8 +2257,8 @@ describe('Phase 0 WASIX smoke test', () => {
     })
 
     test('boot/tests/intrinsics_test.si: per-stratum intrinsic map byte-equal Stage 0', async () => {
-        if (!wasmerAvailable()) {
-            console.log('  (skipped: wasmer not on PATH)')
+        if (!wasmtimeAvailable()) {
+            console.log('  (skipped: wasmtime not on PATH)')
             return
         }
         const wasm = await buildBoot(path.join(PROJECT_ROOT, 'boot', 'tests', 'intrinsics_test.si'))
@@ -2332,7 +2305,7 @@ describe('Phase 0 WASIX smoke test', () => {
         const expected = lines.join('\n') + '\n'
 
         try {
-            const result = spawnSync('wasmer', ['run', tmpPath], {
+            const result = spawnSync('wasmtime', [tmpPath], {
                 input: Buffer.from(bundle, 'utf-8'),
                 maxBuffer: 64 * 1024 * 1024,
             })
@@ -2349,8 +2322,8 @@ describe('Phase 0 WASIX smoke test', () => {
     })
 
     test('boot/tests/elaborator_test.si: definition hooks byte-equal Stage 0 elaboration', async () => {
-        if (!wasmerAvailable()) {
-            console.log('  (skipped: wasmer not on PATH)')
+        if (!wasmtimeAvailable()) {
+            console.log('  (skipped: wasmtime not on PATH)')
             return
         }
         const wasm = await buildBoot(path.join(PROJECT_ROOT, 'boot', 'tests', 'elaborator_test.si'))
@@ -2471,7 +2444,7 @@ describe('Phase 0 WASIX smoke test', () => {
         const expected = lines.join('\n') + '\n'
 
         try {
-            const result = spawnSync('wasmer', ['run', tmpPath], {
+            const result = spawnSync('wasmtime', [tmpPath], {
                 input: Buffer.from(input, 'utf-8'),
                 maxBuffer: 64 * 1024 * 1024,
             })
@@ -2488,8 +2461,8 @@ describe('Phase 0 WASIX smoke test', () => {
     })
 
     test('boot/tests/json_fixtures_test.si: 26 fixtures in one process match Stage 0', async () => {
-        if (!wasmerAvailable()) {
-            console.log('  (skipped: wasmer not on PATH)')
+        if (!wasmtimeAvailable()) {
+            console.log('  (skipped: wasmtime not on PATH)')
             return
         }
         const wasm = await buildBoot(path.join(PROJECT_ROOT, 'boot', 'tests', 'json_fixtures_test.si'))
@@ -2535,7 +2508,7 @@ describe('Phase 0 WASIX smoke test', () => {
             // `---\n`.  The cumulative-state bug that previously forced
             // a per-process loop was fixed by computing $heap from the
             // data-segment extent — see src/codegen/index.ts.
-            const result = spawnSync('wasmer', ['run', tmpPath], {
+            const result = spawnSync('wasmtime', [tmpPath], {
                 maxBuffer: 64 * 1024 * 1024,
             })
             expect(result.status).toBe(0)

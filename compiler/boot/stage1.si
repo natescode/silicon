@@ -13,11 +13,13 @@
 #   cat boot/std/*.si boot/parser/*.si boot/strata/registry.si \
 #       boot/strata/loader.si boot/elab/elaborator.si \
 #       boot/ir/nodes.si boot/elab/body.si boot/ir/lower.si \
-#       boot/emit/wat.si boot/stage1.si | wasmer run boot.wasm > stage1.wat
+#       boot/emit/wat.si boot/stage1.si | wasmtime boot.wasm > stage1.wat
 #   wat2wasm stage1.wat -o stage1.wasm
 #
-# Run:
-#   cat source.si | wasmer run stage1.wasm > out.wat
+# Run (stdin):
+#   cat source.si | wasmtime stage1.wasm > out.wat
+# Run (path):
+#   wasmtime --dir ./src::src stage1.wasm src/hello.si > out.wat
 
 @fn _start:Void := {
   # Phase 4a: load argv + dispatch CLI flags FIRST.  --help and

@@ -63,7 +63,7 @@ async function build(entryPath: string): Promise<void> {
     const wasmPath = path.join(PROJECT_ROOT, 'boot.wasm')
     await fs.writeFile(wasmPath, binary)
     console.log(`  → ${path.relative(PROJECT_ROOT, wasmPath)} (${binary.byteLength} bytes)`)
-    console.log(`\nRun with: wasmer run boot.wasm`)
+    console.log(`\nRun with: wasmtime boot.wasm`)
 }
 
 const entry = process.argv[2] ?? DEFAULT_ENTRY

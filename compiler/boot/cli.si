@@ -18,12 +18,12 @@
 #   <unknown flag>       — writes a single-line error to stderr and
 #                          calls proc_exit 2.
 #
-# Flag-name note: --usage / --emit instead of the more natural
-# --help / --target because wasmer 2.x intercepts those names even
-# after the `--` separator (--help silently swallows; --target=X
-# triggers a Rust panic inside wasmer's argv parser).  Newer wasmer
-# (3+) and wasmtime pass --help / --target through unchanged.
-# When the project moves off wasmer 2.x, rename these accordingly.
+# Flag-name note: --usage / --emit instead of --help / --target.
+# Historical: wasmer 2.x intercepted --help and panicked on --target
+# even after `--`.  Wasmtime (and wasmer ≥ 3) pass both through, so
+# --usage could be renamed to --help in a follow-up; keeping --usage
+# for now means no breaking change for any scripts that already use
+# the current names.
 
 # Source fd the read loop pulls from.  Defaults to 0 (stdin); set to
 # an opened file fd by cli_open_source when a positional arg is seen.
@@ -34,10 +34,10 @@
   &write_str 1, 'sigil — Silicon bootstrap compiler\n';
   &write_str 1, '\n';
   &write_str 1, 'Usage:\n';
-  &write_str 1, '  wasmer run stage1.wasm < source.si > out.wat\n';
-  &write_str 1, '  wasmer run --mapdir src:./src stage1.wasm -- src/hello.si > out.wat\n';
-  &write_str 1, '  wasmer run stage1.wasm -- --usage\n';
-  &write_str 1, '  wasmer run stage1.wasm -- --emit=wasix < source.si > out.wat\n';
+  &write_str 1, '  wasmtime stage1.wasm < source.si > out.wat\n';
+  &write_str 1, '  wasmtime --dir ./src::src stage1.wasm src/hello.si > out.wat\n';
+  &write_str 1, '  wasmtime stage1.wasm --usage\n';
+  &write_str 1, '  wasmtime stage1.wasm --emit=wasix < source.si > out.wat\n';
   &write_str 1, '\n';
   &write_str 1, 'Flags:\n';
   &write_str 1, '  --usage                Print this message and exit.\n';

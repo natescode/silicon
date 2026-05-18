@@ -8,7 +8,7 @@
  *   1. Build boot.wasm via the Stage 0 (TypeScript) pipeline.
  *   2. Assemble the full stage1 source bundle (WASI extern stub +
  *      every boot/*.si file + boot/stage1.si as the entry).
- *   3. Pipe the bundle through boot.wasm under wasmer → stage1.wat.
+ *   3. Pipe the bundle through boot.wasm under wasmtime → stage1.wat.
  *   4. Run stage1.wat through wabt → stage1.wasm.
  *   5. Write both stage1.wat and stage1.wasm.
  *
@@ -18,7 +18,7 @@
  *
  * After building, run user Silicon code through stage1.wasm:
  *
- *   wasmer run stage1.wasm < user.si > user.wat
+ *   wasmtime stage1.wasm < user.si > user.wat
  *
  * Phase 2 embeds src/strata/*.si into stage1.wasm itself, so the
  * caller no longer has to prepend the strata bundle on stdin.  The
@@ -167,8 +167,9 @@ async function main(): Promise<void> {
         STAGE1_FILES.map(p => fs.readFile(path.join(PROJECT_ROOT, p), 'utf-8')),
     )).join('')
 
-    // 4. Pipe through boot.wasm.
-    const compileRes = spawnSync('wasmer', ['run', bootPath], {
+    // 4. Pipe through boot.wasm (wasmtime — see scripts/run-silicon.ts
+    //    for the rationale on runtime choice).
+    const compileRes = spawnSync('wasmtime', [bootPath], {
         input: Buffer.from(bundle + userSrc, 'utf-8'),
         maxBuffer: 64 * 1024 * 1024,
     })
@@ -188,7 +189,7 @@ async function main(): Promise<void> {
     console.log(`  → ${path.relative(PROJECT_ROOT, watPath)} (${stage1Wat.length} bytes)`)
     console.log(`  → ${path.relative(PROJECT_ROOT, wasmPath)} (${stage1Bin.buffer.byteLength} bytes)`)
     console.log(`\nRun user code via:`)
-    console.log(`  wasmer run ${path.relative(PROJECT_ROOT, wasmPath)} < user.si > user.wat`)
+    console.log(`  wasmtime ${path.relative(PROJECT_ROOT, wasmPath)} < user.si > user.wat`)
 }
 
 main().catch(err => {
