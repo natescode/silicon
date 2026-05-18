@@ -90,6 +90,7 @@ $Stage1Files = @(
   'boot/ir/lower.si'
   'boot/emit/wat.si'
   'boot/cli.si'
+  'boot/modules/use.si'
   'boot/stage1.si'
 )
 

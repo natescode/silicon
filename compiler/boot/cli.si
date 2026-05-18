@@ -23,6 +23,20 @@
 @var SOURCE_FD:Int := 0;
 @fn source_fd:Int := { SOURCE_FD };
 
+# When cli_open_source runs, it ALSO records the (preopen dir_fd,
+# path_ptr, path_len) tuple so stage1.si can drive the Silicon-side
+# @use resolver instead of just reading SOURCE_FD directly.  When
+# CLI_HAS_PATH is 0, stage1 uses the legacy stdin-or-single-file
+# read loop.
+@var CLI_HAS_PATH:Int  := 0;
+@var CLI_DIR_FD:Int    := 0;
+@var CLI_PATH_PTR:Int  := 0;
+@var CLI_PATH_LEN:Int  := 0;
+@fn cli_has_path:Int   := { CLI_HAS_PATH };
+@fn cli_dir_fd:Int     := { CLI_DIR_FD };
+@fn cli_path_ptr:Int   := { CLI_PATH_PTR };
+@fn cli_path_len:Int   := { CLI_PATH_LEN };
+
 @fn cli_print_usage := {
   &write_str 1, 'sigil — Silicon bootstrap compiler\n';
   &write_str 1, '\n';
@@ -57,6 +71,10 @@
     &panic_stderr 'sigil: cannot open source file', 3;
   };
   SOURCE_FD = fd;
+  CLI_HAS_PATH = 1;
+  CLI_DIR_FD = dir_fd;
+  CLI_PATH_PTR = p;
+  CLI_PATH_LEN = l;
 };
 
 # Dispatch a single non-positional flag.  Returns 1 if it was

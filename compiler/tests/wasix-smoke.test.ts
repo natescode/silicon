@@ -963,6 +963,7 @@ describe('Phase 0 WASIX smoke test', () => {
             'boot/ir/lower.si',
             'boot/emit/wat.si',
             'boot/cli.si',
+            'boot/modules/use.si',
             'boot/stage1.si',
         ]
         const stage1Bundle = wasiStub + (await Promise.all(
@@ -1386,6 +1387,7 @@ describe('Phase 0 WASIX smoke test', () => {
             'boot/ir/lower.si',
             'boot/emit/wat.si',
             'boot/cli.si',
+            'boot/modules/use.si',
             'boot/stage1.si',
         ]
         const stage1Bundle = wasiStub + (await Promise.all(

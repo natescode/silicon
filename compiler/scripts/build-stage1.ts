@@ -63,6 +63,7 @@ const STAGE1_FILES = [
     'boot/ir/lower.si',
     'boot/emit/wat.si',
     'boot/cli.si',               // depends on argv.si + io.si + fs.si helpers
+    'boot/modules/use.si',       // Silicon-side @use resolver
     'boot/stage1.si',
 ]
 

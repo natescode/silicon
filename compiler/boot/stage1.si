@@ -47,14 +47,42 @@
   };
   total = b_len;
 
-  # Source fd is 0 (stdin) by default; cli_dispatch above may have
-  # opened a file via path_open and set SOURCE_FD to that fd.
-  @local src_fd := &source_fd;
-  &@loop 1, {
-    @local n := &read_bytes src_fd, (buf + total), (cap - total);
-    &@if (n <= 0), { &@break };
-    total = total + n;
-    &@if (total >= cap), { &@break };
+  # Source acquisition.  Two paths:
+  #
+  # - With a positional path arg: drain stdin first (the host can
+  #   pipe a WASI extern stub or other module-level declarations
+  #   that need to come BEFORE the resolved bundle), then walk the
+  #   @use graph from the path and append the resolved concat'd
+  #   source.
+  # - Without a positional path arg: legacy stdin-only path.
+  &@if ((&cli_has_path) == 0), {
+    @local src_fd := &source_fd;
+    &@loop 1, {
+      @local n := &read_bytes src_fd, (buf + total), (cap - total);
+      &@if (n <= 0), { &@break };
+      total = total + n;
+      &@if (total >= cap), { &@break };
+    };
+  };
+  &@if ((&cli_has_path) == 1), {
+    # Drain stdin first.  Use fd 0 directly (SOURCE_FD is the file
+    # we opened, which we don't want to read — the resolver will).
+    &@loop 1, {
+      @local n := &read_bytes 0, (buf + total), (cap - total);
+      &@if (n <= 0), { &@break };
+      total = total + n;
+      &@if (total >= cap), { &@break };
+    };
+    # Now resolve the @use graph from the entry path.
+    &use_resolver_init;
+    @local resolved := &use_resolve
+      (&cli_dir_fd),
+      (&cli_path_ptr), (&cli_path_len),
+      (buf + total), (cap - total);
+    &@if (resolved < 0), {
+      &panic_stderr 'sigil: @use resolution failed', 4;
+    };
+    total = total + resolved;
   };
 
   @local toks := &lex buf, total;
