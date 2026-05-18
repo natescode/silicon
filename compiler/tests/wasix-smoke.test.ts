@@ -261,7 +261,7 @@ describe('Phase 0 WASIX smoke test', () => {
         await fs.writeFile(tmpPath, wasm)
 
         // Concatenate every built-in stratum file as the loader input.
-        const strataDir = path.join(PROJECT_ROOT, 'src', 'strata')
+        const strataDir = path.join(PROJECT_ROOT, 'boot', 'strata', 'builtin')
         const files = (await fs.readdir(strataDir))
             .filter(f => f.endsWith('.si'))
             .sort()
@@ -329,7 +329,7 @@ describe('Phase 0 WASIX smoke test', () => {
         const tmpPath = path.join(WASM_BIN, 'fn-smoke.wasm')
         await fs.writeFile(tmpPath, wasm)
 
-        const strataDir = path.join(PROJECT_ROOT, 'src', 'strata')
+        const strataDir = path.join(PROJECT_ROOT, 'boot', 'strata', 'builtin')
         const files = (await fs.readdir(strataDir))
             .filter(f => f.endsWith('.si'))
             .sort()
@@ -779,7 +779,7 @@ describe('Phase 0 WASIX smoke test', () => {
         const tmpPath = path.join(WASM_BIN, 'wasi-alpha-boot.wasm')
         await fs.writeFile(tmpPath, wasm)
 
-        const strataDir = path.join(PROJECT_ROOT, 'src', 'strata')
+        const strataDir = path.join(PROJECT_ROOT, 'boot', 'strata', 'builtin')
         const files = (await fs.readdir(strataDir))
             .filter(f => f.endsWith('.si'))
             .sort()
@@ -914,7 +914,7 @@ describe('Phase 0 WASIX smoke test', () => {
 
         // Build the stage1 source bundle (everything stage1.wasm
         // needs as a complete Silicon program).
-        const strataDir = path.join(PROJECT_ROOT, 'src', 'strata')
+        const strataDir = path.join(PROJECT_ROOT, 'boot', 'strata', 'builtin')
         const strataFiles = (await fs.readdir(strataDir))
             .filter(f => f.endsWith('.si'))
             .sort()
@@ -1315,7 +1315,7 @@ describe('Phase 0 WASIX smoke test', () => {
         await fs.writeFile(bootPath, boot)
 
         // Step 1: assemble the full bootstrap source + stage1 driver.
-        const strataDir = path.join(PROJECT_ROOT, 'src', 'strata')
+        const strataDir = path.join(PROJECT_ROOT, 'boot', 'strata', 'builtin')
         const strataFiles = (await fs.readdir(strataDir))
             .filter(f => f.endsWith('.si'))
             .sort()
@@ -1420,7 +1420,7 @@ describe('Phase 0 WASIX smoke test', () => {
         const tmpPath = path.join(WASM_BIN, 'self-host-boot.wasm')
         await fs.writeFile(tmpPath, wasm)
 
-        const strataDir = path.join(PROJECT_ROOT, 'src', 'strata')
+        const strataDir = path.join(PROJECT_ROOT, 'boot', 'strata', 'builtin')
         const files = (await fs.readdir(strataDir))
             .filter(f => f.endsWith('.si'))
             .sort()
@@ -1493,7 +1493,7 @@ describe('Phase 0 WASIX smoke test', () => {
         const tmpPath = path.join(WASM_BIN, 'loader-boot.wasm')
         await fs.writeFile(tmpPath, wasm)
 
-        const strataDir = path.join(PROJECT_ROOT, 'src', 'strata')
+        const strataDir = path.join(PROJECT_ROOT, 'boot', 'strata', 'builtin')
         const files = (await fs.readdir(strataDir))
             .filter(f => f.endsWith('.si'))
             .sort()
@@ -1556,7 +1556,7 @@ describe('Phase 0 WASIX smoke test', () => {
         const tmpPath = path.join(WASM_BIN, 'parse-boot.wasm')
         await fs.writeFile(tmpPath, wasm)
 
-        const strataDir = path.join(PROJECT_ROOT, 'src', 'strata')
+        const strataDir = path.join(PROJECT_ROOT, 'boot', 'strata', 'builtin')
         const files = (await fs.readdir(strataDir))
             .filter(f => f.endsWith('.si'))
             .sort()
@@ -1619,7 +1619,7 @@ describe('Phase 0 WASIX smoke test', () => {
         const tmpPath = path.join(WASM_BIN, 'lex-boot.wasm')
         await fs.writeFile(tmpPath, wasm)
 
-        const strataDir = path.join(PROJECT_ROOT, 'src', 'strata')
+        const strataDir = path.join(PROJECT_ROOT, 'boot', 'strata', 'builtin')
         const files = (await fs.readdir(strataDir))
             .filter(f => f.endsWith('.si'))
             .sort()
@@ -1680,7 +1680,7 @@ describe('Phase 0 WASIX smoke test', () => {
         const tmpPath = path.join(WASM_BIN, 'wasi-io-boot.wasm')
         await fs.writeFile(tmpPath, wasm)
 
-        const strataDir = path.join(PROJECT_ROOT, 'src', 'strata')
+        const strataDir = path.join(PROJECT_ROOT, 'boot', 'strata', 'builtin')
         const files = (await fs.readdir(strataDir))
             .filter(f => f.endsWith('.si'))
             .sort()
@@ -1757,7 +1757,7 @@ describe('Phase 0 WASIX smoke test', () => {
         const tmpPath = path.join(WASM_BIN, 'wasi-helper-boot.wasm')
         await fs.writeFile(tmpPath, wasm)
 
-        const strataDir = path.join(PROJECT_ROOT, 'src', 'strata')
+        const strataDir = path.join(PROJECT_ROOT, 'boot', 'strata', 'builtin')
         const files = (await fs.readdir(strataDir))
             .filter(f => f.endsWith('.si'))
             .sort()
@@ -1839,7 +1839,7 @@ describe('Phase 0 WASIX smoke test', () => {
         const tmpPath = path.join(WASM_BIN, 'wasi-hello-boot.wasm')
         await fs.writeFile(tmpPath, wasm)
 
-        const strataDir = path.join(PROJECT_ROOT, 'src', 'strata')
+        const strataDir = path.join(PROJECT_ROOT, 'boot', 'strata', 'builtin')
         const files = (await fs.readdir(strataDir))
             .filter(f => f.endsWith('.si'))
             .sort()
@@ -1909,7 +1909,7 @@ describe('Phase 0 WASIX smoke test', () => {
         const tmpPath = path.join(WASM_BIN, 'scope-smoke.wasm')
         await fs.writeFile(tmpPath, wasm)
 
-        const strataDir = path.join(PROJECT_ROOT, 'src', 'strata')
+        const strataDir = path.join(PROJECT_ROOT, 'boot', 'strata', 'builtin')
         const files = (await fs.readdir(strataDir))
             .filter(f => f.endsWith('.si'))
             .sort()
@@ -1958,7 +1958,7 @@ describe('Phase 0 WASIX smoke test', () => {
         const tmpPath = path.join(WASM_BIN, 'module-smoke.wasm')
         await fs.writeFile(tmpPath, wasm)
 
-        const strataDir = path.join(PROJECT_ROOT, 'src', 'strata')
+        const strataDir = path.join(PROJECT_ROOT, 'boot', 'strata', 'builtin')
         const files = (await fs.readdir(strataDir))
             .filter(f => f.endsWith('.si'))
             .sort()
@@ -2015,7 +2015,7 @@ describe('Phase 0 WASIX smoke test', () => {
         const tmpPath = path.join(WASM_BIN, 'emit-smoke.wasm')
         await fs.writeFile(tmpPath, wasm)
 
-        const strataDir = path.join(PROJECT_ROOT, 'src', 'strata')
+        const strataDir = path.join(PROJECT_ROOT, 'boot', 'strata', 'builtin')
         const files = (await fs.readdir(strataDir))
             .filter(f => f.endsWith('.si'))
             .sort()
@@ -2065,7 +2065,7 @@ describe('Phase 0 WASIX smoke test', () => {
         const tmpPath = path.join(WASM_BIN, 'lower-smoke.wasm')
         await fs.writeFile(tmpPath, wasm)
 
-        const strataDir = path.join(PROJECT_ROOT, 'src', 'strata')
+        const strataDir = path.join(PROJECT_ROOT, 'boot', 'strata', 'builtin')
         const files = (await fs.readdir(strataDir))
             .filter(f => f.endsWith('.si'))
             .sort()
@@ -2125,7 +2125,7 @@ describe('Phase 0 WASIX smoke test', () => {
         const tmpPath = path.join(WASM_BIN, 'body-smoke.wasm')
         await fs.writeFile(tmpPath, wasm)
 
-        const strataDir = path.join(PROJECT_ROOT, 'src', 'strata')
+        const strataDir = path.join(PROJECT_ROOT, 'boot', 'strata', 'builtin')
         const files = (await fs.readdir(strataDir))
             .filter(f => f.endsWith('.si'))
             .sort()
@@ -2276,7 +2276,7 @@ describe('Phase 0 WASIX smoke test', () => {
         const tmpPath = path.join(WASM_BIN, 'tpl-smoke.wasm')
         await fs.writeFile(tmpPath, wasm)
 
-        const strataDir = path.join(PROJECT_ROOT, 'src', 'strata')
+        const strataDir = path.join(PROJECT_ROOT, 'boot', 'strata', 'builtin')
         const files = (await fs.readdir(strataDir))
             .filter(f => f.endsWith('.si'))
             .sort()
@@ -2382,7 +2382,7 @@ describe('Phase 0 WASIX smoke test', () => {
         const tmpPath = path.join(WASM_BIN, 'intr-smoke.wasm')
         await fs.writeFile(tmpPath, wasm)
 
-        const strataDir = path.join(PROJECT_ROOT, 'src', 'strata')
+        const strataDir = path.join(PROJECT_ROOT, 'boot', 'strata', 'builtin')
         const files = (await fs.readdir(strataDir))
             .filter(f => f.endsWith('.si'))
             .sort()
@@ -2450,7 +2450,7 @@ describe('Phase 0 WASIX smoke test', () => {
         // Built-in strata bundle + a handful of user definitions covering
         // every codegen kind (function / global / extern) plus one bad
         // keyword to exercise the error path.
-        const strataDir = path.join(PROJECT_ROOT, 'src', 'strata')
+        const strataDir = path.join(PROJECT_ROOT, 'boot', 'strata', 'builtin')
         const files = (await fs.readdir(strataDir))
             .filter(f => f.endsWith('.si'))
             .sort()

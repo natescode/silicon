@@ -2,7 +2,7 @@
  * Module Loader
  *
  * Builds a ModuleRegistry from:
- *   A. Built-in env modules in src/strata/modules/*.si  (always available; env:: namespace)
+ *   A. Built-in env modules in boot/strata/builtin/modules/*.si  (always available; env:: namespace)
  *   B. User modules in <projectDir>/modules/             (manually downloaded)
  *
  * Resolution order: env modules win over user modules of the same name.
@@ -26,7 +26,7 @@ import type { FnSig, ModuleEntry, ModuleRegistry } from './registry'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dir = dirname(__filename)
-const BUILTIN_MODULES_DIR = join(__dir, '../strata/modules')
+const BUILTIN_MODULES_DIR = join(__dir, '../../boot/strata/builtin/modules')
 
 // ---------------------------------------------------------------------------
 // Internal helpers

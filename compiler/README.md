@@ -75,20 +75,55 @@ bun run stage1:build   # build wasm-bin/stage1.wasm (Silicon-in-Silicon)
 bun run stage1:run examples/demo.si   # compile via stage1.wasm under wasmtime
 ```
 
-Generated artifacts (`boot.wasm`, `stage1.wasm`, and test temp wasm files) live
-in `wasm-bin/` and are gitignored.
+Generated artifacts (`boot.wasm` and test temp wasm files) live in `wasm-bin/`
+and are gitignored.  `wasm-bin/stage1.wasm` is the EXCEPTION — it's checked
+in as the bootstrap seed so a fresh clone can rebuild without first running
+the TS pipeline.
+
+## Silicon-only build (no bun / node / TypeScript)
+
+For compiling Silicon to WASM without any TS dependencies:
+
+```sh
+./scripts/install-wat2wasm.sh   # one-time: fetch wabt to ./bin/
+./build.sh check                # rebuild stage1.wasm; fixed-point byte-equal
+./test.sh                       # run boot/tests/*.si via stage1 + wat2wasm
+```
+
+Requires only `wasmtime`, `bash`, and `curl`/`wget`+`tar` (the installer
+needs the last three).  PowerShell equivalents (`build.ps1`, `test.sh` is
+bash-only today) cover Windows-native shells.
+
+**Editing a built-in stratum.**  Built-in operators / keywords live in
+`boot/strata/builtin/*.si`.  After editing one, regenerate the embedded
+bundle that `stage1.wasm` carries inline:
+
+```sh
+./scripts/regen-embedded-bundle.sh           # bash (no bun needed)
+# or
+.\scripts\regen-embedded-bundle.ps1           # PowerShell
+```
+
+This refreshes `boot/embedded_bundle.si` from the new strata source.
+Rebuild stage1 (`./build.sh`) and the change is live in the next compile.
+See [`docs/silicon-only-bootstrap-plan.html`](docs/silicon-only-bootstrap-plan.html)
+for the remaining steps to a fully bun-free dev loop (typechecker port,
+rich-body dispatch wire-up, expanded Silicon test runner).
 
 ## Repository layout
 
 ```
-src/         Stage 0 TypeScript compiler (parser, AST, elaborator, IR, codegen)
-src/strata/  Built-in Silicon strata (operators, control flow, definition kinds)
-boot/        Silicon-in-Silicon bootstrap source (compiles to stage1.wasm)
-scripts/     Build and run scripts (boot, stage1, run-silicon)
-tests/       WASIX smoke tests, property tests, fuzz harness
-examples/    Sample Silicon programs
-docs/        Architecture, bootstrap plan, strata, compiler-api references
-wasm-bin/    Generated wasm/wat output (gitignored)
+src/                   Stage 0 TypeScript compiler (parser, AST, elaborator, IR, codegen)
+boot/                  Silicon-in-Silicon bootstrap source (compiles to stage1.wasm)
+boot/strata/builtin/   Built-in Silicon strata — operators, control flow, definition kinds
+scripts/               Build / regen / install / run scripts (TS + shell)
+build.sh / build.ps1   Silicon-only build pipeline (no bun)
+test.sh                Silicon-only test runner (no bun)
+tests/                 WASIX smoke tests, property tests, fuzz harness
+examples/              Sample Silicon programs
+docs/                  Architecture, bootstrap plan, strata, compiler-api references
+wasm-bin/              Generated wasm/wat (stage1.wasm checked in as seed; rest ignored)
+bin/                   wat2wasm fetched by scripts/install-wat2wasm.sh (ignored)
 ```
 
 ## Contributing

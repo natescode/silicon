@@ -47,7 +47,7 @@ async function main(): Promise<void> {
     }
 
     // Assemble strata bundle + user source.
-    const strataDir = path.join(PROJECT_ROOT, 'src', 'strata')
+    const strataDir = path.join(PROJECT_ROOT, 'boot', 'strata', 'builtin')
     const strataFiles = (await fs.readdir(strataDir))
         .filter(f => f.endsWith('.si'))
         .sort()
