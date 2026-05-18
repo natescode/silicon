@@ -28,6 +28,7 @@
 @use '../parser/parse.si';
 @use '../ir/nodes.si';
 @use './body_scope.si';
+@use '../compiler_api/ctx.si';
 
 # ── Literal byte sequences ──────────────────────────────────────────
 @fn br_lit_compiler:Int := { (&str_ptr 'Compiler') + 4 };
@@ -44,6 +45,22 @@
 @fn br_lit_arg:Int                  := { (&str_ptr 'arg')                  + 4 };
 @fn br_lit_lower_expr:Int           := { (&str_ptr 'lowerExpr')            + 4 };
 @fn br_lit_lower_expr_if_defined:Int := { (&str_ptr 'lowerExprIfDefined')  + 4 };
+
+# Compiler::ctx::* (3-segment) entry points, plus the
+# Compiler::ctx::*::method (4-segment) methods.  Routed to boot/
+# compiler_api/ctx.si.
+@fn br_lit_ctx:Int                := { (&str_ptr 'ctx')              + 4 };
+@fn br_lit_next_loop_id:Int       := { (&str_ptr 'nextLoopId')       + 4 };
+@fn br_lit_loop_stack:Int         := { (&str_ptr 'loopStack')        + 4 };
+@fn br_lit_globals:Int            := { (&str_ptr 'globals')          + 4 };
+@fn br_lit_var_names:Int          := { (&str_ptr 'varNames')         + 4 };
+@fn br_lit_pending_locals:Int     := { (&str_ptr 'pendingLocals')    + 4 };
+@fn br_lit_locals:Int             := { (&str_ptr 'locals')           + 4 };
+@fn br_lit_peek:Int               := { (&str_ptr 'peek')             + 4 };
+@fn br_lit_push:Int               := { (&str_ptr 'push')             + 4 };
+@fn br_lit_pop:Int                := { (&str_ptr 'pop')              + 4 };
+@fn br_lit_set:Int                := { (&str_ptr 'set')              + 4 };
+@fn br_lit_add:Int                := { (&str_ptr 'add')              + 4 };
 
 # Span-vs-literal byte comparison (P_SRC-relative span).
 @fn br_span_eq_lit:Int off:Int, len:Int, lit_ptr:Int, lit_len:Int := {
@@ -155,13 +172,26 @@
     @local s2_off := &ast_field P_AST, callee, 6;
     @local s2_len := &ast_field P_AST, callee, 7;
 
-    # Must be Compiler::ir::*
+    # Must be Compiler::*::*
     &@if ((&br_span_eq_lit s0_off, s0_len, (&br_lit_compiler), 8) == 0),
-      { &@return IR_NONE; };
-    &@if ((&br_span_eq_lit s1_off, s1_len, (&br_lit_ir), 2) == 0),
       { &@return IR_NONE; };
 
     @local n_args := &ast_field P_AST, call_node, 2;
+
+    # Compiler::ctx::nextLoopId — 3-segment leaf (not a method).
+    # Generates a fresh loop id from the ctx counter.  Returned as a
+    # plain integer the strata body can pass to ::makeLoop / push.
+    &@if ((&br_span_eq_lit s1_off, s1_len, (&br_lit_ctx), 3) == 1), {
+      &@if ((&br_span_eq_lit s2_off, s2_len, (&br_lit_next_loop_id), 10) == 1), {
+        &@return (&ctx_next_loop_id);
+      };
+      # Other Compiler::ctx::leaf paths (none today) → fall through.
+      &@return IR_NONE;
+    };
+
+    # Everything below requires Compiler::ir::*.
+    &@if ((&br_span_eq_lit s1_off, s1_len, (&br_lit_ir), 2) == 0),
+      { &@return IR_NONE; };
 
     # Compiler::ir::makeConst value, wasmType — i32 path only for now.
     &@if ((&br_span_eq_lit s2_off, s2_len, (&br_lit_make_const), 9) == 1), {
@@ -211,6 +241,73 @@
         &@return (&ir_loop cond, body);
       };
       &@return IR_NONE;
+    };
+  };
+
+  # 4-segment Compiler::ctx::<table>::<method> calls.  Routes to the
+  # ctx_* helpers in boot/compiler_api/ctx.si.  Today most ctx_*
+  # writes are stubs — they accept the strata-body arguments without
+  # touching real lower.si state — and ctx_loop_stack_* is the only
+  # group that maintains observable state (a parallel loop-id stack
+  # that mirrors what stage1's emit already tracks).  Returns
+  # IR_NONE for void methods so br_interpret_body's last-non-NONE
+  # tracker skips them.
+  &@if (n_segs == 4), {
+    @local q0_off := &ast_field P_AST, callee, 2;
+    @local q0_len := &ast_field P_AST, callee, 3;
+    @local q1_off := &ast_field P_AST, callee, 4;
+    @local q1_len := &ast_field P_AST, callee, 5;
+    @local q2_off := &ast_field P_AST, callee, 6;
+    @local q2_len := &ast_field P_AST, callee, 7;
+    @local q3_off := &ast_field P_AST, callee, 8;
+    @local q3_len := &ast_field P_AST, callee, 9;
+    &@if ((&br_span_eq_lit q0_off, q0_len, (&br_lit_compiler), 8) == 0),
+      { &@return IR_NONE; };
+    &@if ((&br_span_eq_lit q1_off, q1_len, (&br_lit_ctx), 3) == 0),
+      { &@return IR_NONE; };
+    @local n_args := &ast_field P_AST, call_node, 2;
+
+    # loopStack::{peek,push,pop}
+    &@if ((&br_span_eq_lit q2_off, q2_len, (&br_lit_loop_stack), 9) == 1), {
+      &@if ((&br_span_eq_lit q3_off, q3_len, (&br_lit_peek), 4) == 1),
+        { &@return (&ctx_loop_stack_peek); };
+      &@if ((&br_span_eq_lit q3_off, q3_len, (&br_lit_push), 4) == 1), {
+        &@if (n_args >= 1), {
+          @local id := &br_eval_expr (&ast_field P_AST, call_node, 3);
+          &ctx_loop_stack_push id;
+        };
+        &@return IR_NONE;
+      };
+      &@if ((&br_span_eq_lit q3_off, q3_len, (&br_lit_pop), 3) == 1),
+        { &ctx_loop_stack_pop; &@return IR_NONE; };
+    };
+    # globals::set name, type   (stub — no observable effect today)
+    &@if ((&br_span_eq_lit q2_off, q2_len, (&br_lit_globals), 7) == 1), {
+      &@if ((&br_span_eq_lit q3_off, q3_len, (&br_lit_set), 3) == 1), {
+        &ctx_globals_set 0, 0;
+        &@return IR_NONE;
+      };
+    };
+    # varNames::add name        (stub)
+    &@if ((&br_span_eq_lit q2_off, q2_len, (&br_lit_var_names), 8) == 1), {
+      &@if ((&br_span_eq_lit q3_off, q3_len, (&br_lit_add), 3) == 1), {
+        &ctx_var_names_add 0;
+        &@return IR_NONE;
+      };
+    };
+    # pendingLocals::push local (stub)
+    &@if ((&br_span_eq_lit q2_off, q2_len, (&br_lit_pending_locals), 13) == 1), {
+      &@if ((&br_span_eq_lit q3_off, q3_len, (&br_lit_push), 4) == 1), {
+        &ctx_pending_locals_push 0;
+        &@return IR_NONE;
+      };
+    };
+    # locals::set name, type    (stub)
+    &@if ((&br_span_eq_lit q2_off, q2_len, (&br_lit_locals), 6) == 1), {
+      &@if ((&br_span_eq_lit q3_off, q3_len, (&br_lit_set), 3) == 1), {
+        &ctx_locals_set 0, 0;
+        &@return IR_NONE;
+      };
     };
   };
 

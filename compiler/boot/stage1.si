@@ -68,6 +68,7 @@
   &name_pool_init;
   &synth_start_init;
   &fn_sig_init;
+  &ctx_loop_stack_init;
   &fn_sig_register_prelude_voids;
   &ew_init;
 

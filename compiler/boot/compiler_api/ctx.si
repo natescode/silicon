@@ -1,0 +1,88 @@
+# boot::compiler_api::ctx — mutable compilation-context surface.
+#
+# Phase 1c scaffold.  Provides Silicon-side stubs for the
+# Compiler::ctx::* entry points that strata bodies call.  body_rich.si
+# dispatches the Compiler::ctx::*::method namespace paths into the
+# functions defined here.
+#
+# Today all entry points are STUBS — they accept the same arguments
+# as their TS counterparts but return sentinels (0 / IR_NONE) instead
+# of mutating real state.  This is intentional: the eight keywords
+# currently wired through body_rich (@break, @continue, @return,
+# @if, @and, @or, @not, @loop) don't depend on these ctx mutations
+# being observable — their IR is built purely from lowerExpr +
+# ir::makeX, and the ctx::* calls in their strata bodies fall through
+# to "do nothing" without changing output (verified by the byte-equal
+# STAGE 2 == STAGE 1 self-host fixed point).
+#
+# Real implementations land alongside Phase 1c continuation work that
+# wires definition keywords (@let, @fn, @var, @extern, @local,
+# @export).  Those WILL need the ctx::* surface to observe the real
+# LSCOPE / GSCOPE / pendingLocals / loop-id state currently embedded
+# as globals in boot/ir/lower.si — which is a substantial extraction
+# refactor on its own (see docs/silicon-only-bootstrap-plan.html
+# Phase 1c).
+#
+# Mapping from strata-body call sites (boot/strata/builtin/*.si) to
+# the helpers below:
+#
+#   &Compiler::ctx::loopStack::peek           → ctx_loop_stack_peek
+#   &Compiler::ctx::loopStack::push id        → ctx_loop_stack_push
+#   &Compiler::ctx::loopStack::pop            → ctx_loop_stack_pop
+#   &Compiler::ctx::nextLoopId                → ctx_next_loop_id
+#   &Compiler::ctx::globals::set name, type   → ctx_globals_set
+#   &Compiler::ctx::varNames::add name        → ctx_var_names_add
+#   &Compiler::ctx::pendingLocals::push local → ctx_pending_locals_push
+#   &Compiler::ctx::locals::set name, type    → ctx_locals_set
+
+@use '../std/vec.si';
+
+# ── Loop-id stack ──────────────────────────────────────────────────
+# Stage 1's IR_BREAK / IR_CONTINUE carry no loop-id payload; the
+# emitter (boot/emit/wat.si) labels loops itself via EW_LOOP_IDS.
+# Keeping a parallel stack here lets the body interpreter satisfy
+# the strata bodies' shape without rewiring emit.
+@var CTX_LOOP_STACK:Int := 0;
+@var CTX_LOOP_COUNTER:Int := 0;
+
+@fn ctx_loop_stack_init := {
+  CTX_LOOP_STACK = &vec_new;
+  CTX_LOOP_COUNTER = 0;
+};
+
+@fn ctx_next_loop_id:Int := {
+  @local id := CTX_LOOP_COUNTER;
+  CTX_LOOP_COUNTER = CTX_LOOP_COUNTER + 1;
+  id
+};
+
+@fn ctx_loop_stack_push id:Int := {
+  CTX_LOOP_STACK = &vec_push CTX_LOOP_STACK, id;
+};
+
+@fn ctx_loop_stack_pop:Int := {
+  @local n := &vec_len CTX_LOOP_STACK;
+  &@if (n <= 0), { &@return 0 - 1; };
+  @local top := &vec_get CTX_LOOP_STACK, (n - 1);
+  # vec doesn't expose truncate; shrink the len header directly.
+  # Matches the rewind technique used in boot/elab/body_scope.si.
+  &WASM::i32_store (CTX_LOOP_STACK + 4), (n - 1);
+  top
+};
+
+@fn ctx_loop_stack_peek:Int := {
+  @local n := &vec_len CTX_LOOP_STACK;
+  &@if (n <= 0), { &@return 0 - 1; };
+  &vec_get CTX_LOOP_STACK, (n - 1)
+};
+
+# ── Globals / locals / varNames / pendingLocals ────────────────────
+# Stub returns 0 / IR_NONE.  Real implementations will route to
+# scope_push / global_add / fn_sig_register family in lower.si once
+# those globals are extracted into this module.  Today they're
+# no-ops the dispatcher returns IR_NONE for so the body interpreter
+# treats them as side-effect-free intermediate statements.
+@fn ctx_globals_set name_h:Int, type_h:Int := { };
+@fn ctx_var_names_add name_h:Int := { };
+@fn ctx_pending_locals_push local_h:Int := { };
+@fn ctx_locals_set name_h:Int, type_h:Int := { };

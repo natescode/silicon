@@ -85,6 +85,7 @@ $Stage1Files = @(
   'boot/ir/nodes.si'
   'boot/elab/body.si'
   'boot/elab/body_scope.si'
+  'boot/compiler_api/ctx.si'
   'boot/elab/body_rich.si'
   'boot/ir/lower.si'
   'boot/emit/wat.si'

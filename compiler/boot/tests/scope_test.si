@@ -13,6 +13,7 @@
 @use '../ir/nodes.si';
 @use '../elab/body.si';
 @use '../elab/body_scope.si';
+@use '../compiler_api/ctx.si';
 @use '../elab/body_rich.si';
 @use '../ir/lower.si';
 @use '../emit/wat.si';

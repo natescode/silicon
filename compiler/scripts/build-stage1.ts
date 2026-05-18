@@ -58,6 +58,7 @@ const STAGE1_FILES = [
     'boot/ir/nodes.si',
     'boot/elab/body.si',
     'boot/elab/body_scope.si',   // scope vec for rich strata bodies
+    'boot/compiler_api/ctx.si',  // Compiler::ctx::* surface (Phase 1c)
     'boot/elab/body_rich.si',    // Compiler::ir::* dispatch for rich bodies
     'boot/ir/lower.si',
     'boot/emit/wat.si',
