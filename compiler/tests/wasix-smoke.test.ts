@@ -2284,6 +2284,24 @@ describe('Phase 0 WASIX smoke test', () => {
         }
     })
 
+    test('boot/tests/check_kw_test.si: Phase 2 slice 2e-v — checkNode keyword calls', async () => {
+        if (!wasmtimeAvailable()) {
+            console.log('  (skipped: wasmtime not on PATH)')
+            return
+        }
+        const wasm = await buildBoot(path.join(PROJECT_ROOT, 'boot', 'tests', 'check_kw_test.si'))
+        const tmpPath = path.join(WASM_BIN, 'check_kw.wasm')
+        await fs.writeFile(tmpPath, wasm)
+        try {
+            const result = spawnSync('wasmtime', [tmpPath], { maxBuffer: 1 << 20 })
+            expect(result.status).toBe(0)
+            const stdout = (result.stdout ?? Buffer.alloc(0)).toString('utf-8').trim()
+            expect(stdout).toBe('check-kw OK')
+        } finally {
+            await fs.unlink(tmpPath).catch(() => {})
+        }
+    })
+
     test('boot/tests/check_block_test.si: Phase 2 slice 2e-iv — checkNode Block + Assignment + inline Definition', async () => {
         if (!wasmtimeAvailable()) {
             console.log('  (skipped: wasmtime not on PATH)')

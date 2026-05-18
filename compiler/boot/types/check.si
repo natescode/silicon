@@ -236,17 +236,127 @@
   };
 };
 
+# Keyword name span equality vs a literal `@xxx` string.
+@fn kw_span_eq:Int callee:Int, lit:String := {
+  @local first_off := &ast_field P_AST, callee, 2;
+  @local first_len := &ast_field P_AST, callee, 3;
+  &op_span_eq first_off, first_len, lit
+};
+
+# Per-keyword type inference.  Conservative: only @if / @and / @or
+# produce a meaningful result type (matching their then-branch /
+# operand); everything else returns Unknown after walking the args
+# for inner diagnostics.
+@fn check_keyword_call:Int node:Int := {
+  @local callee := &ast_field P_AST, node, 1;
+  @local n_args := &ast_field P_AST, node, 2;
+  @local r := TYPE_UNKNOWN_H;
+
+  &@if (((&kw_span_eq callee, '@if') == 1) * (n_args >= 2) == 1), {
+    @local cond := &ast_field P_AST, node, 3;
+    @local then := &ast_field P_AST, node, 4;
+    &check_node cond;
+    @local tt := &check_node then;
+    @local et := TYPE_UNKNOWN_H;
+    &@if (n_args >= 3), {
+      @local else_n := &ast_field P_AST, node, 5;
+      et = &check_node else_n;
+    };
+    # Both branches present + concrete + disagree → EK_MISMATCH.
+    &@if ((n_args >= 3)
+        * ((tt != TYPE_UNKNOWN_H) * ((et != TYPE_UNKNOWN_H) * (tt != et)))
+        == 1), {
+      &err_mismatch tt, et, 0, 0;
+    };
+    r = tt;
+  };
+
+  # Boolean short-circuit ops: take two operands, return the right
+  # operand's type (matches the IR makeIf result type).
+  &@if (((&kw_span_eq callee, '@and') == 1) * (n_args >= 2) == 1), {
+    &check_node (&ast_field P_AST, node, 3);
+    r = &check_node (&ast_field P_AST, node, 4);
+  };
+  &@if (((&kw_span_eq callee, '@or') == 1) * (n_args >= 2) == 1), {
+    &check_node (&ast_field P_AST, node, 3);
+    r = &check_node (&ast_field P_AST, node, 4);
+  };
+
+  # @not arg → Int.
+  &@if (((&kw_span_eq callee, '@not') == 1) * (n_args >= 1) == 1), {
+    &check_node (&ast_field P_AST, node, 3);
+    r = TYPE_INT_H;
+  };
+
+  # @nz arg → Int (0/1 normaliser from strata/builtin/logic.si).
+  &@if (((&kw_span_eq callee, '@nz') == 1) * (n_args >= 1) == 1), {
+    &check_node (&ast_field P_AST, node, 3);
+    r = TYPE_INT_H;
+  };
+
+  # @loop cond, body — walk both, void result.
+  &@if (((&kw_span_eq callee, '@loop') == 1) * (n_args >= 2) == 1), {
+    &check_node (&ast_field P_AST, node, 3);
+    &check_node (&ast_field P_AST, node, 4);
+  };
+
+  # @return value — walk arg for inner errors.
+  &@if (((&kw_span_eq callee, '@return') == 1) * (n_args >= 1) == 1), {
+    &check_node (&ast_field P_AST, node, 3);
+  };
+
+  # @break / @continue: no args to walk.
+  # @match: deferred (multi-arm shape) — fall through to args-walk + Unknown.
+
+  # For any keyword we didn't special-case above, still walk every
+  # arg so inner type errors surface.  Covers @match, @export, etc.
+  @local known := 0;
+  &@if ((&kw_span_eq callee, '@if')       == 1), { known = 1; };
+  &@if ((&kw_span_eq callee, '@and')      == 1), { known = 1; };
+  &@if ((&kw_span_eq callee, '@or')       == 1), { known = 1; };
+  &@if ((&kw_span_eq callee, '@not')      == 1), { known = 1; };
+  &@if ((&kw_span_eq callee, '@nz')       == 1), { known = 1; };
+  &@if ((&kw_span_eq callee, '@loop')     == 1), { known = 1; };
+  &@if ((&kw_span_eq callee, '@return')   == 1), { known = 1; };
+  &@if ((&kw_span_eq callee, '@break')    == 1), { known = 1; };
+  &@if ((&kw_span_eq callee, '@continue') == 1), { known = 1; };
+  &@if (known == 0), {
+    &check_call_args node, n_args;
+  };
+
+  r
+};
+
 @fn check_call:Int node:Int := {
   @local callee := &ast_field P_AST, node, 1;
   @local n_args := &ast_field P_AST, node, 2;
 
-  # Walk args first so nested diagnostics fire even on resolution miss.
-  &check_call_args node, n_args;
-
   @local r := TYPE_UNKNOWN_H;
 
-  # Callee must be an AST_NAMESPACE for the lookup path to apply.
+  # Keyword form: callee namespace whose first byte is '@' (64).
+  # Dispatched to check_keyword_call so the @if / @loop / @return /
+  # @match shapes pick up the right per-keyword inference.
+  @local handled_kw := 0;
   &@if ((&ast_kind P_AST, callee) == AST_NAMESPACE), {
+    @local n_segs := &ast_field P_AST, callee, 1;
+    @local first_off := &ast_field P_AST, callee, 2;
+    @local first_len := &ast_field P_AST, callee, 3;
+    &@if ((n_segs == 1) * (first_len > 0) == 1), {
+      &@if ((&WASM::i32_load8_u (P_SRC + first_off)) == 64), {
+        r = &check_keyword_call node;
+        handled_kw = 1;
+      };
+    };
+  };
+
+  # Walk args first (for non-keyword path) so nested diagnostics fire
+  # even on resolution miss.  Keyword path already consumed its args.
+  &@if (handled_kw == 0), {
+    &check_call_args node, n_args;
+  };
+
+  # Callee must be an AST_NAMESPACE for the lookup path to apply.
+  &@if ((handled_kw == 0) * ((&ast_kind P_AST, callee) == AST_NAMESPACE) == 1), {
     @local n_segs := &ast_field P_AST, callee, 1;
     @local first_off := &ast_field P_AST, callee, 2;
     @local last_off  := &ast_field P_AST, callee, (2 + ((n_segs - 1) * 2));
