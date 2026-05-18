@@ -262,6 +262,24 @@
 
 <div class="gate"><span class="lbl">Gate 1</span> &nbsp; For every <code>src/e2e/examples/*.si</code> fixture: <code>stage1.wasm &lt; fixture.si</code> produces WAT byte-equal to <code>compileToWat(typecheck(elaborate(parse(fixture))))</code>.  Plus stage1==stage2 self-host stays green.</div>
 
+<!-- ─── Phase 1.5 ─── -->
+<div class="phase-head"><div class="phase-num">Phase 1.5</div><div class="phase-name">Stage1 codegen — strict-WAT correctness</div></div>
+<div class="meta-row">
+  <div class="k">Scope</div>     <div class="v">Fix the family of emit bugs in <code>boot/emit/wat.si</code> that produce WAT only wabt-NPM's permissive <code>toBinary()</code> tolerates.  Identified so far: <code>drop</code> after a void-returning <code>call</code> inside <code>@if</code> branches; same pattern in loop bodies; likely siblings in <code>@match</code> arms and tail-position void calls in function bodies.</div>
+  <div class="k">Why now</div>   <div class="v">The Phase 4+5 shell pipeline relies on standalone <code>wat2wasm</code>, which performs strict validation.  Today's stage1 output trips type-mismatch errors on every non-trivial fixture (verified on <code>arena_test</code>, <code>vec_test</code>, <code>ir_nodes_test</code>, <code>body_*_test</code>).  wabt-NPM's API path silently emits bytes that <code>wasmtime</code> then rejects at load — a worse failure mode than the strict CLI catching them up front.</div>
+  <div class="k">Triage</div>    <div class="v">Use <code>scripts/check-ts-watToWasm.ts</code> to confirm whether a given WAT is "silently invalid" (TS wabt accepts; wasmtime rejects).  If yes → stage1 codegen bug.</div>
+  <div class="k">Gate</div>      <div class="v">Every fixture in <code>boot/tests/*_test.si</code> compiles via stage1 + standalone <code>wat2wasm</code> and runs under <code>wasmtime</code> producing the expected output.  <code>./test.sh</code> exits 0.</div>
+</div>
+
+<div class="card warn">
+  <p><strong>This is the new gating phase for TS deletion.</strong>  Phase 7 cannot
+  fire until Phase 1.5's gate is green — otherwise <code>./build.sh</code> users
+  would have a working stage1 binary but no way to compile any non-trivial
+  Silicon program with it.  The bug is latent today because the bun-driven
+  test suite compiles user fixtures via Stage 0 TS (where wabt-NPM smooths
+  over the issue), not via stage1.</p>
+</div>
+
 <!-- ─── Phase 2 ─── -->
 <div class="phase-head"><div class="phase-num">Phase 2</div><div class="phase-name">Typechecker port</div></div>
 <div class="meta-row">
@@ -355,17 +373,57 @@ cmp "$STAGE_IN" "$STAGE_OUT" && echo "fixed point ✓"
   </tbody>
 </table>
 
-<h2>What lands on the <code>bootstrap/silicon-only</code> branch today</h2>
+<h2>What landed on <code>bootstrap/silicon-only</code> this session</h2>
 <ul>
   <li>This plan doc.</li>
-  <li>Phase 1a — scope + multi-segment <code>Node.x.y</code> path eval helpers in
-      <code>boot/elab/body.si</code>, tested in isolation via
-      <code>boot/tests/body_scope_test.si</code> (does not affect <code>lower.si</code>;
-      stage1==stage2 byte-equal preserved).</li>
-  <li>Stub <code>boot/compiler_api/</code> directory with a README mapping each of
-      the 17 entry points to its TS source location, so subsequent slices have
-      a clear target.</li>
+  <li><strong>Phase 1a</strong> — scope + multi-segment <code>Node.x.y</code> path eval helpers in
+      <code>boot/elab/body_scope.si</code>; tested in isolation via
+      <code>boot/tests/body_scope_test.si</code>.  Additive — does not touch
+      <code>lower.si</code>; stage1==stage2 self-host gate preserved.</li>
+  <li><strong>Phase 1b</strong> — rich-body dispatcher (<code>boot/elab/body_rich.si</code>)
+      handling <code>&amp;IR::null</code>, <code>&amp;Compiler::ir::makeConst</code>,
+      <code>makeIf</code>, <code>makeBreak</code>, <code>makeContinue</code>,
+      <code>makeReturn</code>, <code>makeLoop</code>; <code>@local</code> bindings
+      evaluated against the scope; nested call args recurse.  Tested via
+      <code>boot/tests/body_rich_test.si</code> (6 assertions).</li>
+  <li><strong>Phase 4+5</strong> — <code>build.sh</code> / <code>build.ps1</code> shell drivers
+      that rebuild <code>stage1.wasm</code> from <code>boot/*.si</code> using only
+      <code>wasmtime</code> + <code>wat2wasm</code>.  Bundle composition verified
+      byte-equal to <code>scripts/build-stage1.ts</code> output (261 371 bytes WAT).
+      <code>wasm-bin/stage1.wasm</code> checked in as the bootstrap seed.</li>
+  <li><strong>Phase 6 (skeleton)</strong> — <code>test.sh</code> with shell-side
+      <code>@use</code> resolver; structural pipeline correct but blocked by
+      Phase 1.5 codegen issue (see card above).</li>
+  <li><strong>Diagnostic tool</strong> — <code>scripts/check-ts-watToWasm.ts</code> for
+      triaging "silently invalid" WAT output.</li>
 </ul>
+
+<h3>Not landed; deletion blockers</h3>
+<ul>
+  <li><strong>Phase 1.5</strong> — stage1 emits invalid WAT for arbitrary user
+      programs.  Strict <code>wat2wasm</code> rejects; wabt-NPM silently emits
+      bytes that <code>wasmtime</code> then rejects.  Must fix before Phase 7.</li>
+  <li><strong>Phase 1c–1e</strong> — stage1 still uses hardcoded per-keyword
+      branches in <code>boot/ir/lower.si</code>; rich-body dispatch isn't wired in.
+      Adding a stratum to <code>src/strata/*.si</code> doesn't yet change stage1's
+      output.</li>
+  <li><strong>Phase 2</strong> — no Silicon-side typechecker.</li>
+  <li><strong>Phase 3</strong> — no Silicon-side <code>@use</code> resolver; build
+      scripts still hand-concatenate the bundle.</li>
+  <li><strong>Phase 6 (full)</strong> — Silicon-driven test runner blocked on
+      Phase 1.5.</li>
+  <li><strong>Phase 7</strong> — TypeScript deletion gated on all of the above.</li>
+</ul>
+
+<div class="card warn">
+  <p><strong>Honest scope for TS deletion.</strong>  The repo can today rebuild
+  stage1 byte-equal via the shell pipeline (Phase 4+5), but stage1 itself
+  cannot yet compile arbitrary user programs cleanly through standalone
+  <code>wat2wasm</code> (Phase 1.5 codegen bug).  Deleting <code>src/</code> in this
+  state would leave new-feature development effectively dead: no typechecker,
+  no working Silicon test loop, codegen bugs only the TS-side wabt-NPM
+  permissive mode papered over.</p>
+</div>
 
 <div class="card ok">
   <p><strong>Tracking.</strong> Update <code>docs/bootstrap-status.md</code> as each

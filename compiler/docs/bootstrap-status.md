@@ -11,6 +11,7 @@ Updated as branches land.
 | ----- | ------------------------------------------------------- | ----------- | ---------------------------- |
 | 1a    | Body interpreter — scope + path-eval scaffolding        | **Landed**  | `bootstrap/silicon-only`     |
 | 1b    | Rich-body dispatch + `Compiler::ir::*` constructors     | **Landed**  | `bootstrap/silicon-only`     |
+| 1.5   | **Codegen fix** — `drop` after void calls inside @if (blocker for std wat2wasm) | **Pending — must land before Phase 7** | — |
 | 1c    | `Compiler::ctx::*` mutable surface                      | Pending     | —                            |
 | 1d    | Lowering helpers (`lowerExpr`, `arg`, `watId`, …)       | Pending     | —                            |
 | 1e    | Wire-up + byte-equal gate vs Stage 0 e2e corpus         | Pending     | —                            |
