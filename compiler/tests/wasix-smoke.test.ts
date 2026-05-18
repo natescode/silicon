@@ -2284,6 +2284,32 @@ describe('Phase 0 WASIX smoke test', () => {
         }
     })
 
+    test('boot/tests/errors_test.si: Phase 2 slice 2b — TypeError arena + formatter', async () => {
+        if (!wasmtimeAvailable()) {
+            console.log('  (skipped: wasmtime not on PATH)')
+            return
+        }
+        const wasm = await buildBoot(path.join(PROJECT_ROOT, 'boot', 'tests', 'errors_test.si'))
+        const tmpPath = path.join(WASM_BIN, 'errors.wasm')
+        await fs.writeFile(tmpPath, wasm)
+        try {
+            const result = spawnSync('wasmtime', [tmpPath], { maxBuffer: 1 << 20 })
+            expect(result.status).toBe(0)
+            const stdout = (result.stdout ?? Buffer.alloc(0)).toString('utf-8').trim()
+            const lines = stdout.split('\n')
+            expect(lines[lines.length - 1]).toBe('errors OK')
+            expect(lines).toContain(`[Mismatch] expected Int, got Float`)
+            expect(lines).toContain(`[InvalidOperator] operator 'op_plus' cannot be applied to (String, Int)`)
+            expect(lines).toContain(`[UnboundIdentifier] unbound identifier 'here'`)
+            expect(lines).toContain(`[UnknownType] unknown type 'here'`)
+            expect(lines).toContain(`[HeterogeneousArray] array literal must be homogeneous: first element is Int, found Array<Int>`)
+            expect(lines).toContain(`[Annotation] 'here' declared as Int but initialiser has type Bool`)
+            expect(lines).toContain(`[ImmutableAssignment] 'here' is immutable and cannot be reassigned`)
+        } finally {
+            await fs.unlink(tmpPath).catch(() => {})
+        }
+    })
+
     test('boot/tests/body_rich_test.si: Phase 1b rich-body dispatch — Compiler::ir::* + IR::null', async () => {
         if (!wasmtimeAvailable()) {
             console.log('  (skipped: wasmtime not on PATH)')
