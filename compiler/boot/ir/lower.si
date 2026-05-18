@@ -1485,6 +1485,16 @@
       };
       &@if ((&lower_span_eq_lit nm_off, nm_len, (&lit_at_loop_ptr), 5) == 1), {
         &@if (n_args == 2), {
+          # Body-rich: the @loop strata body has ctx::nextLoopId +
+          # loopStack::push/pop calls that body_rich doesn't dispatch
+          # (no Compiler::ctx::* surface yet) — they fall through to
+          # IR_NONE and br_interpret_body's last-non-NONE tracker
+          # ignores them.  The trailing &Compiler::ir::makeLoop id,
+          # cond, body produces the same ir_loop(cond, body) as the
+          # hardcoded path because my makeLoop handler ignores the
+          # id arg and uses (cond, body).
+          @local h_l := &try_dispatch_via_body_rich node, nm_off, nm_len;
+          &@if (h_l != IR_NONE), { &@return h_l; };
           @local cond := &lower_expr (&ast_field P_AST, node, 3);
           @local body := &lower_expr (&ast_field P_AST, node, 4);
           &@if (cond != IR_NONE), {
