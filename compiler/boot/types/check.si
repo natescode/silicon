@@ -37,6 +37,9 @@
   &@if (k == AST_NAMESPACE),  { r = &check_namespace node; };
   &@if (k == AST_BIN_OP),     { r = &check_binary_op node; };
   &@if (k == AST_CALL),       { r = &check_call node; };
+  &@if (k == AST_BLOCK),      { r = &check_block node; };
+  &@if (k == AST_ASSIGNMENT), { r = &check_assignment node; };
+  &@if (k == AST_DEFINITION), { r = &check_inline_def node; };
 
   r
 };
@@ -289,4 +292,142 @@
   };
 
   r
+};
+
+# ── Block ──────────────────────────────────────────────────────
+#
+# AST_BLOCK [kind, n_stmts, has_trailing, stmt0, stmt1, ..., trailing_or_-1]
+#
+# Walk every stmt in a child scope so inner bindings disappear on
+# exit (mirrors TS `withScope` discarding inner symbol changes).
+# Return the type of the trailing expression when present, else
+# TYPE_UNKNOWN_H (block-as-statement).
+
+@fn check_block:Int node:Int := {
+  @local n_stmts      := &ast_field P_AST, node, 1;
+  @local has_trailing := &ast_field P_AST, node, 2;
+  @local saved := &sym_scope_save;
+
+  @local i := 0;
+  &@loop (i < n_stmts), {
+    @local stmt := &ast_field P_AST, node, (3 + i);
+    &check_node stmt;
+    i = i + 1;
+  };
+
+  @local r := TYPE_UNKNOWN_H;
+  &@if (has_trailing == 1), {
+    @local tail := &ast_field P_AST, node, (3 + n_stmts);
+    r = &check_node tail;
+  };
+
+  &sym_scope_restore saved;
+  r
+};
+
+# ── Assignment ─────────────────────────────────────────────────
+#
+# AST_ASSIGNMENT [kind, target, value]
+#
+# Rules (mirror typechecker.ts):
+#   - target must be a known Namespace (else EK_UNBOUND already
+#     pushed by check_namespace)
+#   - target must not be in the immutable set; else EK_IMMUTABLE
+#   - value's type must match target's; else EK_MISMATCH
+# Result type is the value type (matches TS `node.inferredType = vt`).
+
+@fn check_assignment:Int node:Int := {
+  @local target := &ast_field P_AST, node, 1;
+  @local value  := &ast_field P_AST, node, 2;
+  @local tt := &check_node target;
+  @local vt := &check_node value;
+
+  &@if ((&ast_kind P_AST, target) == AST_NAMESPACE), {
+    @local n_segs    := &ast_field P_AST, target, 1;
+    @local first_off := &ast_field P_AST, target, 2;
+    @local last_off  := &ast_field P_AST, target, (2 + ((n_segs - 1) * 2));
+    @local last_len  := &ast_field P_AST, target, (3 + ((n_segs - 1) * 2));
+    @local name_len  := (last_off + last_len) - first_off;
+    @local name_p    := P_SRC + first_off;
+
+    # Linear scan IMM_VEC by raw bytes (analogous to fn_lookup).
+    @local imm_hit := 0;
+    @local cnt := &imm_count;
+    @local i := 0;
+    &@loop (((imm_hit == 0) * (i < cnt)) == 1), {
+      @local e_off := &vec_get IMM_VEC, (i * IMM_FIELDS);
+      @local e_len := &vec_get IMM_VEC, ((i * IMM_FIELDS) + 1);
+      &@if ((&tc_name_eq_bytes e_off, e_len, name_p, name_len) == 1), {
+        imm_hit = 1;
+      };
+      i = i + 1;
+    };
+    &@if (imm_hit == 1), {
+      &err_immutable first_off, name_len, first_off, name_len;
+    };
+  };
+
+  &@if (((tt != TYPE_UNKNOWN_H) * ((vt != TYPE_UNKNOWN_H) * (tt != vt))) == 1), {
+    &err_mismatch tt, vt, 0, 0;
+  };
+
+  vt
+};
+
+# ── Inline Definition (statement-position @let / @loc / etc) ──
+#
+# AST_DEFINITION as expression — push the bound name into the
+# current scope so subsequent references resolve.  Annotation
+# validation: if the binding's type doesn't match the annotation,
+# push EK_ANNOTATION.  Returns TYPE_UNKNOWN_H (definitions are
+# statements, not value-producing).
+
+@fn check_inline_def:Int node:Int := {
+  @local kw_off  := &ast_field P_AST, node, 1;
+  @local kw_len  := &ast_field P_AST, node, 2;
+  @local nm_off  := &ast_field P_AST, node, 3;
+  @local nm_len  := &ast_field P_AST, node, 4;
+  @local t_off   := &ast_field P_AST, node, 5;
+  @local t_len   := &ast_field P_AST, node, 6;
+  @local n_params := &ast_field P_AST, node, 7;
+  @local binding  := &ast_field P_AST, node, (8 + n_params);
+
+  # Annotated type.
+  @local ann_t := TYPE_UNKNOWN_H;
+  &@if (t_len > 0), {
+    @local parsed := &parse_type_name t_off, t_len;
+    &@if (parsed != TYPE_NONE), { ann_t = parsed; };
+  };
+
+  # Binding type (if present).
+  @local bind_t := TYPE_UNKNOWN_H;
+  &@if (binding != AST_NONE), {
+    bind_t = &check_node binding;
+  };
+
+  # Annotation mismatch: only when both are concrete and differ.
+  &@if (((ann_t != TYPE_UNKNOWN_H) * ((bind_t != TYPE_UNKNOWN_H) * (ann_t != bind_t))) == 1), {
+    &err_annotation nm_off, nm_len, ann_t, bind_t, nm_off, nm_len;
+  };
+
+  # Push into scope; annotation wins, falls back to bound type.
+  @local sym_t := ann_t;
+  &@if (sym_t == TYPE_UNKNOWN_H), { sym_t = bind_t; };
+  @local n_off := &tc_intern_src nm_off, nm_len;
+  &sym_set n_off, nm_len, sym_t;
+
+  # Mark immutable per kw (@var stays mutable; everything else
+  # immutable).  Mirror pd_is_mutable_kw without depending on
+  # preregister_defs.si.
+  @local is_var := 0;
+  &@if ((kw_len == 4)
+      * ((&WASM::i32_load8_u (P_SRC + kw_off + 0)) == 64)
+      * ((&WASM::i32_load8_u (P_SRC + kw_off + 1)) == 118)
+      * ((&WASM::i32_load8_u (P_SRC + kw_off + 2)) == 97)
+      * ((&WASM::i32_load8_u (P_SRC + kw_off + 3)) == 114) == 1), {
+    is_var = 1;
+  };
+  &@if (is_var == 0), { &imm_add n_off, nm_len; };
+
+  TYPE_UNKNOWN_H
 };
