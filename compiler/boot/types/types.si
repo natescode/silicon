@@ -1,0 +1,306 @@
+# boot::types::types — SiliconType ADT (Phase 2 slice 2a).
+#
+# Port of src/types/types.ts.  Models the surface-level types Silicon
+# exposes to programmers, the WebAssembly value types they lower to,
+# and helpers for comparison + formatting.
+#
+# Storage: every SiliconType is a record in a flat vec<i32> arena.
+# A "type handle" is the record's vec index (just like IR_VEC handles
+# in boot/ir/nodes.si).
+#
+# Record layouts (each cell is one i32):
+#
+#   [SK_INT]            (1 cell)
+#   [SK_INT64]          (1 cell)
+#   [SK_FLOAT]          (1 cell)
+#   [SK_STRING]         (1 cell)
+#   [SK_BOOL]           (1 cell)
+#   [SK_UNKNOWN]        (1 cell)
+#   [SK_ARRAY,    element_handle]                            (2 cells)
+#   [SK_FUNCTION, n_params, result_handle, p0_h, p1_h, ...]  (3 + n cells)
+#   [SK_DISTINCT, name_off, name_len, underlying_handle]     (4 cells)
+#   [SK_SUM,      name_off, name_len, n_variants,
+#                 v0_off, v0_len, v1_off, v1_len, ...]       (4 + 2*n cells)
+#
+# Singletons (TYPE_INT_H et al.) are constructed once at types_init
+# time so identity-by-handle works for the scalar primitives.
+
+@use '../std/vec.si';
+@use '../parser/parse.si';   # P_SRC for name span lookups
+
+# ── Kind tags ──────────────────────────────────────────────────────
+@let SK_INT:Int       := 1;
+@let SK_INT64:Int     := 2;
+@let SK_FLOAT:Int     := 3;
+@let SK_STRING:Int    := 4;
+@let SK_BOOL:Int      := 5;
+@let SK_ARRAY:Int     := 6;
+@let SK_FUNCTION:Int  := 7;
+@let SK_DISTINCT:Int  := 8;
+@let SK_SUM:Int       := 9;
+@let SK_UNKNOWN:Int   := 10;
+
+# WASM value type tags reused from boot/ir/nodes.si (parse.si pulls
+# them in transitively via ast.si → ir/nodes.si).  Kept as bare
+# integers here so this file doesn't have to @use ir/nodes.si and
+# can be compiled standalone if needed.
+@let TY_VOID:Int := 0;
+@let TY_I32:Int  := 1;
+@let TY_I64:Int  := 2;
+@let TY_F32:Int  := 3;
+
+# Sentinel for "no handle".
+@let TYPE_NONE:Int := 0 - 1;
+
+# ── Arena ──────────────────────────────────────────────────────────
+@var TYPE_VEC:Int := 0;
+
+# Singletons — set once by types_init, then reused everywhere.
+@var TYPE_INT_H:Int     := 0;
+@var TYPE_INT64_H:Int   := 0;
+@var TYPE_FLOAT_H:Int   := 0;
+@var TYPE_STRING_H:Int  := 0;
+@var TYPE_BOOL_H:Int    := 0;
+@var TYPE_UNKNOWN_H:Int := 0;
+
+@fn type_kind:Int handle:Int := { &vec_get TYPE_VEC, handle };
+@fn type_field:Int handle:Int, idx:Int := { &vec_get TYPE_VEC, (handle + idx) };
+
+# Push a kind-only record (used for the scalar singletons).  Returns
+# the new handle.
+@fn type_push_scalar:Int kind:Int := {
+  @local h := &vec_len TYPE_VEC;
+  TYPE_VEC = &vec_push TYPE_VEC, kind;
+  h
+};
+
+@fn types_init := {
+  TYPE_VEC        = &vec_new;
+  TYPE_INT_H      = &type_push_scalar SK_INT;
+  TYPE_INT64_H    = &type_push_scalar SK_INT64;
+  TYPE_FLOAT_H    = &type_push_scalar SK_FLOAT;
+  TYPE_STRING_H   = &type_push_scalar SK_STRING;
+  TYPE_BOOL_H     = &type_push_scalar SK_BOOL;
+  TYPE_UNKNOWN_H  = &type_push_scalar SK_UNKNOWN;
+};
+
+# ── Constructors ───────────────────────────────────────────────────
+
+# Build [SK_ARRAY, element_handle].
+@fn type_new_array:Int element_h:Int := {
+  @local h := &vec_len TYPE_VEC;
+  TYPE_VEC = &vec_push TYPE_VEC, SK_ARRAY;
+  TYPE_VEC = &vec_push TYPE_VEC, element_h;
+  h
+};
+
+# Build [SK_FUNCTION, n_params, result_h, param0_h, param1_h, ...].
+# params_vec is a vec<i32> of param handles owned by the caller.
+@fn type_new_function:Int result_h:Int, params_vec:Int := {
+  @local h := &vec_len TYPE_VEC;
+  @local n := &vec_len params_vec;
+  TYPE_VEC = &vec_push TYPE_VEC, SK_FUNCTION;
+  TYPE_VEC = &vec_push TYPE_VEC, n;
+  TYPE_VEC = &vec_push TYPE_VEC, result_h;
+  @local i := 0;
+  &@loop (i < n), {
+    TYPE_VEC = &vec_push TYPE_VEC, (&vec_get params_vec, i);
+    i = i + 1;
+  };
+  h
+};
+
+# Build [SK_DISTINCT, name_off, name_len, underlying_h].  Name span
+# lives in P_SRC.
+@fn type_new_distinct:Int name_off:Int, name_len:Int, underlying_h:Int := {
+  @local h := &vec_len TYPE_VEC;
+  TYPE_VEC = &vec_push TYPE_VEC, SK_DISTINCT;
+  TYPE_VEC = &vec_push TYPE_VEC, name_off;
+  TYPE_VEC = &vec_push TYPE_VEC, name_len;
+  TYPE_VEC = &vec_push TYPE_VEC, underlying_h;
+  h
+};
+
+# Build [SK_SUM, name_off, name_len, n_variants, v0_off, v0_len, ...].
+# variants_vec is a vec<i32> of alternating (off, len) pairs so its
+# length is 2 * n_variants.
+@fn type_new_sum:Int name_off:Int, name_len:Int, variants_vec:Int := {
+  @local h := &vec_len TYPE_VEC;
+  @local two_n := &vec_len variants_vec;
+  @local n := two_n / 2;
+  TYPE_VEC = &vec_push TYPE_VEC, SK_SUM;
+  TYPE_VEC = &vec_push TYPE_VEC, name_off;
+  TYPE_VEC = &vec_push TYPE_VEC, name_len;
+  TYPE_VEC = &vec_push TYPE_VEC, n;
+  @local i := 0;
+  &@loop (i < two_n), {
+    TYPE_VEC = &vec_push TYPE_VEC, (&vec_get variants_vec, i);
+    i = i + 1;
+  };
+  h
+};
+
+# ── WASM lowering ──────────────────────────────────────────────────
+# Mirrors wasmTypeOf in src/types/types.ts.  Maps SiliconType handle
+# to one of the TY_* tags.
+@fn wasm_type_of:Int handle:Int := {
+  @local k := &type_kind handle;
+  &@if (k == SK_INT),      { &@return TY_I32; };
+  &@if (k == SK_INT64),    { &@return TY_I64; };
+  &@if (k == SK_FLOAT),    { &@return TY_F32; };
+  &@if (k == SK_STRING),   { &@return TY_I32; };
+  &@if (k == SK_BOOL),     { &@return TY_I32; };
+  &@if (k == SK_ARRAY),    { &@return TY_I32; };
+  &@if (k == SK_FUNCTION), { &@return TY_I32; };
+  &@if (k == SK_SUM),      { &@return TY_I32; };
+  &@if (k == SK_UNKNOWN),  { &@return TY_I32; };
+  &@if (k == SK_DISTINCT), {
+    @local underlying := &type_field handle, 3;
+    &@return (&wasm_type_of underlying);
+  };
+  TY_I32
+};
+
+# ── Equality (structural) ──────────────────────────────────────────
+# Mirrors typeEquals in src/types/types.ts.
+
+# Compare two source spans byte-for-byte (both in P_SRC).
+@fn type_span_eq:Int a_off:Int, a_len:Int, b_off:Int, b_len:Int := {
+  &@if (a_len != b_len), { &@return 0; };
+  @local i := 0;
+  @local ok := 1;
+  &@loop ((ok == 1) * (i < a_len) == 1), {
+    @local x := &WASM::i32_load8_u (P_SRC + a_off + i);
+    @local y := &WASM::i32_load8_u (P_SRC + b_off + i);
+    &@if (x != y), { ok = 0; };
+    i = i + 1;
+  };
+  ok
+};
+
+@fn type_equals:Int a:Int, b:Int := {
+  &@if (a == b), { &@return 1; };
+  @local ka := &type_kind a;
+  @local kb := &type_kind b;
+  &@if (ka != kb), { &@return 0; };
+  # Scalar singletons share handles; if kinds match and a != b we've
+  # got a stray duplicate — still structurally equal.
+  &@if ((ka == SK_INT) + (ka == SK_INT64) + (ka == SK_FLOAT) +
+        (ka == SK_STRING) + (ka == SK_BOOL) + (ka == SK_UNKNOWN) > 0),
+    { &@return 1; };
+  &@if (ka == SK_ARRAY), {
+    @local ea := &type_field a, 1;
+    @local eb := &type_field b, 1;
+    &@return (&type_equals ea, eb);
+  };
+  &@if (ka == SK_FUNCTION), {
+    @local na := &type_field a, 1;
+    @local nb := &type_field b, 1;
+    &@if (na != nb), { &@return 0; };
+    @local ra := &type_field a, 2;
+    @local rb := &type_field b, 2;
+    &@if ((&type_equals ra, rb) == 0), { &@return 0; };
+    @local i := 0;
+    @local ok := 1;
+    &@loop ((ok == 1) * (i < na) == 1), {
+      @local pa := &type_field a, (3 + i);
+      @local pb := &type_field b, (3 + i);
+      &@if ((&type_equals pa, pb) == 0), { ok = 0; };
+      i = i + 1;
+    };
+    &@return ok;
+  };
+  &@if (ka == SK_DISTINCT), {
+    # Name-based equality.
+    @local a_off := &type_field a, 1;
+    @local a_len := &type_field a, 2;
+    @local b_off := &type_field b, 1;
+    @local b_len := &type_field b, 2;
+    &@return (&type_span_eq a_off, a_len, b_off, b_len);
+  };
+  &@if (ka == SK_SUM), {
+    @local a_off := &type_field a, 1;
+    @local a_len := &type_field a, 2;
+    @local b_off := &type_field b, 1;
+    @local b_len := &type_field b, 2;
+    &@return (&type_span_eq a_off, a_len, b_off, b_len);
+  };
+  0
+};
+
+# ── Predicate helpers ──────────────────────────────────────────────
+# Mirror isNumeric / isComparable / isEqualityComparable.
+
+# Predicates return 0 or 1 (used as boolean-ish conditions).  The
+# extra `+ 0` keeps the inferred type Int instead of Bool, which
+# matches how other boot/*.si predicates (`is_var`, etc.) are
+# annotated and lets call sites compose with `&@if` and arithmetic
+# freely.
+@fn is_numeric:Int h:Int := {
+  @local k := &type_kind h;
+  @local r := 0;
+  &@if ((k == SK_INT) + (k == SK_INT64) + (k == SK_FLOAT) > 0), { r = 1; };
+  r
+};
+
+@fn is_comparable:Int h:Int := {
+  @local k := &type_kind h;
+  @local r := 0;
+  &@if ((k == SK_INT) + (k == SK_INT64) + (k == SK_FLOAT) + (k == SK_BOOL) > 0), { r = 1; };
+  r
+};
+
+@fn is_equality_comparable:Int h:Int := {
+  @local k := &type_kind h;
+  @local r := 0;
+  &@if ((k == SK_INT) + (k == SK_INT64) + (k == SK_FLOAT) +
+        (k == SK_BOOL) + (k == SK_STRING) + (k == SK_SUM) > 0), { r = 1; };
+  r
+};
+
+# ── parse_type_name ────────────────────────────────────────────────
+# Mirrors parseTypeName.  Returns a type handle for recognised names,
+# or TYPE_NONE if the name isn't known.  Type aliases (from
+# @type_alias / @type_distinct) live in a parallel vec of (off, len,
+# handle) triples threaded through the caller's typecheck context;
+# the lookup is deferred to a separate types_alias_lookup helper so
+# this function stays free of context-shape assumptions.
+@fn type_span_eq_lit:Int off:Int, len:Int, lit_ptr:Int, lit_len:Int := {
+  &@if (len != lit_len), { &@return 0; };
+  @local i := 0;
+  @local ok := 1;
+  &@loop ((ok == 1) * (i < len) == 1), {
+    @local a := &WASM::i32_load8_u (P_SRC + off + i);
+    @local b := &WASM::i32_load8_u (lit_ptr + i);
+    &@if (a != b), { ok = 0; };
+    i = i + 1;
+  };
+  ok
+};
+
+@fn ty_lit_int_ptr:Int    := { (&str_ptr 'Int')    + 4 };
+@fn ty_lit_int32_ptr:Int  := { (&str_ptr 'Int32')  + 4 };
+@fn ty_lit_int64_ptr:Int  := { (&str_ptr 'Int64')  + 4 };
+@fn ty_lit_float_ptr:Int  := { (&str_ptr 'Float')  + 4 };
+@fn ty_lit_string_ptr:Int := { (&str_ptr 'String') + 4 };
+@fn ty_lit_bool_ptr:Int   := { (&str_ptr 'Bool')   + 4 };
+@fn ty_lit_void_ptr:Int   := { (&str_ptr 'Void')   + 4 };
+@fn ty_lit_i32_ptr:Int    := { (&str_ptr 'i32')    + 4 };
+@fn ty_lit_i64_ptr:Int    := { (&str_ptr 'i64')    + 4 };
+@fn ty_lit_f32_ptr:Int    := { (&str_ptr 'f32')    + 4 };
+
+@fn parse_type_name:Int name_off:Int, name_len:Int := {
+  &@if ((&type_span_eq_lit name_off, name_len, (&ty_lit_int_ptr),    3) == 1), { &@return TYPE_INT_H; };
+  &@if ((&type_span_eq_lit name_off, name_len, (&ty_lit_int32_ptr),  5) == 1), { &@return TYPE_INT_H; };
+  &@if ((&type_span_eq_lit name_off, name_len, (&ty_lit_int64_ptr),  5) == 1), { &@return TYPE_INT64_H; };
+  &@if ((&type_span_eq_lit name_off, name_len, (&ty_lit_float_ptr),  5) == 1), { &@return TYPE_FLOAT_H; };
+  &@if ((&type_span_eq_lit name_off, name_len, (&ty_lit_string_ptr), 6) == 1), { &@return TYPE_STRING_H; };
+  &@if ((&type_span_eq_lit name_off, name_len, (&ty_lit_bool_ptr),   4) == 1), { &@return TYPE_BOOL_H; };
+  # `Void` returns Unknown to match Stage 0's TS behavior — callers
+  # of void-returning functions don't get a value pushed.
+  &@if ((&type_span_eq_lit name_off, name_len, (&ty_lit_void_ptr),   4) == 1), { &@return TYPE_UNKNOWN_H; };
+  &@if ((&type_span_eq_lit name_off, name_len, (&ty_lit_i32_ptr),    3) == 1), { &@return TYPE_INT_H; };
+  &@if ((&type_span_eq_lit name_off, name_len, (&ty_lit_i64_ptr),    3) == 1), { &@return TYPE_INT64_H; };
+  &@if ((&type_span_eq_lit name_off, name_len, (&ty_lit_f32_ptr),    3) == 1), { &@return TYPE_FLOAT_H; };
+  TYPE_NONE
+};
