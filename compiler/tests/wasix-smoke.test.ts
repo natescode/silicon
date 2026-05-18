@@ -2284,6 +2284,24 @@ describe('Phase 0 WASIX smoke test', () => {
         }
     })
 
+    test('boot/tests/preregister_defs_test.si: Phase 2 slice 2d-iii — top-level definition pre-registration', async () => {
+        if (!wasmtimeAvailable()) {
+            console.log('  (skipped: wasmtime not on PATH)')
+            return
+        }
+        const wasm = await buildBoot(path.join(PROJECT_ROOT, 'boot', 'tests', 'preregister_defs_test.si'))
+        const tmpPath = path.join(WASM_BIN, 'preregister_defs.wasm')
+        await fs.writeFile(tmpPath, wasm)
+        try {
+            const result = spawnSync('wasmtime', [tmpPath], { maxBuffer: 1 << 20 })
+            expect(result.status).toBe(0)
+            const stdout = (result.stdout ?? Buffer.alloc(0)).toString('utf-8').trim()
+            expect(stdout).toBe('preregister-defs OK')
+        } finally {
+            await fs.unlink(tmpPath).catch(() => {})
+        }
+    })
+
     test('boot/tests/preregister_std_test.si: Phase 2 slice 2d-ii — std.wat fn pre-registration', async () => {
         if (!wasmtimeAvailable()) {
             console.log('  (skipped: wasmtime not on PATH)')

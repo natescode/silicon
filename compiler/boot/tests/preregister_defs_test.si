@@ -1,0 +1,90 @@
+# preregister_defs_test — drives preregister_defs over a parsed source.
+#
+# Pass: "preregister-defs OK", exit 0.
+# Fail: "preregister-defs FAIL <code>", exit 1.
+
+@use '../std/io.si';
+@use '../parser/tokens.si';
+@use '../parser/lex.si';
+@use '../parser/ast.si';
+@use '../parser/parse.si';
+@use '../types/types.si';
+@use '../types/ctx.si';
+@use '../types/preregister_defs.si';
+
+@fn pd_put_int n:Int := {
+  @local hundreds := (n / 100);
+  @local tens     := ((n / 10) % 10);
+  @local ones     := (n % 10);
+  &@if (hundreds > 0),     { &write_byte 1, (hundreds + 48); };
+  &@if (((hundreds > 0) | (tens > 0)) == 1), { &write_byte 1, (tens + 48); };
+  &write_byte 1, (ones + 48);
+};
+
+@fn pd_die code:Int := {
+  &write_str 1, 'preregister-defs FAIL ';
+  &pd_put_int code;
+  &write_byte 1, 10;
+  &wasi_snapshot_preview1::proc_exit 1;
+};
+
+@fn pd_assert_sig name:String, want_n:Int, want_p0:Int, want_p1:Int, want_r:Int, want_imm:Int, code:Int := {
+  @local id := &fn_lookup_str name;
+  &@if (id < 0),                          { &pd_die code; };
+  &@if ((&fn_n_params id) != want_n),     { &pd_die (code + 1); };
+  &@if (((want_n >= 1) * ((&fn_param id, 0) != want_p0)) == 1), { &pd_die (code + 2); };
+  &@if (((want_n >= 2) * ((&fn_param id, 1) != want_p1)) == 1), { &pd_die (code + 3); };
+  &@if ((&fn_result   id) != want_r),     { &pd_die (code + 4); };
+  # Symbol exists with the result type.
+  @local p := (&str_ptr name) + 4;
+  @local n := &str_len name;
+  @local sym_t := &sym_lookup_str name;
+  &@if (sym_t != want_r), { &pd_die (code + 5); };
+  # Immutable bit matches expectation.
+  @local has_imm := &imm_has (&fn_name_off id), (&fn_name_len id);
+  &@if (has_imm != want_imm), { &pd_die (code + 6); };
+};
+
+@fn run := {
+  &types_init;
+  &ctx_init;
+
+  # Source with one of each handled keyword.  Parsing details:
+  #
+  #   - `@fn add a:Int, b:Int := { 0 };`   → 2 params, returns Unknown
+  #     (no explicit return-type annotation).  Want result == TYPE_UNKNOWN_H.
+  #   - `@fn typed:Int := { 0 };`          → 0 params, returns Int.
+  #   - `@let MAX:Int := 99;`               → 0 params, Int, immutable.
+  #   - `@var counter:Int := 0;`            → 0 params, Int, MUTABLE.
+  #   - `@extern host::ping:Bool key:Int;`  → 1 param Int, returns Bool, immutable.
+  #
+  # Note: parser stores the name span for @extern as the LAST segment of
+  # a namespace path, so the interned name will be "ping".
+  @local src := '@fn add a:Int, b:Int := { 0 }; @fn typed:Int := { 0 }; @let MAX:Int := 99; @var counter:Int := 0; @extern host::ping:Bool key:Int;';
+  @local p := (&str_ptr src) + 4;
+  @local n := &str_len src;
+  @local toks := &lex p, n;
+  @local prog := &parse p, n, toks;
+
+  &preregister_defs prog;
+
+  # add: (Int, Int) → Unknown, immutable.
+  &pd_assert_sig 'add',     2, TYPE_INT_H, TYPE_INT_H, TYPE_UNKNOWN_H, 1, 10;
+  # typed: () → Int, immutable.
+  &pd_assert_sig 'typed',   0, 0,           0,           TYPE_INT_H,    1, 20;
+  # MAX: () → Int, immutable.
+  &pd_assert_sig 'MAX',     0, 0,           0,           TYPE_INT_H,    1, 30;
+  # counter: () → Int, MUTABLE (@var is the only mutable kw).
+  &pd_assert_sig 'counter', 0, 0,           0,           TYPE_INT_H,    0, 40;
+  # host::ping: (Int) → Bool, immutable.  Multi-segment names are
+  # stored as the joined span.
+  &pd_assert_sig 'host::ping', 1, TYPE_INT_H, 0,         TYPE_BOOL_H,   1, 50;
+
+  &@if ((&fn_count) != 5), { &pd_die 100; };
+
+  &write_str 1, 'preregister-defs OK';
+  &write_byte 1, 10;
+  &wasi_snapshot_preview1::proc_exit 0;
+};
+
+&run;
