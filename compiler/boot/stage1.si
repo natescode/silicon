@@ -45,8 +45,11 @@
   };
   total = b_len;
 
+  # Source fd is 0 (stdin) by default; cli_dispatch above may have
+  # opened a file via path_open and set SOURCE_FD to that fd.
+  @local src_fd := &source_fd;
   &@loop 1, {
-    @local n := &read_bytes 0, (buf + total), (cap - total);
+    @local n := &read_bytes src_fd, (buf + total), (cap - total);
     &@if (n <= 0), { &@break };
     total = total + n;
     &@if (total >= cap), { &@break };

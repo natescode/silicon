@@ -43,6 +43,7 @@ const OUTPUT_PREFIX = process.argv[2] ?? path.join(PROJECT_ROOT, 'stage1')
 const STAGE1_FILES = [
     'boot/std/argv.si',          // declares args_*/proc_exit externs;
     'boot/std/io.si',            // panic_stderr references proc_exit
+    'boot/std/fs.si',            // find_preopen_dir + open_file_for_read
     'boot/std/arena.si',
     'boot/std/vec.si',
     'boot/embedded_bundle.si',
@@ -57,7 +58,7 @@ const STAGE1_FILES = [
     'boot/elab/body.si',
     'boot/ir/lower.si',
     'boot/emit/wat.si',
-    'boot/cli.si',               // depends on argv.si + io.si helpers
+    'boot/cli.si',               // depends on argv.si + io.si + fs.si helpers
     'boot/stage1.si',
 ]
 
@@ -72,6 +73,14 @@ const WASI_STUB = [
     '  argc_out:Int, argv_buf_size_out:Int;',
     '@extern wasi_snapshot_preview1::proc_exit',
     '  code:Int;',
+    '@extern wasi_snapshot_preview1::path_open:Int',
+    '  dirfd:Int, dirflags:Int, path_ptr:Int, path_len:Int,',
+    '  oflags:Int, fs_rights_base:Int64, fs_rights_inheriting:Int64,',
+    '  fdflags:Int, fd_out:Int;',
+    '@extern wasi_snapshot_preview1::fd_prestat_get:Int',
+    '  fd:Int, buf_out:Int;',
+    '@extern wasi_snapshot_preview1::fd_prestat_dir_name:Int',
+    '  fd:Int, path_ptr:Int, path_len:Int;',
 ].join('\n') + '\n'
 
 // Escape a single byte for inclusion in a Silicon single-quoted

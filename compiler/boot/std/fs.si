@@ -1,0 +1,61 @@
+# boot::std::fs — WASI file-system wrappers.
+#
+# Provides:
+#   &find_preopen_dir       — locate a preopened directory fd
+#   &open_file_for_read     — wrap path_open with read rights
+#
+# WASI externs (path_open / fd_prestat_get / fd_prestat_dir_name) are
+# NOT declared here for the same reason io.si doesn't declare its —
+# TS grammar's typedIdentifier rule can't parse `module::name`.  Both
+# WASI_STUB (scripts/build-stage1.ts) and the module registry
+# (src/strata/modules/wasi_snapshot_preview1.si) carry the declarations
+# in their respective compile paths.
+
+# find_preopen_dir — scan WASI preopen fds starting at 3 (the first
+# non-standard fd) for a directory preopen.  Returns the fd of the
+# first directory preopen, or -1 if none is mapped.  Walks at most
+# 1024 fds to bound the search if the host returns 0 errno for an
+# unexpected fd range.
+#
+# WASI prestat layout (8 bytes):
+#   [type:u8] [3 bytes padding] [u_dir.pr_name_len:u32]
+# type == 0 (__WASI_PREOPENTYPE_DIR) — a directory mapping.
+@fn find_preopen_dir:Int := {
+  @local buf := &scratch_alloc 8;
+  @local fd := 3;
+  @local found := 0 - 1;
+  &@loop ((found < 0) * (fd < 1024) == 1), {
+    @local errno := &wasi_snapshot_preview1::fd_prestat_get fd, buf;
+    &@if (errno != 0), { &@break };
+    @local kind := &WASM::i32_load8_u buf;
+    &@if (kind == 0), { found = fd; };
+    fd = fd + 1;
+  };
+  found
+};
+
+# open_file_for_read(dir_fd, path_ptr, path_len) — open the file at
+# `dir_fd`-relative path for reading.  Returns the WASI fd on success,
+# -1 on error (errno != 0).
+#
+# path_open arguments:
+#   dirfd                 — preopen directory fd
+#   dirflags              — 1 = follow symlinks
+#   path_ptr, path_len    — UTF-8 path within dirfd
+#   oflags                — 0 = open existing (no create / trunc)
+#   fs_rights_base        — FD_READ | FD_SEEK | FD_TELL | FD_FILESTAT_GET
+#                            = 0x2 | 0x4 | 0x20 | 0x200000 = 0x200026
+#                            Encoded as i64 below.
+#   fs_rights_inheriting  — 0 (no inherited rights needed for a regular file)
+#   fdflags               — 0 (no special open flags)
+#   fd_out                — out-pointer (4 bytes) that receives the opened fd
+@fn open_file_for_read:Int dir_fd:Int, path_ptr:Int, path_len:Int := {
+  @local fd_out := &scratch_alloc 4;
+  @local rc := &wasi_snapshot_preview1::path_open
+    dir_fd, 1, path_ptr, path_len, 0,
+    (&@toInt64 2097190), (&@toInt64 0),
+    0, fd_out;
+  &@match rc,
+    0, { &WASM::i32_load fd_out },
+    { 0 - 1 }
+};
