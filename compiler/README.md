@@ -2,7 +2,7 @@
 
 Sigil is the official compiler for the Silicon programming language. Sigil compiles Silicon to WebAssembly (WASM). View the [Silicon language specification]().
 
-**Roadmap:** Sigil is in Stage 0 (TypeScript on Bun). The self-hosting plan — Silicon compiling Silicon, running under Wasmer/WASIX — lives in [`docs/bootstrap-plan.html`](docs/bootstrap-plan.html). The in-flight Stage 0 hardening work that precedes it is in [`docs/stage0-cleanup-plan.html`](docs/stage0-cleanup-plan.html). Architecture and contributor entry points: [`CLAUDE.md`](CLAUDE.md), [`docs/strata.md`](docs/strata.md), [`docs/compiler-api.md`](docs/compiler-api.md).
+**Roadmap:** Sigil is in Stage 0 (TypeScript on Bun). The self-hosting plan — Silicon compiling Silicon, running under wasmtime/WASI — lives in [`docs/bootstrap-plan.html`](docs/bootstrap-plan.html). The in-flight Stage 0 hardening work that precedes it is in [`docs/stage0-cleanup-plan.html`](docs/stage0-cleanup-plan.html). Architecture and contributor entry points: [`CLAUDE.md`](CLAUDE.md), [`docs/strata.md`](docs/strata.md), [`docs/compiler-api.md`](docs/compiler-api.md).
 
 
 ## Installation / Setup
@@ -11,12 +11,27 @@ Sigil is currently in early alpha. To build and install:
 
 ## Tools
 
-- [Bun](https://bun.sh/)
-- [Binaryen](https://github.com/WebAssembly/binaryen)
-- [Releases](https://github.com/WebAssembly/binaryen/releases)
-- [WABT](https://github.com/WebAssembly/wabt)
-- [Wasmer](https://docs.wasmer.io/install)
+- [Bun](https://bun.sh/) — the host runtime for the Stage 0 TS compiler.
+- [WABT](https://github.com/WebAssembly/wabt) — `wat2wasm` for assembling emitted WAT into `.wasm`.
+- [Wasmtime](https://docs.wasmtime.dev/cli-install.html) — the WASI runtime the bootstrap (`stage1.wasm`) and the `wasix-smoke` tests run under.  Wasmtime is the WASI reference implementation; wasmer's WASI compat layer has known bugs at both 2.x (mapped-dir rights) and 7.x (post-`path_open` fd state, Windows absolute-path stdout) that block our Phase 4b end-to-end test.
 
+Quick install (per-platform; see each tool's docs for alternatives):
+
+```sh
+# Bun
+curl -fsSL https://bun.sh/install | bash         # macOS/Linux
+irm bun.sh/install.ps1 | iex                     # Windows PowerShell
+
+# Wasmtime (cross-platform installer)
+curl https://wasmtime.dev/install.sh -sSf | bash # macOS/Linux
+# Windows: download from https://github.com/bytecodealliance/wasmtime/releases
+#   (look for `wasmtime-vXX.Y.Z-x86_64-windows.zip`) and add wasmtime.exe to PATH.
+
+# WABT — provides wat2wasm
+brew install wabt                                # macOS
+sudo apt install wabt                            # Debian / Ubuntu
+# Windows: download from https://github.com/WebAssembly/wabt/releases
+```
 
 ```sh
 # Clone the repository
@@ -31,8 +46,17 @@ bun run index.ts
 ## Convert WAT (WASM Text) to WASM binary
 wat2wasm main.wat -o main.wasm
 
-## Run the WASM via wazmer
-wasmer run main.wasm --invoke add 9 7
+## Run the WASM via wasmtime
+wasmtime --invoke add main.wasm 9 7
+```
+
+Sanity check after install:
+
+```sh
+bun --version          # ≥ 1.0
+wasmtime --version     # ≥ 14 (anything older is untested with the bootstrap)
+wat2wasm --version
+bun test               # full suite, including the wasix-smoke bootstrap tests
 ```
 
 ## Getting Started
@@ -114,10 +138,10 @@ console.log(main());
 ```bash
 bun run index.ts
 wat2wasm main.wat -o main.wasm
-wasmer run main.wasm --invoke add 9 7
+wasmtime --invoke add main.wasm 9 7
 ```
 
 ## View WASM Binary
 ```bash
-wasmer run main.wasm --invoke foo
+wasmtime --invoke foo main.wasm
 ```
