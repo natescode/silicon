@@ -106,5 +106,11 @@
   @local decl     := &Compiler::ir::makeLocal sname, wasmType;
   &Compiler::ctx::pendingLocals::push decl;
   &Compiler::ctx::locals::set sname, wasmType;
-  &IR::null;
+  # Binding (`@loc x := <expr>`) handled by makeLocalSet.  Returns
+  # IR_NONE for declaration-only `@loc x;` forms, ir_local_set
+  # otherwise — both are valid body results.  Does NOT mirror TS
+  # Stage 0's CompilerAPI surface today (TS doesn't have
+  # makeLocalSet); when @local proper gets wired through this same
+  # path, makeLocalSet needs to land on the TS side too.
+  &Compiler::ir::makeLocalSet Node;
 };

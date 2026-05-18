@@ -1,33 +1,42 @@
 # loc_keyword test — proves an INLINE def keyword that introduces a
-# local can be added in pure Silicon.
+# local can be added in pure Silicon, and that decl + init in one
+# statement works via &Compiler::ir::makeLocalSet.
 #
 # @loc is defined in boot/strata/builtin/logic.si.  No branch in
-# boot/ir/lower.si or src/ for @loc itself; the inline-position
-# try_dispatch_def_via_body_rich hook in lower_expr's
-# AST_DEFINITION branch routes it through body_rich, which:
-#   - resolves the type via &Compiler::resolveType Node.name.typeAnnotation
-#   - extracts the name via &Compiler::watId Node.name.name
-#   - calls &Compiler::ir::makeLocal (returns name handle)
-#   - calls &Compiler::ctx::pendingLocals::push (no-op in stage1)
-#   - calls &Compiler::ctx::locals::set, which bridges to scope_push
+# boot/ir/lower.si or src/ for @loc itself.  The inline-position
+# try_dispatch_def_via_body_rich hook in lower_expr's AST_DEFINITION
+# branch routes it through body_rich, which runs the strata body:
 #
-# Stage1 then emits a (local i32 ...) declaration in the function's
-# locals list (counted via the updated actual_n_locals in
-# lower_definition).
+#   resolveType  → TYPE_*  (Int / Bool / ...)
+#   watId        → packed (P_SRC name_off, name_len) handle
+#   makeLocal    → returns the name handle (stage1 has no IR_LOCAL
+#                  shape; the "decl" is symbolic)
+#   ctx::pendingLocals::push  (no-op in stage1 — locals counted
+#                  directly from LSCOPE)
+#   ctx::locals::set sname, wasmType
+#                → real bridge in boot/compiler_api/ctx.si decodes
+#                  the handle and calls scope_push with the next
+#                  available slot
+#   makeLocalSet Node
+#                → reads Node's binding field; if present, lowers it
+#                  and emits ir_local_set(slot, value).  Returns
+#                  IR_NONE for declaration-only `@loc x;` forms.
 #
-# Because the @loc strata body doesn't handle the binding (just the
-# declaration), the test uses @loc to DECLARE x, then assigns x
-# with a separate `x = 42;` statement.  This separation mirrors how
-# TS Stage 0 strata bodies split declaration from binding.
+# Stage1's lower_definition uses (vec_len LSCOPE) - n_params as the
+# function's n_locals, so the freshly-pushed local appears in the
+# emitted (local i32 ...) declarations.
 #
 # Pass output: "loc OK", exit 0.
 
 @use '../std/io.si';
 
 @fn _start:Void := {
-  @loc x:Int;
-  x = 42;
-  &@if (x == 42),
+  # One-liner decl + init.
+  @loc x:Int := 42;
+  # Decl now, separate init later — both halves still work.
+  @loc y:Int;
+  y = 7;
+  &@if ((x == 42) * (y == 7) == 1),
     { &write_str 1, 'loc OK' },
     { &write_str 1, 'loc FAIL' };
   &write_byte 1, 10;

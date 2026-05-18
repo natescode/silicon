@@ -41,6 +41,7 @@
 @fn br_lit_make_loop:Int     := { (&str_ptr 'makeLoop')     + 4 };
 @fn br_lit_make_global:Int   := { (&str_ptr 'makeGlobal')   + 4 };
 @fn br_lit_make_local:Int    := { (&str_ptr 'makeLocal')    + 4 };
+@fn br_lit_make_local_set:Int := { (&str_ptr 'makeLocalSet') + 4 };
 @fn br_lit_null:Int := { (&str_ptr 'null') + 4 };
 
 # Compiler::* (2-segment) entry points.
@@ -312,6 +313,33 @@
         @local cond := &br_eval_expr (&ast_field P_AST, call_node, 4);
         @local body := &br_eval_expr (&ast_field P_AST, call_node, 5);
         &@return (&ir_loop cond, body);
+      };
+      &@return IR_NONE;
+    };
+
+    # Compiler::ir::makeLocalSet Node  →  reads the bound def's
+    # binding (field 8+n_params).  When a binding is present, lowers
+    # it and emits ir_local_set against the def's local index from
+    # LSCOPE (which ctx::locals::set just populated).  Returns
+    # IR_NONE for declaration-only @loc x;  forms.  This is the
+    # piece that lets @loc x := 42; declare AND initialize in one
+    # statement — without it, the strata body's IR::null tail meant
+    # the binding got silently dropped.
+    &@if ((&br_span_eq_lit s2_off, s2_len, (&br_lit_make_local_set), 12) == 1), {
+      &@if (n_args >= 1), {
+        @local def := &br_eval_expr (&ast_field P_AST, call_node, 3);
+        &@if (def < 0), { &@return IR_NONE; };
+        &@if ((&ast_kind P_AST, def) != AST_DEFINITION), { &@return IR_NONE; };
+        @local d_nm_off := &ast_field P_AST, def, 3;
+        @local d_nm_len := &ast_field P_AST, def, 4;
+        @local d_n_params := &ast_field P_AST, def, 7;
+        @local d_binding  := &ast_field P_AST, def, (8 + d_n_params);
+        &@if (d_binding < 0), { &@return IR_NONE; };
+        @local d_idx := &scope_lookup d_nm_off, d_nm_len;
+        &@if (d_idx < 0), { &@return IR_NONE; };
+        @local d_v := &lower_expr d_binding;
+        &@if (d_v == IR_NONE), { &@return IR_NONE; };
+        &@return (&ir_local_set d_idx, d_v);
       };
       &@return IR_NONE;
     };
