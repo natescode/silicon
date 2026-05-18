@@ -980,6 +980,59 @@ describe('Phase 0 WASIX smoke test', () => {
         }
     }, 120000)
 
+    test('PHASE 1: stage1.wasm wraps top-level statements in synthesised _start (delfina_smoke)', async () => {
+        if (!wasmerAvailable()) {
+            console.log('  (skipped: wasmer not on PATH)')
+            return
+        }
+        const stage1Path = path.join(PROJECT_ROOT, 'stage1.wasm')
+        try { await fs.access(stage1Path) }
+        catch {
+            console.log('  (skipped: stage1.wasm missing — run scripts/build-stage1.ts)')
+            return
+        }
+
+        // The bundle stage1 expects: strata + io.si (for &write_str /
+        // &write_byte) + delfina_smoke.si (the user-style source with
+        // bare top-level calls and no explicit @fn _start).  If
+        // stage1's Pass 3 synthesis works, the emitted WAT will have
+        // exactly one (func $_start (export "_start") ...) whose body
+        // is those top-level calls.
+        const strataDir = path.join(PROJECT_ROOT, 'src', 'strata')
+        const strataFiles = (await fs.readdir(strataDir))
+            .filter(f => f.endsWith('.si'))
+            .sort()
+        let bundle = ''
+        for (const f of strataFiles) {
+            bundle += await fs.readFile(path.join(strataDir, f), 'utf-8') + '\n'
+        }
+        bundle += await fs.readFile(path.join(PROJECT_ROOT, 'boot', 'std', 'io.si'), 'utf-8') + '\n'
+        bundle += await fs.readFile(path.join(PROJECT_ROOT, 'boot', 'tests', 'delfina_smoke.si'), 'utf-8') + '\n'
+
+        const compile = spawnSync('wasmer', ['run', stage1Path], {
+            input: Buffer.from(bundle, 'utf-8'),
+            maxBuffer: 64 * 1024 * 1024,
+        })
+        expect(compile.status).toBe(0)
+        const wat = (compile.stdout ?? Buffer.alloc(0)).toString('utf-8')
+
+        // Two assertions: synthesis fired (one $_start present) and
+        // wasmer is happy to run the result with the expected output.
+        const startMatches = wat.match(/\(func \$_start /g) ?? []
+        expect(startMatches.length).toBe(1)
+
+        const wasm = await watToWasm(wat)
+        const tmpPath = path.join(PROJECT_ROOT, '.delfina-smoke.wasm')
+        await fs.writeFile(tmpPath, Buffer.from(wasm.buffer))
+        try {
+            const run = spawnSync('wasmer', ['run', tmpPath], { encoding: 'buffer' })
+            expect(run.status).toBe(0)
+            expect(run.stdout?.toString('utf-8')).toBe('Delfina\n')
+        } finally {
+            await fs.unlink(tmpPath).catch(() => {})
+        }
+    }, 60000)
+
     test('STAGE 1: bootstrap-compiled compiler produces byte-identical WAT to the TS-built bootstrap', async () => {
         if (!wasmerAvailable()) {
             console.log('  (skipped: wasmer not on PATH)')

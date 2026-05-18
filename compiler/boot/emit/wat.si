@@ -313,6 +313,25 @@
   &ew_str '")'; &ew_byte 10;
 };
 
+# Emit a synthesised `_start` wrapper around a body IR handle.
+# Used only when the source had top-level non-definition statements
+# (see lower.si SYNTH_START_BODY).  The name "_start" comes from a
+# Silicon string literal; its bytes live in linear memory at
+# `str_ptr + 4`, not in P_SRC.  We write the 6 bytes directly via
+# write_bytes rather than threading a new "name source" field
+# through IR_FUNCTION (which would change the IR record layout and
+# disturb the byte-equal self-host gate).
+@fn emit_synth_start body_h:Int := {
+  @local nm_ptr := (&str_ptr '_start') + 4;
+  &ew_str '  (func $';
+  &write_bytes 1, nm_ptr, 6;
+  &ew_str ' (export "';
+  &write_bytes 1, nm_ptr, 6;
+  &ew_str '")'; &ew_byte 10;
+  &emit_void_body body_h;
+  &ew_str '  )'; &ew_byte 10;
+};
+
 # Emit a complete module: imports must come first in the WAT
 # section ordering (WASM convention).  Then memory/globals, then
 # funcs, then data segments.
@@ -350,6 +369,14 @@
     @local f := &vec_get functions, i;
     &@if ((&ir_kind f) == IR_FUNCTION), { &emit_function f; };
     i = i + 1;
+  };
+  # Synthesised _start, if lower_program populated SYNTH_START_BODY.
+  # Wraps top-level non-definition statements in a WASI entry point
+  # so wasmer auto-invokes them.  Programs with an explicit @fn _start
+  # never populate this body (their `_start` reaches emit_function
+  # above) and the bootstrap itself never trips this path.
+  &@if ((&synth_start_has) == 1), {
+    &emit_synth_start (&synth_start_body);
   };
   # Data segments last.
   @local li := 0;

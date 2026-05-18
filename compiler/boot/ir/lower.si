@@ -557,6 +557,57 @@
     };
     i = i + 1;
   };
+
+  # Pass 3: gather top-level NON-definition statements into a body
+  # the emitter can wrap as `(func $_start (export "_start") ...)`.
+  # The bootstrap source itself has an explicit `@fn _start := { ... }`
+  # in boot/stage1.si, so the guard below short-circuits synthesis
+  # for it — keeping the self-host byte-equal.  User programs with
+  # bare top-level calls (e.g. delfina.si: `&write_str 1, name;`)
+  # get them wrapped here so wasmer has a WASI entry point.
+  #
+  # Guard: skip synthesis when the program already declares
+  # `@fn _start := ...` at top level.  Avoids emitting two
+  # `(func $_start ...)` and the resulting wat2wasm "redefinition"
+  # error.
+  @local has_user_start := 0;
+  @local us_lit := (&str_ptr '_start') + 4;
+  i = 0;
+  &@loop (i < n), {
+    @local elem := &ast_field P_AST, prog, (2 + i);
+    @local k := &ast_kind P_AST, elem;
+    &@if (k == AST_DEFINITION), {
+      @local nm_off := &ast_field P_AST, elem, 3;
+      @local nm_len := &ast_field P_AST, elem, 4;
+      &@if (nm_len == 6), {
+        &@if ((&lower_span_eq_lit nm_off, nm_len, us_lit, 6) == 1), {
+          has_user_start = 1;
+        };
+      };
+    };
+    i = i + 1;
+  };
+
+  &@if (has_user_start == 0), {
+    @local stmts := &vec_new;
+    i = 0;
+    &@loop (i < n), {
+      @local elem := &ast_field P_AST, prog, (2 + i);
+      @local k := &ast_kind P_AST, elem;
+      @local skip := 0;
+      &@if (k == AST_DEFINITION),  { skip = 1; };
+      &@if (k == AST_ELABORATION), { skip = 1; };
+      &@if (k == AST_DOC_COMMENT), { skip = 1; };
+      &@if (skip == 0), {
+        @local sh := &lower_expr elem;
+        &@if (sh != IR_NONE), { stmts = &vec_push stmts, sh; };
+      };
+      i = i + 1;
+    };
+    &@if ((&vec_len stmts) > 0), {
+      &synth_start_set (&ir_block stmts);
+    };
+  };
   out
 };
 
@@ -739,6 +790,21 @@
 @var NAME_POOL:Int := 0;
 
 @fn name_pool_init := { NAME_POOL = &vec_new; };
+
+# ── Synthesised _start body ────────────────────────────────────────
+# When lower_program sees top-level non-definition statements, it
+# stores their wrapped IR_BLOCK handle here so the emitter can
+# produce a `(func $_start (export "_start") ...)` wrapper.  Two
+# globals because @var initialisers must be constant expressions
+# (no `0 - 1` allowed): SYNTH_START_HAS == 0 means "no body
+# synthesised — emit_program skips the wrapper".
+@var SYNTH_START_HAS:Int  := 0;
+@var SYNTH_START_BODY:Int := 0;
+
+@fn synth_start_init := { SYNTH_START_HAS = 0; SYNTH_START_BODY = 0; };
+@fn synth_start_has:Int  := { SYNTH_START_HAS };
+@fn synth_start_body:Int := { SYNTH_START_BODY };
+@fn synth_start_set h:Int := { SYNTH_START_HAS = 1; SYNTH_START_BODY = h; };
 
 # Compute the total length of a multi-segment namespace mangled with
 # `_` separators.

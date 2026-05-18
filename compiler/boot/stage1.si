@@ -39,6 +39,7 @@
   &global_init;
   &litpool_init;
   &name_pool_init;
+  &synth_start_init;
   &fn_sig_init;
   &fn_sig_register_prelude_voids;
   &ew_init;
