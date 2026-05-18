@@ -45,6 +45,8 @@
 @fn br_lit_arg:Int                  := { (&str_ptr 'arg')                  + 4 };
 @fn br_lit_lower_expr:Int           := { (&str_ptr 'lowerExpr')            + 4 };
 @fn br_lit_lower_expr_if_defined:Int := { (&str_ptr 'lowerExprIfDefined')  + 4 };
+@fn br_lit_wat_id:Int                := { (&str_ptr 'watId')               + 4 };
+@fn br_lit_resolve_type:Int          := { (&str_ptr 'resolveType')         + 4 };
 
 # Compiler::ctx::* (3-segment) entry points, plus the
 # Compiler::ctx::*::method (4-segment) methods.  Routed to boot/
@@ -96,6 +98,56 @@
     &@return (&br_dispatch_call node);
   };
   IR_NONE
+};
+
+# ── Name / type extraction from a path-shaped AST arg ──────────────
+# br_extract_name_handle inspects an AST_NAMESPACE arg of shape
+# `<bound>.name` or `<bound>.name.name` (the TS-style TypedIdentifier
+# access pattern), where <bound> resolves to an AST_DEFINITION via
+# the body scope.  Pushes the def's name bytes into NAME_POOL and
+# returns the same negative pool-handle encoding name_pool_push_
+# mangled uses (-pool_start - 2).  Returns IR_NONE when the path
+# doesn't match the expected shape.
+@fn br_extract_name_handle:Int arg_ns:Int := {
+  &@if (arg_ns < 0), { &@return IR_NONE; };
+  &@if ((&ast_kind P_AST, arg_ns) != AST_NAMESPACE), { &@return IR_NONE; };
+  @local n := &ast_field P_AST, arg_ns, 1;
+  &@if (n < 1), { &@return IR_NONE; };
+  @local head_off := &ast_field P_AST, arg_ns, 2;
+  @local head_len := &ast_field P_AST, arg_ns, 3;
+  @local def := &bs_lookup head_off, head_len;
+  &@if (def == BS_NOT_FOUND), { &@return IR_NONE; };
+  &@if ((&ast_kind P_AST, def) != AST_DEFINITION), { &@return IR_NONE; };
+  @local nm_off := &ast_field P_AST, def, 3;
+  @local nm_len := &ast_field P_AST, def, 4;
+  @local pool_start := &vec_len NAME_POOL;
+  @local i := 0;
+  &@loop (i < nm_len), {
+    NAME_POOL = &vec_push NAME_POOL, (&WASM::i32_load8_u (P_SRC + nm_off + i));
+    i = i + 1;
+  };
+  (0 - pool_start) - 2
+};
+
+# br_extract_type_kind inspects an AST_NAMESPACE arg of shape
+# `<bound>.name.typeAnnotation` (or `<bound>.typeAnnotation` —
+# stage1 collapses both to the same flat type span).  Walks to the
+# bound def, reads its (type_off, type_len), and dispatches through
+# lower.si's type_name_to_kind to return a TYPE_* tag.  TYPE_VOID
+# when the annotation is missing.
+@fn br_extract_type_kind:Int arg_ns:Int := {
+  &@if (arg_ns < 0), { &@return TYPE_VOID; };
+  &@if ((&ast_kind P_AST, arg_ns) != AST_NAMESPACE), { &@return TYPE_VOID; };
+  @local n := &ast_field P_AST, arg_ns, 1;
+  &@if (n < 1), { &@return TYPE_VOID; };
+  @local head_off := &ast_field P_AST, arg_ns, 2;
+  @local head_len := &ast_field P_AST, arg_ns, 3;
+  @local def := &bs_lookup head_off, head_len;
+  &@if (def == BS_NOT_FOUND), { &@return TYPE_VOID; };
+  &@if ((&ast_kind P_AST, def) != AST_DEFINITION), { &@return TYPE_VOID; };
+  @local ty_off := &ast_field P_AST, def, 5;
+  @local ty_len := &ast_field P_AST, def, 6;
+  &type_name_to_kind ty_off, ty_len
 };
 
 # ── Dispatch a single &Compiler::ir::makeX call ─────────────────────
@@ -160,6 +212,24 @@
           &@return (&lower_expr an2);
         };
         &@return IR_NONE;
+      };
+      # &Compiler::watId Node.name.name  →  name handle (NAME_POOL
+      # pool-encoded -offset - 2).  Path-shape inspection; see
+      # br_extract_name_handle for the recognised AST shape.
+      &@if ((&br_span_eq_lit s1_off, s1_len, (&br_lit_wat_id), 5) == 1), {
+        &@if (n_args >= 1), {
+          &@return (&br_extract_name_handle (&ast_field P_AST, call_node, 3));
+        };
+        &@return IR_NONE;
+      };
+      # &Compiler::resolveType Node.name.typeAnnotation  →  TYPE_* tag.
+      # Dispatches into lower.si's type_name_to_kind once the type
+      # span is extracted from the bound def.
+      &@if ((&br_span_eq_lit s1_off, s1_len, (&br_lit_resolve_type), 11) == 1), {
+        &@if (n_args >= 1), {
+          &@return (&br_extract_type_kind (&ast_field P_AST, call_node, 3));
+        };
+        &@return TYPE_VOID;
       };
     };
   };

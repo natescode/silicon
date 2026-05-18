@@ -30,7 +30,13 @@
 (import "env" "print" (func $print (param i32)))
 (import "env" "read"  (func $read  (result i32)))
 
-(memory 1)
+;; Initial 64 pages = 4 MiB.  Higher than the alloc-grows-on-demand
+;; default to avoid the boot-pipeline's grow-cliff: when an emitted
+;; wasm processes a multi-hundred-KB source bundle, $heap can race
+;; past memory.size before alloc gets a chance to call memory.grow
+;; on this particular wasmtime version.  64 pages comfortably hosts
+;; the boot.wasm → stage1 compile without ever needing to grow.
+(memory 64)
 (export "memory" (memory 0))
 (global $heap (mut i32) (i32.const 1024))
 
