@@ -1117,6 +1117,11 @@ describe('Phase 0 WASIX smoke test', () => {
     const STAGE1_PIPELINE_FIXTURES: Array<{path: string, expect: string}> = [
         { path: 'boot/tests/arena_test.si',     expect: 'arena OK' },
         { path: 'boot/tests/ir_nodes_test.si',  expect: 'ok' },
+        // vec_test uses nested &@and — historically stage1 had no
+        // dispatch for @and/@or/@not, so the call silently returned
+        // IR_NONE and the @local binding was uninitialized.  Lock in
+        // the short-circuit-bool fix.
+        { path: 'boot/tests/vec_test.si',       expect: 'vec OK' },
     ]
     for (const fx of STAGE1_PIPELINE_FIXTURES) {
         test(`STAGE 1 PIPELINE: ${fx.path} compiles via stage1.wasm + strict watToWasm + runs`, async () => {

@@ -910,6 +910,9 @@
 @fn lit_at_toint_ptr:Int    := { (&str_ptr '@toInt')    + 4 };
 @fn lit_at_toint64_ptr:Int  := { (&str_ptr '@toInt64')  + 4 };
 @fn lit_at_match_ptr:Int    := { (&str_ptr '@match')    + 4 };
+@fn lit_at_and_ptr:Int      := { (&str_ptr '@and')      + 4 };
+@fn lit_at_or_ptr:Int       := { (&str_ptr '@or')       + 4 };
+@fn lit_at_not_ptr:Int      := { (&str_ptr '@not')      + 4 };
 @fn lit_wasm_seg_ptr:Int    := { (&str_ptr 'WASM')      + 4 };
 
 # Type-name literal pointers — used by type_name_to_kind to map a
@@ -1532,6 +1535,39 @@
             result = &ir_if cmp, body_h, result;
           };
           &@return result;
+        };
+      };
+      # Short-circuit booleans.  Matches the rich-body templates in
+      # src/strata/operators.si:
+      #   &@and a, b  →  if (a) then b else 0
+      #   &@or  a, b  →  if (a) then 1 else b
+      #   &@not a     →  i32.eqz a
+      &@if ((&lower_span_eq_lit nm_off, nm_len, (&lit_at_and_ptr), 4) == 1), {
+        &@if (n_args == 2), {
+          @local a_h := &lower_expr (&ast_field P_AST, node, 3);
+          @local b_h := &lower_expr (&ast_field P_AST, node, 4);
+          &@if ((a_h != IR_NONE) * (b_h != IR_NONE) == 1), {
+            @local zero := &ir_i32_const 0;
+            &@return (&ir_if a_h, b_h, zero);
+          };
+        };
+      };
+      &@if ((&lower_span_eq_lit nm_off, nm_len, (&lit_at_or_ptr), 3) == 1), {
+        &@if (n_args == 2), {
+          @local a_h := &lower_expr (&ast_field P_AST, node, 3);
+          @local b_h := &lower_expr (&ast_field P_AST, node, 4);
+          &@if ((a_h != IR_NONE) * (b_h != IR_NONE) == 1), {
+            @local one := &ir_i32_const 1;
+            &@return (&ir_if a_h, one, b_h);
+          };
+        };
+      };
+      &@if ((&lower_span_eq_lit nm_off, nm_len, (&lit_at_not_ptr), 4) == 1), {
+        &@if (n_args == 1), {
+          @local v := &lower_expr (&ast_field P_AST, node, 3);
+          &@if (v != IR_NONE), {
+            &@return (&ir_unop IR_OP_I32_EQZ, v);
+          };
         };
       };
       &@return IR_NONE;
