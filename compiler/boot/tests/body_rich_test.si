@@ -1,0 +1,131 @@
+# body_rich unit test — Phase 1b dispatch slice.
+#
+# Parses synthetic rich-body fragments, feeds them through
+# br_interpret_body, and asserts the resulting IR matches what the
+# corresponding direct ir_* builder would produce.
+#
+# Pass: "body-rich OK", exit 0.
+# Fail: "body-rich FAIL <code>", exit 1.
+
+@use '../std/io.si';
+@use '../std/vec.si';
+@use '../parser/tokens.si';
+@use '../parser/lex.si';
+@use '../parser/ast.si';
+@use '../parser/parse.si';
+@use '../ir/nodes.si';
+@use '../elab/body_scope.si';
+@use '../elab/body_rich.si';
+
+@fn put_int n:Int := {
+  @local hundreds := (n / 100);
+  @local tens     := ((n / 10) % 10);
+  @local ones     := (n % 10);
+  &@if (hundreds > 0),     { &write_byte 1, (hundreds + 48); };
+  &@if (((hundreds > 0) | (tens > 0)) == 1), { &write_byte 1, (tens + 48); };
+  &write_byte 1, (ones + 48);
+};
+
+@fn die code:Int := {
+  &write_str 1, 'body-rich FAIL ';
+  &put_int code;
+  &write_byte 1, 10;
+  &wasi_snapshot_preview1::proc_exit 1;
+};
+
+# Parse a Silicon source fragment as a top-level expression statement
+# and return the parsed AST's first element.  Used to fabricate the
+# AST_BLOCK that br_interpret_body consumes.
+@fn parse_first_elem:Int s:String := {
+  @local p := (&str_ptr s) + 4;
+  @local n := &str_len s;
+  @local toks := &lex p, n;
+  @local prog := &parse p, n, toks;
+  &ast_field P_AST, prog, 2
+};
+
+@fn run := {
+  &ir_init;
+
+  # ── Test 1: bare &IR::null inside a {} block ─────────────────────
+  # Source: `{ &IR::null }` — a one-element block whose only stmt
+  # is the call.  br_interpret_body should dispatch and return an
+  # IR_NULL handle.
+  &bs_init;
+  @local block1 := &parse_first_elem '{ &IR::null }';
+  &@if ((&ast_kind P_AST, block1) != AST_BLOCK), { &die 1; };
+  @local r1 := &br_interpret_body block1;
+  &@if (r1 == IR_NONE), { &die 2; };
+  &@if ((&ir_kind r1) != IR_NULL), { &die 3; };
+
+  # ── Test 2: Compiler::ir::makeConst with a literal arg ───────────
+  # `{ &Compiler::ir::makeConst 42 }`  →  ir_i32_const 42
+  &bs_init;
+  @local block2 := &parse_first_elem '{ &Compiler::ir::makeConst 42 }';
+  @local r2 := &br_interpret_body block2;
+  &@if (r2 == IR_NONE), { &die 10; };
+  &@if ((&ir_kind r2) != IR_I32_CONST), { &die 11; };
+  &@if ((&ir_field r2, 1) != 42), { &die 12; };
+
+  # ── Test 3: @local binding referenced via Namespace lookup ──────
+  # `{ @local v := 7; &Compiler::ir::makeConst v }`
+  &bs_init;
+  @local block3 := &parse_first_elem '{ @local v := 7; &Compiler::ir::makeConst v }';
+  @local r3 := &br_interpret_body block3;
+  &@if (r3 == IR_NONE), { &die 20; };
+  &@if ((&ir_kind r3) != IR_I32_CONST), { &die 21; };
+  &@if ((&ir_field r3, 1) != 7), { &die 22; };
+
+  # ── Test 4: makeIf with three nested makeConst args ─────────────
+  # `{ &Compiler::ir::makeIf
+  #      (&Compiler::ir::makeConst 1),
+  #      (&Compiler::ir::makeConst 2),
+  #      (&Compiler::ir::makeConst 3) }`
+  &bs_init;
+  @local src4 := '{ &Compiler::ir::makeIf (&Compiler::ir::makeConst 1), (&Compiler::ir::makeConst 2), (&Compiler::ir::makeConst 3) }';
+  @local block4 := &parse_first_elem src4;
+  @local r4 := &br_interpret_body block4;
+  &@if (r4 == IR_NONE), { &die 30; };
+  &@if ((&ir_kind r4) != IR_IF), { &die 31; };
+  # Cond/then/else should be IR_I32_CONST handles with values 1/2/3.
+  @local c4 := &ir_field r4, 1;
+  @local t4 := &ir_field r4, 2;
+  @local e4 := &ir_field r4, 3;
+  &@if ((&ir_kind c4) != IR_I32_CONST), { &die 32; };
+  &@if ((&ir_field c4, 1) != 1), { &die 33; };
+  &@if ((&ir_kind t4) != IR_I32_CONST), { &die 34; };
+  &@if ((&ir_field t4, 1) != 2), { &die 35; };
+  &@if ((&ir_kind e4) != IR_I32_CONST), { &die 36; };
+  &@if ((&ir_field e4, 1) != 3), { &die 37; };
+
+  # ── Test 5: makeBreak / makeContinue / makeReturn ────────────────
+  &bs_init;
+  @local b5 := &parse_first_elem '{ &Compiler::ir::makeBreak }';
+  @local r5 := &br_interpret_body b5;
+  &@if ((&ir_kind r5) != IR_BREAK), { &die 40; };
+
+  &bs_init;
+  @local b6 := &parse_first_elem '{ &Compiler::ir::makeContinue }';
+  @local r6 := &br_interpret_body b6;
+  &@if ((&ir_kind r6) != IR_CONTINUE), { &die 41; };
+
+  &bs_init;
+  @local b7 := &parse_first_elem '{ &Compiler::ir::makeReturn (&Compiler::ir::makeConst 9) }';
+  @local r7 := &br_interpret_body b7;
+  &@if ((&ir_kind r7) != IR_RETURN), { &die 42; };
+  @local rv := &ir_field r7, 1;
+  &@if ((&ir_kind rv) != IR_I32_CONST), { &die 43; };
+  &@if ((&ir_field rv, 1) != 9), { &die 44; };
+
+  # ── Test 6: unknown call falls through to IR_NONE ────────────────
+  &bs_init;
+  @local b8 := &parse_first_elem '{ &Compiler::ir::makeUnknownThing 1 }';
+  @local r8 := &br_interpret_body b8;
+  &@if (r8 != IR_NONE), { &die 50; };
+
+  &write_str 1, 'body-rich OK';
+  &write_byte 1, 10;
+  &wasi_snapshot_preview1::proc_exit 0;
+};
+
+&run;

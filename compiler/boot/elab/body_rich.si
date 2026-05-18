@@ -1,0 +1,220 @@
+# Rich-body interpreter dispatcher — Phase 1b initial slice.
+#
+# Walks a strata body's statement list, evaluates each item as either:
+#
+#   - `@local name := expr;` — evaluate expr, push binding onto the
+#     scope via bs_push (see body_scope.si).
+#   - `&Compiler::ir::makeX args...` — dispatch to the corresponding
+#     ir_* builder from boot/ir/nodes.si.  Args are evaluated
+#     recursively against the scope.
+#   - Bare integer literal — yields its value.
+#   - `Node.x.y` namespace path — resolves via bs_eval_path against
+#     the scope (only the *first* segment is bound by the caller; deep
+#     field walks are added when needed).
+#
+# Returns the value of the last evaluated statement (the body's
+# "result"), or IR_NONE if nothing dispatched.
+#
+# Calls outside the Compiler::ir::* and IR::* namespaces are treated
+# as "unhandled" and return IR_NONE.  Subsequent slices (1c–1d) extend
+# this dispatcher with Compiler::ctx::* and Compiler::lowerExpr / etc.
+#
+# This file is ADDITIVE — boot/ir/lower.si does NOT call into it yet.
+# Slice 1e wires it in behind a byte-equal gate.  Until then, the
+# self-host fixed point stage1==stage2 is unaffected.
+
+@use '../std/vec.si';
+@use '../parser/ast.si';
+@use '../parser/parse.si';
+@use '../ir/nodes.si';
+@use './body_scope.si';
+
+# ── Literal byte sequences ──────────────────────────────────────────
+@fn br_lit_compiler:Int := { (&str_ptr 'Compiler') + 4 };
+@fn br_lit_ir:Int       := { (&str_ptr 'ir')       + 4 };
+@fn br_lit_make_const:Int := { (&str_ptr 'makeConst') + 4 };
+@fn br_lit_make_if:Int    := { (&str_ptr 'makeIf')    + 4 };
+@fn br_lit_make_break:Int := { (&str_ptr 'makeBreak') + 4 };
+@fn br_lit_make_continue:Int := { (&str_ptr 'makeContinue') + 4 };
+@fn br_lit_make_return:Int   := { (&str_ptr 'makeReturn')   + 4 };
+@fn br_lit_make_loop:Int     := { (&str_ptr 'makeLoop')     + 4 };
+@fn br_lit_null:Int := { (&str_ptr 'null') + 4 };
+
+# Span-vs-literal byte comparison (P_SRC-relative span).
+@fn br_span_eq_lit:Int off:Int, len:Int, lit_ptr:Int, lit_len:Int := {
+  @local ok := 1;
+  &@if (len != lit_len), { ok = 0; };
+  @local i := 0;
+  &@loop ((ok * (i < len)) == 1), {
+    @local a := &WASM::i32_load8_u (P_SRC + off + i);
+    @local b := &WASM::i32_load8_u (lit_ptr + i);
+    &@if (a != b), { ok = 0; };
+    i = i + 1;
+  };
+  ok
+};
+
+# ── Expression evaluation against the scope ────────────────────────
+# Recognised expression kinds:
+#   AST_INT_LIT     → integer value
+#   AST_NAMESPACE   → bs_eval_path lookup (single-segment binding)
+#   AST_CALL        → br_dispatch_call (Compiler::ir::* or IR::*)
+# Any other kind returns IR_NONE.  The body interpreter is intentionally
+# narrow until the Compiler::* surface is filled out in slices 1c–1d.
+@fn br_eval_expr:Int node:Int := {
+  &@if (node < 0), { &@return IR_NONE; };
+  @local k := &ast_kind P_AST, node;
+  &@if (k == AST_INT_LIT), { &@return (&ast_field P_AST, node, 1); };
+  &@if (k == AST_NAMESPACE), {
+    @local v := &bs_eval_path node;
+    &@if (v == BS_NOT_FOUND), { &@return IR_NONE; };
+    &@return v;
+  };
+  &@if (k == AST_CALL), {
+    &@return (&br_dispatch_call node);
+  };
+  IR_NONE
+};
+
+# ── Dispatch a single &Compiler::ir::makeX call ─────────────────────
+# Expected callee shape: AST_NAMESPACE with 3 segments
+# ["Compiler", "ir", "makeX"].  Args are evaluated via br_eval_expr.
+# Returns the new IR handle, or IR_NONE if the call is unhandled.
+@fn br_dispatch_call:Int call_node:Int := {
+  @local callee := &ast_field P_AST, call_node, 1;
+  &@if ((&ast_kind P_AST, callee) != AST_NAMESPACE),
+    { &@return IR_NONE; };
+  @local n_segs := &ast_field P_AST, callee, 1;
+
+  # &IR::null  →  ir_null
+  &@if (n_segs == 2), {
+    @local s0_off := &ast_field P_AST, callee, 2;
+    @local s0_len := &ast_field P_AST, callee, 3;
+    @local s1_off := &ast_field P_AST, callee, 4;
+    @local s1_len := &ast_field P_AST, callee, 5;
+    # Match "IR::null" — keep the body_rich dispatcher independent of
+    # body.si so callers can use either path.
+    &@if ((&br_span_eq_lit s0_off, s0_len, ((&str_ptr 'IR') + 4), 2) == 1), {
+      &@if ((&br_span_eq_lit s1_off, s1_len, (&br_lit_null), 4) == 1),
+        { &@return (&ir_null); };
+    };
+  };
+
+  &@if (n_segs == 3), {
+    @local s0_off := &ast_field P_AST, callee, 2;
+    @local s0_len := &ast_field P_AST, callee, 3;
+    @local s1_off := &ast_field P_AST, callee, 4;
+    @local s1_len := &ast_field P_AST, callee, 5;
+    @local s2_off := &ast_field P_AST, callee, 6;
+    @local s2_len := &ast_field P_AST, callee, 7;
+
+    # Must be Compiler::ir::*
+    &@if ((&br_span_eq_lit s0_off, s0_len, (&br_lit_compiler), 8) == 0),
+      { &@return IR_NONE; };
+    &@if ((&br_span_eq_lit s1_off, s1_len, (&br_lit_ir), 2) == 0),
+      { &@return IR_NONE; };
+
+    @local n_args := &ast_field P_AST, call_node, 2;
+
+    # Compiler::ir::makeConst value, wasmType — i32 path only for now.
+    &@if ((&br_span_eq_lit s2_off, s2_len, (&br_lit_make_const), 9) == 1), {
+      &@if (n_args >= 1), {
+        @local v := &br_eval_expr (&ast_field P_AST, call_node, 3);
+        &@return (&ir_i32_const v);
+      };
+      &@return IR_NONE;
+    };
+
+    # Compiler::ir::makeIf cond, then, else [, wasmType]
+    &@if ((&br_span_eq_lit s2_off, s2_len, (&br_lit_make_if), 6) == 1), {
+      &@if (n_args >= 3), {
+        @local c := &br_eval_expr (&ast_field P_AST, call_node, 3);
+        @local t := &br_eval_expr (&ast_field P_AST, call_node, 4);
+        @local e := &br_eval_expr (&ast_field P_AST, call_node, 5);
+        &@return (&ir_if c, t, e);
+      };
+      &@return IR_NONE;
+    };
+
+    # Compiler::ir::makeBreak [id]  — id ignored at the IR level
+    # (control_break has no payload).
+    &@if ((&br_span_eq_lit s2_off, s2_len, (&br_lit_make_break), 9) == 1),
+      { &@return (&ir_break); };
+
+    # Compiler::ir::makeContinue [id]
+    &@if ((&br_span_eq_lit s2_off, s2_len, (&br_lit_make_continue), 12) == 1),
+      { &@return (&ir_continue); };
+
+    # Compiler::ir::makeReturn value
+    &@if ((&br_span_eq_lit s2_off, s2_len, (&br_lit_make_return), 10) == 1), {
+      @local v := IR_NONE;
+      &@if (n_args >= 1), {
+        v = &br_eval_expr (&ast_field P_AST, call_node, 3);
+      };
+      &@return (&ir_return v);
+    };
+
+    # Compiler::ir::makeLoop id, cond, body  — id ignored; ir_loop is
+    # (cond, body).  Strata bodies that need loop-id tracking still go
+    # through the Compiler::ctx::loopStack surface (slice 1c).
+    &@if ((&br_span_eq_lit s2_off, s2_len, (&br_lit_make_loop), 8) == 1), {
+      &@if (n_args >= 3), {
+        @local cond := &br_eval_expr (&ast_field P_AST, call_node, 4);
+        @local body := &br_eval_expr (&ast_field P_AST, call_node, 5);
+        &@return (&ir_loop cond, body);
+      };
+      &@return IR_NONE;
+    };
+  };
+
+  IR_NONE
+};
+
+# ── Statement evaluator ─────────────────────────────────────────────
+# AST_DEFINITION with kw=@local pushes a binding; everything else
+# is treated as an expression.  Returns the statement's IR value
+# (or IR_NONE for @local).
+@fn br_eval_stmt:Int stmt:Int := {
+  &@if (stmt < 0), { &@return IR_NONE; };
+  @local k := &ast_kind P_AST, stmt;
+  &@if (k == AST_DEFINITION), {
+    @local kw_off := &ast_field P_AST, stmt, 1;
+    @local kw_len := &ast_field P_AST, stmt, 2;
+    @local local_ptr := (&str_ptr '@local') + 4;
+    &@if ((&br_span_eq_lit kw_off, kw_len, local_ptr, 6) == 1), {
+      # AST_DEFINITION layout: [kind, kw_off, kw_len, name_off, name_len,
+      #   type_off, type_len, n_params, param0_idx..., binding_idx_or_-1]
+      @local n_params := &ast_field P_AST, stmt, 7;
+      @local binding := &ast_field P_AST, stmt, (8 + n_params);
+      @local v := &br_eval_expr binding;
+      @local name_off := &ast_field P_AST, stmt, 3;
+      @local name_len := &ast_field P_AST, stmt, 4;
+      &bs_push name_off, name_len, v;
+      &@return IR_NONE;
+    };
+  };
+  &br_eval_expr stmt
+};
+
+# ── Body driver ─────────────────────────────────────────────────────
+# Interpret a block-as-body.  Caller has already initialized bs_init
+# and pushed any "node param" bindings (e.g. Node → AST def index).
+# Iterates each statement; the result is the value of the last
+# evaluated expression-statement (trailing or final stmt).
+@fn br_interpret_body:Int block:Int := {
+  &@if (block < 0), { &@return IR_NONE; };
+  &@if ((&ast_kind P_AST, block) != AST_BLOCK), { &@return IR_NONE; };
+  @local n_stmts := &ast_field P_AST, block, 1;
+  @local has_trailing := &ast_field P_AST, block, 2;
+  @local total := n_stmts;
+  &@if (has_trailing == 1), { total = total + 1; };
+  @local last := IR_NONE;
+  @local i := 0;
+  &@loop (i < total), {
+    @local stmt := &ast_field P_AST, block, (3 + i);
+    @local v := &br_eval_stmt stmt;
+    &@if (v != IR_NONE), { last = v; };
+    i = i + 1;
+  };
+  last
+};

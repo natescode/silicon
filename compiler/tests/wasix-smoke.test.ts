@@ -2153,6 +2153,24 @@ describe('Phase 0 WASIX smoke test', () => {
         }
     })
 
+    test('boot/tests/body_rich_test.si: Phase 1b rich-body dispatch — Compiler::ir::* + IR::null', async () => {
+        if (!wasmtimeAvailable()) {
+            console.log('  (skipped: wasmtime not on PATH)')
+            return
+        }
+        const wasm = await buildBoot(path.join(PROJECT_ROOT, 'boot', 'tests', 'body_rich_test.si'))
+        const tmpPath = path.join(WASM_BIN, 'body-rich.wasm')
+        await fs.writeFile(tmpPath, wasm)
+        try {
+            const result = spawnSync('wasmtime', [tmpPath], { maxBuffer: 1 << 20 })
+            expect(result.status).toBe(0)
+            const stdout = (result.stdout ?? Buffer.alloc(0)).toString('utf-8').trim()
+            expect(stdout).toBe('body-rich OK')
+        } finally {
+            await fs.unlink(tmpPath).catch(() => {})
+        }
+    })
+
     test('boot/tests/body_scope_test.si: Phase 1a rich-body scope + path-eval scaffolding', async () => {
         if (!wasmtimeAvailable()) {
             console.log('  (skipped: wasmtime not on PATH)')
