@@ -1436,6 +1436,15 @@
       &@if (v_h == IR_NONE), { &@return IR_NONE; };
       &@return (&ir_local_set idx, v_h);
     };
+    # Statement-position fallback for non-@local def keywords.
+    # Mirrors the pass-2 try_dispatch_def_via_body_rich hook so a
+    # user-defined inline def keyword (anything other than @local)
+    # can route through body_rich.  No-op today because no current
+    # strata body produces a meaningful expression-position IR from
+    # a def-context dispatch — but the surface is here so when one
+    # eventually does, no second-pass refactor is needed.
+    @local h_def := &try_dispatch_def_via_body_rich node, kw_off, kw_len;
+    &@if (h_def != IR_NONE), { &@return h_def; };
     &@return IR_NONE;
   };
 
