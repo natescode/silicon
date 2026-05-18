@@ -1107,6 +1107,84 @@ describe('Phase 0 WASIX smoke test', () => {
         expect(wasm.buffer.byteLength).toBeGreaterThan(100)
     }, 60000)
 
+    // Stage1-pipeline coverage: each fixture goes source → stage1.wasm
+    // → strict watToWasm → wasmtime.  Without this, stage1 codegen bugs
+    // that the bun test suite would otherwise route around (because it
+    // compiles fixtures via Stage 0 TS) only surface when a user runs
+    // them through the actual stage1 binary.  Historically this masked
+    // the drop-after-void-call regression (boot/ir/lower.si:
+    // register_extern_sigs) until it broke the Phase 4+5 shell pipeline.
+    const STAGE1_PIPELINE_FIXTURES: Array<{path: string, expect: string}> = [
+        { path: 'boot/tests/arena_test.si',     expect: 'arena OK' },
+        { path: 'boot/tests/ir_nodes_test.si',  expect: 'ok' },
+        // vec_test uses nested &@and — historically stage1 had no
+        // dispatch for @and/@or/@not, so the call silently returned
+        // IR_NONE and the @local binding was uninitialized.  Lock in
+        // the short-circuit-bool fix.
+        { path: 'boot/tests/vec_test.si',       expect: 'vec OK' },
+    ]
+    for (const fx of STAGE1_PIPELINE_FIXTURES) {
+        test(`STAGE 1 PIPELINE: ${fx.path} compiles via stage1.wasm + strict watToWasm + runs`, async () => {
+            if (!wasmtimeAvailable()) { console.log('  (skipped: wasmtime not on PATH)'); return }
+            const stage1Path = path.join(WASM_BIN, 'stage1.wasm')
+            try { await fs.access(stage1Path) } catch {
+                console.log('  (skipped: stage1.wasm missing — run scripts/build-stage1.ts)')
+                return
+            }
+            // Replicate the shell pipeline's @use resolver: depth-first
+            // post-order, cycle-safe, P_SRC-relative paths.  The result
+            // is a single concat bundle stage1.wasm can ingest.
+            const visited = new Set<string>()
+            const order: string[] = []
+            async function resolve(file: string): Promise<void> {
+                const abs = path.resolve(file)
+                if (visited.has(abs)) return
+                visited.add(abs)
+                const src = await fs.readFile(abs, 'utf-8')
+                const dir = path.dirname(abs)
+                for (const line of src.split('\n')) {
+                    const m = /^\s*@use\s+'([^']+)'/.exec(line)
+                    if (m) await resolve(path.join(dir, m[1]))
+                }
+                order.push(abs)
+            }
+            await resolve(path.join(PROJECT_ROOT, fx.path))
+            const wasiStub = [
+                '@extern wasi_snapshot_preview1::fd_write:Int',
+                '  fd:Int, iovs_ptr:Int, iovs_len:Int, nwritten_out:Int;',
+                '@extern wasi_snapshot_preview1::fd_read:Int',
+                '  fd:Int, iovs_ptr:Int, iovs_len:Int, nread_out:Int;',
+                '@extern wasi_snapshot_preview1::proc_exit',
+                '  code:Int;',
+                '',
+            ].join('\n')
+            let bundle = wasiStub
+            for (const f of order) bundle += await fs.readFile(f, 'utf-8')
+
+            const compile = spawnSync('wasmtime', ['--dir', '.', stage1Path], {
+                input: Buffer.from(bundle, 'utf-8'),
+                maxBuffer: 64 * 1024 * 1024,
+            })
+            expect(compile.status).toBe(0)
+            const wat = (compile.stdout ?? Buffer.alloc(0)).toString('utf-8')
+
+            // Strict watToWasm — surfaces any drop-after-void-call or
+            // similar stack-discipline bugs at compile time rather than
+            // at wasmtime load time.
+            const wasm = await watToWasm(wat)
+            const tmpPath = path.join(WASM_BIN, 'stage1-pipeline-smoke.wasm')
+            await fs.writeFile(tmpPath, Buffer.from(wasm.buffer))
+            try {
+                const run = spawnSync('wasmtime', [tmpPath], { maxBuffer: 1 << 20 })
+                expect(run.status).toBe(0)
+                const stdout = (run.stdout ?? Buffer.alloc(0)).toString('utf-8').trim()
+                expect(stdout).toBe(fx.expect)
+            } finally {
+                await fs.unlink(tmpPath).catch(() => {})
+            }
+        }, 60000)
+    }
+
     test('PHASE 4a: stage1.wasm CLI — --help prints help to stdout and exits 0', async () => {
         if (!wasmtimeAvailable()) {
             console.log('  (skipped: wasmtime not on PATH)')
