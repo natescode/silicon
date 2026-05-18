@@ -77,3 +77,34 @@
 @stratum_keyword Const ('@const', Node) = {
   &Compiler::ir::makeGlobal Node;
 };
+
+# @loc name := <expr>  —  user-side analog of @local that demonstrates
+# the body_rich local-declaration path end-to-end.  Used at statement
+# position inside a function body, just like @local.
+#
+# Routes:
+#   lower_expr sees AST_DEFINITION with kw=@loc
+#     → try_dispatch_def_via_body_rich (inline-position hook in
+#       lower_expr's AST_DEFINITION branch)
+#     → body_rich runs the body below
+#     → &Compiler::ir::makeLocal sname, wasmType (returns sname handle)
+#     → &Compiler::ctx::pendingLocals::push (no-op in stage1)
+#     → &Compiler::ctx::locals::set sname, wasmType
+#         → real bridge in boot/compiler_api/ctx.si calls scope_push,
+#           which appends to LSCOPE and bumps the next-slot counter
+#     → body returns IR::null (the @loc *declaration* produces no
+#       IR; the binding part is currently dropped — user must follow
+#       with a separate assignment if they want the local
+#       initialized)
+#
+# Stage1's lower_definition now uses (vec_len LSCOPE) - n_params as
+# the function's n_locals, so the freshly-pushed local IS counted in
+# the emitted (local i32 …) declarations.
+@stratum_keyword Loc ('@loc', Node) = {
+  @local wasmType := &Compiler::resolveType Node.name.typeAnnotation;
+  @local sname    := &Compiler::watId Node.name.name;
+  @local decl     := &Compiler::ir::makeLocal sname, wasmType;
+  &Compiler::ctx::pendingLocals::push decl;
+  &Compiler::ctx::locals::set sname, wasmType;
+  &IR::null;
+};

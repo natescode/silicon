@@ -77,12 +77,46 @@
 };
 
 # ── Globals / locals / varNames / pendingLocals ────────────────────
-# Stub returns 0 / IR_NONE.  Real implementations will route to
-# scope_push / global_add / fn_sig_register family in lower.si once
-# those globals are extracted into this module.  Today they're
-# no-ops the dispatcher returns IR_NONE for so the body interpreter
-# treats them as side-effect-free intermediate statements.
+# ctx_globals_set + ctx_var_names_add are still stubs — globals get
+# created directly by body_rich's Compiler::ir::makeGlobal handler,
+# which calls global_add inline (see boot/elab/body_rich.si).  The
+# strata-body convention SPLITS the work between ctx::globals::set
+# (records (name → type)) and ir::makeGlobal (creates the IR node).
+# Stage1 collapses both into one operation so the ctx call is a
+# no-op.
 @fn ctx_globals_set name_h:Int, type_h:Int := { };
 @fn ctx_var_names_add name_h:Int := { };
+
+# ctx_locals_set — REAL bridge to lower.si's scope_push.  Decodes the
+# packed name handle (off * 4096 + len, matching br_extract_name_
+# handle's encoding) and pushes the local into LSCOPE with the next
+# available slot index.  The slot is simply the current LSCOPE
+# length: scope_push appends, so vec_len gives the next slot before
+# the push.
+#
+# CAVEAT: stage1's collect_locals + lower_definition pre-counts a
+# function's locals (n_locals field on IR_FUNCTION) BEFORE running
+# the body, then emits `(local i32 …)` declarations matching that
+# count.  If body_rich dispatches a custom local-declaring keyword
+# DURING body lowering, scope grows but n_locals stays stale — the
+# function's local declarations under-count and wat2wasm rejects
+# the resulting WAT with a local-index-out-of-bounds error.  Wiring
+# a full user-side @loc keyword needs the pre-counting pass to also
+# walk body_rich-dispatchable defs.  Foundation here works for
+# keywords that introduce locals at function-prologue position only.
+@fn ctx_locals_set name_h:Int, type_h:Int := {
+  &@if (name_h <= 0), {  };
+  &@if (name_h > 0), {
+    @local name_off := name_h / 4096;
+    @local name_len := name_h - (name_off * 4096);
+    @local slot := &vec_len LSCOPE_NAME_OFF;
+    &scope_push name_off, name_len, slot;
+  };
+};
+
+# ctx_pending_locals_push — no-op in stage1.  Stage 0 (TS) keeps a
+# parallel pendingLocals list that gets attached to the IRFunction
+# at emit time; stage1's emitter counts locals via LSCOPE instead,
+# so there's nothing to "push" beyond what ctx_locals_set already
+# did (via scope_push).
 @fn ctx_pending_locals_push local_h:Int := { };
-@fn ctx_locals_set name_h:Int, type_h:Int := { };

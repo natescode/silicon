@@ -134,6 +134,7 @@ DEFAULT_TESTS=(
   "boot/tests/body_rich_test.si"
   "boot/tests/nz_keyword_test.si"
   "boot/tests/const_keyword_test.si"
+  "boot/tests/loc_keyword_test.si"
 )
 
 if [ $# -gt 0 ]; then

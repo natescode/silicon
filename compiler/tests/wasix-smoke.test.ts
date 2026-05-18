@@ -1139,6 +1139,15 @@ describe('Phase 0 WASIX smoke test', () => {
         // (name_off, name_len, int-literal init) and side-effects
         // global_add — emitting a normal (global $X (mut i32) ...).
         { path: 'boot/tests/const_keyword_test.si', expect: 'const OK' },
+        // loc_keyword_test exercises the first INLINE def keyword
+        // introducing a local (boot/strata/builtin/logic.si:Loc).
+        // Routes through the inline-position try_dispatch_def_via_
+        // body_rich hook in lower_expr's AST_DEFINITION branch,
+        // body_rich's Compiler::ir::makeLocal + ctx::locals::set,
+        // and lower_definition's updated actual_n_locals count so
+        // the freshly-pushed local appears in the function's
+        // (local i32 ...) declarations.
+        { path: 'boot/tests/loc_keyword_test.si', expect: 'loc OK' },
     ]
     for (const fx of STAGE1_PIPELINE_FIXTURES) {
         test(`STAGE 1 PIPELINE: ${fx.path} compiles via stage1.wasm + strict watToWasm + runs`, async () => {

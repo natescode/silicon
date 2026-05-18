@@ -967,7 +967,16 @@
   # to push another entry (and the latest entry wins on lookup, so
   # re-registering with a possibly-different value would break
   # forward-reference call sites that fixed produces_value earlier).
-  &ir_function nm_off, nm_len, n_params, n_locals, body_h, has_res
+  #
+  # Use the FINAL scope size as n_locals so any locals introduced
+  # during body lowering (e.g. via body_rich's ctx::locals::set
+  # for a user-defined local-declaring strata keyword) are
+  # reflected in the function's declared local count.  For the
+  # bootstrap source (which uses only the hardcoded @local path)
+  # this equals the original n_locals from collect_locals, so
+  # byte-equal output is preserved.
+  @local actual_n_locals := (&vec_len LSCOPE_NAME_OFF) - n_params;
+  &ir_function nm_off, nm_len, n_params, actual_n_locals, body_h, has_res
 };
 
 # hook_allows_params / hook_allows_binding live in boot/elab/elaborator.si

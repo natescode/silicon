@@ -1,0 +1,35 @@
+# loc_keyword test — proves an INLINE def keyword that introduces a
+# local can be added in pure Silicon.
+#
+# @loc is defined in boot/strata/builtin/logic.si.  No branch in
+# boot/ir/lower.si or src/ for @loc itself; the inline-position
+# try_dispatch_def_via_body_rich hook in lower_expr's
+# AST_DEFINITION branch routes it through body_rich, which:
+#   - resolves the type via &Compiler::resolveType Node.name.typeAnnotation
+#   - extracts the name via &Compiler::watId Node.name.name
+#   - calls &Compiler::ir::makeLocal (returns name handle)
+#   - calls &Compiler::ctx::pendingLocals::push (no-op in stage1)
+#   - calls &Compiler::ctx::locals::set, which bridges to scope_push
+#
+# Stage1 then emits a (local i32 ...) declaration in the function's
+# locals list (counted via the updated actual_n_locals in
+# lower_definition).
+#
+# Because the @loc strata body doesn't handle the binding (just the
+# declaration), the test uses @loc to DECLARE x, then assigns x
+# with a separate `x = 42;` statement.  This separation mirrors how
+# TS Stage 0 strata bodies split declaration from binding.
+#
+# Pass output: "loc OK", exit 0.
+
+@use '../std/io.si';
+
+@fn _start:Void := {
+  @loc x:Int;
+  x = 42;
+  &@if (x == 42),
+    { &write_str 1, 'loc OK' },
+    { &write_str 1, 'loc FAIL' };
+  &write_byte 1, 10;
+  &wasi_snapshot_preview1::proc_exit 0;
+};

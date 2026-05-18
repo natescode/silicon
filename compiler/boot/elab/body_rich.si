@@ -40,6 +40,7 @@
 @fn br_lit_make_return:Int   := { (&str_ptr 'makeReturn')   + 4 };
 @fn br_lit_make_loop:Int     := { (&str_ptr 'makeLoop')     + 4 };
 @fn br_lit_make_global:Int   := { (&str_ptr 'makeGlobal')   + 4 };
+@fn br_lit_make_local:Int    := { (&str_ptr 'makeLocal')    + 4 };
 @fn br_lit_null:Int := { (&str_ptr 'null') + 4 };
 
 # Compiler::* (2-segment) entry points.
@@ -315,6 +316,21 @@
       &@return IR_NONE;
     };
 
+    # Compiler::ir::makeLocal name_h, type_h  →  returns name_h.
+    # In TS, this constructs an IRLocal {name, wasmType}; in stage1
+    # there's no IR_LOCAL declaration node (locals live in LSCOPE +
+    # the function record's n_locals count), so the "decl" we hand
+    # back is just the name handle — the strata body passes it to
+    # &Compiler::ctx::pendingLocals::push which is a no-op in
+    # stage1.  The real local-registration work happens in
+    # &Compiler::ctx::locals::set (see boot/compiler_api/ctx.si).
+    &@if ((&br_span_eq_lit s2_off, s2_len, (&br_lit_make_local), 9) == 1), {
+      &@if (n_args >= 1), {
+        &@return (&br_eval_expr (&ast_field P_AST, call_node, 3));
+      };
+      &@return IR_NONE;
+    };
+
     # Compiler::ir::makeGlobal Node  →  side-effect: register a global
     # in stage1's GSCOPE via lower.si's global_add.  Returns IR_NONE
     # because stage1 doesn't represent globals as IR_VEC nodes.
@@ -413,7 +429,11 @@
     # locals::set name, type    (stub)
     &@if ((&br_span_eq_lit q2_off, q2_len, (&br_lit_locals), 6) == 1), {
       &@if ((&br_span_eq_lit q3_off, q3_len, (&br_lit_set), 3) == 1), {
-        &ctx_locals_set 0, 0;
+        &@if (n_args >= 2), {
+          @local nm_h := &br_eval_expr (&ast_field P_AST, call_node, 3);
+          @local ty_h := &br_eval_expr (&ast_field P_AST, call_node, 4);
+          &ctx_locals_set nm_h, ty_h;
+        };
         &@return IR_NONE;
       };
     };
