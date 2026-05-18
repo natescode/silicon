@@ -1,0 +1,288 @@
+# boot/types/intrinsic_sig.si — IR/WASM intrinsic signature derivation.
+#
+# Port of src/types/intrinsicSig.ts.  Maps a `WASM::foo` / `IR::foo`
+# name to a typed signature (param SiliconTypes + result SiliconType).
+# Used by the typechecker to validate direct `&WASM::*` calls and as
+# the strata loader's fallback signature when a stratum's `intrinsic:`
+# field references an op the loader hasn't seen before.
+#
+# Interface — to avoid the vec-handle-reassignment foot-gun (vec_push
+# returns a possibly-new handle), `intrinsic_sig` writes results into
+# module-level globals rather than mutating a caller-passed vec:
+#
+#   intrinsic_sig(name_ptr, name_len) → Int
+#     returns 1 on match (populates INTR_N_PARAMS, INTR_PARAM_*,
+#     INTR_RESULT); returns 0 on no match (globals left as-is).
+#
+# Max param arity across all WASM ops covered here is 2 (binary ops
+# and memory stores), so only INTR_PARAM_0 / INTR_PARAM_1 exist.
+
+@use './types.si';
+
+# Result slots.
+@var INTR_N_PARAMS:Int := 0;
+@var INTR_PARAM_0:Int  := 0;
+@var INTR_PARAM_1:Int  := 0;
+@var INTR_RESULT:Int   := 0;
+
+@fn intr_set_sig0 r:Int := {
+  INTR_N_PARAMS = 0;
+  INTR_RESULT = r;
+};
+@fn intr_set_sig1 p0:Int, r:Int := {
+  INTR_N_PARAMS = 1;
+  INTR_PARAM_0 = p0;
+  INTR_RESULT = r;
+};
+@fn intr_set_sig2 p0:Int, p1:Int, r:Int := {
+  INTR_N_PARAMS = 2;
+  INTR_PARAM_0 = p0;
+  INTR_PARAM_1 = p1;
+  INTR_RESULT = r;
+};
+
+# ── Byte-span helpers ────────────────────────────────────────────
+# Local to this module so we don't pull in P_SRC-dependent helpers.
+
+@fn istr_eq_lit:Int p:Int, n:Int, lit_ptr:Int, lit_len:Int := {
+  @local ok := 1;
+  &@if (n != lit_len), { ok = 0; };
+  @local i := 0;
+  &@loop ((ok * (i < n)) == 1), {
+    &@if ((&WASM::i32_load8_u (p + i)) != (&WASM::i32_load8_u (lit_ptr + i))), { ok = 0; };
+    i = i + 1;
+  };
+  ok
+};
+
+@fn istr_starts_with:Int p:Int, n:Int, lit_ptr:Int, lit_len:Int := {
+  @local ok := 1;
+  &@if (n < lit_len), { ok = 0; };
+  @local i := 0;
+  &@loop ((ok * (i < lit_len)) == 1), {
+    &@if ((&WASM::i32_load8_u (p + i)) != (&WASM::i32_load8_u (lit_ptr + i))), { ok = 0; };
+    i = i + 1;
+  };
+  ok
+};
+
+@fn istr_eq_str:Int p:Int, n:Int, s:String := {
+  &istr_eq_lit p, n, ((&str_ptr s) + 4), (&str_len s)
+};
+
+@fn istr_starts_str:Int p:Int, n:Int, s:String := {
+  &istr_starts_with p, n, ((&str_ptr s) + 4), (&str_len s)
+};
+
+# ── Suffix classifiers ──────────────────────────────────────────
+#
+# A binary op suffix (after the i32_/i64_/f32_ prefix) is any of the
+# following — matching the TS regex on the spelling alone, not on
+# whether WASM actually defines it for the given prefix.  Callers only
+# query intrinsics that exist in user source, so f32_div_s never gets
+# asked.
+
+@fn intr_is_binary_suffix:Int p:Int, n:Int := {
+  @local r := 0;
+  &@if ((&istr_eq_str p, n, 'add')   == 1), { r = 1; };
+  &@if ((&istr_eq_str p, n, 'sub')   == 1), { r = 1; };
+  &@if ((&istr_eq_str p, n, 'mul')   == 1), { r = 1; };
+  &@if ((&istr_eq_str p, n, 'div')   == 1), { r = 1; };
+  &@if ((&istr_eq_str p, n, 'div_s') == 1), { r = 1; };
+  &@if ((&istr_eq_str p, n, 'div_u') == 1), { r = 1; };
+  &@if ((&istr_eq_str p, n, 'rem_s') == 1), { r = 1; };
+  &@if ((&istr_eq_str p, n, 'rem_u') == 1), { r = 1; };
+  &@if ((&istr_eq_str p, n, 'and')   == 1), { r = 1; };
+  &@if ((&istr_eq_str p, n, 'or')    == 1), { r = 1; };
+  &@if ((&istr_eq_str p, n, 'xor')   == 1), { r = 1; };
+  &@if ((&istr_eq_str p, n, 'shl')   == 1), { r = 1; };
+  &@if ((&istr_eq_str p, n, 'shr_s') == 1), { r = 1; };
+  &@if ((&istr_eq_str p, n, 'shr_u') == 1), { r = 1; };
+  &@if ((&istr_eq_str p, n, 'rotl')  == 1), { r = 1; };
+  &@if ((&istr_eq_str p, n, 'rotr')  == 1), { r = 1; };
+  &@if ((&istr_eq_str p, n, 'eq')    == 1), { r = 1; };
+  &@if ((&istr_eq_str p, n, 'ne')    == 1), { r = 1; };
+  &@if ((&istr_eq_str p, n, 'lt')    == 1), { r = 1; };
+  &@if ((&istr_eq_str p, n, 'lt_s')  == 1), { r = 1; };
+  &@if ((&istr_eq_str p, n, 'lt_u')  == 1), { r = 1; };
+  &@if ((&istr_eq_str p, n, 'gt')    == 1), { r = 1; };
+  &@if ((&istr_eq_str p, n, 'gt_s')  == 1), { r = 1; };
+  &@if ((&istr_eq_str p, n, 'gt_u')  == 1), { r = 1; };
+  &@if ((&istr_eq_str p, n, 'le')    == 1), { r = 1; };
+  &@if ((&istr_eq_str p, n, 'le_s')  == 1), { r = 1; };
+  &@if ((&istr_eq_str p, n, 'le_u')  == 1), { r = 1; };
+  &@if ((&istr_eq_str p, n, 'ge')    == 1), { r = 1; };
+  &@if ((&istr_eq_str p, n, 'ge_s')  == 1), { r = 1; };
+  &@if ((&istr_eq_str p, n, 'ge_u')  == 1), { r = 1; };
+  r
+};
+
+# Comparison ops resolve to Bool.  Matches /^(eq|ne|lt|gt|le|ge)(_[su])?$/.
+@fn intr_is_cmp_suffix:Int p:Int, n:Int := {
+  @local r := 0;
+  &@if ((&istr_eq_str p, n, 'eq')   == 1), { r = 1; };
+  &@if ((&istr_eq_str p, n, 'ne')   == 1), { r = 1; };
+  &@if ((&istr_eq_str p, n, 'lt')   == 1), { r = 1; };
+  &@if ((&istr_eq_str p, n, 'lt_s') == 1), { r = 1; };
+  &@if ((&istr_eq_str p, n, 'lt_u') == 1), { r = 1; };
+  &@if ((&istr_eq_str p, n, 'gt')   == 1), { r = 1; };
+  &@if ((&istr_eq_str p, n, 'gt_s') == 1), { r = 1; };
+  &@if ((&istr_eq_str p, n, 'gt_u') == 1), { r = 1; };
+  &@if ((&istr_eq_str p, n, 'le')   == 1), { r = 1; };
+  &@if ((&istr_eq_str p, n, 'le_s') == 1), { r = 1; };
+  &@if ((&istr_eq_str p, n, 'le_u') == 1), { r = 1; };
+  &@if ((&istr_eq_str p, n, 'ge')   == 1), { r = 1; };
+  &@if ((&istr_eq_str p, n, 'ge_s') == 1), { r = 1; };
+  &@if ((&istr_eq_str p, n, 'ge_u') == 1), { r = 1; };
+  r
+};
+
+# ── Main entrypoint ────────────────────────────────────────────
+
+# Returns 1 on match (and populates INTR_* globals), 0 on no match.
+@fn intrinsic_sig:Int name_p:Int, name_n:Int := {
+  @local matched := 0;
+
+  # Strip `WASM::` or `IR::` prefix.
+  @local off := 0 - 1;
+  &@if ((&istr_starts_str name_p, name_n, 'WASM::') == 1), { off = 6; };
+  &@if ((&istr_starts_str name_p, name_n, 'IR::') == 1),   { off = 4; };
+
+  &@if (off >= 0), {
+    @local sp := name_p + off;
+    @local sn := name_n - off;
+
+    # Detect i32_/i64_/f32_ prefix.
+    @local prefix_t := TYPE_NONE;
+    &@if ((&istr_starts_str sp, sn, 'i32_') == 1), { prefix_t = TYPE_INT_H; };
+    &@if ((&istr_starts_str sp, sn, 'i64_') == 1), { prefix_t = TYPE_INT64_H; };
+    &@if ((&istr_starts_str sp, sn, 'f32_') == 1), { prefix_t = TYPE_FLOAT_H; };
+
+    &@if (prefix_t != TYPE_NONE), {
+      @local sfx_p := sp + 4;
+      @local sfx_n := sn - 4;
+
+      # Binary?
+      &@if ((&intr_is_binary_suffix sfx_p, sfx_n) == 1), {
+        @local is_cmp := &intr_is_cmp_suffix sfx_p, sfx_n;
+        @local res := prefix_t;
+        &@if (is_cmp == 1), { res = TYPE_BOOL_H; };
+        &intr_set_sig2 prefix_t, prefix_t, res;
+        matched = 1;
+      };
+
+      # Unary i32 (clz / ctz / popcnt).
+      &@if (((matched == 0) * (prefix_t == TYPE_INT_H)) == 1), {
+        &@if (((&istr_eq_str sfx_p, sfx_n, 'clz')    == 1)
+            | ((&istr_eq_str sfx_p, sfx_n, 'ctz')    == 1)
+            | ((&istr_eq_str sfx_p, sfx_n, 'popcnt') == 1)), {
+          &intr_set_sig1 TYPE_INT_H, TYPE_INT_H;
+          matched = 1;
+        };
+      };
+
+      # Unary f32 (abs / neg / sqrt).
+      &@if (((matched == 0) * (prefix_t == TYPE_FLOAT_H)) == 1), {
+        &@if (((&istr_eq_str sfx_p, sfx_n, 'abs')  == 1)
+            | ((&istr_eq_str sfx_p, sfx_n, 'neg')  == 1)
+            | ((&istr_eq_str sfx_p, sfx_n, 'sqrt') == 1)), {
+          &intr_set_sig1 TYPE_FLOAT_H, TYPE_FLOAT_H;
+          matched = 1;
+        };
+      };
+    };
+
+    # Conversions (full-string match).
+    &@if (matched == 0), {
+      &@if (((&istr_eq_str sp, sn, 'i32_trunc_f32_s') == 1)
+          | ((&istr_eq_str sp, sn, 'i32_trunc_f32_u') == 1)), {
+        &intr_set_sig1 TYPE_FLOAT_H, TYPE_INT_H;
+        matched = 1;
+      };
+    };
+    &@if (matched == 0), {
+      &@if (((&istr_eq_str sp, sn, 'f32_convert_i32_s') == 1)
+          | ((&istr_eq_str sp, sn, 'f32_convert_i32_u') == 1)), {
+        &intr_set_sig1 TYPE_INT_H, TYPE_FLOAT_H;
+        matched = 1;
+      };
+    };
+    &@if (matched == 0), {
+      &@if (((&istr_eq_str sp, sn, 'i64_extend_i32_s') == 1)
+          | ((&istr_eq_str sp, sn, 'i64_extend_i32_u') == 1)), {
+        &intr_set_sig1 TYPE_INT_H, TYPE_INT64_H;
+        matched = 1;
+      };
+    };
+    &@if (matched == 0), {
+      &@if ((&istr_eq_str sp, sn, 'i32_wrap_i64') == 1), {
+        &intr_set_sig1 TYPE_INT64_H, TYPE_INT_H;
+        matched = 1;
+      };
+    };
+
+    # Memory loads.
+    &@if (matched == 0), {
+      &@if (((&istr_eq_str sp, sn, 'i32_load')    == 1)
+          | ((&istr_eq_str sp, sn, 'i32_load8_s') == 1)
+          | ((&istr_eq_str sp, sn, 'i32_load8_u') == 1)), {
+        &intr_set_sig1 TYPE_INT_H, TYPE_INT_H;
+        matched = 1;
+      };
+    };
+    &@if (matched == 0), {
+      &@if ((&istr_eq_str sp, sn, 'i64_load') == 1), {
+        &intr_set_sig1 TYPE_INT_H, TYPE_INT64_H;
+        matched = 1;
+      };
+    };
+    &@if (matched == 0), {
+      &@if ((&istr_eq_str sp, sn, 'f32_load') == 1), {
+        &intr_set_sig1 TYPE_INT_H, TYPE_FLOAT_H;
+        matched = 1;
+      };
+    };
+
+    # Memory stores (result Unknown = SK_UNKNOWN).
+    &@if (matched == 0), {
+      &@if (((&istr_eq_str sp, sn, 'i32_store')  == 1)
+          | ((&istr_eq_str sp, sn, 'i32_store8') == 1)), {
+        &intr_set_sig2 TYPE_INT_H, TYPE_INT_H, TYPE_UNKNOWN_H;
+        matched = 1;
+      };
+    };
+    &@if (matched == 0), {
+      &@if ((&istr_eq_str sp, sn, 'i64_store') == 1), {
+        &intr_set_sig2 TYPE_INT_H, TYPE_INT64_H, TYPE_UNKNOWN_H;
+        matched = 1;
+      };
+    };
+    &@if (matched == 0), {
+      &@if ((&istr_eq_str sp, sn, 'f32_store') == 1), {
+        &intr_set_sig2 TYPE_INT_H, TYPE_FLOAT_H, TYPE_UNKNOWN_H;
+        matched = 1;
+      };
+    };
+
+    # Misc.
+    &@if (matched == 0), {
+      &@if ((&istr_eq_str sp, sn, 'data_memory') == 1), {
+        &intr_set_sig0 TYPE_INT_H;
+        matched = 1;
+      };
+    };
+    &@if (matched == 0), {
+      &@if ((&istr_eq_str sp, sn, 'mem_grow') == 1), {
+        &intr_set_sig1 TYPE_INT_H, TYPE_INT_H;
+        matched = 1;
+      };
+    };
+  };
+
+  matched
+};
+
+# Convenience wrapper accepting a Silicon String value.
+@fn intrinsic_sig_str:Int s:String := {
+  &intrinsic_sig ((&str_ptr s) + 4), (&str_len s)
+};

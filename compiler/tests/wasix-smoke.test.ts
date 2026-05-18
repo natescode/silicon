@@ -2284,6 +2284,24 @@ describe('Phase 0 WASIX smoke test', () => {
         }
     })
 
+    test('boot/tests/intrinsic_sig_test.si: Phase 2 slice 2c — intrinsic signature derivation', async () => {
+        if (!wasmtimeAvailable()) {
+            console.log('  (skipped: wasmtime not on PATH)')
+            return
+        }
+        const wasm = await buildBoot(path.join(PROJECT_ROOT, 'boot', 'tests', 'intrinsic_sig_test.si'))
+        const tmpPath = path.join(WASM_BIN, 'intrinsic_sig.wasm')
+        await fs.writeFile(tmpPath, wasm)
+        try {
+            const result = spawnSync('wasmtime', [tmpPath], { maxBuffer: 1 << 20 })
+            expect(result.status).toBe(0)
+            const stdout = (result.stdout ?? Buffer.alloc(0)).toString('utf-8').trim()
+            expect(stdout).toBe('intrinsic-sig OK')
+        } finally {
+            await fs.unlink(tmpPath).catch(() => {})
+        }
+    })
+
     test('boot/tests/errors_test.si: Phase 2 slice 2b — TypeError arena + formatter', async () => {
         if (!wasmtimeAvailable()) {
             console.log('  (skipped: wasmtime not on PATH)')
