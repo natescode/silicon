@@ -1653,6 +1653,17 @@
           };
         };
       };
+      # Generic body-rich fallback — catches any @-prefixed call whose
+      # keyword has a strata body in the registry but isn't in
+      # lower.si's hardcoded list above.  Lets users add new keywords
+      # to boot/strata/builtin/*.si without editing lower.si, provided
+      # the body uses only the Compiler::* surface body_rich knows
+      # (arg, lowerExpr, lowerExprIfDefined, ir::make{Const,If,Break,
+      # Continue,Return,Loop}).  Missing entries fall through to the
+      # IR_NONE return below, which surfaces as an "unknown keyword"
+      # at emit time.
+      @local h_generic := &try_dispatch_via_body_rich node, nm_off, nm_len;
+      &@if (h_generic != IR_NONE), { &@return h_generic; };
       &@return IR_NONE;
     };
 
