@@ -355,7 +355,7 @@ export function resolveFunctionReturnType(
     ctx: LowerCtx,
 ): WasmType {
     if (node.name?.typeAnnotation?.typename) {
-        return siliconTypeNameToWasm(node.name.typeAnnotation.typename)
+        return siliconTypeNameToWasmResult(node.name.typeAnnotation.typename)
     }
     const sig = ctx.functions.get(name)
     if (sig && sig.result.kind !== 'Unknown') {
@@ -850,6 +850,13 @@ function callName(n: any): string {
 
 function siliconTypeNameToWasm(typename: string): WasmValType {
     return typename === 'Float' ? 'f32' : 'i32'
+}
+
+// Used by resolveFunctionReturnType — Void becomes the WAT 'void'
+// sentinel so the emitter omits the (result i32) clause; everything
+// else funnels through siliconTypeNameToWasm.
+function siliconTypeNameToWasmResult(typename: string): WasmType {
+    return typename === 'Void' ? 'void' : siliconTypeNameToWasm(typename)
 }
 
 /** Convert a Silicon identifier to a safe WAT identifier (:: → _). */

@@ -20,6 +20,13 @@
 #   cat source.si | wasmer run stage1.wasm > out.wat
 
 @fn _start:Void := {
+  # Phase 4a: load argv + dispatch CLI flags FIRST.  --help and
+  # unknown flags short-circuit via proc_exit; recognised flags
+  # (e.g. --target=wasix) are accepted as no-ops today and the
+  # pipeline continues with the stdin -> stdout compile.
+  &argv_load;
+  &cli_dispatch;
+
   @local cap := 524288;
   @local buf := &arena_alloc cap;
   @local total := 0;

@@ -23,6 +23,11 @@
   fd:Int, iovs_ptr:Int, iovs_len:Int, nwritten_out:Int;
 @extern wasi_snapshot_preview1::fd_read:Int
   fd:Int, iovs_ptr:Int, iovs_len:Int, nread_out:Int;
+# Phase 4a: io.si's panic_stderr references proc_exit, so any
+# bundle that includes io.si must also declare proc_exit (the
+# bootstrap lowers every top-level @fn, even unreferenced ones).
+@extern wasi_snapshot_preview1::proc_exit
+  code:Int;
 
 @let name:String := 'Delfina';
 

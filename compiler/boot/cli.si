@@ -1,0 +1,75 @@
+# boot::cli — flag dispatcher for stage1.wasm.
+#
+# Invoked once at the start of _start, BEFORE the compile pipeline
+# runs.  Walks argv (skipping argv[0] = program name) and:
+#
+#   --usage              — prints usage to fd 1, calls proc_exit 0.
+#   --emit=wasix         — accepted, no-op today (stage1 always
+#                          synthesises _start; reserved for when
+#                          host-target output diverges).
+#   --emit=host          — accepted, no-op today.
+#   --diagnostics=pretty — accepted, no-op today (only renderer
+#                          today).
+#   <unknown>            — writes a single-line error to stderr and
+#                          calls proc_exit 2.
+#
+# Flag-name note: --usage / --emit instead of the more natural
+# --help / --target because wasmer 2.x intercepts those names even
+# after the `--` separator (--help silently swallows; --target=X
+# triggers a Rust panic inside wasmer's argv parser).  Newer wasmer
+# (3+) and wasmtime pass --help / --target through unchanged.
+# When the project moves off wasmer 2.x, rename these accordingly.
+#
+# The eventual file-input path needs path_open (i64 rights flags
+# blocked on Silicon-Core i64 support); until then stage1 keeps
+# reading source from stdin regardless of the flags seen here.
+
+@fn cli_print_usage := {
+  &write_str 1, 'sigil — Silicon bootstrap compiler\n';
+  &write_str 1, '\n';
+  &write_str 1, 'Usage:\n';
+  &write_str 1, '  wasmer run stage1.wasm < source.si > out.wat\n';
+  &write_str 1, '  wasmer run stage1.wasm -- --usage\n';
+  &write_str 1, '  wasmer run stage1.wasm -- --emit=wasix < source.si > out.wat\n';
+  &write_str 1, '\n';
+  &write_str 1, 'Flags:\n';
+  &write_str 1, '  --usage                Print this message and exit.\n';
+  &write_str 1, '  --emit=wasix|host      Target runtime.  Accepted but currently a no-op\n';
+  &write_str 1, '                         (stage1 always synthesises a _start wrapper).\n';
+  &write_str 1, '  --diagnostics=pretty   Diagnostic renderer.  Only `pretty` today.\n';
+  &write_str 1, '\n';
+  &write_str 1, 'Input is read from stdin (Silicon source) and WAT is written to\n';
+  &write_str 1, 'stdout.  File-path input via argv is gated on i64 support for the\n';
+  &write_str 1, 'WASI path_open rights flags; see docs/sigil-wasm-bootstrap-plan.html\n';
+  &write_str 1, 'Phase 4.\n'
+};
+
+# Dispatch a single non-positional flag.  Returns 1 if it was
+# recognised (the caller advances), 0 otherwise (the caller emits
+# unknown-flag and exits).  --usage short-circuits via proc_exit 0.
+@fn cli_handle_flag:Int p:Int, l:Int := {
+  &@if (&argv_eq_lit p, l, '--usage'), {
+    &cli_print_usage;
+    &wasi_snapshot_preview1::proc_exit 0;
+  };
+  &@if (&argv_starts_with p, l, '--emit='),         { &@return 1; };
+  &@if (&argv_starts_with p, l, '--diagnostics='),  { &@return 1; };
+  0
+};
+
+# Walk argv past argv[0].  For each entry, dispatch through
+# cli_handle_flag.  Unknown flags panic to stderr.  Returns nothing
+# meaningful — the dispatcher's effect is via globals + proc_exit.
+@fn cli_dispatch := {
+  @local n := &argv_count;
+  @local i := 1;                           # skip argv[0] = program name
+  &@loop (i < n), {
+    @local p := &argv_ptr_at i;
+    @local l := &argv_len_at i;
+    @local ok := &cli_handle_flag p, l;
+    &@if (ok == 0), {
+      &panic_stderr 'sigil: unknown flag (try --usage)', 2;
+    };
+    i = i + 1;
+  }
+};

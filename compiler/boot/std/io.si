@@ -6,6 +6,18 @@
 # Note: the final expression in each block is the function's return value
 # (no trailing `;` on the last line).
 
+# WASI externs (fd_write / fd_read / proc_exit) used by this module
+# are NOT declared here — the TS grammar's typedIdentifier rule
+# doesn't accept `module::name` in @extern positions (only at call
+# sites), so namespaced declarations only work in files that bypass
+# the TS pipeline.  Instead:
+#   - TS side: loadModules reads bare declarations from
+#     src/strata/modules/wasi_snapshot_preview1.si.
+#   - Bootstrap side: WASI_STUB (scripts/build-stage1.ts) injects the
+#     namespaced declarations into the bundle.
+# Fixtures that bundle io.si standalone (e.g. boot/tests/delfina_
+# smoke.si) declare the externs they need explicitly.
+
 # write_bytes(fd, ptr, len) — write `len` bytes starting at `ptr` to `fd`.
 # Internally builds a 1-element iovs array on scratch memory and calls fd_write.
 # Returns the WASI errno (0 on success).
@@ -48,4 +60,26 @@
   &@match errno,
     0, { &WASM::i32_load nread },
     { 0 - 1 }
+};
+
+# eprint_str(s) — write a Silicon string literal to stderr (fd 2).  No
+# trailing newline; pair with eprint_nl if you want one.  Wrappers
+# around the io primitives so cli.si / future error paths read cleanly.
+@fn eprint_str s:String := { &write_str 2, s };
+@fn eprint_nl := { &write_byte 2, 10 };
+
+# panic_stderr(msg, code) — write `msg` + newline to stderr and exit
+# with the given non-zero code via WASI proc_exit.  Never returns.
+# Used by the CLI dispatcher for unknown-flag and other early-exit
+# error paths.  proc_exit's @extern lives in boot/std/argv.si.
+#
+# Explicit `:Void` annotation because the bootstrap's tail-produces-
+# value inference defaults multi-segment calls (e.g. proc_exit, which
+# is itself void) to "produces a value" — without :Void here the
+# function would be wrongly registered as returning i32 and validation
+# would fail with "expected i32 but nothing on stack".
+@fn panic_stderr:Void msg:String, code:Int := {
+  &eprint_str msg;
+  &eprint_nl;
+  &wasi_snapshot_preview1::proc_exit code
 };

@@ -536,16 +536,25 @@
         &fn_sig_register nm_off, nm_len, 0, has_result;
         &@if (sep_pos >= 0), {
           # Push the mangled name into NAME_POOL so it can be
-          # looked up by the pool path.
+          # looked up by the pool path.  Collapse `::` to a SINGLE
+          # `_` to match how name_pool_push_mangled writes call-site
+          # names — otherwise fn_sig_lookup misses every namespaced
+          # extern and the call site falls back to "produces value",
+          # which spuriously emits `drop` after void calls like
+          # proc_exit.
           @local pool_start := &vec_len NAME_POOL;
           @local k := 0;
           &@loop (k < nm_len), {
             @local bb := &WASM::i32_load8_u (P_SRC + nm_off + k);
-            &@if ((k == sep_pos) + (k == (sep_pos + 1)) > 0), { bb = 95; };
-            NAME_POOL = &vec_push NAME_POOL, bb;
+            @local push_byte := 1;
+            &@if (k == sep_pos), { bb = 95; };             # first ':' -> '_'
+            &@if (k == (sep_pos + 1)), { push_byte = 0; }; # second ':' -> skip
+            &@if (push_byte == 1), {
+              NAME_POOL = &vec_push NAME_POOL, bb;
+            };
             k = k + 1;
           };
-          &fn_sig_register pool_start, nm_len, 1, has_result;
+          &fn_sig_register pool_start, (nm_len - 1), 1, has_result;
         };
         @local h := &ir_extern nm_off, nm_len, n_params, has_result, sep_pos;
         out = &vec_push out, h;

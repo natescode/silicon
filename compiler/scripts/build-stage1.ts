@@ -41,7 +41,8 @@ const OUTPUT_PREFIX = process.argv[2] ?? path.join(PROJECT_ROOT, 'stage1')
 // EMBEDDED_BUNDLE :String constant that stage1.si copies into the
 // source buffer before reading stdin.
 const STAGE1_FILES = [
-    'boot/std/io.si',
+    'boot/std/argv.si',          // declares args_*/proc_exit externs;
+    'boot/std/io.si',            // panic_stderr references proc_exit
     'boot/std/arena.si',
     'boot/std/vec.si',
     'boot/embedded_bundle.si',
@@ -56,6 +57,7 @@ const STAGE1_FILES = [
     'boot/elab/body.si',
     'boot/ir/lower.si',
     'boot/emit/wat.si',
+    'boot/cli.si',               // depends on argv.si + io.si helpers
     'boot/stage1.si',
 ]
 
@@ -64,6 +66,12 @@ const WASI_STUB = [
     '  fd:Int, iovs_ptr:Int, iovs_len:Int, nwritten_out:Int;',
     '@extern wasi_snapshot_preview1::fd_read:Int',
     '  fd:Int, iovs_ptr:Int, iovs_len:Int, nread_out:Int;',
+    '@extern wasi_snapshot_preview1::args_get:Int',
+    '  argv_ptr:Int, argv_buf:Int;',
+    '@extern wasi_snapshot_preview1::args_sizes_get:Int',
+    '  argc_out:Int, argv_buf_size_out:Int;',
+    '@extern wasi_snapshot_preview1::proc_exit',
+    '  code:Int;',
 ].join('\n') + '\n'
 
 // Escape a single byte for inclusion in a Silicon single-quoted
