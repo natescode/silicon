@@ -535,9 +535,16 @@ function lowerBinaryOp(n: any, ctx: LowerCtx): IRExpr {
         : exprWasmType(left)
 
     // Bitwise ops are always i32; other ops follow the operand type.
+    // Operand-type dispatch picks the strata variant: 'Int' (i32),
+    // 'Int64' (i64), or 'Float' (f32).  Bitwise ops short-circuit
+    // to 'Int' since the i64 bitwise overloads aren't implemented yet.
     const isBitwise = ['|', '^', '<<', '>>'].includes(op)
     const leftWt = exprWasmType(left)
-    const typeKind = (isBitwise || leftWt !== 'f32') ? 'Int' : 'Float'
+    const typeKind = isBitwise
+        ? 'Int'
+        : leftWt === 'f32' ? 'Float'
+        : leftWt === 'i64' ? 'Int64'
+        : 'Int'
 
     // Resolve the operator stratum once; dispatch on its intrinsic rather than the symbol.
     const stratum = lookupTypedOperator(ctx.registry, op, typeKind)
@@ -849,7 +856,9 @@ function callName(n: any): string {
 }
 
 function siliconTypeNameToWasm(typename: string): WasmValType {
-    return typename === 'Float' ? 'f32' : 'i32'
+    if (typename === 'Float') return 'f32'
+    if (typename === 'Int64' || typename === 'i64') return 'i64'
+    return 'i32'
 }
 
 // Used by resolveFunctionReturnType — Void becomes the WAT 'void'

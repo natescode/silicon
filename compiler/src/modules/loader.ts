@@ -40,9 +40,12 @@ function unwrap(node: any): any {
     return node
 }
 
-// Silicon types are a bit more flexible than WASM's — we only support i32 and f32, but allow various names for them.
+// Silicon types map to WASM value types: Float → f32, Int64 → i64,
+// everything else (Int, Int32, Bool, String, pointer-ish) → i32.
 function siliconTypeToWasm(typename: string): WasmValType {
-    return typename === 'Float' ? 'f32' : 'i32'
+    if (typename === 'Float') return 'f32'
+    if (typename === 'Int64' || typename === 'i64') return 'i64'
+    return 'i32'
 }
 
 /**

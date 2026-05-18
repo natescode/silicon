@@ -31,6 +31,18 @@
 
 @use '../std/vec.si';
 
+# ── Value-type tags ──────────────────────────────────────────────────
+# Wasm value type encoding, used by IR_FUNCTION / IR_EXTERN to declare
+# per-param / per-result types and by per-op selection in wat.si.
+#   TYPE_VOID — sentinel for "no result" on function/extern signatures
+#   TYPE_I32  — wasm i32 (Silicon Int, Int32, Bool, String, pointer)
+#   TYPE_I64  — wasm i64 (Silicon Int64)
+#   TYPE_F32  — wasm f32 (Silicon Float)
+@let TYPE_VOID:Int := 0;
+@let TYPE_I32:Int  := 1;
+@let TYPE_I64:Int  := 2;
+@let TYPE_F32:Int  := 3;
+
 # ── Kinds ────────────────────────────────────────────────────────────
 # Reserved: 0 = "no node" sentinel.
 @let IR_NULL:Int        := 1;
@@ -53,6 +65,11 @@
 # IR_STORE [kind, op, addr_h, val_h]  — void; emits as
 # `<addr>; <val>; <op_mnemonic>`.
 @let IR_STORE:Int       := 19;
+
+# IR_I64_CONST [kind, value] — value is an i32 (the literal-arg form
+# is `&@i64 N` / `&@toInt64 N` which constrains N to i32 range).  The
+# emitter prints it as `(i64.const N)`, which WAT validates as i64.
+@let IR_I64_CONST:Int   := 20;
 
 # IR_FUNCTION  [kind, name_off, name_len, n_params, n_locals,
 #               body_h, has_result]
@@ -105,6 +122,23 @@
 @let IR_OP_F32_CONVERT_I32_S:Int := 30;
 @let IR_OP_I32_TRUNC_F32_S:Int   := 31;
 
+# Conversion unops between i32 and i64.
+@let IR_OP_I64_EXTEND_I32_S:Int  := 32;
+@let IR_OP_I32_WRAP_I64:Int      := 33;
+
+# i64 arithmetic / comparison binops — emit mnemonics in wat.si.
+@let IR_OP_I64_ADD:Int    := 60;
+@let IR_OP_I64_SUB:Int    := 61;
+@let IR_OP_I64_MUL:Int    := 62;
+@let IR_OP_I64_DIV_S:Int  := 63;
+@let IR_OP_I64_REM_S:Int  := 64;
+@let IR_OP_I64_EQ:Int     := 65;
+@let IR_OP_I64_NE:Int     := 66;
+@let IR_OP_I64_LT_S:Int   := 67;
+@let IR_OP_I64_LE_S:Int   := 68;
+@let IR_OP_I64_GT_S:Int   := 69;
+@let IR_OP_I64_GE_S:Int   := 70;
+
 # Memory load ops (unary — take a pointer, return an i32).
 @let IR_OP_I32_LOAD:Int     := 40;
 @let IR_OP_I32_LOAD8_U:Int  := 41;
@@ -142,6 +176,17 @@
 @fn ir_i32_const:Int value:Int := {
   @local h := &vec_len IR_VEC;
   IR_VEC = &vec_push IR_VEC, IR_I32_CONST;
+  IR_VEC = &vec_push IR_VEC, value;
+  h
+};
+
+# ir_i64_const — produces an `(i64.const N)` at emit time.  N is an i32
+# at the IR level (the literal-arg form `&@toInt64 N` constrains N to
+# i32 range); the emitter prints it in the i64 context so WAT folds it
+# to the right 64-bit pattern.
+@fn ir_i64_const:Int value:Int := {
+  @local h := &vec_len IR_VEC;
+  IR_VEC = &vec_push IR_VEC, IR_I64_CONST;
   IR_VEC = &vec_push IR_VEC, value;
   h
 };
@@ -330,22 +375,46 @@
 @fn ir_function_body:Int       handle:Int := { &vec_get IR_VEC, (handle + 5) };
 @fn ir_function_has_result:Int handle:Int := { &vec_get IR_VEC, (handle + 6) };
 
-# ir_extern — `[IR_EXTERN, name_off, name_len, n_params, has_result,
-#                sep_pos]`
+# ir_extern — `[IR_EXTERN, name_off, name_len, n_params, result_type,
+#                sep_pos, ptype0, ptype1, ..., ptype_{n_params-1}]`
+#
+# `result_type` is one of TYPE_VOID / TYPE_I32 / TYPE_I64 / TYPE_F32.
+# `param_types` is a vec<i32> of per-param TYPE_* tags (length must
+# equal `n_params`).  The tags are appended inline to the record so the
+# emitter can read them with a single index — no parallel-vec lookup.
 @fn ir_extern:Int name_off:Int, name_len:Int,
-                  n_params:Int, has_result:Int, sep_pos:Int := {
+                  n_params:Int, result_type:Int, sep_pos:Int,
+                  param_types:Int := {
   @local h := &vec_len IR_VEC;
   IR_VEC = &vec_push IR_VEC, IR_EXTERN;
   IR_VEC = &vec_push IR_VEC, name_off;
   IR_VEC = &vec_push IR_VEC, name_len;
   IR_VEC = &vec_push IR_VEC, n_params;
-  IR_VEC = &vec_push IR_VEC, has_result;
+  IR_VEC = &vec_push IR_VEC, result_type;
   IR_VEC = &vec_push IR_VEC, sep_pos;
+  @local i := 0;
+  &@loop (i < n_params), {
+    IR_VEC = &vec_push IR_VEC, (&vec_get param_types, i);
+    i = i + 1;
+  };
   h
 };
 
-@fn ir_extern_name_off:Int   handle:Int := { &vec_get IR_VEC, (handle + 1) };
-@fn ir_extern_name_len:Int   handle:Int := { &vec_get IR_VEC, (handle + 2) };
-@fn ir_extern_n_params:Int   handle:Int := { &vec_get IR_VEC, (handle + 3) };
-@fn ir_extern_has_result:Int handle:Int := { &vec_get IR_VEC, (handle + 4) };
-@fn ir_extern_sep_pos:Int    handle:Int := { &vec_get IR_VEC, (handle + 5) };
+@fn ir_extern_name_off:Int     handle:Int := { &vec_get IR_VEC, (handle + 1) };
+@fn ir_extern_name_len:Int     handle:Int := { &vec_get IR_VEC, (handle + 2) };
+@fn ir_extern_n_params:Int     handle:Int := { &vec_get IR_VEC, (handle + 3) };
+@fn ir_extern_result_type:Int  handle:Int := { &vec_get IR_VEC, (handle + 4) };
+@fn ir_extern_sep_pos:Int      handle:Int := { &vec_get IR_VEC, (handle + 5) };
+
+# Read the i-th param's TYPE_* tag.
+@fn ir_extern_param_type:Int handle:Int, i:Int := {
+  &vec_get IR_VEC, (handle + 6 + i)
+};
+
+# Back-compat shim: emitters and lower-side fn_sig still ask "does this
+# extern return a value?"  Derive that from result_type.
+@fn ir_extern_has_result:Int handle:Int := {
+  @local rt := &vec_get IR_VEC, (handle + 4);
+  &@if (rt == TYPE_VOID), { &@return 0; };
+  1
+};

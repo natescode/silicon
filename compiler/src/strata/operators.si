@@ -81,3 +81,50 @@
 @stratum_operator GreaterThanOrEqualFloat ('>=', Node) = {
   &IR::f32_ge Node.left, Node.right;
 };
+
+# Int64 overloads — registered under the compound key `${op}:Int64`.
+# Operator dispatch in lowerBinaryOp picks these when both operands
+# are Int64; the plain Int (i32) entries above stay primary.
+@stratum_operator PlusInt64 ('+', Node) = {
+  &IR::i64_add Node.left, Node.right;
+};
+
+@stratum_operator MinusInt64 ('-', Node) = {
+  &IR::i64_sub Node.left, Node.right;
+};
+
+@stratum_operator MultiplyInt64 ('*', Node) = {
+  &IR::i64_mul Node.left, Node.right;
+};
+
+@stratum_operator DivideInt64 ('/', Node) = {
+  &IR::i64_div_s Node.left, Node.right;
+};
+
+@stratum_operator ModuloInt64 ('%', Node) = {
+  &IR::i64_rem_s Node.left, Node.right;
+};
+
+@stratum_operator EqualInt64 ('==', Node) = {
+  &IR::i64_eq Node.left, Node.right;
+};
+
+@stratum_operator NotEqualInt64 ('!=', Node) = {
+  &IR::i64_ne Node.left, Node.right;
+};
+
+@stratum_operator LessThanInt64 ('<', Node) = {
+  &IR::i64_lt_s Node.left, Node.right;
+};
+
+@stratum_operator GreaterThanInt64 ('>', Node) = {
+  &IR::i64_gt_s Node.left, Node.right;
+};
+
+@stratum_operator LessThanOrEqualInt64 ('<=', Node) = {
+  &IR::i64_le_s Node.left, Node.right;
+};
+
+@stratum_operator GreaterThanOrEqualInt64 ('>=', Node) = {
+  &IR::i64_ge_s Node.left, Node.right;
+};

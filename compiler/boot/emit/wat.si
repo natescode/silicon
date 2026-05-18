@@ -88,12 +88,25 @@
   &@if (op == IR_OP_F32_LE),     { &ew_str 'f32.le'; };
   &@if (op == IR_OP_F32_GT),     { &ew_str 'f32.gt'; };
   &@if (op == IR_OP_F32_GE),     { &ew_str 'f32.ge'; };
+  &@if (op == IR_OP_I64_ADD),    { &ew_str 'i64.add'; };
+  &@if (op == IR_OP_I64_SUB),    { &ew_str 'i64.sub'; };
+  &@if (op == IR_OP_I64_MUL),    { &ew_str 'i64.mul'; };
+  &@if (op == IR_OP_I64_DIV_S),  { &ew_str 'i64.div_s'; };
+  &@if (op == IR_OP_I64_REM_S),  { &ew_str 'i64.rem_s'; };
+  &@if (op == IR_OP_I64_EQ),     { &ew_str 'i64.eq'; };
+  &@if (op == IR_OP_I64_NE),     { &ew_str 'i64.ne'; };
+  &@if (op == IR_OP_I64_LT_S),   { &ew_str 'i64.lt_s'; };
+  &@if (op == IR_OP_I64_LE_S),   { &ew_str 'i64.le_s'; };
+  &@if (op == IR_OP_I64_GT_S),   { &ew_str 'i64.gt_s'; };
+  &@if (op == IR_OP_I64_GE_S),   { &ew_str 'i64.ge_s'; };
 };
 
 @fn emit_unop_mnemonic op:Int := {
   &@if (op == IR_OP_I32_EQZ),           { &ew_str 'i32.eqz'; };
   &@if (op == IR_OP_F32_CONVERT_I32_S), { &ew_str 'f32.convert_i32_s'; };
   &@if (op == IR_OP_I32_TRUNC_F32_S),   { &ew_str 'i32.trunc_f32_s'; };
+  &@if (op == IR_OP_I64_EXTEND_I32_S),  { &ew_str 'i64.extend_i32_s'; };
+  &@if (op == IR_OP_I32_WRAP_I64),      { &ew_str 'i32.wrap_i64'; };
   &@if (op == IR_OP_I32_LOAD),          { &ew_str 'i32.load'; };
   &@if (op == IR_OP_I32_LOAD8_U),       { &ew_str 'i32.load8_u'; };
   &@if (op == IR_OP_I32_LOAD8_S),       { &ew_str 'i32.load8_s'; };
@@ -215,7 +228,7 @@
   @local nm_off := &ir_extern_name_off fn_h;
   @local nm_len := &ir_extern_name_len fn_h;
   @local n_params := &ir_extern_n_params fn_h;
-  @local has_result := &ir_extern_has_result fn_h;
+  @local result_type := &ir_extern_result_type fn_h;
   @local sep_pos := &ir_extern_sep_pos fn_h;
 
   &ew_str '  (import "';
@@ -254,10 +267,17 @@
   };
   i = 0;
   &@loop (i < n_params), {
-    &ew_str ' (param i32)';
+    @local pt := &ir_extern_param_type fn_h, i;
+    &@if (pt == TYPE_I64), { &ew_str ' (param i64)'; };
+    &@if (pt == TYPE_F32), { &ew_str ' (param f32)'; };
+    # Default / TYPE_I32 path — keep the exact byte sequence today's
+    # all-i32 boot tree emits, preserving byte-equal self-host.
+    &@if ((pt != TYPE_I64) * (pt != TYPE_F32) == 1), { &ew_str ' (param i32)'; };
     i = i + 1;
   };
-  &@if (has_result == 1), { &ew_str ' (result i32)'; };
+  &@if (result_type == TYPE_I32), { &ew_str ' (result i32)'; };
+  &@if (result_type == TYPE_I64), { &ew_str ' (result i64)'; };
+  &@if (result_type == TYPE_F32), { &ew_str ' (result f32)'; };
   &ew_str '))'; &ew_byte 10;
 };
 
@@ -462,6 +482,13 @@
 
   &@if (k == IR_I32_CONST), {
     &ew_str 'i32.const ';
+    &ew_write_int (&ir_field h, 1);
+    &ew_byte 10;
+    &@return 0;
+  };
+
+  &@if (k == IR_I64_CONST), {
+    &ew_str 'i64.const ';
     &ew_write_int (&ir_field h, 1);
     &ew_byte 10;
     &@return 0;

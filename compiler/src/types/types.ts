@@ -33,6 +33,7 @@
  */
 export type SiliconType =
     | { kind: 'Int' }
+    | { kind: 'Int64' }
     | { kind: 'Float' }
     | { kind: 'String' }
     | { kind: 'Bool' }
@@ -55,13 +56,14 @@ export type SiliconType =
  * The set of WebAssembly value types Silicon currently targets. `void` is used
  * for expressions that produce no stack value (e.g. prints, stores).
  */
-export type WasmType = 'i32' | 'f32' | 'void'
+export type WasmType = 'i32' | 'i64' | 'f32' | 'void'
 
 /**
  * Pre-constructed singletons for the common primitive types. Using these
  * avoids allocating a fresh object every time the checker names a type.
  */
 export const TypeInt: SiliconType = { kind: 'Int' }
+export const TypeInt64: SiliconType = { kind: 'Int64' }
 export const TypeFloat: SiliconType = { kind: 'Float' }
 export const TypeString: SiliconType = { kind: 'String' }
 export const TypeBool: SiliconType = { kind: 'Bool' }
@@ -114,6 +116,8 @@ export function wasmTypeOf(t: SiliconType): WasmType {
         case 'Array':    // pointer
         case 'Function': // function table index
             return 'i32'
+        case 'Int64':
+            return 'i64'
         case 'Float':
             return 'f32'
         case 'Distinct':
@@ -160,6 +164,7 @@ export function typeEquals(a: SiliconType, b: SiliconType): boolean {
 export function formatType(t: SiliconType): string {
     switch (t.kind) {
         case 'Int': return 'Int'
+        case 'Int64': return 'Int64'
         case 'Float': return 'Float'
         case 'String': return 'String'
         case 'Bool': return 'Bool'
@@ -187,6 +192,11 @@ export function formatType(t: SiliconType): string {
 export function parseTypeName(name: string, aliases?: Map<string, SiliconType>): SiliconType | undefined {
     switch (name) {
         case 'Int': return TypeInt
+        // Int32 is a fixed-width alias for the target-sized Int. On wasm32
+        // these are identical; on a future wasm64 target, Int would map to
+        // Int64 while Int32 stayed at i32.
+        case 'Int32': return TypeInt
+        case 'Int64': return TypeInt64
         case 'Float': return TypeFloat
         case 'String': return TypeString
         case 'Bool': return TypeBool
@@ -197,6 +207,7 @@ export function parseTypeName(name: string, aliases?: Map<string, SiliconType>):
         case 'Void': return TypeUnknown
         // Low-level escape hatch — WASM types written directly.
         case 'i32': return TypeInt
+        case 'i64': return TypeInt64
         case 'f32': return TypeFloat
         default:
             return aliases?.get(name)
@@ -208,7 +219,7 @@ export function parseTypeName(name: string, aliases?: Map<string, SiliconType>):
  * arithmetic operators.
  */
 export function isNumeric(t: SiliconType): boolean {
-    return t.kind === 'Int' || t.kind === 'Float'
+    return t.kind === 'Int' || t.kind === 'Int64' || t.kind === 'Float'
 }
 
 /**
@@ -216,7 +227,7 @@ export function isNumeric(t: SiliconType): boolean {
  * String is excluded — pointer ordering is not meaningful.
  */
 export function isComparable(t: SiliconType): boolean {
-    return t.kind === 'Int' || t.kind === 'Float' || t.kind === 'Bool'
+    return t.kind === 'Int' || t.kind === 'Int64' || t.kind === 'Float' || t.kind === 'Bool'
 }
 
 /**
@@ -224,5 +235,5 @@ export function isComparable(t: SiliconType): boolean {
  * String is included — compares pointers (reference equality).
  */
 export function isEqualityComparable(t: SiliconType): boolean {
-    return t.kind === 'Int' || t.kind === 'Float' || t.kind === 'Bool' || t.kind === 'String' || t.kind === 'Sum'
+    return t.kind === 'Int' || t.kind === 'Int64' || t.kind === 'Float' || t.kind === 'Bool' || t.kind === 'String' || t.kind === 'Sum'
 }

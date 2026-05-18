@@ -1947,3 +1947,170 @@ test("Round 46: unknown module throws a meaningful error", () => {
     expect(result.success).toBe(false)
     expect(result.error).toContain("Unknown module 'nonexistent'")
 })
+
+// ============================================================================
+// Phase A — Silicon-Core i64: Int64 type + @toInt64 / @toInt overload
+//   Plan: docs/silicon-core-i64-plan.html
+// ============================================================================
+
+test("Phase A i64: Int64 extern declaration emits (param i64) and (result i64)", () => {
+    const result = compileSource(loadExample("int64_extern_call.si"))
+    expect(result.success).toBe(true)
+    expect(result.wat).toContain('(param i64)')
+    expect(result.wat).toContain('(result i64)')
+})
+
+test("Phase A i64: @toInt64 emits i64.extend_i32_s and the call passes an i64 arg", () => {
+    const result = compileSource(loadExample("int64_extern_call.si"))
+    expect(result.success).toBe(true)
+    expect(result.wat).toContain('i64.extend_i32_s')
+})
+
+test("Phase A i64: Int64 parameter on a Silicon function compiles", () => {
+    const result = compileSource("@let identity64 x:Int64 := { x };")
+    expect(result.success).toBe(true)
+    expect(result.wat).toContain('(param $x i64)')
+    expect(result.wat).toContain('(result i64)')
+})
+
+test("Phase A i64: @toInt overload on Int64 emits i32.wrap_i64", () => {
+    const result = compileSource(
+        "@let extend x:Int := { &@toInt64 x };" +
+        "@let narrow x:Int64 := { &@toInt x };"
+    )
+    expect(result.success).toBe(true)
+    expect(result.wat).toContain('i64.extend_i32_s')
+    expect(result.wat).toContain('i32.wrap_i64')
+})
+
+test("Phase A i64: passing an Int where Int64 is expected is a type error", () => {
+    const result = compileSource(
+        "@let take64 x:Int64 := { x };" +
+        "@let run := { &take64 5 };"
+    )
+    expect(result.success).toBe(false)
+    expect(result.error).toMatch(/mismatch|Int|Int64/i)
+})
+
+test("Phase A i64: Int32 is recognised as a type name (alias for Int on wasm32)", () => {
+    // Int32 should resolve to the same type as Int on the current target.
+    const result = compileSource("@let id32 x:Int32 := { x };")
+    expect(result.success).toBe(true)
+    expect(result.wat).toContain('(param $x i32)')
+})
+
+test("Phase A i64: @toInt64 result type is Int64 — propagates to extern arg position", () => {
+    // The @toInt64 cast must yield Int64 so the extern call typechecks.
+    const result = compileSource(
+        "@extern wants64:Int64 a:Int64;" +
+        "@let run x:Int := { &wants64 (&@toInt64 x) };"
+    )
+    expect(result.success).toBe(true)
+    expect(result.wat).toContain('i64.extend_i32_s')
+})
+
+test("Phase A i64: i64 escape hatch (lowercase) parses as Int64", () => {
+    // The :i64 / :i32 / :f32 surface forms are documented escape hatches.
+    const result = compileSource("@let id x:i64 := { x };")
+    expect(result.success).toBe(true)
+    expect(result.wat).toContain('(param $x i64)')
+})
+
+// ============================================================================
+// Phase C — Silicon-Core i64: arithmetic + comparison strata
+//   Operator dispatch picks the Int64 overload when both operands are i64.
+// ============================================================================
+
+test("Phase C i64: Int64 + Int64 emits i64.add", () => {
+    const result = compileSource("@let add64 x:Int64, y:Int64 := { x + y };")
+    expect(result.success).toBe(true)
+    const uw = userWat(result.wat!)
+    expect(uw).toContain('i64.add')
+    expect(uw).not.toContain('i32.add')
+})
+
+test("Phase C i64: Int64 < Int64 emits i64.lt_s and returns Bool", () => {
+    const result = compileSource("@let cmp64 x:Int64, y:Int64 := { x < y };")
+    expect(result.success).toBe(true)
+    expect(result.wat).toContain('i64.lt_s')
+    // Comparison result is i32 (Bool) — the function's result reflects that.
+    expect(result.wat).toContain('(result i32)')
+})
+
+test("Phase C i64: full set of arithmetic ops dispatches to i64 variants", () => {
+    const result = compileSource(
+        "@let arith x:Int64, y:Int64 := { ((x + y) - (x * y)) / (x % y) };"
+    )
+    expect(result.success).toBe(true)
+    expect(result.wat).toContain('i64.add')
+    expect(result.wat).toContain('i64.sub')
+    expect(result.wat).toContain('i64.mul')
+    expect(result.wat).toContain('i64.div_s')
+    expect(result.wat).toContain('i64.rem_s')
+})
+
+test("Phase C i64: @toInt64 cast + i64 arithmetic compose", () => {
+    const result = compileSource("@let chain x:Int := { (&@toInt64 x) + (&@toInt64 1) };")
+    expect(result.success).toBe(true)
+    expect(result.wat).toContain('i64.extend_i32_s')
+    expect(result.wat).toContain('i64.add')
+})
+
+test("Phase C i64: comparison ops (==, !=, >, <=, >=) all dispatch to i64", () => {
+    const result = compileSource(
+        "@let eq x:Int64, y:Int64 := { x == y };" +
+        "@let ne x:Int64, y:Int64 := { x != y };" +
+        "@let gt x:Int64, y:Int64 := { x > y };" +
+        "@let le x:Int64, y:Int64 := { x <= y };" +
+        "@let ge x:Int64, y:Int64 := { x >= y };"
+    )
+    expect(result.success).toBe(true)
+    expect(result.wat).toContain('i64.eq')
+    expect(result.wat).toContain('i64.ne')
+    expect(result.wat).toContain('i64.gt_s')
+    expect(result.wat).toContain('i64.le_s')
+    expect(result.wat).toContain('i64.ge_s')
+})
+
+test("Phase C i64: i32 arithmetic still dispatches to i32 (no regression)", () => {
+    const result = compileSource("@let add x:Int, y:Int := { x + y };")
+    expect(result.success).toBe(true)
+    const uw = userWat(result.wat!)
+    expect(uw).toContain('i32.add')
+    expect(uw).not.toContain('i64.add')
+})
+
+// ============================================================================
+// Phase D — Silicon-Core i64: real path_open call composes through
+//   The wasi_snapshot_preview1 module now declares path_open's rights
+//   flags as Int64; this test proves an end-to-end Silicon program can
+//   call it with i64 args without falling through any escape hatch.
+// ============================================================================
+
+test("Phase D i64: path_open call site composes i64 args via module call", () => {
+    const result = compileSource(loadExample("path_open_i64.si"))
+    expect(result.success).toBe(true)
+    // The module-call sugar generates the import automatically with i64 rights.
+    expect(result.wat).toContain('(import "wasi_snapshot_preview1" "path_open"')
+    expect(result.wat).toContain('(param i64) (param i64)')
+    // Call site passes i64 args produced by @toInt64.
+    expect(result.wat).toContain('i64.extend_i32_s')
+})
+
+test("Phase D i64: wasi_snapshot_preview1.path_open module registry declares i64 rights", () => {
+    // Calling path_open without an explicit @extern (module sugar) emits
+    // the right import signature: the two rights flags are i64.
+    const result = compileSource(`
+        @fn try_open dir:Int, p:Int, l:Int, out:Int := {
+            &wasi_snapshot_preview1::path_open
+                dir, 0, p, l, 0,
+                (&@toInt64 0), (&@toInt64 0),
+                0, out
+        };
+    `)
+    expect(result.success).toBe(true)
+    // Five i32 params, two i64 params for rights, two more i32 — total signature shape.
+    expect(result.wat).toMatch(
+        /\(import "wasi_snapshot_preview1" "path_open"[^)]+\(param i32\) \(param i32\) \(param i32\) \(param i32\) \(param i32\) \(param i64\) \(param i64\) \(param i32\) \(param i32\)/
+    )
+})

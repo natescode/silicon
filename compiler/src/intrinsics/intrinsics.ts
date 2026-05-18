@@ -87,6 +87,51 @@ export const wasmIntrinsics: Record<string, WasmIntrinsic> = {
     i32_trunc_f32_u: { name: 'WASM::i32_trunc_f32_u', wasmInstr: 'i32.trunc_f32_u', description: 'f32 → unsigned i32 (truncate)' },
     f32_convert_i32_s: { name: 'WASM::f32_convert_i32_s', wasmInstr: 'f32.convert_i32_s', description: 'signed i32 → f32' },
     f32_convert_i32_u: { name: 'WASM::f32_convert_i32_u', wasmInstr: 'f32.convert_i32_u', description: 'unsigned i32 → f32' },
+    i64_extend_i32_s:  { name: 'WASM::i64_extend_i32_s',  wasmInstr: 'i64.extend_i32_s',  description: 'signed i32 → i64 (sign-extend)' },
+    i64_extend_i32_u:  { name: 'WASM::i64_extend_i32_u',  wasmInstr: 'i64.extend_i32_u',  description: 'unsigned i32 → i64 (zero-extend)' },
+    i32_wrap_i64:      { name: 'WASM::i32_wrap_i64',      wasmInstr: 'i32.wrap_i64',      description: 'i64 → i32 (drop high bits)' },
+
+    // -------------------------------------------------------------------------
+    // Integer (i64) Arithmetic
+    // -------------------------------------------------------------------------
+    i64_add:   { name: 'WASM::i64_add',   wasmInstr: 'i64.add',   description: 'Add two i64 values' },
+    i64_sub:   { name: 'WASM::i64_sub',   wasmInstr: 'i64.sub',   description: 'Subtract two i64 values' },
+    i64_mul:   { name: 'WASM::i64_mul',   wasmInstr: 'i64.mul',   description: 'Multiply two i64 values' },
+    i64_div_s: { name: 'WASM::i64_div_s', wasmInstr: 'i64.div_s', description: 'Signed i64 division' },
+    i64_div_u: { name: 'WASM::i64_div_u', wasmInstr: 'i64.div_u', description: 'Unsigned i64 division' },
+    i64_rem_s: { name: 'WASM::i64_rem_s', wasmInstr: 'i64.rem_s', description: 'Signed i64 remainder' },
+    i64_rem_u: { name: 'WASM::i64_rem_u', wasmInstr: 'i64.rem_u', description: 'Unsigned i64 remainder' },
+
+    // -------------------------------------------------------------------------
+    // Integer (i64) Comparison (return i32 1/0)
+    // -------------------------------------------------------------------------
+    i64_eq:   { name: 'WASM::i64_eq',   wasmInstr: 'i64.eq',   description: 'i64 equality' },
+    i64_ne:   { name: 'WASM::i64_ne',   wasmInstr: 'i64.ne',   description: 'i64 inequality' },
+    i64_lt_s: { name: 'WASM::i64_lt_s', wasmInstr: 'i64.lt_s', description: 'Signed i64 less-than' },
+    i64_lt_u: { name: 'WASM::i64_lt_u', wasmInstr: 'i64.lt_u', description: 'Unsigned i64 less-than' },
+    i64_le_s: { name: 'WASM::i64_le_s', wasmInstr: 'i64.le_s', description: 'Signed i64 ≤' },
+    i64_le_u: { name: 'WASM::i64_le_u', wasmInstr: 'i64.le_u', description: 'Unsigned i64 ≤' },
+    i64_gt_s: { name: 'WASM::i64_gt_s', wasmInstr: 'i64.gt_s', description: 'Signed i64 greater-than' },
+    i64_gt_u: { name: 'WASM::i64_gt_u', wasmInstr: 'i64.gt_u', description: 'Unsigned i64 greater-than' },
+    i64_ge_s: { name: 'WASM::i64_ge_s', wasmInstr: 'i64.ge_s', description: 'Signed i64 ≥' },
+    i64_ge_u: { name: 'WASM::i64_ge_u', wasmInstr: 'i64.ge_u', description: 'Unsigned i64 ≥' },
+    i64_eqz:  { name: 'WASM::i64_eqz',  wasmInstr: 'i64.eqz',  description: 'Test if i64 is zero' },
+
+    // -------------------------------------------------------------------------
+    // Bitwise / Shift (i64)
+    // -------------------------------------------------------------------------
+    i64_and:   { name: 'WASM::i64_and',   wasmInstr: 'i64.and',   description: 'Bitwise AND (i64)' },
+    i64_or:    { name: 'WASM::i64_or',    wasmInstr: 'i64.or',    description: 'Bitwise OR (i64)' },
+    i64_xor:   { name: 'WASM::i64_xor',   wasmInstr: 'i64.xor',   description: 'Bitwise XOR (i64)' },
+    i64_shl:   { name: 'WASM::i64_shl',   wasmInstr: 'i64.shl',   description: 'Shift left (i64)' },
+    i64_shr_s: { name: 'WASM::i64_shr_s', wasmInstr: 'i64.shr_s', description: 'Arithmetic shift right (i64)' },
+    i64_shr_u: { name: 'WASM::i64_shr_u', wasmInstr: 'i64.shr_u', description: 'Logical shift right (i64)' },
+
+    // -------------------------------------------------------------------------
+    // Memory (i64)
+    // -------------------------------------------------------------------------
+    i64_load:  { name: 'WASM::i64_load',  wasmInstr: 'i64.load',  description: 'Load i64 from memory' },
+    i64_store: { name: 'WASM::i64_store', wasmInstr: 'i64.store', description: 'Store i64 to memory' },
 
     // -------------------------------------------------------------------------
     // Memory

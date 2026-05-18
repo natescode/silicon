@@ -69,6 +69,25 @@ Grammar changes are last-resort and need a discussion first.
 - **DO NOT change the grammar.** If it seems necessary, ask permission. Silicon is meant to be simple and bootstrappable. New language features should be added via Stratum.
 - **ALWAYS consult the docs** (`docs/bootstrap-plan.html`, `docs/stage0-cleanup-plan.html`, `docs/strata.md`, `docs/compiler-api.md`) for architectural direction.
 
+## Integer Type Hierarchy
+
+Silicon has three integer surface types, all mapping to WebAssembly value types:
+
+- **`Int`** — target-sized signed integer. On the current `wasm32` target this is `i32`; on a future `wasm64` target it would become `i64`. The default for unsuffixed integer literals.
+- **`Int32`** — explicit 32-bit signed integer. Today this is a recognised alias for `Int` (parses to the same `SiliconType`); kept in the surface so code that needs a guaranteed 32-bit type doesn't have to retype when wasm64 lands.
+- **`Int64`** — explicit 64-bit signed integer. Always `i64` regardless of target. Required for WASI surfaces with 64-bit fields (`path_open` rights, `fd_seek` offset).
+
+Conversions are explicit — no implicit coercion between widths:
+
+- `&@toInt64 x` — `Int → Int64` (sign-extend; `i64.extend_i32_s`).
+- `&@toInt x` — `Int64 → Int` (wrap; `i32.wrap_i64`). Typed-dispatch overload; the `Float → Int` variant of `@toInt` still applies for `Float` arguments.
+
+Arithmetic operators (`+`, `-`, `*`, `/`, `%`) and comparisons (`==`, `!=`, `<`, `>`, `<=`, `>=`) dispatch by operand type via the strata registry. When both operands are `Int64`, the operator resolves to the `i64.*` instruction set. No implicit promotion: `5 + (&@toInt64 1)` is a type error — both sides must be the same width.
+
+No integer-literal suffixes — `42i64` does **not** parse. Use the keyword cast: `&@toInt64 42`. The grammar is unchanged.
+
+Bootstrap support: stage1 understands the full hierarchy via `TYPE_*` constants in `boot/ir/nodes.si` and `type_name_to_kind` in `boot/ir/lower.si`. The byte-equal self-host gate (`STAGE 2 == STAGE 1`) is preserved across the i64 work because no source in `boot/*` currently uses `Int64`. Limitation: typed-operator dispatch in the bootstrap is not yet implemented — the i64 arithmetic strata are registered but only TS Stage 0 picks them. Bootstrap user programs that need i64 arithmetic (vs. just constants/calls) would need that follow-up.
+
 ## Sum Types Today
 
 - `@enum` — payload-free tagged variants, each variant is an immutable i32 global (`Red := 0`, `Green := 1`, …). `@type_sum` is the legacy spelling; both keywords behave identically.

@@ -13,7 +13,7 @@
  */
 
 /** The WASM value types Silicon uses. 'void' means no stack value produced. */
-export type WasmValType = 'i32' | 'f32'
+export type WasmValType = 'i32' | 'i64' | 'f32'
 export type WasmType = WasmValType | 'void'
 
 // ---------------------------------------------------------------------------

@@ -5,3 +5,15 @@
 @stratum_keyword ToInt ('@toInt', Node) = {
   &IR::i32_trunc_f32_s;
 };
+
+# Int → Int64 (sign-extend i32 to i64).
+@stratum_keyword ToInt64 ('@toInt64', Node) = {
+  &IR::i64_extend_i32_s;
+};
+
+# Int64 → Int (wrap, dropping the high 32 bits).
+# Overloads @toInt — the typed-keyword dispatch picks this variant when
+# the operand is Int64; the Float variant above stays in place for f32 args.
+@stratum_keyword ToIntFromInt64 ('@toInt', Node) = {
+  &IR::i32_wrap_i64;
+};

@@ -12,7 +12,7 @@
  * a hand-written table for every WASM op.
  */
 
-import { type SiliconType, TypeInt, TypeFloat, TypeBool, TypeUnknown } from './types'
+import { type SiliconType, TypeInt, TypeInt64, TypeFloat, TypeBool, TypeUnknown } from './types'
 
 /**
  * Type signature for a strata or WASM intrinsic: param types + result type.
@@ -36,19 +36,22 @@ export function intrinsicSignature(fullName: string): TypeSig | undefined {
     const short = m[1]
 
     // Binary arithmetic / bitwise / comparison: <type>_<op>
-    const binaryOp = /^(i32|f32)_(add|sub|mul|div(_[su])?|rem(_[su])?|and|or|xor|shl|shr_s|shr_u|rotl|rotr|eq|ne|lt(_[su])?|gt(_[su])?|le(_[su])?|ge(_[su])?)$/
+    const binaryOp = /^(i32|i64|f32)_(add|sub|mul|div(_[su])?|rem(_[su])?|and|or|xor|shl|shr_s|shr_u|rotl|rotr|eq|ne|lt(_[su])?|gt(_[su])?|le(_[su])?|ge(_[su])?)$/
     if (binaryOp.test(short)) {
-        const prefix = short.startsWith('i32') ? TypeInt : TypeFloat
+        const prefix = short.startsWith('i32') ? TypeInt
+            : short.startsWith('i64') ? TypeInt64
+            : TypeFloat
         const isComp = /^(eq|ne|lt|gt|le|ge)(_[su])?$/.test(short.slice(4))
         return { params: [prefix, prefix], result: isComp ? TypeBool : prefix }
     }
 
     // Unary ops.
-    // Note: i32_eqz is intentionally excluded — at the Silicon level @not must
-    // accept both Bool and Int operands, but the type system treats them as
-    // distinct types. Giving eqz a typed signature would reject `@not @true`
-    // (Bool arg) when the signature says Int. The stratum stays untyped so
-    // lookupTypedKeyword falls back to the plain entry for both operand kinds.
+    // Note: i32_eqz / i64_eqz are intentionally excluded — at the Silicon
+    // level @not must accept both Bool and Int operands, but the type system
+    // treats them as distinct types. Giving eqz a typed signature would
+    // reject `@not @true` (Bool arg) when the signature says Int. The
+    // stratum stays untyped so lookupTypedKeyword falls back to the plain
+    // entry for both operand kinds.
     const unaryI32 = ['clz', 'ctz', 'popcnt']
     if (short.startsWith('i32_') && unaryI32.includes(short.slice(4))) {
         return { params: [TypeInt], result: TypeInt }
@@ -65,16 +68,28 @@ export function intrinsicSignature(fullName: string): TypeSig | undefined {
     if (short === 'f32_convert_i32_s' || short === 'f32_convert_i32_u') {
         return { params: [TypeInt], result: TypeFloat }
     }
+    if (short === 'i64_extend_i32_s' || short === 'i64_extend_i32_u') {
+        return { params: [TypeInt], result: TypeInt64 }
+    }
+    if (short === 'i32_wrap_i64') {
+        return { params: [TypeInt64], result: TypeInt }
+    }
 
     // Memory ops.
     if (short === 'i32_load' || short === 'i32_load8_s' || short === 'i32_load8_u') {
         return { params: [TypeInt], result: TypeInt }
+    }
+    if (short === 'i64_load') {
+        return { params: [TypeInt], result: TypeInt64 }
     }
     if (short === 'f32_load') {
         return { params: [TypeInt], result: TypeFloat }
     }
     if (short === 'i32_store' || short === 'i32_store8') {
         return { params: [TypeInt, TypeInt], result: TypeUnknown }
+    }
+    if (short === 'i64_store') {
+        return { params: [TypeInt, TypeInt64], result: TypeUnknown }
     }
     if (short === 'f32_store') {
         return { params: [TypeInt, TypeFloat], result: TypeUnknown }

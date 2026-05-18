@@ -233,7 +233,11 @@ export interface CompilerAPI {
 
 export function createCompilerAPI(ctx: CtxShape, fns: LowerFns): CompilerAPI {
     function resolveTypeName(name: string): WasmValType {
-        return name === 'Float' ? 'f32' : 'i32'
+        if (name === 'Float') return 'f32'
+        // Int64 is the only fixed-width 64-bit type; the surface alias `i64`
+        // is the low-level escape hatch mirroring how `i32`/`f32` work.
+        if (name === 'Int64' || name === 'i64') return 'i64'
+        return 'i32'
     }
 
     const compilerCtx: CompilerCtx = {

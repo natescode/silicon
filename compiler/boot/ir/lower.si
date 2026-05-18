@@ -513,10 +513,12 @@
       &@if (is_ext == 1), {
         @local nm_off := &ast_field P_AST, elem, 3;
         @local nm_len := &ast_field P_AST, elem, 4;
+        @local ty_off := &ast_field P_AST, elem, 5;
         @local ty_len := &ast_field P_AST, elem, 6;
         @local n_params := &ast_field P_AST, elem, 7;
+        @local result_type := &type_name_to_kind ty_off, ty_len;
         @local has_result := 0;
-        &@if (ty_len > 0), { has_result = 1; };
+        &@if (result_type != TYPE_VOID), { has_result = 1; };
         # Scan the name for `::` so the emitter can produce a
         # `(import "<module>" "<field>" ...)` whose module matches
         # the prefix.  sep_pos == -1 means no `::` → defaults to "env".
@@ -556,7 +558,25 @@
           };
           &fn_sig_register pool_start, (nm_len - 1), 1, has_result;
         };
-        @local h := &ir_extern nm_off, nm_len, n_params, has_result, sep_pos;
+        # Collect per-param TYPE_* tags by reading each AST_PARAMETER's
+        # type-name span.  Params are listed at AST_DEFINITION offsets
+        # 8..(8 + n_params - 1).
+        @local param_types := &vec_new;
+        @local pi := 0;
+        &@loop (pi < n_params), {
+          @local param_idx := &ast_field P_AST, elem, (8 + pi);
+          # AST_PARAMETER [kind, name_off, name_len, type_off, type_len]
+          @local p_ty_off := &ast_field P_AST, param_idx, 3;
+          @local p_ty_len := &ast_field P_AST, param_idx, 4;
+          @local p_kind := &type_name_to_kind p_ty_off, p_ty_len;
+          # An extern param with no annotation defaults to TYPE_I32 —
+          # type_name_to_kind already returns TYPE_VOID for empty spans,
+          # so map VOID → I32 here (a "void parameter" isn't a thing).
+          &@if (p_kind == TYPE_VOID), { p_kind = TYPE_I32; };
+          param_types = &vec_push param_types, p_kind;
+          pi = pi + 1;
+        };
+        @local h := &ir_extern nm_off, nm_len, n_params, result_type, sep_pos, param_types;
         out = &vec_push out, h;
       };
       &@if ((is_var + is_ext) == 0), {
@@ -784,8 +804,37 @@
 @fn lit_at_continue_ptr:Int := { (&str_ptr '@continue') + 4 };
 @fn lit_at_tofloat_ptr:Int  := { (&str_ptr '@toFloat')  + 4 };
 @fn lit_at_toint_ptr:Int    := { (&str_ptr '@toInt')    + 4 };
+@fn lit_at_toint64_ptr:Int  := { (&str_ptr '@toInt64')  + 4 };
 @fn lit_at_match_ptr:Int    := { (&str_ptr '@match')    + 4 };
 @fn lit_wasm_seg_ptr:Int    := { (&str_ptr 'WASM')      + 4 };
+
+# Type-name literal pointers — used by type_name_to_kind to map a
+# source-byte span (the identifier after `:`) to a TYPE_* tag.
+@fn lit_tn_int_ptr:Int   := { (&str_ptr 'Int')   + 4 };
+@fn lit_tn_int32_ptr:Int := { (&str_ptr 'Int32') + 4 };
+@fn lit_tn_int64_ptr:Int := { (&str_ptr 'Int64') + 4 };
+@fn lit_tn_float_ptr:Int := { (&str_ptr 'Float') + 4 };
+@fn lit_tn_void_ptr:Int  := { (&str_ptr 'Void')  + 4 };
+@fn lit_tn_bool_ptr:Int  := { (&str_ptr 'Bool')  + 4 };
+@fn lit_tn_str_ptr:Int   := { (&str_ptr 'String') + 4 };
+@fn lit_tn_i32_ptr:Int   := { (&str_ptr 'i32')   + 4 };
+@fn lit_tn_i64_ptr:Int   := { (&str_ptr 'i64')   + 4 };
+@fn lit_tn_f32_ptr:Int   := { (&str_ptr 'f32')   + 4 };
+
+# type_name_to_kind — map a source span (P_SRC + off..off+len) to a
+# TYPE_* tag.  Empty span → TYPE_VOID (no annotation).  Unknown names
+# default to TYPE_I32 so existing all-i32 code paths are unchanged.
+@fn type_name_to_kind:Int off:Int, len:Int := {
+  &@if (len == 0), { &@return TYPE_VOID; };
+  &@if ((&lower_span_eq_lit off, len, (&lit_tn_int64_ptr), 5) == 1), { &@return TYPE_I64; };
+  &@if ((&lower_span_eq_lit off, len, (&lit_tn_i64_ptr),   3) == 1), { &@return TYPE_I64; };
+  &@if ((&lower_span_eq_lit off, len, (&lit_tn_float_ptr), 5) == 1), { &@return TYPE_F32; };
+  &@if ((&lower_span_eq_lit off, len, (&lit_tn_f32_ptr),   3) == 1), { &@return TYPE_F32; };
+  &@if ((&lower_span_eq_lit off, len, (&lit_tn_void_ptr),  4) == 1), { &@return TYPE_VOID; };
+  # Int / Int32 / Bool / String / i32 / any unknown all map to i32 —
+  # preserves byte-equal for boot/* sources that use only :Int.
+  TYPE_I32
+};
 
 # ── Mangled-name pool (i32 slots, one byte per slot). ──────────────
 # Each mangled name reserves a contiguous run of slots; ir_call gets
@@ -1322,6 +1371,14 @@
           @local v := &lower_expr (&ast_field P_AST, node, 3);
           &@if (v != IR_NONE), {
             &@return (&ir_unop IR_OP_F32_CONVERT_I32_S, v);
+          };
+        };
+      };
+      &@if ((&lower_span_eq_lit nm_off, nm_len, (&lit_at_toint64_ptr), 8) == 1), {
+        &@if (n_args == 1), {
+          @local v := &lower_expr (&ast_field P_AST, node, 3);
+          &@if (v != IR_NONE), {
+            &@return (&ir_unop IR_OP_I64_EXTEND_I32_S, v);
           };
         };
       };
