@@ -464,6 +464,37 @@
   1
 };
 
+# try_dispatch_via_body_rich — Phase 1c–1e bridge.  Look the keyword
+# up in the strata registry; if found, set the body's nodeParamName
+# binding to the AST_CALL node and run the rich-body interpreter.
+# Returns an IR handle on success, or IR_NONE when the registry has
+# no entry (callers fall back to their hardcoded path).  ELAB record
+# offsets: 6=np_off, 7=np_len, 8=semantics.
+#
+# The body interpreter recursively calls lower_expr (via the
+# Compiler::lowerExpr dispatch in body_rich.si), and lower_expr in
+# turn re-enters this function for nested keyword calls.  If we just
+# bs_init'd, the inner dispatch would clobber the outer scope's
+# bindings (Node, cond, then, else_, …).  Save and restore the scope
+# vec handles around the dispatch so the outer frame survives.
+@fn try_dispatch_via_body_rich:Int call_node:Int, nm_off:Int, nm_len:Int := {
+  @local elab := &registry_kw_lookup nm_off, nm_len;
+  &@if (elab < 0), { &@return IR_NONE; };
+  @local sem    := &ast_field P_AST, elab, 8;
+  @local np_off := &ast_field P_AST, elab, 6;
+  @local np_len := &ast_field P_AST, elab, 7;
+  @local sv_off := BS_NAME_OFF;
+  @local sv_len := BS_NAME_LEN;
+  @local sv_val := BS_VALUE;
+  &bs_init;
+  &bs_push np_off, np_len, call_node;
+  @local h := &br_interpret_body sem;
+  BS_NAME_OFF = sv_off;
+  BS_NAME_LEN = sv_len;
+  BS_VALUE    = sv_val;
+  h
+};
+
 # register_extern_sigs — pre-register an @extern AST_DEFINITION's bare
 # and (if namespaced) mangled name in the fn_sig table so later tail-
 # type inference and call-site lookups can resolve produces_value
@@ -1433,6 +1464,12 @@
     &@if (first_byte == 64), {
       &@if ((&lower_span_eq_lit nm_off, nm_len, (&lit_at_if_ptr), 3) == 1), {
         &@if ((n_args < 2) + (n_args > 3) == 0), {
+          # Body-rich first — the @if stratum body builds the same
+          # ir_if(lowerExpr(cond), lowerExpr(then), lowerExprIfDefined(else))
+          # as the hardcoded path.  Byte-equal verified on the
+          # bootstrap source.
+          @local h_if := &try_dispatch_via_body_rich node, nm_off, nm_len;
+          &@if (h_if != IR_NONE), { &@return h_if; };
           @local cond := &lower_expr (&ast_field P_AST, node, 3);
           @local then_h := &lower_expr (&ast_field P_AST, node, 4);
           @local else_h := IR_NONE;
@@ -1467,43 +1504,40 @@
           &@return (&ir_return (&ir_i32_const 0));
         };
       };
-      # @break / @continue — Phase 1e proof-of-concept: dispatch via
-      # the rich-body interpreter in body_rich.si when the registry
-      # has the stratum (i.e. for any user program that bundles the
-      # built-in strata).  The strata bodies for these two keywords
-      # take no @Compiler::arg / Compiler::lowerExpr calls — the only
-      # IR-producing step is the trailing &Compiler::ir::make{Break,
-      # Continue} that body_rich knows how to dispatch — so the IR
-      # output is byte-identical to the hardcoded path below.  When
-      # the registry doesn't have the stratum (bare boot fixtures
-      # that don't carry the embedded bundle), we fall through to
-      # the hardcoded path.
-      #
-      # Keywords whose strata bodies need Compiler::arg /
-      # Compiler::lowerExpr / Compiler::ctx::* stay on the hardcoded
-      # path until those Compiler::* entry points land (Phase 1c+1d).
+      # Body-rich dispatch — Phase 1c–1e.  When the strata registry
+      # has the keyword, run its semantics block through
+      # try_dispatch_via_body_rich.  Returns IR_NONE on miss; we then
+      # fall back to the hardcoded path below for sources that don't
+      # bundle the built-in strata.  The keywords listed here all
+      # produce byte-identical IR via body-rich vs the hardcoded
+      # branch on the bootstrap source (verified by STAGE 2 == STAGE 1
+      # byte-equal fixed-point).  Keywords whose bodies use
+      # Compiler::ctx::* / Compiler::watId / Compiler::resolveType
+      # stay on the hardcoded path until those entry points land.
       &@if ((&lower_span_eq_lit nm_off, nm_len, (&lit_at_break_ptr), 6) == 1), {
         &@if (n_args == 0), {
-          @local elab_b := &registry_kw_lookup nm_off, nm_len;
-          &@if (elab_b >= 0), {
-            @local sem_b := &ast_field P_AST, elab_b, 8;
-            &bs_init;
-            @local h_b := &br_interpret_body sem_b;
-            &@if (h_b != IR_NONE), { &@return h_b; };
-          };
+          @local h_b := &try_dispatch_via_body_rich node, nm_off, nm_len;
+          &@if (h_b != IR_NONE), { &@return h_b; };
           &@return (&ir_break);
         };
       };
       &@if ((&lower_span_eq_lit nm_off, nm_len, (&lit_at_continue_ptr), 9) == 1), {
         &@if (n_args == 0), {
-          @local elab_c := &registry_kw_lookup nm_off, nm_len;
-          &@if (elab_c >= 0), {
-            @local sem_c := &ast_field P_AST, elab_c, 8;
-            &bs_init;
-            @local h_c := &br_interpret_body sem_c;
-            &@if (h_c != IR_NONE), { &@return h_c; };
-          };
+          @local h_c := &try_dispatch_via_body_rich node, nm_off, nm_len;
+          &@if (h_c != IR_NONE), { &@return h_c; };
           &@return (&ir_continue);
+        };
+      };
+      # @return — body-rich dispatches only for the n_args==1 path
+      # (where both routes produce ir_return(lower_expr(arg))).  The
+      # n_args==0 case stays hardcoded because the strata body returns
+      # makeReturn(IR_NONE) while the hardcoded path emits
+      # ir_return(ir_i32_const 0) — divergent until we add an explicit
+      # "wrap missing return value with zero" step.
+      &@if ((&lower_span_eq_lit nm_off, nm_len, (&lit_at_return_ptr), 7) == 1), {
+        &@if (n_args == 1), {
+          @local h_r := &try_dispatch_via_body_rich node, nm_off, nm_len;
+          &@if (h_r != IR_NONE), { &@return h_r; };
         };
       };
       &@if ((&lower_span_eq_lit nm_off, nm_len, (&lit_at_tofloat_ptr), 8) == 1), {
@@ -1577,6 +1611,8 @@
       #   &@not a     →  i32.eqz a
       &@if ((&lower_span_eq_lit nm_off, nm_len, (&lit_at_and_ptr), 4) == 1), {
         &@if (n_args == 2), {
+          @local h_a := &try_dispatch_via_body_rich node, nm_off, nm_len;
+          &@if (h_a != IR_NONE), { &@return h_a; };
           @local a_h := &lower_expr (&ast_field P_AST, node, 3);
           @local b_h := &lower_expr (&ast_field P_AST, node, 4);
           &@if ((a_h != IR_NONE) * (b_h != IR_NONE) == 1), {
@@ -1587,6 +1623,8 @@
       };
       &@if ((&lower_span_eq_lit nm_off, nm_len, (&lit_at_or_ptr), 3) == 1), {
         &@if (n_args == 2), {
+          @local h_o := &try_dispatch_via_body_rich node, nm_off, nm_len;
+          &@if (h_o != IR_NONE), { &@return h_o; };
           @local a_h := &lower_expr (&ast_field P_AST, node, 3);
           @local b_h := &lower_expr (&ast_field P_AST, node, 4);
           &@if ((a_h != IR_NONE) * (b_h != IR_NONE) == 1), {
@@ -1597,6 +1635,8 @@
       };
       &@if ((&lower_span_eq_lit nm_off, nm_len, (&lit_at_not_ptr), 4) == 1), {
         &@if (n_args == 1), {
+          @local h_n := &try_dispatch_via_body_rich node, nm_off, nm_len;
+          &@if (h_n != IR_NONE), { &@return h_n; };
           @local v := &lower_expr (&ast_field P_AST, node, 3);
           &@if (v != IR_NONE), {
             &@return (&ir_unop IR_OP_I32_EQZ, v);

@@ -40,6 +40,11 @@
 @fn br_lit_make_loop:Int     := { (&str_ptr 'makeLoop')     + 4 };
 @fn br_lit_null:Int := { (&str_ptr 'null') + 4 };
 
+# Compiler::* (2-segment) entry points.
+@fn br_lit_arg:Int                  := { (&str_ptr 'arg')                  + 4 };
+@fn br_lit_lower_expr:Int           := { (&str_ptr 'lowerExpr')            + 4 };
+@fn br_lit_lower_expr_if_defined:Int := { (&str_ptr 'lowerExprIfDefined')  + 4 };
+
 # Span-vs-literal byte comparison (P_SRC-relative span).
 @fn br_span_eq_lit:Int off:Int, len:Int, lit_ptr:Int, lit_len:Int := {
   @local ok := 1;
@@ -86,17 +91,59 @@
     { &@return IR_NONE; };
   @local n_segs := &ast_field P_AST, callee, 1;
 
-  # &IR::null  →  ir_null
+  # 2-segment namespace calls — IR::null and the bare Compiler::*
+  # surface (arg / lowerExpr / lowerExprIfDefined).  These are
+  # entry points that strata bodies use directly rather than going
+  # through Compiler::ir::makeX constructors.
   &@if (n_segs == 2), {
     @local s0_off := &ast_field P_AST, callee, 2;
     @local s0_len := &ast_field P_AST, callee, 3;
     @local s1_off := &ast_field P_AST, callee, 4;
     @local s1_len := &ast_field P_AST, callee, 5;
-    # Match "IR::null" — keep the body_rich dispatcher independent of
-    # body.si so callers can use either path.
+    # &IR::null
     &@if ((&br_span_eq_lit s0_off, s0_len, ((&str_ptr 'IR') + 4), 2) == 1), {
       &@if ((&br_span_eq_lit s1_off, s1_len, (&br_lit_null), 4) == 1),
         { &@return (&ir_null); };
+    };
+    # &Compiler::arg Node, idx  →  AST_CALL field offset (3 + idx),
+    # or AST_NONE when idx >= n_args.  Node arg is evaluated against
+    # the scope (caller bound nodeParamName → AST_CALL node index).
+    &@if ((&br_span_eq_lit s0_off, s0_len, (&br_lit_compiler), 8) == 1), {
+      @local n_args := &ast_field P_AST, call_node, 2;
+      &@if ((&br_span_eq_lit s1_off, s1_len, (&br_lit_arg), 3) == 1), {
+        &@if (n_args >= 2), {
+          @local nd := &br_eval_expr (&ast_field P_AST, call_node, 3);
+          @local ix := &br_eval_expr (&ast_field P_AST, call_node, 4);
+          &@if (nd < 0), { &@return AST_NONE; };
+          @local nd_n_args := &ast_field P_AST, nd, 2;
+          &@if (ix >= nd_n_args), { &@return AST_NONE; };
+          &@return (&ast_field P_AST, nd, (3 + ix));
+        };
+        &@return AST_NONE;
+      };
+      # &Compiler::lowerExpr ast_node  →  lower_expr(ast_node).
+      # The ast_node arg comes from a prior Compiler::arg or a scope
+      # binding holding an AST node index.
+      &@if ((&br_span_eq_lit s1_off, s1_len, (&br_lit_lower_expr), 9) == 1), {
+        &@if (n_args >= 1), {
+          @local an := &br_eval_expr (&ast_field P_AST, call_node, 3);
+          &@if (an < 0), { &@return IR_NONE; };
+          &@return (&lower_expr an);
+        };
+        &@return IR_NONE;
+      };
+      # &Compiler::lowerExprIfDefined ast_node  →  lower_expr or
+      # IR_NONE when the node arg is missing / AST_NONE.  Matches
+      # the TS lowerExprIfDefined: returns undefined when input is
+      # nullish, otherwise lowers.
+      &@if ((&br_span_eq_lit s1_off, s1_len, (&br_lit_lower_expr_if_defined), 18) == 1), {
+        &@if (n_args >= 1), {
+          @local an2 := &br_eval_expr (&ast_field P_AST, call_node, 3);
+          &@if (an2 < 0), { &@return IR_NONE; };
+          &@return (&lower_expr an2);
+        };
+        &@return IR_NONE;
+      };
     };
   };
 
