@@ -2,19 +2,8 @@
 # test.sh — run boot/tests/*_test.si under stage1.wasm + wasmtime.
 #
 # Silicon-only test driver.  Uses no bun, no node, no typescript.
-# Required tools on PATH: wasmtime, wat2wasm.
-#
-# ⚠ KNOWN BLOCKER (2026-05-17, see docs/silicon-only-bootstrap-plan.html):
-# stage1.wasm currently emits WAT containing `drop` after void-function
-# calls inside @if branches.  The wabt-NPM JS API's toBinary() silently
-# produces bytes regardless, but those bytes fail wasmtime's validation
-# at load-time.  Strict standalone wat2wasm rejects the WAT outright.
-#
-# Result: this script can't validate tests like body_rich_test or
-# arena_test today.  The compile step (stage1 → WAT) works; the
-# assemble-and-run step doesn't.  Fixing this is the next gating item
-# before TypeScript can be deleted — see Phase 1.5 in the bootstrap
-# status doc.
+# Required tools on PATH: wasmtime, wat2wasm (or ./bin/wat2wasm
+# installed via scripts/install-wat2wasm.{sh,ps1}).
 #
 # For each test:
 #   1. Resolve its @use graph depth-first (in-shell, no external tool).
@@ -123,18 +112,38 @@ run_one() {
   fi
 }
 
-# Default test set — the subset that compiles standalone (no stdin
-# fixture required).  Tests that need parsed input on stdin are skipped
-# until Phase 6 grows fixture support.
+# Default test set — every boot/tests/*_test.si that prints " OK" on
+# success.  Standalone-compilable; no stdin fixtures required.  Tests
+# omitted here (lex_test, parse_test, body_test, emit_test, fn_test,
+# lower_test, module_test, scope_test, json_test, json_fixtures_test,
+# templates_test, intrinsics_test, elaborator_test, strata_loader_test)
+# either need parsed input on stdin or compared their output against
+# Stage 0 (TypeScript) dumps that no longer exist — they remain as
+# .si files for users who want to drive them under a custom harness.
 DEFAULT_TESTS=(
+  # Runtime + data structures (Phase 0/1)
   "boot/tests/arena_test.si"
   "boot/tests/vec_test.si"
   "boot/tests/ir_nodes_test.si"
   "boot/tests/body_scope_test.si"
   "boot/tests/body_rich_test.si"
+  # User-defined keywords (Phase 1)
   "boot/tests/nz_keyword_test.si"
   "boot/tests/const_keyword_test.si"
   "boot/tests/loc_keyword_test.si"
+  # Typechecker (Phase 2)
+  "boot/tests/types_test.si"
+  "boot/tests/errors_test.si"
+  "boot/tests/intrinsic_sig_test.si"
+  "boot/tests/ctx_test.si"
+  "boot/tests/preregister_std_test.si"
+  "boot/tests/preregister_defs_test.si"
+  "boot/tests/check_literals_test.si"
+  "boot/tests/check_binop_test.si"
+  "boot/tests/check_call_test.si"
+  "boot/tests/check_block_test.si"
+  "boot/tests/check_kw_test.si"
+  "boot/tests/check_array_test.si"
 )
 
 if [ $# -gt 0 ]; then

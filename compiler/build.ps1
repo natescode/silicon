@@ -66,8 +66,7 @@ if (-not (Test-Path $Seed)) {
   exit 2
 }
 
-# Bundle order — MUST match scripts/build-stage1.ts:STAGE1_FILES and
-# build.sh:STAGE1_FILES for byte-equal output.
+# Bundle order — MUST match build.sh:STAGE1_FILES for byte-equal output.
 $Stage1Files = @(
   'boot/std/argv.si'
   'boot/std/io.si'
@@ -101,8 +100,7 @@ $Stage1Files = @(
   'boot/stage1.si'
 )
 
-# Must be lexically identical to scripts/build-stage1.ts:WASI_STUB and
-# build.sh:emit_wasi_stub.
+# Must be lexically identical to build.sh:emit_wasi_stub.
 $WasiStub = @'
 @extern wasi_snapshot_preview1::fd_write:Int
   fd:Int, iovs_ptr:Int, iovs_len:Int, nwritten_out:Int;

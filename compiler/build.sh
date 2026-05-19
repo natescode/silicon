@@ -65,10 +65,10 @@ fi
 }
 
 # ─── Source bundle ─────────────────────────────────────────────────────
-# The bundle order MUST mirror scripts/build-stage1.ts:STAGE1_FILES so
-# Silicon and TS pipelines produce byte-equal output.  Kept here as a
-# literal list rather than reading from boot/build_order.txt so a typo
-# in the data file can't silently change the bundle layout.
+# The bundle order MUST match build.ps1's $Stage1Files so the two
+# pipelines emit byte-equal output.  Kept as a literal list (no
+# boot/build_order.txt) so a typo in a data file can't silently
+# change the bundle layout.
 STAGE1_FILES=(
   "boot/std/argv.si"
   "boot/std/io.si"
@@ -102,8 +102,8 @@ STAGE1_FILES=(
   "boot/stage1.si"
 )
 
-# WASI extern declarations.  Must be lexically identical to the WASI_STUB
-# in scripts/build-stage1.ts so the two pipelines emit byte-equal WAT.
+# WASI extern declarations.  Must be lexically identical to the
+# $WasiStub in build.ps1 so both pipelines emit byte-equal WAT.
 emit_wasi_stub() {
   cat <<'EOF'
 @extern wasi_snapshot_preview1::fd_write:Int
@@ -136,15 +136,9 @@ assemble_bundle() {
 }
 
 # ─── Compile pipeline ──────────────────────────────────────────────────
-# Stage1's embedded_bundle is already baked in, so we DO need to prepend
-# the strata bundle when feeding boot.wasm (Stage 0's TS pipeline does
-# the same).  Stage1 itself reads its own embedded bundle internally,
-# so we DON'T prepend strata when invoking stage1.wasm.
-#
-# This script assumes we're rebuilding stage1 USING stage1 (self-host).
-# The TS scripts/build-stage1.ts uses boot.wasm + bundle prefix; we use
-# stage1.wasm and let its embedded bundle do the work.  The two paths
-# produce byte-equal WAT.
+# Self-host: stage1.wasm (the seed) compiles its own source.  Stage1's
+# embedded_bundle is already baked in, so we DON'T prepend strata when
+# invoking it — the embedded copy does the work at runtime.
 
 build_stage1() {
   echo "build.sh: bundling $(printf '%d' "${#STAGE1_FILES[@]}") source files…"
@@ -180,9 +174,7 @@ case "$cmd" in
     build_stage1
     cp "$TMP_WAT"  "$OUT_WAT"
     cp "$TMP_WASM" "$OUT_WASM"
-    echo "build.sh: build complete; test runner not yet ported (Phase 6)"
-    echo "  individual boot/tests/*.si can be built+run via the existing"
-    echo "  scripts/build-boot.ts until the Silicon test runner lands."
+    echo "build.sh: build complete — run ./test.sh to exercise boot/tests/*."
     ;;
   *)
     echo "build.sh: unknown subcommand '$cmd'" >&2

@@ -1,5 +1,0 @@
-@stratum_operator MyAdd ('+++', Node) = {
-  &WASM::i32_add Node.left, Node.right;
-};
-
-@fn myAdd x:Int, y:Int := x +++ y;

@@ -1,2 +1,0 @@
-# U+0080 in source - parser must classify, not throw
-@let x := 1;
