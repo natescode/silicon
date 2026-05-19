@@ -1,0 +1,10 @@
+@stratum_keyword If ('@if', Node) = {
+  &IR::control_if;
+  @local condN := &Compiler::arg Node, 0;
+  @local thenN := &Compiler::arg Node, 1;
+  @local elseN := &Compiler::arg Node, 2;
+  @local cond  := &Compiler::lowerExpr condN;
+  @local then  := &Compiler::lowerExpr thenN;
+  @local else_ := &Compiler::lowerExprIfDefined elseN;
+  &Compiler::ir::makeIf cond, then, else_;
+};

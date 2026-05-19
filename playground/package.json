@@ -1,0 +1,23 @@
+{
+  "name": "silicon-playground",
+  "version": "0.1.0",
+  "description": "Browser playground for the Silicon programming language. Bun HTTP server that compiles Silicon source to WAT + WASM and serves the interactive UI.",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "start": "bun run playground/server.ts",
+    "dev": "bun run --watch playground/server.ts"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "@types/node": "^20.14.2",
+    "ohm-js": "^17.1.0"
+  },
+  "dependencies": {
+    "binaryen": "^117.0.0",
+    "wabt": "^1.0.39"
+  },
+  "peerDependencies": {
+    "typescript": "^5.0.0"
+  }
+}

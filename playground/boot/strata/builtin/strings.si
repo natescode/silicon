@@ -1,0 +1,3 @@
+@stratum_operator Concat ('++', Node) = {
+  &str_concat Node.left, Node.right;
+};
