@@ -6,17 +6,40 @@
 # Note: the final expression in each block is the function's return value
 # (no trailing `;` on the last line).
 
-# WASI externs (fd_write / fd_read / proc_exit) used by this module
-# are NOT declared here — the TS grammar's typedIdentifier rule
-# doesn't accept `module::name` in @extern positions (only at call
-# sites), so namespaced declarations only work in files that bypass
-# the TS pipeline.  Instead:
-#   - TS side: loadModules reads bare declarations from
-#     src/strata/modules/wasi_snapshot_preview1.si.
-#   - Bootstrap side: WASI_STUB (scripts/build-stage1.ts) injects the
-#     namespaced declarations into the bundle.
-# Fixtures that bundle io.si standalone (e.g. boot/tests/delfina_
-# smoke.si) declare the externs they need explicitly.
+# ── @extern declarations: deferred, not omitted by design ──────────
+#
+# This module CALLS three WASI functions — wasi_snapshot_preview1::
+# fd_write, fd_read, and proc_exit — but does NOT declare their
+# @extern signatures here.  build.sh / build.ps1 inject those
+# declarations as a WASI_STUB prelude when bundling stage1's source,
+# so the bootstrap pipeline works.
+#
+# The cost: when a user program does `@use '../boot/std/io.si'` and
+# pipes it through stage1.wasm directly, the resulting WAT has
+# unresolved imports — wat2wasm fails with
+# `undefined function variable "$wasi_snapshot_preview1_fd_write"`.
+# Workaround for users today: declare the three externs at the top
+# of your own source file.  See examples/delfina.si for a worked
+# example.
+#
+# TODO — proper fix.  Move the three @extern declarations into this
+# file so io.si is self-contained.  Blocker: doing it now would
+# produce duplicate-declaration errors because build.sh's WASI_STUB
+# already supplies them when building stage1 itself.  The cleanup
+# is to either
+#   (a) drop the WASI_STUB from build.sh / build.ps1 (and emit_wasi_
+#       stub) and push the declarations into the files that need
+#       them — io.si for fd_*/proc_exit, fs.si for path_open + the
+#       fd_prestat_* pair, argv.si for args_get + args_sizes_get;
+#   (b) teach the lowerer to treat repeated @extern with identical
+#       signatures as idempotent (first-wins), so build.sh's
+#       prepended stub silently shadows the in-file declarations.
+# (a) is simpler and keeps each module's contract local; (b) is a
+# parser-level change that also fixes any future overlap.
+#
+# Until then, callers either ride on build.sh's stub injection (the
+# bootstrap path) or declare what they need themselves (the user
+# path).
 
 # write_bytes(fd, ptr, len) — write `len` bytes starting at `ptr` to `fd`.
 # Internally builds a 1-element iovs array on scratch memory and calls fd_write.
