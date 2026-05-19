@@ -63,9 +63,9 @@
   &write_str 1, '  --diagnostics=pretty   Diagnostic renderer.  Only `pretty` today.\n';
   &write_str 1, '\n';
   &write_str 1, 'A single positional arg is treated as a source-file path opened\n';
-  &write_str 1, 'via WASI path_open under the first preopen directory.  Without a\n';
-  &write_str 1, 'positional arg, source is read from stdin and WAT is written to\n';
-  &write_str 1, 'stdout.\n'
+  &write_str 1, 'via WASI path_open under the first preopen directory; stdin is\n';
+  &write_str 1, 'ignored in that mode.  Without a positional arg, source is read\n';
+  &write_str 1, 'from stdin until EOF and WAT is written to stdout.\n'
 };
 
 # cli_open_source — resolve a positional source path through the first
