@@ -1,0 +1,594 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Testing the Bootstrapped Sigil Compiler</title>
+  <style>
+    :root {
+      --bg: #0f1117;
+      --surface: #1a1d27;
+      --surface2: #222535;
+      --border: #2e3248;
+      --accent: #6c8ef7;
+      --accent2: #b06cf7;
+      --accent3: #3ecf8e;
+      --accent4: #f7a06c;
+      --accent5: #f76c6c;
+      --accent6: #f7e36c;
+      --text: #dde1f0;
+      --muted: #7b82a8;
+      --code-bg: #13151f;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+      padding: 40px 24px;
+    }
+    .page { max-width: 1150px; margin: 0 auto; }
+    h1 { font-size: 2rem; color: var(--accent); margin-bottom: 8px; }
+    h2 { font-size: 1.4rem; color: var(--accent2); margin: 40px 0 16px; border-bottom: 1px solid var(--border); padding-bottom: 8px; }
+    h3 { font-size: 1.1rem; color: var(--accent3); margin: 24px 0 10px; }
+    h4 { font-size: 0.95rem; color: var(--accent4); margin: 16px 0 8px; }
+    p  { margin-bottom: 12px; color: var(--text); }
+    .subtitle { color: var(--muted); font-size: 1rem; margin-bottom: 32px; }
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 20px 24px;
+      margin-bottom: 20px;
+    }
+    .card.warn { border-color: var(--accent5); }
+    .card.ok   { border-color: var(--accent3); }
+    .card.info { border-color: var(--accent);  }
+    .card.note { border-color: var(--accent4); }
+    .card.idea { border-color: var(--accent2); }
+    pre {
+      background: var(--code-bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 16px;
+      overflow-x: auto;
+      font-family: 'Cascadia Code', 'Fira Code', 'Consolas', monospace;
+      font-size: 0.82rem;
+      line-height: 1.55;
+      margin: 12px 0;
+    }
+    code { font-family: 'Cascadia Code', 'Fira Code', 'Consolas', monospace; font-size: 0.85em; background: var(--code-bg); padding: 1px 5px; border-radius: 4px; }
+    .si  { color: var(--accent3); }
+    .ir  { color: var(--accent4); }
+    .api { color: var(--accent2); }
+    .shell { color: var(--accent); }
+    table { width: 100%; border-collapse: collapse; margin: 12px 0; font-size: 0.85rem; }
+    th { background: var(--surface2); color: var(--accent); padding: 8px 12px; text-align: left; border: 1px solid var(--border); }
+    td { padding: 8px 12px; border: 1px solid var(--border); vertical-align: top; }
+    tr:nth-child(even) td { background: #141620; }
+    ul, ol { padding-left: 24px; margin: 8px 0 16px; }
+    li { margin-bottom: 4px; }
+    .tag {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 12px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      margin-right: 4px;
+    }
+    .tag.red    { background: #3a1515; color: var(--accent5); border: 1px solid #5a2020; }
+    .tag.green  { background: #0f2d1f; color: var(--accent3); border: 1px solid #1a4a30; }
+    .tag.blue   { background: #0f1a3a; color: var(--accent);  border: 1px solid #1a2e5a; }
+    .tag.purple { background: #1e1030; color: var(--accent2); border: 1px solid #3a1a50; }
+    .tag.orange { background: #2d1a0f; color: var(--accent4); border: 1px solid #5a3010; }
+    .tag.yellow { background: #2d2a0f; color: var(--accent6); border: 1px solid #5a5510; }
+    .step-head {
+      display: flex;
+      align-items: baseline;
+      gap: 14px;
+      margin: 36px 0 6px;
+      padding-bottom: 8px;
+      border-bottom: 1px solid var(--border);
+    }
+    .step-num {
+      font-size: 0.75rem;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--muted);
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 2px 10px;
+    }
+    .step-name { color: var(--accent3); font-size: 1.25rem; font-weight: 600; }
+    .gate {
+      background: #131e1a;
+      border: 1px solid var(--accent3);
+      border-radius: 6px;
+      padding: 8px 14px;
+      margin: 12px 0;
+      font-size: 0.85rem;
+    }
+    .gate .lbl { color: var(--accent3); font-weight: 600; text-transform: uppercase; font-size: 0.72rem; letter-spacing: 0.08em; }
+    .toc { background: var(--surface2); border: 1px solid var(--border); border-radius: 8px; padding: 14px 20px; margin: 18px 0 30px; }
+    .toc h3 { margin-top: 0; color: var(--accent); font-size: 0.9rem; text-transform: uppercase; letter-spacing: 0.08em; }
+    .toc ol { columns: 2; column-gap: 32px; padding-left: 18px; }
+    .toc a { color: var(--text); text-decoration: none; border-bottom: 1px dotted var(--muted); }
+    .toc a:hover { color: var(--accent); border-bottom-color: var(--accent); }
+    .out { color: var(--muted); }
+    .out::before { content: "⤷ "; color: var(--accent3); }
+  </style>
+</head>
+<body>
+<div class="page">
+
+<h1>Testing the Bootstrapped Sigil Compiler</h1>
+<p class="subtitle">
+  A step-by-step walkthrough for verifying a fresh clone of Sigil, running the
+  Silicon-side test suite, exercising the opt-in typechecker, and confirming the
+  byte-equal self-host fixed point. Zero TypeScript, zero Bun — only
+  <code>wasmtime</code>, <code>wat2wasm</code>, and a shell.
+</p>
+
+<div class="toc">
+  <h3>Contents</h3>
+  <ol>
+    <li><a href="#prereqs">Prerequisites</a></li>
+    <li><a href="#fetch">Get the code</a></li>
+    <li><a href="#smoke">Smoke test: <code>build.sh check</code></a></li>
+    <li><a href="#suite">Run the test suite</a></li>
+    <li><a href="#single">Run one test by name</a></li>
+    <li><a href="#compile">Compile a Silicon program</a></li>
+    <li><a href="#typecheck">Use the opt-in typechecker</a></li>
+    <li><a href="#fixedpoint">Verify the byte-equal self-host</a></li>
+    <li><a href="#wsl">Windows users (PowerShell &amp; WSL)</a></li>
+    <li><a href="#troubleshoot">Troubleshooting</a></li>
+    <li><a href="#whatsnext">Adding your own tests</a></li>
+  </ol>
+</div>
+
+<!-- ─────────────────────────────────────────────────────────── -->
+<h2 id="prereqs">1. Prerequisites</h2>
+
+<p>
+  The bootstrapped compiler runs as a single WebAssembly module
+  (<code>wasm-bin/stage1.wasm</code>). To execute that module and assemble its
+  WAT output you need two tools on <code>PATH</code> (or installed
+  project-locally for <code>wat2wasm</code>):
+</p>
+
+<table>
+  <tr><th>Tool</th><th>Why</th><th>Install</th></tr>
+  <tr>
+    <td><code>wasmtime</code> ≥ 14</td>
+    <td>WASI reference runtime; runs <code>stage1.wasm</code> and any user wasm you build.</td>
+    <td>
+      <span class="tag blue">macOS / Linux</span>
+      <pre>curl https://wasmtime.dev/install.sh -sSf | bash</pre>
+      <span class="tag blue">Windows</span>
+      <p>Download from <a href="https://github.com/bytecodealliance/wasmtime/releases">github.com/bytecodealliance/wasmtime/releases</a>.</p>
+    </td>
+  </tr>
+  <tr>
+    <td><code>wat2wasm</code> (WABT)</td>
+    <td>Assembles the WAT text Sigil emits into a WebAssembly binary.</td>
+    <td>
+      <span class="tag green">project-local (no admin)</span>
+      <pre>./scripts/install-wat2wasm.sh           <span class="out"># bash, writes ./bin/wat2wasm</span>
+.\scripts\install-wat2wasm.ps1          <span class="out"># PowerShell</span></pre>
+      <span class="tag blue">system-wide</span>
+      <pre>brew install wabt                       <span class="out"># macOS</span>
+sudo apt install wabt                   <span class="out"># Debian / Ubuntu</span></pre>
+    </td>
+  </tr>
+</table>
+
+<div class="card warn">
+  <p><strong>Why wasmtime?</strong> Wasmer's WASI compat layer has known bugs at
+  both 2.x (mapped-dir rights) and 7.x (post-<code>path_open</code> fd corruption
+  + Windows absolute-path stdout) that broke the bootstrap during the port. The
+  build is verified against wasmtime; other runtimes may or may not work.</p>
+</div>
+
+<!-- ─────────────────────────────────────────────────────────── -->
+<h2 id="fetch">2. Get the code</h2>
+
+<pre>git clone https://github.com/natescode/sigil.git
+cd sigil</pre>
+
+<p>
+  There is nothing to install. No <code>bun install</code>, no
+  <code>npm ci</code>, no <code>cargo build</code>. The repository ships with
+  <code>wasm-bin/stage1.wasm</code> checked in — that's the bootstrap seed,
+  and from it the rest is rebuilt.
+</p>
+
+<!-- ─────────────────────────────────────────────────────────── -->
+<h2 id="smoke">3. Smoke test — <code>build.sh check</code></h2>
+
+<p>
+  The fastest way to confirm everything is wired up correctly is to ask the
+  build to recompile itself and verify the bytes match:
+</p>
+
+<pre>./build.sh check</pre>
+
+<p>Expected output:</p>
+
+<pre class="out">build.sh: bundling 30 source files…
+build.sh: compiling via stage1.wasm under wasmtime…
+build.sh: assembling WAT → WASM via /…/bin/wat2wasm…
+build.sh: ✓ fixed point — rebuilt stage1.wasm byte-equal to seed</pre>
+
+<div class="gate">
+  <span class="lbl">PASS CRITERION</span> &nbsp; Final line contains
+  <code>✓ fixed point — rebuilt stage1.wasm byte-equal to seed</code>.
+</div>
+
+<p>
+  If you see this, every link in the chain works:
+  <code>wasmtime</code> can run <code>stage1.wasm</code>;
+  <code>stage1.wasm</code> can parse its own source;
+  <code>wat2wasm</code> can assemble the emitted WAT; and the result is the same
+  bytes as the seed — proving the compiler can produce itself.
+</p>
+
+<!-- ─────────────────────────────────────────────────────────── -->
+<h2 id="suite">4. Run the test suite</h2>
+
+<pre>./test.sh</pre>
+
+<p>Expected output:</p>
+
+<pre class="out">test.sh: running 20 test(s)…
+  ✓ PASS boot/tests/arena_test.si — arena OK
+  ✓ PASS boot/tests/vec_test.si — vec OK
+  ✓ PASS boot/tests/ir_nodes_test.si — ok
+  ✓ PASS boot/tests/body_scope_test.si — body-scope OK
+  ✓ PASS boot/tests/body_rich_test.si — body-rich OK
+  ✓ PASS boot/tests/nz_keyword_test.si — nz OK
+  ✓ PASS boot/tests/const_keyword_test.si — const OK
+  ✓ PASS boot/tests/loc_keyword_test.si — loc OK
+  ✓ PASS boot/tests/types_test.si — types OK
+  ✓ PASS boot/tests/errors_test.si — errors OK
+  ✓ PASS boot/tests/intrinsic_sig_test.si — intrinsic-sig OK
+  ✓ PASS boot/tests/ctx_test.si — ctx OK
+  ✓ PASS boot/tests/preregister_std_test.si — preregister-std OK
+  ✓ PASS boot/tests/preregister_defs_test.si — preregister-defs OK
+  ✓ PASS boot/tests/check_literals_test.si — check-literals OK
+  ✓ PASS boot/tests/check_binop_test.si — check-binop OK
+  ✓ PASS boot/tests/check_call_test.si — check-call OK
+  ✓ PASS boot/tests/check_block_test.si — check-block OK
+  ✓ PASS boot/tests/check_kw_test.si — check-kw OK
+  ✓ PASS boot/tests/check_array_test.si — check-array OK
+
+test.sh: 20 passed, 0 failed</pre>
+
+<div class="gate">
+  <span class="lbl">PASS CRITERION</span> &nbsp;
+  <code>20 passed, 0 failed</code>. Exit code 0.
+</div>
+
+<p>What each group covers:</p>
+
+<table>
+  <tr><th>Group</th><th>Tests</th><th>What they prove</th></tr>
+  <tr>
+    <td>Runtime / data structures</td>
+    <td><code>arena_test</code>, <code>vec_test</code>, <code>ir_nodes_test</code>,
+        <code>body_scope_test</code>, <code>body_rich_test</code></td>
+    <td>The bump allocator works; <code>&amp;vec_push</code> grows correctly; IR builders +
+        accessors round-trip; rich-strata body interpreter dispatches
+        <code>&amp;Compiler::*</code>.</td>
+  </tr>
+  <tr>
+    <td>User-defined keywords</td>
+    <td><code>nz_keyword_test</code>, <code>const_keyword_test</code>,
+        <code>loc_keyword_test</code></td>
+    <td>End-to-end demos that a user can add a brand-new keyword
+        (<code>@nz</code>, <code>@const</code>, <code>@loc</code>) by editing only
+        <code>boot/strata/builtin/*.si</code> — no compiler change needed.</td>
+  </tr>
+  <tr>
+    <td>Typechecker — data layer</td>
+    <td><code>types_test</code>, <code>errors_test</code>,
+        <code>intrinsic_sig_test</code>, <code>ctx_test</code></td>
+    <td><code>SiliconType</code> arena + <code>parse_type_name</code>;
+        <code>TypeError</code> records render the same byte stream as the old TS;
+        <code>WASM::*</code> intrinsic signatures derived without regex; symbol /
+        function / immutable / alias tables with scope save+restore.</td>
+  </tr>
+  <tr>
+    <td>Typechecker — registration</td>
+    <td><code>preregister_std_test</code>, <code>preregister_defs_test</code></td>
+    <td>The 11 <code>std.wat</code> helpers seed correctly; a real parsed
+        program's <code>@fn / @let / @var / @extern</code> definitions populate
+        the function table with correct param/result types + immutability bits.</td>
+  </tr>
+  <tr>
+    <td>Typechecker — checkNode walk</td>
+    <td><code>check_literals_test</code>, <code>check_binop_test</code>,
+        <code>check_call_test</code>, <code>check_block_test</code>,
+        <code>check_kw_test</code>, <code>check_array_test</code></td>
+    <td>Literal inference + Namespace lookup; binary-op category dispatch;
+        FunctionCall arity + per-arg type validation; Block scope discipline;
+        keyword-call inference (<code>@if</code>, <code>@and</code>, …); array
+        homogeneity.</td>
+  </tr>
+</table>
+
+<!-- ─────────────────────────────────────────────────────────── -->
+<h2 id="single">5. Run one test by name</h2>
+
+<p>Useful while iterating:</p>
+
+<pre>./test.sh boot/tests/types_test.si</pre>
+
+<pre class="out">test.sh: running 1 test(s)…
+  ✓ PASS boot/tests/types_test.si — types OK
+
+test.sh: 1 passed, 0 failed</pre>
+
+<p>Glob expansion works too:</p>
+
+<pre>./test.sh boot/tests/check_*_test.si</pre>
+
+<p>
+  Adding a new file: drop it into <code>boot/tests/</code> as
+  <code>&lt;feature&gt;_test.si</code>, make it write
+  <code>"&lt;feature&gt; OK"</code> to stdout on success and call
+  <code>&amp;wasi_snapshot_preview1::proc_exit 1</code> on failure, then append
+  the path to <code>DEFAULT_TESTS</code> in <code>test.sh</code>.
+</p>
+
+<!-- ─────────────────────────────────────────────────────────── -->
+<h2 id="compile">6. Compile a Silicon program</h2>
+
+<p>Single-file program via stdin:</p>
+
+<pre>cat &gt; hello.si &lt;&lt;'EOF'
+@extern wasi_snapshot_preview1::fd_write:Int
+  fd:Int, iovs_ptr:Int, iovs_len:Int, nwritten_out:Int;
+@extern wasi_snapshot_preview1::proc_exit
+  code:Int;
+
+@fn _start:Void := {
+  &amp;wasi_snapshot_preview1::proc_exit 0;
+};
+EOF
+
+wasmtime wasm-bin/stage1.wasm &lt; hello.si &gt; hello.wat
+wat2wasm hello.wat -o hello.wasm
+wasmtime hello.wasm
+echo "exit=$?"</pre>
+
+<pre class="out">exit=0</pre>
+
+<p>Multi-file program with <code>@use</code> dependencies — give stage1 a
+positional path so its in-Silicon <code>@use</code> resolver walks the graph:</p>
+
+<pre>wasmtime --dir ./src::src wasm-bin/stage1.wasm src/main.si &gt; main.wat
+wat2wasm main.wat -o main.wasm
+wasmtime main.wasm</pre>
+
+<div class="card note">
+  <p>The <code>--dir ./src::src</code> form is wasmtime's preopen syntax:
+  &ldquo;mount the host's <code>./src</code> directory and let the guest see it as
+  <code>src</code>&rdquo;. stage1's <code>@use</code> resolver opens files relative to
+  that preopen. Without it, <code>stage1.wasm</code> has no filesystem access and
+  can only read stdin.</p>
+</div>
+
+<!-- ─────────────────────────────────────────────────────────── -->
+<h2 id="typecheck">7. Use the opt-in typechecker</h2>
+
+<p>
+  Add <code>--typecheck</code> to ask stage1 to run its Silicon-side checker
+  between parse and lower:
+</p>
+
+<pre>echo '@let x:Int := 5; @let y:Float := 3.14; (x + y);' \
+  | wasmtime wasm-bin/stage1.wasm --typecheck &gt; bad.wat</pre>
+
+<p>Standard output is the WAT (the compile continues regardless), and stderr
+carries the diagnostic:</p>
+
+<pre class="out">[InvalidOperator] operator '+' cannot be applied to (Int, Float)</pre>
+
+<p>A clean program emits no stderr:</p>
+
+<pre>echo '@let x:Int := 5; (x + 1);' \
+  | wasmtime wasm-bin/stage1.wasm --typecheck &gt; ok.wat
+<span class="out"># stderr is empty; exit 0</span></pre>
+
+<h3>Error kinds the checker can report</h3>
+
+<table>
+  <tr><th>Kind</th><th>Triggers when</th><th>Example diagnostic</th></tr>
+  <tr><td><code>Mismatch</code></td><td>Expected one type, got another (arg vs param, if-branches, etc.)</td><td><code>[Mismatch] expected Int, got Float</code></td></tr>
+  <tr><td><code>InvalidOperator</code></td><td>Operator doesn't apply to the operand pair.</td><td><code>[InvalidOperator] operator '+' cannot be applied to (String, Int)</code></td></tr>
+  <tr><td><code>UnboundIdentifier</code></td><td>Reference to a name not in scope.</td><td><code>[UnboundIdentifier] unbound identifier 'foo'</code></td></tr>
+  <tr><td><code>UnknownType</code></td><td>Type annotation names a type the checker doesn't recognise.</td><td><code>[UnknownType] unknown type 'Widget'</code></td></tr>
+  <tr><td><code>HeterogeneousArray</code></td><td>Array literal mixes element types.</td><td><code>[HeterogeneousArray] array literal must be homogeneous: first element is Int, found Float</code></td></tr>
+  <tr><td><code>Annotation</code></td><td>Binding initialiser doesn't match the declared annotation.</td><td><code>[Annotation] 'x' declared as Int but initialiser has type Bool</code></td></tr>
+  <tr><td><code>ImmutableAssignment</code></td><td>Writing to a <code>@let</code> / <code>@fn</code> / <code>@extern</code> name.</td><td><code>[ImmutableAssignment] 'foo' is immutable and cannot be reassigned</code></td></tr>
+</table>
+
+<div class="card info">
+  <p><strong>Warn-only today.</strong> The typechecker prints diagnostics and the
+  build proceeds regardless. This keeps the self-host fixed point intact while
+  the checker matures. To make it fatal in your own project, wrap the
+  <code>stage1.wasm</code> invocation in a shell test that fails the build when
+  stderr is non-empty.</p>
+</div>
+
+<!-- ─────────────────────────────────────────────────────────── -->
+<h2 id="fixedpoint">8. Verify the byte-equal self-host</h2>
+
+<p>
+  This is the most important test in the repo — it proves that the compiler
+  in <code>boot/*.si</code> produces, when run on its own source, the
+  <em>exact</em> bytes of <code>wasm-bin/stage1.wasm</code>. Any change that
+  breaks this gate is rejected by CI.
+</p>
+
+<pre>./build.sh check</pre>
+
+<p>Internally the script:</p>
+
+<ol>
+  <li>Reads the bootstrap seed <code>wasm-bin/stage1.wasm</code> from disk.</li>
+  <li>Bundles the 30 files from <code>STAGE1_FILES</code> + the WASI extern stub.</li>
+  <li>Pipes that bundle through the seed under <code>wasmtime</code>; captures stdout as new WAT.</li>
+  <li>Runs <code>wat2wasm</code> on the new WAT to produce candidate WASM.</li>
+  <li>Compares the candidate to the seed with <code>cmp</code>.</li>
+</ol>
+
+<div class="gate">
+  <span class="lbl">PASS</span> &nbsp; The two files are byte-identical.
+  Print &ldquo;<code>✓ fixed point — rebuilt stage1.wasm byte-equal to seed</code>&rdquo;.
+  Exit 0.
+</div>
+
+<p>If you intentionally changed <code>boot/*.si</code>, the bytes will differ
+and <code>check</code> will fail. To advance the seed:</p>
+
+<pre>./build.sh                <span class="out"># overwrites wasm-bin/stage1.wasm with the new build</span>
+./build.sh check          <span class="out"># now verifies the NEW seed is self-consistent</span>
+./test.sh                 <span class="out"># re-run the suite under the new seed</span>
+git add wasm-bin/stage1.wasm    <span class="out"># commit the seed alongside your source change</span></pre>
+
+<!-- ─────────────────────────────────────────────────────────── -->
+<h2 id="wsl">9. Windows users (PowerShell &amp; WSL)</h2>
+
+<h3>PowerShell-native</h3>
+
+<p>The build script has a sibling: <code>build.ps1</code>. Subcommands match.</p>
+
+<pre>.\scripts\install-wat2wasm.ps1     <span class="out"># one-time</span>
+.\build.ps1 check                  <span class="out"># fixed-point check</span>
+.\build.ps1                        <span class="out"># build (overwrite seed)</span></pre>
+
+<p>
+  <code>test.sh</code> is bash-only. Run it under Git Bash, MSYS2, or WSL —
+  any environment with <code>bash</code> + <code>wasmtime</code> + <code>wat2wasm</code>
+  on <code>PATH</code>:
+</p>
+
+<pre>bash test.sh</pre>
+
+<h3>WSL (Ubuntu / Debian)</h3>
+
+<pre>sudo apt install wabt
+curl https://wasmtime.dev/install.sh -sSf | bash
+git clone https://github.com/natescode/sigil.git
+cd sigil
+./build.sh check
+./test.sh</pre>
+
+<!-- ─────────────────────────────────────────────────────────── -->
+<h2 id="troubleshoot">10. Troubleshooting</h2>
+
+<table>
+  <tr><th>Symptom</th><th>Likely cause</th><th>Fix</th></tr>
+  <tr>
+    <td><code>build.sh: seed compiler …/stage1.wasm not found</code></td>
+    <td>The checked-in seed was deleted or moved.</td>
+    <td><code>git checkout HEAD -- wasm-bin/stage1.wasm</code> to restore from the most recent commit.</td>
+  </tr>
+  <tr>
+    <td><code>build.sh: missing required tool 'wasmtime'</code></td>
+    <td><code>wasmtime</code> not on <code>PATH</code>.</td>
+    <td>Install per <a href="#prereqs">step 1</a> or add it to <code>PATH</code>.</td>
+  </tr>
+  <tr>
+    <td><code>build.sh: missing required tool 'wat2wasm'</code></td>
+    <td>WABT not installed and no project-local copy.</td>
+    <td>Run <code>./scripts/install-wat2wasm.sh</code> (or the <code>.ps1</code>).</td>
+  </tr>
+  <tr>
+    <td><code>✗ fixed-point FAILED</code></td>
+    <td>Source under <code>boot/</code> changed since the seed was built.</td>
+    <td>If intentional, run <code>./build.sh</code> to advance the seed; commit the new <code>wasm-bin/stage1.wasm</code> alongside your source change. If unintentional, <code>git diff boot/</code> to find the drift.</td>
+  </tr>
+  <tr>
+    <td>A test prints <code>"&lt;name&gt; FAIL &lt;code&gt;"</code></td>
+    <td>The named test asserted an invariant and bailed.</td>
+    <td>The numeric code maps to the assertion site in the test file — grep for <code>e_die <code>&lt;code&gt;</code></code> (or the test's matching <code>*_die</code> helper) to find which check tripped.</td>
+  </tr>
+  <tr>
+    <td><code>parseWat failed:</code> with garbage text in the error</td>
+    <td><code>wasm-bin/boot.wasm</code> from an unrelated run was reused by another tool.</td>
+    <td>Not relevant on the Silicon-only path — <code>boot.wasm</code> is no longer produced. If you encounter it after porting custom scripts, delete <code>wasm-bin/boot.{wat,wasm}</code> and rebuild.</td>
+  </tr>
+  <tr>
+    <td><code>Error: failed to open wasm module "wasm-bin/stage1.wasm"</code></td>
+    <td>You're invoking <code>wasmtime</code> from a different working directory.</td>
+    <td>Use an absolute path, or <code>cd</code> to the repo root first. The build scripts always <code>cd</code> first themselves.</td>
+  </tr>
+</table>
+
+<!-- ─────────────────────────────────────────────────────────── -->
+<h2 id="whatsnext">11. Adding your own tests</h2>
+
+<p>Convention: every test file lives at <code>boot/tests/&lt;feature&gt;_test.si</code> and:</p>
+
+<ul>
+  <li><strong>Prints <code>"&lt;feature&gt; OK\n"</code></strong> to stdout (fd 1) on success.</li>
+  <li><strong>Calls <code>&amp;wasi_snapshot_preview1::proc_exit 1</code></strong> with a non-zero status on any failed assertion.</li>
+  <li>Uses <code>@use</code> to pull in <code>boot/std/io.si</code> + any
+      module under test. The shell runner resolves the <code>@use</code> graph
+      depth-first; you don't need to manually order dependencies.</li>
+</ul>
+
+<p>Boilerplate template:</p>
+
+<pre><span class="si"># boot/tests/&lt;feature&gt;_test.si</span>
+@use '../std/io.si';
+@use '../path/to/module_under_test.si';
+
+@fn die code:Int := {
+  &amp;write_str 1, '&lt;feature&gt; FAIL ';
+  <span class="out"># inline integer printer — copy from one of the existing tests</span>
+  &amp;write_byte 1, 10;
+  &amp;wasi_snapshot_preview1::proc_exit 1;
+};
+
+@fn run := {
+  &amp;module_init;
+
+  &amp;@if ((&amp;some_check) != EXPECTED), { &amp;die 1; };
+  &amp;@if ((&amp;another_check) != 42),    { &amp;die 2; };
+
+  &amp;write_str 1, '&lt;feature&gt; OK';
+  &amp;write_byte 1, 10;
+  &amp;wasi_snapshot_preview1::proc_exit 0;
+};
+
+&amp;run;</pre>
+
+<p>Then add the path to <code>DEFAULT_TESTS</code> in <code>test.sh</code> and
+re-run <code>./test.sh</code>. If your test compiles via stage1 but the
+runtime needs special wasmtime args (e.g. preopen directories), invoke it
+manually:</p>
+
+<pre>cat boot/std/io.si boot/your_module.si boot/tests/your_test.si \
+  | wasmtime wasm-bin/stage1.wasm &gt; your_test.wat
+wat2wasm your_test.wat -o your_test.wasm
+wasmtime --dir ./fixtures::fx your_test.wasm</pre>
+
+<hr style="margin: 60px 0 20px; border: none; border-top: 1px solid var(--border);" />
+
+<p style="color: var(--muted); font-size: 0.8rem; text-align: center;">
+  Sigil — the Silicon compiler. Bootstrap complete; this guide reflects the
+  Silicon-only repository.
+  See <a href="bootstrap-plan.html" style="color: var(--accent);">bootstrap-plan.html</a>
+  for the full roadmap and
+  <a href="../CLAUDE.md" style="color: var(--accent);">CLAUDE.md</a>
+  for an architectural tour.
+</p>
+
+</div>
+</body>
+</html>
