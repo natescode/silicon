@@ -306,8 +306,9 @@
     <div>
       <a href="#problem">Problem</a>
       <a href="#stack">Stack</a>
+      <a href="#model-economics">Economics</a>
       <a href="#moat">Moat</a>
-      <a href="#market">Market</a>
+      <a href="#roadmap">Roadmap</a>
       <a href="#ask">Ask</a>
     </div>
   </div>
@@ -604,6 +605,98 @@
   </div>
 </section>
 
+<!-- ─────────────────────────────────────────────────────────── MODEL ECONOMICS -->
+<section class="slide" id="model-economics">
+  <div class="eyebrow">Model economics</div>
+  <h2>Where the moat actually comes from.</h2>
+  <p class="lede">
+    The Silicon Model is defensible because it's <em>cheap to run</em>, not because it's expensive to build.  Self-hosted 7-13B inference at $0.20/1M tokens vs $5-15/1M for a frontier API is the entire margin story.  Honest cost breakdown below — no hand-waving.
+  </p>
+
+  <h3>Build cost: four legitimate paths, very different price tags</h3>
+  <table style="font-size: 0.88rem; margin: 14px 0 26px;">
+    <tr>
+      <th>Approach</th>
+      <th>Upfront cost</th>
+      <th>What you get</th>
+      <th>Timeline</th>
+    </tr>
+    <tr>
+      <td><strong>A. RAG over frontier model</strong></td>
+      <td>$15–35K</td>
+      <td>Vanilla Claude/GPT-5 + vector retrieval over Silicon docs + strata catalogue.  Marginal gains.</td>
+      <td>2–6 weeks</td>
+    </tr>
+    <tr>
+      <td><strong>B. LoRA fine-tune of open base</strong></td>
+      <td>$75–140K</td>
+      <td>Code Llama 7B or DeepSeek-Coder 6.7B + LoRA on curated synthetic Silicon corpus.  2–3× better on narrow tasks.</td>
+      <td>3–6 months</td>
+    </tr>
+    <tr>
+      <td><strong>C. Full fine-tune + continued pre-training</strong> <span class="pill purple">target</span></td>
+      <td>$335–765K</td>
+      <td>7-13B base substantially specialized for Silicon: strata-aware, AST/WAT-grounded, real-world program competence.  5–10× on Silicon-specific benchmarks.</td>
+      <td>6–12 months</td>
+    </tr>
+    <tr>
+      <td><strong>D. From-scratch 7-30B</strong></td>
+      <td>$3M–15M</td>
+      <td>Maximum specialization.  Almost never worth it for a single-language model at startup stage.</td>
+      <td>12–24 months</td>
+    </tr>
+  </table>
+
+  <h3>The bottleneck isn't compute — it's data</h3>
+  <p>
+    Silicon's existing corpus is ~16,000 LoC of high-quality code (compiler + strata + tests).  Useful fine-tuning needs 10–100M+ tokens.  The bridge is <strong>synthetic data generation</strong>: use frontier models to produce Silicon programs from natural language, validate via the Sigil compiler, accumulate the corpus.  Budget for Path C: $50–150K of API spend over the curation period.  Engineer time is the bigger cost line.
+  </p>
+
+  <h3 style="margin-top: 28px;">Why this matters — the margin story</h3>
+  <table style="font-size: 0.88rem;">
+    <tr>
+      <th>Model serving</th>
+      <th>Inference cost (per 1M output tokens)</th>
+      <th>Gross margin at $2/1M list price</th>
+    </tr>
+    <tr>
+      <td>Frontier API (Claude/GPT-5) as middleware</td>
+      <td>$5–15</td>
+      <td><span style="color: var(--accent5);">Negative — you lose money on every call</span></td>
+    </tr>
+    <tr>
+      <td>OpenRouter / Together AI 7-13B</td>
+      <td>$0.20–1.00</td>
+      <td>50–90%</td>
+    </tr>
+    <tr>
+      <td><strong>Self-hosted 7B on owned H100s</strong></td>
+      <td><strong>$0.10–0.30</strong></td>
+      <td><strong>85–95%</strong></td>
+    </tr>
+    <tr>
+      <td><strong>Self-hosted 13B on owned H100s</strong></td>
+      <td><strong>$0.20–0.60</strong></td>
+      <td><strong>70–90%</strong></td>
+    </tr>
+  </table>
+
+  <div class="grid-2" style="margin-top: 28px;">
+    <div class="card accent">
+      <h4 style="color: var(--accent); margin-bottom: 8px;">The moat in one sentence</h4>
+      <p>
+        A competitor wrapping a frontier API has 10–25% gross margin at best, and is one Anthropic price change away from being unprofitable.  We have 70–95% gross margin and own the cost curve.  That's the difference between "AI feature" and "AI business".
+      </p>
+    </div>
+    <div class="card accent2">
+      <h4 style="color: var(--accent2); margin-bottom: 8px;">Total spend to ship Path C</h4>
+      <p>
+        Realistic budget: <strong>$500–800K over 12 months</strong> including data curation, ML engineering, compute, evaluation, and 3 months of inference runway.  Funded from a combination of bootstrap revenue (Path A RAG generates cashflow during Path C buildout), angel capital, and potentially an SBIR/DARPA grant in the "AI-trustworthy code generation" lane (~$150–250K non-dilutive).
+      </p>
+    </div>
+  </div>
+</section>
+
 <!-- ─────────────────────────────────────────────────────────── MOAT -->
 <section class="slide" id="moat">
   <div class="eyebrow">Defensibility</div>
@@ -710,13 +803,16 @@
   </div>
 
   <div class="card accent" style="margin-top: 30px;">
-    <h4 style="color: var(--accent); margin-bottom: 10px;">Path to revenue</h4>
+    <h4 style="color: var(--accent); margin-bottom: 10px;">Path to revenue — charge from day one</h4>
     <p>
-      Year 1: Free tier adoption, no revenue.  Goal: 10K active developers, 100K weekly compile runs.
-      Year 2: Model API launches; $1M ARR target driven by power users + early enterprise pilots.
-      Year 3: NIT Cloud + Registry; $10M ARR target.
-      Year 4+: Enterprise expansion; $50M+ ARR with 15% net retention from upsell.
+      The bootstrap-to-growth path means revenue starts immediately, not after a free-tier expansion.  Path A (RAG over frontier API) launches in month 3 and generates the cashflow that funds Path C (specialized model) buildout.
     </p>
+    <ul class="checks" style="margin-top: 10px;">
+      <li><strong>Months 3–9.</strong>  Path A model + VS Code extension + playground.  $50–250K ARR from individual developers and small teams paying for API access.</li>
+      <li><strong>Months 9–18.</strong>  Path C model launches.  $1–3M ARR.  Self-hosted inference at 70–95% gross margin transforms unit economics.</li>
+      <li><strong>Months 18–24.</strong>  NIT Cloud + Silicon Registry layer on top.  First enterprise pilots in regulated industries.  $3–8M ARR.</li>
+      <li><strong>Year 3+.</strong>  Growth investment from a PSG-style partner unlocks enterprise sales motion + on-prem deployments.  $15–40M ARR with 70%+ gross margin and 25%+ net retention from upsell.</li>
+    </ul>
   </div>
 </section>
 
@@ -770,34 +866,37 @@
 
 <!-- ─────────────────────────────────────────────────────────── ROADMAP -->
 <section class="slide tall" id="roadmap">
-  <div class="eyebrow">18-month plan</div>
-  <h2>From bootstrap to product-market fit.</h2>
+  <div class="eyebrow">24-month plan</div>
+  <h2>Bootstrap to growth-equity readiness.</h2>
+  <p class="lede">
+    Lean execution; revenue from month 3; no Series A treadmill.  Target outcome: $5–10M ARR with 70%+ gross margin, ready to receive a growth-stage investment from a founder-friendly partner like PSG Equity or Insight Partners.
+  </p>
 
   <div class="timeline">
     <div class="milestone q1">
-      <div class="when">Months 0–6 · Foundation</div>
-      <h4>Production-grade Stage 0 compiler + Strata 2.0</h4>
-      <p>Close the audit findings.  Land Strata 2.0 capability set.  Author generics + traits + derive as strata.  Compiler ready for external developers to ship real software with.</p>
+      <div class="when">Months 0–6 · Foundation + first revenue</div>
+      <h4>Production-grade compiler + Path A model launch</h4>
+      <p>Close the audit findings on Stage 0.  Land Strata 2.0 capability set.  Ship Path A (RAG over a frontier model) as the v0 Silicon Model.  VS Code extension + playground convert visitors into paying users.  Target: <strong>$50–150K ARR</strong> by month 6.</p>
     </div>
     <div class="milestone q2">
-      <div class="when">Months 4–9 · Tooling</div>
-      <h4>NIT alpha + Silicon Registry beta</h4>
-      <p>NIT command-line client with content-addressed codebase + name layer, working on real Silicon projects.  Package registry with the first 100 third-party strata.  Silicon team's own dogfooding scales to a 50k-LoC codebase.</p>
+      <div class="when">Months 4–10 · Tooling + corpus build</div>
+      <h4>NIT alpha + synthetic data generation</h4>
+      <p>NIT command-line client with content-addressed codebase + name layer.  Silicon Registry beta.  In parallel: synthetic-data pipeline running to build the 50–500M token Silicon corpus needed for Path C model training.</p>
     </div>
     <div class="milestone q3">
-      <div class="when">Months 6–12 · Model</div>
-      <h4>Silicon Model v0 launches</h4>
-      <p>Fine-tuned base model (7B params) on the Silicon corpus.  Public API at $0.002/1k tokens.  Integrated into the VS Code extension as the default completion provider.  Free tier with rate limits; paid tier for serious usage.</p>
+      <div class="when">Months 9–14 · Path C model</div>
+      <h4>Silicon Model v1 (specialized) launches</h4>
+      <p>Full fine-tune + continued pre-training on the curated corpus.  Self-hosted inference at 70–95% gross margin.  10× quality lead vs Path A on Silicon-specific benchmarks.  Path A pricing rolls into Path C; existing customers upgrade automatically.  Target: <strong>$500K–1.5M ARR</strong> by month 14.</p>
     </div>
     <div class="milestone q3">
-      <div class="when">Months 9–15 · Revenue</div>
-      <h4>NIT Cloud + first enterprise pilots</h4>
-      <p>Hosted NIT with team features.  Three enterprise pilots in regulated industries (finance, defense, healthcare) using the audit-trail and sandboxing properties.  $500k-1M ARR.</p>
+      <div class="when">Months 12–20 · Enterprise + NIT Cloud</div>
+      <h4>First enterprise pilots, hosted NIT</h4>
+      <p>NIT Cloud GA with team collaboration + audit logs.  Three enterprise pilots in regulated industries (finance, defense, healthcare) leveraging the auditable-compiler + sandboxed-runtime + reproducible-build trio.  Founder-led sales motion.  Target: <strong>$2–5M ARR</strong> by month 20.</p>
     </div>
     <div class="milestone q3">
-      <div class="when">Months 12–18 · Scale</div>
-      <h4>Silicon Model v1 + ecosystem flywheel</h4>
-      <p>Model v1 with proprietary RLHF data from registered users.  Demonstrable 10x quality lead on Silicon tasks vs frontier models.  $5-10M ARR.  Series A raise.</p>
+      <div class="when">Months 18–24 · Growth investment</div>
+      <h4>PSG-style growth round at $25–75M valuation</h4>
+      <p>Approach PSG / Insight / Iconiq / Vista with $5–10M ARR, 100%+ YoY growth, and demonstrably owned margin curve.  Raise $15–40M for sales-team buildout + on-prem deployments + Model v2.  Founder retains <strong>65–80%</strong> of the company through this round &mdash; vs ~30–40% on the traditional seed → A → B path.</p>
     </div>
   </div>
 </section>
@@ -805,17 +904,23 @@
 <!-- ─────────────────────────────────────────────────────────── TEAM -->
 <section class="slide" id="team">
   <div class="eyebrow">Team</div>
-  <h2>Solo founder, full-stack designer-builder.</h2>
+  <h2>Solo founder.  Lean by design.</h2>
 
   <div class="grid-2">
     <div>
-      <h3>Why solo today</h3>
+      <h3>Why lean for longer</h3>
       <p>
-        The bootstrap is done.  The audit + roadmap + Strata 2.0 spec exist.  The hard "is this technically real?" questions are answered before headcount.  This is the right founder profile to articulate the thesis to investors and the right time to bring on the second + third engineers.
+        The bootstrap-to-growth path doesn't optimize for headcount — it optimizes for <strong>equity preservation</strong>.  Every hire before revenue dilutes; every hire after revenue is funded from margin.  Plan: stay solo through Path A launch (month 6).  Make the first selective hire when revenue covers the salary.
       </p>
       <p>
-        Hiring plan post-seed: senior compiler engineer (months 1-3), ML researcher (months 2-4), developer-relations lead (months 4-6).  Engineering team of 4 by month 9.
+        Hiring sequence, gated by revenue:
       </p>
+      <ul class="checks" style="margin-top: 6px;">
+        <li><strong>Hire 1</strong> (month 6–9, at ~$150K ARR): ML researcher with code-model lineage (Code Llama / DeepSeek-Coder / StarCoder).</li>
+        <li><strong>Hire 2</strong> (month 9–12, at ~$500K ARR): senior compiler engineer to own Stage 0 production-grade work.</li>
+        <li><strong>Hire 3</strong> (month 12–15, at ~$1M ARR): developer-relations lead for community + content + early sales.</li>
+        <li><strong>Hires 4–8</strong> (post-growth-round): sales engineer, enterprise AE, two senior engineers, one designer.</li>
+      </ul>
     </div>
     <div>
       <h3>What's been built solo, to date</h3>
@@ -823,57 +928,116 @@
         <li>Stage 0 TypeScript compiler &mdash; ~12k LoC across parser, elaborator, typechecker, IR, codegen</li>
         <li>Stage 1 self-hosted compiler &mdash; ~10k LoC of Silicon with byte-equal fixed point</li>
         <li>Strata system v1 &mdash; three user-authored keywords as proof-of-concept</li>
-        <li>VS Code extension + LSP &mdash; on the Marketplace</li>
+        <li>VS Code extension + LSP &mdash; live on the Marketplace</li>
         <li>Playground + LSP &mdash; both publicly hosted</li>
         <li>Strata 2.0 capability spec &mdash; complete, ready for implementation</li>
+        <li>Production audit + roadmap + investor materials &mdash; ready for outside scrutiny</li>
       </ul>
+      <p style="margin-top: 14px; font-size: 0.9rem; color: var(--muted);">
+        This is the founder profile growth-equity firms look for: someone who has answered the hard technical questions before asking for capital.
+      </p>
     </div>
   </div>
 </section>
 
 <!-- ─────────────────────────────────────────────────────────── ASK -->
 <section class="slide" id="ask">
-  <div class="eyebrow">The ask</div>
-  <h2>Seed round.</h2>
+  <div class="eyebrow">The ask · phase 1</div>
+  <h2>Bootstrap seed.</h2>
   <p class="lede">
-    Fund 18 months of execution on the roadmap above.  By the end of it: production compiler, working NIT, launched Silicon Model, first enterprise revenue, Series A position.
+    Small, founder-friendly round.  Capital efficiency is the strategy &mdash; not by accident but by design, because preserving equity through the growth-equity transition compounds founder ownership 2&ndash;3&times; vs the traditional VC ladder.
   </p>
 
   <div class="ask-grid" style="margin-top: 32px;">
     <div class="ask-card">
       <h4>Raise</h4>
-      <div class="big">$3-5M</div>
-      <p style="color: var(--text-dim); font-size: 0.92rem;">Seed round.  Targeting investors with developer-tools or AI-infrastructure thesis.</p>
+      <div class="big">$500K–$1M</div>
+      <p style="color: var(--text-dim); font-size: 0.92rem;">SAFE with high cap ($15–25M post-money).  Operator-angels + strategic angels only &mdash; not institutional funds.</p>
     </div>
     <div class="ask-card">
       <h4>Use of funds</h4>
       <div class="big">60% eng · 25% model · 15% GTM</div>
-      <p style="color: var(--text-dim); font-size: 0.92rem;">Compiler + NIT engineering, fine-tuning the Silicon Model, developer relations + early sales.</p>
+      <p style="color: var(--text-dim); font-size: 0.92rem;">Compiler + NIT engineering, data curation + ML researcher for Path C, developer relations + content.</p>
     </div>
     <div class="ask-card">
       <h4>Runway</h4>
-      <div class="big">18 months</div>
-      <p style="color: var(--text-dim); font-size: 0.92rem;">To Series A milestone: $5-10M ARR, demonstrable 10x model quality lead, three enterprise references.</p>
+      <div class="big">12–18 months</div>
+      <p style="color: var(--text-dim); font-size: 0.92rem;">To $2–5M ARR with self-hosted Silicon Model live, NIT in production, three enterprise pilots running.</p>
     </div>
   </div>
 
-  <h3 style="margin-top: 40px;">What we'd want from investors beyond capital</h3>
+  <h3 style="margin-top: 40px;">Target investors for phase 1</h3>
   <div class="grid-3">
     <div class="icon-card">
       <div class="glyph b1">①</div>
-      <h4>Enterprise intros</h4>
-      <p>Pilot customers in regulated industries.  The sandboxing + audit story sells itself to security-conscious CTOs but requires warm intros.</p>
+      <h4>Operator-angels in dev tools</h4>
+      <p>Founders or early operators from GitHub, Vercel, Supabase, Linear, Anthropic, Replit, Cursor.  $25–100K checks each; network is worth more than capital.</p>
     </div>
     <div class="icon-card">
       <div class="glyph b2">②</div>
-      <h4>ML talent</h4>
-      <p>Specifically: someone who's shipped a small-but-specialized code model.  Code Llama / DeepSeek-Coder lineage preferred.</p>
+      <h4>AI infrastructure veterans</h4>
+      <p>Ex-OpenAI / ex-Anthropic / ex-Cohere operators with code-model lineage.  Help on Path C model architecture + training is the highest-leverage contribution.</p>
     </div>
     <div class="icon-card">
       <div class="glyph b3">③</div>
-      <h4>Distribution partners</h4>
-      <p>Editor vendors, agent frameworks, RAG platforms looking for a "trust" layer for code their models emit.</p>
+      <h4>Programming-language exiteers</h4>
+      <p>Founders of successful niche-language companies who've navigated language-as-product economics before.  Pattern-recognition is the asset.</p>
     </div>
+  </div>
+</section>
+
+<!-- ─────────────────────────────────────────────────────────── ASK PHASE 2 -->
+<section class="slide" id="ask-phase2">
+  <div class="eyebrow">The ask · phase 2</div>
+  <h2>PSG-style growth round at month 18&ndash;24.</h2>
+  <p class="lede">
+    The bootstrap-seed is the warm-up.  The real partnership is the growth round &mdash; with someone whose model is founder-friendly recapitalization, not the traditional VC ladder that dilutes founders to 10&ndash;20% by exit.
+  </p>
+
+  <div class="grid-2" style="margin-top: 20px;">
+    <div>
+      <h3>Who we'd raise from</h3>
+      <ul class="checks">
+        <li><strong>PSG Equity</strong> &mdash; Boston growth-equity firm; explicit founder-friendly thesis; portfolio of established software companies they've helped scale without forcing exits.</li>
+        <li><strong>Insight Partners</strong> &mdash; ScaleUp model; strong on go-to-market amplification.</li>
+        <li><strong>Iconiq Growth</strong> &mdash; family-office anchored; longer-horizon capital.</li>
+        <li><strong>Vista Equity Partners</strong> &mdash; if the enterprise motion is the dominant revenue stream by then.</li>
+      </ul>
+      <p style="margin-top: 12px; font-size: 0.9rem; color: var(--muted);">
+        Each of these does $25–100M+ checks at this stage and takes minority or majority stakes that preserve founder operational control.
+      </p>
+    </div>
+    <div>
+      <h3>What the metrics look like at the ask</h3>
+      <div class="grid-2" style="gap: 12px;">
+        <div class="metric">
+          <div class="num green">$5–10M</div>
+          <div class="label">ARR</div>
+        </div>
+        <div class="metric">
+          <div class="num green">100%+</div>
+          <div class="label">YoY growth</div>
+        </div>
+        <div class="metric">
+          <div class="num">70-90%</div>
+          <div class="label">Gross margin</div>
+        </div>
+        <div class="metric">
+          <div class="num">3</div>
+          <div class="label">Enterprise references</div>
+        </div>
+      </div>
+      <p style="margin-top: 14px; font-size: 0.9rem; color: var(--muted);">
+        Margin is the conversation-starter.  Anyone can hit $5M ARR with a frontier-API wrapper; almost nobody can hit it at 80% gross margin.  That's what the specialized model buys us &mdash; and what growth-equity partners pay a premium for.
+      </p>
+    </div>
+  </div>
+
+  <div class="card accent" style="margin-top: 28px;">
+    <h4 style="color: var(--accent); margin-bottom: 8px;">Equity math at the end of phase 2</h4>
+    <p>
+      Bootstrap seed (SAFE conversion): 4&ndash;7% to angels.  Growth round: 20&ndash;30% to PSG/Insight at the $25–75M valuation level.  ESOP carve-out: 10&ndash;15%.  Founder retained equity: <strong>50&ndash;65%</strong>.  Compare to the traditional seed → A → B → C path that typically leaves founders at <strong>15&ndash;25%</strong> by Series C, on a similar timeline.
+    </p>
   </div>
 </section>
 
@@ -885,8 +1049,8 @@
     will be designed for the models that write in them.
   </h2>
   <p class="lede" style="margin-top: 24px;">
-    Silicon is that language.  Sigil is its compiler.  NIT is its version control.  The specialized model is the moat.
-    The bootstrap is done.  The path from here to product-market fit is concrete and bounded.  We're raising to execute on it.
+    Silicon is that language.  Sigil is its compiler.  NIT is its version control.  The specialized Silicon Model is the moat.
+    The technical bootstrap is done; the financial bootstrap is the next phase.  Capital-efficient by design &mdash; preserve equity through revenue, then partner with a growth-equity firm when the metrics defend it.
   </p>
 
   <div style="margin-top: 50px; display: flex; gap: 16px; flex-wrap: wrap;">
