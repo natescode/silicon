@@ -410,7 +410,7 @@
     <div class="stack-row">
       <div class="lead nit">NIT</div>
       <div class="text">
-        <strong>The version control.</strong>  Replaces Git's merge with set-union semantics.  Multiple AI agents work in parallel without conflicts.  Branches combine algebraically.
+        <strong>The version control.</strong>  Content-addressed code storage in the Unison tradition.  Every definition is identified by its hash, not its name.  Edits add new hashes; nothing ever overwrites.  No merge conflicts because there's nothing to overwrite.
       </div>
     </div>
     <div class="stack-row">
@@ -521,38 +521,38 @@
 <section class="slide" id="nit">
   <div class="product-header nit">
     <div class="glyph">NIT</div>
-    <div class="tagline">Version control built for parallel AI agents</div>
+    <div class="tagline">Content-addressed version control for parallel AI agents</div>
   </div>
-  <h2>What Git is to centralized VCS, NIT is to AI collaboration.</h2>
+  <h2>Code as values, not files.</h2>
 
   <div class="grid-2">
     <div>
       <h3>The shift</h3>
       <p>
-        Git represents history as a directed acyclic graph of commits.  Merging two branches means walking the graph and reconciling each conflicting change &mdash; a fundamentally human task because resolution requires understanding intent.
+        Git represents history as a directed acyclic graph of commits over text files.  Every "change" mutates a file; merging means walking the graph and reconciling textual conflicts &mdash; a fundamentally human task because resolution requires understanding intent.
       </p>
       <p>
-        NIT represents code as a <strong>set of semantic changes</strong>.  Combining branches is the union of those sets.  Union is commutative, associative, and idempotent &mdash; the algebraic guarantees that mean three AI agents working in parallel always produce a defined result.
+        NIT, taking the model proven by <a href="https://www.unison-lang.org/" style="color: var(--accent3);">Unison</a> and pairing it with Silicon, represents code as a <strong>content-addressed database</strong>.  Every function, type, and definition is identified by the hash of its normalized AST.  Names are mutable metadata pointing at immutable hashes.  Edits never mutate anything &mdash; they add a new hash and update the name to point at it.
       </p>
       <ul class="checks">
-        <li><strong>Conflicts become a category that doesn't exist.</strong>  Two changes to the same line don't conflict; they're both in the result set, and the language semantics decide which wins.</li>
-        <li><strong>Branches compose freely.</strong>  Take any subset of changes; the union is itself a valid history.</li>
-        <li><strong>Semantic, not textual.</strong>  Changes are AST-level edits, not line-level patches.  Two refactors that touch overlapping text but different concerns don't collide.</li>
-        <li><strong>Auditable.</strong>  Every change carries an author + a justification + a hash.  Multi-agent contribution audits become trivial.</li>
+        <li><strong>Nothing ever overwrites.</strong>  Conflicts as a category don't exist &mdash; two agents producing different implementations of <code>foo</code> just produce two different hashes.  The name layer decides which one <code>foo</code> resolves to.</li>
+        <li><strong>Refactoring is free and safe.</strong>  Rename a function: update the name → hash map.  No grep-and-replace, no risk of missing a reference.</li>
+        <li><strong>Dependencies pin to hashes.</strong>  Builds are reproducible forever.  Upstream libraries can't break your code by publishing a new version &mdash; you're pinned to a specific hash.</li>
+        <li><strong>History is granular.</strong>  Every hash is a precise unit of change with an author + a timestamp + the AST that produced it.  Audit "what did this AI agent change?" by listing the hashes it added.</li>
       </ul>
     </div>
     <div>
       <h3>Why this unlocks AI workflows</h3>
       <p>
-        The bottleneck in current "agentic" coding setups is not the AI &mdash; it's the human reviewing and resolving conflicts between agents.  Once you replace the merge bottleneck with algebraic combination, you can throw 10 agents at a codebase and still produce a coherent result.
+        The bottleneck in agentic coding isn't model quality &mdash; it's the human reviewing and resolving merge conflicts between concurrent agents.  Under content-addressing, that category of conflict doesn't exist.  Ten agents working in parallel each produce new hashes; the name layer is the only place orchestration matters, and orchestration is a structured problem (cheap to automate) instead of a textual one (expensive, semantic, human-only).
       </p>
       <p>
-        NIT is the operating system for that world.  It also happens to work great for human collaboration &mdash; the same properties that help AI agents (no merge conflicts, free branch composition) help human teams too.
+        NIT pairs naturally with Silicon: both treat code as values rather than text.  Silicon's frozen grammar means hashes are stable across releases; the strata system means name → hash mappings can carry rich metadata; the WASM-native runtime means content-addressed code can be cached + distributed + executed without untrust assumptions.
       </p>
 
       <div class="quote">
-        "Merges were a bottleneck because we treated code as text.  Once you treat code as a set of meaningful edits, the bottleneck disappears."
-        <span class="by">— Project thesis</span>
+        "Code is a database, not a folder of text files.  Hash it, name it, version the names independently.  Merges disappear because the layer they happened on disappears."
+        <span class="by">— Project thesis, after Unison</span>
       </div>
     </div>
   </div>
@@ -623,7 +623,7 @@
     </div>
     <div class="card accent3">
       <h4 style="color: var(--accent3);">3. VCS network effect</h4>
-      <p>NIT's value scales with codebases hosted on it.  Once a project moves from Git to NIT for the AI-collaboration benefit, moving back means losing the parallel-agent capability.</p>
+      <p>NIT's value scales with codebases hosted on it.  Once a project moves from Git to NIT for content-addressed reproducibility + parallel-agent capability, moving back means re-inheriting every problem Git was designed around.</p>
     </div>
     <div class="card accent4">
       <h4 style="color: var(--accent4);">4. Ecosystem composability</h4>
@@ -702,7 +702,7 @@
       <h3>Paid</h3>
       <ul class="checks">
         <li><strong>Silicon Model API.</strong>  Per-token pricing for the specialized model.  Code completion, refactor, review, generation.  Primary revenue.</li>
-        <li><strong>NIT Cloud.</strong>  Hosted NIT with team collaboration features, audit logs, web UI.  GitHub for the union-VCS world.</li>
+        <li><strong>NIT Cloud.</strong>  Hosted NIT with team collaboration features, audit logs, web UI.  GitHub for the content-addressed VCS world.</li>
         <li><strong>Silicon Registry.</strong>  Hosted package registry + private packages.  Eventually marketplace fees on third-party strata.</li>
         <li><strong>Enterprise support.</strong>  SLA-backed support contracts.  Compliance certifications.  On-prem model deployments.</li>
       </ul>
@@ -759,7 +759,7 @@
       <h3>What's on the immediate roadmap</h3>
       <ul class="checks">
         <li><strong>Strata 2.0</strong> — Capability redesign enabling generics, traits, derive macros as libraries (6-10 weeks)</li>
-        <li><strong>NIT prototype</strong> — Single-user version control with union semantics (3 months)</li>
+        <li><strong>NIT prototype</strong> — Single-user content-addressed version control (3 months)</li>
         <li><strong>Silicon Model v0</strong> — Fine-tuned 7B on initial Silicon corpus (3-6 months)</li>
         <li><strong>Production diagnostics</strong> — Rust-quality error messages (6 weeks)</li>
         <li><strong>Package manager</strong> — silicon.toml + remote dependencies (3 months)</li>
@@ -782,7 +782,7 @@
     <div class="milestone q2">
       <div class="when">Months 4–9 · Tooling</div>
       <h4>NIT alpha + Silicon Registry beta</h4>
-      <p>NIT command-line client with union semantics, working on real codebases.  Package registry with the first 100 third-party strata.  Silicon team's own dogfooding scales to a 50k-LoC codebase.</p>
+      <p>NIT command-line client with content-addressed codebase + name layer, working on real Silicon projects.  Package registry with the first 100 third-party strata.  Silicon team's own dogfooding scales to a 50k-LoC codebase.</p>
     </div>
     <div class="milestone q3">
       <div class="when">Months 6–12 · Model</div>
