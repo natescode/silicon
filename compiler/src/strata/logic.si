@@ -1,0 +1,30 @@
+@stratum_operator Or ('||', Node) = {
+  &IR::control_or;
+};
+
+@stratum_keyword Not ('@not', Node) = {
+  &IR::i32_eqz;
+};
+
+@stratum_keyword And ('@and', Node) = {
+  &IR::control_and;
+  @local leftN  := &Compiler::arg Node, 0;
+  @local rightN := &Compiler::arg Node, 1;
+  @local left   := &Compiler::lowerExpr leftN;
+  @local right  := &Compiler::lowerExpr rightN;
+  @local zero   := &Compiler::ir::makeConst 0, 'i32';
+  &Compiler::ir::makeIf left, right, zero, 'i32';
+};
+
+# Keyword form of || for &@or call-sites.  The `||` operator itself is handled
+# specially in lowerBinaryOp; this rich body covers the &@or path so the
+# expander registry has full short-circuit coverage.
+@stratum_keyword OrKw ('@or', Node) = {
+  &IR::control_or;
+  @local leftN  := &Compiler::arg Node, 0;
+  @local rightN := &Compiler::arg Node, 1;
+  @local left   := &Compiler::lowerExpr leftN;
+  @local right  := &Compiler::lowerExpr rightN;
+  @local one    := &Compiler::ir::makeConst 1, 'i32';
+  &Compiler::ir::makeIf left, one, right, 'i32';
+};

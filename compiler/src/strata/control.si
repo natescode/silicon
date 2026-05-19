@@ -1,0 +1,20 @@
+@stratum_keyword Break ('@break', Node) = {
+  &IR::control_break;
+  @local id := &Compiler::ctx::loopStack::peek;
+  &Compiler::assertDefined id, '@break outside @loop';
+  &Compiler::ir::makeBreak id;
+};
+
+@stratum_keyword Continue ('@continue', Node) = {
+  &IR::control_continue;
+  @local id := &Compiler::ctx::loopStack::peek;
+  &Compiler::assertDefined id, '@continue outside @loop';
+  &Compiler::ir::makeContinue id;
+};
+
+@stratum_keyword Return ('@return', Node) = {
+  &IR::control_return;
+  @local valN  := &Compiler::arg Node, 0;
+  @local value := &Compiler::lowerExprIfDefined valN;
+  &Compiler::ir::makeReturn value;
+};
