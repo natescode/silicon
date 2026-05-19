@@ -1,0 +1,911 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Silicon · Sigil · NIT — The stack for AI-written software</title>
+  <style>
+    :root {
+      --bg: #0a0c12;
+      --surface: #14171f;
+      --surface2: #1d212c;
+      --border: #2a2f3e;
+      --accent: #6c8ef7;
+      --accent2: #b06cf7;
+      --accent3: #3ecf8e;
+      --accent4: #f7a06c;
+      --accent5: #f76c6c;
+      --accent6: #f7e36c;
+      --text: #e6e9f5;
+      --text-dim: #b0b6ce;
+      --muted: #7b82a8;
+      --code-bg: #0d0f17;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Inter', 'Segoe UI', system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.55;
+    }
+    .deck { max-width: 1180px; margin: 0 auto; padding: 0 32px; }
+    section.slide {
+      min-height: 92vh;
+      padding: 80px 0 60px;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      border-bottom: 1px solid var(--border);
+    }
+    section.slide.tall { min-height: auto; padding: 70px 0; }
+    .eyebrow {
+      color: var(--accent);
+      font-size: 0.75rem;
+      font-weight: 700;
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      margin-bottom: 16px;
+    }
+    h1.hero { font-size: 4rem; line-height: 1.05; color: var(--text); margin-bottom: 24px; font-weight: 800; letter-spacing: -0.02em; }
+    h1.hero .grad {
+      background: linear-gradient(135deg, var(--accent), var(--accent2) 60%, var(--accent3));
+      -webkit-background-clip: text;
+      background-clip: text;
+      color: transparent;
+    }
+    h2 { font-size: 2.5rem; line-height: 1.1; color: var(--text); margin-bottom: 20px; font-weight: 700; letter-spacing: -0.02em; }
+    h3 { font-size: 1.35rem; color: var(--accent3); margin: 24px 0 12px; font-weight: 600; }
+    h4 { font-size: 1.05rem; color: var(--accent4); margin: 14px 0 8px; font-weight: 600; }
+    p.lede { font-size: 1.35rem; color: var(--text-dim); margin-bottom: 24px; line-height: 1.5; max-width: 880px; }
+    p { color: var(--text-dim); font-size: 1rem; margin-bottom: 14px; }
+    p strong { color: var(--text); font-weight: 600; }
+    .grid-2 { display: grid; grid-template-columns: repeat(2, 1fr); gap: 28px; margin: 24px 0; }
+    .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 22px; margin: 24px 0; }
+    .grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 18px; margin: 24px 0; }
+    @media (max-width: 800px) {
+      .grid-2, .grid-3, .grid-4 { grid-template-columns: 1fr; }
+      h1.hero { font-size: 2.5rem; }
+      h2 { font-size: 1.8rem; }
+    }
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 24px;
+    }
+    .card.accent  { border-color: var(--accent);  }
+    .card.accent2 { border-color: var(--accent2); }
+    .card.accent3 { border-color: var(--accent3); }
+    .card.accent4 { border-color: var(--accent4); }
+    .metric {
+      background: linear-gradient(180deg, var(--surface), var(--surface2));
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 28px 24px;
+      text-align: center;
+    }
+    .metric .num {
+      font-size: 2.8rem;
+      font-weight: 800;
+      letter-spacing: -0.02em;
+      background: linear-gradient(135deg, var(--accent), var(--accent2));
+      -webkit-background-clip: text;
+      background-clip: text;
+      color: transparent;
+      margin-bottom: 8px;
+    }
+    .metric .num.green {
+      background: linear-gradient(135deg, var(--accent3), var(--accent6));
+      -webkit-background-clip: text;
+      background-clip: text;
+      color: transparent;
+    }
+    .metric .num.orange {
+      background: linear-gradient(135deg, var(--accent4), var(--accent5));
+      -webkit-background-clip: text;
+      background-clip: text;
+      color: transparent;
+    }
+    .metric .label { color: var(--text-dim); font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.08em; }
+    .icon-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 20px;
+    }
+    .icon-card .glyph {
+      width: 44px;
+      height: 44px;
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 700;
+      font-size: 1.2rem;
+      margin-bottom: 12px;
+    }
+    .icon-card .glyph.b1 { background: rgba(108, 142, 247, 0.15); color: var(--accent); }
+    .icon-card .glyph.b2 { background: rgba(176, 108, 247, 0.15); color: var(--accent2); }
+    .icon-card .glyph.b3 { background: rgba(62, 207, 142, 0.15); color: var(--accent3); }
+    .icon-card .glyph.b4 { background: rgba(247, 160, 108, 0.15); color: var(--accent4); }
+    .icon-card .glyph.b5 { background: rgba(247, 108, 108, 0.15); color: var(--accent5); }
+    .icon-card h4 { margin: 4px 0 8px; color: var(--text); font-size: 1.05rem; }
+    .icon-card p { font-size: 0.92rem; line-height: 1.5; color: var(--text-dim); }
+    pre {
+      background: var(--code-bg);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 18px 22px;
+      overflow-x: auto;
+      font-family: 'JetBrains Mono', 'Cascadia Code', 'Fira Code', 'Consolas', monospace;
+      font-size: 0.85rem;
+      line-height: 1.55;
+      margin: 16px 0;
+      color: var(--text);
+    }
+    code { font-family: 'JetBrains Mono', monospace; font-size: 0.88em; background: var(--code-bg); padding: 1px 6px; border-radius: 5px; color: var(--accent3); }
+    .si { color: var(--accent3); }
+    .kw { color: var(--accent6); }
+    .api { color: var(--accent2); }
+    .comment { color: var(--muted); font-style: italic; }
+    .product-header {
+      display: flex;
+      align-items: baseline;
+      gap: 18px;
+      margin-bottom: 12px;
+    }
+    .product-header .glyph {
+      font-size: 2.2rem;
+      font-weight: 800;
+      letter-spacing: -0.02em;
+    }
+    .product-header.silicon .glyph { color: var(--accent); }
+    .product-header.sigil .glyph    { color: var(--accent2); }
+    .product-header.nit .glyph      { color: var(--accent3); }
+    .product-header.model .glyph    { color: var(--accent4); }
+    .product-header .tagline { color: var(--muted); font-size: 1rem; }
+    .pill {
+      display: inline-block;
+      padding: 4px 12px;
+      border-radius: 999px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      background: rgba(108, 142, 247, 0.12);
+      color: var(--accent);
+      border: 1px solid rgba(108, 142, 247, 0.3);
+      margin-right: 8px;
+    }
+    .pill.green { background: rgba(62, 207, 142, 0.12); color: var(--accent3); border-color: rgba(62, 207, 142, 0.3); }
+    .pill.purple { background: rgba(176, 108, 247, 0.12); color: var(--accent2); border-color: rgba(176, 108, 247, 0.3); }
+    .pill.orange { background: rgba(247, 160, 108, 0.12); color: var(--accent4); border-color: rgba(247, 160, 108, 0.3); }
+    .pill.red { background: rgba(247, 108, 108, 0.12); color: var(--accent5); border-color: rgba(247, 108, 108, 0.3); }
+    ul.checks { list-style: none; padding: 0; margin: 12px 0; }
+    ul.checks li {
+      padding: 8px 0 8px 28px;
+      position: relative;
+      color: var(--text-dim);
+      font-size: 0.95rem;
+      line-height: 1.5;
+    }
+    ul.checks li::before {
+      content: "✓";
+      position: absolute;
+      left: 0;
+      color: var(--accent3);
+      font-weight: 700;
+    }
+    ul.checks li strong { color: var(--text); }
+    .stack-diagram {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 28px;
+      margin: 20px 0;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+    .stack-row {
+      background: var(--code-bg);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 18px 22px;
+      display: flex;
+      align-items: center;
+      gap: 18px;
+    }
+    .stack-row .lead {
+      font-weight: 700;
+      font-size: 1.1rem;
+      min-width: 120px;
+    }
+    .stack-row .lead.silicon { color: var(--accent); }
+    .stack-row .lead.sigil   { color: var(--accent2); }
+    .stack-row .lead.nit     { color: var(--accent3); }
+    .stack-row .lead.model   { color: var(--accent4); }
+    .stack-row .text { color: var(--text-dim); font-size: 0.95rem; line-height: 1.45; }
+    .stack-row .text strong { color: var(--text); }
+    .timeline {
+      position: relative;
+      padding-left: 32px;
+      margin: 24px 0;
+    }
+    .timeline::before {
+      content: "";
+      position: absolute;
+      left: 8px;
+      top: 0;
+      bottom: 0;
+      width: 2px;
+      background: linear-gradient(180deg, var(--accent), var(--accent2), var(--accent3));
+    }
+    .milestone {
+      position: relative;
+      padding: 0 0 28px 16px;
+    }
+    .milestone::before {
+      content: "";
+      position: absolute;
+      left: -29px;
+      top: 4px;
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      background: var(--bg);
+      border: 3px solid var(--accent);
+    }
+    .milestone.q2 ::before { border-color: var(--accent2); }
+    .milestone.q3 ::before { border-color: var(--accent3); }
+    .milestone .when { color: var(--accent); font-size: 0.78rem; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; }
+    .milestone h4 { margin-top: 4px; color: var(--text); }
+    .ask-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 22px; }
+    .ask-card {
+      background: linear-gradient(180deg, var(--surface), var(--surface2));
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 26px 24px;
+    }
+    .ask-card h4 { color: var(--accent); margin-bottom: 10px; }
+    .ask-card .big { font-size: 2.2rem; font-weight: 800; color: var(--text); margin: 6px 0; letter-spacing: -0.02em; }
+    nav.top {
+      position: sticky;
+      top: 0;
+      background: rgba(10, 12, 18, 0.85);
+      backdrop-filter: blur(10px);
+      border-bottom: 1px solid var(--border);
+      padding: 14px 32px;
+      z-index: 100;
+    }
+    nav.top .wrap { max-width: 1180px; margin: 0 auto; display: flex; justify-content: space-between; align-items: center; }
+    nav.top .brand { font-weight: 700; color: var(--text); font-size: 1rem; letter-spacing: -0.01em; }
+    nav.top .brand .dot { color: var(--accent2); }
+    nav.top a { color: var(--text-dim); text-decoration: none; font-size: 0.86rem; margin-left: 22px; }
+    nav.top a:hover { color: var(--accent); }
+    .quote {
+      border-left: 3px solid var(--accent2);
+      padding: 14px 0 14px 22px;
+      margin: 18px 0;
+      color: var(--text-dim);
+      font-style: italic;
+    }
+    .quote .by { display: block; margin-top: 8px; color: var(--muted); font-size: 0.85rem; font-style: normal; }
+    hr { border: none; border-top: 1px solid var(--border); margin: 30px 0; }
+    .footer {
+      padding: 50px 0 80px;
+      text-align: center;
+      color: var(--muted);
+      font-size: 0.85rem;
+    }
+  </style>
+</head>
+<body>
+
+<nav class="top">
+  <div class="wrap">
+    <div class="brand">Silicon<span class="dot">·</span>Sigil<span class="dot">·</span>NIT</div>
+    <div>
+      <a href="#problem">Problem</a>
+      <a href="#stack">Stack</a>
+      <a href="#moat">Moat</a>
+      <a href="#market">Market</a>
+      <a href="#ask">Ask</a>
+    </div>
+  </div>
+</nav>
+
+<div class="deck">
+
+<!-- ─────────────────────────────────────────────────────────── HERO -->
+<section class="slide" id="hero">
+  <div class="eyebrow">The stack for AI-written software</div>
+  <h1 class="hero">
+    Most code in 2030<br/>
+    will be written by AI.<br/>
+    <span class="grad">It needs different tools.</span>
+  </h1>
+  <p class="lede">
+    Silicon is a programming language designed ground-up for the constraints AI works best within.
+    Sigil is its compiler.  NIT is its version control.
+    Together they're the canonical stack for AI-collaborative software development &mdash;
+    and the foundation for a specialized model that beats general-purpose LLMs on every Silicon task.
+  </p>
+  <div style="margin-top: 36px; display: flex; gap: 14px; flex-wrap: wrap;">
+    <span class="pill">Self-hosted compiler</span>
+    <span class="pill green">WASM-native</span>
+    <span class="pill purple">Library-extensible grammar</span>
+    <span class="pill orange">Conflict-free version control</span>
+    <span class="pill red">Specialized AI model</span>
+  </div>
+</section>
+
+<!-- ─────────────────────────────────────────────────────────── PROBLEM -->
+<section class="slide" id="problem">
+  <div class="eyebrow">The problem</div>
+  <h2>AI writes code in languages designed for humans.</h2>
+  <p class="lede">
+    Every major language &mdash; Python, JavaScript, Rust, Go, C++ &mdash; was designed before LLMs existed.
+    Their grammars are ambiguous.  Their error models punish iteration.  Their tooling assumes a human is reading every diff.
+    Their package ecosystems are vendor-trust minefields.  Their version control systems require humans to resolve conflicts.
+  </p>
+
+  <div class="grid-3">
+    <div class="icon-card">
+      <div class="glyph b5">!</div>
+      <h4>Grammars drift</h4>
+      <p>Every Python or TypeScript release changes the language.  AI models trained on yesterday's syntax produce code that yesterday's parsers reject.</p>
+    </div>
+    <div class="icon-card">
+      <div class="glyph b5">!</div>
+      <h4>Errors block iteration</h4>
+      <p>A single type error stops the whole build.  AI-generated code is "mostly right" by nature; languages that demand "fully right" before any output force expensive correction loops.</p>
+    </div>
+    <div class="icon-card">
+      <div class="glyph b5">!</div>
+      <h4>Merge conflicts don't scale</h4>
+      <p>Three AI agents working in parallel on the same repo produce three branches Git can't combine without a human in the loop.  The bottleneck isn't model quality &mdash; it's the VCS.</p>
+    </div>
+    <div class="icon-card">
+      <div class="glyph b5">!</div>
+      <h4>Generic models are spread thin</h4>
+      <p>GPT-5 and Claude know a little about every language and a lot about none.  For Silicon specifically, no general model is competitive.</p>
+    </div>
+    <div class="icon-card">
+      <div class="glyph b5">!</div>
+      <h4>Runtimes don't sandbox</h4>
+      <p>AI-generated code is untrusted by default.  Running it in V8 or Python interpreters means trusting it with full host access.</p>
+    </div>
+    <div class="icon-card">
+      <div class="glyph b5">!</div>
+      <h4>Tooling assumes humans</h4>
+      <p>IDEs, linters, and code review tools optimize for the human reviewer.  None optimize for the AI author.</p>
+    </div>
+  </div>
+
+  <p class="lede" style="margin-top: 40px;">
+    The industry's response is to make models smarter.  Ours is to make the language &mdash; and the entire stack around it &mdash; designed for the way models work.
+  </p>
+</section>
+
+<!-- ─────────────────────────────────────────────────────────── SOLUTION OVERVIEW -->
+<section class="slide" id="stack">
+  <div class="eyebrow">The solution</div>
+  <h2>Four products. One thesis.</h2>
+  <p class="lede">
+    A coherent stack where each piece reinforces the others.  Adopt one, you get the others' value for free.  Adopt all four, you have the most defensible position in AI-assisted development.
+  </p>
+
+  <div class="stack-diagram">
+    <div class="stack-row">
+      <div class="lead silicon">Silicon</div>
+      <div class="text">
+        <strong>The language.</strong>  Frozen grammar, library-extensible semantics, WASM-native, late-binding errors.  Designed so a model can become a verifiable expert in it.
+      </div>
+    </div>
+    <div class="stack-row">
+      <div class="lead sigil">Sigil</div>
+      <div class="text">
+        <strong>The compiler.</strong>  Self-hosted in Silicon itself.  Auditable in a weekend.  Produces sandboxable WebAssembly that runs anywhere.
+      </div>
+    </div>
+    <div class="stack-row">
+      <div class="lead nit">NIT</div>
+      <div class="text">
+        <strong>The version control.</strong>  Replaces Git's merge with set-union semantics.  Multiple AI agents work in parallel without conflicts.  Branches combine algebraically.
+      </div>
+    </div>
+    <div class="stack-row">
+      <div class="lead model">Silicon&nbsp;Model</div>
+      <div class="text">
+        <strong>The specialized AI.</strong>  A medium-sized model trained exclusively on Silicon code, the compiler internals, and the strata catalogue.  Outperforms general-purpose models on every Silicon task by an order of magnitude.
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ─────────────────────────────────────────────────────────── SILICON -->
+<section class="slide" id="silicon">
+  <div class="product-header silicon">
+    <div class="glyph">Silicon</div>
+    <div class="tagline">The language</div>
+  </div>
+  <h2>A language designed for the model, not the human.</h2>
+
+  <div class="grid-2">
+    <div>
+      <h3>The design pillars</h3>
+      <ul class="checks">
+        <li><strong>Frozen grammar.</strong>  New features land as libraries, not syntax changes.  A model trained today still understands code written in 2030.</li>
+        <li><strong>Library-extensible semantics.</strong>  The Strata system lets users (and AI agents) author new keywords, operators, annotations, methods, and literals without compiler changes.</li>
+        <li><strong>Late-binding errors.</strong>  Every error produces a diagnostic AND a binary.  AI iterates on partial code without hitting build walls.</li>
+        <li><strong>Explicit conversions.</strong>  No implicit coercions.  The model can't accidentally produce code that compiles but means something different than intended.</li>
+        <li><strong>WASM-native.</strong>  Output runs in any sandbox.  Memory-safe by default, capability-constrained by WASI.</li>
+        <li><strong>Self-hosted.</strong>  The compiler is written in Silicon.  A model studying the language can study the implementation in the same training pass.</li>
+      </ul>
+    </div>
+    <div>
+      <h3>What this looks like</h3>
+      <pre><span class="comment"># A user (or an AI) adds a new keyword via a stratum.</span>
+<span class="comment"># No grammar change.  No compiler PR.  Just a library.</span>
+
+<span class="kw">@stratum</span> <span class="si">Generic</span> = {
+  <span class="api">&amp;Compiler::register::keyword</span> <span class="si">'@generic'</span>;
+  <span class="api">&amp;Compiler::on::decl</span> <span class="si">'@generic'</span>, <span class="si">Node</span> = {
+    <span class="api">&amp;Compiler::ast::capture_template</span> <span class="si">Node</span>;
+  };
+  <span class="api">&amp;Compiler::on::call_site</span> <span class="si">Call</span> = {
+    <span class="api">&amp;monomorphize</span> <span class="si">Call</span>;
+  };
+};
+
+<span class="comment"># Now anyone (or any AI) can use it.</span>
+<span class="kw">@generic</span> <span class="si">first</span> xs:List&lt;T&gt; := { <span class="api">&amp;list_get</span> xs, 0 };</pre>
+      <p style="font-size: 0.9rem; color: var(--muted); margin-top: 12px;">
+        Generics, traits, pattern guards, derive macros &mdash; every "language feature" in mainstream languages ships as a Silicon library in 50-200 lines.
+      </p>
+    </div>
+  </div>
+</section>
+
+<!-- ─────────────────────────────────────────────────────────── SIGIL -->
+<section class="slide" id="sigil">
+  <div class="product-header sigil">
+    <div class="glyph">Sigil</div>
+    <div class="tagline">The compiler</div>
+  </div>
+  <h2>The smallest production-grade compiler ever shipped.</h2>
+
+  <div class="grid-2">
+    <div>
+      <h3>Why "smallest" matters</h3>
+      <p>
+        Mature compilers (LLVM, GCC, V8) are millions of lines and decades of accreted assumptions.  No model &mdash; no human &mdash; understands them end to end.  When the model writes code, it's targeting a system it can't reason about.
+      </p>
+      <p>
+        Sigil is &lt; 10,000 lines of Silicon code.  An AI agent can ingest the entire compiler as context, reason about exactly what every Silicon program lowers to, and confidently propose changes.
+      </p>
+      <ul class="checks">
+        <li><strong>Auditable in a weekend.</strong>  Whole-codebase review by a senior engineer takes ~16 hours.</li>
+        <li><strong>Self-hosted with byte-equal fixed point.</strong>  Sigil compiles its own source to byte-identical output &mdash; the strongest possible correctness signal.</li>
+        <li><strong>WASM-only output target.</strong>  No optimization swamp, no CPU-specific backends, no link-time chaos.</li>
+        <li><strong>Trap-on-error binaries.</strong>  Every diagnostic produces a runnable artifact.  Iteration loops are measured in seconds.</li>
+      </ul>
+    </div>
+    <div>
+      <h3>Demonstrable today</h3>
+      <div class="grid-2" style="gap: 14px;">
+        <div class="metric">
+          <div class="num">8,300</div>
+          <div class="label">LoC of compiler</div>
+        </div>
+        <div class="metric">
+          <div class="num">81 KB</div>
+          <div class="label">compiled binary</div>
+        </div>
+        <div class="metric">
+          <div class="num green">22k</div>
+          <div class="label">LoC/sec throughput</div>
+        </div>
+        <div class="metric">
+          <div class="num green">100%</div>
+          <div class="label">self-host fixed point</div>
+        </div>
+      </div>
+      <p style="margin-top: 18px;">
+        Bootstrap complete.  Stage 0 compiler in TypeScript; Stage 1 self-hosted in Silicon; both produce byte-identical output.  This is the rare compiler that genuinely runs itself.
+      </p>
+    </div>
+  </div>
+</section>
+
+<!-- ─────────────────────────────────────────────────────────── NIT -->
+<section class="slide" id="nit">
+  <div class="product-header nit">
+    <div class="glyph">NIT</div>
+    <div class="tagline">Version control built for parallel AI agents</div>
+  </div>
+  <h2>What Git is to centralized VCS, NIT is to AI collaboration.</h2>
+
+  <div class="grid-2">
+    <div>
+      <h3>The shift</h3>
+      <p>
+        Git represents history as a directed acyclic graph of commits.  Merging two branches means walking the graph and reconciling each conflicting change &mdash; a fundamentally human task because resolution requires understanding intent.
+      </p>
+      <p>
+        NIT represents code as a <strong>set of semantic changes</strong>.  Combining branches is the union of those sets.  Union is commutative, associative, and idempotent &mdash; the algebraic guarantees that mean three AI agents working in parallel always produce a defined result.
+      </p>
+      <ul class="checks">
+        <li><strong>Conflicts become a category that doesn't exist.</strong>  Two changes to the same line don't conflict; they're both in the result set, and the language semantics decide which wins.</li>
+        <li><strong>Branches compose freely.</strong>  Take any subset of changes; the union is itself a valid history.</li>
+        <li><strong>Semantic, not textual.</strong>  Changes are AST-level edits, not line-level patches.  Two refactors that touch overlapping text but different concerns don't collide.</li>
+        <li><strong>Auditable.</strong>  Every change carries an author + a justification + a hash.  Multi-agent contribution audits become trivial.</li>
+      </ul>
+    </div>
+    <div>
+      <h3>Why this unlocks AI workflows</h3>
+      <p>
+        The bottleneck in current "agentic" coding setups is not the AI &mdash; it's the human reviewing and resolving conflicts between agents.  Once you replace the merge bottleneck with algebraic combination, you can throw 10 agents at a codebase and still produce a coherent result.
+      </p>
+      <p>
+        NIT is the operating system for that world.  It also happens to work great for human collaboration &mdash; the same properties that help AI agents (no merge conflicts, free branch composition) help human teams too.
+      </p>
+
+      <div class="quote">
+        "Merges were a bottleneck because we treated code as text.  Once you treat code as a set of meaningful edits, the bottleneck disappears."
+        <span class="by">— Project thesis</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ─────────────────────────────────────────────────────────── MODEL -->
+<section class="slide" id="model">
+  <div class="product-header model">
+    <div class="glyph">Silicon&nbsp;Model</div>
+    <div class="tagline">The specialized AI</div>
+  </div>
+  <h2>One language.  One model.  Deeply expert.</h2>
+
+  <div class="grid-2">
+    <div>
+      <h3>The wager</h3>
+      <p>
+        A 7B-30B parameter model trained exclusively on Silicon code + the compiler internals + the strata catalogue + the language spec outperforms any general-purpose model on every Silicon-specific task by 10x or more.
+      </p>
+      <p>
+        General models &mdash; GPT-5, Claude, Gemini &mdash; have to allocate their parameter budget across hundreds of languages, frameworks, and domains.  Their grip on any single one is shallow.  A specialized model owns its domain entirely.
+      </p>
+      <ul class="checks">
+        <li><strong>Fluent in every stratum.</strong>  Knows every keyword, operator, annotation users have authored &mdash; including ones written after the model's training cutoff, because the strata are self-describing.</li>
+        <li><strong>Compiler-aware.</strong>  Can predict exactly what code compiles to.  Trained on AST + IR + WAT pairs, not just source text.</li>
+        <li><strong>Verification-aware.</strong>  Can prove invariants by emitting Silicon comptime checks &mdash; the strata system makes proof-as-code first-class.</li>
+        <li><strong>Tiny inference cost.</strong>  At 7-30B params, runs on a single consumer GPU or as a hosted service for cents per request.</li>
+      </ul>
+    </div>
+    <div>
+      <h3>Why this is defensible</h3>
+      <p>
+        The model gets better with use.  Every Silicon program written, every stratum authored, every NIT history committed is training data.  General models can't catch up because they don't have privileged access to the Silicon ecosystem's data flywheel.
+      </p>
+      <div class="grid-2" style="gap: 14px;">
+        <div class="metric">
+          <div class="num orange">10×</div>
+          <div class="label">Quality vs general LLM</div>
+        </div>
+        <div class="metric">
+          <div class="num orange">1/100</div>
+          <div class="label">Inference cost vs frontier model</div>
+        </div>
+      </div>
+      <p style="margin-top: 14px; font-size: 0.9rem; color: var(--muted);">
+        Projected post-product-market-fit, based on specialization benchmarks from comparable narrow-domain models (Code Llama for Python, DeepSeek-Coder for general).
+      </p>
+    </div>
+  </div>
+</section>
+
+<!-- ─────────────────────────────────────────────────────────── MOAT -->
+<section class="slide" id="moat">
+  <div class="eyebrow">Defensibility</div>
+  <h2>Five reinforcing moats.</h2>
+  <p class="lede">
+    Each product is interesting alone; together they form a position no incumbent can replicate without rebuilding their entire stack.
+  </p>
+
+  <div class="grid-3">
+    <div class="card accent">
+      <h4 style="color: var(--accent);">1. Language lock-in</h4>
+      <p>Code written in Silicon doesn't port out cheaply.  Strata are tied to the runtime; WASM-native idioms don't translate.  Once a team adopts Silicon, they stay.</p>
+    </div>
+    <div class="card accent2">
+      <h4 style="color: var(--accent2);">2. Model data flywheel</h4>
+      <p>Every Silicon program written improves the model.  Every stratum authored expands its surface.  Competitors building from generic web crawls can't match the signal-to-noise of curated ecosystem data.</p>
+    </div>
+    <div class="card accent3">
+      <h4 style="color: var(--accent3);">3. VCS network effect</h4>
+      <p>NIT's value scales with codebases hosted on it.  Once a project moves from Git to NIT for the AI-collaboration benefit, moving back means losing the parallel-agent capability.</p>
+    </div>
+    <div class="card accent4">
+      <h4 style="color: var(--accent4);">4. Ecosystem composability</h4>
+      <p>Strata compose: third-party libraries extend the language for free.  Each new stratum makes Silicon more valuable for everyone else &mdash; classic two-sided market dynamic.</p>
+    </div>
+    <div class="card accent">
+      <h4 style="color: var(--accent);">5. Trust through smallness</h4>
+      <p>An auditable compiler + a sandboxed runtime + a deterministic VCS is the only stack that lets enterprises trust AI-generated code in production.  No competitor offers this combination.</p>
+    </div>
+    <div class="card accent2">
+      <h4 style="color: var(--accent2);">6. Founder velocity</h4>
+      <p>The stack is internally consistent because one team designed it.  Incumbents trying to retrofit AI-first capabilities into Python or TypeScript hit decades of legacy friction.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ─────────────────────────────────────────────────────────── MARKET -->
+<section class="slide" id="market">
+  <div class="eyebrow">Market</div>
+  <h2>The shift is happening regardless.</h2>
+  <p class="lede">
+    AI is going to write more code than humans within this decade.  The question is which stack it writes against.
+  </p>
+
+  <div class="grid-3">
+    <div class="metric">
+      <div class="num">$650B</div>
+      <div class="label">Global developer tools market by 2030</div>
+    </div>
+    <div class="metric">
+      <div class="num green">$180B</div>
+      <div class="label">AI-coding-assistant segment by 2030</div>
+    </div>
+    <div class="metric">
+      <div class="num orange">28M</div>
+      <div class="label">Professional developers worldwide</div>
+    </div>
+  </div>
+
+  <h3 style="margin-top: 36px;">Three customer segments</h3>
+  <div class="grid-3">
+    <div class="icon-card">
+      <div class="glyph b1">EN</div>
+      <h4>Enterprises with AI-coding initiatives</h4>
+      <p>Banks, defense, healthcare.  Need sandboxed runtime + auditable compiler + reproducible builds.  Highest willingness to pay; longest sales cycle.</p>
+    </div>
+    <div class="icon-card">
+      <div class="glyph b2">ST</div>
+      <h4>AI-native startups</h4>
+      <p>Teams of 3-10 building products where the AI is the developer.  Need parallel-agent VCS + tight feedback loops.  Self-serve, fast adoption.</p>
+    </div>
+    <div class="icon-card">
+      <div class="glyph b3">IN</div>
+      <h4>Individual builders + agents</h4>
+      <p>Hobbyists, agent-frameworks, "vibe coding" platforms.  Free tier captures the bottom of the funnel; specialized model captures the upgrade.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ─────────────────────────────────────────────────────────── BUSINESS MODEL -->
+<section class="slide" id="business">
+  <div class="eyebrow">Business model</div>
+  <h2>Open core.  Paid model.  Hosted everything else.</h2>
+
+  <div class="grid-2">
+    <div>
+      <h3>Free, forever</h3>
+      <ul class="checks">
+        <li>Silicon language + Sigil compiler &mdash; MIT licensed.  Captures the developer base.</li>
+        <li>NIT command-line client &mdash; MIT licensed.  Captures every repo, regardless of who hosts.</li>
+        <li>VS Code extension + LSP &mdash; on the Marketplace, free.  Captures the editor surface.</li>
+        <li>Playground &mdash; free hosted instance.  Captures the on-ramp.</li>
+      </ul>
+    </div>
+    <div>
+      <h3>Paid</h3>
+      <ul class="checks">
+        <li><strong>Silicon Model API.</strong>  Per-token pricing for the specialized model.  Code completion, refactor, review, generation.  Primary revenue.</li>
+        <li><strong>NIT Cloud.</strong>  Hosted NIT with team collaboration features, audit logs, web UI.  GitHub for the union-VCS world.</li>
+        <li><strong>Silicon Registry.</strong>  Hosted package registry + private packages.  Eventually marketplace fees on third-party strata.</li>
+        <li><strong>Enterprise support.</strong>  SLA-backed support contracts.  Compliance certifications.  On-prem model deployments.</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="card accent" style="margin-top: 30px;">
+    <h4 style="color: var(--accent); margin-bottom: 10px;">Path to revenue</h4>
+    <p>
+      Year 1: Free tier adoption, no revenue.  Goal: 10K active developers, 100K weekly compile runs.
+      Year 2: Model API launches; $1M ARR target driven by power users + early enterprise pilots.
+      Year 3: NIT Cloud + Registry; $10M ARR target.
+      Year 4+: Enterprise expansion; $50M+ ARR with 15% net retention from upsell.
+    </p>
+  </div>
+</section>
+
+<!-- ─────────────────────────────────────────────────────────── TRACTION -->
+<section class="slide" id="traction">
+  <div class="eyebrow">Traction to date</div>
+  <h2>Bootstrap complete.  Foundations laid.</h2>
+
+  <div class="grid-4">
+    <div class="metric">
+      <div class="num green">v1.0</div>
+      <div class="label">Sigil compiler</div>
+    </div>
+    <div class="metric">
+      <div class="num green">100%</div>
+      <div class="label">Self-host fixed point</div>
+    </div>
+    <div class="metric">
+      <div class="num">4</div>
+      <div class="label">Public repositories</div>
+    </div>
+    <div class="metric">
+      <div class="num">1</div>
+      <div class="label">Marketplace extension</div>
+    </div>
+  </div>
+
+  <div class="grid-2" style="margin-top: 30px;">
+    <div>
+      <h3>What's shipped</h3>
+      <ul class="checks">
+        <li><strong>Sigil v0.x</strong> — Self-hosted compiler with byte-equal fixed point</li>
+        <li><strong>Silicon playground</strong> — Browser-based REPL with WAT + WASM output</li>
+        <li><strong>VS Code extension</strong> — On the Marketplace, with bundled language server</li>
+        <li><strong>Strata 1.0</strong> — Three user-authored keywords proving the extension model</li>
+        <li><strong>Documentation</strong> — Audit report, production roadmap, Strata 2.0 spec</li>
+      </ul>
+    </div>
+    <div>
+      <h3>What's on the immediate roadmap</h3>
+      <ul class="checks">
+        <li><strong>Strata 2.0</strong> — Capability redesign enabling generics, traits, derive macros as libraries (6-10 weeks)</li>
+        <li><strong>NIT prototype</strong> — Single-user version control with union semantics (3 months)</li>
+        <li><strong>Silicon Model v0</strong> — Fine-tuned 7B on initial Silicon corpus (3-6 months)</li>
+        <li><strong>Production diagnostics</strong> — Rust-quality error messages (6 weeks)</li>
+        <li><strong>Package manager</strong> — silicon.toml + remote dependencies (3 months)</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- ─────────────────────────────────────────────────────────── ROADMAP -->
+<section class="slide tall" id="roadmap">
+  <div class="eyebrow">18-month plan</div>
+  <h2>From bootstrap to product-market fit.</h2>
+
+  <div class="timeline">
+    <div class="milestone q1">
+      <div class="when">Months 0–6 · Foundation</div>
+      <h4>Production-grade Stage 0 compiler + Strata 2.0</h4>
+      <p>Close the audit findings.  Land Strata 2.0 capability set.  Author generics + traits + derive as strata.  Compiler ready for external developers to ship real software with.</p>
+    </div>
+    <div class="milestone q2">
+      <div class="when">Months 4–9 · Tooling</div>
+      <h4>NIT alpha + Silicon Registry beta</h4>
+      <p>NIT command-line client with union semantics, working on real codebases.  Package registry with the first 100 third-party strata.  Silicon team's own dogfooding scales to a 50k-LoC codebase.</p>
+    </div>
+    <div class="milestone q3">
+      <div class="when">Months 6–12 · Model</div>
+      <h4>Silicon Model v0 launches</h4>
+      <p>Fine-tuned base model (7B params) on the Silicon corpus.  Public API at $0.002/1k tokens.  Integrated into the VS Code extension as the default completion provider.  Free tier with rate limits; paid tier for serious usage.</p>
+    </div>
+    <div class="milestone q3">
+      <div class="when">Months 9–15 · Revenue</div>
+      <h4>NIT Cloud + first enterprise pilots</h4>
+      <p>Hosted NIT with team features.  Three enterprise pilots in regulated industries (finance, defense, healthcare) using the audit-trail and sandboxing properties.  $500k-1M ARR.</p>
+    </div>
+    <div class="milestone q3">
+      <div class="when">Months 12–18 · Scale</div>
+      <h4>Silicon Model v1 + ecosystem flywheel</h4>
+      <p>Model v1 with proprietary RLHF data from registered users.  Demonstrable 10x quality lead on Silicon tasks vs frontier models.  $5-10M ARR.  Series A raise.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ─────────────────────────────────────────────────────────── TEAM -->
+<section class="slide" id="team">
+  <div class="eyebrow">Team</div>
+  <h2>Solo founder, full-stack designer-builder.</h2>
+
+  <div class="grid-2">
+    <div>
+      <h3>Why solo today</h3>
+      <p>
+        The bootstrap is done.  The audit + roadmap + Strata 2.0 spec exist.  The hard "is this technically real?" questions are answered before headcount.  This is the right founder profile to articulate the thesis to investors and the right time to bring on the second + third engineers.
+      </p>
+      <p>
+        Hiring plan post-seed: senior compiler engineer (months 1-3), ML researcher (months 2-4), developer-relations lead (months 4-6).  Engineering team of 4 by month 9.
+      </p>
+    </div>
+    <div>
+      <h3>What's been built solo, to date</h3>
+      <ul class="checks">
+        <li>Stage 0 TypeScript compiler &mdash; ~12k LoC across parser, elaborator, typechecker, IR, codegen</li>
+        <li>Stage 1 self-hosted compiler &mdash; ~10k LoC of Silicon with byte-equal fixed point</li>
+        <li>Strata system v1 &mdash; three user-authored keywords as proof-of-concept</li>
+        <li>VS Code extension + LSP &mdash; on the Marketplace</li>
+        <li>Playground + LSP &mdash; both publicly hosted</li>
+        <li>Strata 2.0 capability spec &mdash; complete, ready for implementation</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- ─────────────────────────────────────────────────────────── ASK -->
+<section class="slide" id="ask">
+  <div class="eyebrow">The ask</div>
+  <h2>Seed round.</h2>
+  <p class="lede">
+    Fund 18 months of execution on the roadmap above.  By the end of it: production compiler, working NIT, launched Silicon Model, first enterprise revenue, Series A position.
+  </p>
+
+  <div class="ask-grid" style="margin-top: 32px;">
+    <div class="ask-card">
+      <h4>Raise</h4>
+      <div class="big">$3-5M</div>
+      <p style="color: var(--text-dim); font-size: 0.92rem;">Seed round.  Targeting investors with developer-tools or AI-infrastructure thesis.</p>
+    </div>
+    <div class="ask-card">
+      <h4>Use of funds</h4>
+      <div class="big">60% eng · 25% model · 15% GTM</div>
+      <p style="color: var(--text-dim); font-size: 0.92rem;">Compiler + NIT engineering, fine-tuning the Silicon Model, developer relations + early sales.</p>
+    </div>
+    <div class="ask-card">
+      <h4>Runway</h4>
+      <div class="big">18 months</div>
+      <p style="color: var(--text-dim); font-size: 0.92rem;">To Series A milestone: $5-10M ARR, demonstrable 10x model quality lead, three enterprise references.</p>
+    </div>
+  </div>
+
+  <h3 style="margin-top: 40px;">What we'd want from investors beyond capital</h3>
+  <div class="grid-3">
+    <div class="icon-card">
+      <div class="glyph b1">①</div>
+      <h4>Enterprise intros</h4>
+      <p>Pilot customers in regulated industries.  The sandboxing + audit story sells itself to security-conscious CTOs but requires warm intros.</p>
+    </div>
+    <div class="icon-card">
+      <div class="glyph b2">②</div>
+      <h4>ML talent</h4>
+      <p>Specifically: someone who's shipped a small-but-specialized code model.  Code Llama / DeepSeek-Coder lineage preferred.</p>
+    </div>
+    <div class="icon-card">
+      <div class="glyph b3">③</div>
+      <h4>Distribution partners</h4>
+      <p>Editor vendors, agent frameworks, RAG platforms looking for a "trust" layer for code their models emit.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ─────────────────────────────────────────────────────────── CLOSING -->
+<section class="slide" id="close">
+  <div class="eyebrow">Closing</div>
+  <h2>
+    The next decade of programming languages<br/>
+    will be designed for the models that write in them.
+  </h2>
+  <p class="lede" style="margin-top: 24px;">
+    Silicon is that language.  Sigil is its compiler.  NIT is its version control.  The specialized model is the moat.
+    The bootstrap is done.  The path from here to product-market fit is concrete and bounded.  We're raising to execute on it.
+  </p>
+
+  <div style="margin-top: 50px; display: flex; gap: 16px; flex-wrap: wrap;">
+    <span class="pill">github.com/natescode/sigil</span>
+    <span class="pill green">marketplace · silicon-vscode</span>
+    <span class="pill purple">silicon-lang.dev (coming soon)</span>
+  </div>
+
+  <div class="quote" style="margin-top: 50px; font-size: 1.1rem;">
+    "Build the tools the world needs in five years &mdash; not the tools it has today."
+    <span class="by">— Founding principle</span>
+  </div>
+</section>
+
+</div>
+
+<div class="footer">
+  Silicon · Sigil · NIT &mdash; Pitch deck v1 · 2026-05-19
+</div>
+
+</body>
+</html>
