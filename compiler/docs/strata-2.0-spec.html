@@ -1,0 +1,1131 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Strata 2.0 — Capability Specification</title>
+  <style>
+    :root {
+      --bg: #0f1117;
+      --surface: #1a1d27;
+      --surface2: #222535;
+      --border: #2e3248;
+      --accent: #6c8ef7;
+      --accent2: #b06cf7;
+      --accent3: #3ecf8e;
+      --accent4: #f7a06c;
+      --accent5: #f76c6c;
+      --accent6: #f7e36c;
+      --text: #dde1f0;
+      --muted: #7b82a8;
+      --code-bg: #13151f;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+      padding: 40px 24px;
+    }
+    .page { max-width: 1200px; margin: 0 auto; }
+    h1 { font-size: 2rem; color: var(--accent); margin-bottom: 8px; }
+    h2 { font-size: 1.45rem; color: var(--accent2); margin: 44px 0 16px; border-bottom: 1px solid var(--border); padding-bottom: 8px; }
+    h3 { font-size: 1.1rem; color: var(--accent3); margin: 24px 0 10px; }
+    h4 { font-size: 0.95rem; color: var(--accent4); margin: 14px 0 8px; }
+    p  { margin-bottom: 12px; color: var(--text); }
+    .subtitle { color: var(--muted); font-size: 1rem; margin-bottom: 32px; }
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 20px 24px;
+      margin-bottom: 20px;
+    }
+    .card.warn { border-color: var(--accent5); }
+    .card.ok   { border-color: var(--accent3); }
+    .card.info { border-color: var(--accent);  }
+    .card.note { border-color: var(--accent4); }
+    .card.idea { border-color: var(--accent2); }
+    pre {
+      background: var(--code-bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 14px 16px;
+      overflow-x: auto;
+      font-family: 'Cascadia Code', 'Fira Code', 'Consolas', monospace;
+      font-size: 0.82rem;
+      line-height: 1.55;
+      margin: 10px 0;
+    }
+    code { font-family: 'Cascadia Code', 'Fira Code', 'Consolas', monospace; font-size: 0.85em; background: var(--code-bg); padding: 1px 5px; border-radius: 4px; }
+    .si  { color: var(--accent3); }
+    .ir  { color: var(--accent4); }
+    .api { color: var(--accent2); }
+    .err { color: var(--accent5); }
+    .kw  { color: var(--accent6); }
+    table { width: 100%; border-collapse: collapse; margin: 12px 0; font-size: 0.85rem; }
+    th { background: var(--surface2); color: var(--accent); padding: 8px 12px; text-align: left; border: 1px solid var(--border); }
+    td { padding: 8px 12px; border: 1px solid var(--border); vertical-align: top; }
+    tr:nth-child(even) td { background: #141620; }
+    ul, ol { padding-left: 24px; margin: 8px 0 16px; }
+    li { margin-bottom: 5px; }
+    .tag {
+      display: inline-block;
+      padding: 1px 8px;
+      border-radius: 10px;
+      font-size: 0.72rem;
+      font-weight: 600;
+      letter-spacing: 0.02em;
+      margin-right: 4px;
+      vertical-align: middle;
+    }
+    .tag.mvp   { background: #0f2d1f; color: var(--accent3); border: 1px solid #1a4a30; }
+    .tag.defer { background: #2d2a0f; color: var(--accent6); border: 1px solid #5a5510; }
+    .tag.tenet { background: #1e1030; color: var(--accent2); border: 1px solid #3a1a50; }
+    .tag.t0    { background: #0f1a3a; color: var(--accent);  border: 1px solid #1a2e5a; }
+    .tag.t1    { background: #1e1030; color: var(--accent2); border: 1px solid #3a1a50; }
+    .tag.t2    { background: #2d1a0f; color: var(--accent4); border: 1px solid #5a3010; }
+    .toc { background: var(--surface2); border: 1px solid var(--border); border-radius: 8px; padding: 14px 20px; margin: 14px 0 30px; }
+    .toc h3 { margin-top: 0; color: var(--accent); font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.08em; }
+    .toc ol { columns: 2; column-gap: 32px; padding-left: 18px; }
+    .toc a { color: var(--text); text-decoration: none; border-bottom: 1px dotted var(--muted); }
+    .toc a:hover { color: var(--accent); border-bottom-color: var(--accent); }
+    .tenet {
+      background: var(--surface);
+      border-left: 4px solid var(--accent2);
+      border-radius: 0 8px 8px 0;
+      padding: 12px 18px;
+      margin: 14px 0;
+    }
+    .tenet h4 { margin-top: 0; color: var(--accent2); display: flex; align-items: baseline; gap: 12px; }
+    .tenet .id { font-family: monospace; font-size: 0.78rem; color: var(--muted); }
+    .api-entry {
+      background: var(--surface);
+      border-radius: 6px;
+      padding: 10px 14px;
+      margin: 8px 0;
+      border-left: 3px solid var(--accent4);
+    }
+    .api-entry .sig { color: var(--accent2); font-family: monospace; font-size: 0.86rem; font-weight: 600; margin-bottom: 4px; display: block; }
+    .api-entry .desc { color: var(--text); font-size: 0.88rem; }
+    .diagram { background: var(--code-bg); border: 1px solid var(--border); border-radius: 8px; padding: 14px; margin: 12px 0; font-family: monospace; font-size: 0.82rem; line-height: 1.5; white-space: pre; color: var(--text); overflow-x: auto; }
+    hr.thin { border: none; border-top: 1px solid var(--border); margin: 24px 0 16px; }
+  </style>
+</head>
+<body>
+<div class="page">
+
+<h1>Strata 2.0 — Capability Specification</h1>
+<p class="subtitle">
+  The extension system as the product.  Language features ride atop a small set
+  of compiler-side capabilities; this document defines that set.  Date:
+  2026-05-19.  Status: spec proposal, no implementation yet.
+</p>
+
+<div class="card idea">
+  <h4 style="color: var(--accent2); margin-bottom: 8px;">Why this document exists</h4>
+  <p>
+    Sigil's bet is that a small, frozen grammar plus a powerful extension system
+    beats a feature-rich grammar with no extensibility.  <code>docs/strata.md</code>
+    introduced the original Strata; this spec is the v2 redesign that enables
+    that bet at production scale.  In particular: <strong>generics, traits,
+    pattern guards, derive-style macros, and full comptime evaluation can all
+    be authored as strata under v2</strong> without core compiler changes.
+  </p>
+  <p>
+    Companion documents:
+    <a href="bootstrap-audit.html" style="color: var(--accent);">bootstrap-audit.html</a>
+    (what's broken in stage1 today) and
+    <a href="stage0-production-roadmap.html" style="color: var(--accent);">stage0-production-roadmap.html</a>
+    (the production push for Stage 0).  This spec replaces the "Language
+    Features" section of the latter — those user stories become outcomes of
+    Strata 2.0 rather than separate work.
+  </p>
+</div>
+
+<div class="toc">
+  <h3>Contents</h3>
+  <ol>
+    <li><a href="#tenets">Design tenets</a></li>
+    <li><a href="#layers">The four-layer model</a></li>
+    <li><a href="#tier">Tier model</a></li>
+    <li><a href="#dsl">The @stratum registration DSL</a></li>
+    <li><a href="#api">Capability API surface</a></li>
+    <li><a href="#errors">Universal late-binding error model</a></li>
+    <li><a href="#example-generics">Worked example: @generic</a></li>
+    <li><a href="#example-derive">Worked example: @@derive</a></li>
+    <li><a href="#example-thirdparty">Worked example: third-party plugin</a></li>
+    <li><a href="#mvp">MVP capability set</a></li>
+    <li><a href="#migration">Migration from current strata</a></li>
+    <li><a href="#open">Open questions / future work</a></li>
+  </ol>
+</div>
+
+<!-- ============================================================== -->
+<h2 id="tenets">1. Design tenets</h2>
+
+<p>
+  Decisions accumulated through design discussion.  Each tenet has knock-on
+  effects on the rest of the spec; they're listed first so subsequent
+  sections can reference them by ID.
+</p>
+
+<div class="tenet">
+  <h4><span class="id">T-1</span> Strata is the product</h4>
+  <p>
+    Language features (generics, traits, async, derive) are <em>tests</em> of
+    the extension system, not work items.  If a feature can't be authored as
+    a stratum, the feature is on hold while Strata gains the capability that
+    unblocks it.  Adding compiler-internal special cases is the explicit
+    anti-pattern.
+  </p>
+</div>
+
+<div class="tenet">
+  <h4><span class="id">T-2</span> The grammar is frozen</h4>
+  <p>
+    The Ohm grammar (Stage 0) and the hand-written grammar
+    (<code>boot/parser/parse.si</code>) accept five extension axes: keywords,
+    operators, annotations, methods, and sigils.  Strata register entries on
+    these axes; the grammar itself doesn't grow.  In <em>rare</em> cases
+    where the existing axes provably can't accommodate a feature, grammar
+    change is the last resort and requires explicit discussion.
+  </p>
+</div>
+
+<div class="tenet">
+  <h4><span class="id">T-3</span> Single <code>@stratum</code> keyword</h4>
+  <p>
+    Today's <code>@stratum_keyword</code> / <code>@stratum_operator</code>
+    collapse into one <code>@stratum</code> form.  A stratum's body executes
+    once at load time and registers handlers via a DSL.  The body is itself
+    a Silicon program — strata are compile-time programs, not declarations.
+  </p>
+</div>
+
+<div class="tenet">
+  <h4><span class="id">T-4</span> Tiered load order with monotonic reference</h4>
+  <p>
+    Three tiers: built-in (T0), user (T1), third-party (T2).  Load in tier
+    order; intra-tier in source order modulated by
+    <code>@@before</code> / <code>@@after</code> annotations.  T0 may
+    name-resolve other T0 exports; T1 and T2 may only name-resolve <em>lower</em>
+    tiers (T0).  Composition between strata at the same tier or across T1/T2
+    happens via shared events (the observer pattern), never via direct
+    references.
+  </p>
+</div>
+
+<div class="tenet">
+  <h4><span class="id">T-5</span> Universal late-binding error model</h4>
+  <p>
+    Semantic errors (everything past parsing) emit a structured diagnostic
+    at compile time <strong>and</strong> a runtime trap at the offending
+    site in the emitted WASM.  The build never fails on semantic errors;
+    binaries always emit.  Executing the affected code path crashes with
+    the original diagnostic text.  Syntax errors remain hard fails because
+    you can't lower unparseable input.  Internal compiler errors (ICE)
+    crash — they're bugs, not user errors.
+  </p>
+  <p style="font-size: 0.88rem; color: var(--muted); margin-top: 6px;">
+    Matches Roc + Zig.  Enables stub-driven development, partial fixes,
+    interactive exploration.  Replaces the audit's H-2 finding
+    ("typechecker is warn-only") &mdash; that warning was the right
+    instinct, this is the principled version.
+  </p>
+</div>
+
+<div class="tenet">
+  <h4><span class="id">T-6</span> Cycle-free Strata graph</h4>
+  <p>
+    The directed graph of "stratum A references stratum B" must be acyclic.
+    Cycles detected at load time produce a structured error; the loader
+    breaks one edge (recorded in the diagnostic) and continues.  Per T-5,
+    the build still emits — references that were on the broken edge become
+    runtime traps.  Cycles are almost always bugs; revisit if real use
+    cases force the issue.
+  </p>
+</div>
+
+<div class="tenet">
+  <h4><span class="id">T-7</span> Comptime is the long-arc goal</h4>
+  <p>
+    Today's body interpreter dispatches a hardcoded set of
+    <code>&amp;Compiler::*</code> calls.  Strata 2.0 grows that interpreter
+    incrementally toward full Silicon evaluation at compile time.  Every
+    capability added is designed to fit a future world where strata bodies
+    can run arbitrary Silicon code.  Implementation phased; principle is
+    fixed.
+  </p>
+</div>
+
+<!-- ============================================================== -->
+<h2 id="layers">2. The four-layer model</h2>
+
+<p>
+  A stratum participates in compilation across four orthogonal layers.
+  Treating them independently &mdash; rather than mashing them into "kinds of
+  strata" &mdash; is what makes a single <code>@stratum</code> keyword
+  expressive enough to subsume the five extension axes of T-2.
+</p>
+
+<div class="diagram">┌─ LAYER 1: SYNTACTIC SURFACE ───────────────────────────────────┐
+│                                                                │
+│   What the grammar will recognize as belonging to this stratum │
+│                                                                │
+│   • keyword     '@foo'                                         │
+│   • operator    '+'                                            │
+│   • annotation  '@@derive'                                     │
+│   • method      'map'                                          │
+│   • sigil       '$json'                                        │
+└────────────────────────────────────────────────────────────────┘
+
+┌─ LAYER 2: LIFECYCLE PHASES ────────────────────────────────────┐
+│                                                                │
+│   When the stratum's handlers fire                             │
+│                                                                │
+│   on::decl              on::call_site         on::module_      │
+│   on::typecheck         on::lower               finalize       │
+│   on::annotation        on::method            on::parse (rare) │
+└────────────────────────────────────────────────────────────────┘
+
+┌─ LAYER 3: EFFECTS ─────────────────────────────────────────────┐
+│                                                                │
+│   What a handler is allowed to do                              │
+│                                                                │
+│   • Read AST nodes, source spans, doc comments                 │
+│   • Manipulate types as values (construct, substitute, equate) │
+│   • Synthesise AST (capture template, clone, substitute,       │
+│       re-elaborate)                                            │
+│   • Emit new top-level definitions / globals / imports         │
+│   • Read/write per-stratum or per-invocation state             │
+│   • Push structured diagnostics (compile-time + runtime trap)  │
+│   • Emit IR (existing Compiler::ir::* surface)                 │
+└────────────────────────────────────────────────────────────────┘
+
+┌─ LAYER 4: COMPOSITION ─────────────────────────────────────────┐
+│                                                                │
+│   How multiple strata interact at the same event               │
+│                                                                │
+│   • Multiple handlers on one event = observer pattern          │
+│   • Firing order: (tier ASC, source-order, @@before/@@after)   │
+│   • No "owner" required for an event — any stratum can observe │
+│   • Intra-tier name reference: forbidden (except T0)           │
+│   • Inter-tier name reference: only downward                   │
+└────────────────────────────────────────────────────────────────┘</div>
+
+<p>
+  A given stratum can sit anywhere on each layer.  A simple stratum might
+  participate on Layer 1 (one keyword) + Layer 2 (one phase, <code>on::lower</code>)
+  + Layer 3 (just emit IR) + Layer 4 (owner pattern, no other strata
+  involved).  A generics stratum participates on Layer 1 (one keyword) +
+  Layer 2 (three phases) + Layer 3 (types, AST synthesis, module mutation,
+  state) + Layer 4 (defines events that observer strata can hook).
+</p>
+
+<!-- ============================================================== -->
+<h2 id="tier">3. Tier model</h2>
+
+<p>
+  Tier determines load order, name visibility, and resource sandboxing.
+</p>
+
+<h3>Identification</h3>
+
+<table>
+  <tr><th>Tier</th><th>Identified by</th><th>Location convention</th></tr>
+  <tr>
+    <td><span class="tag t0">T0 — built-in</span></td>
+    <td>Strata shipped with the compiler binary</td>
+    <td><code>boot/strata/builtin/*.si</code></td>
+  </tr>
+  <tr>
+    <td><span class="tag t1">T1 — user</span></td>
+    <td><code>silicon.toml</code> declares <code>[package]</code> and the strata are in <code>strata/</code></td>
+    <td><code>&lt;project&gt;/strata/*.si</code></td>
+  </tr>
+  <tr>
+    <td><span class="tag t2">T2 — third-party</span></td>
+    <td>The manifest lists this stratum's package under <code>[dependencies]</code> (any form: git, path, registry)</td>
+    <td><code>&lt;cache&gt;/deps/&lt;pkg&gt;/strata/*.si</code></td>
+  </tr>
+</table>
+
+<p>
+  Crucial: tier is set by the manifest's <em>declaration</em>, not by where
+  the file ended up on disk.  A locally-pathed dependency
+  (<code>foo = { path = "../foo" }</code>) is still T2 because the manifest
+  calls it a dependency.  Matches developer intent: vendoring a stratum
+  into your own <code>strata/</code> directory promotes it to T1; declaring
+  it as a dep keeps it at T2.
+</p>
+
+<h3>Reference rules</h3>
+
+<table>
+  <tr><th>From / To</th><th>T0</th><th>T1</th><th>T2</th></tr>
+  <tr><td><strong>T0</strong></td><td>✓ allowed</td><td>✗ forbidden</td><td>✗ forbidden</td></tr>
+  <tr><td><strong>T1</strong></td><td>✓ allowed</td><td>✗ forbidden</td><td>✗ forbidden</td></tr>
+  <tr><td><strong>T2</strong></td><td>✓ allowed</td><td>✗ forbidden</td><td>✗ forbidden</td></tr>
+</table>
+
+<p>
+  "Reference" means <em>name resolution</em> against another stratum's
+  exports.  It does NOT mean event observation &mdash; any stratum at any tier
+  can register handlers on events fired by any other stratum at any other
+  tier.  The two paths are orthogonal.
+</p>
+
+<h3>Enforcement</h3>
+
+<p>
+  Lexical scoping.  Each tier loads into a separate namespace.  The registry
+  exposes a tier's symbols only to higher-tier resolvers.  Trying to
+  name-resolve a forbidden cross-tier reference returns "unbound" with the
+  same diagnostic shape as any other unbound identifier (per T-5, that
+  becomes a runtime trap in the emitted binary).
+</p>
+
+<h3>Load order</h3>
+
+<div class="diagram">1.  Walk boot/strata/builtin/ → parse each .si file → run @stratum body
+    Result: T0 handlers registered, T0 names visible to T0/T1/T2
+
+2.  Read &lt;project&gt;/silicon.toml → locate strata/*.si in the project
+    → parse each, run @stratum body
+    Result: T1 handlers registered, T1 names visible to T1 only (self)
+
+3.  Read &lt;project&gt;/silicon.toml → walk [dependencies] → pull each
+    package's strata/, parse, run @stratum body
+    Result: T2 handlers registered, T2 names visible to that package only
+
+4.  Begin main compile.  Events fire as the AST is walked.  Handlers run
+    in (tier ASC, source order, @@before/@@after) order.</div>
+
+<h3>Cycles</h3>
+
+<p>
+  Per T-6, the references-between-strata graph at T0 must be a DAG.
+  Detection runs at the end of step 1; on cycle, the loader picks an edge
+  (deterministically: lexicographic by stratum name pair), drops it,
+  pushes a structured diagnostic, continues.  References that traversed
+  the dropped edge become runtime traps in the affected emitted code.
+  T1 and T2 cannot form cycles because they have no intra-tier references.
+</p>
+
+<!-- ============================================================== -->
+<h2 id="dsl">4. The <code>@stratum</code> registration DSL</h2>
+
+<p>
+  A stratum is declared with the <code>@stratum</code> definition keyword:
+</p>
+
+<pre><span class="kw">@stratum</span> <span class="si">Name</span> = {
+  <span class="api">&amp;Compiler::register::</span>&lt;axis&gt; <span class="si">'token'</span>;
+  <span class="api">&amp;Compiler::on::</span>&lt;phase&gt; ...args... = { ...handler body... };
+  ...
+};</pre>
+
+<p>
+  The body is executed once when the stratum loads.  Each
+  <code>register::*</code> call adds an entry to the syntax registry; each
+  <code>on::*</code> call deferred-binds a handler that fires on the named
+  phase.
+</p>
+
+<h3>The body is a Silicon expression</h3>
+
+<p>
+  Not a special declaration form.  This matters for T-7: as the comptime
+  interpreter grows, you can have conditionals, loops, and helper
+  function calls inside the body.  A stratum is a program that registers
+  other programs.
+</p>
+
+<pre><span class="kw">@stratum</span> <span class="si">ConditionalRegister</span> = {
+  <span class="api">&amp;Compiler::register::keyword</span> <span class="si">'@generic'</span>;
+
+  <span class="kw">@if</span> <span class="api">&amp;Compiler::feature_flag</span> <span class="si">'derive'</span>, {
+    <span class="api">&amp;Compiler::register::annotation</span> <span class="si">'@@derive'</span>;
+  };
+
+  <span class="api">&amp;Compiler::on::decl</span> <span class="si">'@generic'</span>, <span class="ir">Node</span> = {
+    ...
+  };
+};</pre>
+
+<h3>Handler bodies are deferred</h3>
+
+<p>
+  An inner <code>{ ...body... }</code> following an <code>on::*</code> call is
+  NOT executed at registration.  It is captured as a closure and run later
+  when the matching event fires.  This is the load-vs-run distinction; the
+  outer body builds the registry, the inner bodies populate it with code
+  that runs later.
+</p>
+
+<!-- ============================================================== -->
+<h2 id="api">5. Capability API surface</h2>
+
+<p>
+  Concrete entry points strata can call.  Grouped by the layer they
+  contribute to.  Each entry tagged
+  <span class="tag mvp">MVP</span> (must ship in v1) or
+  <span class="tag defer">DEFER</span> (later).
+</p>
+
+<h3>5.1 Layer 1 — Syntactic registration</h3>
+
+<div class="api-entry">
+  <span class="sig">&amp;Compiler::register::keyword token:String</span> <span class="tag mvp">MVP</span>
+  <span class="desc">Adds <code>token</code> (e.g. <code>'@generic'</code>) to the keyword registry.  Naked registration is valid; an <code>on::decl</code> handler can be supplied by any tier or a later-loaded stratum.  Per T-5, an unhandled keyword occurrence becomes a runtime trap.</span>
+</div>
+
+<div class="api-entry">
+  <span class="sig">&amp;Compiler::register::operator token:String</span> <span class="tag mvp">MVP</span>
+  <span class="desc">Adds <code>token</code> (e.g. <code>'+'</code>) to the operator registry.  Operators are typed-dispatched — multiple strata can register the same token for different operand types and the right one fires based on operand inference.</span>
+</div>
+
+<div class="api-entry">
+  <span class="sig">&amp;Compiler::register::annotation token:String</span> <span class="tag mvp">MVP</span>
+  <span class="desc">Adds <code>token</code> (e.g. <code>'@@derive'</code>) to the annotation registry.  Annotations attach to the immediately-following definition; the <code>on::annotation</code> handler receives both the annotation node and its target definition.</span>
+</div>
+
+<div class="api-entry">
+  <span class="sig">&amp;Compiler::register::method token:String</span> <span class="tag defer">DEFER</span>
+  <span class="desc">Adds <code>token</code> (e.g. <code>'map'</code>) to the method registry.  Methods are dispatched on the receiver's static type.  Deferred because no MVP user needs it; landing it is straightforward once Layer-3 type-as-data is in.</span>
+</div>
+
+<div class="api-entry">
+  <span class="sig">&amp;Compiler::register::sigil token:String</span> <span class="tag defer">DEFER</span>
+  <span class="desc">Adds <code>token</code> (e.g. <code>'$json'</code>) to the sigil registry.  Sigils introduce new literal-like forms.  Deferred to keep MVP scope tight.</span>
+</div>
+
+<h3>5.2 Layer 2 — Lifecycle phases</h3>
+
+<div class="api-entry">
+  <span class="sig">&amp;Compiler::on::decl token:String, node = { body }</span> <span class="tag mvp">MVP</span>
+  <span class="desc">Fires for each definition AST node whose keyword equals <code>token</code>.  <code>node</code> binds to the AST node.  Handler runs at elaboration time, before lowering.</span>
+</div>
+
+<div class="api-entry">
+  <span class="sig">&amp;Compiler::on::call_site node = { body }</span> <span class="tag mvp">MVP</span>
+  <span class="desc">Fires for every function call in the program.  The handler is responsible for filtering — typically by inspecting <code>&amp;Compiler::callee::kind node</code>.  Used by the monomorphization engine to redirect calls to specialized instances.</span>
+</div>
+
+<div class="api-entry">
+  <span class="sig">&amp;Compiler::on::annotation token:String, ann_node, target_def = { body }</span> <span class="tag mvp">MVP</span>
+  <span class="desc">Fires when an annotation <code>token</code> precedes a definition.  Both nodes bound for inspection.  Annotation handlers can <em>modify</em> the target definition via the synthesis API before lowering proceeds.</span>
+</div>
+
+<div class="api-entry">
+  <span class="sig">&amp;Compiler::on::module_finalize = { body }</span> <span class="tag mvp">MVP</span>
+  <span class="desc">Fires once per module, after every other node has been walked but before code emission.  Used to flush deferred work — monomorphization queues, derived implementations, accumulated diagnostics.</span>
+</div>
+
+<div class="api-entry">
+  <span class="sig">&amp;Compiler::on::lower node = { body }</span> <span class="tag mvp">MVP</span>
+  <span class="desc">The "today" semantics — fires at IR lowering for a matching syntactic form.  The current <code>@stratum_keyword</code> body model maps to this phase.</span>
+</div>
+
+<div class="api-entry">
+  <span class="sig">&amp;Compiler::on::typecheck node = { body }</span> <span class="tag defer">DEFER</span>
+  <span class="desc">Fires after type inference for a matching form.  Lets a stratum participate in / override type-checking for its syntactic surface.  Deferred — generics doesn't strictly need this if Approach A monomorphization re-elaborates from AST templates.</span>
+</div>
+
+<div class="api-entry">
+  <span class="sig">&amp;Compiler::on::method receiver_type, token, call_node = { body }</span> <span class="tag defer">DEFER</span>
+  <span class="desc">Paired with <code>register::method</code>.  Deferred.</span>
+</div>
+
+<div class="api-entry">
+  <span class="sig">&amp;Compiler::on::parse node = { body }</span> <span class="tag defer">DEFER</span>
+  <span class="desc">Rare; runs at parse time before any semantic info exists.  Used by token-level sugar.  Deferred — most cases handled by later phases.</span>
+</div>
+
+<h3>5.3 Layer 3 — Effects (AST read)</h3>
+
+<div class="api-entry">
+  <span class="sig">&amp;Compiler::arg node, idx:Int</span> <span class="tag mvp">MVP</span>
+  <span class="desc">Today's API.  Returns the <code>idx</code>th argument of <code>node</code>.</span>
+</div>
+
+<div class="api-entry">
+  <span class="sig">&amp;Compiler::ast::children node</span> <span class="tag mvp">MVP</span>
+  <span class="desc">Returns the list of child AST nodes for general traversal.</span>
+</div>
+
+<div class="api-entry">
+  <span class="sig">&amp;Compiler::ast::span node</span> <span class="tag mvp">MVP</span>
+  <span class="desc">Returns the <code>(file, line, col, length)</code> source span of <code>node</code>.  Required for any stratum that pushes diagnostics with location info.</span>
+</div>
+
+<div class="api-entry">
+  <span class="sig">&amp;Compiler::ast::doc node</span> <span class="tag mvp">MVP</span>
+  <span class="desc">Returns the <code>##</code> doc-comment string immediately preceding <code>node</code>, or empty.  Used by <code>@@derive(Display)</code>-style strata that want to surface docs.</span>
+</div>
+
+<div class="api-entry">
+  <span class="sig">&amp;Compiler::ann_present node, token:String</span> <span class="tag mvp">MVP</span>
+  <span class="desc">Returns true if the annotation <code>token</code> (e.g. <code>'@@inline'</code>) precedes <code>node</code>.  Lets one stratum's handler test for the presence of another stratum's annotation.</span>
+</div>
+
+<div class="api-entry">
+  <span class="sig">&amp;Compiler::ann::args ann_node</span> <span class="tag mvp">MVP</span>
+  <span class="desc">Returns the argument list of an annotation node.  For <code>@@derive(Display, Debug)</code>, returns the two identifiers.</span>
+</div>
+
+<h3>5.4 Layer 3 — Effects (Types as data)</h3>
+
+<div class="api-entry">
+  <span class="sig">&amp;Compiler::type::int / &amp;Compiler::type::int64 / &amp;Compiler::type::float / &amp;Compiler::type::bool / &amp;Compiler::type::string / &amp;Compiler::type::void</span> <span class="tag mvp">MVP</span>
+  <span class="desc">Singleton type values.  Used to construct generic instantiations: <code>type::substitute tmpl, $T, &amp;Compiler::type::int</code>.</span>
+</div>
+
+<div class="api-entry">
+  <span class="sig">&amp;Compiler::type::array elem_type</span> <span class="tag mvp">MVP</span>
+  <span class="desc">Build an <code>Array&lt;elem_type&gt;</code> type value.</span>
+</div>
+
+<div class="api-entry">
+  <span class="sig">&amp;Compiler::type::function params:List, result</span> <span class="tag mvp">MVP</span>
+  <span class="desc">Build a function type value.</span>
+</div>
+
+<div class="api-entry">
+  <span class="sig">&amp;Compiler::type::variable name:String</span> <span class="tag mvp">MVP</span>
+  <span class="desc">Build a type variable (a placeholder used in generic templates).  Pre-elaboration AST capture preserves these; <code>substitute</code> replaces them.</span>
+</div>
+
+<div class="api-entry">
+  <span class="sig">&amp;Compiler::type::equals A, B</span> <span class="tag mvp">MVP</span>
+  <span class="desc">Structural equality on type values.</span>
+</div>
+
+<div class="api-entry">
+  <span class="sig">&amp;Compiler::type::infer_args call_node</span> <span class="tag mvp">MVP</span>
+  <span class="desc">Returns a list of inferred type values for each argument at a call site.  Used by generics to determine the concrete instantiation.</span>
+</div>
+
+<div class="api-entry">
+  <span class="sig">&amp;Compiler::type::substitute tmpl_type, bindings:Map</span> <span class="tag mvp">MVP</span>
+  <span class="desc">Walk <code>tmpl_type</code>, replace any type variable matching a key in <code>bindings</code> with its bound value, return the substituted type.</span>
+</div>
+
+<div class="api-entry">
+  <span class="sig">&amp;Compiler::type::format type</span> <span class="tag mvp">MVP</span>
+  <span class="desc">Returns a human-readable string for a type value.  Used in diagnostics.</span>
+</div>
+
+<h3>5.5 Layer 3 — Effects (AST synthesis)</h3>
+
+<div class="api-entry">
+  <span class="sig">&amp;Compiler::ast::capture_template node, kind:String</span> <span class="tag mvp">MVP</span>
+  <span class="desc">Returns a template handle representing <code>node</code>'s subtree.  <code>kind</code> is <code>'pre'</code> (un-elaborated parse AST) or <code>'post'</code> (elaborated AST with names resolved and operators dispatched).  Per design discussion, both are supported.</span>
+</div>
+
+<div class="api-entry">
+  <span class="sig">&amp;Compiler::ast::clone template_handle</span> <span class="tag mvp">MVP</span>
+  <span class="desc">Returns a fresh, mutable copy of the template.  Required because substitution mutates.</span>
+</div>
+
+<div class="api-entry">
+  <span class="sig">&amp;Compiler::ast::substitute template_handle, bindings:Map</span> <span class="tag mvp">MVP</span>
+  <span class="desc">Walk the template, replace every reference to a key in <code>bindings</code> with its bound value.  Bindings can map type variables to type values OR identifiers to other identifiers (for name mangling of monomorphs).</span>
+</div>
+
+<div class="api-entry">
+  <span class="sig">&amp;Compiler::ast::re_elaborate template_handle</span> <span class="tag mvp">MVP</span>
+  <span class="desc">For pre-elaboration templates: run the captured AST through elaboration (name resolution + operator dispatch) using the current symbol environment.  Required after substitute on a pre-template.</span>
+</div>
+
+<div class="api-entry">
+  <span class="sig">&amp;Compiler::ast::patch_types template_handle, bindings:Map</span> <span class="tag mvp">MVP</span>
+  <span class="desc">For post-elaboration templates: walk the elaborated AST, replace type-variable annotations in-place.  Lighter than re_elaborate; works when the template's structure doesn't depend on the substituted types.</span>
+</div>
+
+<h3>5.6 Layer 3 — Effects (Module mutation)</h3>
+
+<div class="api-entry">
+  <span class="sig">&amp;Compiler::module::push_definition def_node</span> <span class="tag mvp">MVP</span>
+  <span class="desc">Adds <code>def_node</code> as a new top-level definition in the current module.  Used by generics to emit monomorphized function instances.  The new definition is elaborated, type-checked, and lowered as if it had been in the source.</span>
+</div>
+
+<div class="api-entry">
+  <span class="sig">&amp;Compiler::module::push_global name:String, type, init</span> <span class="tag mvp">MVP</span>
+  <span class="desc">Adds a new global value to the current module.</span>
+</div>
+
+<div class="api-entry">
+  <span class="sig">&amp;Compiler::module::push_import mod:String, name:String, type</span> <span class="tag defer">DEFER</span>
+  <span class="desc">Adds a new WASM import.  Deferred — current strata don't need this; the WASI stub injection in build scripts covers it for now.</span>
+</div>
+
+<h3>5.7 Layer 3 — Effects (State)</h3>
+
+<div class="api-entry">
+  <span class="sig">&amp;Compiler::state scope:String</span> <span class="tag mvp">MVP</span>
+  <span class="desc">Returns a state bucket.  <code>scope</code> is <code>'instance'</code> (fresh per handler firing) or <code>'stratum'</code> (shared across all handlers of the same stratum, across all firings, for the duration of one compilation).  <code>'global'</code> (cross-stratum) deferred.  State buckets are Silicon objects with <code>set</code> / <code>get</code> / <code>has</code> / <code>each</code> methods.</span>
+</div>
+
+<h3>5.8 Layer 3 — Effects (Diagnostics)</h3>
+
+<div class="api-entry">
+  <span class="sig">&amp;Compiler::diag::error code:String, span, message:String, hint:String</span> <span class="tag mvp">MVP</span>
+  <span class="desc">Push a structured error diagnostic.  Renders identically to compiler-emitted errors (code, span, caret, hint).  Per T-5, also emits a runtime trap at <code>span</code> in the resulting binary if the affected code path is reached.</span>
+</div>
+
+<div class="api-entry">
+  <span class="sig">&amp;Compiler::diag::warn code:String, span, message:String, hint:String</span> <span class="tag mvp">MVP</span>
+  <span class="desc">Push a warning.  Renders without trap insertion.  For lint-style strata.</span>
+</div>
+
+<div class="api-entry">
+  <span class="sig">&amp;Compiler::diag::note span, message:String</span> <span class="tag defer">DEFER</span>
+  <span class="desc">Push an informational note.  Used for "see also" links in complex diagnostics.</span>
+</div>
+
+<h3>5.9 Layer 3 — Effects (IR emission)</h3>
+
+<p>
+  Existing <code>&amp;Compiler::ir::makeIf</code>, <code>makeConst</code>,
+  <code>makeFunction</code>, etc.  No new entries needed for MVP; the existing
+  surface is already adequate.  Document them as Layer-3 IR entries here for
+  completeness.
+</p>
+
+<h3>5.10 Layer 4 — Composition annotations</h3>
+
+<div class="api-entry">
+  <span class="sig">@@before "OtherStratumName"</span> <span class="tag mvp">MVP</span>
+  <span class="desc">Annotation on an <code>on::*</code> registration.  Engine sorts so this handler fires before any handler from the named stratum.  Same-tier handlers only; cross-tier ordering is fixed by tier.</span>
+</div>
+
+<div class="api-entry">
+  <span class="sig">@@after "OtherStratumName"</span> <span class="tag mvp">MVP</span>
+  <span class="desc">Mirror of <code>@@before</code>.</span>
+</div>
+
+<!-- ============================================================== -->
+<h2 id="errors">6. Universal late-binding error model</h2>
+
+<p>
+  Per T-5, every semantic error in the program emits a structured
+  diagnostic at compile time AND a runtime trap at the offending site in
+  the binary.  This section specifies how that's mechanized.
+</p>
+
+<h3>6.1 Compile-time output</h3>
+
+<p>
+  Every error has: code, span, severity (error/warning), message, optional
+  hint, optional related notes.  Rendering:
+</p>
+
+<pre>error[E0102]: type mismatch
+  --&gt; src/main.si:12:5
+   |
+12 |     @let count:Int := 3.14;
+   |     ^^^^^^^^^^^^^^^^^^^^^^ expected Int, got Float
+   |
+   = note: a runtime trap at this location will fire if the program
+           reaches this assignment.  Fix the source or constrain the
+           code path to avoid it.
+   = help: convert with `&amp;@toInt 3.14` to truncate.
+
+Built with 1 error.  Run with caution.</pre>
+
+<p>
+  The summary line at the end is intentional: it signals that the build
+  succeeded (per T-5) but the binary contains a known failure mode.
+</p>
+
+<h3>6.2 Runtime trap lowering</h3>
+
+<p>
+  Each error site's offending IR node lowers to:
+</p>
+
+<pre>;; Original (would have been):
+;;   local.get $value           ;; whatever the original computation was
+;;   ...
+
+;; With error binding:
+i32.const &lt;diag_id&gt;            ;; index into the embedded diag table
+call $silicon_runtime_trap     ;; never returns
+unreachable                    ;; validator requirement</pre>
+
+<p>
+  <code>$silicon_runtime_trap</code> lives in <code>std.wat</code>:
+</p>
+
+<pre>(func $silicon_runtime_trap (param $diag_id i32)
+  ;; Look up the diagnostic in the embedded table
+  (call $silicon_diag_table_load (local.get $diag_id))
+  ;; Print to stderr
+  (call $silicon_diag_print)
+  ;; Exit with non-zero status
+  (call $wasi_snapshot_preview1::proc_exit (i32.const 101)))</pre>
+
+<p>
+  The diag table is a WASM data section the compiler emits alongside the
+  module — one entry per trap site with the file:line:col, error code,
+  message, and hint.  Total overhead: ~64 bytes per error site
+  (typically a handful per program).
+</p>
+
+<h3>6.3 Errors that bind to a value (not just a site)</h3>
+
+<p>
+  For "value-level" errors — like <code>@let x:Int := some_function_returning_string</code>
+  — the trap fires when <code>x</code> is <em>read</em>, not at the
+  binding.  This requires writing the diag id into the slot in place of
+  the offending value and trapping on read.  Adds complexity; for the
+  MVP we trap at the binding site instead.  Tradeoff: less precise but
+  simpler.  Revisit if "trap on use, not on bind" becomes important.
+</p>
+
+<h3>6.4 Errors that prevent codegen entirely</h3>
+
+<p>
+  Some errors (a function with no body, a type alias referencing itself
+  unbreakably, etc.) genuinely block lowering.  For these, the trap
+  replaces the entire function: any call to it traps immediately.  The
+  enclosing module still compiles; the program still produces a binary;
+  the broken function just panics when invoked.
+</p>
+
+<!-- ============================================================== -->
+<h2 id="example-generics">7. Worked example: <code>@generic</code></h2>
+
+<p>
+  Approach A — template monomorphization via pre-elaboration AST capture.
+  Three handlers across two strata.
+</p>
+
+<pre><span class="kw">@stratum</span> <span class="si">GenericKeyword</span> = {
+  <span class="api">&amp;Compiler::register::keyword</span> <span class="si">'@generic'</span>;
+};
+
+<span class="kw">@stratum</span> <span class="si">Monomorphize</span> = {
+  <span class="kw">@local</span> templates    := <span class="api">&amp;Compiler::state</span> <span class="si">'stratum'</span>;
+  <span class="kw">@local</span> instantiations := <span class="api">&amp;Compiler::state</span> <span class="si">'stratum'</span>;
+
+  <span class="api">&amp;Compiler::on::decl</span> <span class="si">'@generic'</span>, <span class="ir">DeclNode</span> = {
+    <span class="kw">@local</span> name := <span class="api">&amp;Compiler::watId</span> DeclNode.name.name;
+    <span class="kw">@local</span> tmpl := <span class="api">&amp;Compiler::ast::capture_template</span> DeclNode, <span class="si">'pre'</span>;
+    <span class="api">&amp;templates::set</span> name, tmpl;
+  };
+
+  <span class="api">&amp;Compiler::on::call_site</span> <span class="ir">CallNode</span> = {
+    <span class="kw">@local</span> callee := <span class="api">&amp;Compiler::callee::name</span> CallNode;
+    <span class="kw">@local</span> tmpl := <span class="api">&amp;templates::get</span> callee;
+    <span class="kw">&@if</span> (tmpl != <span class="kw">@nil</span>), {
+      <span class="kw">@local</span> types := <span class="api">&amp;Compiler::type::infer_args</span> CallNode;
+      <span class="kw">@local</span> key := <span class="api">&amp;mangle</span> callee, types;
+      <span class="api">&amp;instantiations::set</span> key, $InstReq tmpl, types;
+      <span class="api">&amp;Compiler::ast::rewrite_call</span> CallNode, key;
+    };
+  };
+
+  <span class="api">&amp;Compiler::on::module_finalize</span> = {
+    <span class="api">&amp;instantiations::each</span>, <span class="ir">Key</span>, <span class="ir">Req</span> = {
+      <span class="kw">@local</span> clone := <span class="api">&amp;Compiler::ast::clone</span> Req.tmpl;
+      <span class="kw">@local</span> sub := <span class="api">&amp;Compiler::ast::substitute</span> clone, Req.bindings;
+      <span class="kw">@local</span> mono := <span class="api">&amp;Compiler::ast::re_elaborate</span> sub;
+      <span class="api">&amp;Compiler::module::push_definition</span> mono;
+    };
+  };
+};</pre>
+
+<p>What a user writes:</p>
+
+<pre><span class="kw">@generic</span> <span class="si">first</span> xs:<span class="si">List</span>&lt;<span class="si">T</span>&gt; := { (<span class="api">&amp;list_get</span> xs, <span class="si">0</span>) };
+
+<span class="kw">@fn</span> <span class="si">_start</span>:<span class="si">Void</span> := {
+  <span class="kw">@local</span> ints := <span class="api">&amp;list_of_ints</span> 1, 2, 3;
+  <span class="kw">@local</span> x := <span class="api">&amp;first</span> ints;     <span class="api">;; type::infer_args =&gt; [List&lt;Int&gt;]</span>
+  ...
+};</pre>
+
+<p>What the compiler emits (conceptually):</p>
+
+<pre><span class="kw">@fn</span> <span class="si">first$List_Int</span> xs:<span class="si">List_Int</span> := { (<span class="api">&amp;list_get</span> xs, <span class="si">0</span>) };
+
+<span class="kw">@fn</span> <span class="si">_start</span>:<span class="si">Void</span> := {
+  <span class="kw">@local</span> ints := <span class="api">&amp;list_of_ints</span> 1, 2, 3;
+  <span class="kw">@local</span> x := <span class="api">&amp;first$List_Int</span> ints;
+  ...
+};</pre>
+
+<p>
+  All achieved without compiler changes.  Adding a second instantiation
+  (<code>&amp;first</code> on <code>List&lt;String&gt;</code>) generates a second monomorph
+  automatically.  Errors inside the template are reported per-instantiation,
+  per <code>@generic</code>'s <code>re_elaborate</code> call — a known C++-templates
+  UX cost we accept for Approach A simplicity.
+</p>
+
+<!-- ============================================================== -->
+<h2 id="example-derive">8. Worked example: <code>@@derive</code></h2>
+
+<p>
+  An annotation that adds trait implementations to a <code>@type</code>
+  declaration.  Demonstrates Layer-4 observer composition: the
+  <code>Derive</code> stratum doesn't own <code>@type</code> — it just
+  observes <code>@type</code> declarations and emits additional code if
+  the <code>@@derive</code> annotation is present.
+</p>
+
+<pre><span class="kw">@stratum</span> <span class="si">Derive</span> = {
+  <span class="api">&amp;Compiler::register::annotation</span> <span class="si">'@@derive'</span>;
+
+  <span class="api">&amp;Compiler::on::annotation</span> <span class="si">'@@derive'</span>, <span class="ir">AnnNode</span>, <span class="ir">TargetDef</span> = {
+    <span class="kw">@local</span> traits := <span class="api">&amp;Compiler::ann::args</span> AnnNode;
+    <span class="api">&amp;loop_traits</span> traits, <span class="ir">Trait</span> = {
+      <span class="kw">&@if</span> (Trait == <span class="si">'Display'</span>), { <span class="api">&amp;emit_display_impl</span> TargetDef };
+      <span class="kw">&@if</span> (Trait == <span class="si">'Debug'</span>),   { <span class="api">&amp;emit_debug_impl</span> TargetDef };
+      <span class="kw">&@if</span> (Trait == <span class="si">'Eq'</span>),      { <span class="api">&amp;emit_eq_impl</span> TargetDef };
+    };
+  };
+};
+
+<span class="kw">@fn</span> <span class="si">emit_display_impl</span> <span class="ir">TargetDef</span> := {
+  <span class="kw">@local</span> name := <span class="api">&amp;Compiler::watId</span> TargetDef.name.name;
+  <span class="kw">@local</span> impl_ast := <span class="api">&amp;build_display_impl_for</span> TargetDef;
+  <span class="api">&amp;Compiler::module::push_definition</span> impl_ast;
+};</pre>
+
+<p>User code:</p>
+
+<pre><span class="kw">@@derive</span>(<span class="si">Display</span>, <span class="si">Debug</span>)
+<span class="kw">@type</span> <span class="si">Point</span> := <span class="si">$Point</span> x:<span class="si">Int</span>, y:<span class="si">Int</span>;</pre>
+
+<p>
+  Compiler walks past the <code>@@derive</code> annotation, lands on the
+  <code>@type</code> declaration, fires the <code>on::decl '@type'</code>
+  handler (which is in T0, the built-in handler for <code>@type</code>),
+  THEN fires the <code>Derive</code> stratum's
+  <code>on::annotation</code> handler (also T0 if you bundle it built-in,
+  T1 if a user wrote it).  Order is deterministic; the
+  <code>on::annotation</code> handler runs after the target's own
+  declaration handler so it can <code>push_definition</code> safely.
+</p>
+
+<!-- ============================================================== -->
+<h2 id="example-thirdparty">9. Worked example: third-party plugin</h2>
+
+<p>
+  A T2 stratum from an imaginary <code>silicon-json</code> dependency that
+  registers a sigil for JSON literals.
+</p>
+
+<p>Package manifest:</p>
+
+<pre><span class="api">[dependencies]</span>
+silicon-json = { git = <span class="si">"https://github.com/...json"</span>, tag = <span class="si">"v0.1"</span> }</pre>
+
+<p>The stratum (loaded as T2):</p>
+
+<pre><span class="kw">@stratum</span> <span class="si">JsonLiteral</span> = {
+  <span class="api">&amp;Compiler::register::sigil</span> <span class="si">'$json'</span>;
+
+  <span class="api">&amp;Compiler::on::sigil</span> <span class="si">'$json'</span>, <span class="ir">SigilNode</span> = {
+    <span class="kw">@local</span> raw := <span class="api">&amp;Compiler::ast::raw_text</span> SigilNode;
+    <span class="kw">@local</span> parsed := <span class="api">&amp;parse_json_at_comptime</span> raw;
+    <span class="kw">&@if</span> (parsed.error != <span class="kw">@nil</span>), {
+      <span class="api">&amp;Compiler::diag::error</span>
+        <span class="si">'E2001'</span>,
+        (<span class="api">&amp;Compiler::ast::span</span> SigilNode),
+        parsed.error.message,
+        <span class="si">'Check the JSON syntax in this $json literal.'</span>;
+    };
+    <span class="kw">&@if</span> (parsed.error == <span class="kw">@nil</span>), {
+      <span class="api">&amp;Compiler::ir::make_json_value</span> parsed.tree;
+    };
+  };
+};</pre>
+
+<p>User code:</p>
+
+<pre><span class="kw">@use</span> <span class="si">'silicon-json/api.si'</span>;
+
+<span class="kw">@fn</span> <span class="si">_start</span> := {
+  <span class="kw">@local</span> config := $json<span class="si">'{"port": 8080, "host": "localhost"}'</span>;
+  ...
+};</pre>
+
+<p>
+  The JsonLiteral stratum is T2, cannot reference other T2 strata, and
+  cannot be referenced by T1 user strata.  But the user's program <em>uses</em>
+  it through the registered sigil, which is the right kind of coupling:
+  syntactic and capability-based, not symbol-based.
+</p>
+
+<!-- ============================================================== -->
+<h2 id="mvp">10. MVP capability set</h2>
+
+<p>
+  Cross-reference of API entries flagged <span class="tag mvp">MVP</span>
+  against the user stories in
+  <a href="stage0-production-roadmap.html" style="color: var(--accent);">stage0-production-roadmap.html</a>.
+</p>
+
+<table>
+  <tr><th>MVP capability</th><th>Roadmap story unlocked</th></tr>
+  <tr><td>register::{keyword, operator, annotation}</td><td>LANG-* (entire language-features section)</td></tr>
+  <tr><td>on::{decl, call_site, annotation, module_finalize, lower}</td><td>LANG-1 (generics), LANG-3 (traits), LANG-4 (guards)</td></tr>
+  <tr><td>ast::{children, span, doc, capture_template, clone, substitute, re_elaborate, patch_types}</td><td>LANG-1, LANG-3, future <code>@@derive</code>-family annotations</td></tr>
+  <tr><td>type::{int, int64, float, bool, string, void, array, function, variable, equals, infer_args, substitute, format}</td><td>LANG-1, LANG-3, LANG-6 (Result/Option)</td></tr>
+  <tr><td>module::{push_definition, push_global}</td><td>LANG-1 monomorphization, <code>@@derive</code></td></tr>
+  <tr><td>state 'instance' / 'stratum'</td><td>Generics memo, <code>@@derive</code> registry</td></tr>
+  <tr><td>diag::{error, warn}</td><td>DIAG-3 (error codes), DIAG-5 (cross-file chains)</td></tr>
+  <tr><td>ann::{args, present}</td><td>LANG-3 trait bounds, <code>@@derive</code></td></tr>
+  <tr><td>Runtime trap mechanism (<code>silicon_runtime_trap</code> + diag table)</td><td>T-5 universal tenet; replaces audit H-2</td></tr>
+  <tr><td>Tier loader (T0/T1/T2)</td><td>PKG-3 (remote deps), DIST-* (distribution boundary)</td></tr>
+  <tr><td>@@before / @@after handler ordering</td><td>Composition between competing strata</td></tr>
+</table>
+
+<p>
+  Total: ~30 API entries, ~3 substantial subsystems (tier loader, runtime
+  trap, comptime body interpreter expansion).  Estimated:
+  <strong>6&ndash;10 engineer-weeks</strong> for a complete MVP including the runtime
+  trap codegen.  Stretches to <strong>3&ndash;4 months</strong> if you also push
+  comptime evaluation toward full Silicon (T-7).
+</p>
+
+<!-- ============================================================== -->
+<h2 id="migration">11. Migration from current strata</h2>
+
+<p>
+  Current strata (<code>boot/strata/builtin/*.si</code>) use
+  <code>@stratum_keyword</code> and <code>@stratum_operator</code> as
+  one-shot declarations with implicit on-lower handlers.  Migration is
+  mechanical:
+</p>
+
+<table>
+  <tr><th>Today</th><th>Strata 2.0</th></tr>
+  <tr>
+    <td>
+<pre>@stratum_keyword Const ('@const', Node) = {
+  &Compiler::ir::makeGlobal Node;
+};</pre>
+    </td>
+    <td>
+<pre>@stratum Const = {
+  &Compiler::register::keyword '@const';
+  &Compiler::on::lower Node = {
+    &Compiler::ir::makeGlobal Node;
+  };
+};</pre>
+    </td>
+  </tr>
+  <tr>
+    <td>
+<pre>@stratum_operator Plus ('+', Node) = {
+  &IR::i32_add Node.left, Node.right;
+};</pre>
+    </td>
+    <td>
+<pre>@stratum Plus = {
+  &Compiler::register::operator '+';
+  &Compiler::on::lower Node = {
+    &IR::i32_add Node.left, Node.right;
+  };
+};</pre>
+    </td>
+  </tr>
+</table>
+
+<p>
+  The old syntax can stay as syntactic sugar that desugars to the new
+  form &mdash; or can be removed in a single sweep.  Either works; mechanical
+  migration script in either direction is &lt; 200 LoC.
+</p>
+
+<p>
+  Recommendation: <strong>keep both for one release</strong>, then drop
+  <code>@stratum_keyword</code> / <code>@stratum_operator</code>.  Gives
+  users a window to migrate without a hard cutover.
+</p>
+
+<!-- ============================================================== -->
+<h2 id="open">12. Open questions / future work</h2>
+
+<div class="card note">
+  <h4 style="color: var(--accent4); margin-bottom: 8px;">Open: Compile-time evaluation scope</h4>
+  <p>
+    The body interpreter currently dispatches a fixed set of
+    <code>&amp;Compiler::*</code> calls.  Strata 2.0 expands it incrementally.
+    Open question: when does the interpreter become powerful enough to
+    handle arbitrary Silicon code at compile time?  The pragmatic answer
+    is "when a stratum needs it" &mdash; grow the interpreter feature-by-feature
+    as use cases force the issue.  But there's a design pull toward
+    deciding the long-arc target now (e.g., "the interpreter implements
+    a subset of Silicon limited to expressions over comptime-known data").
+    Worth pinning down before too much surface accumulates.
+  </p>
+</div>
+
+<div class="card note">
+  <h4 style="color: var(--accent4); margin-bottom: 8px;">Open: Trait/interface dispatch under T-5</h4>
+  <p>
+    Traits-as-stratum (LANG-3) needs dispatch resolution at call sites.
+    Under T-5, an unresolved trait method call must trap at runtime.  Is
+    that always the right behavior?  For "method called on a type that
+    doesn't implement the trait" the trap is fine.  For "trait method
+    not implemented for the inferred type", the call-site rewriting
+    needs to emit the trap inline.  Spec-out when implementation
+    proceeds.
+  </p>
+</div>
+
+<div class="card note">
+  <h4 style="color: var(--accent4); margin-bottom: 8px;">Open: Cross-compilation tier rules</h4>
+  <p>
+    When compiling for one WASM target on another host, do tier rules
+    apply to the host's compiler or the target's runtime?  Probably the
+    former (strata run at compile time on the host), but worth checking
+    if cross-compilation ever becomes a thing.  Punt until needed.
+  </p>
+</div>
+
+<div class="card note">
+  <h4 style="color: var(--accent4); margin-bottom: 8px;">Open: Strata versioning</h4>
+  <p>
+    A T2 stratum declares a required platform/compiler version somewhere.
+    Today there's no version stamp on the compiler.  Coupled with PKG-1
+    (manifest) and CI-3 (semver enforcement) in the production roadmap.
+    No new design needed; just remember to land version metadata when
+    PKG-1 lands.
+  </p>
+</div>
+
+<div class="card note">
+  <h4 style="color: var(--accent4); margin-bottom: 8px;">Open: Incremental compilation + strata state</h4>
+  <p>
+    State buckets (<code>stratum</code> scope) persist across handler
+    firings within one compile.  What about across compiles in watch mode
+    (PERF-1)?  Probably reset between compiles &mdash; cache only the
+    typed-AST output, not stratum scratch state.  Worth formalizing when
+    the incremental cache lands.
+  </p>
+</div>
+
+<hr class="thin" />
+
+<p style="color: var(--muted); font-size: 0.82rem;">
+  This spec replaces the language-features section of
+  <a href="stage0-production-roadmap.html" style="color: var(--accent);">stage0-production-roadmap.html</a>.
+  Stories LANG-1 through LANG-7 in that roadmap now read as "build Strata 2.0
+  to MVP, then author the corresponding stratum."  The work order: ship the
+  MVP capability set, write <code>@generic</code> as a stratum to validate
+  it, then traits / guards / records / Result-Option follow without further
+  compiler changes.
+</p>
+
+</div>
+</body>
+</html>
