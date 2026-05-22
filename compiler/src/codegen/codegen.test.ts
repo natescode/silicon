@@ -6,7 +6,7 @@
  */
 
 import { test, expect } from "bun:test"
-import { compileToWat } from "./index"
+import { compileToWat, compileToWasm } from "./index"
 import siliconGrammar from "../grammar/SiliconGrammar"
 import parse from "../parser"
 import { addToAstSemantics } from "../ast/index"
@@ -21,6 +21,15 @@ function compile(source: string): string {
     const { program: elaborated } = elaborate(ast, registry)
     const { program: typed, functions } = typecheck(elaborated, registry)
     return compileToWat(typed, registry, functions)
+}
+
+function compileBinary(source: string): Uint8Array {
+    const match = parse(source)
+    const ast = addToAstSemantics(siliconGrammar)(match).toAst() as Program
+    const registry = buildStrataRegistry(ast)
+    const { program: elaborated } = elaborate(ast, registry)
+    const { program: typed, functions } = typecheck(elaborated, registry)
+    return compileToWasm(typed, registry, functions)
 }
 
 test("compile generates module structure", () => {
@@ -166,4 +175,29 @@ test("compile @extern with multiple params", () => {
     expect(wat).toContain('(import "env" "add"')
     // IR emitter uses unnamed params in import declarations
     expect(wat).toContain("(param i32) (param i32)")
+})
+
+test("compileToWasm returns a valid WASM binary", () => {
+    const bin = compileBinary("42;")
+    // Magic + version: \0asm 0x01000000
+    expect(bin[0]).toBe(0x00)
+    expect(bin[1]).toBe(0x61)
+    expect(bin[2]).toBe(0x73)
+    expect(bin[3]).toBe(0x6d)
+    expect(bin[4]).toBe(0x01)
+    expect(bin[5]).toBe(0x00)
+    expect(bin[6]).toBe(0x00)
+    expect(bin[7]).toBe(0x00)
+    expect(bin.byteLength).toBeGreaterThan(8)
+})
+
+test("compileToWasm direct emitter is byte-equal to WAT round-trip", async () => {
+    const { watToWasm } = await import("./toWasm")
+    const source = "@let add x:Int, y:Int := x + y;"
+    const viaWat = await watToWasm(compile(source))
+    const viaDirect = compileBinary(source)
+    expect(viaDirect.byteLength).toBe(viaWat.byteLength)
+    for (let i = 0; i < viaWat.byteLength; i++) {
+        expect(viaDirect[i]).toBe(viaWat[i])
+    }
 })
