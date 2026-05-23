@@ -17,6 +17,7 @@ export type CodegenKind =
     | 'function' | 'global' | 'local' | 'extern'
     | 'type_alias' | 'type_distinct' | 'type_sum' | 'type_record'
     | 'export' | 'platform'
+    | 'stratum_def'  // user-defined def-keyword via register::keyword (Strata 2.0)
 
 export interface DefKindEntry {
     keyword: string          // full keyword, e.g. "@let"

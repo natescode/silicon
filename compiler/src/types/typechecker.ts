@@ -81,6 +81,11 @@ import {
 import { getWasmIntrinsic } from '../intrinsics'
 import { type ElaboratorRegistry, lookupOperator, lookupTypedOperator, lookupKeyword, lookupTypedKeyword } from '../elaborator/registry'
 import { intrinsicSignature, type TypeSig } from './intrinsicSig'
+import {
+    unify, applySubst, emptySubst, makeFreshGen, UnifyError,
+} from './unify'
+import type { Subst } from './unify'
+import { normalizeMatchArgs } from '../ast/matchArms'
 
 /**
  * Mutable checking context. Threaded through the recursive walk so error
@@ -99,6 +104,16 @@ interface Ctx {
     // User-defined type names from @type_alias and @type_distinct declarations.
     // Passed to parseTypeName so annotations like `x: age` resolve correctly.
     typeAliases: Map<string, SiliconType>
+    // Type variables in scope (from a Definition's GenericParams `[T, U, …]`).
+    // Names here resolve to `{ kind: 'Variable', name }` instead of being
+    // reported as unknown types.  Child scopes (per-definition) extend this.
+    typeVars: Set<string>
+    // Variant schemes — for each variant of a parameterised sum type,
+    // remember the declared field types and the type variables they were
+    // declared with.  Used at pattern-bind time so `$Some v` against
+    // `Option[Int]` binds `v:Int`, not the hardcoded TypeInt of yesteryear.
+    // Keyed by `${SumName}::${VariantName}`.
+    variantSchemes: Map<string, { tvars: string[]; fields: { name: string; type: SiliconType }[] }>
     // Stratum registry for user-defined operator type checking (optional).
     registry?: ElaboratorRegistry
 }
@@ -113,11 +128,80 @@ export interface FunctionSig {
  * bindings are discarded when `fn` returns. Errors still accumulate into the
  * shared `ctx.errors` list.
  */
+/** Resolve a type-name against the context's aliases AND type-variable scope.
+ *  Names in `ctx.typeVars` resolve to `{ kind: 'Variable', name }` — this is
+ *  what makes `@fn id[T] x:T := x;` typecheck without `unknown type 'T'`. */
+function resolveType(name: string, ctx: Ctx): SiliconType | undefined {
+    if (ctx.typeVars.has(name)) return { kind: 'Variable', name }
+    return parseTypeName(name, ctx.typeAliases)
+}
+
+/**
+ * Resolve the concrete field types of a variant given the discriminant's
+ * sum type.  Looks up the variant's declared scheme (tvars + field types
+ * with Variable placeholders) and substitutes the discriminant's typeArgs.
+ *
+ *   discT = Option[Int]   variant 'Some'   scheme tvars=['T'], fields=[value:T]
+ *   → [TypeInt]
+ *
+ * Returns an empty array if no scheme is registered (e.g. legacy enums,
+ * unparametrised sums whose field info wasn't stashed).  Callers should
+ * fall back to a safe default in that case.
+ */
+function resolveVariantFieldTypes(discT: SiliconType, variantName: string, ctx: Ctx): SiliconType[] {
+    if (discT.kind !== 'Sum') return []
+    const scheme = ctx.variantSchemes.get(`${discT.name}::${variantName}`)
+    if (!scheme) return []
+    const tvars = scheme.tvars
+    const callArgs = discT.typeArgs ?? []
+    if (tvars.length === 0) return scheme.fields.map(f => f.type)
+    const subst: Map<string, SiliconType> = new Map()
+    for (let i = 0; i < tvars.length && i < callArgs.length; i++) {
+        subst.set(tvars[i], callArgs[i])
+    }
+    return scheme.fields.map(f => applySubst(f.type, subst))
+}
+
+/** Resolve a full TypeAnnotation, honouring `typeArgs` for parametric Sums.
+ *  `:Option[Int]` → `Sum('Option', variants, [TypeInt])`.
+ *  `:Option[Float]` → `Sum('Option', variants, [TypeFloat])` — distinct
+ *  from `:Option[Int]` by typeEquals.
+ *
+ *  Falls back to `resolveType` for non-parametric annotations so existing
+ *  callers keep working. */
+function resolveTypeAnnotation(ann: any, ctx: Ctx): SiliconType | undefined {
+    if (!ann) return undefined
+    const base = resolveType(ann.typename, ctx)
+    if (!base) return undefined
+    const typeArgs: any[] = ann.typeArgs ?? []
+    if (typeArgs.length === 0) return base
+    // Recursively resolve each type-arg.  A TypeArg has { name, args? } so we
+    // synthesize an annotation-shaped object and recurse.
+    const resolvedArgs: SiliconType[] = []
+    for (const ta of typeArgs) {
+        const inner = resolveTypeAnnotation(
+            { typename: ta.name, typeArgs: ta.args },
+            ctx,
+        )
+        if (!inner) return undefined
+        resolvedArgs.push(inner)
+    }
+    // Attach typeArgs to Sum / Distinct.  Other kinds get the args ignored
+    // (they shouldn't be parameterized at the user surface).
+    if (base.kind === 'Sum') {
+        return { kind: 'Sum', name: base.name, variants: base.variants, typeArgs: resolvedArgs }
+    }
+    return base
+}
+
 function withScope(ctx: Ctx, fn: (inner: Ctx) => SiliconType): SiliconType {
     const savedSymbols = ctx.symbols
+    const savedTypeVars = ctx.typeVars
     ctx.symbols = new Map(savedSymbols)
+    ctx.typeVars = new Set(savedTypeVars)
     const t = fn(ctx)
     ctx.symbols = savedSymbols
+    ctx.typeVars = savedTypeVars
     return t
 }
 
@@ -148,6 +232,8 @@ export default function typecheck(program: Program, registry?: ElaboratorRegistr
         functions: new Map(),
         immutable: new Set(),
         typeAliases: new Map(),
+        typeVars: new Set(),
+        variantSchemes: new Map(),
         registry,
     }
     // Pre-registration pass: seed module function signatures first so that
@@ -273,17 +359,26 @@ function preRegisterDefinitions(elements: any[], ctx: Ctx): void {
         // @export references an existing name — never defines new params.
         if (isTypeDeclKeyword(kw) || kw === '@export') continue
 
+        // Establish per-def type-variable scope from GenericParams `[T, U, …]`
+        // so type names like `T` in param/result annotations resolve to Variable
+        // rather than triggering "unknown type" errors.
+        const savedTypeVars = ctx.typeVars
+        ctx.typeVars = new Set(savedTypeVars)
+        for (const tv of def.generics?.params ?? []) ctx.typeVars.add(tv)
+
         const paramTypes: SiliconType[] = []
         for (const p of def.params || []) {
             if (p.isLiteral || !p.typeAnnotation) continue
-            paramTypes.push(parseTypeName(p.typeAnnotation.typename, ctx.typeAliases) ?? TypeUnknown)
+            paramTypes.push(resolveTypeAnnotation(p.typeAnnotation, ctx) ?? TypeUnknown)
         }
 
         let resultType: SiliconType = TypeUnknown
         if (def.name.typeAnnotation) {
-            const parsed = parseTypeName(def.name.typeAnnotation.typename, ctx.typeAliases)
+            const parsed = resolveTypeAnnotation(def.name.typeAnnotation, ctx)
             if (parsed) resultType = parsed
         }
+
+        ctx.typeVars = savedTypeVars
 
         ctx.functions.set(def.name.name, { params: paramTypes, result: resultType })
 
@@ -395,21 +490,59 @@ function preRegisterRecordSumType(def: any, ctx: Ctx): void {
         return
     }
 
-    // Register the sum type itself.  Variant names are stored as Name::Variant
-    // to keep parity with @enum.
-    const variantNames = variants.map(v => `${name}::${v.name}`)
-    const sumType = SumOf(name, variantNames)
-    ctx.typeAliases.set(name, sumType)
+    // Type-variable scope from the type def's GenericParams.  Without this,
+    // variant fields like `value:T` register as Unknown instead of Variable.
+    const savedTypeVars = ctx.typeVars
+    ctx.typeVars = new Set(savedTypeVars)
+    const tvars: string[] = def.generics?.params ?? []
+    for (const tv of tvars) ctx.typeVars.add(tv)
 
-    // For each variant, register a constructor function `&Variant fields...`
-    // returning the parent sum type.
+    // Register the sum type itself.  Variant names are stored as Name::Variant
+    // to keep parity with @enum.  The alias entry stays *non-parametric* (the
+    // bare `Option` resolves to a Sum without typeArgs) so that
+    // `resolveTypeAnnotation` can attach the call-site typeArgs.
+    const variantNames = variants.map(v => `${name}::${v.name}`)
+    const aliasType = SumOf(name, variantNames)
+    ctx.typeAliases.set(name, aliasType)
+
+    // For each variant, the return type carries the type parameters as
+    // Variables — `Some : ∀T. T → Option[T]`.  That way the unifier
+    // at the call site propagates the concrete T into the result.
+    const sumTypeAsResult: SiliconType = tvars.length > 0
+        ? SumOf(name, variantNames, tvars.map(t => ({ kind: 'Variable', name: t } as SiliconType)))
+        : aliasType
+
     for (const v of variants) {
         const paramTypes = v.fields.map(f =>
-            parseTypeName(f.typeName, ctx.typeAliases) ?? TypeUnknown)
-        ctx.functions.set(v.name, { params: paramTypes, result: sumType })
-        ctx.symbols.set(v.name, FunctionOf(paramTypes, sumType))
+            resolveType(f.typeName, ctx) ?? TypeUnknown)
+        ctx.functions.set(v.name, { params: paramTypes, result: sumTypeAsResult })
+        ctx.symbols.set(v.name, FunctionOf(paramTypes, sumTypeAsResult))
         ctx.immutable.add(v.name)
+
+        // Also register the qualified `Name::Variant` path so explicit
+        // namespace references (`Color::Red`, used in @match patterns or as
+        // a value) typecheck.  Payload-free variants resolve to the sum
+        // type itself (like @enum); payload-bearing variants resolve to
+        // their constructor's function type.
+        const qualified = `${name}::${v.name}`
+        if (paramTypes.length === 0) {
+            ctx.symbols.set(qualified, sumTypeAsResult)
+        } else {
+            ctx.symbols.set(qualified, FunctionOf(paramTypes, sumTypeAsResult))
+        }
+        ctx.immutable.add(qualified)
+
+        // Stash the variant's declared field types keyed by qualified name.
+        // Pattern-binding (`$Some v` against `Option[Int]`) reads this and
+        // substitutes the sum's typeArgs for the original tvars to get
+        // concrete field types per call site.
+        ctx.variantSchemes.set(`${name}::${v.name}`, {
+            tvars,
+            fields: v.fields.map((f, i) => ({ name: f.name, type: paramTypes[i] })),
+        })
     }
+
+    ctx.typeVars = savedTypeVars
 }
 
 interface RecordVariantSummary {
@@ -592,11 +725,17 @@ function checkDefinition(d: any, ctx: Ctx): SiliconType {
         return TypeUnknown
     }
 
+    // Per-def type-variable scope from GenericParams.  Saved/restored around
+    // the body so generics don't leak between sibling definitions.
+    const savedTypeVars = ctx.typeVars
+    ctx.typeVars = new Set(savedTypeVars)
+    for (const tv of d.generics?.params ?? []) ctx.typeVars.add(tv)
+
     // Resolve the declared type annotation (if any).
     let annotated: SiliconType | undefined
     const annotation = d.name && d.name.typeAnnotation
     if (annotation) {
-        const parsed = parseTypeName(annotation.typename, ctx.typeAliases)
+        const parsed = resolveTypeAnnotation(annotation, ctx)
         if (!parsed) {
             ctx.errors.push(unknownType(annotation.typename, d.sourceLocation))
         } else {
@@ -609,10 +748,11 @@ function checkDefinition(d: any, ctx: Ctx): SiliconType {
     let bodyType: SiliconType = TypeUnknown
     if (d.binding) {
         bodyType = withScope(ctx, inner => {
+            // Inherit the typeVars we just set (withScope clones ctx.typeVars).
             for (const param of d.params || []) {
                 if (param.isLiteral) continue
                 if (param.typeAnnotation) {
-                    const pt = parseTypeName(param.typeAnnotation.typename, inner.typeAliases)
+                    const pt = resolveTypeAnnotation(param.typeAnnotation, inner)
                     if (!pt) {
                         ctx.errors.push(unknownType(param.typeAnnotation.typename, d.sourceLocation))
                     } else {
@@ -625,17 +765,28 @@ function checkDefinition(d: any, ctx: Ctx): SiliconType {
         })
     }
 
-    // Reconcile annotation with body.
+    // Reconcile annotation with body — via unification so polymorphic body
+    // results (like `Option[?T1]` from a no-arg `&None`) can be pinned by
+    // an explicit annotation (`Option[Int]`).  Strict typeEquals here would
+    // reject the alignment because `?T1` doesn't equal `Int`.
     const finalType = annotated ?? bodyType
-    if (annotated && d.binding && !typeEquals(annotated, bodyType) && bodyType.kind !== 'Unknown') {
-        ctx.errors.push(annotationMismatch(d.name.name, annotated, bodyType, d.sourceLocation))
+    if (annotated && d.binding && bodyType.kind !== 'Unknown') {
+        try {
+            unify(annotated, bodyType)
+        } catch (e) {
+            if (e instanceof UnifyError) {
+                ctx.errors.push(annotationMismatch(d.name.name, annotated, bodyType, d.sourceLocation))
+            } else {
+                throw e
+            }
+        }
     }
 
     if (d.name && d.name.name) {
         const paramTypes: SiliconType[] = []
         for (const param of d.params || []) {
             if (param.isLiteral || !param.typeAnnotation) continue
-            paramTypes.push(parseTypeName(param.typeAnnotation.typename, ctx.typeAliases) ?? TypeUnknown)
+            paramTypes.push(resolveTypeAnnotation(param.typeAnnotation, ctx) ?? TypeUnknown)
         }
         ctx.functions.set(d.name.name, { params: paramTypes, result: finalType })
 
@@ -654,6 +805,7 @@ function checkDefinition(d: any, ctx: Ctx): SiliconType {
             ctx.immutable.add(d.name.name)
         }
     }
+    ctx.typeVars = savedTypeVars
     return finalType
 }
 
@@ -786,13 +938,20 @@ function checkMatchArgs(args: any[], ctx: Ctx): SiliconType[] {
 
         if (variant) {
             // VariantDecl pattern: the pattern's "type" is the discriminant's
-            // sum type (it picks one tag from it).  Bind each field as an Int
-            // local in a child scope before checking the arm body.
+            // sum type (it picks one tag from it).  Bind each field with its
+            // declared type from the variant's scheme, substituting the
+            // discriminant's concrete typeArgs for any tvars the variant
+            // was declared with.
             out.push(discT)
             const armT = withScope(ctx, inner => {
-                for (const f of variant.fields || []) {
-                    const fname: string = f.name
-                    inner.symbols.set(fname, TypeInt)
+                const fieldTypes = resolveVariantFieldTypes(discT, variant.name, ctx)
+                const declaredFields = (variant.fields || []) as any[]
+                for (let fi = 0; fi < declaredFields.length; fi++) {
+                    const fname: string = declaredFields[fi].name
+                    // Fall back to TypeInt for variants whose scheme we
+                    // don't have (e.g. legacy `@type_sum`-style enums) so
+                    // existing code keeps working.
+                    inner.symbols.set(fname, fieldTypes[fi] ?? TypeInt)
                 }
                 return armNode !== undefined ? checkNode(armNode, inner) : TypeUnknown
             })
@@ -818,7 +977,11 @@ function isMatchCall(call: any): boolean {
 function checkFunctionCall(call: any, ctx: Ctx): SiliconType {
     // @match has scoped pattern bindings — handle it before the generic walk.
     if (isMatchCall(call)) {
-        const matchArgTypes = checkMatchArgs(call.args || [], ctx)
+        // Accept both flat form (`disc, pat, body, …`) and arm-expression
+        // form (`disc, pat => body, …`).  normalize collapses the latter
+        // into the former so existing match-arg checking works unchanged.
+        const flatArgs = normalizeMatchArgs(call.args || [])
+        const matchArgTypes = checkMatchArgs(flatArgs, ctx)
         return typeOfMatchCall(matchArgTypes, call.sourceLocation, ctx)
     }
 
@@ -870,16 +1033,9 @@ function checkFunctionCall(call: any, ctx: Ctx): SiliconType {
                 message: `'${name}' expects ${sig.params.length} argument(s), got ${argTypes.length}`,
                 sourceLocation: call.sourceLocation,
             })
-        } else {
-            for (let i = 0; i < sig.params.length; i++) {
-                const expected = sig.params[i]
-                const actual = argTypes[i]
-                if (actual.kind !== 'Unknown' && !typeEquals(expected, actual)) {
-                    ctx.errors.push(mismatch(expected, actual, `'${name}' arg ${i}`, call.sourceLocation))
-                }
-            }
+            return sig.result
         }
-        return sig.result
+        return checkPolymorphicCall(name, sig, argTypes, call, ctx)
     }
 
     // Builtin keyword strata (@if, @loop, @match, @toInt, @toFloat, …) — look up via the registry.
@@ -953,36 +1109,52 @@ function typeOfMatchCall(argTypes: SiliconType[], loc: any, ctx: Ctx): SiliconTy
     const armsEnd = hasDefault ? argTypes.length - 1 : argTypes.length
     let resultT: SiliconType = TypeUnknown
 
+    // HM-lite: track the accumulated substitution so type-variable info
+    // flows between arms.  A pattern of `$Some v` against a discriminant of
+    // `Option[?T]` should pin `?T` and let that pinning carry forward.
+    let subst: Subst = emptySubst()
+    const tryUnify = (a: SiliconType, b: SiliconType, ctxStr: string): void => {
+        if (a.kind === 'Unknown' || b.kind === 'Unknown') return
+        try {
+            subst = unify(a, b, subst)
+        } catch (e) {
+            if (e instanceof UnifyError) {
+                ctx.errors.push(mismatch(applySubst(a, subst), applySubst(b, subst), ctxStr, loc))
+            } else {
+                throw e
+            }
+        }
+    }
+
     for (let i = 1; i < armsEnd; i += 2) {
         const patT = argTypes[i]
         const resT = argTypes[i + 1] ?? TypeUnknown
 
-        // Each pattern must have the same type as the discriminant.
-        if (discT.kind !== 'Unknown' && patT.kind !== 'Unknown' && !typeEquals(discT, patT)) {
-            ctx.errors.push(mismatch(discT, patT, `@match pattern ${Math.floor(i / 2)}`, loc))
-        }
+        // Each pattern's type must unify with the discriminant.
+        tryUnify(discT, patT, `@match pattern ${Math.floor(i / 2)}`)
 
-        // All arm results must agree on one type.
+        // All arm results must unify with the accumulated result type.
         if (resT.kind !== 'Unknown') {
-            if (resultT.kind === 'Unknown') resultT = resT
-            else if (!typeEquals(resultT, resT)) {
-                ctx.errors.push(mismatch(resultT, resT, `@match arm ${Math.floor(i / 2)} result`, loc))
+            if (resultT.kind === 'Unknown') {
+                resultT = resT
+            } else {
+                tryUnify(resultT, resT, `@match arm ${Math.floor(i / 2)} result`)
             }
         }
     }
 
-    // Trailing default — must agree with the arm result type.
+    // Trailing default — must unify with the arm result type.
     if (hasDefault) {
         const defaultT = argTypes[argTypes.length - 1]
         if (defaultT.kind !== 'Unknown') {
             if (resultT.kind === 'Unknown') resultT = defaultT
-            else if (!typeEquals(resultT, defaultT)) {
-                ctx.errors.push(mismatch(resultT, defaultT, `@match default arm`, loc))
-            }
+            else tryUnify(resultT, defaultT, `@match default arm`)
         }
     }
 
-    return resultT
+    // Apply the accumulated subst so the returned type reflects everything
+    // we learned across all arms.
+    return applySubst(resultT, subst)
 }
 
 // ---------------------------------------------------------------------------
@@ -1040,3 +1212,88 @@ function typeOfBlock(block: any, ctx: Ctx): SiliconType {
 // intrinsicSignature is imported from ./intrinsicSig and used above for
 // direct WASM intrinsic calls (&WASM::...) and as a fallback for strata
 // whose typeSignature field was not populated by the loader.
+
+// ---------------------------------------------------------------------------
+// HM-lite call-site checking
+// ---------------------------------------------------------------------------
+
+/** Collect the names of all unique Variable types appearing in `t`.  Used to
+ *  reconstruct a Scheme from a registered FunctionSig — if the sig has free
+ *  Variables, those are its scheme's bound vars (Roc-style: only declared
+ *  polymorphism, never auto-generalised from inferred locals). */
+function freeTypeVars(t: SiliconType, into: Set<string> = new Set()): Set<string> {
+    switch (t.kind) {
+        case 'Variable': into.add(t.name); break
+        case 'Array':    freeTypeVars(t.element, into); break
+        case 'Function':
+            t.params.forEach(p => freeTypeVars(p, into))
+            freeTypeVars(t.result, into)
+            break
+        case 'Sum':
+            ;(t.typeArgs ?? []).forEach(a => freeTypeVars(a, into))
+            break
+        case 'Distinct':
+            freeTypeVars(t.underlying, into)
+            break
+    }
+    return into
+}
+
+/**
+ * Type-check a call to a user-defined function, applying HM-lite unification
+ * if the signature is polymorphic (contains free Variables).
+ *
+ * For monomorphic sigs (the common case), this collapses to the existing
+ * strict-equality check, so existing behaviour is preserved.  For
+ * polymorphic sigs (`@fn id[T] x:T := x`, variant constructors of `@type Option[T]`),
+ * each call instantiates the Variables to fresh `?Ti`, unifies with arg
+ * types, and returns the substituted result.
+ */
+function checkPolymorphicCall(
+    name: string,
+    sig: FunctionSig,
+    argTypes: SiliconType[],
+    call: any,
+    ctx: Ctx,
+): SiliconType {
+    const tvarNames = Array.from(freeTypeVars(FunctionOf(sig.params, sig.result)))
+
+    // Monomorphic — fall back to strict-equality path (preserves existing semantics).
+    if (tvarNames.length === 0) {
+        for (let i = 0; i < sig.params.length; i++) {
+            const expected = sig.params[i]
+            const actual = argTypes[i]
+            if (actual.kind !== 'Unknown' && !typeEquals(expected, actual)) {
+                ctx.errors.push(mismatch(expected, actual, `'${name}' arg ${i}`, call.sourceLocation))
+            }
+        }
+        return sig.result
+    }
+
+    // Polymorphic — instantiate the scheme with fresh `?Ti`s shared across
+    // params and result, then unify pointwise.
+    const fresh = makeFreshGen()
+    const instMap = new Map<string, SiliconType>()
+    for (const tv of tvarNames) instMap.set(tv, fresh.next(tv))
+    const instParams = sig.params.map(p => applySubst(p, instMap))
+    const instResult = applySubst(sig.result, instMap)
+
+    let subst: Subst = emptySubst()
+    for (let i = 0; i < instParams.length; i++) {
+        const actual = argTypes[i]
+        if (actual.kind === 'Unknown') continue  // suppress cascading errors
+        try {
+            subst = unify(instParams[i], actual, subst)
+        } catch (e) {
+            if (e instanceof UnifyError) {
+                // Report against the instantiated-then-substituted param so the
+                // user sees the *contextual* expected type, not raw `?Ti`.
+                const expectedShown = applySubst(instParams[i], subst)
+                ctx.errors.push(mismatch(expectedShown, actual, `'${name}' arg ${i}`, call.sourceLocation))
+            } else {
+                throw e
+            }
+        }
+    }
+    return applySubst(instResult, subst)
+}

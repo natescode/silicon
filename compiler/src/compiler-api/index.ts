@@ -15,8 +15,15 @@
 
 import type { FunctionSig } from '../types/typechecker'
 import type { ModuleRegistry } from '../modules/registry'
+import type { ElaboratorRegistry, ComptimeHandler } from '../elaborator/registry'
+import { getStratumState, lookupComptimeHandler } from '../elaborator/registry'
+import { lookupDefKind } from '../elaborator/defkinds'
+import { normalizeMatchArgs } from '../ast/matchArms'
 import { resolveIntrinsicWasmInstr } from '../intrinsics'
 import { wasmTypeOf } from '../types/types'
+import type { SiliconType } from '../types/types'
+import type { Diagnostic } from '../errors/diagnostic'
+import { spanFromLocation } from '../errors/diagnostic'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Errors raised from inside CompilerAPI calls (e.g. assertDefined, error)
@@ -58,6 +65,12 @@ interface CtxShape {
     functions:       Map<string, FunctionSig>
     moduleRegistry?: ModuleRegistry
     freshIdCounter:  { n: number }
+    /** Registry reference for state buckets, pendingDefinitions, and diagnostics. */
+    registry?:       ElaboratorRegistry
+    /** Name of the currently-executing stratum (for 'stratum' state scope). */
+    currentStratum?: string
+    /** Mutable ref — preferred over currentStratum; set by the lowerer before each handler call. */
+    currentStratumRef?: { name: string }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -168,6 +181,87 @@ export interface IRBuilders {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Strata 2.0 — types-as-data, AST synthesis, state, module, diagnostics
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Opaque handle for a captured (and cloneable) AST template. */
+export interface TemplateHandle {
+    /** Deep clone of the captured AST subtree. */
+    ast: any
+    /** 'pre' = captured before elaboration; 'post' = after. */
+    kind: 'pre' | 'post'
+}
+
+/** Per-stratum or per-invocation mutable state bucket. */
+export interface StateHandle {
+    get(key: string): any
+    set(key: string, value: any): this
+    has(key: string): boolean
+    each(fn: (key: string, value: any) => void): void
+}
+
+/** Types-as-data namespace (§5.4 of the Strata 2.0 spec). */
+export interface CompilerTypes {
+    readonly int:    SiliconType
+    readonly int64:  SiliconType
+    readonly float:  SiliconType
+    readonly bool:   SiliconType
+    readonly string: SiliconType
+    readonly void:   SiliconType
+    array(elem: SiliconType): SiliconType
+    function(params: SiliconType[], result: SiliconType): SiliconType
+    variable(name: string): SiliconType
+    equals(a: SiliconType, b: SiliconType): boolean
+    infer_args(callNode: any): SiliconType[]
+    substitute(tmpl: SiliconType, bindings: Map<string, SiliconType>): SiliconType
+    format(t: SiliconType): string
+    /** Given a generic template Definition node and a concrete call site, return
+     *  a Map of type-variable bindings (e.g. T → Int) suitable for ast::patch_types.
+     *  Type variables are identified as parameter type annotations whose name is
+     *  not a built-in Silicon type (Int, Int64, Float, Bool, String, Void).
+     *  The corresponding concrete type is inferred from each call argument. */
+    bind_template_args(tmplDef: any, callNode: any): Map<string, SiliconType>
+    /** Human-readable suffix for monomorph mangling: bind_template_args(...) → "Int_Float". */
+    mangle_suffix(bindings: Map<string, SiliconType>): string
+}
+
+/** AST read + synthesis namespace (§5.3 / §5.5 of the Strata 2.0 spec). */
+export interface CompilerAst {
+    children(node: any): any[]
+    span(node: any): { file: string; line: number; col: number; length: number }
+    doc(node: any): string
+    capture_template(node: any, kind: 'pre' | 'post'): TemplateHandle
+    clone(handle: TemplateHandle): TemplateHandle
+    substitute(handle: TemplateHandle, bindings: Record<string, any>): TemplateHandle
+    re_elaborate(handle: TemplateHandle): any
+    patch_types(handle: TemplateHandle, bindings: Map<string, SiliconType>): TemplateHandle
+    /** Return a new template with the root Definition's keyword replaced and
+     *  re-stamped with the codegen hook implied by the new keyword. Used to
+     *  convert a captured @generic template into an @fn (or any other) def
+     *  before pushing it via module::push_definition. */
+    with_keyword(handle: TemplateHandle, keyword: string): TemplateHandle
+    /** Return a new template with the root Definition's name replaced. Used
+     *  by monomorphization to mangle generated instances (e.g. identity → identity$Int). */
+    with_name(handle: TemplateHandle, name: string): TemplateHandle
+    /** Mutate a FunctionCall node so the lowerer resolves the call to `newName`
+     *  instead of its original callee.  Used at on::call_site to redirect a
+     *  generic call to its monomorph (e.g. id → id$Int). */
+    rewrite_call(callNode: any, newName: string): void
+}
+
+/** Module mutation namespace (§5.6 of the Strata 2.0 spec). */
+export interface CompilerModule {
+    push_definition(def: any): void
+    push_global(name: string, type: SiliconType, init: any): void
+}
+
+/** Structured diagnostics namespace — T-5 runtime-trap model (§6). */
+export interface CompilerDiag {
+    error(code: string, span: any, message: string, hint?: string): void
+    warn(code: string, span: any, message: string, hint?: string): void
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // CompilerAPI — the full $compiler surface callable from strata bodies
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -177,53 +271,56 @@ export interface CompilerAPI {
     /** IR node constructors — build typed IR without writing object literals. */
     readonly ir: IRBuilders
 
-    /** Map a Silicon type-annotation AST node to a WASM value type. */
+    // ── Strata 2.0 namespaces ─────────────────────────────────────────────────
+    /** Types as first-class values (§5.4). */
+    readonly type: CompilerTypes
+    /** AST read + synthesis (§5.3 / §5.5). */
+    readonly ast: CompilerAst
+    /** Module mutation — emit new top-level items (§5.6). */
+    readonly module: CompilerModule
+    /** Structured diagnostics — T-5 runtime-trap model (§6). */
+    readonly diag: CompilerDiag
+
+    /** Check whether an annotation token is present on an AST node (§5.3). */
+    ann_present(node: any, token: string): boolean
+    /** Return the argument list of an annotation node (§5.3). */
+    ann_args(annNode: any): any[]
+    /** Access per-stratum or per-invocation state bucket (§5.7). */
+    state(scope: 'stratum' | 'instance'): StateHandle
+    /** Inspect a call site's callee (§5 spec — `&Compiler::callee::*`). */
+    readonly callee: { name(callNode: any): string }
+    /** Look up a comptime handler registered for an operator/keyword token.
+     *  Used by the strata body interpreter to dispatch built-in forms
+     *  (`@nil`, `@not`, `+`, `==`, etc.) and any user-defined comptime
+     *  semantics registered via `on::comptime`.  Returns undefined if no
+     *  handler is registered for the token. */
+    lookupComptime(token: string): ComptimeHandler | undefined
+
+    // ── Legacy / existing surface ─────────────────────────────────────────────
     resolveType(annotation: any): WasmValType
-    /** Map a raw Silicon type name string (e.g. 'Float', 'Int') to a WASM value type. */
     resolveTypeName(name: string): WasmValType
-    /** Get the WASM type of an already-lowered IR expression node. */
     resolveExprType(expr: IRExpr): WasmType
-    /** True if `name` is a mutable global (@var / sum-type variant), not a zero-arg function. */
     isVarName(name: string): boolean
 
-    /** Recursively lower an AST expression node to an IRExpr, using the bound context. */
     lowerExpr(node: any): IRExpr
-    /** Lower a Block AST node to IRBlock, using the bound context. */
     lowerBlock(node: any): IRBlock
-    /** Lower a single function parameter to IRParam, or null for literal / untyped params. */
     lowerParam(param: any): IRParam | null
-    /** Iterate node.params and lower each entry; literal/untyped params are skipped. */
     lowerParams(node: any): IRParam[]
-    /** Lower a function's binding expression in a child scope; returns body + collected locals. */
     lowerFunctionBody(node: any, params: IRParam[]): { body: IRExpr | undefined; locals: IRLocal[] }
-    /** Resolve a function's return type from annotation, function sig, or body refinement. */
     resolveFunctionReturnType(node: any, name: string, body?: IRExpr): WasmType
-    /** Lower a @var initialiser, returning the init expression and its (possibly refined) wasmType. */
     lowerGlobalInit(node: any, defaultType: WasmValType): { init: IRExpr; wasmType: WasmValType }
-    /** Iterate the parameters of an @extern and return their WASM types in order. */
     lowerExternParams(node: any): WasmValType[]
-    /** Extract the result wasmType of an @extern declaration, or undefined if void. */
     lowerExternResult(node: any): WasmValType | undefined
-    /** Unwrap AST wrapper nodes (Element, Item, Statement) to the inner node. */
     unwrapNode(node: any): any
 
-    /** Sanitize a Silicon identifier to a valid WAT identifier (:: → _). */
     watId(name: string): string
-    /** Allocate a unique synthetic identifier for compiler-generated temporaries. */
     freshId(prefix?: string): string
-    /** Resolve an intrinsic name (WASM::foo or IR::foo) to its WAT instruction string. */
     resolveIntrinsic(name: string): string | undefined
-    /** Ternary helper for strata bodies that lack first-class control flow. */
     choose<T>(cond: any, ifTrue: T, ifFalse: T): T
-    /** Indexed access into an args array (e.g. rawArgs[i]). Returns undefined past the end. */
     arg(node: any, index: number): any
-    /** Lower an expression if defined, otherwise return undefined (preserves IRIf void/typed distinction). */
     lowerExprIfDefined(node: any): IRExpr | undefined
-    /** Throw a CompilerAPIError if `value` is null/undefined. Used by strata bodies for guards. */
     assertDefined(value: any, msg: string): void
-    /** Throw a CompilerAPIError with optional source location from `node`. */
     error(msg: string, node?: any): never
-    /** Build the nested if/else chain for @match. Encapsulates the recursion the body interpreter can't express. */
     expandMatchChain(rawArgs: any[], inferredType: any): IRExpr
 }
 
@@ -299,9 +396,375 @@ export function createCompilerAPI(ctx: CtxShape, fns: LowerFns): CompilerAPI {
         null:            ()                                    => null,
     }
 
+    // ── Types-as-data (§5.4) ─────────────────────────────────────────────────
+
+    function siliconTypeEquals(a: SiliconType, b: SiliconType): boolean {
+        if (a.kind !== b.kind) return false
+        if (a.kind === 'Array' && b.kind === 'Array') return siliconTypeEquals(a.element, b.element)
+        if (a.kind === 'Function' && b.kind === 'Function') {
+            return siliconTypeEquals(a.result, b.result)
+                && a.params.length === b.params.length
+                && a.params.every((p, i) => siliconTypeEquals(p, (b as any).params[i]))
+        }
+        if (a.kind === 'Variable' && b.kind === 'Variable') return a.name === b.name
+        if (a.kind === 'Distinct' && b.kind === 'Distinct') return a.name === b.name
+        if (a.kind === 'Sum' && b.kind === 'Sum') return a.name === b.name
+        return true  // primitives — kind match is sufficient
+    }
+
+    function formatSiliconType(t: SiliconType): string {
+        switch (t.kind) {
+            case 'Int':      return 'Int'
+            case 'Int64':    return 'Int64'
+            case 'Float':    return 'Float'
+            case 'String':   return 'String'
+            case 'Bool':     return 'Bool'
+            case 'Void':     return 'Void'
+            case 'Unknown':  return 'Unknown'
+            case 'Array':    return `Array[${formatSiliconType(t.element)}]`
+            case 'Function': return `(${t.params.map(formatSiliconType).join(', ')}) -> ${formatSiliconType(t.result)}`
+            case 'Variable': return `$${t.name}`
+            case 'Distinct': return t.name
+            case 'Sum':      return t.name
+        }
+    }
+
+    function siliconTypeToTypeName(t: SiliconType): string {
+        switch (t.kind) {
+            case 'Int':    return 'Int'
+            case 'Int64':  return 'Int64'
+            case 'Float':  return 'Float'
+            case 'Bool':   return 'Bool'
+            case 'String': return 'String'
+            case 'Void':   return 'Void'
+            case 'Distinct': return (t as any).name ?? 'Unknown'
+            case 'Sum':      return (t as any).name ?? 'Unknown'
+            default:       return 'Unknown'
+        }
+    }
+
+    const BUILTIN_TYPE_NAMES = new Set([
+        'Int', 'Int32', 'Int64', 'Float', 'Bool', 'String', 'Void',
+    ])
+
+    function siliconTypeForName(name: string | undefined): SiliconType {
+        switch (name) {
+            case 'Int':    return { kind: 'Int' }
+            case 'Int32':  return { kind: 'Int' }
+            case 'Int64':  return { kind: 'Int64' }
+            case 'Float':  return { kind: 'Float' }
+            case 'Bool':   return { kind: 'Bool' }
+            case 'String': return { kind: 'String' }
+            case 'Void':   return { kind: 'Void' }
+            default:       return { kind: 'Unknown' }
+        }
+    }
+
+    /** Infer a literal AST node's type so monomorphization can drive
+     *  off-the-arg shape even when the typechecker hasn't run. */
+    function literalNodeType(node: any): SiliconType | undefined {
+        if (!node || typeof node !== 'object') return undefined
+        // Unwrap common wrappers (Element/Item/Statement) and Binding/expression.
+        let cur = node
+        for (let i = 0; i < 8 && cur && typeof cur === 'object'; i++) {
+            if (cur.type === 'IntLiteral')     return { kind: 'Int' }
+            if (cur.type === 'FloatLiteral')   return { kind: 'Float' }
+            if (cur.type === 'StringLiteral')  return { kind: 'String' }
+            if (cur.type === 'BooleanLiteral') return { kind: 'Bool' }
+            cur = cur.value ?? cur.expression
+        }
+        return undefined
+    }
+
+    /** Best-effort SiliconType for a call argument.  Priority:
+     *    1. typechecker-stamped inferredType
+     *    2. literal AST shape
+     *    3. local/param reference via ctx.locals (wasmType-only — i32→Int,
+     *       i64→Int64, f32→Float; lossy but the common case in user code). */
+    function inferArgType(arg: any): SiliconType | undefined {
+        if (arg?.inferredType && arg.inferredType.kind !== 'Unknown') return arg.inferredType
+        const lit = literalNodeType(arg)
+        if (lit) return lit
+        let cur = arg
+        for (let i = 0; i < 8 && cur && typeof cur === 'object'; i++) {
+            if (cur.type === 'Namespace' && Array.isArray(cur.path) && cur.path.length === 1) {
+                const wt = ctx.locals.get(cur.path[0])
+                if (wt === 'i32') return { kind: 'Int' }
+                if (wt === 'i64') return { kind: 'Int64' }
+                if (wt === 'f32') return { kind: 'Float' }
+                break
+            }
+            cur = cur.value ?? cur.expression
+        }
+        return undefined
+    }
+
+    function substituteType(tmpl: SiliconType, bindings: Map<string, SiliconType>): SiliconType {
+        if (tmpl.kind === 'Variable' && bindings.has(tmpl.name)) return bindings.get(tmpl.name)!
+        if (tmpl.kind === 'Array') return { kind: 'Array', element: substituteType(tmpl.element, bindings) }
+        if (tmpl.kind === 'Function') return {
+            kind: 'Function',
+            params: tmpl.params.map(p => substituteType(p, bindings)),
+            result: substituteType(tmpl.result, bindings),
+        }
+        return tmpl
+    }
+
+    const compilerType: CompilerTypes = {
+        int:    { kind: 'Int' },
+        int64:  { kind: 'Int64' },
+        float:  { kind: 'Float' },
+        bool:   { kind: 'Bool' },
+        string: { kind: 'String' },
+        void:   { kind: 'Void' },
+        array:      (elem) => ({ kind: 'Array', element: elem }),
+        function:   (params, result) => ({ kind: 'Function', params, result }),
+        variable:   (name) => ({ kind: 'Variable', name }),
+        equals:     siliconTypeEquals,
+        infer_args: (callNode) => {
+            const args: any[] = callNode?.args ?? []
+            return args.map((a: any) => inferArgType(a) ?? ({ kind: 'Unknown' } as SiliconType))
+        },
+        substitute: substituteType,
+        format:     formatSiliconType,
+        bind_template_args: (tmplDef, callNode) => {
+            const bindings = new Map<string, SiliconType>()
+            const params: any[] = tmplDef?.params ?? []
+            const args:   any[] = callNode?.args   ?? []
+            for (let i = 0; i < params.length; i++) {
+                const paramType: string | undefined = params[i]?.typeAnnotation?.typename
+                if (!paramType || BUILTIN_TYPE_NAMES.has(paramType)) continue
+                if (bindings.has(paramType)) continue
+                const argType = inferArgType(args[i])
+                if (argType) bindings.set(paramType, argType)
+            }
+            return bindings
+        },
+        mangle_suffix: (bindings) => {
+            const parts: string[] = []
+            // Sort for deterministic output regardless of insertion order.
+            const keys = Array.from(bindings.keys()).sort()
+            for (const k of keys) parts.push(siliconTypeToTypeName(bindings.get(k)!))
+            return parts.join('_')
+        },
+    }
+
+    // ── AST read + synthesis (§5.3 / §5.5) ───────────────────────────────────
+
+    function deepClone(node: any): any {
+        if (!node || typeof node !== 'object') return node
+        if (Array.isArray(node)) return node.map(deepClone)
+        const out: any = {}
+        for (const k of Object.keys(node)) out[k] = deepClone(node[k])
+        return out
+    }
+
+    function substituteAst(node: any, bindings: Record<string, any>): any {
+        if (!node || typeof node !== 'object') return node
+        if (Array.isArray(node)) return node.map(n => substituteAst(n, bindings))
+        if (node.type === 'Namespace' && Array.isArray(node.path) && node.path.length === 1) {
+            const name = node.path[0]
+            if (name in bindings) return bindings[name]
+        }
+        const out: any = {}
+        for (const k of Object.keys(node)) out[k] = substituteAst(node[k], bindings)
+        return out
+    }
+
+    const compilerAst: CompilerAst = {
+        children: (node) => {
+            if (!node || typeof node !== 'object') return []
+            return Object.values(node).filter(v => v && typeof v === 'object') as any[]
+        },
+        span: (node) => {
+            const loc = node?.sourceLocation
+            if (!loc) return { file: '', line: 0, col: 0, length: 0 }
+            // Support both { startLine, startColumn } (SourceLocation) and { line, col } (test mocks).
+            const line = loc.startLine ?? loc.line ?? 0
+            const col  = loc.startColumn ?? loc.col ?? 0
+            return { file: loc.file ?? '', line, col, length: loc.length ?? 0 }
+        },
+        doc: (node) => node?.doc ?? node?.docComment ?? '',
+        capture_template: (node, kind) => ({ ast: deepClone(node), kind }),
+        clone: (handle) => ({ ast: deepClone(handle.ast), kind: handle.kind }),
+        substitute: (handle, bindings) => ({
+            ast: substituteAst(deepClone(handle.ast), bindings),
+            kind: handle.kind,
+        }),
+        re_elaborate: (handle) => handle.ast,
+        with_keyword: (handle, keyword) => {
+            const next = deepClone(handle.ast)
+            if (next && typeof next === 'object' && next.type === 'Definition') {
+                next.keyword = keyword
+                // Re-stamp the codegen hook so lowerDefinition routes to the
+                // right expander (e.g. @fn → 'function'). If the keyword isn't
+                // registered, leave the hook untouched — lowerDefinition will
+                // surface a clear error.
+                const defKind = ctx.registry
+                    ? lookupDefKind(ctx.registry.defKinds, keyword)
+                    : undefined
+                if (defKind) next.hook = defKind.codegenKind
+            }
+            return { ast: next, kind: handle.kind }
+        },
+        with_name: (handle, name) => {
+            const next = deepClone(handle.ast)
+            if (next && typeof next === 'object' && next.type === 'Definition') {
+                if (next.name && typeof next.name === 'object') {
+                    next.name = { ...next.name, name }
+                } else {
+                    next.name = { name }
+                }
+            }
+            return { ast: next, kind: handle.kind }
+        },
+        rewrite_call: (callNode, newName) => {
+            if (!callNode || typeof callNode !== 'object') return
+            if (callNode.name && typeof callNode.name === 'object') {
+                // FunctionCall.name is a Namespace { path: [...] }.  Single-segment
+                // path is the common case; preserve any tail (module::fn) by replacing
+                // only the last segment, but typically generic calls are single-name.
+                if (Array.isArray(callNode.name.path)) {
+                    callNode.name.path = [newName]
+                } else {
+                    callNode.name = { type: 'Namespace', path: [newName] }
+                }
+            } else {
+                callNode.name = { type: 'Namespace', path: [newName] }
+            }
+        },
+        patch_types: (handle, bindings) => {
+            function patchNode(n: any): any {
+                if (!n || typeof n !== 'object') return n
+                if (Array.isArray(n)) return n.map(patchNode)
+                const out = { ...n }
+                // 1. Already-inferred type Variable → concrete (existing semantics).
+                if (out.inferredType?.kind === 'Variable' && bindings.has(out.inferredType.name)) {
+                    out.inferredType = bindings.get(out.inferredType.name)
+                }
+                // 2. Syntactic type annotation — `x:T`, return type `:T`, etc. —
+                //    needs the typename string rewritten so the lowerer reads
+                //    the concrete type.  This is what makes pre-elaboration
+                //    monomorphization actually produce typed param/result IR.
+                if (out.type === 'TypeAnnotation' && typeof out.typename === 'string' && bindings.has(out.typename)) {
+                    const target = bindings.get(out.typename)!
+                    out.typename = siliconTypeToTypeName(target)
+                }
+                for (const k of Object.keys(out)) {
+                    if (k === 'inferredType') continue
+                    out[k] = patchNode(out[k])
+                }
+                return out
+            }
+            return { ast: patchNode(deepClone(handle.ast)), kind: handle.kind }
+        },
+    }
+
+    // ── Module mutation (§5.6) ────────────────────────────────────────────────
+
+    const compilerModule: CompilerModule = {
+        push_definition: (def) => {
+            if (!ctx.registry) return
+            ctx.registry.pendingDefinitions.push(def)
+            // Pre-register the signature so call sites lowered *after* this
+            // push can resolve to the new function.  Without this, the @fn
+            // test := { (&identity 42) } pattern would fail because lowering
+            // for `test` happens before pendingDefinitions are flushed.
+            if (def && def.type === 'Definition' && def.hook === 'function') {
+                const name = def.name?.name
+                if (typeof name === 'string') {
+                    const params: SiliconType[] = (def.params ?? []).map((p: any) => {
+                        const t = p?.typeAnnotation?.typename
+                        return siliconTypeForName(t)
+                    })
+                    const result = siliconTypeForName(def.name?.typeAnnotation?.typename)
+                    ctx.functions.set(name, { params, result } as any)
+                }
+            }
+        },
+        push_global: (name, _type, init) => {
+            const wt = wasmTypeOf(_type as any) as any ?? 'i32'
+            const g = ir.makeGlobal(name, wt, true, init)
+            if (ctx.registry) ctx.registry.pendingDefinitions.push(g)
+        },
+    }
+
+    // ── Diagnostics (§6, T-5 runtime-trap model) ─────────────────────────────
+
+    const compilerDiag: CompilerDiag = {
+        error: (code, span, message, hint) => {
+            const diag: Diagnostic = {
+                phase: 'lower',
+                code,
+                span: typeof span === 'object' && 'line' in span
+                    ? span
+                    : spanFromLocation(span),
+                message,
+                hint,
+            }
+            if (ctx.registry) ctx.registry.diagnostics.push(diag)
+        },
+        warn: (code, span, message, hint) => {
+            const diag: Diagnostic = {
+                phase: 'lower',
+                code,
+                span: typeof span === 'object' && 'line' in span
+                    ? span
+                    : spanFromLocation(span),
+                message,
+                hint,
+            }
+            if (ctx.registry) ctx.registry.diagnostics.push(diag)
+        },
+    }
+
+    // ── State buckets (§5.7) ──────────────────────────────────────────────────
+
+    function makeStateHandle(map: Map<string, any>): StateHandle {
+        return {
+            get: (k) => map.get(k),
+            set: (k, v) => { map.set(k, v); return makeStateHandle(map) },
+            has: (k) => map.has(k),
+            each: (fn) => map.forEach((v, k) => fn(k, v)),
+        }
+    }
+
     const api: CompilerAPI = {
-        ctx:  compilerCtx,
+        ctx:    compilerCtx,
         ir,
+        type:   compilerType,
+        ast:    compilerAst,
+        module: compilerModule,
+        diag:   compilerDiag,
+
+        callee: {
+            name: (callNode) => {
+                const path = callNode?.name?.path
+                if (Array.isArray(path)) return path.join('::')
+                if (typeof callNode?.name === 'string') return callNode.name
+                return ''
+            },
+        },
+
+        lookupComptime: (token) =>
+            ctx.registry ? lookupComptimeHandler(ctx.registry, token) : undefined,
+
+
+        ann_present: (node, token) => {
+            const anns: any[] = node?.annotations ?? node?.ann ?? []
+            return anns.some((a: any) => a?.name === token || a?.token === token)
+        },
+        ann_args: (annNode) => annNode?.args ?? annNode?.arguments ?? [],
+
+        state: (scope) => {
+            if (scope === 'stratum') {
+                const name = ctx.currentStratumRef?.name ?? ctx.currentStratum ?? '__global__'
+                const map = ctx.registry ? getStratumState(ctx.registry, name) : new Map()
+                return makeStateHandle(map)
+            }
+            // 'instance' scope: fresh bucket per call (no persistence across handler invocations).
+            return makeStateHandle(new Map())
+        },
 
         resolveTypeName,
         resolveType:     (annotation) => resolveTypeName(annotation?.typename ?? ''),
@@ -332,6 +795,10 @@ export function createCompilerAPI(ctx: CtxShape, fns: LowerFns): CompilerAPI {
             throw new CompilerAPIError(`${msg}${formatLoc(node)}`)
         },
         expandMatchChain: (rawArgs, inferredType) => {
+            // Normalise arm-expression form (`pat => body`, with `|`-alternation)
+            // into the flat `[disc, pat, body, …]` form the rest of this
+            // routine consumes.  Pass-through for legacy callers.
+            rawArgs = normalizeMatchArgs(rawArgs)
             if (rawArgs.length < 3) return ir.makeNop()
             const discNode = rawArgs[0]
             const discExpr = fns.lowerExpr(discNode, ctx)

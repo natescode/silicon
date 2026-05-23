@@ -4,8 +4,7 @@ import * as fs from "node:fs/promises"
 import * as path from "node:path"
 import parse from './parser'
 import { addToAstSemantics, type ASTNode, type Program } from './ast'
-import { compileToWat, type LowerTarget } from './codegen'
-import { watToWasm } from './codegen/toWasm'
+import { compileToWat, compileToWasm, type LowerTarget } from './codegen'
 import { elaborate, buildStrataRegistry } from './elaborator'
 import { typecheck, formatTypeError } from './types'
 import { siliconGrammar } from './grammar'
@@ -14,20 +13,24 @@ import { toDiagnostic, parseDiagnostic, renderJson, renderPretty, type Diagnosti
 
 const help = `Sigil: the Official Silicon compiler
 
-Usage: sgl [--strata <file.si>]... [--wasm] [--target=<t>] <main.si>
+Usage: sgl [--strata <file.si>]... [--wat] [--target=<t>] <main.si>
 
-Compiles a Silicon (.si) source file to WebAssembly text format (WAT).
-External strata libraries can be loaded with --strata before the main file.
+Compiles a Silicon (.si) source file to a WebAssembly binary (main.wasm).
+Pass --wat to emit WebAssembly text format (main.wat) instead.  External
+strata libraries can be loaded with --strata before the main file.
 
 Flags:
   --strata <file>     Load strata definitions from <file> before compiling.
                       May be specified multiple times.
-  --wasm              Also emit main.wasm binary (requires binaryen).
+  --wat               Emit main.wat (WebAssembly text) instead of main.wasm.
+  --wasm              Deprecated; .wasm is the default output now.  Accepted
+                      as a no-op so older invocations still work.
   --target=<t>        Compilation target. One of:
                         host   (default) — host-embed runner
                         wasix          — Wasmer-WASIX runtime; the module
                                          exports _start so 'wasmer run' picks
                                          it up automatically.
+  --pretty            Render diagnostics in the human format instead of JSON.
 
 Diagnostics:
   Errors are emitted as structured Diagnostic records (see
@@ -40,14 +43,14 @@ Source includes:
                       emitted at most once.  See docs/use-includes.md.
 
 Output files (written to current directory):
-  main.wat   WebAssembly text format (assemble with wat2wasm)
-  ast.json   Type-annotated AST (for debugging)
-  main.wasm  WebAssembly binary (only with --wasm)
+  main.wasm  WebAssembly binary (default).
+  main.wat   WebAssembly text format (only with --wat).
+  ast.json   Type-annotated AST (for debugging).
 
 Examples:
   sgl main.si
-  sgl --wasm main.si
-  sgl --target=wasix --wasm main.si
+  sgl --wat main.si
+  sgl --target=wasix main.si
   sgl --strata ops.si main.si
   sgl --strata lib/math.si --strata lib/strings.si main.si
 `
@@ -55,7 +58,7 @@ Examples:
 async function compileFile(
     filename: string,
     strataFiles: string[],
-    emitWasm: boolean,
+    emitWat: boolean,
     target: LowerTarget,
     pretty: boolean,
 ) {
@@ -87,24 +90,24 @@ async function compileFile(
         emitDiagnostics(typeErrors.map(e => toDiagnostic(e, entryAbs)))
     }
 
-    const wat: string = compileToWat(typedAST, registry, functions, undefined, { target })
-
     await Bun.write('ast.json', JSON.stringify(typedAST, null, 2))
-    await Bun.write('main.wat', wat)
-    console.log(`Compiled ${filename} → main.wat`)
 
-    if (emitWasm) {
-        const binary = await watToWasm(wat)
+    if (emitWat) {
+        const wat = compileToWat(typedAST, registry, functions, undefined, { target })
+        await Bun.write('main.wat', wat)
+        console.log(`Compiled ${filename} → main.wat`)
+    } else {
+        const binary = compileToWasm(typedAST, registry, functions, undefined, { target })
         await Bun.write('main.wasm', binary)
         console.log(`Compiled ${filename} → main.wasm (${binary.byteLength} bytes)`)
     }
 }
 
-// Parse CLI args: collect --strata flags, --wasm flag, --target=<t>, and the positional main file.
+// Parse CLI args: --strata, --wat, --target=<t>, and the positional main file.
 const args = process.argv.slice(2)
 const strataFiles: string[] = []
 let mainFile: string | undefined
-let emitWasm = false
+let emitWat = false
 let target: LowerTarget = 'host'
 let pretty = false
 
@@ -120,8 +123,10 @@ for (let i = 0; i < args.length; i++) {
         const next = args[++i]
         if (!next) { console.error('--strata requires a file argument'); process.exit(1) }
         strataFiles.push(next)
+    } else if (arg === '--wat') {
+        emitWat = true
     } else if (arg === '--wasm') {
-        emitWasm = true
+        // Accepted as a no-op for backwards compatibility; .wasm is the default now.
     } else if (arg === '--pretty') {
         pretty = true
     } else if (arg === '--target') {
@@ -143,7 +148,7 @@ if (!mainFile) {
 }
 
 try {
-    await compileFile(mainFile, strataFiles, emitWasm, target, pretty)
+    await compileFile(mainFile, strataFiles, emitWat, target, pretty)
 } catch (e) {
     console.error(`\x1b[31mError: ${e}\x1b[39m`)
     process.exit(1)

@@ -14,7 +14,7 @@
 
 import { wasmTypeOf } from '../types/types'
 import { type SiliconType } from '../types/types'
-import { type ElaboratorRegistry, lookupTypedOperator, lookupKeyword, lookupTypedKeyword, lookupDefKindEntry } from '../elaborator/registry'
+import { type ElaboratorRegistry, lookupTypedOperator, lookupKeyword, lookupTypedKeyword, lookupDefKindEntry, fireModuleFinalizeHandlers, fireHandlers } from '../elaborator/registry'
 import { resolveIntrinsicWasmInstr } from '../intrinsics'
 import type { FunctionSig } from '../types/typechecker'
 import type { ModuleRegistry } from '../modules/registry'
@@ -59,6 +59,10 @@ interface LowerCtx {
     freshIdCounter: { n: number }
     /** The $compiler API surface exposed to strata expanders. Set after ctx creation. */
     $compiler?: CompilerAPI
+    /** Current stratum name (for 'stratum' state scope). */
+    currentStratum?: string
+    /** Mutable ref written by the handler-firing loops so state('stratum') routes correctly. */
+    currentStratumRef?: { name: string }
 }
 
 interface StringAlloc {
@@ -148,6 +152,7 @@ export function lowerProgram(
     options: LowerOptions = {},
 ): IRModule {
     const target: LowerTarget = options.target ?? 'host'
+    const currentStratumRef = { name: '__global__' }
     const ctx: LowerCtx = {
         locals: new Map(),
         globals: new Map(),
@@ -161,8 +166,9 @@ export function lowerProgram(
         pendingLocals: [],
         strings: createStringAlloc(),
         freshIdCounter: { n: 0 },
+        currentStratumRef,
     }
-    ctx.$compiler = createCompilerAPI(ctx, lowerFns)
+    ctx.$compiler = createCompilerAPI({ ...ctx, registry }, lowerFns)
 
     const imports: IRImport[] = []
     const globals: IRGlobal[] = []
@@ -210,6 +216,29 @@ export function lowerProgram(
         if (post !== undefined) append(post)
     }
 
+    // Strata 2.0 §2: fire on::module_finalize handlers (T-5: build never fails).
+    for (const result of fireModuleFinalizeHandlers(registry, ctx.$compiler!, currentStratumRef)) {
+        append(result)
+    }
+
+    // Emit definitions pushed by module::push_definition during any phase.
+    // Pushed AST Definition nodes are routed through lowerDefinition so they
+    // are elaborated/lowered as if they had appeared in the source.  This is
+    // the substrate for Approach A generics monomorphization (§7 of the
+    // Strata 2.0 spec): on::decl captures a template, swaps the keyword,
+    // and pushes a concrete @fn that gets fully lowered here.
+    // Use index-based iteration so handlers that push *more* definitions
+    // during their own lowering (e.g. nested generics) are processed too.
+    for (let i = 0; i < registry.pendingDefinitions.length; i++) {
+        const def = registry.pendingDefinitions[i]
+        if (def && def.type === 'Definition') {
+            append(lowerDefinition(def, ctx))
+        } else {
+            append(def)
+        }
+    }
+    registry.pendingDefinitions.length = 0
+
     // Collect top-level non-definition expression statements into $__start.
     const startCtx: LowerCtx = {
         ...ctx,
@@ -217,7 +246,7 @@ export function lowerProgram(
         pendingLocals: [],
         loopStack: [],
     }
-    startCtx.$compiler = createCompilerAPI(startCtx, lowerFns)
+    startCtx.$compiler = createCompilerAPI({ ...startCtx, registry }, lowerFns)
     const startStmts: IRStmt[] = []
     for (const el of program.elements as any[]) {
         const node = unwrap(el)
@@ -279,9 +308,48 @@ function lowerDefinition(node: any, ctx: LowerCtx): any {
     const hook = node.hook
     const name = watId(node.name?.name ?? '')
 
+    // @stratum is a compile-time directive consumed by buildStrataRegistry;
+    // it produces no runtime IR.  Guard here so it doesn't fall through to
+    // the "Unknown definition keyword" error.
+    if (node.keyword === '@stratum') return null
+
+    // Dissolution Phase A: `@fn`s claimed as strata handlers don't lower to
+    // WASM — their bodies use `&Compiler::*` calls that only have meaning
+    // to the strata interpreter.  Phase C will lower these properly through
+    // a compile-time WASM engine; until then, skip them.
+    if (node.keyword === '@fn' && ctx.registry.strataHandlerFnNames.has(node.name?.name ?? '')) {
+        return null
+    }
+
+    // Strata 2.0 §2: fire on::decl handlers before def expansion (real API available here).
+    const keyword = node.keyword ?? hook
+    if (ctx.registry.handlers.decl.has(keyword)) {
+        fireHandlers(ctx.registry, 'decl', keyword, node, ctx.$compiler!, ctx.currentStratumRef)
+    }
+
+    // Strata 2.0 §2: fire on::annotation handlers for each annotation on this def.
+    const annotations: any[] = node.annotations ?? node.ann ?? []
+    for (const ann of annotations) {
+        const token: string = ann?.name ?? ann?.token ?? ''
+        if (token && ctx.registry.handlers.annotation.has(token)) {
+            fireHandlers(ctx.registry, 'annotation', token, { ann, def: node }, ctx.$compiler!, ctx.currentStratumRef)
+        }
+    }
+
     // Def expander takes priority over hardcoded switch cases.
     const defExp = ctx.registry.defExpanders.get(hook)
     if (defExp) return defExp.expand(node, name, ctx.$compiler!)
+
+    // Strata 2.0: 'stratum_def' — keyword registered via register::keyword.
+    // Fire on::lower handlers; their return value is the IR output.
+    if (hook === 'stratum_def') {
+        const token = node.keyword ?? ''
+        if (ctx.registry.handlers.lower.has(token)) {
+            const results = fireHandlers(ctx.registry, 'lower', token, node, ctx.$compiler!, ctx.currentStratumRef)
+            return results.length > 0 ? results[results.length - 1] : null
+        }
+        return null  // No on::lower handler → no WAT output (T-5: silent)
+    }
 
     // No defExpander registered — type aliases produce no WAT, anything else is an error.
     if (hook === 'type_alias' || hook === 'type_distinct') return null
@@ -597,7 +665,21 @@ function lowerBinaryOp(n: any, ctx: LowerCtx): IRExpr {
 }
 
 function lowerFunctionCall(n: any, ctx: LowerCtx): IRExpr {
-    const name = callName(n)
+    let name = callName(n)
+
+    // Strata 2.0 §2: fire on::callSite handlers.  Wildcard '*' handlers fire
+    // for every call site (used by monomorphization / instrumentation strata
+    // that filter by inspecting the callee themselves).  After handlers run,
+    // re-read the call name so a rewrite_call has effect downstream.
+    const hasNameKeyed = ctx.registry.handlers.callSite.has(name)
+    const hasWildcard  = ctx.registry.handlers.callSite.has('*')
+    if (hasNameKeyed) {
+        fireHandlers(ctx.registry, 'callSite', name, n, ctx.$compiler!, ctx.currentStratumRef)
+    }
+    if (hasWildcard) {
+        fireHandlers(ctx.registry, 'callSite', '*', n, ctx.$compiler!, ctx.currentStratumRef)
+    }
+    if (hasNameKeyed || hasWildcard) name = callName(n)
 
     if (n.isBuiltin) {
         return lowerBuiltinCall(name, n.args || [], ctx, n.inferredType)

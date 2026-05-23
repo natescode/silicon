@@ -18,6 +18,8 @@ import type { Program } from '../ast/astNodes'
 import type { ElaboratorRegistry } from '../elaborator/registry'
 import type { FunctionSig } from '../types/typechecker'
 import type { ModuleRegistry } from '../modules/registry'
+import { buildPrelude } from './prelude-ir'
+import { emitWasmBinary } from './wasm-emitter'
 
 export type { LowerTarget, LowerOptions } from '../ir/lower'
 
@@ -125,4 +127,22 @@ export function compileToWat(
     if (options.target === 'wasix') std = stripHostPrintImports(std)
     std = setHeapBase(std, computeHeapBase(irModule))
     return emitModule(irModule, std)
+}
+
+/**
+ * Compile a type-checked Silicon program straight to a WASM binary.
+ *
+ * Emits binary directly from IR — no wabt dependency.
+ */
+export function compileToWasm(
+    program: Program,
+    registry: ElaboratorRegistry,
+    functionSigs: Map<string, FunctionSig>,
+    moduleRegistry?: ModuleRegistry,
+    options: LowerOptions = {},
+): Uint8Array {
+    const irModule = lowerProgram(program, registry, functionSigs, moduleRegistry, options)
+    const heapBase = computeHeapBase(irModule)
+    const prelude = buildPrelude(heapBase, options.target !== 'wasix')
+    return emitWasmBinary(prelude, irModule)
 }

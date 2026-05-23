@@ -71,6 +71,10 @@
 # emitter prints it as `(i64.const N)`, which WAT validates as i64.
 @let IR_I64_CONST:Int   := 20;
 
+# IR_MEMORY_SIZE [kind] — zero-arg expression producing the current
+# memory size in pages (i32).  Bootstrap-prelude $alloc uses this.
+@let IR_MEMORY_SIZE:Int := 21;
+
 # IR_FUNCTION  [kind, name_off, name_len, n_params, n_locals,
 #               body_h, has_result]
 # has_result = 0 → (no result), 1 → (result i32).
@@ -105,6 +109,7 @@
 @let IR_OP_I32_SHL:Int    := 15;
 @let IR_OP_I32_SHR_S:Int  := 16;
 @let IR_OP_I32_EQZ:Int    := 17;   # unop
+@let IR_OP_I32_SHR_U:Int  := 18;   # binop — used by $alloc to compute pages
 
 # Float ops — same numbering convention; emit mnemonics in wat.si.
 @let IR_OP_F32_ADD:Int    := 20;
@@ -125,6 +130,9 @@
 # Conversion unops between i32 and i64.
 @let IR_OP_I64_EXTEND_I32_S:Int  := 32;
 @let IR_OP_I32_WRAP_I64:Int      := 33;
+
+# memory.grow — unop, takes page count, returns previous pages or -1.
+@let IR_OP_MEMORY_GROW:Int       := 34;
 
 # i64 arithmetic / comparison binops — emit mnemonics in wat.si.
 @let IR_OP_I64_ADD:Int    := 60;
@@ -270,6 +278,13 @@
 @fn ir_continue:Int := {
   @local h := &vec_len IR_VEC;
   IR_VEC = &vec_push IR_VEC, IR_CONTINUE;
+  h
+};
+
+# Zero-arg expression producing memory.size (pages, i32).
+@fn ir_memory_size:Int := {
+  @local h := &vec_len IR_VEC;
+  IR_VEC = &vec_push IR_VEC, IR_MEMORY_SIZE;
   h
 };
 

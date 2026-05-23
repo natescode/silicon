@@ -98,6 +98,11 @@
 @extern diag_warn                     codeStr:Int, spanH:Int, messageStr:Int, hintStr:Int;
 
 # ── Utility helpers (pure) ──────────────────────────────────────────────
+# Read UTF-8 bytes from the handler's exported memory; intern in StringPool.
+# Pass `lenOrZero=0` for the Silicon string-literal layout (4-byte LE
+# length header at ptr, body at ptr+4).  Pass an explicit `len` for a raw
+# (ptr, len) range.
+@extern compiler_str_intern:Int       ptr:Int, lenOrZero:Int;
 @extern compiler_watId:Int            nameStr:Int;
 @extern compiler_freshId:Int          prefixStr:Int;
 @extern compiler_arg:Int              nodeH:Int, index:Int;

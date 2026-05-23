@@ -253,9 +253,21 @@ export interface VariantDecl {
     inferredType?: any
 }
 
+export interface TypeArg {
+    type: 'TypeArg'
+    name: string
+    /** Nested type args for forms like `List[Option[Int]]`. */
+    args?: TypeArg[]
+}
+
 export interface TypeAnnotation {
     type: 'TypeAnnotation'
     typename: string
+    /** Generic type arguments, e.g. `:Option[Int]` → typeArgs = [{ name: 'Int' }].
+     *  Captured at parse time; interpreted by the @type[T] monomorphization
+     *  stratum.  Existing typechecker/lowerer ignore this field — undefined
+     *  for non-parameterised type annotations. */
+    typeArgs?: TypeArg[]
     sourceLocation?: SourceLocation
 }
 
@@ -403,8 +415,8 @@ export const ASTFactory = {
         return { type: 'TypedIdentifier', name, typeAnnotation }
     },
 
-    typeAnnotation(typename: string): TypeAnnotation {
-        return { type: 'TypeAnnotation', typename }
+    typeAnnotation(typename: string, typeArgs?: TypeArg[]): TypeAnnotation {
+        return { type: 'TypeAnnotation', typename, typeArgs }
     },
 
     parameter(name: string, typeAnnotation?: TypeAnnotation, isLiteral?: boolean, value?: Literal): Parameter {

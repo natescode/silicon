@@ -19,33 +19,176 @@
 import { type StrataNode } from './strataenum'
 import { type DefKindRegistry, type DefKindEntry, createDefKindRegistry, lookupDefKind as _lookupDefKind } from './defkinds'
 import type { IRExpanderFn, IRDefExpander } from '../ir/expander'
+import type { Diagnostic } from '../errors/diagnostic'
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Strata 2.0 — Phase handler types
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Tier classification per Strata 2.0 §3. */
+export type StratumTier = 'T0' | 'T1' | 'T2'
+
+/** Phases a stratum handler can fire on (MVP subset). */
+export type StratumPhase = 'decl' | 'callSite' | 'annotation' | 'lower' | 'moduleFinalize' | 'comptime'
+
+/**
+ * A compiled handler function. Receives the matching AST node and the live
+ * CompilerAPI for the current compilation unit. Returns an IR node or null.
+ * Import as `any` to avoid circular dependency with compiler-api.
+ */
+export type PhaseHandler = (node: any, api: any) => any
+
+/**
+ * A comptime handler — the function invoked when the strata body interpreter
+ * encounters a registered keyword/operator in expression position.  Unlike
+ * lowering handlers (which build IR), a comptime handler returns a JS-level
+ * value: the result of evaluating the form at compile time.
+ *
+ * Receives raw AST args (unevaluated) plus an `evalArg` callback so the
+ * handler can decide which args to evaluate and in what order.  This is
+ * what makes lazy forms like `@if` expressible.
+ */
+export type ComptimeHandler = (rawArgs: any[], api: any, evalArg: (node: any) => any) => any
+
+/** Per-stratum metadata for ordering and cycle detection. */
+export interface StratumMeta {
+    name: string
+    tier: StratumTier
+    /** Names of strata this one must fire BEFORE. */
+    before: string[]
+    /** Names of strata this one must fire AFTER. */
+    after: string[]
+}
 
 /**
  * Central registry mapping operator/keyword symbols to StrataNode semantics
  * and definition keywords to Def-Kind descriptors.
+ *
+ * Strata 2.0 additions: per-phase handler maps, annotation registry,
+ * stratum metadata, pending definitions from module::push_definition, and
+ * an accumulated diagnostics list (runtime-trap model, T-5).
  */
 export interface ElaboratorRegistry {
     operators: Record<string, StrataNode>    // "+" → StrataNode
-    keywords: Record<string, StrataNode>     // "@fn" → StrataNode (future)
-    defKinds: DefKindRegistry                // "@let" → DefKindEntry
-    /** Intrinsic name → IR expander fn (bypasses the generic lowering path). */
+    keywords: Record<string, StrataNode>     // "@fn" → StrataNode
+    /** Annotation token → StrataNode (Strata 2.0 §5.1). */
+    annotations: Record<string, StrataNode>
+    defKinds: DefKindRegistry
+    /** Intrinsic name → IR expander fn. */
     expanders: Map<string, IRExpanderFn>
-    /** CodegenKind → IR definition expander (bypasses the lowerDefinition switch). */
+    /** CodegenKind → IR definition expander. */
     defExpanders: Map<string, IRDefExpander>
+
+    // ── Strata 2.0: phase handler tables ─────────────────────────────────────
+    handlers: {
+        /** Fires for each Definition node with keyword matching the registered token. */
+        decl:           Map<string, PhaseHandler[]>
+        /** Fires for each call-site expression matching the registered keyword token. */
+        callSite:       Map<string, PhaseHandler[]>
+        /** Fires when an annotation token is applied to a Definition. Second arg is the target def. */
+        annotation:     Map<string, PhaseHandler[]>
+        /** Fires during IR lowering for the registered keyword/operator token. */
+        lower:          Map<string, PhaseHandler[]>
+        /** Fires once at end of module walk — no token discrimination. */
+        moduleFinalize: PhaseHandler[]
+        /** Compile-time evaluation: token (operator or keyword) → handler.
+         *  Single handler per token — comptime semantics is unambiguous by
+         *  construction (unlike `on::lower` which can be observed). */
+        comptime: Map<string, ComptimeHandler>
+    }
+
+    // ── Strata 2.0: metadata + cross-stratum composition ──────────────────────
+    /** stratum name → StratumMeta (tier, ordering). */
+    strata: Map<string, StratumMeta>
+
+    // ── Strata 2.0: module::push_definition accumulator ───────────────────────
+    /** Definitions emitted by module::push_definition, appended to the module. */
+    pendingDefinitions: any[]
+
+    // ── Strata 2.0: T-5 runtime-trap error model ──────────────────────────────
+    /** Diagnostics accumulated by diag::error / diag::warn (never throws). */
+    diagnostics: Diagnostic[]
+
+    // ── Per-stratum state storage (state 'stratum' scope) ─────────────────────
+    stratumState: Map<string, Map<string, any>>
+
+    // ── Dissolution Phase A: named-handler bodies ─────────────────────────────
+    /** `@fn` body blocks keyed by function name.  Populated by a pre-pass
+     *  over program elements so that strata handlers referencing `@fn` by
+     *  name can find the body at fire time, regardless of source order.
+     *  `paramName` is the @fn's first parameter name (typically 'node') so
+     *  the body sees the triggering AST under the binding the author wrote.
+     *
+     *  Phase A bridge: the body is still interpreted via compileHandlerBlock.
+     *  Phase C will swap interpretation for compile-then-run.  Either way,
+     *  this map is the lookup point. */
+    namedHandlers: Map<string, { body: any; paramName: string }>
+
+    /** Names of `@fn`s that have been claimed as strata handlers.  Those
+     *  bodies use `&Compiler::*` calls that have no runtime meaning, so
+     *  the lowerer skips them — they exist only at compile-time as
+     *  interpreted handler bodies.  Phase C will lower them as real WASM
+     *  functions invoked through a comptime engine. */
+    strataHandlerFnNames: Set<string>
+
+    /** Phase C compiled-handler cache.  Populated by an opt-in async
+     *  pre-compile pass (`compileStrataHandlers`).  When a handler fires,
+     *  the wrapper checks this map first: if a compiled instance exists,
+     *  it invokes the WASM function; otherwise it falls back to the
+     *  interpreter.  Bridge pattern — both paths coexist until Phase D
+     *  finishes migrating every strata to the compiled path. */
+    compiledHandlers: Map<string, { invoke: (arg: number) => number }>
 }
 
 /**
- * Create a new empty elaborator registry
- * Initially populated with builtins via registerElaborator calls
+ * Create a new empty elaborator registry.
+ * Initially populated with builtins via registerElaborator calls.
  */
 export function createElaboratorRegistry(): ElaboratorRegistry {
     return {
         operators: {},
         keywords: {},
+        annotations: {},
         defKinds: createDefKindRegistry(),
         expanders: new Map(),
         defExpanders: new Map(),
+        handlers: {
+            decl:           new Map(),
+            callSite:       new Map(),
+            annotation:     new Map(),
+            lower:          new Map(),
+            moduleFinalize: [],
+            comptime:       new Map(),
+        },
+        strata: new Map(),
+        pendingDefinitions: [],
+        diagnostics: [],
+        stratumState: new Map(),
+        namedHandlers: new Map(),
+        strataHandlerFnNames: new Set(),
+        compiledHandlers: new Map(),
     }
+}
+
+/** Register a `@fn` body as a candidate strata-handler target by name.  Called
+ *  from a buildStrataRegistry pre-pass.  Last-write-wins on name collision —
+ *  same convention as comptime handler registration. */
+export function registerNamedHandler(
+    registry: ElaboratorRegistry,
+    name: string,
+    body: any,
+    paramName: string,
+): void {
+    registry.namedHandlers.set(name, { body, paramName })
+}
+
+/** Look up a named-handler entry by function name.  Returns undefined if the
+ *  pre-pass didn't see a matching `@fn`. */
+export function lookupNamedHandler(
+    registry: ElaboratorRegistry,
+    name: string,
+): { body: any; paramName: string } | undefined {
+    return registry.namedHandlers.get(name)
 }
 
 /**
@@ -210,11 +353,152 @@ export function hasKeyword(registry: ElaboratorRegistry, name: string): boolean 
  * Useful for combining builtins + user elaborators
  */
 export function mergeRegistries(target: ElaboratorRegistry, source: ElaboratorRegistry): ElaboratorRegistry {
+    const mergeHandlerMap = (
+        a: Map<string, PhaseHandler[]>,
+        b: Map<string, PhaseHandler[]>,
+    ): Map<string, PhaseHandler[]> => {
+        const out = new Map(a)
+        for (const [k, v] of b) out.set(k, [...(out.get(k) ?? []), ...v])
+        return out
+    }
     return {
         operators: { ...target.operators, ...source.operators },
         keywords: { ...target.keywords, ...source.keywords },
+        annotations: { ...target.annotations, ...source.annotations },
         defKinds: { ...target.defKinds, ...source.defKinds },
         expanders: new Map([...target.expanders, ...source.expanders]),
         defExpanders: new Map([...target.defExpanders, ...source.defExpanders]),
+        handlers: {
+            decl:           mergeHandlerMap(target.handlers.decl, source.handlers.decl),
+            callSite:       mergeHandlerMap(target.handlers.callSite, source.handlers.callSite),
+            annotation:     mergeHandlerMap(target.handlers.annotation, source.handlers.annotation),
+            lower:          mergeHandlerMap(target.handlers.lower, source.handlers.lower),
+            moduleFinalize: [...target.handlers.moduleFinalize, ...source.handlers.moduleFinalize],
+            comptime:       new Map([...target.handlers.comptime, ...source.handlers.comptime]),
+        },
+        strata:              new Map([...target.strata, ...source.strata]),
+        pendingDefinitions:  [...target.pendingDefinitions, ...source.pendingDefinitions],
+        diagnostics:         [...target.diagnostics, ...source.diagnostics],
+        stratumState:        new Map([...target.stratumState, ...source.stratumState]),
+        namedHandlers:       new Map([...target.namedHandlers, ...source.namedHandlers]),
+        strataHandlerFnNames: new Set([...target.strataHandlerFnNames, ...source.strataHandlerFnNames]),
+        compiledHandlers:    new Map([...target.compiledHandlers, ...source.compiledHandlers]),
     }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Strata 2.0 — registration helpers
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Register an annotation token in the registry. */
+export function registerAnnotation(
+    registry: ElaboratorRegistry,
+    token: string,
+    node: StrataNode,
+): void {
+    registry.annotations[token] = node
+}
+
+/** Register a phase handler for a token. Handlers accumulate (observer pattern). */
+export function registerPhaseHandler(
+    registry: ElaboratorRegistry,
+    phase: Exclude<StratumPhase, 'moduleFinalize' | 'comptime'>,
+    token: string,
+    handler: PhaseHandler,
+): void {
+    const map = registry.handlers[phase] as Map<string, PhaseHandler[]>
+    const existing = map.get(token) ?? []
+    existing.push(handler)
+    map.set(token, existing)
+}
+
+/** Register a module-finalize handler (no token). */
+export function registerModuleFinalizeHandler(
+    registry: ElaboratorRegistry,
+    handler: PhaseHandler,
+): void {
+    registry.handlers.moduleFinalize.push(handler)
+}
+
+/** Register a comptime handler for an operator/keyword token.  Last
+ *  registration wins (comptime semantics is unambiguous by design — a single
+ *  evaluation rule per token).  Built-in handlers register first; user
+ *  strata can override by registering later. */
+export function registerComptimeHandler(
+    registry: ElaboratorRegistry,
+    token: string,
+    handler: ComptimeHandler,
+): void {
+    registry.handlers.comptime.set(token, handler)
+}
+
+/** Look up the comptime handler for a token, if any. */
+export function lookupComptimeHandler(
+    registry: ElaboratorRegistry,
+    token: string,
+): ComptimeHandler | undefined {
+    return registry.handlers.comptime.get(token)
+}
+
+/** Register stratum metadata (tier, ordering). */
+export function registerStratumMeta(
+    registry: ElaboratorRegistry,
+    meta: StratumMeta,
+): void {
+    registry.strata.set(meta.name, meta)
+}
+
+/**
+ * Fire all handlers registered for a given token under the given phase.
+ * Returns an array of non-null results (handlers that return null/undefined
+ * are excluded — they ran for side-effects only).
+ *
+ * When `stratumRef` is provided, each handler's `.__stratumName` is written
+ * into it before invocation so that `api.state('stratum')` returns the
+ * correct per-stratum bucket inside the handler.
+ */
+export function fireHandlers(
+    registry: ElaboratorRegistry,
+    phase: Exclude<StratumPhase, 'moduleFinalize'>,
+    token: string,
+    node: any,
+    api: any,
+    stratumRef?: { name: string },
+): any[] {
+    const handlers = (registry.handlers[phase] as Map<string, PhaseHandler[]>).get(token) ?? []
+    const results: any[] = []
+    for (const h of handlers) {
+        if (stratumRef) stratumRef.name = (h as any).__stratumName ?? '__global__'
+        const r = h(node, api)
+        if (r != null) results.push(r)
+    }
+    if (stratumRef) stratumRef.name = '__global__'
+    return results
+}
+
+/** Fire all module-finalize handlers in registration order. */
+export function fireModuleFinalizeHandlers(
+    registry: ElaboratorRegistry,
+    api: any,
+    stratumRef?: { name: string },
+): any[] {
+    const results: any[] = []
+    for (const h of registry.handlers.moduleFinalize) {
+        if (stratumRef) stratumRef.name = (h as any).__stratumName ?? '__global__'
+        const r = h(null, api)
+        if (r != null) results.push(r)
+    }
+    if (stratumRef) stratumRef.name = '__global__'
+    return results
+}
+
+/** Look up the per-stratum state bucket (creates it on first access). */
+export function getStratumState(
+    registry: ElaboratorRegistry,
+    stratumName: string,
+): Map<string, any> {
+    if (!registry.stratumState.has(stratumName)) {
+        registry.stratumState.set(stratumName, new Map())
+    }
+    return registry.stratumState.get(stratumName)!
 }

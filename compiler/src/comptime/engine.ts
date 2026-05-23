@@ -27,6 +27,7 @@ import type { ElaboratorRegistry } from '../elaborator/registry'
 import elaborate from '../elaborator/elaborator'
 import { lowerProgram } from '../ir/lower'
 import { emitModule } from '../ir/emit'
+import { loadStdWat } from '../codegen'
 import { watToWasm } from '../codegen/toWasm'
 import { loadModules } from '../modules/loader'
 import type { ModuleRegistry } from '../modules/registry'
@@ -135,7 +136,10 @@ export async function compileHandlerToWasm(
             elaborated.program, registry, new Map(),
             getBuiltinModuleRegistry(),
         )
-        wat = emitModule(mod)
+        // Wrap with std.wat so memory + alloc helpers are present.
+        // Handlers that use string literals need the data segment + memory
+        // declaration — same shape that compileToWat in src/codegen/ uses.
+        wat = emitModule(mod, loadStdWat())
     } finally {
         if (wasClaimed) registry.strataHandlerFnNames.add(handlerName)
     }
@@ -144,6 +148,14 @@ export async function compileHandlerToWasm(
     const wasm = await watToWasm(wat)
     const env = createComptimeEnv(registry)
     const imports = createComptimeImports(env)
+    // std.wat declares `env::print` / `env::read` for host-embed runtimes.
+    // Handlers never use these — but the module still requires the imports
+    // to instantiate.  Stub them: print is a no-op, read returns 0.
+    ;(imports as any).env = {
+        print: (_: number) => {},
+        read:  () => 0,
+        ...((imports as any).env ?? {}),
+    }
     let instance: WebAssembly.Instance
     try {
         const result = await WebAssembly.instantiate(wasm, imports)
@@ -162,6 +174,10 @@ export async function compileHandlerToWasm(
     if (typeof exportFn !== 'function') {
         throw new Error(`[comptime] export '${handlerName}' not found or not a function`)
     }
+    // Capture the handler's memory so imports like `compiler_str_intern`
+    // can read Silicon string literals out of it.  std.wat exports "memory".
+    const memory = (instance.exports as any).memory as WebAssembly.Memory | undefined
+    if (memory) env.memory = memory
 
     return {
         invoke: (arg: number) => Number(exportFn(arg) ?? 0),

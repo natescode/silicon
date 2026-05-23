@@ -80,7 +80,9 @@ Silicon {
   StrataBody = "{" (Item ";")* "}"
   
   typedIdentifier = identifier type?
-  type = ":" identifier
+  type = ":" identifier typeArgs?
+  typeArgs = "[" typeArg ("," typeArg)* "]"
+  typeArg = identifier typeArgs?
   identifier =
       letter identTail*                     -- normal
     | "_" identTail+                        -- underscoreStart

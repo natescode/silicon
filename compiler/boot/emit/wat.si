@@ -78,6 +78,7 @@
   &@if (op == IR_OP_I32_XOR),    { &ew_str 'i32.xor'; };
   &@if (op == IR_OP_I32_SHL),    { &ew_str 'i32.shl'; };
   &@if (op == IR_OP_I32_SHR_S),  { &ew_str 'i32.shr_s'; };
+  &@if (op == IR_OP_I32_SHR_U),  { &ew_str 'i32.shr_u'; };
   &@if (op == IR_OP_F32_ADD),    { &ew_str 'f32.add'; };
   &@if (op == IR_OP_F32_SUB),    { &ew_str 'f32.sub'; };
   &@if (op == IR_OP_F32_MUL),    { &ew_str 'f32.mul'; };
@@ -107,6 +108,7 @@
   &@if (op == IR_OP_I32_TRUNC_F32_S),   { &ew_str 'i32.trunc_f32_s'; };
   &@if (op == IR_OP_I64_EXTEND_I32_S),  { &ew_str 'i64.extend_i32_s'; };
   &@if (op == IR_OP_I32_WRAP_I64),      { &ew_str 'i32.wrap_i64'; };
+  &@if (op == IR_OP_MEMORY_GROW),       { &ew_str 'memory.grow'; };
   &@if (op == IR_OP_I32_LOAD),          { &ew_str 'i32.load'; };
   &@if (op == IR_OP_I32_LOAD8_U),       { &ew_str 'i32.load8_u'; };
   &@if (op == IR_OP_I32_LOAD8_S),       { &ew_str 'i32.load8_s'; };
@@ -175,47 +177,59 @@
   &ew_str '  )'; &ew_byte 10;
 };
 
-# Emit a minimal std-prelude — the runtime helpers every Silicon
-# program needs.  Without this, the bootstrap-emitted module
+# Emit the minimal std-prelude — the runtime helpers every Silicon
+# program needs.  Without these, the bootstrap-emitted module
 # references `$alloc` / `$scratch_alloc` / `$str_ptr` / `$str_len` /
 # `$heap_get` / `$heap_set` without defining them, so wat2wasm
 # rejects the output as having undefined function variables.
-# Inlining the prelude (rather than expecting the runtime to
-# provide them as imports) keeps the bootstrap-emitted wasm
-# self-contained — wat2wasm consumes it directly.
 #
-# Heap initial value defaults to LITPOOL_NEXT (4-byte aligned)
-# so the bump allocator starts past the literal-pool data
-# segments.
+# Function names, parameter lists, result types, and local decls
+# stay inline here — they're scaffolding the binary emitter will
+# replicate in its own form.  The BODIES come from IR built by
+# prelude_build_bodies (boot/ir/lower.si) and walk through the
+# same emit_expr that user code uses, so opcode coverage stays in
+# one place.  S-expr vs linear WAT differ in text but wat2wasm
+# canonicalises both to identical bytes; the self-host gate
+# verifies that.
+#
+# Heap initial value is LITPOOL_NEXT (4-byte aligned by litpool
+# allocation) so the bump allocator starts past the literal-pool
+# data segments.
 @fn emit_std_prelude := {
   &ew_str '  (global $heap (mut i32) (i32.const ';
   &ew_write_int LITPOOL_NEXT;
   &ew_str '))'; &ew_byte 10;
 
+  # $alloc — 1 param (size), 4 locals (a, new_heap, cur_bytes, need_pages).
   &ew_str '  (func $alloc (param $size i32) (result i32)'; &ew_byte 10;
-  &ew_str '    (local $a i32) (local $new_heap i32) (local $cur_bytes i32) (local $need_pages i32)'; &ew_byte 10;
-  &ew_str '    (local.set $new_heap (i32.add (global.get $heap) (local.get $size)))'; &ew_byte 10;
-  &ew_str '    (local.set $cur_bytes (i32.shl (memory.size) (i32.const 16)))'; &ew_byte 10;
-  &ew_str '    (if (i32.le_s (local.get $new_heap) (local.get $cur_bytes))'; &ew_byte 10;
-  &ew_str '      (then'; &ew_byte 10;
-  &ew_str '        (local.set $a (global.get $heap))'; &ew_byte 10;
-  &ew_str '        (global.set $heap (local.get $new_heap))'; &ew_byte 10;
-  &ew_str '        (return (local.get $a))))'; &ew_byte 10;
-  &ew_str '    (local.set $need_pages (i32.add (i32.shr_u (i32.sub (local.get $new_heap) (local.get $cur_bytes)) (i32.const 16)) (i32.const 1)))'; &ew_byte 10;
-  &ew_str '    (if (i32.eq (memory.grow (local.get $need_pages)) (i32.const -1))'; &ew_byte 10;
-  &ew_str '      (then (return (i32.const -1))))'; &ew_byte 10;
-  &ew_str '    (local.set $a (global.get $heap))'; &ew_byte 10;
-  &ew_str '    (global.set $heap (local.get $new_heap))'; &ew_byte 10;
-  &ew_str '    (local.get $a))'; &ew_byte 10;
+  &ew_str '    (local i32) (local i32) (local i32) (local i32)'; &ew_byte 10;
+  &emit_expr (&prelude_body_alloc);
+  &ew_str '  )'; &ew_byte 10;
 
-  # scratch_alloc rounds $n up to the next multiple of 4 so successive
-  # bumps stay 4-byte-aligned — wasmtime traps on unaligned WASI struct
-  # stores (e.g. fd_prestat_get's prestat write).  `(n + 3) & -4`.
-  &ew_str '  (func $scratch_alloc (param $n i32) (result i32) (call $alloc (i32.and (i32.add (local.get $n) (i32.const 3)) (i32.const -4))))'; &ew_byte 10;
-  &ew_str '  (func $str_ptr (param $s i32) (result i32) (local.get $s))'; &ew_byte 10;
-  &ew_str '  (func $str_len (param $s i32) (result i32) (i32.load (local.get $s)))'; &ew_byte 10;
-  &ew_str '  (func $heap_get (result i32) (global.get $heap))'; &ew_byte 10;
-  &ew_str '  (func $heap_set (param $h i32) (global.set $heap (local.get $h)))'; &ew_byte 10;
+  # $scratch_alloc — rounds $n up to a 4-byte boundary, calls $alloc.
+  &ew_str '  (func $scratch_alloc (param $n i32) (result i32)'; &ew_byte 10;
+  &emit_expr (&prelude_body_scratch_alloc);
+  &ew_str '  )'; &ew_byte 10;
+
+  # $str_ptr — identity over the i32 pointer.
+  &ew_str '  (func $str_ptr (param $s i32) (result i32)'; &ew_byte 10;
+  &emit_expr (&prelude_body_str_ptr);
+  &ew_str '  )'; &ew_byte 10;
+
+  # $str_len — load the 4-byte LE length header.
+  &ew_str '  (func $str_len (param $s i32) (result i32)'; &ew_byte 10;
+  &emit_expr (&prelude_body_str_len);
+  &ew_str '  )'; &ew_byte 10;
+
+  # $heap_get — return the current heap pointer.
+  &ew_str '  (func $heap_get (result i32)'; &ew_byte 10;
+  &emit_expr (&prelude_body_heap_get);
+  &ew_str '  )'; &ew_byte 10;
+
+  # $heap_set — assign the heap pointer; void result.
+  &ew_str '  (func $heap_set (param $h i32)'; &ew_byte 10;
+  &emit_expr (&prelude_body_heap_set);
+  &ew_str '  )'; &ew_byte 10;
 };
 
 # Emit one IR_EXTERN as
@@ -497,6 +511,11 @@
     &@return 0;
   };
 
+  &@if (k == IR_MEMORY_SIZE), {
+    &ew_str 'memory.size'; &ew_byte 10;
+    &@return 0;
+  };
+
   &@if (k == IR_LOCAL_GET), {
     &ew_str 'local.get ';
     &ew_write_int (&ir_field h, 1);
@@ -515,8 +534,13 @@
   };
 
   &@if (k == IR_GLOBAL_GET), {
+    @local idx := &ir_field h, 1;
+    &@if (idx == PRELUDE_HEAP_GLOBAL_IDX), {
+      &ew_str 'global.get $heap'; &ew_byte 10;
+      &@return 0;
+    };
     &ew_str 'global.get $g_';
-    &ew_write_int (&ir_field h, 1);
+    &ew_write_int idx;
     &ew_byte 10;
     &@return 0;
   };
@@ -525,6 +549,10 @@
     @local idx := &ir_field h, 1;
     @local val := &ir_field h, 2;
     &emit_expr val;
+    &@if (idx == PRELUDE_HEAP_GLOBAL_IDX), {
+      &ew_str 'global.set $heap'; &ew_byte 10;
+      &@return 0;
+    };
     &ew_str 'global.set $g_';
     &ew_write_int idx;
     &ew_byte 10;

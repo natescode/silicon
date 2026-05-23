@@ -77,6 +77,42 @@ export function compileBodyToExpanderFn(body: any, nodeParamName: string): IRExp
     }
 }
 
+/**
+ * Compile an AST Block node (from a `@stratum` on::* handler) into a
+ * PhaseHandler function. The block receives the triggering AST node as
+ * `nodeParamName` (default 'node').
+ */
+export function compileHandlerBlock(block: any, nodeParamName = 'node'): (node: any, api: any) => any {
+    return (node, api) => {
+        const scope: Scope = { [nodeParamName]: node }
+        return evalBody(block, scope, api)
+    }
+}
+
+/**
+ * Compile an AST Block from a `@stratum on::comptime` handler into a
+ * ComptimeHandler.  Args are *eagerly* evaluated and bound in the body's
+ * scope as `arg0`, `arg1`, …  Lazy comptime forms (like `@if`) can't be
+ * authored this way today — they remain intrinsic to the body interpreter.
+ *
+ * Example user stratum:
+ *
+ *   &Compiler::on::comptime '+', {
+ *       arg0 + arg1
+ *   };
+ *
+ * Caveat: a handler that uses the same operator it overrides recurses
+ * infinitely (no super-call mechanism yet).  Override carefully.
+ */
+export function compileComptimeHandler(block: any): (rawArgs: any[], api: any, evalArg: (n: any) => any) => any {
+    return (rawArgs, api, evalArg) => {
+        const evaluated = rawArgs.map(evalArg)
+        const scope: Scope = {}
+        for (let i = 0; i < evaluated.length; i++) scope[`arg${i}`] = evaluated[i]
+        return evalBody(block, scope, api)
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Interpreter
 // ---------------------------------------------------------------------------
@@ -138,6 +174,8 @@ function evalExpr(expr: any, scope: Scope, api: CompilerAPI): any {
         case 'Namespace':     return evalNamespace(node, scope)
         case 'FunctionCall':  return evalCall(node, scope, api)
         case 'Binding':       return evalExpr(node.expression, scope, api)
+        case 'BinaryOp':      return evalBinaryOp(node, scope, api)
+        case 'Block':         return evalBody(node, scope, api)
 
         // Wrappers that should already be stripped, but be defensive.
         case 'Literal':
@@ -148,6 +186,22 @@ function evalExpr(expr: any, scope: Scope, api: CompilerAPI): any {
         default:
             throw new StrataBodyError(`Unsupported expression: ${node.type}`)
     }
+}
+
+/**
+ * BinaryOp evaluation dispatches to a comptime handler registered under the
+ * operator symbol — `+`, `==`, `!=`, `<`, etc.  The built-in handlers live
+ * in src/elaborator/comptimeBuiltins.ts and are registered automatically by
+ * buildStrataRegistry.  User strata can override by registering a new
+ * `on::comptime` handler for the same operator.
+ */
+function evalBinaryOp(node: any, scope: Scope, api: CompilerAPI): any {
+    const op = node.operator
+    const handler = api.lookupComptime?.(op)
+    if (!handler) {
+        throw new StrataBodyError(`No comptime handler for operator '${op}' — register one via on::comptime.`)
+    }
+    return handler([node.left, node.right], api, (n) => evalExpr(n, scope, api))
 }
 
 /** Resolve a `Node.x.y` or local-binding path against the body's scope. */
@@ -169,6 +223,16 @@ function evalNamespace(node: any, scope: Scope): any {
 /** Dispatch &IR::null sentinels and &Compiler::*::method(args) calls. */
 function evalCall(node: any, scope: Scope, api: CompilerAPI): any {
     const name = node.name
+
+    // Builtin calls — `&@if`, `&@nil`, `&not`, `&@true` etc.
+    // The parser stamps `isBuiltin=true` and `name` is a plain string (the
+    // keyword token, e.g. '@if').  Builtins that need control flow over
+    // their args (like @if) must look at the raw arg AST, not pre-evaluated
+    // values — handled inside evalBuiltin.
+    if (typeof name === 'string') {
+        return evalBuiltin(name, node.args ?? [], scope, api)
+    }
+
     if (!name || name.type !== 'Namespace') {
         throw new StrataBodyError(`Unsupported call name in strata body`)
     }
@@ -188,7 +252,73 @@ function evalCall(node: any, scope: Scope, api: CompilerAPI): any {
         return invokeCompilerMethod(path.slice(1), node.args ?? [], scope, api)
     }
 
+    // &localVar::method(args) — method call on a scope-bound value.
+    // Enables: &stateHandle::set 'key', val  and  &stateHandle::get 'key'.
+    if (path[0] in scope) {
+        let target: any = scope[path[0]]
+        for (let i = 1; i < path.length - 1; i++) {
+            if (target == null) throw new StrataBodyError(`Null segment '${path[i]}' on '${path[0]}'`)
+            target = target[path[i]]
+        }
+        const methodName = path[path.length - 1]
+        const method = target?.[methodName]
+        if (typeof method === 'function') {
+            const args = (node.args ?? []).map((a: any) => evalExpr(a, scope, api))
+            return method.apply(target, args)
+        }
+        throw new StrataBodyError(`'${path[0]}.${methodName}' is not a callable method`)
+    }
+
     throw new StrataBodyError(`Unsupported call namespace '${path[0]}' in strata body`)
+}
+
+/**
+ * Dispatch a `&@token args...` builtin call inside a strata body.
+ *
+ *   `@if` is the one irreducible primitive — it has to exist so every other
+ *   comptime handler can branch internally.  All other builtins (`@nil`,
+ *   `@true`, `@false`, `@not`, and the binary operators) are looked up in
+ *   the registry's comptime-handler table.  Built-in semantics are
+ *   registered into that table by registerBuiltinComptimeHandlers when
+ *   the registry is created; user strata can override by registering an
+ *   `on::comptime` handler under the same token.
+ */
+function evalBuiltin(name: string, args: any[], scope: Scope, api: CompilerAPI): any {
+    // `@if` is intrinsic.  We can't dispatch it through the registry because
+    // any comptime handler we'd write for it would itself need a way to
+    // branch — and that's exactly what @if provides.  Pin it here as the
+    // bootstrap primitive.
+    if (name === '@if') {
+        if (args.length < 2) {
+            throw new StrataBodyError(`&@if requires at least cond and then-branch`)
+        }
+        const cond = evalExpr(args[0], scope, api)
+        if (strataTruthy(cond)) return evalExpr(args[1], scope, api)
+        if (args.length >= 3)   return evalExpr(args[2], scope, api)
+        return null
+    }
+
+    // Everything else: dispatch through the registry.
+    const handler = api.lookupComptime?.(name)
+    if (!handler) {
+        throw new StrataBodyError(
+            `No comptime handler for builtin '${name}' — register one via on::comptime.`
+        )
+    }
+    return handler(args, api, (n) => evalExpr(n, scope, api))
+}
+
+/** Strata-body truthiness: null/undefined/false/0/'' are falsy; everything
+ *  else (including {} and []) is truthy.  Kept local because @if's intrinsic
+ *  branch decision needs it.  The same rule is duplicated in
+ *  comptimeBuiltins.ts for the registered handlers (e.g. `@not`); they must
+ *  agree, but the duplication is small and self-contained. */
+function strataTruthy(v: any): boolean {
+    if (v == null) return false
+    if (v === false) return false
+    if (v === 0) return false
+    if (v === '') return false
+    return true
 }
 
 function invokeCompilerMethod(

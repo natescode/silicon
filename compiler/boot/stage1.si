@@ -109,6 +109,7 @@
   &ctx_loop_stack_init;
   &fn_sig_register_prelude_voids;
   &ew_init;
+  &prelude_build_bodies;
 
   @local fns := &lower_program prog;
   &emit_program fns

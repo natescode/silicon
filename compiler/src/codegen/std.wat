@@ -224,7 +224,7 @@
   (local.set $i (i32.const 0))
   (block $done
     (loop $next
-      (br_if $done (i32.ge_s (local.get $i) (local.get $len)))
+      (br_if $done (i32.eqz (i32.lt_s (local.get $i) (local.get $len))))
       (call $print
         (i32.load8_u
           (i32.add
@@ -260,7 +260,7 @@
   (local.set $i (i32.const 0))
   (block $brk_a
     (loop $cp_a
-      (br_if $brk_a (i32.ge_s (local.get $i) (local.get $len_a)))
+      (br_if $brk_a (i32.eqz (i32.lt_s (local.get $i) (local.get $len_a))))
       (i32.store8
         (i32.add (i32.add (local.get $dst) (i32.const 4)) (local.get $i))
         (i32.load8_u
@@ -272,7 +272,7 @@
   (local.set $i (i32.const 0))
   (block $brk_b
     (loop $cp_b
-      (br_if $brk_b (i32.ge_s (local.get $i) (local.get $len_b)))
+      (br_if $brk_b (i32.eqz (i32.lt_s (local.get $i) (local.get $len_b))))
       (i32.store8
         (i32.add
           (i32.add (local.get $dst) (i32.add (i32.const 4) (local.get $len_a)))

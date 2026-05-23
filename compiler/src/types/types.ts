@@ -44,13 +44,49 @@ export type SiliconType =
     // Silicon level. Use `wasmTypeOf` to get the concrete WASM encoding.
     | { kind: 'Distinct'; name: string; underlying: SiliconType }
     // A user-defined sum type. Variants are stored as i32 constants (0, 1, …)
-    // and are accessed as `Name::Variant` namespace references.
-    | { kind: 'Sum'; name: string; variants: string[] }
+    // and are accessed as `Name::Variant` namespace references.  `typeArgs`,
+    // when present, makes `Option[Int]` and `Option[Float]` distinct nominal
+    // types: same `name` and `variants`, different `typeArgs`.  Absent for
+    // non-parametric sums (e.g. plain `@type Color := $Red | $Green;`).
+    | { kind: 'Sum'; name: string; variants: string[]; typeArgs?: SiliconType[] }
     // `Unknown` is the top type used when the checker cannot determine a type
     // (e.g. references to unbound identifiers). It never appears in a
     // well-typed program. Downstream code should treat `Unknown` as "do not
     // propagate further errors from this node".
     | { kind: 'Unknown' }
+    // `Void` is the unit type for functions that return nothing.
+    | { kind: 'Void' }
+    // `Variable` is a compile-time type placeholder for generic type parameters.
+    | { kind: 'Variable'; name: string }
+
+/**
+ * A *Type scheme* — a polymorphic type bound over a list of type variables.
+ *
+ *   schemeOf(['T'], FunctionOf([Variable('T')], Variable('T'))) =
+ *       ∀T. T → T              ── the type of `@fn id[T] x:T := x`
+ *
+ * Schemes only appear in symbol-table / function-signature positions: they
+ * represent declared polymorphism on @fn[T] / @type[T].  At a call site, a
+ * scheme is *instantiated* by replacing its bound vars with fresh `Variable`s,
+ * and then unified against arg types.
+ *
+ * Roc-style restriction: schemes are introduced ONLY by syntactic [T]
+ * declarations, never auto-generalised from inferred locals.  This keeps the
+ * inference algorithm small and predictable.
+ */
+export interface Scheme {
+    tvars: string[]
+    type:  SiliconType
+}
+
+export function schemeOf(tvars: string[], type: SiliconType): Scheme {
+    return { tvars, type }
+}
+
+/** Convenience: a monomorphic Scheme (no type vars) — wraps a plain type. */
+export function monoScheme(type: SiliconType): Scheme {
+    return { tvars: [], type }
+}
 
 /**
  * The set of WebAssembly value types Silicon currently targets. `void` is used
@@ -98,8 +134,10 @@ export function DistinctOf(name: string, underlying: SiliconType): SiliconType {
  * (e.g. `['Red', 'Green', 'Blue']` for `Color`). All variants lower to i32
  * constants (0, 1, 2, …) in WAT and are accessed as `Name::Variant`.
  */
-export function SumOf(name: string, variants: string[]): SiliconType {
-    return { kind: 'Sum', name, variants }
+export function SumOf(name: string, variants: string[], typeArgs?: SiliconType[]): SiliconType {
+    return typeArgs && typeArgs.length > 0
+        ? { kind: 'Sum', name, variants, typeArgs }
+        : { kind: 'Sum', name, variants }
 }
 
 /**
@@ -150,8 +188,21 @@ export function typeEquals(a: SiliconType, b: SiliconType): boolean {
     if (a.kind === 'Distinct' && b.kind === 'Distinct') {
         return a.name === b.name
     }
-    // Sum types are equal only to themselves (same name).
+    // Sum types are equal when name AND typeArgs match.  `Option[Int]` and
+    // `Option[Float]` share a name but differ structurally.
     if (a.kind === 'Sum' && b.kind === 'Sum') {
+        if (a.name !== b.name) return false
+        const aArgs = a.typeArgs ?? []
+        const bArgs = b.typeArgs ?? []
+        if (aArgs.length !== bArgs.length) return false
+        for (let i = 0; i < aArgs.length; i++) {
+            if (!typeEquals(aArgs[i], bArgs[i])) return false
+        }
+        return true
+    }
+    // Type variables are equal when they share a name.  Two different
+    // variables (?T1 vs ?T2) are NOT equal — unification handles that.
+    if (a.kind === 'Variable' && b.kind === 'Variable') {
         return a.name === b.name
     }
     return true
@@ -171,7 +222,13 @@ export function formatType(t: SiliconType): string {
         case 'Array': return `Array[${formatType(t.element)}]`
         case 'Function': return `Function(${t.params.map(formatType).join(', ')}) -> ${formatType(t.result)}`
         case 'Distinct': return t.name
-        case 'Sum': return `${t.name}(${t.variants.join(' | ')})`
+        case 'Sum': {
+            if (t.typeArgs && t.typeArgs.length > 0) {
+                return `${t.name}[${t.typeArgs.map(formatType).join(', ')}]`
+            }
+            return `${t.name}(${t.variants.join(' | ')})`
+        }
+        case 'Variable': return t.name
         case 'Unknown': return '<unknown>'
     }
 }

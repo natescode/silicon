@@ -90,6 +90,28 @@ describe('Phase C — compile a handler @fn to WASM and run it', () => {
         expect(ir.wasmType).toBe('i32')
     })
 
+    test('handler passes a string literal via compiler_str_intern → ir_makeConst with wasmType', async () => {
+        // Demonstrates the string-literal pass-through path.  Without
+        // compiler_str_intern, handlers can only use the default 'i32'
+        // type (passing 0 as the wasmType string id).  With it, they can
+        // construct a Const with any explicit wasmType.
+        const src = `
+            @fn build_f32_const n:Int :=
+                &compiler::ir_makeConst 7, (&compiler::compiler_str_intern 'f32', 0);
+        `
+        const prog = parseProgram(src)
+        const registry = buildStrataRegistry(prog)
+        registry.strataHandlerFnNames.add('build_f32_const')
+
+        const compiled = await compileHandlerToWasm('build_f32_const', prog, registry)
+        const irHandle = compiled.invoke(0)
+        expect(irHandle).toBeGreaterThan(0)
+        const ir = compiled.env.irHandles.get(irHandle) as any
+        expect(ir.kind).toBe('Const')
+        expect(ir.value).toBe(7)
+        expect(ir.wasmType).toBe('f32')
+    })
+
     test('handler can build a BinOp(LocalGet, Const) through host imports', async () => {
         // More realistic shape: build (LocalGet "" + Const 42).  Names
         // are 0 (empty string id) so we test pure composition without

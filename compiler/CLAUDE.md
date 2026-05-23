@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **Sigil** is a compiler for the **Silicon programming language**, targeting WebAssembly Text Format (WAT). The compiler is itself written in Silicon — there is no TypeScript, Bun, or Node host. `wasm-bin/stage1.wasm` is the checked-in bootstrap seed; it compiles its own source byte-equal as the self-host gate. The wasm runtime used by every test and by `./build.sh` is **wasmtime** (the WASI reference implementation). Wasmer's WASI compat layer has known bugs at both 2.x (mapped-dir rights) and 7.x (post-`path_open` fd corruption + Windows absolute-path stdout) — wasmtime is the only supported target.
 
-**Status:** Self-hosted.  All seven phases of the bootstrap plan are complete; `src/` (TypeScript) no longer exists.  Continued work lives in `boot/*.si`.
+**Status:** Self-hosted.  All seven phases of the bootstrap plan are complete.  **Current work target: `src/` (TypeScript compiler) only — do NOT modify `boot/` Silicon files unless explicitly asked.**  The WASM binary emitter work is being prototyped in `src/codegen/` before being ported to Silicon.
 
 ## Commands
 
@@ -102,7 +102,42 @@ Bootstrap support: stage1 understands the full hierarchy via `TYPE_*` constants 
 
 - `@enum` — payload-free tagged variants, each variant is an immutable i32 global (`Red := 0`, `Green := 1`, …).  `@type_sum` is the legacy spelling; both keywords behave identically.
 - `@type Shape := $Circle r:Int | $Rectangle w:Int, h:Int;` — sum-with-payloads.  The `$Variant` form marks a variant declarator (data-shape sigil); each variant becomes a constructor function returning the sum type, with pad-to-max record layout `[tag:i32, field0:i32, ..., field<max-1>:i32]` zero-init in unused slots.  Pattern destructure in `@match` binds the fields by name.
+- `@type Option[T] := $Some value:T | $None;` — **parametric** sum types.  `:Option[Int]` and `:Option[Float]` are nominally distinct.  Variant constructors are polymorphic: `Some : ∀T. T → Option[T]`.  See `docs/hm-lite.md` for how inference handles call sites.  `boot/` does not yet have parametric types — feature is `src/`-only.
 - `@type_alias`, `@type_distinct` — declared and accepted by the typechecker.
+
+## Type Inference (`src/` only)
+
+Silicon uses **HM-lite** — Hindley-Milner restricted to declared polymorphism
+on `@fn[T]` and `@type[T]`, no let-generalisation.  Roc-style trajectory.
+
+- Generic function: `@fn id[T] x:T := x;` — call sites infer `T` automatically; no explicit `[Int]` at the call.
+- Annotation-driven: `:Option[Int] := (&None)` unifies the body's `Option[?T]` with the annotation.
+- Nested inference: `(&unwrap_or (&Some 42), 0)` correctly flows `T = Int` through the chain.
+
+Implementation: `src/types/unify.ts`, `src/types/typechecker.ts`, ~250 lines + 38 unit tests + 33 integration tests.  See `docs/hm-lite.md` for the reference.
+
+## `@match` Forms
+
+Both forms are supported and interchangeable:
+
+```silicon
+# Legacy flat form
+&@match opt, $Some v, { v }, $None, { dflt }
+
+# Arm-expression form (no grammar changes — `=>` and `|` are BinaryOp operators)
+&@match opt,
+    $Some v => v,
+    $None => dflt
+
+# Per-arm pattern alternation
+&@match c,
+    $Red | $Green => 1,
+    $Blue => 0
+```
+
+`normalizeMatchArgs` in `src/ast/matchArms.ts` flattens the arm-expression
+form into the flat form so the existing match-lowerer / typechecker handle
+both uniformly.  Pattern alternation duplicates the body across alternatives.
 
 ## Test Structure
 

@@ -88,7 +88,12 @@ export default function addToAstSemantics(siliconGrammar: ohm.Grammar): ohm.Sema
         Definition(kw, typedId, generics, params, binding) {
             const keyword = kw.toAst()
             const name = typedId.toAst()
-            const genericParams = generics.children.length > 0 ? generics.toAst() : undefined
+            // generics is an iter for `GenericParams?`; descend into the single
+            // child if present so the AST node is a GenericParams object (not
+            // an array of one).
+            const genericParams = generics.children.length > 0
+                ? generics.children[0].toAst()
+                : undefined
             const paramList = params.asIteration().children.map((p: any) => p.toAst())
             const bindingAst = binding.children.length > 0 ? binding.children[0].toAst() : undefined
             return ASTFactory.definition(keyword, name, paramList, genericParams, bindingAst)
@@ -357,8 +362,26 @@ export default function addToAstSemantics(siliconGrammar: ohm.Grammar): ohm.Sema
             return ASTFactory.typedIdentifier(name, typeAnnotation)
         },
 
-        type(_colon, ident) {
-            return ASTFactory.typeAnnotation(ident.sourceString)
+        type(_colon, ident, typeArgsOpt) {
+            // typeArgsOpt is the iter for `typeArgs?`. Descend into the single
+            // child if present (Ohm v16 has no default `_iter` action).
+            const typeArgs = typeArgsOpt.children.length > 0
+                ? typeArgsOpt.children[0].toAst()
+                : undefined
+            return ASTFactory.typeAnnotation(ident.sourceString, typeArgs)
+        },
+
+        typeArgs(_lb, first, _commas, rest, _rb) {
+            const items: any[] = [first.toAst()]
+            for (const r of rest.children) items.push(r.toAst())
+            return items
+        },
+
+        typeArg(ident, typeArgsOpt) {
+            const args = typeArgsOpt.children.length > 0
+                ? typeArgsOpt.children[0].toAst()
+                : undefined
+            return { type: 'TypeArg', name: ident.sourceString, args }
         },
 
         ParamLiteral_typedId(typedId) {

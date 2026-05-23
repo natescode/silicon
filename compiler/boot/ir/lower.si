@@ -1762,3 +1762,149 @@
 
   IR_NONE
 };
+
+# ── Runtime prelude bodies ─────────────────────────────────────────
+# Builds IR for the six bootstrap-prelude functions ($alloc,
+# $scratch_alloc, $str_ptr, $str_len, $heap_get, $heap_set) that
+# every Silicon program needs but no Silicon source defines.  The
+# function names, parameter lists, and result types stay hardcoded
+# in the emitter scaffolding (boot/emit/wat.si and the upcoming
+# binary emitter); the BODIES are real IR so both backends walk the
+# same trees with the same opcode set.  Adding a new instruction
+# kind requires one entry in nodes.si and one mnemonic per backend
+# — never a separate prelude transcription.
+
+# Sentinel global index for the bootstrap heap.  The heap is emitted
+# specially (as `$heap`, not `$g_<n>`) and is not in the user-global
+# registry, so IR_GLOBAL_GET / IR_GLOBAL_SET on this sentinel index
+# tell the emitter to use the heap-specific spelling.  Pick a value
+# no legitimate user-global index can take.
+@let PRELUDE_HEAP_GLOBAL_IDX:Int := 0 - 2;
+
+# Pool handle for the literal "alloc" — needed for $scratch_alloc's
+# internal call to $alloc.  Stored as a NAME_POOL handle (encoded
+# negative; see name_pool_push_mangled in this file).
+@var PRELUDE_ALLOC_NM:Int := 0;
+@let PRELUDE_ALLOC_NM_LEN:Int := 5;
+
+# IR body handles for each prelude function, set by prelude_build_bodies.
+@var PRELUDE_BODY_ALLOC:Int         := 0;
+@var PRELUDE_BODY_SCRATCH_ALLOC:Int := 0;
+@var PRELUDE_BODY_STR_PTR:Int       := 0;
+@var PRELUDE_BODY_STR_LEN:Int       := 0;
+@var PRELUDE_BODY_HEAP_GET:Int      := 0;
+@var PRELUDE_BODY_HEAP_SET:Int      := 0;
+
+@fn prelude_body_alloc:Int         := { PRELUDE_BODY_ALLOC };
+@fn prelude_body_scratch_alloc:Int := { PRELUDE_BODY_SCRATCH_ALLOC };
+@fn prelude_body_str_ptr:Int       := { PRELUDE_BODY_STR_PTR };
+@fn prelude_body_str_len:Int       := { PRELUDE_BODY_STR_LEN };
+@fn prelude_body_heap_get:Int      := { PRELUDE_BODY_HEAP_GET };
+@fn prelude_body_heap_set:Int      := { PRELUDE_BODY_HEAP_SET };
+
+# Push the 5-byte literal "alloc" into NAME_POOL and store its handle.
+# Must run after name_pool_init.
+@fn prelude_pool_push_alloc := {
+  @local start := &vec_len NAME_POOL;
+  NAME_POOL = &vec_push NAME_POOL, 97;   # a
+  NAME_POOL = &vec_push NAME_POOL, 108;  # l
+  NAME_POOL = &vec_push NAME_POOL, 108;  # l
+  NAME_POOL = &vec_push NAME_POOL, 111;  # o
+  NAME_POOL = &vec_push NAME_POOL, 99;   # c
+  PRELUDE_ALLOC_NM = (0 - start) - 2;
+};
+
+# Build IR bodies for the six prelude functions.  Must run AFTER
+# ir_init, name_pool_init, and fn_sig_register_prelude_voids.  Local
+# indices in $alloc:
+#   0 = $size (param)
+#   1 = $a
+#   2 = $new_heap
+#   3 = $cur_bytes
+#   4 = $need_pages
+@fn prelude_build_bodies := {
+  &prelude_pool_push_alloc;
+
+  # ── $alloc body ────────────────────────────────────────────────
+  @local alloc_kids := &vec_new;
+
+  # local.set $new_heap = global.get $heap + local.get $size
+  alloc_kids = &vec_push alloc_kids,
+    (&ir_local_set 2,
+      (&ir_binop IR_OP_I32_ADD,
+        (&ir_global_get PRELUDE_HEAP_GLOBAL_IDX),
+        (&ir_local_get 0)));
+
+  # local.set $cur_bytes = memory.size << 16
+  alloc_kids = &vec_push alloc_kids,
+    (&ir_local_set 3,
+      (&ir_binop IR_OP_I32_SHL,
+        (&ir_memory_size),
+        (&ir_i32_const 16)));
+
+  # Fast path: if $new_heap <= $cur_bytes then bump-and-return.
+  @local fast_kids := &vec_new;
+  fast_kids = &vec_push fast_kids,
+    (&ir_local_set 1, (&ir_global_get PRELUDE_HEAP_GLOBAL_IDX));
+  fast_kids = &vec_push fast_kids,
+    (&ir_global_set PRELUDE_HEAP_GLOBAL_IDX, (&ir_local_get 2));
+  fast_kids = &vec_push fast_kids, (&ir_return (&ir_local_get 1));
+  @local fast_block := &ir_block fast_kids;
+
+  alloc_kids = &vec_push alloc_kids,
+    (&ir_if
+      (&ir_binop IR_OP_I32_LE_S, (&ir_local_get 2), (&ir_local_get 3)),
+      fast_block,
+      IR_NONE);
+
+  # Slow path: compute pages needed and grow.
+  # local.set $need_pages = (($new_heap - $cur_bytes) >> 16) + 1
+  alloc_kids = &vec_push alloc_kids,
+    (&ir_local_set 4,
+      (&ir_binop IR_OP_I32_ADD,
+        (&ir_binop IR_OP_I32_SHR_U,
+          (&ir_binop IR_OP_I32_SUB, (&ir_local_get 2), (&ir_local_get 3)),
+          (&ir_i32_const 16)),
+        (&ir_i32_const 1)));
+
+  # if (memory.grow $need_pages == -1) return -1
+  alloc_kids = &vec_push alloc_kids,
+    (&ir_if
+      (&ir_binop IR_OP_I32_EQ,
+        (&ir_unop IR_OP_MEMORY_GROW, (&ir_local_get 4)),
+        (&ir_i32_const (0 - 1))),
+      (&ir_return (&ir_i32_const (0 - 1))),
+      IR_NONE);
+
+  # Grew successfully — bump-and-return.
+  alloc_kids = &vec_push alloc_kids,
+    (&ir_local_set 1, (&ir_global_get PRELUDE_HEAP_GLOBAL_IDX));
+  alloc_kids = &vec_push alloc_kids,
+    (&ir_global_set PRELUDE_HEAP_GLOBAL_IDX, (&ir_local_get 2));
+  alloc_kids = &vec_push alloc_kids, (&ir_local_get 1);
+
+  PRELUDE_BODY_ALLOC = &ir_block alloc_kids;
+
+  # ── $scratch_alloc(param $n):Int — rounds $n up to a multiple of 4
+  # and calls $alloc.  alloc(($n + 3) & -4).
+  @local sa_args := &vec_new;
+  sa_args = &vec_push sa_args,
+    (&ir_binop IR_OP_I32_AND,
+      (&ir_binop IR_OP_I32_ADD, (&ir_local_get 0), (&ir_i32_const 3)),
+      (&ir_i32_const (0 - 4)));
+  PRELUDE_BODY_SCRATCH_ALLOC =
+    &ir_call PRELUDE_ALLOC_NM, PRELUDE_ALLOC_NM_LEN, 1, sa_args;
+
+  # ── $str_ptr(param $s):Int — identity.
+  PRELUDE_BODY_STR_PTR = &ir_local_get 0;
+
+  # ── $str_len(param $s):Int — i32.load (local.get 0).
+  PRELUDE_BODY_STR_LEN = &ir_unop IR_OP_I32_LOAD, (&ir_local_get 0);
+
+  # ── $heap_get:Int — global.get $heap.
+  PRELUDE_BODY_HEAP_GET = &ir_global_get PRELUDE_HEAP_GLOBAL_IDX;
+
+  # ── $heap_set(param $h) — global.set $heap (local.get 0).
+  PRELUDE_BODY_HEAP_SET =
+    &ir_global_set PRELUDE_HEAP_GLOBAL_IDX, (&ir_local_get 0);
+};

@@ -1067,6 +1067,17 @@ silicon-json = { git = <span class="si">"https://github.com/...json"</span>, tag
     a subset of Silicon limited to expressions over comptime-known data").
     Worth pinning down before too much surface accumulates.
   </p>
+  <p style="margin-top: 10px;">
+    <strong>Update (2026-05-22):</strong> direction settled.  See
+    <a href="comptime-via-compilation.md" style="color: var(--accent);">comptime-via-compilation.md</a>
+    &mdash; the dissolution plan replaces the AST-walk interpreter with a
+    Zig-style <em>compile-then-run</em> model: strata bodies become
+    first-class Silicon programs lowered through the normal pipeline and
+    invoked by the host via a compiler-as-imports surface.  Closes the
+    <code>@if</code>-as-intrinsic chicken-egg and gives strata bodies full
+    Silicon at compile time.  Not yet implemented; T-7 is the principle,
+    that doc is the destination.
+  </p>
 </div>
 
 <div class="card note">
@@ -1079,6 +1090,30 @@ silicon-json = { git = <span class="si">"https://github.com/...json"</span>, tag
     not implemented for the inferred type", the call-site rewriting
     needs to emit the trap inline.  Spec-out when implementation
     proceeds.
+  </p>
+</div>
+
+<div class="card ok">
+  <h4 style="color: var(--accent3); margin-bottom: 8px;">Resolved: type system for generic strata (HM-lite, 2026-05-22)</h4>
+  <p>
+    The spec's worked examples for <code>@generic</code> and <code>@@derive</code>
+    assume a type system that handles parametric types and call-site
+    inference.  That layer landed as <strong>HM-lite</strong> &mdash;
+    Hindley-Milner restricted to declared polymorphism on <code>@fn[T]</code>
+    and <code>@type[T]</code>, no let-generalisation for locals.  Roc-style
+    trajectory; full HM is the natural extension.  See
+    <a href="hm-lite.md" style="color: var(--accent);">hm-lite.md</a>
+    for the data shapes, the five core primitives, and how the typechecker
+    threads them through call sites, annotation reconciliation, and
+    <code>@match</code> arm checking.  &lt;<code>Option[T]</code>,
+    <code>List[Option[Int]]</code>&gt; etc. parse and typecheck end-to-end.
+  </p>
+  <p style="font-size: 0.88rem; color: var(--muted); margin-top: 6px;">
+    Companion: <code>@match</code> grew an arm-expression form
+    <code>&amp;@match d, pat =&gt; body, …</code> with per-arm pattern
+    alternation via <code>|</code> &mdash; zero grammar changes because
+    <code>=&gt;</code> and <code>|</code> were already valid BinaryOp
+    operators.  Legacy flat form still works; both coexist.
   </p>
 </div>
 

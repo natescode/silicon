@@ -80,6 +80,14 @@ export interface ComptimeEnv {
     /** The CompilerAPI for the current firing.  Used by `lowerExpr`,
      *  `lowerParams`, etc.  Same lifetime model as `ctx`. */
     api?: CompilerAPI
+    /** The compiled handler module's exported memory.  Installed by the
+     *  engine right after `WebAssembly.instantiate`.  Used by
+     *  `compiler_str_intern` to read Silicon string literals out of
+     *  the WASM module's linear memory (Silicon string layout:
+     *  4-byte little-endian length header + UTF-8 bytes — but the
+     *  intern import accepts an explicit (ptr, len) pair to also
+     *  cover non-headered byte ranges). */
+    memory?: WebAssembly.Memory
     /** Per-firing module-mutation accumulator.  `module::push_definition`
      *  pushes here; the firing wrapper drains it after the handler
      *  returns and feeds them into `registry.pendingTopLevelInjections`. */
@@ -101,6 +109,7 @@ export function createComptimeEnv(registry: ElaboratorRegistry): ComptimeEnv {
         irHandles: new HandleTable<IRHandleValue>(),
         ctx: undefined,
         api: undefined,
+        memory: undefined,
         pendingDefinitions: [],
         pendingGlobals: [],
         testLog: [],
@@ -543,6 +552,48 @@ export function createComptimeImports(env: ComptimeEnv): WebAssembly.Imports {
     // `arg` reads the i-th child of an AST node (the node is a host handle).
     // `isVarName` and `resolveType` need the per-firing lowering ctx — not
     // wired into ComptimeEnv yet (that's a strataLoader follow-up).
+
+    /**
+     * Read a UTF-8 byte range from the compiled handler's exported memory
+     * and intern it as a string-pool id.  This is the bridge that lets
+     * handler @fn source pass string literals to host imports — Silicon
+     * literals live in linear memory; the host's import surface uses
+     * string-pool ids.
+     *
+     * Two call forms:
+     *   `compiler_str_intern(ptr, 0)` — Silicon literal layout: 4-byte
+     *      little-endian length header at `ptr`, then `len` UTF-8 bytes
+     *      starting at `ptr + 4`.  Pass `0` for `lenOrZero` to use this
+     *      form.  This is what `&compiler::compiler_str_intern 'global'`
+     *      produces in handler source: the literal is laid down with a
+     *      header and the pointer is passed.
+     *   `compiler_str_intern(ptr, len)` — raw range without header.
+     *      Useful for substrings or strings constructed by handlers.
+     *
+     * Returns 0 if `env.memory` is unset (no firing in progress) or the
+     * range is out of bounds.
+     */
+    const compiler_str_intern = (ptr: number, lenOrZero: number): number => {
+        if (!env.memory) return 0
+        const buf = new Uint8Array(env.memory.buffer)
+        let start: number
+        let end: number
+        if (lenOrZero === 0) {
+            // Silicon-literal form: read length from ptr, bytes from ptr+4.
+            if (ptr < 0 || ptr + 4 > buf.length) return 0
+            const len = buf[ptr] | (buf[ptr + 1] << 8) | (buf[ptr + 2] << 16) | (buf[ptr + 3] << 24)
+            start = ptr + 4
+            end = start + (len | 0)
+        } else {
+            start = ptr
+            end = ptr + (lenOrZero | 0)
+        }
+        if (start < 0 || end > buf.length || end < start) return 0
+        const bytes = buf.subarray(start, end)
+        // TextDecoder is fine — handler strings are small.
+        const s = new TextDecoder('utf-8').decode(bytes)
+        return strings.intern(s)
+    }
 
     /** Convert a Silicon identifier into a WAT-safe identifier. */
     const compiler_watId = (nameStr: number): number => {
@@ -1116,6 +1167,7 @@ export function createComptimeImports(env: ComptimeEnv): WebAssembly.Imports {
             ir_makeExport, ir_makeLocal, ir_makeParam, ir_makeGlobal,
             ir_makeFunction, ir_makeImport, compiler_arr_push_str,
             diag_error, diag_warn,
+            compiler_str_intern,
             compiler_watId, compiler_freshId, compiler_arg, compiler_choose,
             compiler_ctx_locals_set, compiler_ctx_locals_get,
             compiler_ctx_globals_set, compiler_ctx_globals_get,

@@ -94,8 +94,10 @@ function elaborateNode(node: any, registry: ElaboratorRegistry, errors: Elaborat
     case 'BinaryOp':
       return elaborateBinOp(node, registry, errors)
 
-    case 'FunctionCall':
-      return { ...node, args: node.args.map((a: any) => elaborateNode(a, registry, errors)) }
+    case 'FunctionCall': {
+      const elaboratedCall = { ...node, args: node.args.map((a: any) => elaborateNode(a, registry, errors)) }
+      return elaboratedCall
+    }
 
     case 'Assignment':
       return { ...node, value: elaborateNode(node.value, registry, errors) }
@@ -179,14 +181,17 @@ function elaborateDefinition(
 
   const hook = defEntry.codegenKind
   const elaborated = { ...node, hook }
-  if (!elaborated.binding) return elaborated
-  return {
-    ...elaborated,
-    binding: {
-      ...elaborated.binding,
-      expression: elaborateNode(elaborated.binding.expression, registry, errors),
-    },
-  }
+  const withBinding = elaborated.binding
+    ? {
+        ...elaborated,
+        binding: {
+          ...elaborated.binding,
+          expression: elaborateNode(elaborated.binding.expression, registry, errors),
+        },
+      }
+    : elaborated
+
+  return withBinding
 }
 
 function elaborateBlock(
