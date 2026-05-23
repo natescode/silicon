@@ -68,12 +68,11 @@ test("buildStrataRegistry: registers @if (D-D-2 migrated to new @stratum form)",
     expect(registry.handlers.lower.has('@if')).toBe(true)
 })
 
-test("buildStrataRegistry: registers @loop as Control stratum", () => {
+test("buildStrataRegistry: registers @loop (D-D-9 migrated; on::lower handler)", () => {
     const registry = buildStrataRegistry(ASTFactory.program([]))
     const entry = registry.keywords['@loop']
     expect(entry).toBeDefined()
-    expect(entry.type).toBe(StrataType.Control)
-    expect(entry.data?.intrinsic).toBe('IR::control_loop')
+    expect(registry.handlers.lower.has('@loop')).toBe(true)
 })
 
 test("buildStrataRegistry: registers @break and @continue (D-D-8 migrated)", () => {
@@ -447,11 +446,9 @@ test("buildStrataRegistry: populates registry.expanders with built-in control-fl
     // D-D-10) still register their legacy intrinsic expander.  @if (D-D-2)
     // no longer registers this — dispatch flows through on::lower instead.
     const expected = [
-        'IR::control_loop',
-        // D-D-8 migrated: @break/@continue/@return no longer register their
-        // legacy intrinsic expanders — dispatch goes via on::lower.
-        // D-D-3 migrated: @and/@or/|| no longer register their legacy
-        // expanders either.
+        // D-D-2/3/8/9 migrated: @if/@loop/@break/@continue/@return/@and/@or/||
+        // no longer register their legacy intrinsic expanders — dispatch goes
+        // via on::lower.  Only IR::control_match remains (D-D-10 still pending).
         'IR::control_match',
     ]
     for (const intrinsic of expected) {
@@ -461,10 +458,10 @@ test("buildStrataRegistry: populates registry.expanders with built-in control-fl
 
 test("buildStrataRegistry: expanders are callable functions", () => {
     const registry = buildStrataRegistry(ASTFactory.program([]))
-    // @if (D-D-2) no longer has an IR::control_if expander; pick a still-legacy
-    // strata for this test.
-    const loopExpander = registry.expanders.get('IR::control_loop')
-    expect(typeof loopExpander).toBe('function')
+    // After D-D-2/3/8/9 migrations, the only built-in control-flow expander
+    // still registered is IR::control_match (D-D-10 pending).
+    const matchExpander = registry.expanders.get('IR::control_match')
+    expect(typeof matchExpander).toBe('function')
 })
 
 test("buildStrataRegistry: expanders map is a Map instance", () => {

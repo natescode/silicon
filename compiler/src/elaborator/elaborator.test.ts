@@ -342,12 +342,12 @@ test("elaborate registers @if as a keyword stratum (D-D-2: new @stratum form)", 
   expect(registry.handlers.lower.has('@if')).toBe(true)
 })
 
-test("elaborate registers @loop as keyword stratum with control_loop intrinsic", () => {
+test("elaborate registers @loop as keyword stratum (D-D-9 migrated)", () => {
   const program = ASTFactory.program([])
   const { registry } = elaborate(program)
   const entry = registry.keywords['@loop']
   expect(entry).toBeDefined()
-  expect(entry.data.intrinsic).toBe('IR::control_loop')
+  expect(registry.handlers.lower.has('@loop')).toBe(true)
 })
 
 // Test 10: builtin elaborators for various operators

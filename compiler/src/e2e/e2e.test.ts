@@ -1228,10 +1228,10 @@ test("Round 24: @continue registered in registry as keyword stratum (D-D-8 migra
     expect(registry.handlers.lower.has('@continue')).toBe(true)
 });
 
-test("Round 24: @loop registered in registry as keyword stratum", () => {
+test("Round 24: @loop registered in registry as keyword stratum (D-D-9 migrated)", () => {
     const { registry } = elaborate(ASTFactory.program([]))
     expect(registry.keywords['@loop']).toBeDefined()
-    expect(registry.keywords['@loop'].data.intrinsic).toBe('IR::control_loop')
+    expect(registry.handlers.lower.has('@loop')).toBe(true)
 });
 
 test("Round 24: count_loop.si example compiles successfully", () => {
