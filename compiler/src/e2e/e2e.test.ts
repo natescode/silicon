@@ -1213,16 +1213,19 @@ test("Round 24: nested @loop — inner @break uses inner label", () => {
     expect(breakId).toBe(ids[1])
 });
 
-test("Round 24: @break registered in registry as keyword stratum", () => {
+test("Round 24: @break registered in registry as keyword stratum (D-D-8 migrated)", () => {
+    // D-D-8: @break/@continue/@return now use the new @stratum form.  The
+    // legacy intrinsic field is no longer set; dispatch flows via the
+    // on::lower handler registered on the keyword.
     const { registry } = elaborate(ASTFactory.program([]))
     expect(registry.keywords['@break']).toBeDefined()
-    expect(registry.keywords['@break'].data.intrinsic).toBe('IR::control_break')
+    expect(registry.handlers.lower.has('@break')).toBe(true)
 });
 
-test("Round 24: @continue registered in registry as keyword stratum", () => {
+test("Round 24: @continue registered in registry as keyword stratum (D-D-8 migrated)", () => {
     const { registry } = elaborate(ASTFactory.program([]))
     expect(registry.keywords['@continue']).toBeDefined()
-    expect(registry.keywords['@continue'].data.intrinsic).toBe('IR::control_continue')
+    expect(registry.handlers.lower.has('@continue')).toBe(true)
 });
 
 test("Round 24: @loop registered in registry as keyword stratum", () => {
@@ -1441,10 +1444,10 @@ test("Round 27: @return with no arg emits bare return", () => {
     expect(uw).toContain("return");
 });
 
-test("Round 27: @return registered in registry as keyword stratum", () => {
+test("Round 27: @return registered in registry as keyword stratum (D-D-8 migrated)", () => {
     const { registry } = elaborate(ASTFactory.program([]))
     expect(registry.keywords['@return']).toBeDefined()
-    expect(registry.keywords['@return'].data.intrinsic).toBe('IR::control_return')
+    expect(registry.handlers.lower.has('@return')).toBe(true)
 });
 
 test("Round 27: @toFloat — cast_to_float.si compiles successfully", () => {

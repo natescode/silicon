@@ -134,14 +134,19 @@ function unwrap(node: any): any {
 
 function evalBody(body: any, scope: Scope, api: CompilerAPI): any {
     if (!body) return null
-    let result: any = null
-    for (const item of body.items ?? []) {
-        result = evalStatement(item, scope, api)
+    // Block body: walk items + trailing.  Single-expression body (e.g. an
+    // `@fn handler := <expr>` form): evaluate the expression directly.
+    if (body.type === 'Block') {
+        let result: any = null
+        for (const item of body.items ?? []) {
+            result = evalStatement(item, scope, api)
+        }
+        if (body.trailing) {
+            result = evalExpr(body.trailing, scope, api)
+        }
+        return result
     }
-    if (body.trailing) {
-        result = evalExpr(body.trailing, scope, api)
-    }
-    return result
+    return evalExpr(body, scope, api)
 }
 
 function evalStatement(stmt: any, scope: Scope, api: CompilerAPI): any {

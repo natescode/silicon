@@ -1,20 +1,26 @@
-@stratum_keyword Break ('@break', Node) = {
-  &IR::control_break;
-  @local id := &Compiler::ctx::loopStack::peek;
-  &Compiler::assertDefined id, '@break outside @loop';
-  &Compiler::ir::makeBreak id;
-};
+# D-D-8: @break / @continue / @return migrated to the new @stratum form.
+# Handler bodies read the current loop-id via compiler_ctx_loopStack_peek
+# and the @return value via compiler_arg + compiler_lowerExprIfDefined.
 
-@stratum_keyword Continue ('@continue', Node) = {
-  &IR::control_continue;
-  @local id := &Compiler::ctx::loopStack::peek;
-  &Compiler::assertDefined id, '@continue outside @loop';
-  &Compiler::ir::makeContinue id;
+@stratum Break := {
+    &Compiler::register::expression_keyword '@break';
+    &Compiler::on::lower '@break', Break_lower;
 };
+@fn Break_lower node:Int :=
+    &compiler::ir_makeBreak &compiler::compiler_ctx_loopStack_peek;
 
-@stratum_keyword Return ('@return', Node) = {
-  &IR::control_return;
-  @local valN  := &Compiler::arg Node, 0;
-  @local value := &Compiler::lowerExprIfDefined valN;
-  &Compiler::ir::makeReturn value;
+@stratum Continue := {
+    &Compiler::register::expression_keyword '@continue';
+    &Compiler::on::lower '@continue', Continue_lower;
 };
+@fn Continue_lower node:Int :=
+    &compiler::ir_makeContinue &compiler::compiler_ctx_loopStack_peek;
+
+@stratum Return := {
+    &Compiler::register::expression_keyword '@return';
+    &Compiler::on::lower '@return', Return_lower;
+};
+@fn Return_lower node:Int :=
+    &compiler::ir_makeReturn
+        (&compiler::compiler_lowerExprIfDefined
+            (&compiler::compiler_arg node, 0));

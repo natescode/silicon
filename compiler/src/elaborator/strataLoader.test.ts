@@ -75,15 +75,19 @@ test("buildStrataRegistry: registers @loop as Control stratum", () => {
     expect(entry.data?.intrinsic).toBe('IR::control_loop')
 })
 
-test("buildStrataRegistry: registers @break and @continue", () => {
+test("buildStrataRegistry: registers @break and @continue (D-D-8 migrated)", () => {
+    // D-D-8: dispatch now via on::lower handler, not legacy intrinsic.
     const registry = buildStrataRegistry(ASTFactory.program([]))
-    expect(registry.keywords['@break']?.data?.intrinsic).toBe('IR::control_break')
-    expect(registry.keywords['@continue']?.data?.intrinsic).toBe('IR::control_continue')
+    expect(registry.keywords['@break']).toBeDefined()
+    expect(registry.keywords['@continue']).toBeDefined()
+    expect(registry.handlers.lower.has('@break')).toBe(true)
+    expect(registry.handlers.lower.has('@continue')).toBe(true)
 })
 
-test("buildStrataRegistry: registers @return", () => {
+test("buildStrataRegistry: registers @return (D-D-8 migrated)", () => {
     const registry = buildStrataRegistry(ASTFactory.program([]))
-    expect(registry.keywords['@return']?.data?.intrinsic).toBe('IR::control_return')
+    expect(registry.keywords['@return']).toBeDefined()
+    expect(registry.handlers.lower.has('@return')).toBe(true)
 })
 
 test("buildStrataRegistry: registers @toInt and @toFloat cast strata", () => {
@@ -447,9 +451,8 @@ test("buildStrataRegistry: populates registry.expanders with built-in control-fl
     // no longer registers this — dispatch flows through on::lower instead.
     const expected = [
         'IR::control_loop',
-        'IR::control_break',
-        'IR::control_continue',
-        'IR::control_return',
+        // D-D-8 migrated: @break/@continue/@return no longer register
+        // their legacy intrinsic expanders — dispatch goes via on::lower.
         'IR::control_and',
         'IR::control_or',
         'IR::control_match',
