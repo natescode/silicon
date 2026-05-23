@@ -1,0 +1,1174 @@
+/**
+ * Compiler-as-imports surface for compile-then-run strata handlers.
+ *
+ * Each function here is a JS implementation of a WASM-callable host import.
+ * Strata handler bodies, once lowered to WASM, call these via WebAssembly
+ * import declarations:
+ *
+ *     (import "compiler" "state_set" (func (param i32) (param i32) (param i32)))
+ *
+ * Signatures are all-i32 in, i32 out (or void).  Non-primitive args pass as
+ * handles into the `HandleTable`; strings pass as ids into the `StringPool`.
+ * The host's `createComptimeImports(registry, env)` returns an `imports`
+ * object you hand to `WebAssembly.instantiate`.
+ *
+ * What's here (initial Phase B coverage, can grow):
+ *   - register::*               (keyword / operator / annotation)
+ *   - on::*                     (decl, call_site, annotation, module_finalize, comptime)
+ *   - state::stratum / instance and state.has/get/set
+ *   - callee::name
+ *   - ast::capture_template / with_keyword / with_name / rewrite_call
+ *   - type::bind_template_args / mangle_suffix
+ *   - module::push_definition
+ *   - diag::error / warn
+ *   - test::observe — host-side hook so tests can verify a handler fired
+ *
+ * What's not here yet (would be Phase B continuation):
+ *   - ast::clone, patch_types (need handle copy semantics decisions)
+ *   - type::* primitives (int/int64/float/bool/string singletons)
+ *   - Complex AST field accessors (node.name.name, etc.)
+ *   - String operations (concat, etc.) — currently builtin operators handle these
+ */
+
+import type { ElaboratorRegistry, ComptimeHandler } from '../elaborator/registry'
+import {
+    registerElaborator, registerAnnotation, registerPhaseHandler,
+    registerModuleFinalizeHandler, registerComptimeHandler,
+} from '../elaborator/registry'
+import { registerDefKind, lookupDefKind } from './../elaborator/defkinds'
+import { StrataType, type StrataNode } from '../elaborator/strataenum'
+import { HandleTable, StringPool } from './handles'
+import { compileHandlerBlock, compileComptimeHandler } from '../elaborator/strataBody'
+import type {
+    IRExpr, IRStmt, IRFunction, IRGlobal, IRImport, IRExport, IRLocal, IRParam,
+    IRConst, IRLocalGet, IRGlobalGet, IRBinOp, IRBlock,
+    WasmValType,
+} from '../ir/nodes'
+import type { CompilerAPI, CompilerCtx } from '../compiler-api'
+import {
+    TypeInt, TypeInt64, TypeFloat, TypeString, TypeBool,
+    formatType, type SiliconType,
+} from '../types/types'
+
+/** Anything that can sit in the IR handle table.  Stays loose because
+ *  `compiler_arr_*` also returns arrays of these (or of IRParam / IRLocal
+ *  records), and a single tagged union doesn't help — handlers know what
+ *  shape they're stashing. */
+export type IRHandleValue =
+    | IRExpr | IRStmt
+    | IRFunction | IRGlobal | IRImport | IRExport
+    | IRLocal  | IRParam
+    | IRHandleValue[]
+
+/** Per-firing environment passed to import implementations. */
+export interface ComptimeEnv {
+    registry: ElaboratorRegistry
+    /** All non-primitive objects (AST nodes, templates, state buckets, bindings, …). */
+    handles: HandleTable<any>
+    /** Strings — interned by content. */
+    strings: StringPool
+    /** IR-node handle table.  Compiled handlers build IR through
+     *  `ir_make*` imports that return an id into this table; the
+     *  firing wrapper recovers the JS object after the handler
+     *  returns.  See `src/comptime/IR_HANDLE_ABI.md`. */
+    irHandles: HandleTable<IRHandleValue>
+    /** The lowering ctx for the current firing.  Set by the strataLoader
+     *  wrapper before invoking the compiled handler; undefined outside
+     *  a firing (so accessors are no-ops in unit tests that don't
+     *  install one). */
+    ctx?: CompilerCtx
+    /** The CompilerAPI for the current firing.  Used by `lowerExpr`,
+     *  `lowerParams`, etc.  Same lifetime model as `ctx`. */
+    api?: CompilerAPI
+    /** Per-firing module-mutation accumulator.  `module::push_definition`
+     *  pushes here; the firing wrapper drains it after the handler
+     *  returns and feeds them into `registry.pendingTopLevelInjections`. */
+    pendingDefinitions: any[]
+    /** Per-firing global-mutation accumulator.  Same model as
+     *  pendingDefinitions, but the firing wrapper turns each into an
+     *  IRGlobal and adds to the module. */
+    pendingGlobals: Array<{ name: string; type: any; init: any }>
+    /** Test-only observation log.  Pushed via `test::observe`; consulted
+     *  by tests to verify handlers actually fired. */
+    testLog: any[]
+}
+
+export function createComptimeEnv(registry: ElaboratorRegistry): ComptimeEnv {
+    return {
+        registry,
+        handles: new HandleTable<any>(),
+        strings: new StringPool(),
+        irHandles: new HandleTable<IRHandleValue>(),
+        ctx: undefined,
+        api: undefined,
+        pendingDefinitions: [],
+        pendingGlobals: [],
+        testLog: [],
+    }
+}
+
+/**
+ * Build the WebAssembly import object for a strata handler module.
+ *
+ *     const env = createComptimeEnv(registry)
+ *     const imports = createComptimeImports(env)
+ *     await WebAssembly.instantiate(wasm, imports)
+ *
+ * The returned import object lives under the `compiler` namespace so user
+ * `@extern compiler.<name>` declarations in handler Silicon source can
+ * link against it.  All host functions are bound to `env` so they share
+ * the handle table and string pool.
+ */
+export function createComptimeImports(env: ComptimeEnv): WebAssembly.Imports {
+    const { registry, handles, strings, testLog } = env
+
+    // ── Registration imports (one-shot at strata-load time) ─────────────────
+    // Today these run via the interpreted strata body; Phase C compile-then-run
+    // for the strata BODY itself is a follow-up.  The host implementations
+    // exist so handler @fns can call them too (rare but legal).
+
+    const register_keyword = (token: number): void => {
+        const s = strings.get(token)
+        if (!s) return
+        const stub: StrataNode = { type: StrataType.Keyword, discriminant: s, data: { nodeParamName: 'node' } }
+        registerElaborator(registry, 'keyword', s, stub)
+        registerDefKind(registry.defKinds, {
+            keyword: s, codegenKind: 'stratum_def',
+            allowsParams: true, allowsBinding: true, allowsGenerics: true,
+        })
+    }
+
+    const register_operator = (token: number): void => {
+        const s = strings.get(token); if (!s) return
+        const stub: StrataNode = { type: StrataType.Operator, discriminant: s, data: { nodeParamName: 'node' } }
+        registerElaborator(registry, 'operator', s, stub)
+    }
+
+    const register_annotation = (token: number): void => {
+        const s = strings.get(token); if (!s) return
+        const stub: StrataNode = { type: StrataType.Keyword, discriminant: s, data: { nodeParamName: 'node' } }
+        registerAnnotation(registry, s, stub)
+    }
+
+    const on_decl = (token: number, handlerName: number): void => {
+        const t = strings.get(token); const h = strings.get(handlerName)
+        if (!t || !h) return
+        registerPhaseHandler(registry, 'decl', t, makeNamedHandler(registry, h))
+    }
+
+    const on_call_site = (token: number, handlerName: number): void => {
+        const t = strings.get(token); const h = strings.get(handlerName)
+        if (!h) return
+        registerPhaseHandler(registry, 'callSite', t || '*', makeNamedHandler(registry, h))
+    }
+
+    const on_annotation = (token: number, handlerName: number): void => {
+        const t = strings.get(token); const h = strings.get(handlerName)
+        if (!t || !h) return
+        registerPhaseHandler(registry, 'annotation', t, makeNamedHandler(registry, h))
+    }
+
+    const on_module_finalize = (handlerName: number): void => {
+        const h = strings.get(handlerName); if (!h) return
+        registerModuleFinalizeHandler(registry, makeNamedHandler(registry, h))
+    }
+
+    const on_comptime = (token: number, handlerName: number): void => {
+        const t = strings.get(token); const h = strings.get(handlerName)
+        if (!t || !h) return
+        registerComptimeHandler(registry, t, makeNamedComptimeHandler(registry, h))
+    }
+
+    // ── State buckets ───────────────────────────────────────────────────────
+    // 'stratum' returns the registry-shared per-stratum map; 'instance' returns
+    // a fresh map per call.  Both wrapped in handles so the WASM side passes
+    // them around as i32 ids.
+
+    const state_stratum = (): number => {
+        const name = (registry as any).__currentStratum?.name ?? '__global__'
+        let bucket = registry.stratumState.get(name)
+        if (!bucket) { bucket = new Map(); registry.stratumState.set(name, bucket) }
+        return handles.intern(bucket)
+    }
+
+    const state_instance = (): number => handles.fresh(new Map<string, any>())
+
+    const state_has = (bucketId: number, keyId: number): number => {
+        const m = handles.get(bucketId) as Map<string, any> | undefined
+        if (!m) return 0
+        return m.has(strings.get(keyId)) ? 1 : 0
+    }
+
+    const state_get = (bucketId: number, keyId: number): number => {
+        const m = handles.get(bucketId) as Map<string, any> | undefined
+        if (!m) return 0
+        const v = m.get(strings.get(keyId))
+        if (v === undefined || v === null) return 0
+        // Auto-intern: primitives → strings if string-shaped; objects → handles.
+        if (typeof v === 'string') return strings.intern(v)
+        if (typeof v === 'number') return v | 0   // i32-coerce
+        return handles.intern(v)
+    }
+
+    const state_set = (bucketId: number, keyId: number, valueId: number): void => {
+        const m = handles.get(bucketId) as Map<string, any> | undefined
+        if (!m) return
+        // We can't distinguish string-id from handle-id at this boundary;
+        // store the raw integer and let readers interpret consistently.
+        m.set(strings.get(keyId), valueId)
+    }
+
+    // ── Array builders ──────────────────────────────────────────────────────
+    // Block / Function / Import IR builders need arrays of sub-nodes (or of
+    // IRParam / IRLocal records).  The handler builds one with these two
+    // imports, then passes its handle to the IR builder.  Arrays live in
+    // `irHandles` because their lifetime matches IR nodes (single firing).
+    //
+    // Arrays store handle *ids* (i32), not resolved JS objects, so that
+    // `compiler_arr_get` round-trips through `arr_push` cleanly.  The IR
+    // builders that take an array (`ir_makeBlock`, `ir_makeFunction`,
+    // `ir_makeImport`) resolve each id to a JS value when assembling the
+    // IR node.
+
+    const compiler_arr_new = (): number => env.irHandles.fresh([] as any)
+
+    const compiler_arr_push = (arrId: number, valueId: number): void => {
+        const arr = env.irHandles.get(arrId)
+        if (!Array.isArray(arr)) return
+        if (valueId === 0) return
+        // Skip stale/unknown handles so callers don't accidentally seed the
+        // array with values that will resolve to undefined downstream.
+        if (env.irHandles.get(valueId) === undefined) return
+        arr.push(valueId as any)
+    }
+
+    // ── IR builders (D-B-3 — basic expression nodes) ────────────────────────
+    // Each wrapper recovers JS values from handle/string ids, calls the
+    // matching IRBuilder, and interns the result in `irHandles`.  Returns
+    // the new i32 handle id.
+
+    const ir_makeConst = (value: number, wasmTypeStr: number): number => {
+        const wt = strings.get(wasmTypeStr) || 'i32'
+        return env.irHandles.fresh({
+            kind: 'Const',
+            wasmType: wt as IRConst['wasmType'],
+            value: value | 0,
+        })
+    }
+
+    const ir_makeLocalGet = (nameStr: number, wasmTypeStr: number): number => {
+        const wt = strings.get(wasmTypeStr) || 'i32'
+        return env.irHandles.fresh({
+            kind: 'LocalGet',
+            wasmType: wt as IRLocalGet['wasmType'],
+            name: strings.get(nameStr),
+        })
+    }
+
+    const ir_makeLocalSet = (nameStr: number, valueH: number): number => {
+        const value = env.irHandles.get(valueH) as IRExpr | undefined
+        if (!value) return 0
+        return env.irHandles.fresh({
+            kind: 'LocalSet',
+            name: strings.get(nameStr),
+            value,
+        })
+    }
+
+    const ir_makeGlobalGet = (nameStr: number, wasmTypeStr: number): number => {
+        const wt = strings.get(wasmTypeStr) || 'i32'
+        return env.irHandles.fresh({
+            kind: 'GlobalGet',
+            wasmType: wt as IRGlobalGet['wasmType'],
+            name: strings.get(nameStr),
+        })
+    }
+
+    const ir_makeGlobalSet = (nameStr: number, valueH: number): number => {
+        const value = env.irHandles.get(valueH) as IRExpr | undefined
+        if (!value) return 0
+        return env.irHandles.fresh({
+            kind: 'GlobalSet',
+            name: strings.get(nameStr),
+            value,
+        })
+    }
+
+    const ir_makeBinOp = (
+        instrStr: number, leftH: number, rightH: number, wasmTypeStr: number,
+    ): number => {
+        const left  = env.irHandles.get(leftH)  as IRExpr | undefined
+        const right = env.irHandles.get(rightH) as IRExpr | undefined
+        if (!left || !right) return 0
+        const wt = strings.get(wasmTypeStr) || 'i32'
+        return env.irHandles.fresh({
+            kind: 'BinOp',
+            wasmType: wt as IRBinOp['wasmType'],
+            instr: strings.get(instrStr),
+            left,
+            right,
+        })
+    }
+
+    /**
+     * Block IR.  Three positional args:
+     *   - stmtsArrH:    handle of an array of IRStmt (built via compiler_arr_*)
+     *   - trailingH:    handle of an IRExpr, or 0 for no trailing value
+     *   - wasmTypeStr:  type id, or 0 to infer (then trailing's wasmType if any, else 'void')
+     */
+    const ir_makeBlock = (
+        stmtsArrH: number, trailingH: number, wasmTypeStr: number,
+    ): number => {
+        const rawStmts = env.irHandles.get(stmtsArrH)
+        const stmts: IRStmt[] = Array.isArray(rawStmts)
+            ? (rawStmts as number[]).map(id => env.irHandles.get(id) as IRStmt).filter(Boolean)
+            : []
+        const trailing = trailingH === 0 ? undefined : (env.irHandles.get(trailingH) as IRExpr)
+        const wt = wasmTypeStr === 0
+            ? (trailing ? (trailing as any).wasmType : 'void')
+            : strings.get(wasmTypeStr) as IRBlock['wasmType']
+        return env.irHandles.fresh({
+            kind: 'Block',
+            wasmType: wt,
+            stmts,
+            trailing,
+        })
+    }
+
+    /** Sentinel — `&IR::null` legacy marker.  Handlers return this when
+     *  they emit no IR (purely declaration-like passes).  Always returns 0. */
+    const ir_null = (): number => 0
+
+    // ── IR builders (D-B-4 — control flow) ──────────────────────────────────
+    // The whole point of strata is to emit control IR.  These four imports
+    // close out the basic surface needed by `if.si`, `loop.si`, `control.si`.
+
+    /**
+     * If IR.  `elseH=0` means no else-branch (void if statement).  When
+     * `wasmTypeStr=0`, infer from `then.wasmType` if else_ is present,
+     * otherwise 'void'.  Matches the legacy `&Compiler::ir::makeIf` signature.
+     */
+    const ir_makeIf = (
+        condH: number, thenH: number, elseH: number, wasmTypeStr: number,
+    ): number => {
+        const cond  = env.irHandles.get(condH)  as IRExpr | undefined
+        const then  = env.irHandles.get(thenH)  as IRExpr | undefined
+        if (!cond || !then) return 0
+        const else_ = elseH === 0 ? undefined : (env.irHandles.get(elseH) as IRExpr)
+        const wt = wasmTypeStr === 0
+            ? (else_ ? (then as any).wasmType : 'void')
+            : strings.get(wasmTypeStr)
+        return env.irHandles.fresh({
+            kind: 'If',
+            wasmType: wt as IRExpr['wasmType'] as any,
+            cond, then, else_,
+        })
+    }
+
+    /** Loop IR.  `id` is the loop's break/continue label id (typically
+     *  allocated via `compiler_ctx_nextLoopId` — see D-B-11). */
+    const ir_makeLoop = (id: number, condH: number, bodyH: number): number => {
+        const cond = env.irHandles.get(condH) as IRExpr | undefined
+        const body = env.irHandles.get(bodyH) as IRExpr | undefined
+        if (!cond || !body) return 0
+        return env.irHandles.fresh({ kind: 'Loop', id: id | 0, cond, body })
+    }
+
+    /** Break out of the loop with label id `id`. */
+    const ir_makeBreak = (id: number): number =>
+        env.irHandles.fresh({ kind: 'Break', id: id | 0 })
+
+    /** Continue to the next iteration of the loop with label id `id`. */
+    const ir_makeContinue = (id: number): number =>
+        env.irHandles.fresh({ kind: 'Continue', id: id | 0 })
+
+    /** Return from the enclosing function.  `valueH=0` means a void return. */
+    const ir_makeReturn = (valueH: number): number => {
+        const value = valueH === 0 ? undefined : (env.irHandles.get(valueH) as IRExpr)
+        return env.irHandles.fresh({ kind: 'Return', value })
+    }
+
+    // ── IR builders (D-B-5 — module-level definitions) ──────────────────────
+    // Required by defkinds.si migration: @export, @var, @let/@fn, @extern,
+    // and the local/param sub-records hoisted into functions.
+
+    /**
+     * Export IR.  `whatStr` is "func" or "global".  Maps directly to the
+     * legacy `&Compiler::ir::makeExport alias, internalName, what` form.
+     */
+    const ir_makeExport = (
+        aliasStr: number, internalNameStr: number, whatStr: number,
+    ): number => {
+        const what = strings.get(whatStr) as IRExport['what']
+        return env.irHandles.fresh({
+            kind: 'Export',
+            alias: strings.get(aliasStr),
+            internalName: strings.get(internalNameStr),
+            what,
+        })
+    }
+
+    /** Local declaration (hoisted into a function preamble). */
+    const ir_makeLocal = (nameStr: number, wasmTypeStr: number): number => {
+        const wt = strings.get(wasmTypeStr) || 'i32'
+        return env.irHandles.fresh({
+            name: strings.get(nameStr),
+            wasmType: wt as IRLocal['wasmType'],
+        } satisfies IRLocal)
+    }
+
+    /** Parameter declaration (for function signatures). */
+    const ir_makeParam = (nameStr: number, wasmTypeStr: number): number => {
+        const wt = strings.get(wasmTypeStr) || 'i32'
+        return env.irHandles.fresh({
+            name: strings.get(nameStr),
+            wasmType: wt as IRParam['wasmType'],
+        } satisfies IRParam)
+    }
+
+    /**
+     * Global IR.  `mutable` is i32 (0=false, non-zero=true).  `initH` is
+     * the handle of the init expression.
+     */
+    const ir_makeGlobal = (
+        nameStr: number, wasmTypeStr: number, mutable: number, initH: number,
+    ): number => {
+        const init = env.irHandles.get(initH) as IRExpr | undefined
+        if (!init) return 0
+        const wt = strings.get(wasmTypeStr) || 'i32'
+        return env.irHandles.fresh({
+            kind: 'Global',
+            name: strings.get(nameStr),
+            wasmType: wt as IRGlobal['wasmType'],
+            mutable: mutable !== 0,
+            init,
+        })
+    }
+
+    /**
+     * Function IR.  `paramsArrH` and `localsArrH` are handles of arrays
+     * built via compiler_arr_*.  `bodyH=0` for @extern-style declarations
+     * with no body.  `returnTypeStr=0` means 'void'.
+     */
+    const ir_makeFunction = (
+        nameStr: number, paramsArrH: number, returnTypeStr: number,
+        localsArrH: number, bodyH: number,
+    ): number => {
+        const rawParams = env.irHandles.get(paramsArrH)
+        const rawLocals = env.irHandles.get(localsArrH)
+        const params: IRParam[] = Array.isArray(rawParams)
+            ? (rawParams as number[]).map(id => env.irHandles.get(id) as IRParam).filter(Boolean)
+            : []
+        const locals: IRLocal[] = Array.isArray(rawLocals)
+            ? (rawLocals as number[]).map(id => env.irHandles.get(id) as IRLocal).filter(Boolean)
+            : []
+        const body = bodyH === 0 ? undefined : (env.irHandles.get(bodyH) as IRExpr)
+        const rt = returnTypeStr === 0 ? 'void' : strings.get(returnTypeStr)
+        return env.irHandles.fresh({
+            kind: 'Function',
+            name: strings.get(nameStr),
+            params,
+            returnType: rt as IRFunction['returnType'],
+            locals,
+            body,
+        })
+    }
+
+    /**
+     * Import IR.  `paramsArrH` is an array-handle of WasmValType strings
+     * (each is a string-pool id pushed via compiler_arr_push of a const
+     * string).  `resultStr=0` means no result.  Matches legacy
+     * `&Compiler::ir::makeImport 'env', name, name, params, result`.
+     */
+    const ir_makeImport = (
+        envStr: number, fieldStr: number, nameStr: number,
+        paramsArrH: number, resultStr: number,
+    ): number => {
+        const rawParams = env.irHandles.get(paramsArrH)
+        // For Import, the params array holds WasmValType *strings*.
+        // Callers push string-pool ids via `compiler_arr_push_str`; we
+        // resolve them here.
+        const params: IRImport['params'] = Array.isArray(rawParams)
+            ? (rawParams as number[]).map(id => strings.get(id) as IRImport['params'][number])
+            : []
+        const result = resultStr === 0 ? undefined : (strings.get(resultStr) as IRImport['result'])
+        return env.irHandles.fresh({
+            kind: 'Import',
+            env: strings.get(envStr),
+            field: strings.get(fieldStr),
+            name: strings.get(nameStr),
+            params,
+            result,
+        })
+    }
+
+    /**
+     * Push a string-pool id onto an array-handle.  Specifically for
+     * Import's `params: WasmValType[]` slot where we can't push an
+     * IR-handle value (there's no IR node — just a type tag).  Reuses
+     * the array storage in irHandles.
+     */
+    const compiler_arr_push_str = (arrId: number, strId: number): void => {
+        const arr = env.irHandles.get(arrId)
+        if (!Array.isArray(arr)) return
+        if (strId === 0) return
+        arr.push(strId as any)
+    }
+
+    // ── Diagnostics (D-B-10) ────────────────────────────────────────────────
+    // The T-5 runtime-trap model: diag::error/warn never throw — they
+    // accumulate into `registry.diagnostics` and the host renders later.
+    // Spans are nullable here (handler often doesn't have one) — the
+    // accumulator records an empty span if `spanH=0`.
+
+    const EMPTY_SPAN = { file: '', line: 0, col: 0, length: 0 } as const
+
+    const diag_error = (
+        codeStr: number, spanH: number, messageStr: number, hintStr: number,
+    ): void => {
+        const span = spanH === 0 ? EMPTY_SPAN : (env.handles.get(spanH) as typeof EMPTY_SPAN) || EMPTY_SPAN
+        const hint = hintStr === 0 ? undefined : strings.get(hintStr)
+        registry.diagnostics.push({
+            phase: 'lower',
+            code: strings.get(codeStr) || 'E0000',
+            span,
+            message: strings.get(messageStr),
+            hint,
+        })
+    }
+
+    // ── Utility helpers (D-B-13) ────────────────────────────────────────────
+    // Pure host functions used pervasively across legacy strata bodies.
+    // `watId` and `choose` are stateless; `freshId` uses a per-env counter.
+    // `arg` reads the i-th child of an AST node (the node is a host handle).
+    // `isVarName` and `resolveType` need the per-firing lowering ctx — not
+    // wired into ComptimeEnv yet (that's a strataLoader follow-up).
+
+    /** Convert a Silicon identifier into a WAT-safe identifier. */
+    const compiler_watId = (nameStr: number): number => {
+        const s = strings.get(nameStr)
+        return strings.intern(s.replace(/::/g, '_'))
+    }
+
+    /** Per-env fresh-id counter — local to a firing. */
+    let freshIdCounter = 0
+    const compiler_freshId = (prefixStr: number): number => {
+        const prefix = prefixStr === 0 ? 'tmp' : (strings.get(prefixStr) || 'tmp')
+        return strings.intern(`${prefix}_${freshIdCounter++}`)
+    }
+
+    /** `arg(nodeH, i)` — return a handle of the i-th argument of an AST
+     *  node.  Same access pattern the strata body interpreter used.  The
+     *  node is expected to have an `args` array (FunctionCall, Keyword
+     *  invocation, etc.); if absent or out-of-range, returns 0. */
+    const compiler_arg = (nodeH: number, index: number): number => {
+        const node = handles.get(nodeH)
+        const args = node?.args
+        if (!Array.isArray(args)) return 0
+        const i = index | 0
+        if (i < 0 || i >= args.length) return 0
+        return handles.intern(args[i])
+    }
+
+    /** `choose(cond, aH, bH)` — non-zero `cond` returns `aH`; zero returns `bH`.
+     *  Plain wrapper for symmetry with the legacy `&Compiler::choose` form;
+     *  handlers can also use a direct `@if` since they're real Silicon. */
+    const compiler_choose = (cond: number, aH: number, bH: number): number =>
+        cond !== 0 ? aH : bH
+
+    // ── Ctx accessors (D-B-11) ─────────────────────────────────────────────
+    // All of these are no-ops when `env.ctx` is undefined (handler is
+    // running outside a firing — e.g. during unit tests with no full
+    // lowering pass).  The firing wrapper installs `env.ctx` before
+    // invoking the compiled handler so these become live.
+    //
+    // Each accessor returns 0 / no-op for "absent" so handlers that
+    // probe for state behave gracefully.
+
+    const compiler_ctx_locals_set = (nameStr: number, wasmTypeStr: number): void => {
+        if (!env.ctx) return
+        env.ctx.locals.set(strings.get(nameStr), (strings.get(wasmTypeStr) || 'i32') as WasmValType)
+    }
+
+    const compiler_ctx_locals_get = (nameStr: number): number => {
+        if (!env.ctx) return 0
+        const t = env.ctx.locals.get(strings.get(nameStr))
+        return t ? strings.intern(t) : 0
+    }
+
+    const compiler_ctx_globals_set = (nameStr: number, wasmTypeStr: number): void => {
+        if (!env.ctx) return
+        env.ctx.globals.set(strings.get(nameStr), (strings.get(wasmTypeStr) || 'i32') as WasmValType)
+    }
+
+    const compiler_ctx_globals_get = (nameStr: number): number => {
+        if (!env.ctx) return 0
+        const t = env.ctx.globals.get(strings.get(nameStr))
+        return t ? strings.intern(t) : 0
+    }
+
+    const compiler_ctx_varNames_add = (nameStr: number): void => {
+        if (!env.ctx) return
+        env.ctx.varNames.add(strings.get(nameStr))
+    }
+
+    const compiler_ctx_varNames_has = (nameStr: number): number => {
+        if (!env.ctx) return 0
+        return env.ctx.varNames.has(strings.get(nameStr)) ? 1 : 0
+    }
+
+    /** Same logical purpose as legacy `&Compiler::isVarName name` — i.e.,
+     *  "is this top-level name a mutable @var?"  Routes through ctx. */
+    const compiler_isVarName = compiler_ctx_varNames_has
+
+    const compiler_ctx_pendingLocals_push = (localH: number): void => {
+        if (!env.ctx) return
+        const local = env.irHandles.get(localH) as IRLocal | undefined
+        if (local) env.ctx.pendingLocals.push(local)
+    }
+
+    const compiler_ctx_loopStack_push = (id: number): void => {
+        if (!env.ctx) return
+        env.ctx.loopStack.push(id | 0)
+    }
+
+    const compiler_ctx_loopStack_pop = (): number => {
+        if (!env.ctx) return 0
+        const top = env.ctx.loopStack.pop()
+        return top === undefined ? 0 : (top | 0)
+    }
+
+    const compiler_ctx_loopStack_peek = (): number => {
+        if (!env.ctx) return 0
+        const top = env.ctx.loopStack.peek()
+        return top === undefined ? 0 : (top | 0)
+    }
+
+    const compiler_ctx_nextLoopId = (): number => {
+        if (!env.ctx) return 0
+        return env.ctx.nextLoopId() | 0
+    }
+
+    // ── Module accumulators (D-B-9) ────────────────────────────────────────
+    // `module::push_definition def_h` — push an AST node (already a complete
+    // Definition AST subtree) onto the per-firing accumulator.  The firing
+    // wrapper drains these after the handler returns and re-elaborates +
+    // re-lowers them.
+    //
+    // `module::push_global name_str, type_h, init_h` — same but for globals;
+    // the firing wrapper materialises an IRGlobal from each entry.
+
+    const module_push_definition = (defH: number): void => {
+        const def = env.handles.get(defH)
+        if (def != null) env.pendingDefinitions.push(def)
+    }
+
+    // ── AST field accessor (D-B-7) ─────────────────────────────────────────
+    // Replaces JS-side `node.name.name` dot-paths in legacy strata bodies.
+    // Returns a tagged i32:
+    //
+    //   tag 0x0  →  null/undefined (full result = 0)
+    //   tag 0x1  →  child AST-node handle (low 28 bits = env.handles id)
+    //   tag 0x2  →  string-pool id (low 28 bits = strings id)
+    //   tag 0x3  →  small signed-int literal (low 28 bits, sign-extended)
+    //   tag 0x4  →  boolean (low bit = 0/1)
+    //   tag 0x5  →  array — value is an irHandles id whose entry is an
+    //              array of resolved child handles (each tagged the same
+    //              way; clients iterate via compiler_arr_len + index).
+    //
+    // The full layout:  (tag << 28) | (value & 0x0fffffff)
+    //
+    // Callers know what shape they're asking for, so the tag is mostly a
+    // correctness check.  Mixed-shape fields (e.g. `args` where each child
+    // could be a different node kind) use the array tag.
+
+    const TAG_NULL   = 0
+    const TAG_NODE   = 1
+    const TAG_STR    = 2
+    const TAG_INT    = 3
+    const TAG_BOOL   = 4
+    const TAG_ARR    = 5
+
+    function tag(tagBits: number, value: number): number {
+        return (tagBits << 28) | (value & 0x0fffffff)
+    }
+
+    function classify(v: any): number {
+        if (v === null || v === undefined) return 0
+        if (typeof v === 'boolean') return tag(TAG_BOOL, v ? 1 : 0)
+        if (typeof v === 'number' && Number.isInteger(v) && v >= -(1 << 27) && v < (1 << 27)) {
+            // 28-bit signed range:  -2^27 .. 2^27-1
+            return tag(TAG_INT, v & 0x0fffffff)
+        }
+        if (typeof v === 'number') {
+            // Large int outside the 28-bit window: cross as a string id.
+            return tag(TAG_STR, strings.intern(String(v)))
+        }
+        if (typeof v === 'string') return tag(TAG_STR, strings.intern(v))
+        if (Array.isArray(v)) {
+            // Resolve each element, build an array of those tagged values
+            // into the irHandles table.  Clients iterate via array imports.
+            const resolved: any[] = v.map(classify)
+            return tag(TAG_ARR, env.irHandles.fresh(resolved as any))
+        }
+        // Object: treat as an AST node.
+        return tag(TAG_NODE, env.handles.intern(v))
+    }
+
+    /**
+     * Walk a dotted path on the AST node and return the tagged result.
+     *
+     *   compiler_ast_field(nodeH, "name.name") → tagged string id of node.name.name
+     *   compiler_ast_field(nodeH, "args.0")    → tagged handle of node.args[0]
+     */
+    const compiler_ast_field = (nodeH: number, pathStr: number): number => {
+        let cur: any = env.handles.get(nodeH)
+        if (cur == null) return 0
+        const path = strings.get(pathStr)
+        if (!path) return classify(cur)
+        for (const part of path.split('.')) {
+            if (cur == null) return 0
+            // Numeric segment → array index
+            if (/^\d+$/.test(part)) {
+                const i = parseInt(part, 10)
+                cur = Array.isArray(cur) ? cur[i] : undefined
+                continue
+            }
+            cur = cur[part]
+        }
+        return classify(cur)
+    }
+
+    /** Helpers to decode a tagged result on the host side.  Tests use
+     *  these to keep tag arithmetic out of assertion bodies. */
+    const compiler_tag_kind  = (tagged: number): number => (tagged >>> 28) & 0xf
+    const compiler_tag_value = (tagged: number): number => {
+        // 28-bit value field, sign-extended for the INT tag.
+        const kind = (tagged >>> 28) & 0xf
+        const raw  = tagged & 0x0fffffff
+        if (kind === TAG_INT) {
+            // sign-extend from 28 bits
+            return (raw << 4) >> 4
+        }
+        return raw
+    }
+
+    const compiler_arr_len = (arrId: number): number => {
+        const arr = env.irHandles.get(arrId)
+        return Array.isArray(arr) ? arr.length : 0
+    }
+
+    const compiler_arr_get = (arrId: number, index: number): number => {
+        const arr = env.irHandles.get(arrId)
+        if (!Array.isArray(arr)) return 0
+        const i = index | 0
+        if (i < 0 || i >= arr.length) return 0
+        return arr[i] as any
+    }
+
+    // ── Types-as-data (D-B-8) ──────────────────────────────────────────────
+    // SiliconType objects live in `handles` (the generic handle table).
+    // Type primitives are singletons; type constructors mint fresh objects.
+
+    const type_int    = (): number => handles.intern(TypeInt)
+    const type_int64  = (): number => handles.intern(TypeInt64)
+    const type_float  = (): number => handles.intern(TypeFloat)
+    const type_bool   = (): number => handles.intern(TypeBool)
+    const type_string = (): number => handles.intern(TypeString)
+    const type_void   = (): number => handles.intern({ kind: 'Void' } satisfies SiliconType)
+
+    const type_variable = (nameStr: number): number =>
+        handles.intern({ kind: 'Variable', name: strings.get(nameStr) } satisfies SiliconType)
+
+    const type_array = (elemTypeH: number): number => {
+        const elem = handles.get(elemTypeH) as SiliconType | undefined
+        if (!elem) return 0
+        return handles.intern({ kind: 'Array', element: elem } satisfies SiliconType)
+    }
+
+    /**
+     * Equality on SiliconType structures.  Uses `formatType` as a robust
+     * structural comparison — slower than a dedicated walker, but it
+     * matches what `types::equals` does in the JS-side compiler-api.
+     */
+    const type_equals = (aH: number, bH: number): number => {
+        const a = handles.get(aH) as SiliconType | undefined
+        const b = handles.get(bH) as SiliconType | undefined
+        if (!a || !b) return 0
+        return formatType(a) === formatType(b) ? 1 : 0
+    }
+
+    /** Render a SiliconType to a human-readable string, returning the string id. */
+    const type_format = (tH: number): number => {
+        const t = handles.get(tH) as SiliconType | undefined
+        if (!t) return 0
+        return strings.intern(formatType(t))
+    }
+
+    /**
+     * Substitute type variables in `templateT` per `bindings` (a Map handle).
+     * If `bindings` doesn't resolve to a Map, returns the template id.
+     */
+    const type_substitute = (templateH: number, bindingsH: number): number => {
+        const tmpl = handles.get(templateH) as SiliconType | undefined
+        const bindings = handles.get(bindingsH) as Map<string, SiliconType> | undefined
+        if (!tmpl) return 0
+        if (!(bindings instanceof Map) || bindings.size === 0) return templateH
+
+        function go(t: SiliconType): SiliconType {
+            switch (t.kind) {
+                case 'Variable': return bindings!.get(t.name) ?? t
+                case 'Array': return { kind: 'Array', element: go(t.element) }
+                case 'Function': return {
+                    kind: 'Function',
+                    params: t.params.map(go),
+                    result: go(t.result),
+                }
+                case 'Sum':
+                    if (t.typeArgs) {
+                        return { kind: 'Sum', name: t.name, variants: t.variants, typeArgs: t.typeArgs.map(go) }
+                    }
+                    return t
+                case 'Distinct': return { kind: 'Distinct', name: t.name, underlying: go(t.underlying) }
+                default: return t
+            }
+        }
+        return handles.intern(go(tmpl))
+    }
+
+    /**
+     * Human-readable mangling suffix from a bindings Map handle.  Order
+     * follows insertion order of the Map (JS-spec stable).  Returns the
+     * string id ("Int_Float" etc.) — empty pool id if bindings is empty.
+     */
+    const type_mangle_suffix = (bindingsH: number): number => {
+        const bindings = handles.get(bindingsH) as Map<string, SiliconType> | undefined
+        if (!(bindings instanceof Map) || bindings.size === 0) return strings.intern('')
+        const parts: string[] = []
+        for (const [_, v] of bindings) parts.push(formatType(v))
+        return strings.intern(parts.join('_'))
+    }
+
+    // ── AST manipulation (D-B-6) ───────────────────────────────────────────
+    // Templates are deep-cloned AST subtrees with a `kind` discriminator
+    // ('pre' = captured before elaboration; 'post' = after).  All `with_*`
+    // wrappers produce a *new* template handle — never mutate the original.
+    //
+    // Implementation mirrors the JS-side CompilerAst (see compiler-api/index.ts).
+
+    function deepCloneAst(node: any): any {
+        if (!node || typeof node !== 'object') return node
+        if (Array.isArray(node)) return node.map(deepCloneAst)
+        const out: any = {}
+        for (const k of Object.keys(node)) out[k] = deepCloneAst(node[k])
+        return out
+    }
+
+    function siliconTypeToTypeName(t: SiliconType): string {
+        switch (t.kind) {
+            case 'Int':    return 'Int'
+            case 'Int64':  return 'Int64'
+            case 'Float':  return 'Float'
+            case 'Bool':   return 'Bool'
+            case 'String': return 'String'
+            case 'Void':   return 'Void'
+            case 'Distinct': return (t as any).name ?? 'Unknown'
+            case 'Sum':      return (t as any).name ?? 'Unknown'
+            default:       return 'Unknown'
+        }
+    }
+
+    const ast_capture_template = (nodeH: number, kindStr: number): number => {
+        const node = handles.get(nodeH)
+        if (!node) return 0
+        const kind = (strings.get(kindStr) === 'post' ? 'post' : 'pre') as 'pre' | 'post'
+        return handles.intern({ ast: deepCloneAst(node), kind })
+    }
+
+    const ast_clone = (templateH: number): number => {
+        const tmpl = handles.get(templateH) as { ast: any; kind: 'pre' | 'post' } | undefined
+        if (!tmpl) return 0
+        return handles.intern({ ast: deepCloneAst(tmpl.ast), kind: tmpl.kind })
+    }
+
+    const ast_with_keyword = (templateH: number, keywordStr: number): number => {
+        const tmpl = handles.get(templateH) as { ast: any; kind: 'pre' | 'post' } | undefined
+        if (!tmpl) return 0
+        const next = deepCloneAst(tmpl.ast)
+        const keyword = strings.get(keywordStr)
+        if (next && typeof next === 'object' && next.type === 'Definition') {
+            next.keyword = keyword
+            const defKind = lookupDefKind(registry.defKinds, keyword)
+            if (defKind) next.hook = defKind.codegenKind
+        }
+        return handles.intern({ ast: next, kind: tmpl.kind })
+    }
+
+    const ast_with_name = (templateH: number, nameStr: number): number => {
+        const tmpl = handles.get(templateH) as { ast: any; kind: 'pre' | 'post' } | undefined
+        if (!tmpl) return 0
+        const next = deepCloneAst(tmpl.ast)
+        const newName = strings.get(nameStr)
+        if (next && typeof next === 'object' && next.type === 'Definition') {
+            if (next.name && typeof next.name === 'object') {
+                next.name = { ...next.name, name: newName }
+            } else {
+                next.name = { name: newName }
+            }
+        }
+        return handles.intern({ ast: next, kind: tmpl.kind })
+    }
+
+    /** Mutate a FunctionCall node in place so the lowerer resolves to
+     *  `newName` instead of its original callee.  Returns 0 on success. */
+    const ast_rewrite_call = (callH: number, newNameStr: number): number => {
+        const callNode = handles.get(callH)
+        if (!callNode || typeof callNode !== 'object') return 0
+        const newName = strings.get(newNameStr)
+        if (callNode.name && typeof callNode.name === 'object') {
+            if (Array.isArray(callNode.name.path)) {
+                callNode.name.path = [newName]
+            } else {
+                callNode.name = { type: 'Namespace', path: [newName] }
+            }
+        } else {
+            callNode.name = { type: 'Namespace', path: [newName] }
+        }
+        return 0
+    }
+
+    /** Walk a template's AST replacing Variable type annotations with
+     *  concrete types per `bindings` (a Map handle). */
+    // ── Lowering helpers (D-B-12) ──────────────────────────────────────────
+    // These delegate to `env.api` (a CompilerAPI installed by the firing
+    // wrapper).  When `api` is not set (e.g. unit tests), they return 0
+    // / no-op so handlers can be exercised in isolation.
+
+    const compiler_lowerExpr = (nodeH: number): number => {
+        if (!env.api) return 0
+        const node = handles.get(nodeH)
+        if (!node) return 0
+        try {
+            const ir = env.api.lowerExpr(node)
+            return ir ? env.irHandles.fresh(ir) : 0
+        } catch {
+            return 0
+        }
+    }
+
+    const compiler_lowerExprIfDefined = (nodeH: number): number => {
+        if (!env.api) return 0
+        const node = handles.get(nodeH)
+        if (!node) return 0
+        try {
+            const ir = env.api.lowerExprIfDefined(node)
+            return ir ? env.irHandles.fresh(ir) : 0
+        } catch {
+            return 0
+        }
+    }
+
+    /** Lower a definition node's parameter list to IRParam[]; returns an
+     *  arr handle whose elements are IRParam-handle ids. */
+    const compiler_lowerParams = (nodeH: number): number => {
+        if (!env.api) return env.irHandles.fresh([])
+        const node = handles.get(nodeH)
+        if (!node) return env.irHandles.fresh([])
+        try {
+            const params = env.api.lowerParams(node)
+            const ids = params.map(p => env.irHandles.fresh(p))
+            return env.irHandles.fresh(ids as any)
+        } catch {
+            return env.irHandles.fresh([])
+        }
+    }
+
+    /**
+     * Lower a function body — returns a handle to `{ bodyH, localsArrH }`
+     * stashed in irHandles so callers can fetch the two pieces.
+     */
+    const compiler_lowerFunctionBody = (nodeH: number, paramsArrH: number): number => {
+        if (!env.api) return 0
+        const node = handles.get(nodeH)
+        if (!node) return 0
+        const rawParams = env.irHandles.get(paramsArrH)
+        const params = Array.isArray(rawParams)
+            ? (rawParams as number[]).map(id => env.irHandles.get(id) as IRParam).filter(Boolean)
+            : []
+        try {
+            const result = env.api.lowerFunctionBody(node, params)
+            const localIds = result.locals.map(l => env.irHandles.fresh(l))
+            return env.irHandles.fresh({
+                bodyH:    result.body ? env.irHandles.fresh(result.body) : 0,
+                localsH:  env.irHandles.fresh(localIds as any),
+            } as any)
+        } catch {
+            return 0
+        }
+    }
+
+    /** Read the `body` slot from a `lowerFunctionBody` result handle. */
+    const compiler_funcResult_body = (resultH: number): number => {
+        const r = env.irHandles.get(resultH) as any
+        return r?.bodyH ?? 0
+    }
+
+    /** Read the `locals` slot (array of IRLocal handles). */
+    const compiler_funcResult_locals = (resultH: number): number => {
+        const r = env.irHandles.get(resultH) as any
+        return r?.localsH ?? 0
+    }
+
+    const compiler_resolveFunctionReturnType = (
+        nodeH: number, nameStr: number, bodyH: number,
+    ): number => {
+        if (!env.api) return 0
+        const node = handles.get(nodeH)
+        if (!node) return 0
+        const body = bodyH === 0 ? undefined : (env.irHandles.get(bodyH) as IRExpr | undefined)
+        try {
+            const rt = env.api.resolveFunctionReturnType(node, strings.get(nameStr), body)
+            return strings.intern(rt)
+        } catch {
+            return 0
+        }
+    }
+
+    const compiler_resolveType = (annotH: number): number => {
+        if (!env.api) return 0
+        const annot = handles.get(annotH)
+        if (!annot) return 0
+        try {
+            return strings.intern(env.api.resolveType(annot))
+        } catch {
+            return 0
+        }
+    }
+
+    const ast_patch_types = (templateH: number, bindingsH: number): number => {
+        const tmpl = handles.get(templateH) as { ast: any; kind: 'pre' | 'post' } | undefined
+        const bindings = handles.get(bindingsH) as Map<string, SiliconType> | undefined
+        if (!tmpl) return 0
+        if (!(bindings instanceof Map) || bindings.size === 0) return templateH
+
+        function patchNode(n: any): any {
+            if (!n || typeof n !== 'object') return n
+            if (Array.isArray(n)) return n.map(patchNode)
+            const out: any = { ...n }
+            if (out.inferredType?.kind === 'Variable' && bindings!.has(out.inferredType.name)) {
+                out.inferredType = bindings!.get(out.inferredType.name)
+            }
+            if (out.type === 'TypeAnnotation' && typeof out.typename === 'string' && bindings!.has(out.typename)) {
+                const target = bindings!.get(out.typename)!
+                out.typename = siliconTypeToTypeName(target)
+            }
+            for (const k of Object.keys(out)) {
+                if (k === 'inferredType') continue
+                out[k] = patchNode(out[k])
+            }
+            return out
+        }
+        return handles.intern({ ast: patchNode(deepCloneAst(tmpl.ast)), kind: tmpl.kind })
+    }
+
+    const module_push_global = (nameStr: number, typeH: number, initH: number): void => {
+        // type is a SiliconType handle; init is an AST or IR-handle (either
+        // works — the firing wrapper inspects the shape).
+        const type = env.handles.get(typeH)
+        const init = env.handles.get(initH) ?? env.irHandles.get(initH)
+        env.pendingGlobals.push({
+            name: strings.get(nameStr),
+            type,
+            init,
+        })
+    }
+
+    const diag_warn = (
+        codeStr: number, spanH: number, messageStr: number, hintStr: number,
+    ): void => {
+        const span = spanH === 0 ? EMPTY_SPAN : (env.handles.get(spanH) as typeof EMPTY_SPAN) || EMPTY_SPAN
+        const hint = hintStr === 0 ? undefined : strings.get(hintStr)
+        registry.diagnostics.push({
+            phase: 'lower',
+            code: strings.get(codeStr) || 'W0000',
+            span,
+            message: strings.get(messageStr),
+            hint,
+        })
+    }
+
+    // ── Test-only observation hook ──────────────────────────────────────────
+    // Strata handlers under test call this to make their firing visible to
+    // assertions.  Not part of the long-term API surface.
+
+    const test_observe = (value: number): void => { testLog.push(value) }
+
+    return {
+        compiler: {
+            register_keyword, register_operator, register_annotation,
+            on_decl, on_call_site, on_annotation, on_module_finalize, on_comptime,
+            state_stratum, state_instance, state_has, state_get, state_set,
+            compiler_arr_new, compiler_arr_push,
+            ir_makeConst, ir_makeLocalGet, ir_makeLocalSet,
+            ir_makeGlobalGet, ir_makeGlobalSet,
+            ir_makeBinOp, ir_makeBlock, ir_null,
+            ir_makeIf, ir_makeLoop, ir_makeBreak, ir_makeContinue, ir_makeReturn,
+            ir_makeExport, ir_makeLocal, ir_makeParam, ir_makeGlobal,
+            ir_makeFunction, ir_makeImport, compiler_arr_push_str,
+            diag_error, diag_warn,
+            compiler_watId, compiler_freshId, compiler_arg, compiler_choose,
+            compiler_ctx_locals_set, compiler_ctx_locals_get,
+            compiler_ctx_globals_set, compiler_ctx_globals_get,
+            compiler_ctx_varNames_add, compiler_ctx_varNames_has,
+            compiler_isVarName,
+            compiler_ctx_pendingLocals_push,
+            compiler_ctx_loopStack_push, compiler_ctx_loopStack_pop, compiler_ctx_loopStack_peek,
+            compiler_ctx_nextLoopId,
+            module_push_definition, module_push_global,
+            compiler_ast_field, compiler_tag_kind, compiler_tag_value,
+            compiler_arr_len, compiler_arr_get,
+            type_int, type_int64, type_float, type_bool, type_string, type_void,
+            type_variable, type_array,
+            type_equals, type_format, type_substitute, type_mangle_suffix,
+            ast_capture_template, ast_clone, ast_with_keyword, ast_with_name,
+            ast_rewrite_call, ast_patch_types,
+            compiler_lowerExpr, compiler_lowerExprIfDefined,
+            compiler_lowerParams, compiler_lowerFunctionBody,
+            compiler_funcResult_body, compiler_funcResult_locals,
+            compiler_resolveFunctionReturnType, compiler_resolveType,
+            test_observe,
+        },
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Helpers — make handler wrappers that look up a named @fn at fire time.
+//
+// These mirror buildPhaseHandler / buildComptimeHandler in strataLoader.ts;
+// the duplication is intentional for now — the strataLoader version is for
+// strata bodies executed via the interpreter, this version is for handler
+// references registered from WASM-side strata bodies (Phase C+).
+// ─────────────────────────────────────────────────────────────────────────────
+
+function makeNamedHandler(registry: ElaboratorRegistry, handlerName: string) {
+    const wrapper = (node: any, api: any) => {
+        const entry = registry.namedHandlers.get(handlerName)
+        if (!entry) {
+            throw new Error(`[strata compile-then-run] handler '${handlerName}' not found`)
+        }
+        const fn = compileHandlerBlock(entry.body, entry.paramName)
+        return fn(node, api)
+    }
+    return wrapper
+}
+
+function makeNamedComptimeHandler(registry: ElaboratorRegistry, handlerName: string): ComptimeHandler {
+    return (rawArgs, api, evalArg) => {
+        const entry = registry.namedHandlers.get(handlerName)
+        if (!entry) {
+            throw new Error(`[strata compile-then-run] comptime handler '${handlerName}' not found`)
+        }
+        const fn = compileComptimeHandler(entry.body)
+        return fn(rawArgs, api, evalArg)
+    }
+}
