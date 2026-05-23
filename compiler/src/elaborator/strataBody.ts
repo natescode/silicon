@@ -439,6 +439,14 @@ function invokeCompilerInteropShim(fnName: string, args: any[], api: CompilerAPI
         return api.ir.makeBlock(stmts, args[1] || undefined, wt)
     }
     if (fnName === 'ir_null')          return api.ir.null()
+    if (fnName === 'ir_makeCall') {
+        const callArgs = Array.isArray(args[1]) ? args[1] : []
+        return api.ir.makeCall(
+            String(args[0] ?? ''), callArgs,
+            args[2] ? String(args[2]) as any : 'i32',
+            args[3] ? String(args[3]) as 'user' | 'instr' : 'user',
+        )
+    }
     if (fnName === 'ir_makeIf')        return api.ir.makeIf(args[0], args[1], args[2] || undefined, args[3] ? String(args[3]) as any : undefined)
     if (fnName === 'ir_makeLoop')      return api.ir.makeLoop(args[0] | 0, args[1], args[2])
     if (fnName === 'ir_makeBreak')     return api.ir.makeBreak(args[0] | 0)

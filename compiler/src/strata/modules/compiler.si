@@ -48,6 +48,7 @@
 @extern ir_makeBinOp:Int              instr:Int, left:Int, right:Int, wasmType:Int;
 @extern ir_makeBlock:Int              stmtsArr:Int, trailing:Int, wasmType:Int;
 @extern ir_null:Int;
+@extern ir_makeCall:Int               calleeStr:Int, argsArr:Int, wasmType:Int, callKindStr:Int;
 
 # ── IR builders — control flow ─────────────────────────────────────────
 @extern ir_makeIf:Int                 cond:Int, then:Int, else_:Int, wasmType:Int;

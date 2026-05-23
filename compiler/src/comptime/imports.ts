@@ -363,6 +363,29 @@ export function createComptimeImports(env: ComptimeEnv): WebAssembly.Imports {
      *  they emit no IR (purely declaration-like passes).  Always returns 0. */
     const ir_null = (): number => 0
 
+    /**
+     * Call IR.  `argsArrH` is a handle of an array of IRExpr-handle ids
+     * (built via compiler_arr_*).  `callKindStr` is 'user' (default) or
+     * 'instr' (for raw WASM instruction calls).
+     */
+    const ir_makeCall = (
+        calleeStr: number, argsArrH: number, wasmTypeStr: number, callKindStr: number,
+    ): number => {
+        const rawArgs = env.irHandles.get(argsArrH)
+        const args = Array.isArray(rawArgs)
+            ? (rawArgs as number[]).map(id => env.irHandles.get(id) as any).filter(Boolean)
+            : []
+        const wt = wasmTypeStr === 0 ? 'i32' : strings.get(wasmTypeStr)
+        const ck = (callKindStr === 0 ? 'user' : strings.get(callKindStr)) as 'user' | 'instr'
+        return env.irHandles.fresh({
+            kind: 'Call',
+            wasmType: wt as any,
+            callee: strings.get(calleeStr),
+            callKind: ck,
+            args,
+        })
+    }
+
     // ── IR builders (D-B-4 — control flow) ──────────────────────────────────
     // The whole point of strata is to emit control IR.  These four imports
     // close out the basic surface needed by `if.si`, `loop.si`, `control.si`.
@@ -1234,7 +1257,7 @@ export function createComptimeImports(env: ComptimeEnv): WebAssembly.Imports {
             compiler_arr_new, compiler_arr_push,
             ir_makeConst, ir_makeLocalGet, ir_makeLocalSet,
             ir_makeGlobalGet, ir_makeGlobalSet,
-            ir_makeBinOp, ir_makeBlock, ir_null,
+            ir_makeBinOp, ir_makeBlock, ir_null, ir_makeCall,
             ir_makeIf, ir_makeLoop, ir_makeBreak, ir_makeContinue, ir_makeReturn,
             ir_makeExport, ir_makeLocal, ir_makeParam, ir_makeGlobal,
             ir_makeFunction, ir_makeImport, compiler_arr_push_str,
