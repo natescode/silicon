@@ -168,7 +168,11 @@ export function lowerProgram(
         freshIdCounter: { n: 0 },
         currentStratumRef,
     }
-    ctx.$compiler = createCompilerAPI({ ...ctx, registry }, lowerFns)
+    // Pass the live ctx (not a snapshot) so $compiler is current when
+    // recursively invoked methods (api.lowerExpr → lowerBinaryOp → on::lower
+    // handler dispatch) read ctx.$compiler.  A spread snapshot here would
+    // freeze ctx.$compiler at undefined.
+    ctx.$compiler = createCompilerAPI(ctx, lowerFns)
 
     const imports: IRImport[] = []
     const globals: IRGlobal[] = []
@@ -246,7 +250,7 @@ export function lowerProgram(
         pendingLocals: [],
         loopStack: [],
     }
-    startCtx.$compiler = createCompilerAPI({ ...startCtx, registry }, lowerFns)
+    startCtx.$compiler = createCompilerAPI(startCtx, lowerFns)
     const startStmts: IRStmt[] = []
     for (const el of program.elements as any[]) {
         const node = unwrap(el)
@@ -618,12 +622,17 @@ function lowerBinaryOp(n: any, ctx: LowerCtx): IRExpr {
     const stratum = lookupTypedOperator(ctx.registry, op, typeKind)
     const intrinsic = stratum?.data?.intrinsic
 
-    // New-form operator strata (D-D-3, D-D-4, D-D-6, D-D-7*): when an
-    // on::lower handler is registered for this operator, fire it with a
-    // synthesised BinaryOp-like node so the handler can read `left`/`right`
-    // via compiler_ast_node_field.  The handler's IR return value is the
-    // emitted IR.  Same shape as lowerBuiltinCall's on::lower bridge.
-    if (ctx.registry.handlers.lower.has(op)) {
+    // New-form operator strata (D-D-3, D-D-4, D-D-6, D-D-7*): when this
+    // operand-type dispatch falls through (no intrinsic on the resolved
+    // stratum entry) AND an on::lower handler is registered for the
+    // operator, fire it with a synthesised BinaryOp-like node so the
+    // handler can read `left`/`right` via compiler_ast_node_field.  The
+    // handler's IR return value is the emitted IR.
+    //
+    // Gated on `!intrinsic` so a typed legacy overload (e.g. `+:Float` →
+    // IR::f32_add) keeps its precedence — without the gate, a migrated
+    // primary `+` handler would override the Float overload.
+    if (!intrinsic && ctx.registry.handlers.lower.has(op)) {
         const synthNode = { type: 'BinaryOp', operator: op, left: n.left, right: n.right, inferredType: inferT }
         const results = fireHandlers(ctx.registry, 'lower', op, synthNode, ctx.$compiler!, ctx.currentStratumRef)
         const result = results.length > 0 ? results[results.length - 1] : null

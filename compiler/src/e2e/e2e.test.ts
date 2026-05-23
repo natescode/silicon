@@ -1620,12 +1620,11 @@ test("Round 34: single-step strata body still works (regression)", () => {
     expect(userWat(result.wat!)).toContain("i32.add")
 })
 
-test("Round 34: bodyTemplate for '+' is a 1-element array", () => {
+test("Round 34: '+' dispatches via on::lower handler (D-D-7a migrated)", () => {
     const { registry } = elaborate(ASTFactory.program([]))
-    const bt = registry.operators['+']?.data?.bodyTemplate
-    expect(Array.isArray(bt)).toBe(true)
-    expect(bt?.length).toBe(1)
-    expect(bt?.[0]?.intrinsic).toBe('IR::i32_add')
+    // D-D-7a: no more bodyTemplate; the handler synthesises the IRBinOp.
+    expect(registry.operators['+']).toBeDefined()
+    expect(registry.handlers.lower.has('+')).toBe(true)
 })
 
 // ============================================================================

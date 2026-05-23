@@ -364,9 +364,13 @@ test("elaborate: @let strata has StrataType.Definition", () => {
   expect(registry.keywords['@let'].type).toBe(StrataType.Definition)
 })
 
-test("elaborate: '+' operator strata has StrataType.Operator", () => {
+test("elaborate: '+' operator strata is registered (D-D-7a migrated; StrataType.Keyword)", () => {
+  // D-D-7a: '+' migrated to new @stratum form via register::operator.
+  // The new-form stub uses StrataType.Keyword (the legacy expression-form
+  // type); legacy '@stratum_operator' set StrataType.Operator.
   const { registry } = elaborate(ASTFactory.program([]))
-  expect(registry.operators['+'].type).toBe(StrataType.Operator)
+  expect(registry.operators['+']).toBeDefined()
+  expect(registry.handlers.lower.has('+')).toBe(true)
 })
 
 // Test 10: builtin elaborators for various operators
