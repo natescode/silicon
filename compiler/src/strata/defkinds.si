@@ -64,17 +64,31 @@
   &IR::def_type_record;
 };
 
-# @local is NOT migrated in D-D-11a — lowerAsStmt special-cases
-# `node.hook === 'local'` for in-block @local declarations.  After
-# migration to the new @stratum form, hook would be 'stratum_def'
-# and the special-case path wouldn't fire, breaking @local in function
-# bodies.  Migration deferred until lowerAsStmt is refactored.
-@stratum_keyword LocalDef ('@local', Node) = {
-  &IR::def_local;
-  @local wasmType := &Compiler::resolveType Node.name.typeAnnotation;
-  @local sname    := &Compiler::watId Node.name.name;
-  @local decl     := &Compiler::ir::makeLocal sname, wasmType;
-  &Compiler::ctx::pendingLocals::push decl;
-  &Compiler::ctx::locals::set sname, wasmType;
-  &IR::null;
+# D-D-11a: @local migrated.  Handler reads the type + name, pushes a
+# pending local, sets up the local in ctx.locals, and emits no IR
+# itself — the local declaration appears in the function preamble
+# through the pendingLocals accumulator.  Companion change in
+# lowerAsStmt added a `stratum_def` branch so the handler runs when
+# @local appears inside a function body.
+@stratum LocalDef := {
+    &Compiler::register::keyword '@local';
+    &Compiler::on::lower '@local', LocalDef_lower;
+};
+@fn LocalDef_lower node:Int := {
+    @local wasmType:Int := &compiler::compiler_resolveType
+        (&compiler::compiler_ast_node_field node,
+            (&compiler::compiler_str_intern 'name.typeAnnotation', 0));
+    @local sname:Int := &compiler::compiler_watId
+        (&compiler::compiler_ast_str_field node,
+            (&compiler::compiler_str_intern 'name.name', 0));
+    @local decl:Int := &compiler::ir_makeLocal sname, wasmType;
+    &compiler::compiler_ctx_pendingLocals_push decl;
+    &compiler::compiler_ctx_locals_set sname, wasmType;
+    # If there's a binding init (`@local x:Int := <expr>`), emit a LocalSet.
+    # Otherwise (`@local x:Int;`), emit no IR (declaration only).
+    @local binding:Int := &compiler::compiler_ast_node_field node,
+        (&compiler::compiler_str_intern 'binding.expression', 0);
+    &@if binding,
+        { &compiler::ir_makeLocalSet sname, (&compiler::compiler_lowerExpr binding) },
+        { &compiler::ir_null }
 };

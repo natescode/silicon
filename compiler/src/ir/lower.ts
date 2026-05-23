@@ -895,6 +895,28 @@ function lowerAsStmt(node: any, ctx: LowerCtx): IRStmt | null {
         return null
     }
 
+    // New-form (D-D-* migrated) Definition with stratum_def hook used inside
+    // a function body: fire the on::lower handler, treat the return value
+    // (often null IR for declaration-only kinds) as a void statement.
+    // Without this branch, the generic "expression statement" fallback below
+    // would recurse via lowerDefinitionAsExpr → lowerAsStmt → infinite loop.
+    if (node.type === 'Definition' && node.hook === 'stratum_def') {
+        const keyword = node.keyword ?? ''
+        if (ctx.registry.handlers.lower.has(keyword)) {
+            const results = fireHandlers(ctx.registry, 'lower', keyword, node, ctx.$compiler!, ctx.currentStratumRef)
+            const result = results.length > 0 ? results[results.length - 1] : null
+            // null / Nop / no-IR — produces no statement.
+            if (!result || (result as any).kind === 'Nop') return null
+            // LocalSet / GlobalSet / ExprStmt return as-is.
+            if ((result as any).kind === 'LocalSet' || (result as any).kind === 'GlobalSet') {
+                return result as IRStmt
+            }
+            // Other IR — wrap as an expression statement.
+            return { kind: 'ExprStmt', expr: result as IRExpr }
+        }
+        return null
+    }
+
     // Expression statement — lower and discard value.
     const expr = lowerExpr(node, ctx)
     if (expr.kind === 'Nop') return null
