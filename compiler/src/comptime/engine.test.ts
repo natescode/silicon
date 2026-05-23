@@ -196,9 +196,12 @@ describe('Phase C — bridge wrapper invokes compiled handler over interpreter',
         expect(registry.compiledHandlers.has('Spy_handler')).toBe(true)
 
         // Replace the compiled instance with a spy so we can observe firing.
+        // Preserve `env` so the strataLoader firing wrapper can set per-firing
+        // ctx/api and intern the node.
         let spyCalls = 0
         const realCompiled = registry.compiledHandlers.get('Spy_handler')!
         registry.compiledHandlers.set('Spy_handler', {
+            env: realCompiled.env,
             invoke: (arg: number) => {
                 spyCalls++
                 return realCompiled.invoke(arg)

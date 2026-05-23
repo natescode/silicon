@@ -474,13 +474,23 @@ function buildPhaseHandler(
       // otherwise.  Same observable behavior either way — that's the point.
       const compiled = registry.compiledHandlers.get(handlerName)
       if (compiled) {
-        // For Phase C minimum, handlers receive an i32 node handle.  The
-        // host's handle table interns AST nodes on demand.  Since we don't
-        // yet have a global handle table threaded through, we pass 0 as a
-        // sentinel — handlers using the compiled path can't read AST fields
-        // yet (that's a Phase C continuation).  Handlers whose body doesn't
-        // depend on `node` (constants, arithmetic on the int) work today.
-        return compiled.invoke(0)
+        // Install per-firing env state — ctx/api so accessor imports work,
+        // node handle so the handler can read AST fields via compiler_arg
+        // and compiler_ast_field.
+        const env = compiled.env
+        env.ctx = api?.ctx
+        env.api = api
+        const nodeId = env.handles.intern(node)
+        const resultId = compiled.invoke(nodeId)
+        // Recover the IR object from the returned irHandle.  0 → null IR.
+        const result = resultId === 0 ? null : env.irHandles.get(resultId)
+        // Per-firing cleanup so subsequent firings start from a clean slate
+        // (avoid leaking handles across calls).
+        env.handles.release(nodeId)
+        env.irHandles.clear()
+        env.ctx = undefined
+        env.api = undefined
+        return result ?? null
       }
       const entry = registry.namedHandlers.get(handlerName)
       if (!entry) {

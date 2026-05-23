@@ -809,6 +809,62 @@ export function createComptimeImports(env: ComptimeEnv): WebAssembly.Imports {
         return Array.isArray(arr) ? arr.length : 0
     }
 
+    /**
+     * Convenience: walk a dotted path on an AST node and return the leaf
+     * value as a string-pool id, no tag unwrapping needed.  Returns 0 if
+     * the field is missing, null, or not a string-shaped value (numbers
+     * get string-formatted).  Migrations use this for the common pattern
+     *
+     *     @local sname := &Compiler::watId Node.name.name;
+     *
+     * which becomes
+     *
+     *     @let sname := &compiler::compiler_watId
+     *         (&compiler::compiler_ast_str_field node, '<path>');
+     */
+    const compiler_ast_str_field = (nodeH: number, pathStr: number): number => {
+        let cur: any = handles.get(nodeH)
+        if (cur == null) return 0
+        const path = strings.get(pathStr)
+        if (path) {
+            for (const part of path.split('.')) {
+                if (cur == null) return 0
+                if (/^\d+$/.test(part)) {
+                    const i = parseInt(part, 10)
+                    cur = Array.isArray(cur) ? cur[i] : undefined
+                    continue
+                }
+                cur = cur[part]
+            }
+        }
+        if (cur == null) return 0
+        if (typeof cur === 'string') return strings.intern(cur)
+        if (typeof cur === 'number') return strings.intern(String(cur))
+        return 0
+    }
+
+    /** Convenience: walk a dotted path and return a child-node handle
+     *  directly (TAG_NODE without the tag).  Returns 0 if the leaf
+     *  isn't a node-shaped value. */
+    const compiler_ast_node_field = (nodeH: number, pathStr: number): number => {
+        let cur: any = handles.get(nodeH)
+        if (cur == null) return 0
+        const path = strings.get(pathStr)
+        if (path) {
+            for (const part of path.split('.')) {
+                if (cur == null) return 0
+                if (/^\d+$/.test(part)) {
+                    const i = parseInt(part, 10)
+                    cur = Array.isArray(cur) ? cur[i] : undefined
+                    continue
+                }
+                cur = cur[part]
+            }
+        }
+        if (cur == null || typeof cur !== 'object') return 0
+        return handles.intern(cur)
+    }
+
     const compiler_arr_get = (arrId: number, index: number): number => {
         const arr = env.irHandles.get(arrId)
         if (!Array.isArray(arr)) return 0
@@ -1178,6 +1234,7 @@ export function createComptimeImports(env: ComptimeEnv): WebAssembly.Imports {
             compiler_ctx_nextLoopId,
             module_push_definition, module_push_global,
             compiler_ast_field, compiler_tag_kind, compiler_tag_value,
+            compiler_ast_str_field, compiler_ast_node_field,
             compiler_arr_len, compiler_arr_get,
             type_int, type_int64, type_float, type_bool, type_string, type_void,
             type_variable, type_array,

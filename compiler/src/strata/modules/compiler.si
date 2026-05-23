@@ -70,6 +70,11 @@
 @extern compiler_ast_field:Int        nodeH:Int, path:Int;
 @extern compiler_tag_kind:Int         tagged:Int;
 @extern compiler_tag_value:Int        tagged:Int;
+# Convenience: walk a dotted path and unbox directly to a string-pool id
+# (returns 0 if not string-shaped) or a node handle (returns 0 if not a
+# node-shaped value).  Cuts boilerplate for migrations.
+@extern compiler_ast_str_field:Int    nodeH:Int, path:Int;
+@extern compiler_ast_node_field:Int   nodeH:Int, path:Int;
 
 # ── AST manipulation — templates ───────────────────────────────────────
 @extern ast_capture_template:Int      nodeH:Int, kind:Int;
