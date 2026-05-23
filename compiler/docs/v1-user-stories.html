@@ -1,0 +1,1415 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Sigil 1.0 — User Stories</title>
+  <style>
+    :root {
+      --bg: #0f1117;
+      --surface: #1a1d27;
+      --surface2: #222535;
+      --border: #2e3248;
+      --accent: #6c8ef7;
+      --accent2: #b06cf7;
+      --accent3: #3ecf8e;
+      --accent4: #f7a06c;
+      --accent5: #f76c6c;
+      --accent6: #f7e36c;
+      --text: #dde1f0;
+      --muted: #7b82a8;
+      --code-bg: #13151f;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.55;
+      padding: 32px 24px;
+    }
+    .page { max-width: 1100px; margin: 0 auto; }
+    h1 { font-size: 1.9rem; color: var(--accent); margin-bottom: 6px; }
+    h2 { font-size: 1.35rem; color: var(--accent2); margin: 40px 0 12px; border-bottom: 1px solid var(--border); padding-bottom: 6px; }
+    h3 { font-size: 1.05rem; color: var(--accent3); margin: 22px 0 8px; }
+    p  { margin-bottom: 10px; color: var(--text); font-size: 0.93rem; }
+    .subtitle { color: var(--muted); font-size: 0.95rem; margin-bottom: 24px; }
+    .legend { background: var(--surface2); border: 1px solid var(--border); border-radius: 8px; padding: 12px 18px; margin: 14px 0 24px; font-size: 0.85rem; }
+    .legend code { background: var(--code-bg); padding: 1px 6px; border-radius: 4px; }
+    pre {
+      background: var(--code-bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 10px 12px;
+      overflow-x: auto;
+      font-family: 'Cascadia Code', 'Fira Code', 'Consolas', monospace;
+      font-size: 0.78rem;
+      line-height: 1.5;
+      margin: 6px 0;
+    }
+    code { font-family: 'Cascadia Code', 'Fira Code', 'Consolas', monospace; font-size: 0.85em; background: var(--code-bg); padding: 1px 5px; border-radius: 4px; }
+    details {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-left: 3px solid var(--accent);
+      border-radius: 6px;
+      padding: 10px 14px;
+      margin: 8px 0;
+    }
+    details[open] { padding-bottom: 14px; }
+    summary {
+      cursor: pointer;
+      font-weight: 600;
+      color: var(--text);
+      font-size: 0.94rem;
+      display: list-item;
+      padding: 2px 0;
+    }
+    summary:hover { color: var(--accent); }
+    summary .id { color: var(--muted); font-family: monospace; font-size: 0.85em; margin-right: 10px; }
+    summary .est { float: right; color: var(--muted); font-size: 0.8em; background: var(--surface2); padding: 1px 8px; border-radius: 10px; }
+    summary .done { color: var(--accent3); font-weight: 700; margin-left: 8px; }
+    details.complete > summary { color: var(--accent3); }
+    details.complete { border-left-color: var(--accent3) !important; opacity: 0.92; }
+    .goal { font-size: 0.88rem; color: var(--muted); margin: 8px 0 10px; padding-left: 12px; border-left: 2px solid var(--border); }
+    .accept { margin: 8px 0; font-size: 0.88rem; }
+    .accept strong { color: var(--accent3); }
+    .accept ul { padding-left: 22px; margin: 4px 0; }
+    .accept li { margin-bottom: 2px; }
+    .subtasks { margin: 10px 0 4px; font-size: 0.86rem; }
+    .subtasks strong { color: var(--accent4); }
+    .subtasks ol { padding-left: 22px; margin: 4px 0; }
+    .subtasks li { margin-bottom: 2px; }
+    .deps { font-size: 0.82rem; color: var(--muted); margin-top: 8px; }
+    .deps strong { color: var(--accent5); }
+    .phase-intro { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 12px 18px; margin: 12px 0 18px; font-size: 0.9rem; }
+    details.dissolution { border-left-color: var(--accent4); }
+    details.lang       { border-left-color: var(--accent3); }
+    details.diag       { border-left-color: var(--accent5); }
+    details.strata     { border-left-color: var(--accent2); }
+    details.stdlib     { border-left-color: var(--accent); }
+    details.runtime    { border-left-color: var(--accent6); }
+    details.toolchain  { border-left-color: var(--accent4); }
+    details.distro     { border-left-color: var(--accent5); }
+    details.caas       { border-left-color: var(--accent2); background: var(--surface); }
+    .toc { background: var(--surface2); border: 1px solid var(--border); border-radius: 8px; padding: 12px 18px; margin: 14px 0 28px; }
+    .toc h3 { margin-top: 0; color: var(--accent); font-size: 0.82rem; text-transform: uppercase; letter-spacing: 0.08em; }
+    .toc ol { columns: 2; column-gap: 28px; padding-left: 18px; font-size: 0.9rem; }
+    .toc a { color: var(--text); text-decoration: none; border-bottom: 1px dotted var(--muted); }
+    .toc a:hover { color: var(--accent); border-bottom-color: var(--accent); }
+    table { width: 100%; border-collapse: collapse; margin: 8px 0; font-size: 0.85rem; }
+    th { background: var(--surface2); color: var(--accent); padding: 6px 10px; text-align: left; border: 1px solid var(--border); }
+    td { padding: 6px 10px; border: 1px solid var(--border); vertical-align: top; }
+  </style>
+</head>
+<body>
+<div class="page">
+
+<h1>Sigil 1.0 — User Stories</h1>
+<p class="subtitle">
+  Session-sized work units to ship 1.0.  Stories are grouped by phase (matching
+  <a href="sigil-1.0-roadmap.md" style="color: var(--accent);">sigil-1.0-roadmap.md</a>)
+  with the in-progress dissolution work as Phase 0 and a cross-cutting
+  Compiler-as-a-Service section as Phase 8.5.  Click any story to expand its
+  goal, acceptance criteria, and subtasks.  Date: 2026-05-23.
+</p>
+
+<div class="legend" style="border-color: var(--accent2);">
+  <strong>Architectural directives (2026-05-23):</strong>
+  <br/><br/>
+  <strong>1. Compiler-as-a-Service.</strong>  Sigil is designed Roslyn-style
+  — the compiler is a library, not just a CLI.  Every consumer
+  (<code>sgl</code> tool, LSP server, IDE plugins, formatter, REPL, future
+  analysers) uses the same public API surface.  LSP-protocol conformance is
+  optional — the underlying API may be richer.  CaaS is split across two
+  phases:  <strong>Phase 0.5 — CaaS Foundation</strong> is required-for-1.0
+  and must land <em>before</em> the boot/ port (Phase 3) so the self-hosted
+  compiler inherits the right shape.  <strong>Phase 8.5 — CaaS Consumer
+  APIs</strong> is the rest:  some 1.0, some post-1.0 stretch.  Phase 9b
+  (LSP) consumes both.
+  <br/><br/>
+  <strong>2. Interpreter-first debugging.</strong>  The Silicon
+  interpreter (Phase 7) is the primary debug tool for 1.0 — it shows
+  Silicon values as Silicon types and covers app-developer needs.  Native
+  DWARF emission (Phase 9a) is marked post-1.0 acceptable; native binaries
+  still get function-name symbols for free from QBE/linker, so stack
+  traces stay readable.  Full source-line DWARF can land when there's
+  concrete demand for systems-level debugging of compiled artifacts.
+</div>
+
+<div class="legend">
+  <strong>Sizing.</strong>
+  <code>S</code> = 1–2h focused session ·
+  <code>M</code> = 3–5h session ·
+  <code>L</code> = 1 day ·
+  <code>XL</code> = 2+ days (consider splitting further).
+  Numbers in parentheses (eg. "M, ~4h") give the estimate.  Effort is for one
+  focused engineer; subtask order matters less than total dependency chain.
+</div>
+
+<div class="toc">
+  <h3>Contents</h3>
+  <ol>
+    <li><a href="#phase-0">Phase 0 — Dissolution completion</a></li>
+    <li><a href="#phase-0-5">Phase 0.5 — CaaS Foundation (required-for-1.0; precedes boot/ port)</a></li>
+    <li><a href="#phase-1">Phase 1 — Language foundations (<code>@struct</code>, typechecker always-on)</a></li>
+    <li><a href="#phase-2">Phase 2 — Error messages</a></li>
+    <li><a href="#phase-3">Phase 3 — Strata 2.0 in <code>boot/</code></a></li>
+    <li><a href="#phase-4">Phase 4 — <code>@defer</code></a></li>
+    <li><a href="#phase-5">Phase 5 — Generic stdlib + type system</a></li>
+    <li><a href="#phase-6">Phase 6 — <code>@comptime</code> + <code>sgl</code> CLI</a></li>
+    <li><a href="#phase-7">Phase 7 — Silicon interpreter</a></li>
+    <li><a href="#phase-8">Phase 8 — Native backend (QBE)</a></li>
+    <li><a href="#phase-caas">Phase 8.5 — CaaS Consumer APIs (workspace, symbols, incremental)</a></li>
+    <li><a href="#phase-9">Phase 9 — DWARF + LSP</a></li>
+    <li><a href="#phase-10">Phase 10 — Stability + distribution</a></li>
+  </ol>
+</div>
+
+<!-- ================================================================== -->
+<h2 id="phase-0">Phase 0 — Dissolution completion</h2>
+
+<div class="phase-intro">
+  Phases A, B-foundation, C-minimum, and D-groundwork shipped 2026-05-23.
+  <strong style="color: var(--accent3);">Phase B import surface — all 13 D-B-* stories complete ✅</strong>
+  (2026-05-23 second session).  <code>compiler</code> module wired into
+  <code>moduleRegistry</code>; first migration (D-D-1, <code>@platform</code> only)
+  landed end-to-end.  Remaining: migrate the other ~62 legacy
+  <code>@stratum_keyword</code>/<code>@stratum_operator</code> declarations
+  across 10 .si files (most blocked on a <code>compiler_str_intern(ptr, len)</code>
+  import for string-literal pass-through), then delete the interpreter.
+  See <code>docs/comptime-via-compilation.md</code> for the full design.
+  Realistic remaining total: ~2 working weeks.
+</div>
+
+<h3>0.B — Extend the Phase B import surface</h3>
+
+<details class="dissolution complete">
+  <summary><span class="id">D-B-1</span> Design the IR-handle ABI <span class="done">✅</span> <span class="est">M, ~3h</span></summary>
+  <p class="goal">Specify how compiled-handler WASM modules construct IR results and hand them back to the host.  Without this, no non-trivial handler can run via the compile-then-run path.</p>
+  <div class="accept"><strong>Acceptance:</strong>
+    <ul>
+      <li>A markdown design doc adjacent to <code>src/comptime/engine.ts</code> covering: i32-handle representation for IR nodes, return-value contract (handler returns an IR-result handle or 0 for null), lifetime / GC story (host owns; handles are released after firing), and the table of (signature, host wrapper, JS impl) for every IR builder.</li>
+      <li>Worked example: <code>makeIf(cond_h, then_h, else_h) → result_h</code> with full host-side code shown.</li>
+      <li>Decision recorded on how WASM-side strata bodies receive the result handle for IR-emitting handlers (e.g. via a known export name + return value, or via a side-channel set_result import).</li>
+    </ul>
+  </div>
+  <div class="subtasks"><strong>Subtasks:</strong>
+    <ol>
+      <li>Survey all <code>&Compiler::ir::*</code> calls used by existing legacy strata.</li>
+      <li>Spec the handle table additions to <code>src/comptime/handles.ts</code>.</li>
+      <li>Spec the host-import signatures for each IR builder.</li>
+      <li>Spec the result-handle protocol back to the firing code in <code>strataLoader.ts</code>.</li>
+    </ol>
+  </div>
+</details>
+
+<details class="dissolution complete">
+  <summary><span class="id">D-B-2</span> Implement IR-handle table on the host <span class="done">✅</span> <span class="est">S, ~2h</span></summary>
+  <p class="goal">Allocate an IR-handle table in <code>ComptimeEnv</code>; provide intern/get/release; thread it through <code>createComptimeImports</code>.</p>
+  <div class="accept"><strong>Acceptance:</strong>
+    <ul>
+      <li><code>ComptimeEnv</code> gains an <code>irHandles: HandleTable&lt;IRExpr | IRStmt&gt;</code> field.</li>
+      <li>Tests in <code>handles.test.ts</code> for IR-handle round-trip.</li>
+    </ul>
+  </div>
+  <div class="deps"><strong>Depends on:</strong> D-B-1</div>
+</details>
+
+<details class="dissolution complete">
+  <summary><span class="id">D-B-3</span> Wrap basic IR builders (Const, BinOp, LocalGet, LocalSet, Block) <span class="done">✅</span> <span class="est">M, ~4h</span></summary>
+  <p class="goal">Add WASM-callable wrappers for the 5 most-used IR builders so simple handlers can emit IR via the new path.</p>
+  <div class="accept"><strong>Acceptance:</strong>
+    <ul>
+      <li>5 new imports in <code>src/comptime/imports.ts</code> with signatures matching D-B-1.</li>
+      <li>Test: a handler @fn that constructs <code>Const 42</code> via the imports compiles, runs, and the firing code receives the right IR.</li>
+    </ul>
+  </div>
+  <div class="deps"><strong>Depends on:</strong> D-B-2</div>
+</details>
+
+<details class="dissolution complete">
+  <summary><span class="id">D-B-4</span> Wrap IR control-flow builders (If, Loop, Break, Continue, Return) <span class="done">✅</span> <span class="est">M, ~4h</span></summary>
+  <p class="goal">Add control-flow IR builder imports.  Required to migrate <code>if.si</code>, <code>loop.si</code>, <code>control.si</code>.</p>
+  <div class="deps"><strong>Depends on:</strong> D-B-3</div>
+</details>
+
+<details class="dissolution complete">
+  <summary><span class="id">D-B-5</span> Wrap IR module-level builders (Function, Global, Import, Export) <span class="done">✅</span> <span class="est">M, ~3h</span></summary>
+  <p class="goal">Imports for module-level IR construction — required for <code>defkinds.si</code> (@let, @fn, @var, @extern) migration.</p>
+  <div class="deps"><strong>Depends on:</strong> D-B-3</div>
+</details>
+
+<details class="dissolution complete">
+  <summary><span class="id">D-B-6</span> Wrap AST inspection + manipulation (capture_template, clone, with_keyword, with_name, rewrite_call, patch_types) <span class="done">✅</span> <span class="est">M, ~4h</span></summary>
+  <p class="goal">Required for the @generic monomorphization stratum to run via compile-then-run.</p>
+  <div class="deps"><strong>Depends on:</strong> D-B-2</div>
+</details>
+
+<details class="dissolution complete">
+  <summary><span class="id">D-B-7</span> Wrap AST field accessor (<code>compiler_ast_field</code>) <span class="done">✅</span> <span class="est">M, ~3h</span></summary>
+  <p class="goal">Replace JS-side <code>node.name.name</code> dot-paths with import calls.  Returns either a child handle, a string id, or a primitive coerced to i32.</p>
+  <div class="accept"><strong>Acceptance:</strong>
+    <ul>
+      <li><code>compiler_ast_field(node_h, field_name_id) → result_id</code> with documented return-value tagging.</li>
+      <li>Tests for navigating <code>Node.name.name</code>, <code>Node.params[0].typeAnnotation.typename</code>.</li>
+    </ul>
+  </div>
+  <div class="deps"><strong>Depends on:</strong> D-B-2</div>
+</details>
+
+<details class="dissolution complete">
+  <summary><span class="id">D-B-8</span> Wrap <code>type::*</code> methods (bind_template_args, mangle_suffix, primitives) <span class="done">✅</span> <span class="est">S, ~2h</span></summary>
+  <div class="deps"><strong>Depends on:</strong> D-B-7</div>
+</details>
+
+<details class="dissolution complete">
+  <summary><span class="id">D-B-9</span> Wrap <code>module::push_definition</code> / <code>push_global</code> <span class="done">✅</span> <span class="est">S, ~2h</span></summary>
+  <div class="deps"><strong>Depends on:</strong> D-B-5</div>
+</details>
+
+<details class="dissolution complete">
+  <summary><span class="id">D-B-10</span> Wrap <code>diag::error</code> / <code>diag::warn</code> <span class="done">✅</span> <span class="est">S, ~1.5h</span></summary>
+  <div class="deps"><strong>Depends on:</strong> D-B-2</div>
+</details>
+
+<details class="dissolution complete">
+  <summary><span class="id">D-B-11</span> Wrap ctx accessors (locals, globals, pendingLocals, varNames) <span class="done">✅</span> <span class="est">S, ~2h</span></summary>
+  <div class="deps"><strong>Depends on:</strong> D-B-2</div>
+</details>
+
+<details class="dissolution complete">
+  <summary><span class="id">D-B-12</span> Wrap lowering helpers (lowerExpr, lowerExprIfDefined, lowerParams, lowerFunctionBody, resolveFunctionReturnType) <span class="done">✅</span> <span class="est">M, ~3h</span></summary>
+  <p class="goal">Required for <code>defkinds.si</code> migration — these are the heavy hitters of the legacy function-def expander.</p>
+  <div class="deps"><strong>Depends on:</strong> D-B-7</div>
+</details>
+
+<details class="dissolution complete">
+  <summary><span class="id">D-B-13</span> Wrap utility helpers (watId, freshId, arg, choose, resolveType, isVarName) <span class="done">✅</span> <span class="est">S, ~2h</span></summary>
+  <div class="deps"><strong>Depends on:</strong> D-B-2</div>
+</details>
+
+<h3>0.D — Migrate strata files (one at a time)</h3>
+
+<div class="phase-intro" style="font-size: 0.85rem;">
+  Each migration story: rewrite <code>@stratum_keyword X ('@foo', Node) = { body };</code>
+  → <code>@stratum X := { register::keyword '@foo'; on::lower '@foo', X_lower; };</code>
+  + <code>@fn X_lower node:Int := { body };</code>.  Run the suite; if
+  <code>compileStrataHandlers</code> succeeds, the new path runs.  Otherwise it
+  falls back to the interpreter (no behavioural change).
+</div>
+
+<details class="dissolution">
+  <summary><span class="id">D-D-1</span> Migrate <code>metadata.si</code> (@export, @platform) <span class="done" style="color: var(--accent4);">◐ partial</span> <span class="est">S, ~2h</span></summary>
+  <p class="goal">Simplest first.  <code>@platform</code> is almost a no-op; <code>@export</code> needs watId + isVarName + ir::makeExport.</p>
+  <p style="color: var(--accent3); font-size: 0.85rem;"><strong>Status (2026-05-23):</strong> <code>@platform</code> migrated ✅ — handler @fn compiles to WASM and invokes <code>&amp;compiler::ir_null</code>.  <code>@export</code> still legacy — blocked on a <code>compiler_str_intern(ptr, len)</code> import so the handler can pass <code>'global'</code> / <code>'func'</code> string literals to <code>ir_makeExport</code>.</p>
+  <div class="deps"><strong>Depends on:</strong> D-B-5 (for makeExport), D-B-13 (watId/isVarName)</div>
+</details>
+
+<details class="dissolution">
+  <summary><span class="id">D-D-2</span> Migrate <code>if.si</code> (@if) <span class="est">S, ~2h</span></summary>
+  <div class="deps"><strong>Depends on:</strong> D-B-4 (makeIf), D-B-12 (lowerExpr)</div>
+</details>
+
+<details class="dissolution">
+  <summary><span class="id">D-D-3</span> Migrate <code>logic.si</code> (and/or/not + comparisons) <span class="est">M, ~3h</span></summary>
+  <div class="deps"><strong>Depends on:</strong> D-B-3</div>
+</details>
+
+<details class="dissolution">
+  <summary><span class="id">D-D-4</span> Migrate <code>bitwise.si</code> <span class="est">S, ~2h</span></summary>
+  <div class="deps"><strong>Depends on:</strong> D-B-3</div>
+</details>
+
+<details class="dissolution">
+  <summary><span class="id">D-D-5</span> Migrate <code>cast.si</code> <span class="est">M, ~3h</span></summary>
+  <div class="deps"><strong>Depends on:</strong> D-B-3, D-B-13</div>
+</details>
+
+<details class="dissolution">
+  <summary><span class="id">D-D-6</span> Migrate <code>strings.si</code> <span class="est">S, ~1.5h</span></summary>
+  <div class="deps"><strong>Depends on:</strong> D-B-3</div>
+</details>
+
+<details class="dissolution">
+  <summary><span class="id">D-D-7a</span> Migrate <code>operators.si</code> — arithmetic (8 ops) <span class="est">M, ~3h</span></summary>
+  <div class="deps"><strong>Depends on:</strong> D-B-3</div>
+</details>
+
+<details class="dissolution">
+  <summary><span class="id">D-D-7b</span> Migrate <code>operators.si</code> — comparison (8 ops) <span class="est">M, ~3h</span></summary>
+  <div class="deps"><strong>Depends on:</strong> D-B-3</div>
+</details>
+
+<details class="dissolution">
+  <summary><span class="id">D-D-7c</span> Migrate <code>operators.si</code> — Float + Int64 variants (16 ops) <span class="est">M, ~4h</span></summary>
+  <div class="deps"><strong>Depends on:</strong> D-D-7a, D-D-7b</div>
+</details>
+
+<details class="dissolution">
+  <summary><span class="id">D-D-8</span> Migrate <code>control.si</code> (@return, @break, @continue) <span class="est">S, ~2h</span></summary>
+  <div class="deps"><strong>Depends on:</strong> D-B-4</div>
+</details>
+
+<details class="dissolution">
+  <summary><span class="id">D-D-9</span> Migrate <code>loop.si</code> (@loop, loop-id management) <span class="est">M, ~3h</span></summary>
+  <div class="deps"><strong>Depends on:</strong> D-B-4, D-B-11</div>
+</details>
+
+<details class="dissolution">
+  <summary><span class="id">D-D-10</span> Migrate <code>match.si</code> (@match + expandMatchChain integration) <span class="est">L, ~6h</span></summary>
+  <p class="goal">@match is the most intricate — variant tag computation, field bindings, arm alternation.  The host already has <code>expandMatchChain</code>; this story exposes it cleanly to compiled handlers.</p>
+  <div class="deps"><strong>Depends on:</strong> D-B-4, D-B-6, D-B-7</div>
+</details>
+
+<details class="dissolution">
+  <summary><span class="id">D-D-11a</span> Migrate <code>defkinds.si</code> — leaf def-kinds (@local, @type_alias, @type_distinct) <span class="est">M, ~3h</span></summary>
+  <div class="deps"><strong>Depends on:</strong> D-B-11</div>
+</details>
+
+<details class="dissolution">
+  <summary><span class="id">D-D-11b</span> Migrate <code>defkinds.si</code> — @let / @fn (function def-kind) <span class="est">L, ~6h</span></summary>
+  <p class="goal">The largest single legacy body — uses lowerParams, lowerFunctionBody, resolveFunctionReturnType, ir::makeFunction.  Touch-stone for whether the IR-handle ABI is genuinely sufficient.</p>
+  <div class="deps"><strong>Depends on:</strong> D-B-5, D-B-12</div>
+</details>
+
+<details class="dissolution">
+  <summary><span class="id">D-D-11c</span> Migrate <code>defkinds.si</code> — @var, @extern <span class="est">M, ~3h</span></summary>
+  <div class="deps"><strong>Depends on:</strong> D-B-5, D-B-12</div>
+</details>
+
+<details class="dissolution">
+  <summary><span class="id">D-D-11d</span> Migrate <code>defkinds.si</code> — @type, @enum, @type_sum (sum types) <span class="est">M, ~4h</span></summary>
+  <div class="deps"><strong>Depends on:</strong> D-D-11c</div>
+</details>
+
+<h3>0.E — Retire the interpreter</h3>
+
+<details class="dissolution">
+  <summary><span class="id">D-E-1</span> Remove the named-handler fallback path <span class="est">S, ~1.5h</span></summary>
+  <p class="goal">In <code>buildPhaseHandler</code> and <code>buildComptimeHandler</code>: drop the <code>compileHandlerBlock</code> fallback.  Every claimed handler must compile.  Any that don't surface as build-time errors.</p>
+  <div class="deps"><strong>Depends on:</strong> All D-D stories complete</div>
+</details>
+
+<details class="dissolution">
+  <summary><span class="id">D-E-2</span> Delete <code>strataBody.ts</code> + tests <span class="est">S, ~1h</span></summary>
+  <p class="goal">Mechanical deletion + import pruning.  Test suite proves no caller remains.</p>
+  <div class="deps"><strong>Depends on:</strong> D-E-1</div>
+</details>
+
+<details class="dissolution">
+  <summary><span class="id">D-E-3</span> Delete <code>comptimeBuiltins.ts</code> + replace with strata <span class="est">M, ~3h</span></summary>
+  <p class="goal">The 15 built-in comptime handlers (@nil, @not, ==, !=, +, etc.) become Silicon-side strata using <code>on::comptime</code>.  Each registers in the standard prelude.</p>
+  <div class="deps"><strong>Depends on:</strong> D-E-2</div>
+</details>
+
+<details class="dissolution">
+  <summary><span class="id">D-E-4</span> Final cleanup — interpreter completely retired <span class="est">S, ~2h</span></summary>
+  <p class="goal">Update docs, memory, and CLAUDE.md to reflect the dissolved state.  Move comptime-via-compilation.md to "shipped" status.</p>
+  <div class="deps"><strong>Depends on:</strong> D-E-3</div>
+</details>
+
+<!-- ================================================================== -->
+<h2 id="phase-0-5">Phase 0.5 — CaaS Foundation</h2>
+
+<div class="phase-intro">
+  <strong>Required-for-1.0.  Must land before Phase 3 (boot/ port).</strong>
+  These four stories establish the architectural shape every later phase
+  inherits — public API surface, immutable trees, queryable semantic
+  information, diagnostics-as-data.  Doing them <em>before</em> porting to
+  boot/ means the self-hosted compiler is built with the right shape from
+  day one; doing them after means re-porting most of boot/.  The
+  consumer-facing APIs (workspace, symbols, incremental) live in Phase 8.5.
+</div>
+
+<details class="caas">
+  <summary><span class="id">CaaS-1</span> Design doc: library-first API surface <span class="est">M, ~4h</span></summary>
+  <p class="goal">Write <code>docs/compiler-as-a-service.md</code> documenting the public API shape: entry points (parse, elaborate, typecheck, lower), public types (SyntaxTree, SemanticModel, Workspace, Diagnostic, Symbol), invariants (immutability, thread-safety expectations), stability contract.</p>
+  <div class="accept"><strong>Acceptance:</strong>
+    <ul>
+      <li>Document covers: each public entry point with signature and return-type semantics; lifecycle of long-lived state (workspace, project, document); the relationship between public types and internal data structures; what changes are non-breaking vs breaking.</li>
+      <li>Worked example: a 30-line TypeScript or Silicon program that uses only the public API to parse, typecheck, and emit a Silicon source string.</li>
+      <li>Explicit position on LSP: API is richer than LSP and the LSP wrapper is a separate concern.</li>
+    </ul>
+  </div>
+</details>
+
+<details class="caas">
+  <summary><span class="id">CaaS-2</span> Immutable syntax tree (red-green tree, Roslyn-style) <span class="est">XL, 2d</span></summary>
+  <p class="goal">Convert the mutable AST to an immutable/persistent representation.  The "green" tree is structurally shared (content-addressed); the "red" tree is the per-document overlay with parent links and absolute positions.  Required for incremental compilation, safe concurrent access from IDE tooling, and to avoid baking the mutable shape into boot/.</p>
+  <div class="accept"><strong>Acceptance:</strong>
+    <ul>
+      <li>Existing elaborator/typechecker/lowerer use the immutable representation.</li>
+      <li>A node never changes after construction; "modifications" produce new trees that share unchanged subtrees.</li>
+      <li>Memory footprint is bounded — repeated reparses of similar source don't grow the tree pool unboundedly.</li>
+      <li>All existing tests pass.</li>
+    </ul>
+  </div>
+  <div class="subtasks"><strong>Subtasks:</strong>
+    <ol>
+      <li>Audit current mutable-AST patterns (elaborator stamping <code>hook</code>, typechecker stamping <code>inferredType</code>, etc.) and design replacement.</li>
+      <li>Implement green-tree node types + interning pool.</li>
+      <li>Implement red-tree overlay with parent links and positions.</li>
+      <li>Migrate elaborator to produce new trees rather than mutating.</li>
+      <li>Migrate typechecker to surface <code>inferredType</code> via SemanticModel (CaaS-3) rather than node stamping.</li>
+      <li>Migrate lowerer.</li>
+      <li>Verify byte-equal self-host.</li>
+    </ol>
+  </div>
+  <div class="deps"><strong>Depends on:</strong> CaaS-1</div>
+</details>
+
+<details class="caas">
+  <summary><span class="id">CaaS-3</span> SemanticModel — queryable semantic information <span class="est">L, ~8h</span></summary>
+  <p class="goal">A SemanticModel wraps a typechecked tree and answers questions: <em>what's the type at this position?</em>, <em>what does this name resolve to?</em>, <em>what diagnostics apply to this range?</em>  Replaces ad-hoc <code>node.inferredType</code> field access — critical so boot/ doesn't inherit the mutable-node-stamping pattern.</p>
+  <div class="accept"><strong>Acceptance:</strong>
+    <ul>
+      <li>API: <code>semanticModel.typeOf(node)</code>, <code>semanticModel.symbolAt(position)</code>, <code>semanticModel.diagnosticsIn(range)</code>, <code>semanticModel.referencesTo(symbol)</code>.</li>
+      <li>SemanticModel is computed lazily and cached per syntax tree version.</li>
+      <li>Existing typechecker tests pass when using the SemanticModel API.</li>
+    </ul>
+  </div>
+  <div class="deps"><strong>Depends on:</strong> CaaS-2</div>
+</details>
+
+<details class="caas">
+  <summary><span class="id">CaaS-6</span> Diagnostic query API — diagnostics-as-data, not stdout <span class="est">S, ~2h</span></summary>
+  <p class="goal">Diagnostics already accumulate in <code>registry.diagnostics</code>.  Expose them through the SemanticModel as a queryable collection — by document, by range, by severity, by code.  Stop emitting to stderr from the compiler core; the CLI driver does that.</p>
+  <div class="accept"><strong>Acceptance:</strong>
+    <ul>
+      <li>Compiler core never writes to stdout/stderr — diagnostics returned as data.</li>
+      <li>CLI driver and LSP wrapper format diagnostics for their respective channels.</li>
+      <li>Existing diagnostic tests still pass.</li>
+    </ul>
+  </div>
+  <div class="deps"><strong>Depends on:</strong> CaaS-3</div>
+</details>
+
+<!-- ================================================================== -->
+<h2 id="phase-1">Phase 1 — Language foundations</h2>
+
+<h3>1a — Product types (<code>@struct</code>)</h3>
+
+<details class="lang">
+  <summary><span class="id">1a-1</span> Design the @struct stratum (lowering + accessor desugar) <span class="est">M, ~3h</span></summary>
+  <p class="goal">Field layout (offset table), constructor function shape, accessor desugar contract.</p>
+  <div class="accept"><strong>Acceptance:</strong>
+    <ul>
+      <li>Design doc <code>docs/struct-design.md</code> covering: alignment rules, padding, nested-struct field offsets, size_of computation, accessor read vs write.</li>
+      <li>Worked example showing the lowered IR for <code>@struct Point := { x: Int, y: Int };</code></li>
+    </ul>
+  </div>
+</details>
+
+<details class="lang">
+  <summary><span class="id">1a-2</span> Implement @struct as a stratum (declarations only) <span class="est">M, ~4h</span></summary>
+  <p class="goal">The stratum captures struct defs and registers them with the typechecker.  No accessor emission yet.</p>
+  <div class="deps"><strong>Depends on:</strong> 1a-1</div>
+</details>
+
+<details class="lang">
+  <summary><span class="id">1a-3</span> Field read access — <code>p.x</code> compiles to offset load <span class="est">M, ~3h</span></summary>
+</details>
+
+<details class="lang">
+  <summary><span class="id">1a-4</span> Field write access — <code>p.x = 5</code> compiles to offset store <span class="est">M, ~3h</span></summary>
+</details>
+
+<details class="lang">
+  <summary><span class="id">1a-5</span> Constructor function generation via push_definition <span class="est">M, ~3h</span></summary>
+</details>
+
+<details class="lang">
+  <summary><span class="id">1a-6</span> Nested struct support + size_of computation <span class="est">M, ~4h</span></summary>
+</details>
+
+<details class="lang">
+  <summary><span class="id">1a-7</span> Migrate compiler's aggregate types to @struct <span class="est">L, ~6h</span></summary>
+  <p class="goal">Replace TS-style records in src/ with @struct usage as proof.</p>
+  <div class="deps"><strong>Depends on:</strong> 1a-3, 1a-4, 1a-5</div>
+</details>
+
+<details class="lang">
+  <summary><span class="id">1a-8</span> Port @struct to boot/ <span class="est">L, ~8h</span></summary>
+  <div class="deps"><strong>Depends on:</strong> 1a-7, Phase 3 substantially complete</div>
+</details>
+
+<h3>1b — Typechecker always-on</h3>
+
+<details class="lang">
+  <summary><span class="id">1b-1</span> Audit typechecker for struct field access <span class="est">S, ~2h</span></summary>
+  <div class="deps"><strong>Depends on:</strong> 1a-3</div>
+</details>
+
+<details class="lang">
+  <summary><span class="id">1b-2</span> Audit for generic instantiation completeness <span class="est">S, ~2h</span></summary>
+</details>
+
+<details class="lang">
+  <summary><span class="id">1b-3</span> Audit strata-emitted IR for type-correctness <span class="est">M, ~3h</span></summary>
+</details>
+
+<details class="lang">
+  <summary><span class="id">1b-4</span> Remove --typecheck flag; make typechecker default <span class="est">M, ~3h</span></summary>
+</details>
+
+<details class="lang">
+  <summary><span class="id">1b-5</span> Fix tests broken by always-on typechecking <span class="est">M, ~4h</span></summary>
+  <div class="deps"><strong>Depends on:</strong> 1b-4</div>
+</details>
+
+<details class="lang">
+  <summary><span class="id">1b-6</span> Verify ./build.sh check still byte-equal <span class="est">S, ~1h</span></summary>
+  <div class="deps"><strong>Depends on:</strong> 1b-5</div>
+</details>
+
+<!-- ================================================================== -->
+<h2 id="phase-2">Phase 2 — Error messages</h2>
+
+<details class="diag">
+  <summary><span class="id">2-1</span> Audit the 20 most common errors from the test suite <span class="est">M, ~3h</span></summary>
+  <p class="goal">Catalogue every error message produced by the test suite, rank by frequency, identify the 20 to rewrite first.</p>
+</details>
+
+<details class="diag">
+  <summary><span class="id">2-2</span> Type mismatch: show both source spans <span class="est">M, ~4h</span></summary>
+  <pre>error[T0042]: cannot add Int and Float
+  --> src/math.si:12:14
+   |
+12 |   @let total := count + ratio;
+   |                 ^^^^^ Int
+   |                         ^^^^^ Float
+   = hint: use &amp;@toFloat count to convert</pre>
+</details>
+
+<details class="diag">
+  <summary><span class="id">2-3</span> Unknown keyword/operator — suggest closest registered name <span class="est">M, ~3h</span></summary>
+  <p class="goal">Levenshtein distance against registered names; show top suggestion.</p>
+</details>
+
+<details class="diag">
+  <summary><span class="id">2-4</span> Missing return — show signature and inferred return <span class="est">S, ~2h</span></summary>
+</details>
+
+<details class="diag">
+  <summary><span class="id">2-5</span> Arity errors — show expected parameter list <span class="est">S, ~2h</span></summary>
+</details>
+
+<details class="diag">
+  <summary><span class="id">2-6</span> Undefined name — nearest-name suggestion <span class="est">S, ~2h</span></summary>
+</details>
+
+<details class="diag">
+  <summary><span class="id">2-7</span> Strata diag::error formatting matches native errors <span class="est">M, ~3h</span></summary>
+</details>
+
+<details class="diag">
+  <summary><span class="id">2-8</span> Document error format in language reference <span class="est">S, ~2h</span></summary>
+</details>
+
+<!-- ================================================================== -->
+<h2 id="phase-3">Phase 3 — Strata 2.0 in <code>boot/</code></h2>
+
+<div class="phase-intro">
+  Port every piece of the src/ TypeScript Strata 2.0 implementation to boot/
+  Silicon.  Reference implementation is the 56 tests in
+  <code>src/elaborator/strata2.test.ts</code> — each becomes a corresponding
+  boot test.  Order below mirrors dependency: ABI primitives first, then
+  registry, then phase handlers, then bodies, then specific systems.
+  <br/><br/>
+  <strong>Hard prerequisite:</strong> Phase 0.5 (CaaS Foundation) must
+  complete first.  Porting boot/ with the mutable-tree pattern and
+  inferredType node stamping bakes those assumptions into the self-hosted
+  compiler; ripping them out later means re-porting most of boot/.  Cheaper
+  to land CaaS-1 through CaaS-3 + CaaS-6 in src/ first, then port the new
+  shape to boot/.
+</div>
+
+<details class="strata">
+  <summary><span class="id">3-1</span> Port HandleTable + StringPool to boot/ <span class="est">M, ~4h</span></summary>
+  <p class="goal">Mirror src/comptime/handles.ts in Silicon.  Foundation for everything else in this phase.</p>
+</details>
+
+<details class="strata">
+  <summary><span class="id">3-2</span> Port unify, applySubst, instantiate, schemes <span class="est">L, ~8h</span></summary>
+  <p class="goal">HM-lite primitives.  See <code>docs/hm-lite.md</code>; mirror src/types/unify.ts.</p>
+</details>
+
+<details class="strata">
+  <summary><span class="id">3-3</span> Extend boot/types/types.si — parametric Sum + Scheme <span class="est">M, ~4h</span></summary>
+  <div class="deps"><strong>Depends on:</strong> 3-2</div>
+</details>
+
+<details class="strata">
+  <summary><span class="id">3-4</span> Port resolveTypeAnnotation + variant schemes to boot/types/check.si <span class="est">L, ~6h</span></summary>
+  <div class="deps"><strong>Depends on:</strong> 3-3</div>
+</details>
+
+<details class="strata">
+  <summary><span class="id">3-5</span> Port checkPolymorphicCall — instantiate + unify at call sites <span class="est">L, ~6h</span></summary>
+  <div class="deps"><strong>Depends on:</strong> 3-4</div>
+</details>
+
+<details class="strata">
+  <summary><span class="id">3-6</span> Port typeOfMatchCall arm unification <span class="est">M, ~4h</span></summary>
+  <div class="deps"><strong>Depends on:</strong> 3-5</div>
+</details>
+
+<details class="strata">
+  <summary><span class="id">3-7</span> Port currentStratumRef + per-stratum state routing <span class="est">M, ~4h</span></summary>
+</details>
+
+<details class="strata">
+  <summary><span class="id">3-8</span> Port the @stratum unified-form loader <span class="est">L, ~6h</span></summary>
+  <p class="goal">Recognise <code>@stratum Name := { ... };</code> as a Definition kind.  Parse register::* / on::* calls in the body.</p>
+</details>
+
+<details class="strata">
+  <summary><span class="id">3-9</span> Port phase-handler tables (decl, callSite, annotation, lower, module_finalize, comptime) <span class="est">L, ~6h</span></summary>
+  <div class="deps"><strong>Depends on:</strong> 3-8</div>
+</details>
+
+<details class="strata">
+  <summary><span class="id">3-10</span> Port fireHandlers + stratumRef threading <span class="est">M, ~4h</span></summary>
+  <div class="deps"><strong>Depends on:</strong> 3-9</div>
+</details>
+
+<details class="strata">
+  <summary><span class="id">3-11</span> Port T-6 cycle detection on T0 DAG <span class="est">S, ~2h</span></summary>
+  <div class="deps"><strong>Depends on:</strong> 3-10</div>
+</details>
+
+<details class="strata">
+  <summary><span class="id">3-12</span> Port @@before / @@after ordering <span class="est">S, ~2h</span></summary>
+  <div class="deps"><strong>Depends on:</strong> 3-11</div>
+</details>
+
+<details class="strata">
+  <summary><span class="id">3-13</span> Port @fn pre-pass + namedHandlers (Phase A) <span class="est">M, ~4h</span></summary>
+  <div class="deps"><strong>Depends on:</strong> 3-8</div>
+</details>
+
+<details class="strata">
+  <summary><span class="id">3-14</span> Port the @match arm-expression form + normalizeMatchArgs <span class="est">M, ~3h</span></summary>
+</details>
+
+<details class="strata">
+  <summary><span class="id">3-15</span> Port ast.capture_template + clone + substitute + patch_types <span class="est">L, ~6h</span></summary>
+</details>
+
+<details class="strata">
+  <summary><span class="id">3-16</span> Port ast.with_keyword / with_name / rewrite_call <span class="est">M, ~3h</span></summary>
+  <div class="deps"><strong>Depends on:</strong> 3-15</div>
+</details>
+
+<details class="strata">
+  <summary><span class="id">3-17</span> Port type.* primitives (variable, substitute, equals, format) <span class="est">M, ~3h</span></summary>
+  <div class="deps"><strong>Depends on:</strong> 3-3</div>
+</details>
+
+<details class="strata">
+  <summary><span class="id">3-18</span> Port type.bind_template_args + mangle_suffix <span class="est">M, ~3h</span></summary>
+  <div class="deps"><strong>Depends on:</strong> 3-17</div>
+</details>
+
+<details class="strata">
+  <summary><span class="id">3-19</span> Port module.push_definition / push_global accumulator <span class="est">M, ~3h</span></summary>
+</details>
+
+<details class="strata">
+  <summary><span class="id">3-20</span> Port diag::error / warn accumulator (T-5 model) <span class="est">S, ~2h</span></summary>
+</details>
+
+<details class="strata">
+  <summary><span class="id">3-21</span> Port on::comptime + built-in comptime handlers (@nil, @not, ops) <span class="est">L, ~6h</span></summary>
+  <div class="deps"><strong>Depends on:</strong> 3-10</div>
+</details>
+
+<details class="strata">
+  <summary><span class="id">3-22</span> Port the comptime engine (compileStrataHandlers + WASM-in-WASM) <span class="est">XL, 2d</span></summary>
+  <p class="goal">The biggest single port.  Requires embedding a WASM interpreter or using a WASI extension.  See <code>docs/comptime-via-compilation.md</code>.</p>
+  <div class="deps"><strong>Depends on:</strong> 3-1 through 3-21</div>
+</details>
+
+<details class="strata">
+  <summary><span class="id">3-23</span> Write boot/tests/strata2_test.si covering all 56 src/ behaviours <span class="est">L, ~8h</span></summary>
+  <div class="deps"><strong>Depends on:</strong> 3-22</div>
+</details>
+
+<details class="strata">
+  <summary><span class="id">3-24</span> Write the strata authoring guide <span class="est">L, ~6h</span></summary>
+  <p class="goal">User-facing doc: @stratum unified form, all phase hooks, state, push_definition, testing strata, CompilerAPI stability contract.</p>
+</details>
+
+<!-- ================================================================== -->
+<h2 id="phase-4">Phase 4 — <code>@defer</code></h2>
+
+<details class="lang">
+  <summary><span class="id">4-1</span> Design @defer stratum (state model, finalize semantics) <span class="est">M, ~3h</span></summary>
+</details>
+
+<details class="lang">
+  <summary><span class="id">4-2</span> Implement @defer as a stratum in src/strata/ <span class="est">M, ~4h</span></summary>
+</details>
+
+<details class="lang">
+  <summary><span class="id">4-3</span> Tests: early return / multiple returns / nested defer <span class="est">M, ~3h</span></summary>
+  <div class="deps"><strong>Depends on:</strong> 4-2</div>
+</details>
+
+<details class="lang">
+  <summary><span class="id">4-4</span> Replace compiler's arena cleanup with @defer <span class="est">M, ~4h</span></summary>
+  <div class="deps"><strong>Depends on:</strong> 4-3</div>
+</details>
+
+<details class="lang">
+  <summary><span class="id">4-5</span> Port @defer to boot/ <span class="est">M, ~4h</span></summary>
+  <div class="deps"><strong>Depends on:</strong> 4-4, Phase 3 complete</div>
+</details>
+
+<!-- ================================================================== -->
+<h2 id="phase-5">Phase 5 — Generic stdlib + type system</h2>
+
+<h3>5a — Generic stdlib</h3>
+
+<details class="stdlib">
+  <summary><span class="id">5a-1</span> @generic Option as a stratum + Silicon source <span class="est">M, ~3h</span></summary>
+</details>
+
+<details class="stdlib">
+  <summary><span class="id">5a-2</span> @generic Result + @try shorthand <span class="est">M, ~4h</span></summary>
+  <div class="deps"><strong>Depends on:</strong> 5a-1</div>
+</details>
+
+<details class="stdlib">
+  <summary><span class="id">5a-3</span> ? unwrap shorthand for Result / Option <span class="est">M, ~3h</span></summary>
+  <div class="deps"><strong>Depends on:</strong> 5a-2</div>
+</details>
+
+<details class="stdlib">
+  <summary><span class="id">5a-4</span> Vec[T] — growable array (alloc + grow + len + idx) <span class="est">L, ~6h</span></summary>
+  <div class="deps"><strong>Depends on:</strong> 1a-3 (field access), 5d-1 (allocator interface)</div>
+</details>
+
+<details class="stdlib">
+  <summary><span class="id">5a-5</span> Vec[T] iteration helpers (map/filter — needs first-class fns) <span class="est">M, ~4h</span></summary>
+  <div class="deps"><strong>Depends on:</strong> 5a-4, 5d-3</div>
+</details>
+
+<details class="stdlib">
+  <summary><span class="id">5a-6</span> HashMap[K, V] — open-addressing hash table <span class="est">L, ~8h</span></summary>
+  <div class="deps"><strong>Depends on:</strong> 5a-4</div>
+</details>
+
+<details class="stdlib">
+  <summary><span class="id">5a-7</span> Rewrite compiler's internal data structures using Vec/HashMap/Option <span class="est">L, ~8h</span></summary>
+  <div class="deps"><strong>Depends on:</strong> 5a-6</div>
+</details>
+
+<h3>5b — Unsigned integer types</h3>
+
+<details class="lang">
+  <summary><span class="id">5b-1</span> Register u8, u16, u32, u64 as distinct types <span class="est">M, ~3h</span></summary>
+</details>
+
+<details class="lang">
+  <summary><span class="id">5b-2</span> Unsigned operator overloads (div_u, shr_u, comparisons) <span class="est">M, ~4h</span></summary>
+  <div class="deps"><strong>Depends on:</strong> 5b-1</div>
+</details>
+
+<details class="lang">
+  <summary><span class="id">5b-3</span> Codegen routes to *_u WASM instruction variants <span class="est">M, ~3h</span></summary>
+  <div class="deps"><strong>Depends on:</strong> 5b-2</div>
+</details>
+
+<details class="lang">
+  <summary><span class="id">5b-4</span> Migrate WASI bindings to u32/u64 <span class="est">M, ~4h</span></summary>
+  <div class="deps"><strong>Depends on:</strong> 5b-3</div>
+</details>
+
+<h3>5c — Slices</h3>
+
+<details class="lang">
+  <summary><span class="id">5c-1</span> Design Slice[T] (struct with ptr, len) <span class="est">M, ~3h</span></summary>
+  <div class="deps"><strong>Depends on:</strong> 1a-5</div>
+</details>
+
+<details class="lang">
+  <summary><span class="id">5c-2</span> Bounds-checked indexing via on::callSite <span class="est">M, ~4h</span></summary>
+  <div class="deps"><strong>Depends on:</strong> 5c-1</div>
+</details>
+
+<details class="lang">
+  <summary><span class="id">5c-3</span> String → Slice[u8] generalisation <span class="est">M, ~3h</span></summary>
+  <div class="deps"><strong>Depends on:</strong> 5c-2, 5b-1</div>
+</details>
+
+<details class="lang">
+  <summary><span class="id">5c-4</span> Migrate compiler's (ptr, len) pairs to Slice[u8] <span class="est">L, ~6h</span></summary>
+  <div class="deps"><strong>Depends on:</strong> 5c-3</div>
+</details>
+
+<h3>5d — First-class functions</h3>
+
+<details class="lang">
+  <summary><span class="id">5d-1</span> Function reference table management <span class="est">M, ~4h</span></summary>
+</details>
+
+<details class="lang">
+  <summary><span class="id">5d-2</span> call_indirect codegen <span class="est">M, ~4h</span></summary>
+  <div class="deps"><strong>Depends on:</strong> 5d-1</div>
+</details>
+
+<details class="lang">
+  <summary><span class="id">5d-3</span> Function-type as a first-class SiliconType <span class="est">M, ~3h</span></summary>
+  <div class="deps"><strong>Depends on:</strong> 5d-2</div>
+</details>
+
+<details class="lang">
+  <summary><span class="id">5d-4</span> Vec.map proof — first-class function passed as callback <span class="est">M, ~3h</span></summary>
+  <div class="deps"><strong>Depends on:</strong> 5d-3, 5a-4</div>
+</details>
+
+<!-- ================================================================== -->
+<h2 id="phase-6">Phase 6 — <code>@comptime</code> + <code>sgl</code> CLI</h2>
+
+<h3>6a — @comptime</h3>
+
+<details class="lang">
+  <summary><span class="id">6a-1</span> Expose strata body evaluator at user-level @comptime <span class="est">M, ~4h</span></summary>
+</details>
+
+<details class="lang">
+  <summary><span class="id">6a-2</span> @comptime in expression position (returns a value) <span class="est">M, ~3h</span></summary>
+  <div class="deps"><strong>Depends on:</strong> 6a-1</div>
+</details>
+
+<details class="lang">
+  <summary><span class="id">6a-3</span> @comptime block — push_definition + module mutation <span class="est">M, ~4h</span></summary>
+  <div class="deps"><strong>Depends on:</strong> 6a-2</div>
+</details>
+
+<details class="lang">
+  <summary><span class="id">6a-4</span> Migrate emitter opcode table to @comptime-generated <span class="est">M, ~4h</span></summary>
+  <div class="deps"><strong>Depends on:</strong> 6a-3</div>
+</details>
+
+<details class="lang">
+  <summary><span class="id">6a-5</span> @assert in @comptime blocks <span class="est">S, ~2h</span></summary>
+  <div class="deps"><strong>Depends on:</strong> 6a-2</div>
+</details>
+
+<h3>6b — <code>sgl</code> CLI</h3>
+
+<details class="toolchain">
+  <summary><span class="id">6b-1</span> sgl binary scaffold + subcommand routing <span class="est">M, ~3h</span></summary>
+</details>
+
+<details class="toolchain">
+  <summary><span class="id">6b-2</span> sgl.toml manifest parser <span class="est">M, ~3h</span></summary>
+</details>
+
+<details class="toolchain">
+  <summary><span class="id">6b-3</span> sgl init — scaffold a project <span class="est">M, ~3h</span></summary>
+  <div class="deps"><strong>Depends on:</strong> 6b-1, 6b-2</div>
+</details>
+
+<details class="toolchain">
+  <summary><span class="id">6b-4</span> sgl build — compile to default target <span class="est">M, ~4h</span></summary>
+  <div class="deps"><strong>Depends on:</strong> 6b-2</div>
+</details>
+
+<details class="toolchain">
+  <summary><span class="id">6b-5</span> sgl run — interpreter-backed dev mode <span class="est">M, ~4h</span></summary>
+  <div class="deps"><strong>Depends on:</strong> 6b-2, Phase 7</div>
+</details>
+
+<details class="toolchain">
+  <summary><span class="id">6b-6</span> sgl run --release — compile + execute <span class="est">M, ~3h</span></summary>
+  <div class="deps"><strong>Depends on:</strong> 6b-4, Phase 8 substantially complete</div>
+</details>
+
+<details class="toolchain">
+  <summary><span class="id">6b-7</span> sgl test — @@test discovery and reporting <span class="est">M, ~4h</span></summary>
+  <div class="deps"><strong>Depends on:</strong> 6b-5</div>
+</details>
+
+<details class="toolchain">
+  <summary><span class="id">6b-8</span> sgl check — typecheck only <span class="est">S, ~2h</span></summary>
+  <div class="deps"><strong>Depends on:</strong> 6b-2</div>
+</details>
+
+<details class="toolchain">
+  <summary><span class="id">6b-9</span> sgl eval — REPL <span class="est">M, ~4h</span></summary>
+  <div class="deps"><strong>Depends on:</strong> Phase 7</div>
+</details>
+
+<details class="toolchain">
+  <summary><span class="id">6b-10</span> sgl fmt — formatter <span class="est">L, ~6h</span></summary>
+</details>
+
+<details class="toolchain">
+  <summary><span class="id">6b-11</span> sgl add — fetch a dependency <span class="est">M, ~4h</span></summary>
+  <div class="deps"><strong>Depends on:</strong> 6b-2, 6b-12</div>
+</details>
+
+<details class="toolchain">
+  <summary><span class="id">6b-12</span> Git-backed package registry + index file <span class="est">L, ~6h</span></summary>
+</details>
+
+<details class="toolchain">
+  <summary><span class="id">6b-13</span> sgl.lock generation and version pinning <span class="est">M, ~3h</span></summary>
+  <div class="deps"><strong>Depends on:</strong> 6b-11</div>
+</details>
+
+<details class="toolchain">
+  <summary><span class="id">6b-14</span> Acceptance: <code>sgl init &amp;&amp; sgl run</code> prints "Hello, world!" <span class="est">S, ~2h</span></summary>
+  <div class="deps"><strong>Depends on:</strong> 6b-3, 6b-5</div>
+</details>
+
+<!-- ================================================================== -->
+<h2 id="phase-7">Phase 7 — Silicon interpreter</h2>
+
+<div class="phase-intro">
+  Tree-walking interpreter for Silicon, written in Silicon.  Drives
+  <code>sgl run</code>, <code>sgl test</code>, <code>sgl eval</code>.
+  Generalises the strata body evaluator from a subset to the full Silicon
+  surface.
+</div>
+
+<details class="runtime">
+  <summary><span class="id">7-1</span> Design Value type (tagged variants) + env model <span class="est">M, ~3h</span></summary>
+</details>
+
+<details class="runtime">
+  <summary><span class="id">7-2</span> Environment frames (HashMap chain for closures) <span class="est">M, ~3h</span></summary>
+  <div class="deps"><strong>Depends on:</strong> 5a-6, 7-1</div>
+</details>
+
+<details class="runtime">
+  <summary><span class="id">7-3</span> Walker for literals + namespaces + calls <span class="est">M, ~4h</span></summary>
+  <div class="deps"><strong>Depends on:</strong> 7-2</div>
+</details>
+
+<details class="runtime">
+  <summary><span class="id">7-4</span> Walker for binary ops via comptime-handler dispatch <span class="est">M, ~3h</span></summary>
+  <div class="deps"><strong>Depends on:</strong> 7-3</div>
+</details>
+
+<details class="runtime">
+  <summary><span class="id">7-5</span> Walker for @if / @loop / @match <span class="est">L, ~6h</span></summary>
+  <div class="deps"><strong>Depends on:</strong> 7-4</div>
+</details>
+
+<details class="runtime">
+  <summary><span class="id">7-6</span> Walker for @let / @var / @local (bindings + scope) <span class="est">M, ~4h</span></summary>
+  <div class="deps"><strong>Depends on:</strong> 7-3</div>
+</details>
+
+<details class="runtime">
+  <summary><span class="id">7-7</span> Walker for @fn declarations + closures <span class="est">L, ~6h</span></summary>
+  <div class="deps"><strong>Depends on:</strong> 7-6</div>
+</details>
+
+<details class="runtime">
+  <summary><span class="id">7-8</span> Walker for @struct field access (read + write) <span class="est">M, ~3h</span></summary>
+  <div class="deps"><strong>Depends on:</strong> 7-7, 1a-4</div>
+</details>
+
+<details class="runtime">
+  <summary><span class="id">7-9</span> Walker for @match variant destructure + pattern bindings <span class="est">M, ~4h</span></summary>
+  <div class="deps"><strong>Depends on:</strong> 7-5</div>
+</details>
+
+<details class="runtime">
+  <summary><span class="id">7-10</span> Generalise strata body evaluator (subset → full Silicon) <span class="est">L, ~8h</span></summary>
+  <div class="deps"><strong>Depends on:</strong> 7-9</div>
+</details>
+
+<details class="runtime">
+  <summary><span class="id">7-11</span> CompilerAPI boundary works inside interpreter <span class="est">M, ~4h</span></summary>
+  <div class="deps"><strong>Depends on:</strong> 7-10</div>
+</details>
+
+<details class="runtime">
+  <summary><span class="id">7-12</span> Interpreter driver for sgl run <span class="est">M, ~3h</span></summary>
+  <div class="deps"><strong>Depends on:</strong> 7-11</div>
+</details>
+
+<details class="runtime">
+  <summary><span class="id">7-13</span> @@test annotation + sgl test discovery <span class="est">M, ~4h</span></summary>
+  <div class="deps"><strong>Depends on:</strong> 7-12</div>
+</details>
+
+<details class="runtime">
+  <summary><span class="id">7-14</span> sgl eval REPL with line editor <span class="est">L, ~6h</span></summary>
+  <div class="deps"><strong>Depends on:</strong> 7-12</div>
+</details>
+
+<details class="runtime">
+  <summary><span class="id">7-15</span> Pretty-printer for Silicon values (Result, Vec, struct, sum) <span class="est">M, ~4h</span></summary>
+  <div class="deps"><strong>Depends on:</strong> 7-14</div>
+</details>
+
+<details class="runtime">
+  <summary><span class="id">7-16</span> Regression: run boot/tests/*_test.si via interpreter <span class="est">M, ~4h</span></summary>
+  <div class="deps"><strong>Depends on:</strong> 7-13</div>
+</details>
+
+<!-- ================================================================== -->
+<h2 id="phase-8">Phase 8 — Native backend (QBE)</h2>
+
+<details class="runtime">
+  <summary><span class="id">8-1</span> QBE IR emitter scaffolding + module skeleton <span class="est">M, ~4h</span></summary>
+</details>
+
+<details class="runtime">
+  <summary><span class="id">8-2</span> Emit Const / BinOp / LocalGet / LocalSet to QBE text IR <span class="est">M, ~4h</span></summary>
+  <div class="deps"><strong>Depends on:</strong> 8-1</div>
+</details>
+
+<details class="runtime">
+  <summary><span class="id">8-3</span> Emit Call / Return <span class="est">M, ~3h</span></summary>
+  <div class="deps"><strong>Depends on:</strong> 8-2</div>
+</details>
+
+<details class="runtime">
+  <summary><span class="id">8-4</span> Emit If / Loop / Break / Continue as basic blocks + jumps <span class="est">L, ~6h</span></summary>
+  <div class="deps"><strong>Depends on:</strong> 8-3</div>
+</details>
+
+<details class="runtime">
+  <summary><span class="id">8-5</span> Emit Global / Import / Export <span class="est">M, ~3h</span></summary>
+  <div class="deps"><strong>Depends on:</strong> 8-3</div>
+</details>
+
+<details class="runtime">
+  <summary><span class="id">8-6</span> Emit Function decl + body + signature <span class="est">M, ~4h</span></summary>
+  <div class="deps"><strong>Depends on:</strong> 8-4</div>
+</details>
+
+<details class="runtime">
+  <summary><span class="id">8-7</span> Bundle QBE binary inside sgl <span class="est">M, ~3h</span></summary>
+</details>
+
+<details class="runtime">
+  <summary><span class="id">8-8</span> Invoke as/ld pipeline; produce executable <span class="est">M, ~4h</span></summary>
+  <div class="deps"><strong>Depends on:</strong> 8-6, 8-7</div>
+</details>
+
+<details class="runtime">
+  <summary><span class="id">8-9</span> Linux x86-64 platform support + CI <span class="est">M, ~4h</span></summary>
+  <div class="deps"><strong>Depends on:</strong> 8-8</div>
+</details>
+
+<details class="runtime">
+  <summary><span class="id">8-10</span> Linux ARM64 platform support + CI <span class="est">M, ~4h</span></summary>
+  <div class="deps"><strong>Depends on:</strong> 8-9</div>
+</details>
+
+<details class="runtime">
+  <summary><span class="id">8-11</span> macOS ARM64 (Apple Silicon) platform support + CI <span class="est">M, ~4h</span></summary>
+  <div class="deps"><strong>Depends on:</strong> 8-9</div>
+</details>
+
+<details class="runtime">
+  <summary><span class="id">8-12</span> macOS x86-64 platform support + CI <span class="est">M, ~3h</span></summary>
+  <div class="deps"><strong>Depends on:</strong> 8-11</div>
+</details>
+
+<details class="runtime">
+  <summary><span class="id">8-13</span> Self-host: native sigilc compiles itself <span class="est">L, ~8h</span></summary>
+  <div class="deps"><strong>Depends on:</strong> 8-12</div>
+</details>
+
+<details class="runtime">
+  <summary><span class="id">8-14</span> Byte-equal WAT output verification across backends <span class="est">M, ~3h</span></summary>
+  <div class="deps"><strong>Depends on:</strong> 8-13</div>
+</details>
+
+<!-- ================================================================== -->
+<h2 id="phase-caas">Phase 8.5 — CaaS Consumer APIs</h2>
+
+<div class="phase-intro">
+  Builds on Phase 0.5 (CaaS Foundation).  These stories add the
+  consumer-facing APIs — workspace, symbols, incrementality, code
+  actions — and rewrite existing CLI / formatter tools to be the first
+  real consumers of the foundation.  Phase 9b (LSP) consumes these.
+  <br/><br/>
+  Some stories here are <strong>required for 1.0</strong> (workspace,
+  symbols, CLI rewrite, stability contract); others are
+  <strong>post-1.0 acceptable</strong> (incremental parsing/typecheck,
+  code actions) and labelled accordingly in their summaries.
+</div>
+
+<details class="caas">
+  <summary><span class="id">CaaS-4</span> Workspace abstraction — multi-document project state <span class="est">M, ~4h</span> <em style="color: var(--accent3); font-size: 0.78em;">[1.0]</em></summary>
+  <p class="goal">A Workspace holds a set of Documents (files).  Each Document has a content version, a parsed SyntaxTree, and a derived SemanticModel.  Operations on the Workspace: open/close/edit/save documents; query across all documents.</p>
+  <div class="accept"><strong>Acceptance:</strong>
+    <ul>
+      <li>API: <code>workspace.openDocument(uri, content)</code>, <code>workspace.editDocument(uri, edits)</code>, <code>workspace.closeDocument(uri)</code>.</li>
+      <li>Change events fire when documents are modified; consumers can subscribe.</li>
+      <li>Cross-document references (a function in file A used in file B) resolve correctly.</li>
+    </ul>
+  </div>
+  <div class="deps"><strong>Depends on:</strong> CaaS-3</div>
+</details>
+
+<details class="caas">
+  <summary><span class="id">CaaS-5</span> Symbol table API — declarations, references, navigation <span class="est">M, ~4h</span> <em style="color: var(--accent3); font-size: 0.78em;">[1.0]</em></summary>
+  <p class="goal">Public Symbol type with: name, kind (function/type/variable/strata), declaration location, list of reference locations, containing scope.  Powers go-to-definition, find-references, rename.  Required for LSP go-to-def and hover (Phase 9b).</p>
+  <div class="deps"><strong>Depends on:</strong> CaaS-4</div>
+</details>
+
+<details class="caas">
+  <summary><span class="id">CaaS-7</span> Incremental parser — re-parse only changed documents <span class="est">L, ~8h</span> <em style="color: var(--accent4); font-size: 0.78em;">[post-1.0 acceptable]</em></summary>
+  <p class="goal">When a document is edited, re-parse only that document.  Downstream artifacts (SemanticModel, diagnostics) invalidate per-document.  No full-project reparse.  Pure perf optimisation — 1.0 ships without it (full reparse on change) and the LSP is still usable for moderately sized projects.</p>
+  <div class="accept"><strong>Acceptance:</strong>
+    <ul>
+      <li>Editing one document leaves other documents' SyntaxTrees unchanged.</li>
+      <li>Sub-document incremental parsing (only re-parse the changed subtree) is a stretch goal; full-document re-parse is the floor.</li>
+    </ul>
+  </div>
+  <div class="deps"><strong>Depends on:</strong> CaaS-2, CaaS-4</div>
+</details>
+
+<details class="caas">
+  <summary><span class="id">CaaS-8</span> Incremental typecheck — semantic delta propagation <span class="est">L, ~8h</span> <em style="color: var(--accent4); font-size: 0.78em;">[post-1.0 acceptable]</em></summary>
+  <p class="goal">When document A changes and B doesn't, B's SemanticModel only re-runs if A's exports actually changed (signatures, types, registered strata).  Salsa-style query memoisation.  Like CaaS-7, a perf concern — 1.0 ships without it.</p>
+  <div class="deps"><strong>Depends on:</strong> CaaS-7</div>
+</details>
+
+<details class="caas">
+  <summary><span class="id">CaaS-9</span> CLI rewrite — sgl as a library consumer <span class="est">M, ~4h</span> <em style="color: var(--accent3); font-size: 0.78em;">[1.0]</em></summary>
+  <p class="goal">Rewrite <code>sgl build</code> / <code>run</code> / <code>check</code> to use only the public CaaS API.  Proves the API is sufficient for a real consumer.  Any internal-only access needed → either expose it or change the implementation.</p>
+  <div class="deps"><strong>Depends on:</strong> CaaS-3, CaaS-6, 6b-1</div>
+</details>
+
+<details class="caas">
+  <summary><span class="id">CaaS-10</span> Stability contract for the CaaS API <span class="est">S, ~2h</span> <em style="color: var(--accent3); font-size: 0.78em;">[1.0]</em></summary>
+  <p class="goal">Part of Phase 10 stability work.  Declare the CaaS API surface stable at 1.0: additive changes are fine, removals/breaks require a major version.  Internal refactors are unconstrained.  Document which subsystems can call which.</p>
+  <div class="deps"><strong>Depends on:</strong> CaaS-9, 10b-1</div>
+</details>
+
+<details class="caas">
+  <summary><span class="id">CaaS-11</span> Code action / quick-fix API surface <span class="est">M, ~4h</span> <em style="color: var(--accent4); font-size: 0.78em;">[post-1.0 acceptable]</em></summary>
+  <p class="goal">A CodeAction takes a diagnostic and produces zero or more TextEdits that fix it.  Foundational for Roslyn-style "Press Ctrl+. to fix this error" workflows in IDEs.  Strata authors can register code actions for their diagnostics.  Nice IDE polish but not blocking 1.0.</p>
+  <div class="deps"><strong>Depends on:</strong> CaaS-6</div>
+</details>
+
+<details class="caas">
+  <summary><span class="id">CaaS-12</span> Formatter as a CaaS consumer (sgl fmt rewrite) <span class="est">M, ~4h</span> <em style="color: var(--accent3); font-size: 0.78em;">[1.0]</em></summary>
+  <p class="goal">Re-implement <code>sgl fmt</code> (originally story 6b-10) on top of the SyntaxTree API.  No re-parsing in the formatter — it reads the tree.  Proves the API supports format-style tooling.</p>
+  <div class="deps"><strong>Depends on:</strong> CaaS-2, 6b-10 superseded</div>
+</details>
+
+<!-- ================================================================== -->
+<h2 id="phase-9">Phase 9 — DWARF + LSP</h2>
+
+<h3>9a — DWARF debug info</h3>
+
+<div class="phase-intro" style="font-size: 0.85rem;">
+  The Silicon interpreter (Phase 7) is the primary debug story for 1.0 —
+  it operates on Silicon semantics, shows values as Silicon types, and
+  covers app-developer needs.  DWARF wins systems-level debugging of
+  native binaries (crash analysis, profilers, gdb on <code>sigilc</code>
+  itself) — a real but secondary concern.  All 9a stories are marked
+  <em>post-1.0 acceptable</em>; ship when there's concrete demand.
+  <br/><br/>
+  Function-name symbols in native binaries come essentially free from
+  QBE → <code>as</code> → <code>ld</code> as long as functions are
+  emitted with proper names — so stack traces stay readable without
+  any DWARF work.  Full source-line info, variable inspection, and
+  IDE-level native debugging wait on Phase 9a being prioritised.
+</div>
+
+<details class="toolchain">
+  <summary><span class="id">9a-1</span> Thread sourceLocation through IR nodes <span class="est">L, ~6h</span> <em style="color: var(--accent4); font-size: 0.78em;">[post-1.0 acceptable]</em></summary>
+</details>
+
+<details class="toolchain">
+  <summary><span class="id">9a-2</span> Emit dbgloc directives in QBE output <span class="est">M, ~3h</span> <em style="color: var(--accent4); font-size: 0.78em;">[post-1.0 acceptable]</em></summary>
+  <div class="deps"><strong>Depends on:</strong> 9a-1, 8-6</div>
+</details>
+
+<details class="toolchain">
+  <summary><span class="id">9a-3</span> DW_TAG_subprogram for function names <span class="est">M, ~3h</span> <em style="color: var(--accent4); font-size: 0.78em;">[post-1.0 acceptable]</em></summary>
+  <div class="deps"><strong>Depends on:</strong> 9a-2</div>
+</details>
+
+<details class="toolchain">
+  <summary><span class="id">9a-4</span> Verify gdb/lldb source-level breakpoints work <span class="est">M, ~3h</span> <em style="color: var(--accent4); font-size: 0.78em;">[post-1.0 acceptable]</em></summary>
+  <div class="deps"><strong>Depends on:</strong> 9a-3</div>
+</details>
+
+<details class="toolchain">
+  <summary><span class="id">9a-5</span> Verify stack traces show Silicon function names <span class="est">S, ~2h</span> <em style="color: var(--accent4); font-size: 0.78em;">[post-1.0 acceptable]</em></summary>
+  <div class="deps"><strong>Depends on:</strong> 9a-4</div>
+</details>
+
+<h3>9b — LSP v1 (thin wrapper over CaaS)</h3>
+
+<div class="phase-intro" style="font-size: 0.85rem;">
+  Each LSP capability becomes a translation from an LSP request to a
+  call into the CaaS API.  No language-specific intelligence lives in
+  this layer — it's a protocol adapter.  Drops from estimated ~28h
+  (custom LSP) to ~14h (thin wrapper) thanks to Phase 8.5.
+</div>
+
+<details class="toolchain">
+  <summary><span class="id">9b-1</span> sgl lsp subcommand + LSP scaffolding (jsonrpc loop) <span class="est">M, ~3h</span></summary>
+</details>
+
+<details class="toolchain">
+  <summary><span class="id">9b-2</span> didOpen / didChange / didClose → Workspace.editDocument <span class="est">S, ~2h</span></summary>
+  <div class="deps"><strong>Depends on:</strong> 9b-1, CaaS-4</div>
+</details>
+
+<details class="toolchain">
+  <summary><span class="id">9b-3</span> publishDiagnostics ← Workspace change events + SemanticModel.diagnosticsIn <span class="est">S, ~2h</span></summary>
+  <div class="deps"><strong>Depends on:</strong> 9b-2, CaaS-6</div>
+</details>
+
+<details class="toolchain">
+  <summary><span class="id">9b-4</span> textDocument/definition ← Symbol.declarationLocation <span class="est">S, ~2h</span></summary>
+  <div class="deps"><strong>Depends on:</strong> 9b-2, CaaS-5</div>
+</details>
+
+<details class="toolchain">
+  <summary><span class="id">9b-5</span> textDocument/hover ← SemanticModel.typeOf + doc comment <span class="est">S, ~2h</span></summary>
+  <div class="deps"><strong>Depends on:</strong> 9b-2, CaaS-3</div>
+</details>
+
+<details class="toolchain">
+  <summary><span class="id">9b-6</span> textDocument/documentSymbol ← SyntaxTree walk <span class="est">S, ~1.5h</span></summary>
+  <div class="deps"><strong>Depends on:</strong> 9b-2, CaaS-2</div>
+</details>
+
+<details class="toolchain">
+  <summary><span class="id">9b-7</span> TextMate grammar for syntax highlighting <span class="est">M, ~4h</span></summary>
+</details>
+
+<details class="toolchain">
+  <summary><span class="id">9b-8</span> VS Code extension <span class="est">M, ~4h</span></summary>
+  <div class="deps"><strong>Depends on:</strong> 9b-1, 9b-7</div>
+</details>
+
+<details class="toolchain">
+  <summary><span class="id">9b-9</span> Neovim + Helix integration docs <span class="est">S, ~2h</span></summary>
+  <div class="deps"><strong>Depends on:</strong> 9b-8</div>
+</details>
+
+<!-- ================================================================== -->
+<h2 id="phase-10">Phase 10 — Stability + distribution</h2>
+
+<h3>10a — Grammar specification</h3>
+
+<details class="distro">
+  <summary><span class="id">10a-1</span> Write EBNF for current grammar <span class="est">M, ~4h</span></summary>
+</details>
+
+<details class="distro">
+  <summary><span class="id">10a-2</span> Document strata vs grammar boundary <span class="est">S, ~2h</span></summary>
+  <div class="deps"><strong>Depends on:</strong> 10a-1</div>
+</details>
+
+<details class="distro">
+  <summary><span class="id">10a-3</span> Cross-check EBNF against ohm grammar <span class="est">M, ~3h</span></summary>
+  <div class="deps"><strong>Depends on:</strong> 10a-1</div>
+</details>
+
+<h3>10b — Stability policy</h3>
+
+<details class="distro">
+  <summary><span class="id">10b-1</span> Draft language stability policy <span class="est">M, ~3h</span></summary>
+</details>
+
+<details class="distro">
+  <summary><span class="id">10b-2</span> Draft CompilerAPI stability contract <span class="est">S, ~2h</span></summary>
+</details>
+
+<details class="distro">
+  <summary><span class="id">10b-3</span> Draft strata API stability rules <span class="est">S, ~2h</span></summary>
+</details>
+
+<h3>10c — Distribution</h3>
+
+<details class="distro">
+  <summary><span class="id">10c-1</span> GitHub Releases — binary tarballs for Tier 1 platforms <span class="est">M, ~4h</span></summary>
+  <div class="deps"><strong>Depends on:</strong> 8-12</div>
+</details>
+
+<details class="distro">
+  <summary><span class="id">10c-2</span> Homebrew formula + tap <span class="est">M, ~3h</span></summary>
+  <div class="deps"><strong>Depends on:</strong> 10c-1</div>
+</details>
+
+<details class="distro">
+  <summary><span class="id">10c-3</span> apt/deb package <span class="est">M, ~4h</span></summary>
+  <div class="deps"><strong>Depends on:</strong> 10c-1</div>
+</details>
+
+<details class="distro">
+  <summary><span class="id">10c-4</span> winget manifest (Windows via WSL) <span class="est">M, ~3h</span></summary>
+  <div class="deps"><strong>Depends on:</strong> 10c-1</div>
+</details>
+
+<details class="distro">
+  <summary><span class="id">10c-5</span> curl | sh installer script <span class="est">M, ~3h</span></summary>
+  <div class="deps"><strong>Depends on:</strong> 10c-1</div>
+</details>
+
+<details class="distro">
+  <summary><span class="id">10c-6</span> Embed wasmtime + stage1.wasm in sgl binary <span class="est">L, ~6h</span></summary>
+</details>
+
+<details class="distro">
+  <summary><span class="id">10c-7</span> Getting-started tutorial — install to running program in 15 min <span class="est">M, ~4h</span></summary>
+  <div class="deps"><strong>Depends on:</strong> 10c-2, 10c-7</div>
+</details>
+
+<details class="distro">
+  <summary><span class="id">10c-8</span> CI: build all Tier 1 binaries on every release tag <span class="est">M, ~4h</span></summary>
+  <div class="deps"><strong>Depends on:</strong> 8-9 through 8-12</div>
+</details>
+
+<details class="distro">
+  <summary><span class="id">10c-9</span> Acceptance gate: <code>brew install sigil &amp;&amp; sgl init &amp;&amp; sgl run</code> on a fresh machine <span class="est">S, ~2h</span></summary>
+  <div class="deps"><strong>Depends on:</strong> 10c-2, 10c-7</div>
+</details>
+
+<!-- ================================================================== -->
+<h2 id="summary" style="border-color: var(--accent5);">Total effort summary</h2>
+
+<table>
+  <tr><th>Phase</th><th>Stories</th><th>Approx effort</th><th>Critical path note</th></tr>
+  <tr><td>0 — Dissolution completion</td><td>30</td><td>~14 days</td><td>Sequential on per-stratum migration</td></tr>
+  <tr><td>0.5 — CaaS Foundation</td><td>4</td><td>~5 days</td><td><strong>Required-for-1.0.</strong>  Must precede Phase 3 (boot port).  CaaS-2 (immutable trees) is ~half the phase.</td></tr>
+  <tr><td>1 — Language foundations</td><td>14</td><td>~10 days</td><td>1a blocks 1b; 1a-8 (port) blocks Phase 3 closure</td></tr>
+  <tr><td>2 — Error messages</td><td>8</td><td>~5 days</td><td>Parallelisable per error type</td></tr>
+  <tr><td>3 — Strata 2.0 in boot/</td><td>24</td><td>~25 days</td><td>3-22 (comptime engine port) is the hardest single story</td></tr>
+  <tr><td>4 — @defer</td><td>5</td><td>~3 days</td><td>Blocks on Phase 3</td></tr>
+  <tr><td>5 — Generic stdlib + extensions</td><td>17</td><td>~18 days</td><td>5a depends on 1a; 5d-4 caps the phase</td></tr>
+  <tr><td>6 — @comptime + sgl CLI</td><td>19</td><td>~17 days</td><td>6b-5 blocks on Phase 7</td></tr>
+  <tr><td>7 — Silicon interpreter</td><td>16</td><td>~15 days</td><td>Linear within the phase</td></tr>
+  <tr><td>8 — Native backend (QBE)</td><td>14</td><td>~14 days</td><td>Backend-then-platforms-then-self-host</td></tr>
+  <tr><td>8.5 — CaaS Consumer APIs</td><td>8</td><td>~12 days (1.0) + ~8 days (post-1.0)</td><td>CaaS-7, CaaS-8, CaaS-11 are post-1.0 acceptable</td></tr>
+  <tr><td>9 — LSP (DWARF deferred)</td><td>14</td><td>~4 days (1.0) + ~3 days (post-1.0)</td><td>9a stories all post-1.0; interpreter covers app-dev debugging</td></tr>
+  <tr><td>10 — Stability + distribution</td><td>15</td><td>~10 days</td><td>Mostly parallel; blocks on 8-12</td></tr>
+  <tr style="background: var(--surface2); font-weight: 600;"><td>1.0 Total</td><td>~175 stories</td><td>~149 working days (~7 months)</td><td>Required-for-1.0 only; excludes post-1.0 stretch</td></tr>
+  <tr style="font-size: 0.85em; color: var(--muted);"><td>+ post-1.0 stretch</td><td>~13 stories</td><td>~11 days</td><td>CaaS-7/8/11 + all of Phase 9a (DWARF); ship when bandwidth allows</td></tr>
+</table>
+
+<p style="margin-top: 14px; font-size: 0.85rem; color: var(--muted);">
+  Notes on the estimate: this is for one focused engineer working sequentially.
+  Many stories are parallelisable (different phases, different files).  A team
+  of three could plausibly compress to 3–4 months.  The estimate excludes
+  bug-fix capacity, design-revision rounds, and any feature creep — pad
+  20–30% for realism.  Stories sized XL should be split further when
+  approached; their estimates assume current scope, not future complexity
+  surprises.
+</p>
+
+</div>
+</body>
+</html>
