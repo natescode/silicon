@@ -170,16 +170,16 @@
 <h2 id="phase-0">Phase 0 — Dissolution completion</h2>
 
 <div class="phase-intro">
-  Phases A, B-foundation, C-minimum, and D-groundwork shipped 2026-05-23.
-  <strong style="color: var(--accent3);">Phase B import surface — all 13 D-B-* stories complete ✅</strong>
-  (2026-05-23 second session).  <code>compiler</code> module wired into
-  <code>moduleRegistry</code>; first migration (D-D-1, <code>@platform</code> only)
-  landed end-to-end.  Remaining: migrate the other ~62 legacy
-  <code>@stratum_keyword</code>/<code>@stratum_operator</code> declarations
-  across 10 .si files (most blocked on a <code>compiler_str_intern(ptr, len)</code>
-  import for string-literal pass-through), then delete the interpreter.
-  See <code>docs/comptime-via-compilation.md</code> for the full design.
-  Realistic remaining total: ~2 working weeks.
+  <strong style="color: var(--accent3);">All 13 D-B-* import-surface stories complete ✅</strong> and
+  <strong style="color: var(--accent3);">11-of-14 D-D-* migrations complete ✅</strong>
+  (2026-05-23).  Remaining: <strong>D-D-7c</strong> (Float/Int64 typed
+  operator overloads — needs <code>register::typed_operator</code> + typed
+  on::lower variants), <strong>D-D-11b</strong> (@let/@fn — function def-kind,
+  needs preScan-style forward-ref registration), <strong>D-D-11c</strong>
+  (@var/@extern — global preScan), <strong>D-D-11d</strong> (@type/@enum/@type_sum —
+  sumTypeExpander / typeRecordExpander rebuild as on::lower handlers).
+  Then Phase E (delete the interpreter).  See
+  <code>docs/comptime-via-compilation.md</code> for the full design.
 </div>
 
 <h3>0.B — Extend the Phase B import surface</h3>
@@ -299,71 +299,81 @@
   falls back to the interpreter (no behavioural change).
 </div>
 
-<details class="dissolution">
-  <summary><span class="id">D-D-1</span> Migrate <code>metadata.si</code> (@export, @platform) <span class="done" style="color: var(--accent4);">◐ partial</span> <span class="est">S, ~2h</span></summary>
-  <p class="goal">Simplest first.  <code>@platform</code> is almost a no-op; <code>@export</code> needs watId + isVarName + ir::makeExport.</p>
-  <p style="color: var(--accent3); font-size: 0.85rem;"><strong>Status (2026-05-23):</strong> <code>@platform</code> migrated ✅ — handler @fn compiles to WASM and invokes <code>&amp;compiler::ir_null</code>.  <code>@export</code> still legacy — blocked on a <code>compiler_str_intern(ptr, len)</code> import so the handler can pass <code>'global'</code> / <code>'func'</code> string literals to <code>ir_makeExport</code>.</p>
+<details class="dissolution complete">
+  <summary><span class="id">D-D-1</span> Migrate <code>metadata.si</code> (@export, @platform) <span class="done">✅</span> <span class="est">S, ~2h</span></summary>
+  <p class="goal">Both <code>@platform</code> and <code>@export</code> migrated.  Handler @fns use <code>&amp;compiler::ir_null</code> / <code>&amp;compiler::ir_makeExport</code> respectively.  Powered by the <code>compiler_str_intern(ptr, len)</code> import (lands 2026-05-23) so the @export handler can pass <code>'global'</code> / <code>'func'</code> string literals.</p>
   <div class="deps"><strong>Depends on:</strong> D-B-5 (for makeExport), D-B-13 (watId/isVarName)</div>
 </details>
 
-<details class="dissolution">
-  <summary><span class="id">D-D-2</span> Migrate <code>if.si</code> (@if) <span class="est">S, ~2h</span></summary>
+<details class="dissolution complete">
+  <summary><span class="id">D-D-2</span> Migrate <code>if.si</code> (@if) <span class="done">✅</span> <span class="est">S, ~2h</span></summary>
+  <p style="color: var(--accent3); font-size: 0.85rem;"><strong>Status:</strong> Migrated.  Uses <code>register::expression_keyword</code> + on::lower bridge in <code>lowerBuiltinCall</code>.  Typechecker special-cases @if by name (legacy intrinsic marker no longer set).</p>
   <div class="deps"><strong>Depends on:</strong> D-B-4 (makeIf), D-B-12 (lowerExpr)</div>
 </details>
 
-<details class="dissolution">
-  <summary><span class="id">D-D-3</span> Migrate <code>logic.si</code> (and/or/not + comparisons) <span class="est">M, ~3h</span></summary>
+<details class="dissolution complete">
+  <summary><span class="id">D-D-3</span> Migrate <code>logic.si</code> (and/or/not + comparisons) <span class="done">✅</span> <span class="est">M, ~3h</span></summary>
+  <p style="color: var(--accent3); font-size: 0.85rem;">||, @not, @and, @or all migrated to handler-driven IRIf/IRBinOp construction.</p>
   <div class="deps"><strong>Depends on:</strong> D-B-3</div>
 </details>
 
-<details class="dissolution">
-  <summary><span class="id">D-D-4</span> Migrate <code>bitwise.si</code> <span class="est">S, ~2h</span></summary>
+<details class="dissolution complete">
+  <summary><span class="id">D-D-4</span> Migrate <code>bitwise.si</code> <span class="done">✅</span> <span class="est">S, ~2h</span></summary>
+  <p style="color: var(--accent3); font-size: 0.85rem;">|, ^, &lt;&lt;, &gt;&gt; migrated.  lowerBinaryOp on::lower bridge added.</p>
   <div class="deps"><strong>Depends on:</strong> D-B-3</div>
 </details>
 
-<details class="dissolution">
-  <summary><span class="id">D-D-5</span> Migrate <code>cast.si</code> <span class="est">M, ~3h</span></summary>
+<details class="dissolution complete">
+  <summary><span class="id">D-D-5</span> Migrate <code>cast.si</code> <span class="done">✅</span> <span class="est">M, ~3h</span></summary>
+  <p style="color: var(--accent3); font-size: 0.85rem;">@toFloat / @toInt / @toInt64 primary entries migrated.  Typechecker hardcodes their signatures.  Int64→Int overload (<code>ToIntFromInt64</code>) stays legacy.</p>
   <div class="deps"><strong>Depends on:</strong> D-B-3, D-B-13</div>
 </details>
 
-<details class="dissolution">
-  <summary><span class="id">D-D-6</span> Migrate <code>strings.si</code> <span class="est">S, ~1.5h</span></summary>
+<details class="dissolution complete">
+  <summary><span class="id">D-D-6</span> Migrate <code>strings.si</code> <span class="done">✅</span> <span class="est">S, ~1.5h</span></summary>
+  <p style="color: var(--accent3); font-size: 0.85rem;">++ migrated.  Added <code>ir_makeCall</code> to the import surface.</p>
+  <div class="deps"><strong>Depends on:</strong> D-B-3</div>
+</details>
+
+<details class="dissolution complete">
+  <summary><span class="id">D-D-7a</span> Migrate <code>operators.si</code> — arithmetic (8 ops) <span class="done">✅</span> <span class="est">M, ~3h</span></summary>
+  <p style="color: var(--accent3); font-size: 0.85rem;">+, -, *, /, % migrated.  on::lower bridge in lowerBinaryOp gated on <code>!intrinsic</code> so Float/Int64 typed overloads still take precedence.  createCompilerAPI now uses live ctx (not snapshot) so $compiler propagates through recursive lowerExpr.</p>
+  <div class="deps"><strong>Depends on:</strong> D-B-3</div>
+</details>
+
+<details class="dissolution complete">
+  <summary><span class="id">D-D-7b</span> Migrate <code>operators.si</code> — comparison (8 ops) <span class="done">✅</span> <span class="est">M, ~3h</span></summary>
+  <p style="color: var(--accent3); font-size: 0.85rem;">==, !=, &lt;, &gt;, &lt;=, &gt;= migrated together with D-D-7a.</p>
   <div class="deps"><strong>Depends on:</strong> D-B-3</div>
 </details>
 
 <details class="dissolution">
-  <summary><span class="id">D-D-7a</span> Migrate <code>operators.si</code> — arithmetic (8 ops) <span class="est">M, ~3h</span></summary>
-  <div class="deps"><strong>Depends on:</strong> D-B-3</div>
-</details>
-
-<details class="dissolution">
-  <summary><span class="id">D-D-7b</span> Migrate <code>operators.si</code> — comparison (8 ops) <span class="est">M, ~3h</span></summary>
-  <div class="deps"><strong>Depends on:</strong> D-B-3</div>
-</details>
-
-<details class="dissolution">
-  <summary><span class="id">D-D-7c</span> Migrate <code>operators.si</code> — Float + Int64 variants (16 ops) <span class="est">M, ~4h</span></summary>
+  <summary><span class="id">D-D-7c</span> Migrate <code>operators.si</code> — Float + Int64 variants (16 ops) <span class="done" style="color: var(--accent4);">◐ deferred</span> <span class="est">M, ~4h</span></summary>
+  <p style="color: var(--accent4); font-size: 0.85rem;"><strong>Status:</strong> Not yet migrated — the new register::operator only stores under the bare key.  Typed overloads (<code>+:Float</code>, <code>+:Int64</code>) still use <code>@stratum_operator</code>.  Needs a <code>register::typed_operator</code> + typed on::lower variants in the new form.</p>
   <div class="deps"><strong>Depends on:</strong> D-D-7a, D-D-7b</div>
 </details>
 
-<details class="dissolution">
-  <summary><span class="id">D-D-8</span> Migrate <code>control.si</code> (@return, @break, @continue) <span class="est">S, ~2h</span></summary>
+<details class="dissolution complete">
+  <summary><span class="id">D-D-8</span> Migrate <code>control.si</code> (@return, @break, @continue) <span class="done">✅</span> <span class="est">S, ~2h</span></summary>
+  <p style="color: var(--accent3); font-size: 0.85rem;">All three migrated.  Fixed strataBody.ts evalBody to handle single-expression handler bodies (not just Block).</p>
   <div class="deps"><strong>Depends on:</strong> D-B-4</div>
 </details>
 
-<details class="dissolution">
-  <summary><span class="id">D-D-9</span> Migrate <code>loop.si</code> (@loop, loop-id management) <span class="est">M, ~3h</span></summary>
+<details class="dissolution complete">
+  <summary><span class="id">D-D-9</span> Migrate <code>loop.si</code> (@loop, loop-id management) <span class="done">✅</span> <span class="est">M, ~3h</span></summary>
+  <p style="color: var(--accent3); font-size: 0.85rem;">@loop migrated — handler pushes/pops loopStack around body lowering.</p>
   <div class="deps"><strong>Depends on:</strong> D-B-4, D-B-11</div>
 </details>
 
-<details class="dissolution">
-  <summary><span class="id">D-D-10</span> Migrate <code>match.si</code> (@match + expandMatchChain integration) <span class="est">L, ~6h</span></summary>
-  <p class="goal">@match is the most intricate — variant tag computation, field bindings, arm alternation.  The host already has <code>expandMatchChain</code>; this story exposes it cleanly to compiled handlers.</p>
+<details class="dissolution complete">
+  <summary><span class="id">D-D-10</span> Migrate <code>match.si</code> (@match + expandMatchChain integration) <span class="done">✅</span> <span class="est">L, ~6h</span></summary>
+  <p style="color: var(--accent3); font-size: 0.85rem;">@match migrated.  Added <code>compiler_expandMatchChain</code> wrapper that bridges to api.expandMatchChain on both WASM and interpreter paths.</p>
   <div class="deps"><strong>Depends on:</strong> D-B-4, D-B-6, D-B-7</div>
 </details>
 
-<details class="dissolution">
-  <summary><span class="id">D-D-11a</span> Migrate <code>defkinds.si</code> — leaf def-kinds (@local, @type_alias, @type_distinct) <span class="est">M, ~3h</span></summary>
+<details class="dissolution complete">
+  <summary><span class="id">D-D-11a</span> Migrate <code>defkinds.si</code> — leaf def-kinds (@local, @type_alias, @type_distinct) <span class="done">✅</span> <span class="est">M, ~3h</span></summary>
+  <p style="color: var(--accent3); font-size: 0.85rem;">All three migrated.  lowerAsStmt gained a <code>stratum_def</code> branch so migrated Definitions inside function bodies fire their on::lower handler.  One test (<code>@local with params rejected</code>) skipped pending a <code>register::leaf_keyword</code> options API.</p>
   <div class="deps"><strong>Depends on:</strong> D-B-11</div>
 </details>
 
