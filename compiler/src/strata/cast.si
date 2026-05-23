@@ -1,19 +1,57 @@
-@stratum_keyword ToFloat ('@toFloat', Node) = {
-  &IR::f32_convert_i32_s;
+# D-D-5: cast keywords migrated to the new @stratum form.
+# Each handler builds an IRCall with callKind='instr' to the right
+# WASM cast instruction.  ToIntFromInt64 (the typed Int64 overload)
+# stays legacy — new-form typed-overload registration isn't yet wired,
+# and the typed dispatch in lowerBuiltinCall still picks the legacy
+# Int64 overload before falling back to the migrated primary.
+
+@stratum ToFloat := {
+    &Compiler::register::expression_keyword '@toFloat';
+    &Compiler::on::lower '@toFloat', ToFloat_lower;
+};
+@fn ToFloat_lower node:Int := {
+    @local args:Int := &compiler::compiler_arr_new;
+    &compiler::compiler_arr_push args,
+        (&compiler::compiler_lowerExpr (&compiler::compiler_arg node, 0));
+    &compiler::ir_makeCall
+        (&compiler::compiler_str_intern 'f32.convert_i32_s', 0),
+        args,
+        (&compiler::compiler_str_intern 'f32', 0),
+        (&compiler::compiler_str_intern 'instr', 0)
 };
 
-@stratum_keyword ToInt ('@toInt', Node) = {
-  &IR::i32_trunc_f32_s;
+@stratum ToInt := {
+    &Compiler::register::expression_keyword '@toInt';
+    &Compiler::on::lower '@toInt', ToInt_lower;
+};
+@fn ToInt_lower node:Int := {
+    @local args:Int := &compiler::compiler_arr_new;
+    &compiler::compiler_arr_push args,
+        (&compiler::compiler_lowerExpr (&compiler::compiler_arg node, 0));
+    &compiler::ir_makeCall
+        (&compiler::compiler_str_intern 'i32.trunc_f32_s', 0),
+        args,
+        (&compiler::compiler_str_intern 'i32', 0),
+        (&compiler::compiler_str_intern 'instr', 0)
 };
 
-# Int → Int64 (sign-extend i32 to i64).
-@stratum_keyword ToInt64 ('@toInt64', Node) = {
-  &IR::i64_extend_i32_s;
+@stratum ToInt64 := {
+    &Compiler::register::expression_keyword '@toInt64';
+    &Compiler::on::lower '@toInt64', ToInt64_lower;
+};
+@fn ToInt64_lower node:Int := {
+    @local args:Int := &compiler::compiler_arr_new;
+    &compiler::compiler_arr_push args,
+        (&compiler::compiler_lowerExpr (&compiler::compiler_arg node, 0));
+    &compiler::ir_makeCall
+        (&compiler::compiler_str_intern 'i64.extend_i32_s', 0),
+        args,
+        (&compiler::compiler_str_intern 'i64', 0),
+        (&compiler::compiler_str_intern 'instr', 0)
 };
 
-# Int64 → Int (wrap, dropping the high 32 bits).
-# Overloads @toInt — the typed-keyword dispatch picks this variant when
-# the operand is Int64; the Float variant above stays in place for f32 args.
+# Int64 → Int — typed overload of @toInt, picked when arg type is Int64.
+# Stays legacy; D-D-5 typed-overload migration deferred.
 @stratum_keyword ToIntFromInt64 ('@toInt', Node) = {
   &IR::i32_wrap_i64;
 };

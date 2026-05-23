@@ -91,10 +91,12 @@ test("buildStrataRegistry: registers @return (D-D-8 migrated)", () => {
     expect(registry.handlers.lower.has('@return')).toBe(true)
 })
 
-test("buildStrataRegistry: registers @toInt and @toFloat cast strata", () => {
+test("buildStrataRegistry: registers @toInt and @toFloat cast strata (D-D-5 migrated)", () => {
     const registry = buildStrataRegistry(ASTFactory.program([]))
-    expect(registry.keywords['@toInt']?.data?.intrinsic).toBe('IR::i32_trunc_f32_s')
-    expect(registry.keywords['@toFloat']?.data?.intrinsic).toBe('IR::f32_convert_i32_s')
+    expect(registry.keywords['@toInt']).toBeDefined()
+    expect(registry.keywords['@toFloat']).toBeDefined()
+    expect(registry.handlers.lower.has('@toInt')).toBe(true)
+    expect(registry.handlers.lower.has('@toFloat')).toBe(true)
 })
 
 // ---------------------------------------------------------------------------
@@ -213,20 +215,19 @@ test("buildStrataRegistry: '==' registered with on::lower handler (D-D-7b migrat
     expect(registry.handlers.lower.has('==')).toBe(true)
 })
 
-test("buildStrataRegistry: @toFloat has typeSignature (Int) -> Float", () => {
+// D-D-5 migrated: cast keywords no longer carry typeSignature on the
+// primary entry.  The typechecker hardcodes their signatures (see
+// typechecker.ts migratedCastSig) so behavior is preserved.
+test("buildStrataRegistry: @toFloat dispatches via on::lower (D-D-5 migrated)", () => {
     const registry = buildStrataRegistry(ASTFactory.program([]))
-    const sig = registry.keywords['@toFloat'].data?.typeSignature
-    expect(sig).toBeDefined()
-    expect(sig!.params).toEqual([TypeInt])
-    expect(sig!.result).toEqual(TypeFloat)
+    expect(registry.keywords['@toFloat']).toBeDefined()
+    expect(registry.handlers.lower.has('@toFloat')).toBe(true)
 })
 
-test("buildStrataRegistry: @toInt has typeSignature (Float) -> Int", () => {
+test("buildStrataRegistry: @toInt dispatches via on::lower (D-D-5 migrated)", () => {
     const registry = buildStrataRegistry(ASTFactory.program([]))
-    const sig = registry.keywords['@toInt'].data?.typeSignature
-    expect(sig).toBeDefined()
-    expect(sig!.params).toEqual([TypeFloat])
-    expect(sig!.result).toEqual(TypeInt)
+    expect(registry.keywords['@toInt']).toBeDefined()
+    expect(registry.handlers.lower.has('@toInt')).toBe(true)
 })
 
 test("buildStrataRegistry: control strata have no typeSignature (they are structural)", () => {
@@ -386,30 +387,26 @@ test("buildStrataRegistry: bitwise '<<' falls back to Int primary for Float look
 // Round 37: keyword typed dispatch, metadata strata, || strata consistency
 // ---------------------------------------------------------------------------
 
-test("buildStrataRegistry: @toFloat registers typed variant @toFloat:Int", () => {
+// D-D-5 migrated: cast keywords no longer register typed variants and the
+// primary no longer carries an intrinsic.  Dispatch is via on::lower handler
+// (Int/Float primary) plus the legacy Int64 overload (ToIntFromInt64).
+test("buildStrataRegistry: @toFloat primary registered (D-D-5 migrated)", () => {
     const registry = buildStrataRegistry(ASTFactory.program([]))
-    // @toFloat converts Int → Float, so it registers under the 'Int' typeKind.
-    const typed = lookupTypedKeyword(registry, '@toFloat', 'Int')
-    expect(typed?.data?.intrinsic).toBe('IR::f32_convert_i32_s')
+    expect(registry.keywords['@toFloat']).toBeDefined()
+    expect(registry.handlers.lower.has('@toFloat')).toBe(true)
 })
 
-test("buildStrataRegistry: @toInt registers typed variant @toInt:Float", () => {
+test("buildStrataRegistry: @toInt primary registered (D-D-5 migrated)", () => {
     const registry = buildStrataRegistry(ASTFactory.program([]))
-    // @toInt converts Float → Int, so it registers under the 'Float' typeKind.
-    const typed = lookupTypedKeyword(registry, '@toInt', 'Float')
-    expect(typed?.data?.intrinsic).toBe('IR::i32_trunc_f32_s')
+    expect(registry.keywords['@toInt']).toBeDefined()
+    expect(registry.handlers.lower.has('@toInt')).toBe(true)
 })
 
-test("buildStrataRegistry: @toFloat plain entry still exists (backward compat)", () => {
+test("buildStrataRegistry: lookupTypedKeyword falls back to plain entry for unknown typeKind (D-D-5 migrated)", () => {
     const registry = buildStrataRegistry(ASTFactory.program([]))
-    expect(registry.keywords['@toFloat']?.data?.intrinsic).toBe('IR::f32_convert_i32_s')
-})
-
-test("buildStrataRegistry: lookupTypedKeyword falls back to plain entry for unknown typeKind", () => {
-    const registry = buildStrataRegistry(ASTFactory.program([]))
-    // @toFloat has no 'Bool' variant — should fall back to the plain entry.
+    // After D-D-5, plain entry no longer has intrinsic; just check it exists.
     const fallback = lookupTypedKeyword(registry, '@toFloat', 'Bool')
-    expect(fallback?.data?.intrinsic).toBe('IR::f32_convert_i32_s')
+    expect(fallback).toBeDefined()
 })
 
 test("buildStrataRegistry: @export keyword is registered (D-D-1 migrated to @stratum form)", () => {

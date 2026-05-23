@@ -53,6 +53,7 @@ import type { Program } from '../ast/astNodes'
 import {
     type SiliconType,
     TypeInt,
+    TypeInt64,
     TypeFloat,
     TypeString,
     TypeBool,
@@ -1052,11 +1053,21 @@ function checkFunctionCall(call: any, ctx: Ctx): SiliconType {
             if (intr === 'WASM::control_if'    || intr === 'IR::control_if'    || name === '@if')    return typeOfIfCall(argTypes, call.sourceLocation, ctx)
             if (intr === 'WASM::control_loop'  || intr === 'IR::control_loop'  || name === '@loop')  return TypeUnknown  // loops are void
             if (intr === 'WASM::control_match' || intr === 'IR::control_match' || name === '@match') return typeOfMatchCall(argTypes, call.sourceLocation, ctx)
+            // D-D-5 migrated cast keywords don't carry a typeSignature on
+            // their primary entry.  Hardcode their signatures here so the
+            // typechecker keeps rejecting mismatched arguments (e.g.
+            // @toFloat on an already-Float operand).
+            const migratedCastSig: TypeSig | undefined =
+                name === '@toFloat' ? { params: [TypeInt],   result: TypeFloat } :
+                name === '@toInt'   ? { params: [TypeFloat], result: TypeInt   } :
+                name === '@toInt64' ? { params: [TypeInt],   result: TypeInt64 } :
+                undefined
             // Prefer the pre-derived TypeSig stored in the registry; fall back to
             // deriving from the intrinsic name for strata loaded before Round 30.
             const sig: TypeSig | undefined =
                 kwEntry.data?.typeSignature ??
-                (intr ? intrinsicSignature(intr) : undefined)
+                (intr ? intrinsicSignature(intr) : undefined) ??
+                migratedCastSig
             if (sig) {
                 for (let i = 0; i < sig.params.length; i++) {
                     const actual = argTypes[i]

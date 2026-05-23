@@ -1474,10 +1474,10 @@ test("Round 27: @toFloat promotes type — explicit cast then float add", () => 
     expect(uw).not.toContain("i32.add");
 });
 
-test("Round 27: @toFloat registered in registry as keyword stratum", () => {
+test("Round 27: @toFloat registered in registry as keyword stratum (D-D-5 migrated)", () => {
     const { registry } = elaborate(ASTFactory.program([]))
     expect(registry.keywords['@toFloat']).toBeDefined()
-    expect(registry.keywords['@toFloat'].data.intrinsic).toBe('IR::f32_convert_i32_s')
+    expect(registry.handlers.lower.has('@toFloat')).toBe(true)
 });
 
 test("Round 27: @toInt — cast_to_int.si compiles successfully", () => {
@@ -1498,10 +1498,10 @@ test("Round 27: @toInt on a Float param emits i32.trunc_f32_s", () => {
     expect(uw).toContain("i32.trunc_f32_s");
 });
 
-test("Round 27: @toInt registered in registry as keyword stratum", () => {
+test("Round 27: @toInt registered in registry as keyword stratum (D-D-5 migrated)", () => {
     const { registry } = elaborate(ASTFactory.program([]))
     expect(registry.keywords['@toInt']).toBeDefined()
-    expect(registry.keywords['@toInt'].data.intrinsic).toBe('IR::i32_trunc_f32_s')
+    expect(registry.handlers.lower.has('@toInt')).toBe(true)
 });
 
 test("Round 27: @toInt result type is i32 — can add with int param", () => {

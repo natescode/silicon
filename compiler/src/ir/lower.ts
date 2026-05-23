@@ -787,11 +787,12 @@ function lowerBuiltinCall(name: string, rawArgs: any[], ctx: LowerCtx, inferredT
     }
 
     // New-form strata: when the keyword has a registered on::lower handler
-    // (D-D-* migrations), fire it with a synthesised FunctionCall-like node
-    // so the handler can read args via compiler_arg.  The handler's return
-    // is the IR.  This is how migrated keywords like @if produce control IR
-    // even though their data.intrinsic is empty.
-    if (ctx.registry.handlers.lower.has(name)) {
+    // (D-D-* migrations) AND the typed-overload dispatch didn't find a
+    // legacy intrinsic, fire the handler.  The `!intrinsic` gate
+    // preserves legacy typed overloads' precedence — without it, a
+    // migrated `@toInt` primary handler would override the legacy
+    // `@toInt:Int64` overload.
+    if (!intrinsic && ctx.registry.handlers.lower.has(name)) {
         const synthNode = { type: 'FunctionCall', name: { type: 'Namespace', path: [name] }, args: rawArgs, inferredType }
         const results = fireHandlers(ctx.registry, 'lower', name, synthNode, ctx.$compiler!, ctx.currentStratumRef)
         const result = results.length > 0 ? results[results.length - 1] : null
