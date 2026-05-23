@@ -81,10 +81,31 @@ export async function compileHandlerToWasm(
     program: Program,
     registry: ElaboratorRegistry,
 ): Promise<CompiledHandler> {
-    // Find the handler @fn in the program.
-    const handlerDef = findHandlerDef(handlerName, program)
+    // Find the handler @fn — first in the user program, then fall back
+    // to `registry.namedHandlers` which carries the body for built-in
+    // strata handlers (loaded from src/strata/*.si).  Built-in handler
+    // bodies aren't in the user program's AST, so without this lookup
+    // every built-in handler migration would fail compilation.
+    let handlerDef = findHandlerDef(handlerName, program)
     if (!handlerDef) {
-        throw new Error(`[comptime] handler @fn '${handlerName}' not found in program`)
+        const entry = registry.namedHandlers.get(handlerName)
+        if (entry) {
+            // Synthesise a minimal @fn Definition node so the rest of
+            // the pipeline (elaborate → lower) can process it normally.
+            handlerDef = {
+                type: 'Definition',
+                keyword: '@fn',
+                name: { type: 'TypedIdentifier', name: handlerName },
+                params: [{
+                    type: 'Param', name: entry.paramName ?? 'node',
+                    typeAnnotation: { type: 'TypeAnnotation', typename: 'Int' },
+                }],
+                binding: [{ expression: entry.body }],
+            }
+        }
+    }
+    if (!handlerDef) {
+        throw new Error(`[comptime] handler @fn '${handlerName}' not found in program or namedHandlers`)
     }
 
     // Build the synthetic program: just the handler @fn + an explicit

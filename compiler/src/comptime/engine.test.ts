@@ -128,7 +128,10 @@ describe('Phase C — bridge: compileStrataHandlers caches compiled handlers', (
         registry.strataHandlerFnNames.add('Bridge_handler')
 
         const count = await compileStrataHandlers(prog, registry)
-        expect(count).toBe(1)
+        // count is >= 1 — built-in strata handlers (e.g. PlatformDecl_lower)
+        // also compile through this pass once metadata.si migrated to the
+        // new @stratum form.  We only assert our handler compiled cleanly.
+        expect(count).toBeGreaterThanOrEqual(1)
         expect(registry.compiledHandlers.has('Bridge_handler')).toBe(true)
         expect(registry.compiledHandlers.get('Bridge_handler')!.invoke(0)).toBe(99)
     })
