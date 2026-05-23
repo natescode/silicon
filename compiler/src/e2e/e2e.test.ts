@@ -1362,36 +1362,31 @@ test("Round 26: bitwise | does not promote to f32 (always emits i32.or)", () => 
     expect(uw).not.toContain("f32");
 });
 
-test("Round 26: | operator registered in registry as StrataType.Operator", () => {
+// D-D-4 migrated: bitwise operators dispatch via on::lower handlers, not via
+// the legacy intrinsic/bodyTemplate fields.  Tests assert registration +
+// on::lower presence only.
+test("Round 26: | operator registered (D-D-4 migrated)", () => {
     const { registry } = elaborate(ASTFactory.program([]))
     expect(registry.operators['|']).toBeDefined()
-    expect(registry.operators['|'].data.intrinsic).toBe('IR::i32_or')
+    expect(registry.handlers.lower.has('|')).toBe(true)
 });
 
-test("Round 26: ^ operator registered in registry as StrataType.Operator", () => {
+test("Round 26: ^ operator registered (D-D-4 migrated)", () => {
     const { registry } = elaborate(ASTFactory.program([]))
     expect(registry.operators['^']).toBeDefined()
-    expect(registry.operators['^'].data.intrinsic).toBe('IR::i32_xor')
+    expect(registry.handlers.lower.has('^')).toBe(true)
 });
 
-test("Round 26: << operator registered in registry as StrataType.Operator", () => {
+test("Round 26: << operator registered (D-D-4 migrated)", () => {
     const { registry } = elaborate(ASTFactory.program([]))
     expect(registry.operators['<<']).toBeDefined()
-    expect(registry.operators['<<'].data.intrinsic).toBe('IR::i32_shl')
+    expect(registry.handlers.lower.has('<<')).toBe(true)
 });
 
-test("Round 26: >> operator registered in registry as StrataType.Operator", () => {
+test("Round 26: >> operator registered (D-D-4 migrated)", () => {
     const { registry } = elaborate(ASTFactory.program([]))
     expect(registry.operators['>>']).toBeDefined()
-    expect(registry.operators['>>'].data.intrinsic).toBe('IR::i32_shr_s')
-});
-
-test("Round 26: body template for | has argRefs [left, right]", () => {
-    const { registry } = elaborate(ASTFactory.program([]))
-    const bt = registry.operators['|']?.data?.bodyTemplate
-    expect(bt).toBeDefined()
-    expect(Array.isArray(bt)).toBe(true)
-    expect(bt[0]?.argRefs).toEqual(['left', 'right'])
+    expect(registry.handlers.lower.has('>>')).toBe(true)
 });
 
 test("Round 26: | and || are distinct operators", () => {

@@ -618,6 +618,18 @@ function lowerBinaryOp(n: any, ctx: LowerCtx): IRExpr {
     const stratum = lookupTypedOperator(ctx.registry, op, typeKind)
     const intrinsic = stratum?.data?.intrinsic
 
+    // New-form operator strata (D-D-3, D-D-4, D-D-6, D-D-7*): when an
+    // on::lower handler is registered for this operator, fire it with a
+    // synthesised BinaryOp-like node so the handler can read `left`/`right`
+    // via compiler_ast_node_field.  The handler's IR return value is the
+    // emitted IR.  Same shape as lowerBuiltinCall's on::lower bridge.
+    if (ctx.registry.handlers.lower.has(op)) {
+        const synthNode = { type: 'BinaryOp', operator: op, left: n.left, right: n.right, inferredType: inferT }
+        const results = fireHandlers(ctx.registry, 'lower', op, synthNode, ctx.$compiler!, ctx.currentStratumRef)
+        const result = results.length > 0 ? results[results.length - 1] : null
+        if (result) return result as IRExpr
+    }
+
     if (!intrinsic) {
         // No WASM intrinsic — check for a user function call step in the body template.
         const template = stratum?.data?.bodyTemplate ?? []

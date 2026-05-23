@@ -43,11 +43,12 @@ test("buildStrataRegistry: registers comparison operators", () => {
     }
 })
 
-test("buildStrataRegistry: registers bitwise operators", () => {
+test("buildStrataRegistry: registers bitwise operators (D-D-4 migrated)", () => {
     const registry = buildStrataRegistry(ASTFactory.program([]))
     for (const op of ['|', '^', '<<', '>>']) {
         expect(registry.operators[op]).toBeDefined()
-        expect(registry.operators[op].data?.intrinsic).toMatch(/^IR::i32_/)
+        // Dispatch via on::lower handler instead of legacy intrinsic field.
+        expect(registry.handlers.lower.has(op)).toBe(true)
     }
 })
 
@@ -301,11 +302,13 @@ test("buildStrataRegistry: '==' has a Float overload (f32.eq)", () => {
     expect(floatOp?.data?.intrinsic).toBe('IR::f32_eq')
 })
 
-test("buildStrataRegistry: bitwise '|' has no Float overload (no f32 counterpart)", () => {
+test("buildStrataRegistry: bitwise '|' has no Float overload (no f32 counterpart) (D-D-4 migrated)", () => {
     const registry = buildStrataRegistry(ASTFactory.program([]))
-    // Typed lookup falls back to Int primary for bitwise ops.
+    // Typed lookup falls back to Int primary for bitwise ops.  After D-D-4
+    // migration, the primary entry no longer carries intrinsic; we just
+    // confirm typed lookup falls through to it.
     const floatOp = lookupTypedOperator(registry, '|', 'Float')
-    expect(floatOp?.data?.intrinsic).toBe('IR::i32_or')
+    expect(floatOp).toBeDefined()
 })
 
 test("buildStrataRegistry: lookupTypedOperator returns primary for unknown typeKind", () => {
@@ -375,10 +378,10 @@ test("buildStrataRegistry: '%' has no Float overload (WASM has no f32 modulo)", 
     expect(floatOp?.data?.intrinsic).toBe('IR::i32_rem_s')
 })
 
-test("buildStrataRegistry: bitwise '<<' falls back to Int primary for Float lookup", () => {
+test("buildStrataRegistry: bitwise '<<' falls back to Int primary for Float lookup (D-D-4 migrated)", () => {
     const registry = buildStrataRegistry(ASTFactory.program([]))
     const floatOp = lookupTypedOperator(registry, '<<', 'Float')
-    expect(floatOp?.data?.intrinsic).toBe('IR::i32_shl')
+    expect(floatOp).toBeDefined()
 })
 
 // ---------------------------------------------------------------------------
