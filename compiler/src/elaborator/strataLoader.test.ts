@@ -440,28 +440,18 @@ test("buildStrataRegistry: || operator is registered (D-D-3 migrated; on::lower-
 // Round 40: IR expander hook — buildStrataRegistry populates registry.expanders
 // ---------------------------------------------------------------------------
 
-test("buildStrataRegistry: populates registry.expanders with built-in control-flow expanders", () => {
+test("buildStrataRegistry: registry.expanders is empty after D-D-2/3/4/6/7/8/9/10 migrations", () => {
     const registry = buildStrataRegistry(ASTFactory.program([]))
-    // Control-flow strata that haven't been migrated yet (D-D-3, D-D-8, D-D-9,
-    // D-D-10) still register their legacy intrinsic expander.  @if (D-D-2)
-    // no longer registers this — dispatch flows through on::lower instead.
-    const expected = [
-        // D-D-2/3/8/9 migrated: @if/@loop/@break/@continue/@return/@and/@or/||
-        // no longer register their legacy intrinsic expanders — dispatch goes
-        // via on::lower.  Only IR::control_match remains (D-D-10 still pending).
-        'IR::control_match',
-    ]
-    for (const intrinsic of expected) {
-        expect(registry.expanders.has(intrinsic)).toBe(true)
-    }
+    // All built-in control-flow strata have been migrated to the new @stratum
+    // form and now dispatch via on::lower handlers.  The legacy intrinsic
+    // expander registry no longer contains them.
+    expect(registry.expanders.size).toBe(0)
 })
 
-test("buildStrataRegistry: expanders are callable functions", () => {
+test("buildStrataRegistry: expanders map is a Map instance and is empty after migrations", () => {
     const registry = buildStrataRegistry(ASTFactory.program([]))
-    // After D-D-2/3/8/9 migrations, the only built-in control-flow expander
-    // still registered is IR::control_match (D-D-10 pending).
-    const matchExpander = registry.expanders.get('IR::control_match')
-    expect(typeof matchExpander).toBe('function')
+    expect(registry.expanders).toBeInstanceOf(Map)
+    expect(registry.expanders.size).toBe(0)
 })
 
 test("buildStrataRegistry: expanders map is a Map instance", () => {

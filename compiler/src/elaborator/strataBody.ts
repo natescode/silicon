@@ -472,6 +472,11 @@ function invokeCompilerInteropShim(fnName: string, args: any[], api: CompilerAPI
     if (fnName === 'compiler_ctx_loopStack_peek')     return api.ctx.loopStack.peek() ?? 0
     if (fnName === 'compiler_ctx_nextLoopId')         return api.ctx.nextLoopId()
 
+    // Match expansion — delegate to api.expandMatchChain.
+    if (fnName === 'compiler_expandMatchChain') {
+        return api.expandMatchChain(args[0] ?? [], args[1])
+    }
+
     // Diagnostics.
     if (fnName === 'diag_error' || fnName === 'diag_warn') {
         // No accumulator available on api — silently drop.  The

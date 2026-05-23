@@ -141,6 +141,7 @@
 @extern compiler_funcResult_locals:Int    resultH:Int;
 @extern compiler_resolveFunctionReturnType:Int   nodeH:Int, nameStr:Int, bodyH:Int;
 @extern compiler_resolveType:Int          annotH:Int;
+@extern compiler_expandMatchChain:Int     rawArgsArrH:Int, inferredTypeH:Int;
 
 # ── Test-only ───────────────────────────────────────────────────────────
 @extern test_observe                  value:Int;

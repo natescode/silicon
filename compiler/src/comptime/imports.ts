@@ -1190,6 +1190,22 @@ export function createComptimeImports(env: ComptimeEnv): WebAssembly.Imports {
         }
     }
 
+    /** Match-chain expansion — delegate to api.expandMatchChain.
+     *  `rawArgsArrH` is a handles id of the AST args array; `inferredTypeH`
+     *  is a handle of the inferredType.  Returns an IR-handle of the
+     *  resulting IRExpr.  Used by the migrated @match handler. */
+    const compiler_expandMatchChain = (rawArgsArrH: number, inferredTypeH: number): number => {
+        if (!env.api) return 0
+        const rawArgs = handles.get(rawArgsArrH)
+        const inferredType = inferredTypeH === 0 ? undefined : handles.get(inferredTypeH)
+        try {
+            const ir = env.api.expandMatchChain(Array.isArray(rawArgs) ? rawArgs : [], inferredType)
+            return ir ? env.irHandles.fresh(ir) : 0
+        } catch {
+            return 0
+        }
+    }
+
     const ast_patch_types = (templateH: number, bindingsH: number): number => {
         const tmpl = handles.get(templateH) as { ast: any; kind: 'pre' | 'post' } | undefined
         const bindings = handles.get(bindingsH) as Map<string, SiliconType> | undefined
@@ -1284,6 +1300,7 @@ export function createComptimeImports(env: ComptimeEnv): WebAssembly.Imports {
             compiler_lowerParams, compiler_lowerFunctionBody,
             compiler_funcResult_body, compiler_funcResult_locals,
             compiler_resolveFunctionReturnType, compiler_resolveType,
+            compiler_expandMatchChain,
             test_observe,
         },
     }
