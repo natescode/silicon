@@ -28,7 +28,25 @@ import elaborate from '../elaborator/elaborator'
 import { lowerProgram } from '../ir/lower'
 import { emitModule } from '../ir/emit'
 import { watToWasm } from '../codegen/toWasm'
+import { loadModules } from '../modules/loader'
+import type { ModuleRegistry } from '../modules/registry'
 import { createComptimeEnv, createComptimeImports, type ComptimeEnv } from './imports'
+
+/**
+ * Lazily-loaded ModuleRegistry containing only the built-in env modules
+ * (including the `compiler` module).  Handler @fn bodies that use
+ * `&compiler::ir_makeConst …` resolve through this so the lowerer
+ * generates the right `(import "compiler" "ir_makeConst" …)` IR.
+ *
+ * Cached for the lifetime of the process — re-reading the .si files on
+ * every handler compile would be wasteful.  Tests that need a fresh
+ * registry can call `getBuiltinModuleRegistry()` and clear after.
+ */
+let _builtinModules: ModuleRegistry | undefined
+function getBuiltinModuleRegistry(): ModuleRegistry {
+    if (!_builtinModules) _builtinModules = loadModules()
+    return _builtinModules
+}
 
 /** A compiled handler instance — the result of running an @fn through the
  *  WASM pipeline.  `invoke(arg)` calls the exported function with a single
@@ -92,7 +110,10 @@ export async function compileHandlerToWasm(
     try {
         // Elaborate first so the @fn gets its `hook: 'function'` stamp.
         const elaborated = elaborate(syntheticProg as any, registry)
-        const mod = lowerProgram(elaborated.program, registry, new Map())
+        const mod = lowerProgram(
+            elaborated.program, registry, new Map(),
+            getBuiltinModuleRegistry(),
+        )
         wat = emitModule(mod)
     } finally {
         if (wasClaimed) registry.strataHandlerFnNames.add(handlerName)

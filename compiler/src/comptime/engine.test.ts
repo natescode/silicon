@@ -68,6 +68,52 @@ describe('Phase C — compile a handler @fn to WASM and run it', () => {
         expect(compiled.invoke(-5)).toBe(5)
         expect(compiled.invoke(0)).toBe(0)
     })
+
+    // ── moduleRegistry "compiler" wired in (D-D gating prerequisite) ───────
+    test('handler can call &compiler::ir_makeConst — end-to-end WASM-side', async () => {
+        // Build a handler that ignores its node arg and constructs an IR
+        // Const 42 via the host import.  Returns the IR-handle id.
+        const src = `@fn build_const n:Int := &compiler::ir_makeConst 42, 0;`
+        const prog = parseProgram(src)
+        const registry = buildStrataRegistry(prog)
+        registry.strataHandlerFnNames.add('build_const')
+
+        const compiled = await compileHandlerToWasm('build_const', prog, registry)
+        const irHandle = compiled.invoke(0)
+        // Handle must be non-zero and resolve to the right IR Const.
+        expect(irHandle).toBeGreaterThan(0)
+        const ir = compiled.env.irHandles.get(irHandle) as any
+        expect(ir.kind).toBe('Const')
+        expect(ir.value).toBe(42)
+        // wasmType defaults to 'i32' because we passed string-id 0 (empty)
+        // which the host wrapper coerces to 'i32'.
+        expect(ir.wasmType).toBe('i32')
+    })
+
+    test('handler can build a BinOp(LocalGet, Const) through host imports', async () => {
+        // More realistic shape: build (LocalGet "" + Const 42).  Names
+        // are 0 (empty string id) so we test pure composition without
+        // needing a string-pool argument.
+        const src = `
+            @fn build_x_plus_42 n:Int :=
+                &compiler::ir_makeBinOp 0,
+                    (&compiler::ir_makeLocalGet 0, 0),
+                    (&compiler::ir_makeConst 42, 0),
+                    0;
+        `
+        const prog = parseProgram(src)
+        const registry = buildStrataRegistry(prog)
+        registry.strataHandlerFnNames.add('build_x_plus_42')
+
+        const compiled = await compileHandlerToWasm('build_x_plus_42', prog, registry)
+        const irHandle = compiled.invoke(0)
+        expect(irHandle).toBeGreaterThan(0)
+        const ir = compiled.env.irHandles.get(irHandle) as any
+        expect(ir.kind).toBe('BinOp')
+        expect(ir.left.kind).toBe('LocalGet')
+        expect(ir.right.kind).toBe('Const')
+        expect(ir.right.value).toBe(42)
+    })
 })
 
 describe('Phase C — bridge: compileStrataHandlers caches compiled handlers', () => {
