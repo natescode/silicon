@@ -36,13 +36,21 @@
   &Compiler::ir::makeImport 'env', name, name, params, result;
 };
 
-@stratum_keyword TypeAliasDef ('@type_alias', Node) = {
-  &IR::def_type_alias;
-};
+# D-D-11a: leaf def-kinds (@type_alias, @type_distinct, @local) migrated to
+# the new @stratum form.  These either emit no IR (type aliases) or build
+# their IR through compiler_ctx_* and ir_makeLocal.
 
-@stratum_keyword TypeDistinctDef ('@type_distinct', Node) = {
-  &IR::def_type_distinct;
+@stratum TypeAliasDef := {
+    &Compiler::register::keyword '@type_alias';
+    &Compiler::on::lower '@type_alias', TypeAliasDef_lower;
 };
+@fn TypeAliasDef_lower node:Int := &compiler::ir_null;
+
+@stratum TypeDistinctDef := {
+    &Compiler::register::keyword '@type_distinct';
+    &Compiler::on::lower '@type_distinct', TypeDistinctDef_lower;
+};
+@fn TypeDistinctDef_lower node:Int := &compiler::ir_null;
 
 @stratum_keyword TypeSumDef ('@type_sum', Node) = {
   &IR::def_type_sum;
@@ -56,6 +64,11 @@
   &IR::def_type_record;
 };
 
+# @local is NOT migrated in D-D-11a — lowerAsStmt special-cases
+# `node.hook === 'local'` for in-block @local declarations.  After
+# migration to the new @stratum form, hook would be 'stratum_def'
+# and the special-case path wouldn't fire, breaking @local in function
+# bodies.  Migration deferred until lowerAsStmt is refactored.
 @stratum_keyword LocalDef ('@local', Node) = {
   &IR::def_local;
   @local wasmType := &Compiler::resolveType Node.name.typeAnnotation;
