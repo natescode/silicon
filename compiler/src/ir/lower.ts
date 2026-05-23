@@ -765,6 +765,18 @@ function lowerBuiltinCall(name: string, rawArgs: any[], ctx: LowerCtx, inferredT
         return expander(rawArgs, ctx.$compiler!, inferredType)
     }
 
+    // New-form strata: when the keyword has a registered on::lower handler
+    // (D-D-* migrations), fire it with a synthesised FunctionCall-like node
+    // so the handler can read args via compiler_arg.  The handler's return
+    // is the IR.  This is how migrated keywords like @if produce control IR
+    // even though their data.intrinsic is empty.
+    if (ctx.registry.handlers.lower.has(name)) {
+        const synthNode = { type: 'FunctionCall', name: { type: 'Namespace', path: [name] }, args: rawArgs, inferredType }
+        const results = fireHandlers(ctx.registry, 'lower', name, synthNode, ctx.$compiler!, ctx.currentStratumRef)
+        const result = results.length > 0 ? results[results.length - 1] : null
+        if (result) return result as IRExpr
+    }
+
     // Generic builtin (e.g. @toInt, @toFloat, user-defined keyword strata).
     const wasmInstr = intrinsic ? resolveIntrinsicWasmInstr(intrinsic) : undefined
     const args = rawArgs.map((a: any) => lowerExpr(a, ctx))

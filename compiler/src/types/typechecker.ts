@@ -1045,9 +1045,13 @@ function checkFunctionCall(call: any, ctx: Ctx): SiliconType {
         const kwEntry = lookupTypedKeyword(ctx.registry, name, firstArgKind) ?? lookupKeyword(ctx.registry, name)
         if (kwEntry) {
             const intr = kwEntry.data?.intrinsic
-            if (intr === 'WASM::control_if'    || intr === 'IR::control_if')    return typeOfIfCall(argTypes, call.sourceLocation, ctx)
-            if (intr === 'WASM::control_loop'  || intr === 'IR::control_loop')  return TypeUnknown  // loops are void
-            if (intr === 'WASM::control_match' || intr === 'IR::control_match') return typeOfMatchCall(argTypes, call.sourceLocation, ctx)
+            // Recognise control-flow keywords by name OR by legacy intrinsic
+            // marker — D-D-* migrations to the new @stratum form drop the
+            // intrinsic field, but the typechecker still needs the special
+            // typing rules (branch unification for @if/@match, void for @loop).
+            if (intr === 'WASM::control_if'    || intr === 'IR::control_if'    || name === '@if')    return typeOfIfCall(argTypes, call.sourceLocation, ctx)
+            if (intr === 'WASM::control_loop'  || intr === 'IR::control_loop'  || name === '@loop')  return TypeUnknown  // loops are void
+            if (intr === 'WASM::control_match' || intr === 'IR::control_match' || name === '@match') return typeOfMatchCall(argTypes, call.sourceLocation, ctx)
             // Prefer the pre-derived TypeSig stored in the registry; fall back to
             // deriving from the intrinsic name for strata loaded before Round 30.
             const sig: TypeSig | undefined =

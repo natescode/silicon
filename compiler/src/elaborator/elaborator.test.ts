@@ -330,12 +330,16 @@ test("elaborate registry contains @var def-kind", () => {
   expect(registry.defKinds['@var'].codegenKind).toBe('global')
 })
 
-test("elaborate registers @if as keyword stratum with control_if intrinsic", () => {
+test("elaborate registers @if as a keyword stratum (D-D-2: new @stratum form)", () => {
+  // D-D-2 migration: @if rewritten to the new @stratum + @fn-handler form.
+  // The keyword is still registered, and the lowerer / typechecker now
+  // dispatch via the on::lower handler instead of the legacy `IR::control_if`
+  // intrinsic marker (which is no longer set in the new form).
   const program = ASTFactory.program([])
   const { registry } = elaborate(program)
   const entry = registry.keywords['@if']
   expect(entry).toBeDefined()
-  expect(entry.data.intrinsic).toBe('IR::control_if')
+  expect(registry.handlers.lower.has('@if')).toBe(true)
 })
 
 test("elaborate registers @loop as keyword stratum with control_loop intrinsic", () => {
@@ -347,9 +351,12 @@ test("elaborate registers @loop as keyword stratum with control_loop intrinsic",
 })
 
 // Test 10: builtin elaborators for various operators
-test("elaborate: @if strata has StrataType.Control", () => {
+test("elaborate: @if registered (D-D-2 migrated — StrataType.Keyword in new form)", () => {
+  // D-D-2 migration: @if now registers via register::expression_keyword.
+  // The new-form stub uses StrataType.Keyword; legacy form used Control.
   const { registry } = elaborate(ASTFactory.program([]))
-  expect(registry.keywords['@if'].type).toBe(StrataType.Control)
+  expect(registry.keywords['@if']).toBeDefined()
+  expect(registry.keywords['@if'].type).toBe(StrataType.Keyword)
 })
 
 test("elaborate: @let strata has StrataType.Definition", () => {

@@ -56,12 +56,15 @@ test("buildStrataRegistry: registers || as operator stratum", () => {
     expect(registry.operators['||']).toBeDefined()
 })
 
-test("buildStrataRegistry: registers @if as Control stratum", () => {
+test("buildStrataRegistry: registers @if (D-D-2 migrated to new @stratum form)", () => {
+    // D-D-2: @if rewritten to `@stratum If := { register::expression_keyword '@if'; on::lower '@if', If_lower; }`.
+    // StrataType.Keyword (not Control) and no intrinsic field — the new-form
+    // typechecker / lowerer dispatch via the on::lower handler instead.
     const registry = buildStrataRegistry(ASTFactory.program([]))
     const entry = registry.keywords['@if']
     expect(entry).toBeDefined()
-    expect(entry.type).toBe(StrataType.Control)
-    expect(entry.data?.intrinsic).toBe('IR::control_if')
+    expect(entry.type).toBe(StrataType.Keyword)
+    expect(registry.handlers.lower.has('@if')).toBe(true)
 })
 
 test("buildStrataRegistry: registers @loop as Control stratum", () => {
@@ -439,9 +442,10 @@ test("buildStrataRegistry: || operator has IR::control_or intrinsic (strata-driv
 
 test("buildStrataRegistry: populates registry.expanders with built-in control-flow expanders", () => {
     const registry = buildStrataRegistry(ASTFactory.program([]))
-    // All 8 built-in expanders must be registered.
+    // Control-flow strata that haven't been migrated yet (D-D-3, D-D-8, D-D-9,
+    // D-D-10) still register their legacy intrinsic expander.  @if (D-D-2)
+    // no longer registers this — dispatch flows through on::lower instead.
     const expected = [
-        'IR::control_if',
         'IR::control_loop',
         'IR::control_break',
         'IR::control_continue',
@@ -457,8 +461,10 @@ test("buildStrataRegistry: populates registry.expanders with built-in control-fl
 
 test("buildStrataRegistry: expanders are callable functions", () => {
     const registry = buildStrataRegistry(ASTFactory.program([]))
-    const ifExpander = registry.expanders.get('IR::control_if')
-    expect(typeof ifExpander).toBe('function')
+    // @if (D-D-2) no longer has an IR::control_if expander; pick a still-legacy
+    // strata for this test.
+    const loopExpander = registry.expanders.get('IR::control_loop')
+    expect(typeof loopExpander).toBe('function')
 })
 
 test("buildStrataRegistry: expanders map is a Map instance", () => {

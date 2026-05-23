@@ -1,10 +1,18 @@
-@stratum_keyword If ('@if', Node) = {
-  &IR::control_if;
-  @local condN := &Compiler::arg Node, 0;
-  @local thenN := &Compiler::arg Node, 1;
-  @local elseN := &Compiler::arg Node, 2;
-  @local cond  := &Compiler::lowerExpr condN;
-  @local then  := &Compiler::lowerExpr thenN;
-  @local else_ := &Compiler::lowerExprIfDefined elseN;
-  &Compiler::ir::makeIf cond, then, else_;
+# D-D-2: @if migrated to the new @stratum + @fn-handler form.
+# `register::expression_keyword` registers @if as an expression keyword
+# (no def-kind) — `&@if cond, then, else_` works at expression position.
+# The handler reads the AST node args via compiler_arg + compiler_lowerExpr
+# and builds an IRIf via ir_makeIf.
+@stratum If := {
+    &Compiler::register::expression_keyword '@if';
+    &Compiler::on::lower '@if', If_lower;
+};
+@fn If_lower node:Int := {
+    @local condN:Int := &compiler::compiler_arg node, 0;
+    @local thenN:Int := &compiler::compiler_arg node, 1;
+    @local elseN:Int := &compiler::compiler_arg node, 2;
+    @local cond:Int  := &compiler::compiler_lowerExpr condN;
+    @local then:Int  := &compiler::compiler_lowerExpr thenN;
+    @local else_:Int := &compiler::compiler_lowerExprIfDefined elseN;
+    &compiler::ir_makeIf cond, then, else_, 0
 };
