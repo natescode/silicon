@@ -147,6 +147,21 @@ export function createComptimeImports(env: ComptimeEnv): WebAssembly.Imports {
         })
     }
 
+    /**
+     * Variant for expression-style keywords (`@if`, `@loop`, `@match`,
+     * `@return`, …): registers the elaborator entry but does NOT
+     * register a def-kind.  Without this, callers like `&@if cond, …`
+     * would be parsed as a definition-style usage.  Strata that
+     * migrate from `@stratum_keyword` (the legacy expression form,
+     * not the def form) call this from their body.
+     */
+    const register_expression_keyword = (token: number): void => {
+        const s = strings.get(token)
+        if (!s) return
+        const stub: StrataNode = { type: StrataType.Keyword, discriminant: s, data: { nodeParamName: 'node' } }
+        registerElaborator(registry, 'keyword', s, stub)
+    }
+
     const register_operator = (token: number): void => {
         const s = strings.get(token); if (!s) return
         const stub: StrataNode = { type: StrataType.Operator, discriminant: s, data: { nodeParamName: 'node' } }
@@ -1212,7 +1227,8 @@ export function createComptimeImports(env: ComptimeEnv): WebAssembly.Imports {
 
     return {
         compiler: {
-            register_keyword, register_operator, register_annotation,
+            register_keyword, register_expression_keyword,
+            register_operator, register_annotation,
             on_decl, on_call_site, on_annotation, on_module_finalize, on_comptime,
             state_stratum, state_instance, state_has, state_get, state_set,
             compiler_arr_new, compiler_arr_push,

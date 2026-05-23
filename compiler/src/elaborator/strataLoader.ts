@@ -388,6 +388,11 @@ function registerStratumDefinition(
           allowsBinding: true,
           allowsGenerics: true,
         })
+      } else if (seg2 === 'expression_keyword') {
+        // Variant for expression-position keywords (`@if`, `@loop`, `@match`,
+        // `@return`, …).  Registers the elaborator entry but NOT a def-kind,
+        // so the keyword can't accidentally be used as a definition.
+        registerElaborator(registry, 'keyword', token, stub)
       } else if (seg2 === 'operator')  { registerElaborator(registry, 'operator', token, stub) }
       else if (seg2 === 'annotation') { registerAnnotation(registry, token, stub) }
 

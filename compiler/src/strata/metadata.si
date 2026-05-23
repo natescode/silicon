@@ -1,18 +1,25 @@
-@stratum_keyword ExportDecl ('@export', Node) = {
-  &IR::meta_export;
-  @local sname := &Compiler::watId Node.name.name;
-  @local isVar := &Compiler::isVarName sname;
-  @local kind  := &Compiler::choose isVar, 'global', 'func';
-  &Compiler::ir::makeExport sname, sname, kind;
-};
+# D-D-1: @platform and @export both migrated to the new @stratum + @fn-handler
+# form.  Handler @fn bodies compile to WASM via the Phase C engine; they read
+# AST fields via compiler_ast_str_field, intern string literals via
+# compiler_str_intern, and build IR via the &compiler::ir_make* imports.
 
-# D-D-1 (partial): @platform migrated to the new @stratum + @fn-handler form.
-# The handler body uses no string literals (just `ir_null`), which works
-# end-to-end via the compile-then-run engine.  @export still uses the legacy
-# form pending a `compiler_str_intern(ptr, len)` import (handler needs to
-# pass 'global' / 'func' strings to ir_makeExport).
 @stratum PlatformDecl := {
     &Compiler::register::keyword '@platform';
     &Compiler::on::lower '@platform', PlatformDecl_lower;
 };
 @fn PlatformDecl_lower node:Int := &compiler::ir_null;
+
+@stratum ExportDecl := {
+    &Compiler::register::keyword '@export';
+    &Compiler::on::lower '@export', ExportDecl_lower;
+};
+@fn ExportDecl_lower node:Int := {
+    @local sname:Int := &compiler::compiler_watId
+        (&compiler::compiler_ast_str_field node,
+            (&compiler::compiler_str_intern 'name.name', 0));
+    @local isVar:Int := &compiler::compiler_isVarName sname;
+    @local kind:Int  := &compiler::compiler_choose isVar,
+        (&compiler::compiler_str_intern 'global', 0),
+        (&compiler::compiler_str_intern 'func', 0);
+    &compiler::ir_makeExport sname, sname, kind
+};

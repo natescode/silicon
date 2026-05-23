@@ -404,20 +404,25 @@ test("buildStrataRegistry: lookupTypedKeyword falls back to plain entry for unkn
     expect(fallback?.data?.intrinsic).toBe('IR::f32_convert_i32_s')
 })
 
-test("buildStrataRegistry: @export is registered as Metadata stratum", () => {
+test("buildStrataRegistry: @export keyword is registered (D-D-1 migrated to @stratum form)", () => {
+    // D-D-1 migration: @export moved from `@stratum_keyword` to the new
+    // `@stratum := { register::keyword '@export'; on::lower '@export', H; }` form.
+    // The keyword is still registered and the lowerer fires the on::lower
+    // handler — but the underlying StrataType and intrinsic markers are
+    // no longer set (those were legacy-form artifacts).
     const registry = buildStrataRegistry(ASTFactory.program([]))
-    const entry = registry.keywords['@export']
-    expect(entry).toBeDefined()
-    expect(entry.data?.intrinsic).toBe('IR::meta_export')
+    expect(registry.keywords['@export']).toBeDefined()
+    expect(registry.handlers.lower.has('@export')).toBe(true)
 })
 
-test("buildStrataRegistry: @export is registered in defKinds with codegenKind 'export'", () => {
+test("buildStrataRegistry: @export registered in defKinds (D-D-1 migrated, codegenKind 'stratum_def')", () => {
+    // D-D-1 migration: register::keyword now sets codegenKind to
+    // 'stratum_def' — the lowerer routes to on::lower handlers for the
+    // actual IR emission.
     const registry = buildStrataRegistry(ASTFactory.program([]))
     const defKind = registry.defKinds['@export']
     expect(defKind).toBeDefined()
-    expect(defKind.codegenKind).toBe('export')
-    expect(defKind.allowsParams).toBe(false)
-    expect(defKind.allowsBinding).toBe(false)
+    expect(defKind.codegenKind).toBe('stratum_def')
 })
 
 test("buildStrataRegistry: || operator has IR::control_or intrinsic (strata-driven)", () => {

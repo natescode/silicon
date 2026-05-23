@@ -109,18 +109,15 @@ export async function compileHandlerToWasm(
         throw new Error(`[comptime] handler @fn '${handlerName}' not found in program or namedHandlers`)
     }
 
-    // Build the synthetic program: just the handler @fn + an explicit
-    // export so the JS side can call it.
-    const exportDef = {
-        type: 'Definition',
-        keyword: '@export',
-        hook: 'export',
-        name: { name: handlerName, type: 'TypedIdentifier' },
-        params: [],
-    }
+    // Build the synthetic program: just the handler @fn.  We *don't* add
+    // an @export Definition because once @export is itself migrated to
+    // the new @stratum form, lowering @export here would fire the
+    // ExportDecl_lower handler — which can't run yet (we're in the middle
+    // of compiling handlers).  Instead, we mutate the lowered IRModule
+    // to add the export directly.
     const syntheticProg = {
         type: 'Program',
-        elements: [handlerDef, exportDef],
+        elements: [handlerDef],
     }
 
     // Temporarily unclaim the handler name so lowerDefinition processes it.
@@ -136,6 +133,15 @@ export async function compileHandlerToWasm(
             elaborated.program, registry, new Map(),
             getBuiltinModuleRegistry(),
         )
+        // Add the export to the IRModule directly — equivalent to having
+        // `@export <handlerName>;` in the source, but immune to @export
+        // itself being migrated to a new-form stratum.
+        mod.exports.push({
+            kind: 'Export',
+            alias: handlerName,
+            internalName: handlerName,
+            what: 'func',
+        })
         // Wrap with std.wat so memory + alloc helpers are present.
         // Handlers that use string literals need the data segment + memory
         // declaration — same shape that compileToWat in src/codegen/ uses.
