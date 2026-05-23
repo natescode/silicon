@@ -433,12 +433,11 @@ test("buildStrataRegistry: @export registered in defKinds (D-D-1 migrated, codeg
     expect(defKind.codegenKind).toBe('stratum_def')
 })
 
-test("buildStrataRegistry: || operator has IR::control_or intrinsic (strata-driven)", () => {
+test("buildStrataRegistry: || operator is registered (D-D-3 migrated; on::lower-driven)", () => {
     const registry = buildStrataRegistry(ASTFactory.program([]))
-    // || is registered as an operator stratum, not hardcoded — verify via intrinsic.
     const entry = registry.operators['||']
-    expect(entry?.data?.intrinsic).toBe('IR::control_or')
-    expect(entry?.type).toBe(StrataType.Control)
+    expect(entry).toBeDefined()
+    expect(registry.handlers.lower.has('||')).toBe(true)
 })
 
 // ---------------------------------------------------------------------------
@@ -452,10 +451,10 @@ test("buildStrataRegistry: populates registry.expanders with built-in control-fl
     // no longer registers this — dispatch flows through on::lower instead.
     const expected = [
         'IR::control_loop',
-        // D-D-8 migrated: @break/@continue/@return no longer register
-        // their legacy intrinsic expanders — dispatch goes via on::lower.
-        'IR::control_and',
-        'IR::control_or',
+        // D-D-8 migrated: @break/@continue/@return no longer register their
+        // legacy intrinsic expanders — dispatch goes via on::lower.
+        // D-D-3 migrated: @and/@or/|| no longer register their legacy
+        // expanders either.
         'IR::control_match',
     ]
     for (const intrinsic of expected) {
