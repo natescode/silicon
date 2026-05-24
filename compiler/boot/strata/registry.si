@@ -58,6 +58,10 @@
 @fn registry_get_tier:Int := { R_CURRENT_TIER };
 
 # registry_init — call before populating.  Fresh vecs, ready for push.
+# Inlines the phase-hook table init (was &registry_hooks_init) so the
+# function body's trailing statement is an assignment — stage1's
+# return-type inference treats trailing void-call statements
+# inconsistently and emits a spurious `drop` in callers.
 @fn registry_init := {
   R_OP_SYM_OFF = &vec_new;
   R_OP_SYM_LEN = &vec_new;
@@ -71,6 +75,16 @@
   R_DK_KW_LEN  = &vec_new;
   R_DK_CG_OFF  = &vec_new;
   R_DK_CG_LEN  = &vec_new;
+  H_DECL_TOK_OFF = &vec_new;
+  H_DECL_TOK_LEN = &vec_new;
+  H_DECL_BODY    = &vec_new;
+  H_CALL_TOK_OFF = &vec_new;
+  H_CALL_TOK_LEN = &vec_new;
+  H_CALL_BODY    = &vec_new;
+  H_ANN_TOK_OFF  = &vec_new;
+  H_ANN_TOK_LEN  = &vec_new;
+  H_ANN_BODY     = &vec_new;
+  H_FINALIZE_BODY = &vec_new;
   R_CURRENT_TIER = R_TIER_T1;
 };
 
@@ -210,3 +224,82 @@
   };
   found
 };
+
+# ── Phase hook tables (Strata 2.0 §2 Layer 2) ───────────────────────
+#
+# Strata 2.0 lets a stratum body register handlers for four lifecycle
+# phases.  Each handler is the AST_BLOCK that follows the on::* call
+# in the unified-form body:
+#
+#   on::decl '@kw',          { body }   — fires for each AST_DEFINITION
+#                                          whose keyword matches @kw
+#   on::callSite 'name',     { body }   — fires for each AST_CALL whose
+#                                          callee matches `name`
+#   on::annotation '@@tag',  { body }   — fires for each annotation on
+#                                          a Definition matching @@tag
+#   on::module_finalize      { body }   — fires once per lowerProgram
+#                                          call, after all defs are seen
+#
+# Storage: parallel vecs, one row per registration.  The token is
+# stored as a (off, len) source span like the keyword/operator tables;
+# the body is an AST index into P_AST.  module_finalize has no token,
+# so it's a single vec of body indices.
+@var H_DECL_TOK_OFF:Int := 0;
+@var H_DECL_TOK_LEN:Int := 0;
+@var H_DECL_BODY:Int    := 0;
+
+@var H_CALL_TOK_OFF:Int := 0;
+@var H_CALL_TOK_LEN:Int := 0;
+@var H_CALL_BODY:Int    := 0;
+
+@var H_ANN_TOK_OFF:Int := 0;
+@var H_ANN_TOK_LEN:Int := 0;
+@var H_ANN_BODY:Int    := 0;
+
+@var H_FINALIZE_BODY:Int := 0;
+
+@fn register_decl_handler tok_off:Int, tok_len:Int, body:Int := {
+  H_DECL_TOK_OFF = &vec_push H_DECL_TOK_OFF, tok_off;
+  H_DECL_TOK_LEN = &vec_push H_DECL_TOK_LEN, tok_len;
+  H_DECL_BODY    = &vec_push H_DECL_BODY, body;
+};
+
+@fn register_callsite_handler tok_off:Int, tok_len:Int, body:Int := {
+  H_CALL_TOK_OFF = &vec_push H_CALL_TOK_OFF, tok_off;
+  H_CALL_TOK_LEN = &vec_push H_CALL_TOK_LEN, tok_len;
+  H_CALL_BODY    = &vec_push H_CALL_BODY, body;
+};
+
+@fn register_annotation_handler tok_off:Int, tok_len:Int, body:Int := {
+  H_ANN_TOK_OFF = &vec_push H_ANN_TOK_OFF, tok_off;
+  H_ANN_TOK_LEN = &vec_push H_ANN_TOK_LEN, tok_len;
+  H_ANN_BODY    = &vec_push H_ANN_BODY, body;
+};
+
+@fn register_finalize_handler body:Int := {
+  H_FINALIZE_BODY = &vec_push H_FINALIZE_BODY, body;
+};
+
+# Counts.
+@fn hook_decl_count:Int     := { &vec_len H_DECL_BODY };
+@fn hook_callsite_count:Int := { &vec_len H_CALL_BODY };
+@fn hook_annotation_count:Int := { &vec_len H_ANN_BODY };
+@fn hook_finalize_count:Int := { &vec_len H_FINALIZE_BODY };
+
+# Field accessors.  `*_body i` returns the AST index of handler i's
+# body block; `*_tok_off/len` return the span of the token the handler
+# binds to (e.g. "@kw" for decl, "name" for callSite, "@@tag" for
+# annotation).
+@fn hook_decl_tok_off:Int i:Int := { &vec_get H_DECL_TOK_OFF, i };
+@fn hook_decl_tok_len:Int i:Int := { &vec_get H_DECL_TOK_LEN, i };
+@fn hook_decl_body:Int    i:Int := { &vec_get H_DECL_BODY, i };
+
+@fn hook_callsite_tok_off:Int i:Int := { &vec_get H_CALL_TOK_OFF, i };
+@fn hook_callsite_tok_len:Int i:Int := { &vec_get H_CALL_TOK_LEN, i };
+@fn hook_callsite_body:Int    i:Int := { &vec_get H_CALL_BODY, i };
+
+@fn hook_annotation_tok_off:Int i:Int := { &vec_get H_ANN_TOK_OFF, i };
+@fn hook_annotation_tok_len:Int i:Int := { &vec_get H_ANN_TOK_LEN, i };
+@fn hook_annotation_body:Int    i:Int := { &vec_get H_ANN_BODY, i };
+
+@fn hook_finalize_body:Int i:Int := { &vec_get H_FINALIZE_BODY, i };
