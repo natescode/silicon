@@ -254,6 +254,57 @@
   @local ok_ce_b := (ce_result != IR_NONE);
   @local ok_eng  := &@and ok_ce_a, ok_ce_b;
 
+  # §4 Handler composition — multiple handlers for the same token all
+  # fire (observer pattern).  Register two extra decl handlers for
+  # the same token as the existing on::decl handler, fire by token,
+  # assert all three fire.
+  @local decl_tok_off := &hook_decl_tok_off 0;
+  @local decl_tok_len := &hook_decl_tok_len 0;
+  @local body0 := &hook_decl_body 0;
+  &register_decl_handler decl_tok_off, decl_tok_len, body0;
+  &register_decl_handler decl_tok_off, decl_tok_len, body0;
+  @local decl_fired := &fire_decl_handlers decl_tok_off, decl_tok_len;
+  @local ok_observer := (decl_fired == 3);
+
+  # Annotation handler observer: register two for '@@demo_ann',
+  # plus the one already in the registry → 3 total.
+  @local ann_tok_off := &hook_annotation_tok_off 0;
+  @local ann_tok_len := &hook_annotation_tok_len 0;
+  @local ann_body0   := &hook_annotation_body 0;
+  &register_annotation_handler ann_tok_off, ann_tok_len, ann_body0;
+  &register_annotation_handler ann_tok_off, ann_tok_len, ann_body0;
+  @local ann_fired := &fire_annotation_handlers ann_tok_off, ann_tok_len;
+  @local ok_obs_ann := (ann_fired == 3);
+
+  @local ok_obs := &@and ok_observer, ok_obs_ann;
+
+  # State persistence across handler firings — simulate stratum-scope
+  # state surviving multiple invocations.  Use state_set/get to bump
+  # a counter and assert it persists.
+  @local state_b := 42;
+  &state_set state_b, 'count', 1;
+  @local s1 := &state_get state_b, 'count';
+  &state_set state_b, 'count', ((&state_get state_b, 'count') + 1);
+  &state_set state_b, 'count', ((&state_get state_b, 'count') + 1);
+  @local s_final := &state_get state_b, 'count';
+  @local ok_persist := &@and (s1 == 1), (s_final == 3);
+
+  # Type round-trip: format Float and check first byte.
+  @local fl_fmt := &type_format TYPE_FLOAT_H;
+  @local fl_fmt_len := &WASM::i32_load fl_fmt;
+  @local fl_fmt_b0  := &WASM::i32_load8_u (fl_fmt + 4);    # 'F'
+  @local ok_fmt_float := &@and (fl_fmt_len == 5), (fl_fmt_b0 == 70);
+
+  # Diagnostics: error vs warn filtering still works.
+  @local d_warns_before := &diag_count_by_severity DIAG_SEV_WARN;
+  &diag_warn 'W500', 0, 'observer test warn', 0;
+  @local d_warns_after  := &diag_count_by_severity DIAG_SEV_WARN;
+  @local ok_diag_filter := ((d_warns_after - d_warns_before) == 1);
+
+  @local ok_more_a := &@and ok_obs, ok_persist;
+  @local ok_more_b := &@and ok_fmt_float, ok_diag_filter;
+  @local ok_more   := &@and ok_more_a, ok_more_b;
+
   # §5.5 ast_substitute.  Build a tiny snippet `T` (an AST_NAMESPACE
   # with one segment), capture it, substitute T -> 42 (an int literal),
   # then verify the new ast is the replacement.
@@ -311,7 +362,8 @@
   @local ok_j := &@and ok_i, ok_fire_all;
   @local ok_k := &@and ok_j, ok_sub;
   @local ok_l := &@and ok_k, ok_fmt;
-  @local ok   := &@and ok_l, ok_eng;
+  @local ok_m := &@and ok_l, ok_eng;
+  @local ok   := &@and ok_m, ok_more;
   &@if ok,
     { &write_str 1, 'strata2 OK' },
     { &write_str 1, 'strata2 FAIL' };
