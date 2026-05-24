@@ -17,6 +17,12 @@
 @use '../strata/registry.si';
 @use '../strata/loader.si';
 @use '../types/types.si';
+@use '../ir/nodes.si';
+@use '../elab/body.si';
+@use '../elab/body_scope.si';
+@use '../compiler_api/ctx.si';
+@use '../elab/body_rich.si';
+@use '../ir/lower.si';
 
 @fn _start:Void := {
   # Source bundle: ONE @stratum unified-form definition registering
@@ -204,6 +210,27 @@
   @local ok_cycle_x := &@and ok_cycle_a, ok_cycle_b;
   @local ok_cycle   := &@and ok_cycle_x, ok_cycle_diag;
 
+  # §2 Layer 2: handler firing.  Re-load the original strata source
+  # (registry was disturbed by earlier additions); fire all
+  # module_finalize handlers via fire_module_finalize_handlers.
+  # Verify the fire count equals the registered handler count.
+  &registry_init;
+  &load_strata prog;
+  @local pre_fin_count := &hook_finalize_count;
+  @local fired := &fire_module_finalize_handlers;
+  @local ok_fire := &@and (fired == 1), (pre_fin_count == 1);
+
+  # Now register a fresh handler and fire by token.  Reuse the
+  # 'demo_fn' callSite registration the unified-form created.  The
+  # source `Demo := { ... &Compiler::on::callSite 'demo_fn', { 2 };
+  # ... }` registered exactly one callSite handler.
+  @local call_h0_off := &hook_callsite_tok_off 0;
+  @local call_h0_len := &hook_callsite_tok_len 0;
+  @local cs_fired := &fire_callsite_handlers call_h0_off, call_h0_len;
+  @local ok_fire_cs := (cs_fired == 1);
+
+  @local ok_fire_all := &@and ok_fire, ok_fire_cs;
+
   @local ok_a := &@and ok_count, ok_tier;
   @local ok_b := &@and ok_a, ok_hooks;
   @local ok_c := &@and ok_b, ok_state;
@@ -212,7 +239,8 @@
   @local ok_f := &@and ok_e, ok_ast;
   @local ok_g := &@and ok_f, ok_type;
   @local ok_h := &@and ok_g, ok_diag;
-  @local ok   := &@and ok_h, ok_cycle;
+  @local ok_i := &@and ok_h, ok_cycle;
+  @local ok   := &@and ok_i, ok_fire_all;
   &@if ok,
     { &write_str 1, 'strata2 OK' },
     { &write_str 1, 'strata2 FAIL' };
