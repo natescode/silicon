@@ -94,6 +94,11 @@
   R_PENDING_DEFS = &vec_new;
   AST_H_KIND = &vec_new;
   AST_H_AST  = &vec_new;
+  DIAG_CODE     = &vec_new;
+  DIAG_SPAN     = &vec_new;
+  DIAG_MSG      = &vec_new;
+  DIAG_HINT     = &vec_new;
+  DIAG_SEVERITY = &vec_new;
   R_CURRENT_TIER = R_TIER_T1;
 };
 
@@ -521,3 +526,59 @@
 @fn ast_handle_ast:Int  handle:Int := { &vec_get AST_H_AST,  handle };
 @fn ast_handle_kind:Int handle:Int := { &vec_get AST_H_KIND, handle };
 @fn ast_handle_count:Int := { &vec_len AST_H_AST };
+
+# ── Diagnostics (Strata 2.0 §6 / T-5) ────────────────────────────────
+#
+# `&Compiler::diag::error code, span, message, hint?` and
+# `&Compiler::diag::warn  code, span, message, hint?` accumulate
+# diagnostics without throwing.  Build never fails on diag.error today
+# (T-5 runtime-trap codegen is the next step) — the diagnostics just
+# pile up in this vec so the host can inspect / render them.
+#
+# Storage: parallel vecs of i32 refs.  Each cell holds a Silicon
+# string pointer (length-prefixed) for code/message/hint, an arbitrary
+# span ref (AST index or 0 placeholder) for span, and a severity tag
+# (DIAG_SEV_ERROR = 0, DIAG_SEV_WARN = 1).
+@let DIAG_SEV_ERROR:Int := 0;
+@let DIAG_SEV_WARN:Int  := 1;
+
+@var DIAG_CODE:Int     := 0;
+@var DIAG_SPAN:Int     := 0;
+@var DIAG_MSG:Int      := 0;
+@var DIAG_HINT:Int     := 0;
+@var DIAG_SEVERITY:Int := 0;
+
+@fn diag_push severity:Int, code:Int, span:Int, msg:Int, hint:Int := {
+  DIAG_CODE     = &vec_push DIAG_CODE, code;
+  DIAG_SPAN     = &vec_push DIAG_SPAN, span;
+  DIAG_MSG      = &vec_push DIAG_MSG, msg;
+  DIAG_HINT     = &vec_push DIAG_HINT, hint;
+  DIAG_SEVERITY = &vec_push DIAG_SEVERITY, severity;
+};
+
+@fn diag_error code:Int, span:Int, msg:Int, hint:Int := {
+  &diag_push DIAG_SEV_ERROR, code, span, msg, hint;
+};
+
+@fn diag_warn code:Int, span:Int, msg:Int, hint:Int := {
+  &diag_push DIAG_SEV_WARN, code, span, msg, hint;
+};
+
+@fn diag_count:Int    := { &vec_len DIAG_CODE };
+@fn diag_code:Int     i:Int := { &vec_get DIAG_CODE, i };
+@fn diag_span:Int     i:Int := { &vec_get DIAG_SPAN, i };
+@fn diag_msg:Int      i:Int := { &vec_get DIAG_MSG, i };
+@fn diag_hint:Int     i:Int := { &vec_get DIAG_HINT, i };
+@fn diag_severity:Int i:Int := { &vec_get DIAG_SEVERITY, i };
+
+# Filter helper: count diagnostics matching a severity.
+@fn diag_count_by_severity:Int severity:Int := {
+  @local n := &vec_len DIAG_SEVERITY;
+  @local i := 0;
+  @local count := 0;
+  &@loop (i < n), {
+    &@if ((&vec_get DIAG_SEVERITY, i) == severity), { count = count + 1; };
+    i = i + 1;
+  };
+  count
+};

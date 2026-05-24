@@ -172,13 +172,30 @@
   @local ok_ty_g := &@and ok_ty_e, ok_ty_f;
   @local ok_type := &@and ok_ty_g, ok_subst_orig;
 
+  # §6 Diagnostics — accumulate, never throw.  Push two errors + one
+  # warning; assert counts and per-row severity.
+  &diag_error 'E001', 0, 'first error',  0;
+  &diag_error 'E002', 0, 'second error', 'try fixing X';
+  &diag_warn  'W001', 0, 'a warning',    0;
+  @local dn := &diag_count;
+  @local de := &diag_count_by_severity DIAG_SEV_ERROR;
+  @local dw := &diag_count_by_severity DIAG_SEV_WARN;
+  @local d0_sev := &diag_severity 0;
+  @local d2_sev := &diag_severity 2;
+  @local ok_diag_count := (dn == 3);
+  @local ok_diag_split := &@and (de == 2), (dw == 1);
+  @local ok_diag_sev   := &@and (d0_sev == DIAG_SEV_ERROR), (d2_sev == DIAG_SEV_WARN);
+  @local ok_diag_a := &@and ok_diag_count, ok_diag_split;
+  @local ok_diag   := &@and ok_diag_a, ok_diag_sev;
+
   @local ok_a := &@and ok_count, ok_tier;
   @local ok_b := &@and ok_a, ok_hooks;
   @local ok_c := &@and ok_b, ok_state;
   @local ok_d := &@and ok_c, ok_inst;
   @local ok_e := &@and ok_d, ok_pend;
   @local ok_f := &@and ok_e, ok_ast;
-  @local ok   := &@and ok_f, ok_type;
+  @local ok_g := &@and ok_f, ok_type;
+  @local ok   := &@and ok_g, ok_diag;
   &@if ok,
     { &write_str 1, 'strata2 OK' },
     { &write_str 1, 'strata2 FAIL' };
