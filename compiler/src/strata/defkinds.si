@@ -84,17 +84,33 @@
 };
 @fn TypeDistinctDef_lower node:Int := &compiler::ir_null;
 
-@stratum_keyword TypeSumDef ('@type_sum', Node) = {
-  &IR::def_type_sum;
-};
+# D-D-11d: @type_sum / @enum / @type migrated to the new @stratum form.
+# Each handler delegates to a TS-side expander (sumTypeExpander or
+# typeRecordExpander) which does the heavy lifting:
+#   - extract variants from the AST
+#   - emit one IRGlobal per variant tag (sum types) or one IRFunction
+#     per variant constructor (record types)
+#   - register tag globals in ctx for forward references
+# The handler returns the array of IR objects; lowerProgram's append()
+# already handles array results.
 
-@stratum_keyword EnumDef ('@enum', Node) = {
-  &IR::def_type_sum;
+@stratum TypeSumDef := {
+    &Compiler::register::keyword '@type_sum';
+    &Compiler::on::lower '@type_sum', TypeSumDef_lower;
 };
+@fn TypeSumDef_lower node:Int := &compiler::compiler_expandSumType node;
 
-@stratum_keyword TypeRecordDef ('@type', Node) = {
-  &IR::def_type_record;
+@stratum EnumDef := {
+    &Compiler::register::keyword '@enum';
+    &Compiler::on::lower '@enum', EnumDef_lower;
 };
+@fn EnumDef_lower node:Int := &compiler::compiler_expandSumType node;
+
+@stratum TypeRecordDef := {
+    &Compiler::register::keyword '@type';
+    &Compiler::on::lower '@type', TypeRecordDef_lower;
+};
+@fn TypeRecordDef_lower node:Int := &compiler::compiler_expandTypeRecord node;
 
 # D-D-11a: @local migrated.  Handler reads the type + name, pushes a
 # pending local, sets up the local in ctx.locals, and emits no IR

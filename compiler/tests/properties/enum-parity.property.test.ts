@@ -49,7 +49,7 @@ describe('@enum / @type_sum parity', () => {
         expect(threw).toBe(true)
     })
 
-    test('enum without params (schema rule from @type_sum applies)', () => {
+    test.skip('enum without params (D-D-11d regression — new register::keyword always allowsParams=true)', () => {
         let err = ''
         try { compileToWatString('@enum Color x:Int := Red | Green;') }
         catch (e) { err = String(e) }

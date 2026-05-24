@@ -194,6 +194,16 @@ export function lowerProgram(
         }
         // Def expander pre-scan (handles type_sum and any user-registered kinds).
         ctx.registry.defExpanders.get(hook)?.preScan?.(node, ctx.$compiler!)
+        // D-D-11d: migrated @enum/@type_sum/@type need the same preScan
+        // even though their codegenKind is now 'stratum_def'.  Delegate
+        // to the legacy expanders' preScan methods by keyword.
+        if (hook === 'stratum_def') {
+            const exp =
+                node.keyword === '@enum' || node.keyword === '@type_sum' ? ctx.registry.defExpanders.get('type_sum') :
+                node.keyword === '@type' ? ctx.registry.defExpanders.get('type_record') :
+                undefined
+            exp?.preScan?.(node, ctx.$compiler!)
+        }
     }
 
     // Append an IR node (or array of nodes) into the right module bucket.

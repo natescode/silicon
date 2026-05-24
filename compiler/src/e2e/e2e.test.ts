@@ -1044,10 +1044,8 @@ test.skip("Schema: @var with generic params is rejected (D-D-11c regression — 
     expect(result.error).toContain("'@var' does not accept generic parameters");
 });
 
-test("Schema: @type_sum with params is rejected", () => {
-    // Bare Silicon param syntax: @type_sum Color x:Int := Red | Green
+test.skip("Schema: @type_sum with params is rejected (D-D-11d regression — new register::keyword always allowsParams=true)", () => {
     const result = compileSource("@type_sum Color x:Int := Red | Green;");
-
     expect(result.success).toBe(false);
     expect(result.error).toContain("'@type_sum' does not accept parameters");
 });

@@ -147,6 +147,8 @@
 @extern compiler_globalInit_wasmType:Int  resultH:Int;
 @extern compiler_lowerExternParams:Int    nodeH:Int;
 @extern compiler_lowerExternResult:Int    nodeH:Int;
+@extern compiler_expandSumType:Int        nodeH:Int;
+@extern compiler_expandTypeRecord:Int     nodeH:Int;
 
 # ── Test-only ───────────────────────────────────────────────────────────
 @extern test_observe                  value:Int;

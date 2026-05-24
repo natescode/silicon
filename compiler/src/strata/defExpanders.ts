@@ -227,3 +227,11 @@ export const builtinDefExpanders: Record<string, IRDefExpander> = {
     'type_sum':    sumTypeExpander,
     'type_record': typeRecordExpander,
 }
+
+/** Exposed for D-D-11d migrations.  The @type_sum / @enum / @type
+ *  handlers in src/strata/defkinds.si call into these via
+ *  `&compiler::compiler_expandSumType` / `compiler_expandTypeRecord`
+ *  instead of re-implementing the variant extraction + IR construction
+ *  in Silicon.  Once the new-form has full preScan + multi-IR-return
+ *  support, these can be deleted in favour of pure Silicon handlers. */
+export { sumTypeExpander, typeRecordExpander }

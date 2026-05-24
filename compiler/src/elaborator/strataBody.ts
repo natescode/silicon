@@ -419,6 +419,14 @@ function invokeCompilerInteropShim(fnName: string, args: any[], api: CompilerAPI
     if (fnName === 'compiler_globalInit_wasmType') return args[0]?.wasmType ?? 'i32'
     if (fnName === 'compiler_lowerExternParams') return api.lowerExternParams(args[0])
     if (fnName === 'compiler_lowerExternResult') return api.lowerExternResult(args[0])
+    if (fnName === 'compiler_expandSumType') {
+        const { sumTypeExpander } = require('../strata/defExpanders') as typeof import('../strata/defExpanders')
+        return sumTypeExpander.expand(args[0], '', api as any)
+    }
+    if (fnName === 'compiler_expandTypeRecord') {
+        const { typeRecordExpander } = require('../strata/defExpanders') as typeof import('../strata/defExpanders')
+        return typeRecordExpander.expand(args[0], '', api as any)
+    }
 
     // funcResult struct accessors — interpreter just sees plain objects.
     if (fnName === 'compiler_funcResult_body')   return args[0]?.body

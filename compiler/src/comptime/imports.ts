@@ -1226,6 +1226,41 @@ export function createComptimeImports(env: ComptimeEnv): WebAssembly.Imports {
 
     /** Lower an @extern's result type — returns a string-pool id, or 0
      *  if the extern has no result. */
+    /** Delegate to the TS-side sumTypeExpander.expand for the migrated
+     *  @enum / @type_sum handler — returns a handle of an array of
+     *  IRGlobal handles.  See src/strata/defExpanders.ts. */
+    const compiler_expandSumType = (nodeH: number): number => {
+        if (!env.api) return env.irHandles.fresh([])
+        const node = handles.get(nodeH)
+        if (!node) return env.irHandles.fresh([])
+        try {
+            const { sumTypeExpander } = require('../strata/defExpanders') as typeof import('../strata/defExpanders')
+            const name = strings.get(0) // unused by the expander
+            const irs = sumTypeExpander.expand(node, name, env.api) as any[]
+            const ids = irs.map(ir => env.irHandles.fresh(ir))
+            return env.irHandles.fresh(ids as any)
+        } catch {
+            return env.irHandles.fresh([])
+        }
+    }
+
+    /** Delegate to typeRecordExpander.expand for the migrated @type
+     *  (sum-with-payloads) handler. */
+    const compiler_expandTypeRecord = (nodeH: number): number => {
+        if (!env.api) return env.irHandles.fresh([])
+        const node = handles.get(nodeH)
+        if (!node) return env.irHandles.fresh([])
+        try {
+            const { typeRecordExpander } = require('../strata/defExpanders') as typeof import('../strata/defExpanders')
+            const name = strings.get(0)
+            const irs = typeRecordExpander.expand(node, name, env.api) as any[]
+            const ids = irs.map(ir => env.irHandles.fresh(ir))
+            return env.irHandles.fresh(ids as any)
+        } catch {
+            return env.irHandles.fresh([])
+        }
+    }
+
     const compiler_lowerExternResult = (nodeH: number): number => {
         if (!env.api) return 0
         const node = handles.get(nodeH)
@@ -1361,7 +1396,7 @@ export function createComptimeImports(env: ComptimeEnv): WebAssembly.Imports {
             compiler_resolveFunctionReturnType, compiler_resolveType,
             compiler_lowerGlobalInit, compiler_globalInit_init, compiler_globalInit_wasmType,
             compiler_lowerExternParams, compiler_lowerExternResult,
-            compiler_expandMatchChain,
+            compiler_expandMatchChain, compiler_expandSumType, compiler_expandTypeRecord,
             test_observe,
         },
     }
