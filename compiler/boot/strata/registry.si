@@ -91,6 +91,7 @@
   STATE_VAL     = &vec_new;
   STATE_INSTANCE_NEXT   = 1000000;
   R_CURRENT_STRATUM_REF = 0;
+  R_PENDING_DEFS = &vec_new;
   R_CURRENT_TIER = R_TIER_T1;
 };
 
@@ -429,4 +430,42 @@
     i = i + 1;
   };
   count
+};
+
+# ── Pending definitions (Strata 2.0 §5.6 — module mutation) ─────────
+#
+# `&Compiler::module::push_definition def` and
+# `&Compiler::module::push_global  name, type, init`
+# both append to the pending-definitions accumulator.  lowerProgram
+# drains this list AFTER walking the user's AST so handler-generated
+# code appears in the final module.
+#
+# Representation: a vec of i32 references.  In boot/, the reference
+# is an AST_DEFINITION index (for push_definition) or — for push_global
+# — a synthesized AST_DEFINITION created via the AST builders.  The
+# integration step (Phase 3.10) wires the drain into lower_program.
+@var R_PENDING_DEFS:Int := 0;
+
+@fn module_push_definition def_ref:Int := {
+  R_PENDING_DEFS = &vec_push R_PENDING_DEFS, def_ref;
+};
+
+# module_push_global — boot/ doesn't synthesize AST_DEFINITION
+# objects from raw (name, type, init) tuples yet, so this thin shim
+# just records the pre-built AST ref; callers that need the (name,
+# type, init) shape can construct an AST_DEFINITION via the
+# ast_definition_* builders and pass its index.  Same accumulator as
+# module_push_definition; the distinction is purely API-shape.
+@fn module_push_global def_ref:Int := {
+  R_PENDING_DEFS = &vec_push R_PENDING_DEFS, def_ref;
+};
+
+@fn module_pending_count:Int   := { &vec_len R_PENDING_DEFS };
+@fn module_pending_get:Int i:Int := { &vec_get R_PENDING_DEFS, i };
+
+# module_pending_reset — drain marker.  Called by lower_program after
+# the accumulated defs have been emitted, so a second compile pass
+# starts fresh.
+@fn module_pending_reset := {
+  R_PENDING_DEFS = &vec_new;
 };

@@ -86,10 +86,27 @@
   @local ok_inst_3 := (inst1 != inst2);
   @local ok_inst   := &@and (&@and ok_inst_1, ok_inst_2), ok_inst_3;
 
+  # §5.6 Module mutation.  Push three pending definitions, confirm
+  # the accumulator records them in order; reset and confirm drain.
+  &module_push_definition 101;
+  &module_push_definition 102;
+  &module_push_global     103;
+  @local pend_n := &module_pending_count;
+  @local pend_0 := &module_pending_get 0;
+  @local pend_2 := &module_pending_get 2;
+  &module_pending_reset;
+  @local pend_after := &module_pending_count;
+  @local ok_pend_count := (pend_n == 3);
+  @local ok_pend_order := &@and (pend_0 == 101), (pend_2 == 103);
+  @local ok_pend_reset := (pend_after == 0);
+  @local ok_pend_a     := &@and ok_pend_count, ok_pend_order;
+  @local ok_pend       := &@and ok_pend_a, ok_pend_reset;
+
   @local ok_a := &@and ok_count, ok_tier;
   @local ok_b := &@and ok_a, ok_hooks;
   @local ok_c := &@and ok_b, ok_state;
-  @local ok   := &@and ok_c, ok_inst;
+  @local ok_d := &@and ok_c, ok_inst;
+  @local ok   := &@and ok_d, ok_pend;
   &@if ok,
     { &write_str 1, 'strata2 OK' },
     { &write_str 1, 'strata2 FAIL' };
