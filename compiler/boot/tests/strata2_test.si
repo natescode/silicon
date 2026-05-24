@@ -235,6 +235,25 @@
 
   @local ok_fire_all := &@and ok_fire, ok_fire_cs;
 
+  # 3-22 Comptime engine skeleton (run BEFORE ast_substitute, since
+  # that test re-parses and clobbers P_AST — invalidating the stored
+  # handler-body AST indices).  Compile two no-op handler bodies and
+  # invoke one through the engine API.  The stub engine returns the
+  # handle index for compile and forwards to br_interpret_body for
+  # invoke; this verifies the surface is stable so the real
+  # WASM-in-WASM engine can drop in later without API churn.
+  &comptime_engine_init;
+  @local ce_body := &hook_comptime_body 0;
+  @local ce_h1 := &comptime_engine_compile_handler ce_body;
+  @local ce_h2 := &comptime_engine_compile_handler ce_body;
+  @local ce_n  := &comptime_engine_count;
+  @local ce_result := &comptime_engine_invoke ce_h1;
+  @local ok_ce := &@and (ce_h1 == 0), (ce_h2 == 1);
+  @local ok_ce_count := (ce_n == 2);
+  @local ok_ce_a := &@and ok_ce, ok_ce_count;
+  @local ok_ce_b := (ce_result != IR_NONE);
+  @local ok_eng  := &@and ok_ce_a, ok_ce_b;
+
   # §5.5 ast_substitute.  Build a tiny snippet `T` (an AST_NAMESPACE
   # with one segment), capture it, substitute T -> 42 (an int literal),
   # then verify the new ast is the replacement.
@@ -291,7 +310,8 @@
   @local ok_i := &@and ok_h, ok_cycle;
   @local ok_j := &@and ok_i, ok_fire_all;
   @local ok_k := &@and ok_j, ok_sub;
-  @local ok   := &@and ok_k, ok_fmt;
+  @local ok_l := &@and ok_k, ok_fmt;
+  @local ok   := &@and ok_l, ok_eng;
   &@if ok,
     { &write_str 1, 'strata2 OK' },
     { &write_str 1, 'strata2 FAIL' };

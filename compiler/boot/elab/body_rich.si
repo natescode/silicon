@@ -639,3 +639,55 @@
   };
   fired
 };
+
+# ── Comptime engine skeleton (3-22) ─────────────────────────────────
+#
+# The dissolution plan (docs/comptime-via-compilation.md) replaces the
+# hand-rolled body interpreter with a WASM-in-WASM engine: every
+# stratum body is compiled through the normal Silicon pipeline into
+# WASM and then executed in an embedded WASM runtime at compile time.
+# The full engine is XL (~2 days of work) and includes a tiny
+# interpreter plus the CompilerAPI exposed as WASM imports.
+#
+# This skeleton lands the API surface so callers can be written
+# against the stable contract today.  The default implementation
+# routes calls through the existing br_interpret_body — i.e.
+# "compiling a handler to WASM" today is "store the AST body ref",
+# and "invoking" is "interpret the body AST".  When the WASM engine
+# arrives the function bodies below change but the signatures stay.
+#
+# Storage: parallel vecs of (handle_id, body_ast_ref).  handle_id is
+# the row index returned by comptime_engine_compile_handler.
+@var CE_HANDLE:Int := 0;
+@var CE_BODY:Int   := 0;
+
+@fn comptime_engine_init := {
+  CE_HANDLE = &vec_new;
+  CE_BODY   = &vec_new;
+};
+
+# comptime_engine_compile_handler body_ast -> handle_id
+#
+# Today: O(1), just stores the body ref.  When the real WASM engine
+# lands this is where lowerProgram + wabt + WebAssembly.instantiate
+# (or the embedded interpreter's bytecode compile) happens.
+@fn comptime_engine_compile_handler:Int body_ast:Int := {
+  @local handle := &vec_len CE_BODY;
+  CE_HANDLE = &vec_push CE_HANDLE, handle;
+  CE_BODY   = &vec_push CE_BODY,   body_ast;
+  handle
+};
+
+# comptime_engine_invoke handle -> result
+#
+# Today: br_interpret_body on the stored AST.  When the real engine
+# lands this invokes the compiled WASM.  Returns IR_NONE if the
+# handle is out of range.
+@fn comptime_engine_invoke:Int handle:Int := {
+  &@if (handle < 0), { &@return IR_NONE; };
+  &@if (handle >= (&vec_len CE_BODY)), { &@return IR_NONE; };
+  @local body := &vec_get CE_BODY, handle;
+  &fire_one_handler body
+};
+
+@fn comptime_engine_count:Int := { &vec_len CE_HANDLE };
