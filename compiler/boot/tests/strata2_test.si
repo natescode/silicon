@@ -188,6 +188,22 @@
   @local ok_diag_a := &@and ok_diag_count, ok_diag_split;
   @local ok_diag   := &@and ok_diag_a, ok_diag_sev;
 
+  # T-6 cycle detection.  Phase A: 3-node DAG (no cycle).  Phase B:
+  # add a back-edge to introduce a cycle; verify it's caught and the
+  # S0001 diag is appended.
+  &tier_add_dep 0, 1;
+  &tier_add_dep 1, 2;
+  @local cycle_a := &tier_cycle_detect 3;     # expect 0
+  &tier_add_dep 2, 0;                          # introduce cycle
+  @local diag_before := &diag_count;
+  @local cycle_b := &tier_cycle_check_and_emit 3;  # expect 1, appends S0001
+  @local diag_after  := &diag_count;
+  @local ok_cycle_a := (cycle_a == 0);
+  @local ok_cycle_b := (cycle_b == 1);
+  @local ok_cycle_diag := ((diag_after - diag_before) == 1);
+  @local ok_cycle_x := &@and ok_cycle_a, ok_cycle_b;
+  @local ok_cycle   := &@and ok_cycle_x, ok_cycle_diag;
+
   @local ok_a := &@and ok_count, ok_tier;
   @local ok_b := &@and ok_a, ok_hooks;
   @local ok_c := &@and ok_b, ok_state;
@@ -195,7 +211,8 @@
   @local ok_e := &@and ok_d, ok_pend;
   @local ok_f := &@and ok_e, ok_ast;
   @local ok_g := &@and ok_f, ok_type;
-  @local ok   := &@and ok_g, ok_diag;
+  @local ok_h := &@and ok_g, ok_diag;
+  @local ok   := &@and ok_h, ok_cycle;
   &@if ok,
     { &write_str 1, 'strata2 OK' },
     { &write_str 1, 'strata2 FAIL' };

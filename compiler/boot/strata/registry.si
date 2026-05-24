@@ -99,6 +99,8 @@
   DIAG_MSG      = &vec_new;
   DIAG_HINT     = &vec_new;
   DIAG_SEVERITY = &vec_new;
+  CYCLE_FROM = &vec_new;
+  CYCLE_TO   = &vec_new;
   R_CURRENT_TIER = R_TIER_T1;
 };
 
@@ -581,4 +583,89 @@
     i = i + 1;
   };
   count
+};
+
+# ── T-6 cycle detection ─────────────────────────────────────────────
+#
+# T0 strata form a DAG via @use dependencies.  If two T0 strata
+# require each other, the load order is undefined and one of their
+# bodies will run against an unregistered dependency.  T-6 catches
+# this at registry-build time: if a cycle exists in the directed graph
+# of T0 strata, emit S0001 and stop.
+#
+# Storage: parallel edge vecs.  Caller adds (from, to) edges where
+# both ids are small ints (node indices).  tier_cycle_detect runs
+# Kahn's algorithm — count in-degrees, peel off zero-in-degree nodes,
+# decrement neighbors; if any node is left in-degree > 0 there's a
+# cycle.
+@var CYCLE_FROM:Int := 0;
+@var CYCLE_TO:Int   := 0;
+
+@fn tier_cycles_init := {
+  CYCLE_FROM = &vec_new;
+  CYCLE_TO   = &vec_new;
+};
+
+@fn tier_add_dep from_id:Int, to_id:Int := {
+  CYCLE_FROM = &vec_push CYCLE_FROM, from_id;
+  CYCLE_TO   = &vec_push CYCLE_TO,   to_id;
+};
+
+@fn tier_dep_count:Int := { &vec_len CYCLE_FROM };
+
+# tier_cycle_detect n_nodes — Kahn's topo-sort with cycle detection.
+# Returns 1 iff the graph has a cycle, 0 otherwise.  n_nodes must
+# bound the node ids used in tier_add_dep calls.
+@fn tier_cycle_detect:Int n_nodes:Int := {
+  @local in_deg := &vec_new;
+  @local i := 0;
+  &@loop (i < n_nodes), {
+    in_deg = &vec_push in_deg, 0;
+    i = i + 1;
+  };
+  @local n_edges := &vec_len CYCLE_FROM;
+  @local e := 0;
+  &@loop (e < n_edges), {
+    @local to_id := &vec_get CYCLE_TO, e;
+    @local cur   := &vec_get in_deg, to_id;
+    &vec_set in_deg, to_id, (cur + 1);
+    e = e + 1;
+  };
+  @local removed := 0;
+  @local progress := 1;
+  &@loop (progress == 1), {
+    progress = 0;
+    @local k := 0;
+    &@loop (k < n_nodes), {
+      &@if ((&vec_get in_deg, k) == 0), {
+        &vec_set in_deg, k, (0 - 1);
+        removed = removed + 1;
+        progress = 1;
+        @local j := 0;
+        &@loop (j < n_edges), {
+          &@if ((&vec_get CYCLE_FROM, j) == k), {
+            @local nb := &vec_get CYCLE_TO, j;
+            @local nb_deg := &vec_get in_deg, nb;
+            &@if (nb_deg > 0), {
+              &vec_set in_deg, nb, (nb_deg - 1);
+            };
+          };
+          j = j + 1;
+        };
+      };
+      k = k + 1;
+    };
+  };
+  &@if (removed < n_nodes), { &@return 1; };
+  0
+};
+
+# tier_cycle_check_and_emit n_nodes — run detection; on cycle, append
+# S0001 diagnostic.  Returns 1 if a cycle was found, 0 otherwise.
+@fn tier_cycle_check_and_emit:Int n_nodes:Int := {
+  @local has_cycle := &tier_cycle_detect n_nodes;
+  &@if (has_cycle == 1), {
+    &diag_error 'S0001', 0, 'circular dependency in T0 strata', 0;
+  };
+  has_cycle
 };
