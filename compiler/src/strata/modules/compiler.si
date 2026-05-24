@@ -142,6 +142,11 @@
 @extern compiler_resolveFunctionReturnType:Int   nodeH:Int, nameStr:Int, bodyH:Int;
 @extern compiler_resolveType:Int          annotH:Int;
 @extern compiler_expandMatchChain:Int     rawArgsArrH:Int, inferredTypeH:Int;
+@extern compiler_lowerGlobalInit:Int      nodeH:Int, defaultTypeStr:Int;
+@extern compiler_globalInit_init:Int      resultH:Int;
+@extern compiler_globalInit_wasmType:Int  resultH:Int;
+@extern compiler_lowerExternParams:Int    nodeH:Int;
+@extern compiler_lowerExternResult:Int    nodeH:Int;
 
 # ── Test-only ───────────────────────────────────────────────────────────
 @extern test_observe                  value:Int;

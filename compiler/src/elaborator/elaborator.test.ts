@@ -323,12 +323,12 @@ test("elaborate registry contains @fn def-kind (D-D-11b migrated)", () => {
   expect(registry.defKinds['@fn'].codegenKind).toBe('stratum_def')
 })
 
-// Test: defKinds registry is populated with @var
-test("elaborate registry contains @var def-kind", () => {
+// Test: defKinds registry is populated with @var (D-D-11c migrated)
+test("elaborate registry contains @var def-kind (D-D-11c migrated)", () => {
   const program = ASTFactory.program([])
   const { registry } = elaborate(program)
   expect(registry.defKinds['@var']).toBeDefined()
-  expect(registry.defKinds['@var'].codegenKind).toBe('global')
+  expect(registry.defKinds['@var'].codegenKind).toBe('stratum_def')
 })
 
 test("elaborate registers @if as a keyword stratum (D-D-2: new @stratum form)", () => {

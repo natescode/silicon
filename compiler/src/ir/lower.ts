@@ -184,7 +184,10 @@ export function lowerProgram(
         const node = unwrap(el)
         if (!node || node.type !== 'Definition') continue
         const hook = node.hook
-        if (hook === 'global') {
+        // Legacy 'global' codegenKind OR migrated @var (D-D-11c — hook is
+        // 'stratum_def' but the keyword still needs the same forward-ref
+        // global registration).
+        if (hook === 'global' || node.keyword === '@var') {
             const name = watId(node.name?.name ?? '')
             ctx.globals.set(name, 'i32') // refined below
             ctx.varNames.add(name)
@@ -857,8 +860,11 @@ function lowerAsStmt(node: any, ctx: LowerCtx): IRStmt | null {
         return { kind: 'GlobalSet', name: target, value }
     }
 
-    if (node.type === 'Definition' && node.hook === 'global') {
-        // @var inside a function body: treat as a mutable local variable.
+    // @var inside a function body: treat as a mutable local variable.
+    // Recognise by hook (legacy 'global') or by keyword (D-D-11c migrated @var
+    // with hook='stratum_def').  Either way, in-function @var emits a Local
+    // declaration + LocalSet, not a module Global.
+    if (node.type === 'Definition' && (node.hook === 'global' || node.keyword === '@var')) {
         const name = watId(node.name?.name ?? '')
         let wasmType: WasmValType = 'i32'
         if (node.name?.typeAnnotation?.typename) {

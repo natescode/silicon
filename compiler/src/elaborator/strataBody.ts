@@ -414,6 +414,11 @@ function invokeCompilerInteropShim(fnName: string, args: any[], api: CompilerAPI
         return api.resolveFunctionReturnType(args[0], String(args[1] ?? ''), args[2])
     }
     if (fnName === 'compiler_resolveType')        return api.resolveType(args[0])
+    if (fnName === 'compiler_lowerGlobalInit')   return api.lowerGlobalInit(args[0], String(args[1] || 'i32') as any)
+    if (fnName === 'compiler_globalInit_init')   return args[0]?.init
+    if (fnName === 'compiler_globalInit_wasmType') return args[0]?.wasmType ?? 'i32'
+    if (fnName === 'compiler_lowerExternParams') return api.lowerExternParams(args[0])
+    if (fnName === 'compiler_lowerExternResult') return api.lowerExternResult(args[0])
 
     // funcResult struct accessors — interpreter just sees plain objects.
     if (fnName === 'compiler_funcResult_body')   return args[0]?.body

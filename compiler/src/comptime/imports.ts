@@ -1179,6 +1179,65 @@ export function createComptimeImports(env: ComptimeEnv): WebAssembly.Imports {
         }
     }
 
+    /** Lower a @var's init expression — returns a handle to
+     *  `{ initH, wasmTypeStr }` so the handler can read both fields.
+     *  Used by D-D-11c @var migration. */
+    const compiler_lowerGlobalInit = (nodeH: number, defaultTypeStr: number): number => {
+        if (!env.api) return 0
+        const node = handles.get(nodeH)
+        if (!node) return 0
+        const defaultType = (strings.get(defaultTypeStr) || 'i32') as 'i32' | 'i64' | 'f32'
+        try {
+            const result = env.api.lowerGlobalInit(node, defaultType as any)
+            return env.irHandles.fresh({
+                initH:      env.irHandles.fresh(result.init),
+                wasmTypeStr: strings.intern(result.wasmType),
+            } as any)
+        } catch {
+            return 0
+        }
+    }
+
+    /** Read the `init` IR handle from a lowerGlobalInit result. */
+    const compiler_globalInit_init = (resultH: number): number => {
+        const r = env.irHandles.get(resultH) as any
+        return r?.initH ?? 0
+    }
+    /** Read the `wasmType` string id from a lowerGlobalInit result. */
+    const compiler_globalInit_wasmType = (resultH: number): number => {
+        const r = env.irHandles.get(resultH) as any
+        return r?.wasmTypeStr ?? 0
+    }
+
+    /** Lower an @extern's param-type list to WasmValType[] — returns an
+     *  array handle whose entries are string-pool ids of the types. */
+    const compiler_lowerExternParams = (nodeH: number): number => {
+        if (!env.api) return env.irHandles.fresh([])
+        const node = handles.get(nodeH)
+        if (!node) return env.irHandles.fresh([])
+        try {
+            const params = env.api.lowerExternParams(node)
+            const ids = params.map(t => strings.intern(t))
+            return env.irHandles.fresh(ids as any)
+        } catch {
+            return env.irHandles.fresh([])
+        }
+    }
+
+    /** Lower an @extern's result type — returns a string-pool id, or 0
+     *  if the extern has no result. */
+    const compiler_lowerExternResult = (nodeH: number): number => {
+        if (!env.api) return 0
+        const node = handles.get(nodeH)
+        if (!node) return 0
+        try {
+            const result = env.api.lowerExternResult(node)
+            return result ? strings.intern(result) : 0
+        } catch {
+            return 0
+        }
+    }
+
     const compiler_resolveType = (annotH: number): number => {
         if (!env.api) return 0
         const annot = handles.get(annotH)
@@ -1300,6 +1359,8 @@ export function createComptimeImports(env: ComptimeEnv): WebAssembly.Imports {
             compiler_lowerParams, compiler_lowerFunctionBody,
             compiler_funcResult_body, compiler_funcResult_locals,
             compiler_resolveFunctionReturnType, compiler_resolveType,
+            compiler_lowerGlobalInit, compiler_globalInit_init, compiler_globalInit_wasmType,
+            compiler_lowerExternParams, compiler_lowerExternResult,
             compiler_expandMatchChain,
             test_observe,
         },
