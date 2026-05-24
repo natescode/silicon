@@ -41,9 +41,7 @@ import { registerDefKind, type CodegenKind } from './defkinds'
 import { getIRKind } from '../ir/irKinds'
 import { loadBuiltinStrata } from '../strata/index'
 import { builtinDefExpanders } from '../strata/defExpanders'
-import { compileHandlerBlock, compileComptimeHandler } from './strataBody'
 import { translateLegacyBlock } from './legacyBlockTranslator'
-import { registerBuiltinComptimeHandlers } from './comptimeBuiltins'
 // D-E-1: comptime engine for pre-compiling strata handlers @fns at
 // strata-load time.  See `compileStrataHandlers` call in buildStrataRegistry.
 import { compileStrataHandlers, compileHandlerToWasm } from '../comptime/engine'
@@ -80,13 +78,9 @@ export function buildStrataRegistry(
 ): ElaboratorRegistry {
   const registry = createElaboratorRegistry()
 
-  // Register the built-in comptime handlers FIRST so any subsequent stratum
-  // can read or override them.  These define the compile-time semantics of
-  // @nil, @not, ==, !=, +, -, *, /, %, <, >, <=, >= — used by the strata
-  // body interpreter.  Authoring them as data (rather than hardcoding them
-  // in the interpreter) is what lets user strata extend or override these
-  // forms in the same way they extend runtime forms.
-  registerBuiltinComptimeHandlers(registry)
+  // D-E-3 PR 2: the registerBuiltinComptimeHandlers call is gone —
+  // comptime handlers were only consumed by the strata-body interpreter
+  // (strataBody.ts), which is being deleted in this PR.
 
   // D-E-3: register built-in def expanders FIRST so that any auto-extracted
   // inline-block handler (compiled on-demand during T2 processing of user
@@ -526,15 +520,14 @@ function buildPhaseHandler(
         env.api = prevApi
         return result ?? null
       }
-      const entry = registry.namedHandlers.get(handlerName)
-      if (!entry) {
-        throw new Error(
-          `[strata] named handler '${handlerName}' referenced by stratum '${stratumName}' ` +
-          `but no top-level @fn ${handlerName} was found in the program`,
-        )
-      }
-      const fn = compileHandlerBlock(entry.body, entry.paramName)
-      return fn(node, api)
+      // D-E-3 PR 2: no fallback.  Every named handler must be in
+      // registry.compiledHandlers (populated by buildStrataRegistry's
+      // pre-compile pass).  Reaching here means the handler @fn body
+      // either failed to compile or was never registered.
+      throw new Error(
+        `[strata] named handler '${handlerName}' (referenced by stratum '${stratumName}') ` +
+        `has no compiled instance — did the @fn body fail to compile?`,
+      )
     }
     ;(wrapper as any).__stratumName = stratumName
     ;(wrapper as any).__handlerName = handlerName
@@ -647,17 +640,29 @@ function buildComptimeHandler(
     const handlerName = arg.path[0]
     registry.strataHandlerFnNames.add(handlerName)
     const wrapper = (rawArgs: any[], api: any, evalArg: (n: any) => any): any => {
-      const entry = registry.namedHandlers.get(handlerName)
-      if (!entry) {
+      // D-E-3 PR 2: named comptime handlers must be pre-compiled.
+      const compiled = registry.compiledHandlers.get(handlerName)
+      if (!compiled) {
         throw new Error(
-          `[strata] named comptime handler '${handlerName}' referenced by stratum ` +
-          `'${stratumName}' but no top-level @fn ${handlerName} was found in the program`,
+          `[strata] named comptime handler '${handlerName}' (stratum '${stratumName}') ` +
+          `has no compiled instance — did the @fn body fail to compile?`,
         )
       }
-      const fn = compileComptimeHandler(entry.body)
-      return fn(rawArgs, api, evalArg)
+      const env = compiled.env
+      const prevCtx = env.ctx, prevApi = env.api
+      env.ctx = api?.ctx
+      env.api = api
+      const evaluated = rawArgs.map(evalArg)
+      const nodeId = env.handles.intern(evaluated)
+      const resultId = compiled.invoke(nodeId)
+      const result = resultId === 0 ? null : env.irHandles.get(resultId)
+      env.handles.release(nodeId)
+      env.ctx = prevCtx
+      env.api = prevApi
+      return result
     }
     ;(wrapper as any).__stratumName = stratumName
+    ;(wrapper as any).__handlerName = handlerName
     return wrapper
   }
   // Inline comptime block — D-E-3 PR 1: auto-extract via translator.

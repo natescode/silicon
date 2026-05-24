@@ -38,7 +38,6 @@ import {
 import { registerDefKind, lookupDefKind } from './../elaborator/defkinds'
 import { StrataType, type StrataNode } from '../elaborator/strataenum'
 import { HandleTable, StringPool } from './handles'
-import { compileHandlerBlock, compileComptimeHandler } from '../elaborator/strataBody'
 import type {
     IRExpr, IRStmt, IRFunction, IRGlobal, IRImport, IRExport, IRLocal, IRParam,
     IRConst, IRLocalGet, IRGlobalGet, IRBinOp, IRBlock,
@@ -1397,34 +1396,28 @@ export function createComptimeImports(env: ComptimeEnv): WebAssembly.Imports {
 
 function makeNamedHandler(registry: ElaboratorRegistry, handlerName: string) {
     const wrapper = (node: any, api: any) => {
-        // D-E-1: prefer the pre-compiled WASM instance from
-        // registry.compiledHandlers.  Fall back to the interpreter only
-        // when no compiled instance exists (e.g. handler registered AFTER
-        // buildStrataRegistry's pre-compile pass).
+        // D-E-3 PR 2: no interpreter fallback.  Every named handler must
+        // be pre-compiled — buildStrataRegistry runs compileStrataHandlers
+        // before any code paths that fire handlers.
         const compiled = registry.compiledHandlers.get(handlerName)
-        if (compiled) {
-            const env = compiled.env
-            const prevCtx = env.ctx
-            const prevApi = env.api
-            env.ctx = api?.ctx
-            env.api = api
-            const nodeId = env.handles.intern(node)
-            const resultId = compiled.invoke(nodeId)
-            let result: any = resultId === 0 ? null : env.irHandles.get(resultId)
-            if (Array.isArray(result)) {
-                result = result.map((v) => typeof v === 'number' ? env.irHandles.get(v) : v).filter(Boolean)
-            }
-            env.handles.release(nodeId)
-            env.ctx = prevCtx
-            env.api = prevApi
-            return result ?? null
+        if (!compiled) {
+            throw new Error(`[strata compile-then-run] handler '${handlerName}' has no compiled instance`)
         }
-        const entry = registry.namedHandlers.get(handlerName)
-        if (!entry) {
-            throw new Error(`[strata compile-then-run] handler '${handlerName}' not found`)
+        const env = compiled.env
+        const prevCtx = env.ctx
+        const prevApi = env.api
+        env.ctx = api?.ctx
+        env.api = api
+        const nodeId = env.handles.intern(node)
+        const resultId = compiled.invoke(nodeId)
+        let result: any = resultId === 0 ? null : env.irHandles.get(resultId)
+        if (Array.isArray(result)) {
+            result = result.map((v) => typeof v === 'number' ? env.irHandles.get(v) : v).filter(Boolean)
         }
-        const fn = compileHandlerBlock(entry.body, entry.paramName)
-        return fn(node, api)
+        env.handles.release(nodeId)
+        env.ctx = prevCtx
+        env.api = prevApi
+        return result ?? null
     }
     ;(wrapper as any).__handlerName = handlerName
     return wrapper
@@ -1432,11 +1425,22 @@ function makeNamedHandler(registry: ElaboratorRegistry, handlerName: string) {
 
 function makeNamedComptimeHandler(registry: ElaboratorRegistry, handlerName: string): ComptimeHandler {
     return (rawArgs, api, evalArg) => {
-        const entry = registry.namedHandlers.get(handlerName)
-        if (!entry) {
-            throw new Error(`[strata compile-then-run] comptime handler '${handlerName}' not found`)
+        // D-E-3 PR 2: comptime handlers also pre-compiled — no interpreter.
+        const compiled = registry.compiledHandlers.get(handlerName)
+        if (!compiled) {
+            throw new Error(`[strata compile-then-run] comptime handler '${handlerName}' has no compiled instance`)
         }
-        const fn = compileComptimeHandler(entry.body)
-        return fn(rawArgs, api, evalArg)
+        const env = compiled.env
+        const prevCtx = env.ctx, prevApi = env.api
+        env.ctx = api?.ctx
+        env.api = api
+        const evaluated = rawArgs.map(evalArg)
+        const nodeId = env.handles.intern(evaluated)
+        const resultId = compiled.invoke(nodeId)
+        const result = resultId === 0 ? null : env.irHandles.get(resultId)
+        env.handles.release(nodeId)
+        env.ctx = prevCtx
+        env.api = prevApi
+        return result
     }
 }

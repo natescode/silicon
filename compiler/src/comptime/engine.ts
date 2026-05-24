@@ -25,6 +25,7 @@
 import type { Program } from '../ast/astNodes'
 import type { ElaboratorRegistry } from '../elaborator/registry'
 import elaborate from '../elaborator/elaborator'
+import { translateLegacyBlock } from '../elaborator/legacyBlockTranslator'
 import { lowerProgram } from '../ir/lower'
 import { emitModule } from '../ir/emit'
 import { loadStdWat } from '../codegen'
@@ -88,10 +89,21 @@ export function compileHandlerToWasm(
     // bodies aren't in the user program's AST, so without this lookup
     // every built-in handler migration would fail compilation.
     let handlerDef = findHandlerDef(handlerName, program)
-    // Pre-stamp `hook: 'function'` so the elaborator preserves it
-    // (handler def takes the legacy functionExpander path, bypassing the
-    // migrated LetOrFn_lower handler — chicken-and-egg break).
-    if (handlerDef) handlerDef = { ...handlerDef, hook: 'function' }
+    if (handlerDef) {
+        // Pre-stamp `hook: 'function'` so the elaborator preserves it
+        // (handler def takes the legacy functionExpander path, bypassing the
+        // migrated LetOrFn_lower handler — chicken-and-egg break).
+        // Also translate the body via the legacy-block translator so
+        // bodies written in the old `&Compiler::*` API still compile.
+        const binding = Array.isArray(handlerDef.binding) ? handlerDef.binding[0] : handlerDef.binding
+        const body = binding?.expression ?? binding
+        const translatedBody = body ? translateLegacyBlock(body, handlerDef.params?.[0]?.name ?? 'node') : body
+        handlerDef = {
+            ...handlerDef,
+            hook: 'function',
+            binding: { type: 'Binding', expression: translatedBody },
+        }
+    }
     if (!handlerDef) {
         const entry = registry.namedHandlers.get(handlerName)
         if (entry) {
@@ -101,6 +113,9 @@ export function compileHandlerToWasm(
             // re-stamp by passing it through unchanged.  Without this,
             // post-D-D-11b migration the synthetic @fn would itself
             // fire LetOrFn_lower (chicken-and-egg).
+            // Translate the body too — bodies authored in legacy
+            // `&Compiler::*` style get auto-rewritten to `&compiler::*`.
+            const translatedBody = translateLegacyBlock(entry.body, entry.paramName ?? 'node')
             handlerDef = {
                 type: 'Definition',
                 keyword: '@fn',
@@ -110,7 +125,7 @@ export function compileHandlerToWasm(
                     type: 'Param', name: entry.paramName ?? 'node',
                     typeAnnotation: { type: 'TypeAnnotation', typename: 'Int' },
                 }],
-                binding: { type: 'Binding', expression: entry.body },
+                binding: { type: 'Binding', expression: translatedBody },
             }
         }
     }
@@ -241,15 +256,28 @@ export function compileStrataHandlers(
     // it (delete-then-readd around the synthetic lowering), and iterating
     // a Set while it's being mutated has surprised us in test runners.
     const names = Array.from(registry.strataHandlerFnNames)
-    let count = 0
-    for (const name of names) {
-        const compiled = tryCompileHandler(name, program, registry)
-        if (compiled) {
-            registry.compiledHandlers.set(name, compiled)
-            count++
+
+    // Iterate until stable: a handler may depend on another handler being
+    // already compiled (e.g. LocalDef_lower's body uses &@if, which fires
+    // If_lower).  Each pass compiles handlers whose dependencies are now
+    // available; loop until no progress.  Bounded by 2× the handler count
+    // to guard against infinite loops on genuinely-uncompilable handlers.
+    let pass = 0
+    const maxPasses = Math.max(names.length * 2, 2)
+    while (pass < maxPasses) {
+        pass++
+        let progressed = false
+        for (const name of names) {
+            if (registry.compiledHandlers.has(name)) continue
+            const compiled = tryCompileHandler(name, program, registry)
+            if (compiled) {
+                registry.compiledHandlers.set(name, compiled)
+                progressed = true
+            }
         }
+        if (!progressed) break
     }
-    return count
+    return registry.compiledHandlers.size
 }
 
 

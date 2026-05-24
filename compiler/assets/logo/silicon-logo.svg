@@ -1,0 +1,42 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 280" width="240" height="280">
+  <!--
+    Silicon — primary logo.
+    Periodic-table element box format.  Version number occupies the
+    atomic-number slot (top-left); the "Si" symbol dominates the
+    centre; the language name sits below the symbol; the real-world
+    atomic mass (28.085) sits at the bottom as a chemistry easter egg.
+
+    Update the version string per release.  Everything else is stable.
+  -->
+
+  <!-- Element box: dark fill, purple accent border, rounded corners -->
+  <rect x="3" y="3" width="234" height="274" rx="14" ry="14"
+        fill="#0d1117" stroke="#a371f7" stroke-width="3"/>
+
+  <!-- Version number (atomic-number slot) -->
+  <text x="22" y="46"
+        font-family="Inter, 'Segoe UI', system-ui, -apple-system, sans-serif"
+        font-size="22" font-weight="500"
+        fill="#7b82a8" letter-spacing="0.02em">1.0</text>
+
+  <!-- Element symbol -->
+  <text x="120" y="178"
+        font-family="Inter, 'Segoe UI', system-ui, -apple-system, sans-serif"
+        font-size="120" font-weight="700"
+        fill="#a371f7" text-anchor="middle"
+        letter-spacing="-0.04em">Si</text>
+
+  <!-- Element name -->
+  <text x="120" y="220"
+        font-family="Inter, 'Segoe UI', system-ui, -apple-system, sans-serif"
+        font-size="20" font-weight="600"
+        fill="#e6edf3" text-anchor="middle"
+        letter-spacing="0.18em">SILICON</text>
+
+  <!-- Atomic mass — real-world Si mass as a chemistry easter egg -->
+  <text x="120" y="250"
+        font-family="Inter, 'Segoe UI', system-ui, -apple-system, sans-serif"
+        font-size="15" font-weight="400"
+        fill="#7b82a8" text-anchor="middle"
+        letter-spacing="0.04em">28.085</text>
+</svg>

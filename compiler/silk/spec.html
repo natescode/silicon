@@ -1,0 +1,415 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Silk — Language Specification</title>
+  <style>
+    :root {
+      --bg: #0f1117;
+      --surface: #1a1d27;
+      --surface2: #222535;
+      --border: #2e3248;
+      --accent: #6c8ef7;
+      --accent2: #b06cf7;
+      --accent3: #3ecf8e;
+      --accent4: #f7a06c;
+      --accent5: #f76c6c;
+      --accent6: #f7e36c;
+      --text: #dde1f0;
+      --muted: #7b82a8;
+      --code-bg: #13151f;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.65;
+      padding: 40px 24px;
+    }
+    .page { max-width: 980px; margin: 0 auto; }
+    h1 { font-size: 2.1rem; color: var(--accent); margin-bottom: 6px; }
+    h2 { font-size: 1.45rem; color: var(--accent2); margin: 48px 0 18px; border-bottom: 1px solid var(--border); padding-bottom: 8px; }
+    h3 { font-size: 1.1rem; color: var(--accent3); margin: 26px 0 10px; }
+    h4 { font-size: 0.98rem; color: var(--accent4); margin: 16px 0 8px; letter-spacing: 0.02em; }
+    p  { margin-bottom: 12px; color: var(--text); }
+    .subtitle { color: var(--muted); font-size: 1rem; margin-bottom: 32px; }
+    .status-pill {
+      display: inline-block; padding: 2px 10px; border-radius: 10px;
+      background: var(--surface2); color: var(--accent6);
+      font-size: 0.72rem; font-weight: 600; letter-spacing: 0.04em; margin-left: 8px;
+    }
+    .card {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 10px; padding: 16px 22px; margin: 14px 0;
+    }
+    .card.note { border-color: var(--accent4); }
+    .card.warn { border-color: var(--accent5); }
+    .card.info { border-color: var(--accent);  }
+    pre {
+      background: var(--code-bg); border: 1px solid var(--border);
+      border-radius: 8px; padding: 14px 16px; overflow-x: auto;
+      font-family: 'Cascadia Code', 'Fira Code', 'Consolas', monospace;
+      font-size: 0.82rem; line-height: 1.55; margin: 10px 0; color: var(--text);
+    }
+    code { font-family: 'Cascadia Code', 'Fira Code', 'Consolas', monospace; font-size: 0.86em; background: var(--code-bg); padding: 1px 5px; border-radius: 4px; color: var(--accent6); }
+    pre code { background: transparent; padding: 0; color: inherit; }
+    table { width: 100%; border-collapse: collapse; margin: 12px 0; font-size: 0.86rem; }
+    th { background: var(--surface2); color: var(--accent); padding: 8px 12px; text-align: left; border: 1px solid var(--border); }
+    td { padding: 8px 12px; border: 1px solid var(--border); vertical-align: top; }
+    tr:nth-child(even) td { background: #141620; }
+    ul, ol { padding-left: 24px; margin: 8px 0 16px; }
+    li { margin-bottom: 5px; }
+    a { color: var(--accent); text-decoration: none; border-bottom: 1px dashed var(--accent); }
+    a:hover { color: var(--accent2); border-bottom-color: var(--accent2); }
+    .toc { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 14px 20px; margin: 12px 0 28px; font-size: 0.9rem; }
+    .toc ol { padding-left: 22px; margin: 0; }
+    .toc li { margin-bottom: 2px; }
+    blockquote { border-left: 3px solid var(--accent4); padding: 6px 14px; margin: 10px 0; color: var(--muted); background: var(--surface); border-radius: 4px; }
+    blockquote strong { color: var(--accent4); }
+    hr { border: 0; border-top: 1px solid var(--border); margin: 32px 0; }
+  </style>
+</head>
+<body>
+<div class="page">
+
+<h1>Silk — Language Specification <span class="status-pill">draft · v0.1</span></h1>
+<p class="subtitle">An S-expression IR for software architecture and code, designed for multi-target codegen and LLM trainability.</p>
+
+<blockquote><strong>Status:</strong> draft. This document is the canonical reference for the language; conflicts with prose elsewhere should be resolved in favor of this file.</blockquote>
+
+<div class="toc">
+  <strong>Contents</strong>
+  <ol>
+    <li><a href="#goals">Goals & non-goals</a></li>
+    <li><a href="#syntax">Syntax</a></li>
+    <li><a href="#kinds">Block kinds</a></li>
+    <li><a href="#types">Type system</a></li>
+    <li><a href="#flow">The flow DSL</a></li>
+    <li><a href="#expr">Expression sublanguage</a></li>
+    <li><a href="#saga">Saga</a></li>
+    <li><a href="#validation">Validation</a></li>
+    <li><a href="#backends">Backends</a></li>
+    <li><a href="#corpus">Training corpus</a></li>
+    <li><a href="#versioning">Versioning</a></li>
+  </ol>
+</div>
+
+<h2 id="goals">1. Goals & non-goals</h2>
+<p>Silk exists for two reasons:</p>
+<ol>
+  <li><strong>Multi-target code generation.</strong> One Silk file can lower to different language / framework / database combinations without rewriting domain logic.</li>
+  <li><strong>Trainability.</strong> Silk is small and uniform on purpose. An LLM that learns the syntax once generalizes across the whole language. Constraint is the design principle, not a limitation.</li>
+</ol>
+<p>The non-goals are equally deliberate:</p>
+<ul>
+  <li>Silk is <strong>not</strong> a general-purpose programming language. Arbitrary computation belongs in the target backend.</li>
+  <li>Silk is <strong>not</strong> optimized for human elegance. Uniformity beats prose.</li>
+  <li>Silk is <strong>not</strong> Turing-complete inside any single block. The flow DSL is intentionally finite-state-machine-shaped.</li>
+</ul>
+
+<h2 id="syntax">2. Syntax</h2>
+<p>Silk has exactly one syntactic form:</p>
+<pre>form    ::= ( kind name kwargs body )
+kwargs  ::= ( :key value )*
+value   ::= atom | list | form
+body    ::= form*</pre>
+<p><strong>Atoms</strong> are identifiers, strings (<code>"..."</code>), integers, decimals, and the predefined symbols <code>true</code>, <code>false</code>, <code>nil</code>.</p>
+<p><strong>Lists</strong> are parenthesized sequences with no head reserved word — used for parameter lists, field tuples, etc.</p>
+<p><strong>Comments</strong> start with <code>;;</code> and run to end-of-line.</p>
+
+<h3>2.1 Naming conventions</h3>
+<table>
+  <tr><th>Category</th><th>Convention</th><th>Example</th></tr>
+  <tr><td>Identifiers, fields</td><td><code>kebab-case</code></td><td><code>book-id</code>, <code>created-at</code></td></tr>
+  <tr><td>Declared types, contracts</td><td><code>PascalCase</code></td><td><code>Order</code>, <code>PaymentProcessor</code></td></tr>
+  <tr><td>Events, commands</td><td><code>PascalCase</code></td><td><code>OrderPlaced</code>, <code>Checkout</code></td></tr>
+  <tr><td>Enum variants</td><td><code>PascalCase</code></td><td><code>Pending</code>, <code>Shipped</code></td></tr>
+  <tr><td>Keywords</td><td><code>:lower-kebab</code></td><td><code>:input</code>, <code>:auth</code></td></tr>
+</table>
+<p>A validator should enforce these — mixed conventions are an LLM-training hazard.</p>
+
+<h2 id="kinds">3. Block kinds</h2>
+<p>There are 17 reserved heads. Every form starts with one of them.</p>
+<table>
+  <tr><th>Stratum</th><th>Kind</th><th>Purpose</th></tr>
+  <tr><td>System</td><td><code>system</code></td><td>top-level container; targets, concerns</td></tr>
+  <tr><td></td><td><code>service</code></td><td>bounded context; owns entities, exposes contracts</td></tr>
+  <tr><td></td><td><code>module</code></td><td>code-organization unit within a service</td></tr>
+  <tr><td>Domain</td><td><code>entity</code></td><td>persisted aggregate with identity</td></tr>
+  <tr><td></td><td><code>value</code></td><td>immutable structured data; no identity</td></tr>
+  <tr><td></td><td><code>enum</code></td><td>payload-free tagged variants</td></tr>
+  <tr><td></td><td><code>event</code></td><td>something that happened (past tense)</td></tr>
+  <tr><td></td><td><code>command</code></td><td>something requested (imperative)</td></tr>
+  <tr><td>Behavior</td><td><code>contract</code></td><td>externally-visible interface</td></tr>
+  <tr><td></td><td><code>operation</code></td><td>named behavior with input/output/effects</td></tr>
+  <tr><td></td><td><code>flow</code></td><td>ordered steps; used inline via <code>:flow</code></td></tr>
+  <tr><td></td><td><code>step</code></td><td>reusable named step (rare; prefer inlining)</td></tr>
+  <tr><td>Binding</td><td><code>impl</code></td><td>implementation of a contract on a provider</td></tr>
+  <tr><td>Saga</td><td><code>saga</code></td><td>cross-service compensation block</td></tr>
+  <tr><td>Atomicity</td><td><code>transaction</code></td><td>within-DB atomic block</td></tr>
+  <tr><td>Misc</td><td><code>record</code></td><td>inline structural type (see §4)</td></tr>
+  <tr><td>Escape</td><td><code>raw</code></td><td>target-specific literal (signals missing verb)</td></tr>
+</table>
+
+<h3>3.1 <code>system</code></h3>
+<pre>(system Bookshop
+  :description "Online bookstore"
+  :targets   (typescript-node postgres)
+  :concerns  (auth observability rate-limit))</pre>
+<p>A <code>system</code> is the root. <code>:targets</code> is a list of <code>(language framework storage …)</code> tuples a backend can match against. <code>:concerns</code> are cross-cutting features the renderer should weave through every operation.</p>
+
+<h3>3.2 <code>service</code></h3>
+<pre>(service Catalog
+  :system    Bookshop
+  :exposes   (CatalogAPI)
+  :owns      (Book BookReview))</pre>
+<p>Services are the unit of deployment and ownership. An entity belongs to exactly one service; cross-service reads go through contracts.</p>
+
+<h3>3.3 <code>entity</code>, <code>value</code>, <code>enum</code></h3>
+<pre>(entity Book
+  :service Catalog
+  :fields  ((id      uuid   :pk)
+            (isbn    string :unique)
+            (title   string)
+            (author  string :index)
+            (price   money)
+            (stock   int    :default 0))
+  :invariants
+    ((stock-nonneg   (&gt;= stock 0))
+     (price-positive (&gt;  price 0))))
+
+(value Address
+  :fields ((line1   string)
+           (city    string)
+           (region  string)
+           (postal  string)
+           (country string)))
+
+(enum OrderStatus
+  :variants (Pending Confirmed Fulfilling Shipped Cancelled))</pre>
+<p>Entities have identity, persistence, and invariants. Values have neither identity nor persistence — they're substituted by structure. Enums are payload-free tagged variants.</p>
+<p>Field attributes: <code>:pk</code>, <code>:unique</code>, <code>:index</code>, <code>:default &lt;expr&gt;</code>, <code>:optional</code>.</p>
+
+<h3>3.4 <code>event</code>, <code>command</code></h3>
+<pre>(event OrderPlaced
+  :payload ((order-id    uuid)
+            (customer-id uuid)
+            (total       money)))
+
+(command Checkout
+  :payload ((cart-id         uuid)
+            (customer-id     uuid)
+            (idempotency-key string)))</pre>
+<p>Events are past-tense facts; commands are imperative requests. Both have <em>nominal</em> payloads — no inline <code>record</code>.</p>
+
+<h3>3.5 <code>contract</code>, <code>impl</code></h3>
+<pre>(contract PaymentProcessor
+  :methods ((charge :input ((amount money) (customer uuid))
+                    :output ChargeId
+                    :throws (Declined))))
+
+(impl StripePayments PaymentProcessor
+  :provider stripe
+  :config   ((api-key :env STRIPE_SECRET))
+  :map      ((charge -&gt; stripe.PaymentIntents.create)))</pre>
+<p>A contract is an interface; <code>impl</code> is the binding to a concrete provider. Multiple <code>impl</code>s of the same contract coexist for runtime selection.</p>
+
+<h3>3.6 <code>operation</code></h3>
+<pre>(operation OperationName
+  :service ServiceName
+  :input   ((param Type) …)
+  :output  ReturnType
+  :effects (db-write event-emit payment …)
+  :errors  (ErrorVariant …)
+  :auth    (authenticated :owns customer-id)
+  :flow    &lt;flow-body&gt;)</pre>
+<p><code>:effects</code> declares observable side effects; the validator uses it to reject operations that perform effects they didn't declare. <code>:errors</code> declares the closed set of error variants the operation can raise.</p>
+
+<h2 id="types">4. Type system</h2>
+
+<h3>4.1 Built-in types</h3>
+<table>
+  <tr><th>Name</th><th>Description</th></tr>
+  <tr><td><code>int</code>, <code>int32</code>, <code>int64</code></td><td>signed integers</td></tr>
+  <tr><td><code>decimal</code></td><td>arbitrary-precision decimal</td></tr>
+  <tr><td><code>money</code></td><td>decimal with currency tag</td></tr>
+  <tr><td><code>string</code></td><td>UTF-8</td></tr>
+  <tr><td><code>bool</code></td><td>true / false</td></tr>
+  <tr><td><code>uuid</code></td><td>RFC 4122</td></tr>
+  <tr><td><code>timestamp</code></td><td>instant in time</td></tr>
+  <tr><td><code>duration</code></td><td>length of time, e.g. <code>(duration 30s)</code></td></tr>
+  <tr><td><code>bytes</code></td><td>opaque binary</td></tr>
+  <tr><td><code>(list T)</code>, <code>(option T)</code>, <code>(map K V)</code>, <code>(set T)</code></td><td>type constructors</td></tr>
+</table>
+
+<h3>4.2 Nominal default, structural escape</h3>
+<p><strong>Nominal references are required</strong> at every boundary:</p>
+<ul>
+  <li><code>entity :fields</code></li>
+  <li><code>event :payload</code></li>
+  <li><code>command :payload</code></li>
+  <li><code>contract :methods</code> input/output</li>
+  <li>Any reference from another service</li>
+</ul>
+<p><strong>Structural <code>(record …)</code> is permitted</strong> for one-shot shapes:</p>
+<ul>
+  <li><code>operation :output</code> of an internal operation</li>
+  <li><code>operation :input</code> parameter type</li>
+  <li>Local <code>:as</code> bindings inside a flow</li>
+</ul>
+<pre>;; nominal — the default
+:output Book
+
+;; structural — local return shape, doesn't deserve a name
+:output (record (title string) (author string) (in-stock bool))</pre>
+
+<h3>4.3 No structural-to-nominal coercion</h3>
+<p>A <code>(record (id uuid) (title string))</code> does <strong>not</strong> satisfy <code>Book</code> even if <code>Book</code> has those exact fields. Conformance must be explicit — reference <code>Book</code> by name from the start, or use <code>(coerce x :to Book)</code>.</p>
+<p>This is a hard rule: implicit conformance creates two semantically-identical surface forms, which is poison for LLM training.</p>
+
+<h3>4.4 Promotion rule</h3>
+<div class="card info">
+A structural shape that appears more than once in the corpus is a refactor signal. Tooling should detect identical <code>(record …)</code> shapes used in N+ places and recommend promotion to a named <code>value</code>. This is the same shape as the <code>raw → verb</code> promotion rule from the flow DSL — <strong>the language grows from observed patterns, not upfront speculation.</strong>
+</div>
+
+<h2 id="flow">5. The flow DSL</h2>
+<p><code>:flow</code> accepts a sequence of step verbs. The verb set is <strong>closed at 17 forms.</strong></p>
+
+<h3>5.1 Data verbs</h3>
+<table>
+  <tr><th>Verb</th><th>Shape</th><th>Purpose</th></tr>
+  <tr><td><code>load</code></td><td><code>(load Type :by field :as name [:else Error] [:optional])</code></td><td>fetch one row</td></tr>
+  <tr><td><code>insert</code></td><td><code>(insert Type :field val … :as name)</code></td><td>create one row</td></tr>
+  <tr><td><code>update</code></td><td><code>(update name :field val …)</code></td><td>update existing row by reference</td></tr>
+  <tr><td><code>mutate</code></td><td><code>(mutate name :field val …)</code></td><td>in-memory field update on aggregate</td></tr>
+  <tr><td><code>delete</code></td><td><code>(delete name)</code></td><td>delete row by reference</td></tr>
+</table>
+
+<h3>5.2 Control verbs</h3>
+<table>
+  <tr><th>Verb</th><th>Shape</th><th>Purpose</th></tr>
+  <tr><td><code>if</code></td><td><code>(if cond :then &lt;flow&gt; :else &lt;flow&gt;)</code></td><td>two-armed branch</td></tr>
+  <tr><td><code>when</code></td><td><code>(when cond &lt;flow&gt;)</code></td><td>one-armed branch</td></tr>
+  <tr><td><code>guard</code></td><td><code>(guard cond :else Error)</code></td><td>early-return on false</td></tr>
+  <tr><td><code>return</code></td><td><code>(return value)</code></td><td>return from operation</td></tr>
+</table>
+
+<h3>5.3 Iteration verbs</h3>
+<table>
+  <tr><th>Verb</th><th>Shape</th><th>Purpose</th></tr>
+  <tr><td><code>for-each</code></td><td><code>(for-each items :as item &lt;body&gt;)</code></td><td>iterate, no value</td></tr>
+  <tr><td><code>map</code></td><td><code>(map items :as item :to expr :into name)</code></td><td>iterate and accumulate values</td></tr>
+  <tr><td><code>collect</code></td><td><code>(collect value :into name)</code></td><td>accumulator sub-form inside <code>for-each</code></td></tr>
+</table>
+
+<h3>5.4 Effect verbs</h3>
+<table>
+  <tr><th>Verb</th><th>Shape</th><th>Purpose</th></tr>
+  <tr><td><code>call</code></td><td><code>(call Contract.method :arg val … :as name [:else Error])</code></td><td>invoke external operation</td></tr>
+  <tr><td><code>emit</code></td><td><code>(emit Event :field val …)</code></td><td>publish event</td></tr>
+  <tr><td><code>compute</code></td><td><code>(compute name expr)</code></td><td>bind a derived value</td></tr>
+</table>
+
+<h3>5.5 Composition verbs</h3>
+<table>
+  <tr><th>Verb</th><th>Shape</th><th>Purpose</th></tr>
+  <tr><td><code>parallel</code></td><td><code>(parallel &lt;step&gt; &lt;step&gt; … [:tolerate Errors])</code></td><td>concurrent execution</td></tr>
+  <tr><td><code>transaction</code></td><td><code>(transaction [:isolation L] &lt;flow&gt;)</code></td><td>within-DB atomic block</td></tr>
+  <tr><td><code>saga</code></td><td><code>(saga name :forward &lt;flow&gt; :compensate &lt;flow&gt; …)</code></td><td>cross-service compensation; see <a href="saga.html">saga.html</a></td></tr>
+</table>
+
+<h3>5.6 Escape</h3>
+<table>
+  <tr><th>Verb</th><th>Shape</th><th>Purpose</th></tr>
+  <tr><td><code>raw</code></td><td><code>(raw target "literal code")</code></td><td>last-resort target literal; flags missing verbs</td></tr>
+</table>
+<div class="card warn"><strong>raw</strong> use in a corpus is a <em>signal</em>, not a feature. Frequent <code>raw</code> for the same pattern is a candidate for verb promotion.</div>
+
+<h2 id="expr">6. Expression sublanguage</h2>
+<p>Expressions appear inside conditions, computations, and field values. The sublanguage is <strong>closed</strong> — no user-defined expression functions. If you need one, lift it to an <code>operation</code>.</p>
+
+<h3>6.1 Operators</h3>
+<table>
+  <tr><th>Category</th><th>Operators</th></tr>
+  <tr><td>Comparison</td><td><code>==</code> <code>!=</code> <code>&lt;</code> <code>&gt;</code> <code>&lt;=</code> <code>&gt;=</code></td></tr>
+  <tr><td>Arithmetic</td><td><code>+</code> <code>-</code> <code>*</code> <code>/</code> <code>%</code></td></tr>
+  <tr><td>Logical</td><td><code>and</code> <code>or</code> <code>not</code></td></tr>
+</table>
+<p>All operators are written in prefix form: <code>(&gt;= book.stock 1)</code>, <code>(* book.price quantity)</code>.</p>
+
+<h3>6.2 Field access</h3>
+<p>Dot notation: <code>book.stock</code>, <code>order.line-items.length</code>. Resolves through entity / value / record field references and through type-aware properties (<code>(list T)</code> exposes <code>.length</code>).</p>
+
+<h3>6.3 Predicates</h3>
+<table>
+  <tr><th>Predicate</th><th>Meaning</th></tr>
+  <tr><td><code>(present? x)</code></td><td>true if <code>x</code> is a non-nil optional</td></tr>
+  <tr><td><code>(absent? x)</code></td><td>true if <code>x</code> is nil</td></tr>
+  <tr><td><code>(empty? xs)</code></td><td>true if collection has zero elements</td></tr>
+  <tr><td><code>(any? xs :where pred)</code></td><td>true if any element satisfies pred</td></tr>
+  <tr><td><code>(all? xs :where pred)</code></td><td>true if every element satisfies pred</td></tr>
+</table>
+
+<h3>6.4 Collection builtins</h3>
+<table>
+  <tr><th>Builtin</th><th>Shape</th></tr>
+  <tr><td><code>count</code></td><td><code>(count xs)</code></td></tr>
+  <tr><td><code>sum</code></td><td><code>(sum xs :by field)</code></td></tr>
+  <tr><td><code>min</code></td><td><code>(min xs :by field)</code></td></tr>
+  <tr><td><code>max</code></td><td><code>(max xs :by field)</code></td></tr>
+</table>
+
+<h3>6.5 Environment builtins</h3>
+<table>
+  <tr><th>Builtin</th><th>Returns</th></tr>
+  <tr><td><code>(now)</code></td><td>current <code>timestamp</code></td></tr>
+  <tr><td><code>(uuid-gen)</code></td><td>a fresh <code>uuid</code></td></tr>
+  <tr><td><code>(current-actor)</code></td><td>the authenticated principal, if <code>:auth</code> declared</td></tr>
+</table>
+
+<h2 id="saga">7. Saga</h2>
+<p><code>saga</code> deserves its own document. See <a href="saga.html">saga.html</a> for execution model, semantic rules, strategies, and composition with <code>transaction</code>.</p>
+
+<h2 id="validation">8. Validation</h2>
+<p>A static validator must reject:</p>
+<ol>
+  <li><strong>Undeclared references.</strong> Any nominal name (<code>Book</code>, <code>OrderStatus.Pending</code>, <code>PaymentProcessor</code>) must resolve to a declared block.</li>
+  <li><strong>Unowned mutations.</strong> An operation in service <code>A</code> may not <code>mutate</code> an entity owned by service <code>B</code>. Cross-service writes go through contracts.</li>
+  <li><strong>Undeclared effects.</strong> An operation that uses <code>emit</code> must declare <code>event-emit</code> in <code>:effects</code>. Same for <code>db-write</code>, <code>payment</code>, etc.</li>
+  <li><strong>Undeclared errors.</strong> An <code>:else SomeError</code> clause must list <code>SomeError</code> in the surrounding operation's <code>:errors</code>.</li>
+  <li><strong>Banned compositions.</strong> <code>saga</code> inside <code>transaction</code> is rejected. So is <code>mutate</code> on a <code>value</code> (values are immutable by definition).</li>
+  <li><strong>Convention violations.</strong> Identifiers in wrong case (e.g., <code>lowerCamel</code> for a type name).</li>
+  <li><strong>Effectful expressions.</strong> Expressions are pure; a <code>call</code> cannot appear inside an arithmetic expression. Lift it to a <code>compute</code> step.</li>
+</ol>
+
+<h2 id="backends">9. Backends</h2>
+<p>A backend renders Silk into a specific language / framework / storage combination. Each kind has a renderer; each verb has a translation rubric. The backend is responsible for:</p>
+<ul>
+  <li><strong>Idiomatic code.</strong> Generated code should look hand-written for the target.</li>
+  <li><strong>Effect realization.</strong> Mapping <code>emit</code> to the chosen event bus, <code>transaction</code> to the chosen DB, <code>saga</code> to the chosen orchestration mechanism (Temporal, Step Functions, or hand-rolled).</li>
+  <li><strong>Cross-cutting concerns.</strong> Auth, observability, rate limiting — driven by <code>:concerns</code> at the <code>system</code> level.</li>
+  <li><strong>No semantic changes.</strong> A backend must not silently introduce retry, caching, or other behavior the Silk source didn't ask for.</li>
+</ul>
+<p>The IR is the contract. If two backends disagree on what an operation <em>means</em>, the spec wins.</p>
+
+<h2 id="corpus">10. Training corpus</h2>
+<p>Because Silk is designed for LLM training, the corpus matters as much as the language. Recommended practices:</p>
+<ol>
+  <li><strong>Cross-validate every example.</strong> A program in the corpus must pass the validator. Broken examples poison training.</li>
+  <li><strong>Mutate to augment.</strong> Rename a field, add an effect, swap a contract impl, add a saga step — each mutation produces a new valid program with known semantics.</li>
+  <li><strong>Round-trip.</strong> Train against (Silk → code → Silk) consistency loss in addition to (NL → Silk).</li>
+  <li><strong>Track <code>raw</code> density.</strong> A corpus with many <code>raw</code> forms for the same pattern means the language has a gap. Use this to drive verb promotion.</li>
+</ol>
+
+<h2 id="versioning">11. Versioning</h2>
+<p>The spec is versioned <code>(silk N.M)</code>. <code>M</code> increments are additive (new verb, new kind, new builtin). <code>N</code> increments may break backward compatibility. Files declare their target version with <code>(silk-version 0.1)</code> at the top.</p>
+<p>Current version: <strong>0.1</strong>.</p>
+
+<hr>
+<p class="subtitle">See also: <a href="saga.html">saga.html</a> · <a href="README.md">README.md</a> · examples in <code>examples/</code>.</p>
+
+</div>
+</body>
+</html>
