@@ -85,6 +85,12 @@
   H_ANN_TOK_LEN  = &vec_new;
   H_ANN_BODY     = &vec_new;
   H_FINALIZE_BODY = &vec_new;
+  STATE_BUCKET  = &vec_new;
+  STATE_KEY_OFF = &vec_new;
+  STATE_KEY_LEN = &vec_new;
+  STATE_VAL     = &vec_new;
+  STATE_INSTANCE_NEXT   = 1000000;
+  R_CURRENT_STRATUM_REF = 0;
   R_CURRENT_TIER = R_TIER_T1;
 };
 
@@ -303,3 +309,124 @@
 @fn hook_annotation_body:Int    i:Int := { &vec_get H_ANN_BODY, i };
 
 @fn hook_finalize_body:Int i:Int := { &vec_get H_FINALIZE_BODY, i };
+
+# ── State buckets (Strata 2.0 §5.7) ──────────────────────────────────
+#
+# Two state scopes:
+#
+#   state 'stratum'  — keyed on the current stratum's identity; persists
+#                      across handler firings within that stratum.
+#   state 'instance' — keyed on a fresh handle minted per handler call;
+#                      always starts empty.
+#
+# Storage: ONE map shared by both scopes, namespaced by a bucket id.
+# Stratum buckets use the stratum's defining-AST index as the id
+# (always < 1_000_000 in practice).  Instance buckets are minted from
+# STATE_INSTANCE_NEXT, starting at 1_000_000 — well clear of any
+# realistic AST index.  Keys are Silicon string pointers (length-
+# prefixed); state_set/get compare bytes directly so the call sites
+# can pass `'count'` literals naturally.
+@var STATE_BUCKET:Int  := 0;     # vec of i32 bucket ids
+@var STATE_KEY_OFF:Int := 0;     # vec of i32 byte pointers
+@var STATE_KEY_LEN:Int := 0;     # vec of i32 byte lengths
+@var STATE_VAL:Int     := 0;     # vec of i32 values
+
+@var R_CURRENT_STRATUM_REF:Int := 0;
+@var STATE_INSTANCE_NEXT:Int   := 1000000;
+
+# state_init — call after registry_init.  Currently invoked inline
+# from registry_init; exposed separately so tests can reset state
+# mid-run if needed.
+@fn state_init := {
+  STATE_BUCKET  = &vec_new;
+  STATE_KEY_OFF = &vec_new;
+  STATE_KEY_LEN = &vec_new;
+  STATE_VAL     = &vec_new;
+  STATE_INSTANCE_NEXT   = 1000000;
+  R_CURRENT_STRATUM_REF = 0;
+};
+
+@fn state_set_current_stratum stratum_ref:Int := {
+  R_CURRENT_STRATUM_REF = stratum_ref;
+};
+
+@fn state_current_stratum:Int := { R_CURRENT_STRATUM_REF };
+
+# state_instance_new — mint a fresh instance-bucket id.
+@fn state_instance_new:Int := {
+  @local id := STATE_INSTANCE_NEXT;
+  STATE_INSTANCE_NEXT = STATE_INSTANCE_NEXT + 1;
+  id
+};
+
+# state_lookup_index — internal: find the row index for (bucket, key),
+# or -1 if no row exists.  Key is given as a Silicon-string pointer.
+@fn state_lookup_index:Int bucket:Int, key_ptr:Int := {
+  @local key_len := &WASM::i32_load key_ptr;
+  @local key_off := key_ptr + 4;
+  @local n := &vec_len STATE_BUCKET;
+  @local i := 0;
+  @local found := 0 - 1;
+  &@loop ((found < 0) * (i < n) == 1), {
+    &@if ((&vec_get STATE_BUCKET, i) == bucket), {
+      @local k_off := &vec_get STATE_KEY_OFF, i;
+      @local k_len := &vec_get STATE_KEY_LEN, i;
+      &@if (k_len == key_len), {
+        @local ok := 1;
+        @local j := 0;
+        &@loop ((ok * (j < key_len)) == 1), {
+          @local a := &WASM::i32_load8_u (key_off + j);
+          @local b := &WASM::i32_load8_u (k_off + j);
+          &@if (a != b), { ok = 0; };
+          j = j + 1;
+        };
+        &@if (ok == 1), { found = i; };
+      };
+    };
+    i = i + 1;
+  };
+  found
+};
+
+# state_set bucket, key_ptr, value — store or overwrite.
+@fn state_set bucket:Int, key_ptr:Int, value:Int := {
+  @local key_len := &WASM::i32_load key_ptr;
+  @local key_off := key_ptr + 4;
+  @local idx := &state_lookup_index bucket, key_ptr;
+  &@if (idx >= 0), {
+    &vec_set STATE_VAL, idx, value;
+  };
+  &@if (idx < 0), {
+    STATE_BUCKET  = &vec_push STATE_BUCKET, bucket;
+    STATE_KEY_OFF = &vec_push STATE_KEY_OFF, key_off;
+    STATE_KEY_LEN = &vec_push STATE_KEY_LEN, key_len;
+    STATE_VAL     = &vec_push STATE_VAL, value;
+  };
+};
+
+# state_get bucket, key_ptr — returns the stored value, or 0 if no
+# entry exists.  Use state_has to disambiguate "absent" from "stored 0".
+@fn state_get:Int bucket:Int, key_ptr:Int := {
+  @local idx := &state_lookup_index bucket, key_ptr;
+  &@if (idx < 0), { &@return 0; };
+  &vec_get STATE_VAL, idx
+};
+
+# state_has bucket, key_ptr — returns 1 if the entry exists, 0 otherwise.
+@fn state_has:Int bucket:Int, key_ptr:Int := {
+  @local idx := &state_lookup_index bucket, key_ptr;
+  &@if (idx < 0), { &@return 0; };
+  1
+};
+
+# state_count_bucket — number of entries in a single bucket.
+@fn state_count_bucket:Int bucket:Int := {
+  @local n := &vec_len STATE_BUCKET;
+  @local i := 0;
+  @local count := 0;
+  &@loop (i < n), {
+    &@if ((&vec_get STATE_BUCKET, i) == bucket), { count = count + 1; };
+    i = i + 1;
+  };
+  count
+};

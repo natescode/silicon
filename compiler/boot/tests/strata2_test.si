@@ -50,7 +50,46 @@
   @local ok_tier  := &@and (kw_tier == R_TIER_T1), (op_tier == R_TIER_T1);
   @local ok_hooks := &@and (&@and (h_decl == 1), (h_call == 1)),
                            (&@and (h_ann == 1),  (h_fin == 1));
-  @local ok       := &@and (&@and ok_count, ok_tier), ok_hooks;
+
+  # State buckets §5.7.  Use the stratum's defining-AST index as the
+  # stratum-bucket id; mint a fresh instance bucket via state_instance_new.
+  # Verify: stratum-bucket persists across set/get/has; instance buckets
+  # are isolated.
+  @local strat_bucket := 42;     # arbitrary id for this test
+  &state_set strat_bucket, 'count', 7;
+  &state_set strat_bucket, 'name',  99;
+  &state_set strat_bucket, 'count', 8;     # overwrite
+  @local s_count := &state_get strat_bucket, 'count';
+  @local s_name  := &state_get strat_bucket, 'name';
+  @local s_has1  := &state_has strat_bucket, 'count';
+  @local s_has0  := &state_has strat_bucket, 'missing';
+  @local s_size  := &state_count_bucket strat_bucket;
+
+  @local inst1 := &state_instance_new;
+  @local inst2 := &state_instance_new;
+  &state_set inst1, 'x', 1;
+  &state_set inst2, 'x', 2;
+  @local i1_x := &state_get inst1, 'x';
+  @local i2_x := &state_get inst2, 'x';
+
+  @local ok_state_count := (s_count == 8);
+  @local ok_state_name  := (s_name == 99);
+  @local ok_state_has1  := (s_has1 == 1);
+  @local ok_state_has0  := (s_has0 == 0);
+  @local ok_state_size  := (s_size == 2);
+  @local ok_state_a     := &@and ok_state_count, ok_state_name;
+  @local ok_state_b     := &@and ok_state_has1, ok_state_has0;
+  @local ok_state       := &@and (&@and ok_state_a, ok_state_b), ok_state_size;
+
+  @local ok_inst_1 := (i1_x == 1);
+  @local ok_inst_2 := (i2_x == 2);
+  @local ok_inst_3 := (inst1 != inst2);
+  @local ok_inst   := &@and (&@and ok_inst_1, ok_inst_2), ok_inst_3;
+
+  @local ok_a := &@and ok_count, ok_tier;
+  @local ok_b := &@and ok_a, ok_hooks;
+  @local ok_c := &@and ok_b, ok_state;
+  @local ok   := &@and ok_c, ok_inst;
   &@if ok,
     { &write_str 1, 'strata2 OK' },
     { &write_str 1, 'strata2 FAIL' };
