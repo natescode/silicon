@@ -102,11 +102,34 @@
   @local ok_pend_a     := &@and ok_pend_count, ok_pend_order;
   @local ok_pend       := &@and ok_pend_a, ok_pend_reset;
 
+  # §5.3/§5.5 AST handle table.  capture_template returns a fresh id;
+  # clone returns a NEW id but pointing at the same AST.  AST_H_KIND
+  # records the 'pre' / 'post' tag.  Use AST index `prog` (the loaded
+  # program) as a stand-in node.
+  @local h1 := &ast_capture_template prog, AST_HANDLE_PRE;
+  @local h2 := &ast_clone h1;
+  @local h3 := &ast_capture_template prog, AST_HANDLE_POST;
+  @local h1_ast := &ast_handle_ast h1;
+  @local h2_ast := &ast_handle_ast h2;
+  @local h1_kind := &ast_handle_kind h1;
+  @local h3_kind := &ast_handle_kind h3;
+  @local hc := &ast_handle_count;
+  @local ok_ast_distinct := (h1 != h2);
+  @local ok_ast_same     := (h1_ast == h2_ast);
+  @local ok_ast_kind_pre := (h1_kind == AST_HANDLE_PRE);
+  @local ok_ast_kind_post := (h3_kind == AST_HANDLE_POST);
+  @local ok_ast_count    := (hc == 3);
+  @local ok_ast_a := &@and ok_ast_distinct, ok_ast_same;
+  @local ok_ast_b := &@and ok_ast_kind_pre, ok_ast_kind_post;
+  @local ok_ast_c := &@and ok_ast_a, ok_ast_b;
+  @local ok_ast   := &@and ok_ast_c, ok_ast_count;
+
   @local ok_a := &@and ok_count, ok_tier;
   @local ok_b := &@and ok_a, ok_hooks;
   @local ok_c := &@and ok_b, ok_state;
   @local ok_d := &@and ok_c, ok_inst;
-  @local ok   := &@and ok_d, ok_pend;
+  @local ok_e := &@and ok_d, ok_pend;
+  @local ok   := &@and ok_e, ok_ast;
   &@if ok,
     { &write_str 1, 'strata2 OK' },
     { &write_str 1, 'strata2 FAIL' };

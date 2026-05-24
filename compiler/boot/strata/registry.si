@@ -92,6 +92,8 @@
   STATE_INSTANCE_NEXT   = 1000000;
   R_CURRENT_STRATUM_REF = 0;
   R_PENDING_DEFS = &vec_new;
+  AST_H_KIND = &vec_new;
+  AST_H_AST  = &vec_new;
   R_CURRENT_TIER = R_TIER_T1;
 };
 
@@ -469,3 +471,53 @@
 @fn module_pending_reset := {
   R_PENDING_DEFS = &vec_new;
 };
+
+# ── AST handle table (Strata 2.0 §5.3 / §5.5) ────────────────────────
+#
+# `&Compiler::ast::capture_template node, kind` returns a handle that
+# preserves the captured AST subtree alongside a 'pre' / 'post' kind
+# tag.  Clones produce fresh handle ids pointing at the same AST
+# (since the boot/ AST is append-only, a clone shares storage but
+# the handle is distinct).  Substitute / patch_types produce a NEW
+# captured AST with the modifications applied — fresh handle, fresh
+# AST.
+#
+# Kind tags:
+#   AST_HANDLE_PRE  := 0    — captured BEFORE type inference
+#   AST_HANDLE_POST := 1    — captured AFTER type inference
+@let AST_HANDLE_PRE:Int  := 0;
+@let AST_HANDLE_POST:Int := 1;
+
+@var AST_H_KIND:Int := 0;       # vec of i32 kind tags
+@var AST_H_AST:Int  := 0;       # vec of i32 ast indices
+
+# Allocate a new handle.  Returns the handle id (= row index in the
+# parallel vecs).
+@fn ast_handle_alloc:Int ast_idx:Int, kind:Int := {
+  @local id := &vec_len AST_H_AST;
+  AST_H_KIND = &vec_push AST_H_KIND, kind;
+  AST_H_AST  = &vec_push AST_H_AST, ast_idx;
+  id
+};
+
+# capture_template — like src/ ast.capture_template, but in boot/ the
+# AST is append-only so we share storage with the original.  Handler
+# code that mutates an AST node must use clone first (which still
+# shares storage today — actual node mutation needs substitute /
+# patch_types, both of which allocate new AST cells).
+@fn ast_capture_template:Int ast_idx:Int, kind:Int := {
+  &ast_handle_alloc ast_idx, kind
+};
+
+# clone — return a fresh handle id pointing at the same AST.  Useful
+# when you want a distinct identity (e.g. one captured template +
+# many cloned monomorphs) without yet committing to a substitution.
+@fn ast_clone:Int handle:Int := {
+  @local ast  := &vec_get AST_H_AST, handle;
+  @local kind := &vec_get AST_H_KIND, handle;
+  &ast_handle_alloc ast, kind
+};
+
+@fn ast_handle_ast:Int  handle:Int := { &vec_get AST_H_AST,  handle };
+@fn ast_handle_kind:Int handle:Int := { &vec_get AST_H_KIND, handle };
+@fn ast_handle_count:Int := { &vec_len AST_H_AST };
