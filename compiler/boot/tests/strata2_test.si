@@ -16,6 +16,7 @@
 @use '../parser/parse.si';
 @use '../strata/registry.si';
 @use '../strata/loader.si';
+@use '../types/types.si';
 
 @fn _start:Void := {
   # Source bundle: ONE @stratum unified-form definition registering
@@ -124,12 +125,60 @@
   @local ok_ast_c := &@and ok_ast_a, ok_ast_b;
   @local ok_ast   := &@and ok_ast_c, ok_ast_count;
 
+  # §5.4 Type-as-data.  Verify scalar singletons + Array constructor +
+  # Function constructor + Variable constructor + substitute.
+  &types_init;
+  @local int_kind   := &type_kind TYPE_INT_H;
+  @local float_kind := &type_kind TYPE_FLOAT_H;
+  @local arr_int    := &type_new_array TYPE_INT_H;
+  @local arr_kind   := &type_kind arr_int;
+  @local arr_elem   := &type_field arr_int, 1;
+  # Use known-good (name_off=0, name_len=1) — any consistent span will
+  # do; substitute compares bytes via type_span_eq.  Source isn't
+  # critical since both sides reference the same bytes.
+  @local var_t      := &type_new_variable 0, 1;
+  @local var_kind   := &type_kind var_t;
+  # Function: (T, Float) -> T
+  @local params_vec := &vec_new;
+  params_vec        = &vec_push params_vec, var_t;
+  params_vec        = &vec_push params_vec, TYPE_FLOAT_H;
+  @local fn_t       := &type_new_function var_t, params_vec;
+  @local fn_kind    := &type_kind fn_t;
+  # Substitute T := Int.  Result should be (Int, Float) -> Int.
+  @local fn_int     := &type_substitute_one fn_t, 0, 1, TYPE_INT_H;
+  @local fi_kind    := &type_kind fn_int;
+  @local fi_result  := &type_field fn_int, 2;
+  @local fi_p0      := &type_field fn_int, 3;
+  @local fi_p1      := &type_field fn_int, 4;
+  # Original template unchanged (Variable still in place).
+  @local orig_result := &type_field fn_t, 2;
+  @local orig_kind   := &type_kind orig_result;
+
+  @local ok_type_scalars := &@and (int_kind == SK_INT), (float_kind == SK_FLOAT);
+  @local ok_type_array   := &@and (arr_kind == SK_ARRAY), (arr_elem == TYPE_INT_H);
+  @local ok_type_var     := (var_kind == SK_VARIABLE);
+  @local ok_type_fn      := (fn_kind == SK_FUNCTION);
+  @local ok_subst_kind   := (fi_kind == SK_FUNCTION);
+  @local ok_subst_result := (fi_result == TYPE_INT_H);
+  @local ok_subst_p0     := (fi_p0 == TYPE_INT_H);
+  @local ok_subst_p1     := (fi_p1 == TYPE_FLOAT_H);
+  @local ok_subst_orig   := (orig_kind == SK_VARIABLE);
+  @local ok_ty_a := &@and ok_type_scalars, ok_type_array;
+  @local ok_ty_b := &@and ok_type_var, ok_type_fn;
+  @local ok_ty_c := &@and ok_subst_kind, ok_subst_result;
+  @local ok_ty_d := &@and ok_subst_p0, ok_subst_p1;
+  @local ok_ty_e := &@and ok_ty_a, ok_ty_b;
+  @local ok_ty_f := &@and ok_ty_c, ok_ty_d;
+  @local ok_ty_g := &@and ok_ty_e, ok_ty_f;
+  @local ok_type := &@and ok_ty_g, ok_subst_orig;
+
   @local ok_a := &@and ok_count, ok_tier;
   @local ok_b := &@and ok_a, ok_hooks;
   @local ok_c := &@and ok_b, ok_state;
   @local ok_d := &@and ok_c, ok_inst;
   @local ok_e := &@and ok_d, ok_pend;
-  @local ok   := &@and ok_e, ok_ast;
+  @local ok_f := &@and ok_e, ok_ast;
+  @local ok   := &@and ok_f, ok_type;
   &@if ok,
     { &write_str 1, 'strata2 OK' },
     { &write_str 1, 'strata2 FAIL' };

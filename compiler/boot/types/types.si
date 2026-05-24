@@ -39,6 +39,10 @@
 @let SK_DISTINCT:Int  := 8;
 @let SK_SUM:Int       := 9;
 @let SK_UNKNOWN:Int   := 10;
+# Strata 2.0 §5.4 — type-as-data needs a Variable kind so generic
+# function signatures (T, T -> T) can be represented and substituted
+# at compile time.
+@let SK_VARIABLE:Int  := 11;
 
 # WASM value type tags reused from boot/ir/nodes.si (parse.si pulls
 # them in transitively via ast.si → ir/nodes.si).  Kept as bare
@@ -110,6 +114,17 @@
   h
 };
 
+# Build [SK_VARIABLE, name_off, name_len].  Strata 2.0 §5.4.
+# Variable types appear in generic function signatures
+# (T → T → T).  type_substitute replaces them given a binding.
+@fn type_new_variable:Int name_off:Int, name_len:Int := {
+  @local h := &vec_len TYPE_VEC;
+  TYPE_VEC = &vec_push TYPE_VEC, SK_VARIABLE;
+  TYPE_VEC = &vec_push TYPE_VEC, name_off;
+  TYPE_VEC = &vec_push TYPE_VEC, name_len;
+  h
+};
+
 # Build [SK_DISTINCT, name_off, name_len, underlying_h].  Name span
 # lives in P_SRC.
 @fn type_new_distinct:Int name_off:Int, name_len:Int, underlying_h:Int := {
@@ -154,6 +169,7 @@
   &@if (k == SK_FUNCTION), { &@return TY_I32; };
   &@if (k == SK_SUM),      { &@return TY_I32; };
   &@if (k == SK_UNKNOWN),  { &@return TY_I32; };
+  &@if (k == SK_VARIABLE), { &@return TY_I32; };
   &@if (k == SK_DISTINCT), {
     @local underlying := &type_field handle, 3;
     &@return (&wasm_type_of underlying);
@@ -225,7 +241,61 @@
     @local b_len := &type_field b, 2;
     &@return (&type_span_eq a_off, a_len, b_off, b_len);
   };
+  &@if (ka == SK_VARIABLE), {
+    @local a_off := &type_field a, 1;
+    @local a_len := &type_field a, 2;
+    @local b_off := &type_field b, 1;
+    @local b_len := &type_field b, 2;
+    &@return (&type_span_eq a_off, a_len, b_off, b_len);
+  };
   0
+};
+
+# ── Substitution (Strata 2.0 §5.4) ──────────────────────────────────
+#
+# type_substitute_one template, name_off, name_len, repl_h
+#   Returns a NEW type handle where every SK_VARIABLE node whose name
+#   span equals (name_off, name_len) is replaced by repl_h.
+#   Non-matching nodes pass through; non-Variable container types
+#   (Array, Function) are rebuilt with substituted children.
+#
+# Multi-binding substitution: chain calls.  E.g. to replace T with Int
+# and U with Float, call type_substitute_one twice.
+@fn type_substitute_one:Int tmpl:Int, name_off:Int, name_len:Int, repl:Int := {
+  @local k := &type_kind tmpl;
+  &@if (k == SK_VARIABLE), {
+    @local t_off := &type_field tmpl, 1;
+    @local t_len := &type_field tmpl, 2;
+    &@if ((&type_span_eq t_off, t_len, name_off, name_len) == 1), {
+      &@return repl;
+    };
+    &@return tmpl;
+  };
+  &@if (k == SK_ARRAY), {
+    @local elem := &type_field tmpl, 1;
+    @local new_elem := &type_substitute_one elem, name_off, name_len, repl;
+    &@if (new_elem == elem), { &@return tmpl; };
+    &@return (&type_new_array new_elem);
+  };
+  &@if (k == SK_FUNCTION), {
+    @local n := &type_field tmpl, 1;
+    @local result_h := &type_field tmpl, 2;
+    @local new_result := &type_substitute_one result_h, name_off, name_len, repl;
+    @local params := &vec_new;
+    @local any_changed := &@if (new_result == result_h), { 0 }, { 1 };
+    @local i := 0;
+    &@loop (i < n), {
+      @local p_old := &type_field tmpl, (3 + i);
+      @local p_new := &type_substitute_one p_old, name_off, name_len, repl;
+      &@if (p_new != p_old), { any_changed = 1; };
+      params = &vec_push params, p_new;
+      i = i + 1;
+    };
+    &@if (any_changed == 0), { &@return tmpl; };
+    &@return (&type_new_function new_result, params);
+  };
+  # Scalar / Distinct / Sum: no Variable inside.
+  tmpl
 };
 
 # ── Predicate helpers ──────────────────────────────────────────────
