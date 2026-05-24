@@ -1056,9 +1056,12 @@ function checkFunctionCall(call: any, ctx: Ctx): SiliconType {
             // D-D-5 migrated cast keywords don't carry a typeSignature on
             // their primary entry.  Hardcode their signatures here so the
             // typechecker keeps rejecting mismatched arguments (e.g.
-            // @toFloat on an already-Float operand).
+            // @toFloat on an already-Float operand).  @toInt has two
+            // forms — Float→Int (primary) and Int64→Int (typed overload,
+            // picked when the operand is Int64).
             const migratedCastSig: TypeSig | undefined =
                 name === '@toFloat' ? { params: [TypeInt],   result: TypeFloat } :
+                name === '@toInt' && firstArgKind === 'Int64' ? { params: [TypeInt64], result: TypeInt } :
                 name === '@toInt'   ? { params: [TypeFloat], result: TypeInt   } :
                 name === '@toInt64' ? { params: [TypeInt],   result: TypeInt64 } :
                 undefined

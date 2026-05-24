@@ -50,8 +50,19 @@
         (&compiler::compiler_str_intern 'instr', 0)
 };
 
-# Int64 → Int — typed overload of @toInt, picked when arg type is Int64.
-# Stays legacy; D-D-5 typed-overload migration deferred.
-@stratum_keyword ToIntFromInt64 ('@toInt', Node) = {
-  &IR::i32_wrap_i64;
+# D-D-5 complete: Int64→Int typed overload of @toInt now uses the new
+# typed-keyword registration (mirrors register::typed_operator).
+@stratum ToIntFromInt64 := {
+    &Compiler::register::typed_keyword '@toInt', 'Int64';
+    &Compiler::on::lower '@toInt:Int64', ToIntFromInt64_lower;
+};
+@fn ToIntFromInt64_lower node:Int := {
+    @local args:Int := &compiler::compiler_arr_new;
+    &compiler::compiler_arr_push args,
+        (&compiler::compiler_lowerExpr (&compiler::compiler_arg node, 0));
+    &compiler::ir_makeCall
+        (&compiler::compiler_str_intern 'i32.wrap_i64', 0),
+        args,
+        (&compiler::compiler_str_intern 'i32', 0),
+        (&compiler::compiler_str_intern 'instr', 0)
 };

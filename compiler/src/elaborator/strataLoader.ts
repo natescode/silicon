@@ -412,6 +412,13 @@ function registerStratumDefinition(
         if (!typeKind) continue
         const compoundKey = `${token}:${typeKind}`
         registry.operators[compoundKey] = stub
+      } else if (seg2 === 'typed_keyword') {
+        // `register::typed_keyword '@toInt', 'Int64'` — keyword analog of
+        // typed_operator.  Used by D-D-5's ToIntFromInt64 migration.
+        const typeKind = extractString(args[1])
+        if (!typeKind) continue
+        const compoundKey = `${token}:${typeKind}`
+        registry.keywords[compoundKey] = stub
       } else if (seg2 === 'annotation') { registerAnnotation(registry, token, stub) }
 
     } else if (seg1 === 'on') {

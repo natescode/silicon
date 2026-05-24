@@ -856,11 +856,19 @@ function lowerBuiltinCall(name: string, rawArgs: any[], ctx: LowerCtx, inferredT
     // preserves legacy typed overloads' precedence — without it, a
     // migrated `@toInt` primary handler would override the legacy
     // `@toInt:Int64` overload.
-    if (!intrinsic && ctx.registry.handlers.lower.has(name)) {
+    if (!intrinsic) {
         const compilingHandler = (ctx.registry as any).__compilingHandler === true
-        if (!compilingHandler || hasCompiledHandlerFor(ctx.registry, name)) {
+        const typedKey = `${name}:${firstArgKind}`
+        const canFire = (key: string): boolean =>
+            ctx.registry.handlers.lower.has(key) &&
+            (!compilingHandler || hasCompiledHandlerFor(ctx.registry, key))
+        const handlerKey =
+            canFire(typedKey) ? typedKey :
+            canFire(name)     ? name     :
+            ''
+        if (handlerKey) {
             const synthNode = { type: 'FunctionCall', name: { type: 'Namespace', path: [name] }, args: rawArgs, inferredType }
-            const results = fireHandlers(ctx.registry, 'lower', name, synthNode, ctx.$compiler!, ctx.currentStratumRef)
+            const results = fireHandlers(ctx.registry, 'lower', handlerKey, synthNode, ctx.$compiler!, ctx.currentStratumRef)
             const result = results.length > 0 ? results[results.length - 1] : null
             if (result) return result as IRExpr
         }
