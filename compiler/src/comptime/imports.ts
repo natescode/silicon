@@ -1397,6 +1397,28 @@ export function createComptimeImports(env: ComptimeEnv): WebAssembly.Imports {
 
 function makeNamedHandler(registry: ElaboratorRegistry, handlerName: string) {
     const wrapper = (node: any, api: any) => {
+        // D-E-1: prefer the pre-compiled WASM instance from
+        // registry.compiledHandlers.  Fall back to the interpreter only
+        // when no compiled instance exists (e.g. handler registered AFTER
+        // buildStrataRegistry's pre-compile pass).
+        const compiled = registry.compiledHandlers.get(handlerName)
+        if (compiled) {
+            const env = compiled.env
+            const prevCtx = env.ctx
+            const prevApi = env.api
+            env.ctx = api?.ctx
+            env.api = api
+            const nodeId = env.handles.intern(node)
+            const resultId = compiled.invoke(nodeId)
+            let result: any = resultId === 0 ? null : env.irHandles.get(resultId)
+            if (Array.isArray(result)) {
+                result = result.map((v) => typeof v === 'number' ? env.irHandles.get(v) : v).filter(Boolean)
+            }
+            env.handles.release(nodeId)
+            env.ctx = prevCtx
+            env.api = prevApi
+            return result ?? null
+        }
         const entry = registry.namedHandlers.get(handlerName)
         if (!entry) {
             throw new Error(`[strata compile-then-run] handler '${handlerName}' not found`)
@@ -1404,6 +1426,7 @@ function makeNamedHandler(registry: ElaboratorRegistry, handlerName: string) {
         const fn = compileHandlerBlock(entry.body, entry.paramName)
         return fn(node, api)
     }
+    ;(wrapper as any).__handlerName = handlerName
     return wrapper
 }
 

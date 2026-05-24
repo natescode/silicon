@@ -41,7 +41,7 @@ import { registerDefKind, type CodegenKind } from './defkinds'
 import { getIRKind } from '../ir/irKinds'
 import { loadBuiltinStrata } from '../strata/index'
 import { builtinDefExpanders } from '../strata/defExpanders'
-import { isRichBody, compileBodyToDefExpander, compileBodyToExpanderFn, compileHandlerBlock, compileComptimeHandler } from './strataBody'
+import { compileHandlerBlock, compileComptimeHandler } from './strataBody'
 import { registerBuiltinComptimeHandlers } from './comptimeBuiltins'
 // D-E-1: comptime engine for pre-compiling strata handlers @fns at
 // strata-load time.  See `compileStrataHandlers` call in buildStrataRegistry.
@@ -268,18 +268,10 @@ function registerElaboration(registry: ElaboratorRegistry, elab: Elaboration, ti
     })
   }
 
-  // Rich body: contains &Compiler:: calls or @local bindings.  Compile the
-  // body into a closure and register it.  Definition-kind bodies override
-  // the hardcoded TS def expander (if any); other bodies become an
-  // IRExpanderFn keyed on the intrinsic.
-  if (isRichBody(elab.semantics)) {
-    const nodeParamName = elab.nodeParamName
-    if (codegenKind) {
-      registry.defExpanders.set(codegenKind, compileBodyToDefExpander(elab.semantics, nodeParamName))
-    } else if (baseNode.data?.intrinsic) {
-      registry.expanders.set(baseNode.data.intrinsic, compileBodyToExpanderFn(elab.semantics, nodeParamName))
-    }
-  }
+  // D-E-2: rich-body path removed.  All built-in strata are migrated to
+  // the new @stratum + @fn-handler form (D-D-* complete).  User-defined
+  // @stratum_keyword bodies with &Compiler::* calls are no longer
+  // supported — they need to be rewritten in the new form.
 }
 
 /** Parse a Silicon source string and return all Elaboration nodes found. */

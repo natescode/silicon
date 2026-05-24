@@ -28,54 +28,23 @@
  * minimal; later phases may extend it.
  */
 
-import type { IRDefExpander, IRExpanderFn } from '../ir/expander'
 import type { CompilerAPI } from '../compiler-api'
-
-// ---------------------------------------------------------------------------
-// Detection
-// ---------------------------------------------------------------------------
-
-/**
- * Returns true if the body contains any `&Compiler::*` call or `@local`
- * definition — signalling that the body needs the rich-body interpreter
- * rather than the simple intrinsic-extraction path.
- */
-export function isRichBody(body: any): boolean {
-    function scan(node: any): boolean {
-        if (!node || typeof node !== 'object') return false
-        if (Array.isArray(node)) return node.some(scan)
-        if (node.type === 'Namespace' && Array.isArray(node.path) && node.path[0] === 'Compiler') return true
-        if (node.type === 'Definition' && node.keyword === '@local') return true
-        for (const key of Object.keys(node)) {
-            if (key === 'sourceLocation' || key === 'inferredType') continue
-            if (scan(node[key])) return true
-        }
-        return false
-    }
-    return scan(body)
-}
 
 // ---------------------------------------------------------------------------
 // Public compilation entry points
 // ---------------------------------------------------------------------------
-
-/** Compile a rich strata body into an IRDefExpander. The body sees the AST def node as `nodeParamName`. */
-export function compileBodyToDefExpander(body: any, nodeParamName: string): IRDefExpander {
-    return {
-        expand(def, _name, api) {
-            const scope: Scope = { [nodeParamName]: def }
-            return evalBody(body, scope, api) as ReturnType<IRDefExpander['expand']>
-        },
-    }
-}
-
-/** Compile a rich strata body into an IRExpanderFn. The body sees the raw call-args array as `nodeParamName`. */
-export function compileBodyToExpanderFn(body: any, nodeParamName: string): IRExpanderFn {
-    return (rawArgs, api, inferredType) => {
-        const scope: Scope = { [nodeParamName]: rawArgs, inferredType }
-        return evalBody(body, scope, api) as ReturnType<IRExpanderFn>
-    }
-}
+//
+// D-E-2: the legacy rich-body path (isRichBody / compileBodyToDefExpander
+// / compileBodyToExpanderFn) has been removed.  All built-in strata are
+// migrated to the new @stratum + @fn-handler form (D-D-* complete) and
+// run via the compile-then-run engine (Phase C).
+//
+// What remains here is the small interpreter that powers two backward-
+// compat paths:
+//   - Inline-block handlers in user @stratum bodies
+//   - Comptime handler dispatch (compileComptimeHandler)
+//   - On::* handlers registered via &compiler::on_decl from WASM-side
+//     bodies (used when no compiled instance exists yet)
 
 /**
  * Compile an AST Block node (from a `@stratum` on::* handler) into a
