@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Sigil 1.1 — User Stories</title>
+  <style>
+    :root {
+      --bg: #0f1117;
+      --surface: #1a1d27;
+      --surface2: #222535;
+      --border: #2e3248;
+      --accent: #6c8ef7;
+      --accent2: #b06cf7;
+      --accent3: #3ecf8e;
+      --accent4: #f7a06c;
+      --accent5: #f76c6c;
+      --accent6: #f7e36c;
+      --text: #dde1f0;
+      --muted: #7b82a8;
+      --code-bg: #13151f;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.55;
+      padding: 32px 24px;
+    }
+    .page { max-width: 1100px; margin: 0 auto; }
+    h1 { font-size: 1.9rem; color: var(--accent); margin-bottom: 6px; }
+    h2 { font-size: 1.35rem; color: var(--accent2); margin: 40px 0 12px; border-bottom: 1px solid var(--border); padding-bottom: 6px; }
+    h3 { font-size: 1.05rem; color: var(--accent3); margin: 22px 0 8px; }
+    p  { margin-bottom: 10px; color: var(--text); font-size: 0.93rem; }
+    .subtitle { color: var(--muted); font-size: 0.95rem; margin-bottom: 24px; }
+    .legend { background: var(--surface2); border: 1px solid var(--border); border-radius: 8px; padding: 12px 18px; margin: 14px 0 24px; font-size: 0.85rem; }
+    .legend code { background: var(--code-bg); padding: 1px 6px; border-radius: 4px; }
+    pre {
+      background: var(--code-bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 10px 12px;
+      overflow-x: auto;
+      font-family: 'Cascadia Code', 'Fira Code', 'Consolas', monospace;
+      font-size: 0.78rem;
+      line-height: 1.5;
+      margin: 6px 0;
+    }
+    code { font-family: 'Cascadia Code', 'Fira Code', 'Consolas', monospace; font-size: 0.85em; background: var(--code-bg); padding: 1px 5px; border-radius: 4px; }
+    details {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-left: 3px solid var(--accent);
+      border-radius: 6px;
+      padding: 10px 14px;
+      margin: 8px 0;
+    }
+    details[open] { padding-bottom: 14px; }
+    summary {
+      cursor: pointer;
+      font-weight: 600;
+      color: var(--text);
+      font-size: 0.94rem;
+      display: list-item;
+      padding: 2px 0;
+    }
+    summary:hover { color: var(--accent); }
+    summary .id { color: var(--muted); font-family: monospace; font-size: 0.85em; margin-right: 10px; }
+    summary .est { float: right; color: var(--muted); font-size: 0.8em; background: var(--surface2); padding: 1px 8px; border-radius: 10px; }
+    summary .done { color: var(--accent3); font-weight: 700; margin-left: 8px; }
+    summary .partial { color: var(--accent4); font-weight: 700; margin-left: 8px; }
+    details.complete > summary { color: var(--accent3); }
+    details.complete { border-left-color: var(--accent3) !important; opacity: 0.92; }
+    details.partial > summary { color: var(--accent4); }
+    details.partial { border-left-color: var(--accent4) !important; }
+    .goal { font-size: 0.88rem; color: var(--muted); margin: 8px 0 10px; padding-left: 12px; border-left: 2px solid var(--border); }
+    .accept { margin: 8px 0; font-size: 0.88rem; }
+    .accept strong { color: var(--accent3); }
+    .accept ul { padding-left: 22px; margin: 4px 0; }
+    .accept li { margin-bottom: 2px; }
+    .subtasks { margin: 10px 0 4px; font-size: 0.86rem; }
+    .subtasks strong { color: var(--accent4); }
+    .subtasks ol { padding-left: 22px; margin: 4px 0; }
+    .subtasks li { margin-bottom: 2px; }
+    .deps { font-size: 0.82rem; color: var(--muted); margin-top: 8px; }
+    .deps strong { color: var(--accent5); }
+    .phase-intro { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 12px 18px; margin: 12px 0 18px; font-size: 0.9rem; }
+    details.toolchain  { border-left-color: var(--accent4); }
+    .toc { background: var(--surface2); border: 1px solid var(--border); border-radius: 8px; padding: 12px 18px; margin: 14px 0 28px; }
+    .toc h3 { margin-top: 0; color: var(--accent); font-size: 0.82rem; text-transform: uppercase; letter-spacing: 0.08em; }
+    .toc ol { columns: 2; column-gap: 28px; padding-left: 18px; font-size: 0.9rem; }
+    .toc a { color: var(--text); text-decoration: none; border-bottom: 1px dotted var(--muted); }
+    .toc a:hover { color: var(--accent); border-bottom-color: var(--accent); }
+    table { width: 100%; border-collapse: collapse; margin: 8px 0; font-size: 0.85rem; }
+    th { background: var(--surface2); color: var(--accent); padding: 6px 10px; text-align: left; border: 1px solid var(--border); }
+    td { padding: 6px 10px; border: 1px solid var(--border); vertical-align: top; }
+  </style>
+</head>
+<body>
+<div class="page">
+
+<h1>Sigil 1.1 — User Stories</h1>
+<p class="subtitle">
+  Stretch work consciously deferred out of 1.0 scope.  Phase numbers are
+  retained from <a href="v1-user-stories.html">v1-user-stories.html</a>
+  so cross-references stay valid; nothing here gates the 1.0 release.
+</p>
+
+<div class="legend">
+  <strong>Scope philosophy:</strong> 1.0 ships when the four pillars
+  (language, compiler, toolchain, distribution) cover the production-
+  systems-software claim.  Tooling that's nice-to-have but not load-bearing
+  for that claim — IDE-level native debugging, LSP integration — moves
+  here.  The 1.0 toolchain still includes the Silicon interpreter (<code>sgl
+  eval</code>) as the primary debug story; v1.1 adds the systems-level
+  surfaces that round out the developer experience.
+  <br/><br/>
+  <strong>Status:</strong> v1.1 is officially planned for after 1.0
+  ships.  Stories may move back to 1.0 if priorities shift; new v1.1
+  work can be appended below.  No commitment on ordering or scheduling
+  beyond "after 1.0."
+</div>
+
+<div class="toc">
+  <h3>Roadmap</h3>
+  <ol>
+    <li><a href="#phase-9">Phase 9 — DWARF + LSP</a></li>
+  </ol>
+</div>
+
+<!-- ================================================================== -->
+<h2 id="phase-9">Phase 9 — DWARF + LSP</h2>
+
+<div class="phase-intro">
+  <strong>Why this is v1.1, not v1.0:</strong> Phase 9 has two halves —
+  <strong>9a (DWARF)</strong> for native-binary debugging via gdb/lldb,
+  and <strong>9b (LSP)</strong> for IDE integration.  Both were marked
+  post-1.0 acceptable in earlier planning: 9a explicitly so (the Silicon
+  interpreter from Phase 7 + <code>sgl eval</code> covers Silicon-level
+  debugging, which is the 1.0 story); 9b implicitly so (it depends on
+  CaaS Consumer APIs that are partially post-1.0 themselves, and most
+  languages ship 1.0 without an LSP — Rust did, Zig did).
+  <br/><br/>
+  Moving the whole phase to v1.1 reflects what was already the realistic
+  schedule.  Function-name symbols in native binaries come essentially
+  free from QBE → <code>as</code> → <code>ld</code> at 1.0; full DWARF
+  source-line info, variable inspection, and IDE-level support land
+  here when there's concrete demand.
+</div>
+
+<h3>9a — DWARF debug info</h3>
+
+<div class="phase-intro" style="font-size: 0.85rem;">
+  The Silicon interpreter (Phase 7) is the primary debug story for 1.0 —
+  it operates on Silicon semantics, shows values as Silicon types, and
+  covers app-developer needs.  DWARF wins systems-level debugging of
+  native binaries (crash analysis, profilers, gdb on <code>sigilc</code>
+  itself) — a real but secondary concern.
+  <br/><br/>
+  Function-name symbols in native binaries come essentially free from
+  QBE → <code>as</code> → <code>ld</code> as long as functions are
+  emitted with proper names — so stack traces stay readable without
+  any DWARF work.  Full source-line info, variable inspection, and
+  IDE-level native debugging are the v1.1 deliverables.
+</div>
+
+<details class="toolchain">
+  <summary><span class="id">9a-1</span> Thread sourceLocation through IR nodes <span class="est">L, ~6h</span></summary>
+</details>
+
+<details class="toolchain">
+  <summary><span class="id">9a-2</span> Emit dbgloc directives in QBE output <span class="est">M, ~3h</span></summary>
+  <div class="deps"><strong>Depends on:</strong> 9a-1, 8-6 (Phase 8 QBE function emission)</div>
+</details>
+
+<details class="toolchain">
+  <summary><span class="id">9a-3</span> DW_TAG_subprogram for function names <span class="est">M, ~3h</span></summary>
+  <div class="deps"><strong>Depends on:</strong> 9a-2</div>
+</details>
+
+<details class="toolchain">
+  <summary><span class="id">9a-4</span> Verify gdb/lldb source-level breakpoints work <span class="est">M, ~3h</span></summary>
+  <div class="deps"><strong>Depends on:</strong> 9a-3</div>
+</details>
+
+<details class="toolchain">
+  <summary><span class="id">9a-5</span> Verify stack traces show Silicon function names <span class="est">S, ~2h</span></summary>
+  <div class="deps"><strong>Depends on:</strong> 9a-4</div>
+</details>
+
+<h3>9b — LSP v1 (thin wrapper over CaaS)</h3>
+
+<div class="phase-intro" style="font-size: 0.85rem;">
+  Each LSP capability becomes a translation from an LSP request to a
+  call into the CaaS API.  No language-specific intelligence lives in
+  this layer — it's a protocol adapter.  Drops from estimated ~28h
+  (custom LSP) to ~14h (thin wrapper) thanks to Phase 8.5 having
+  delivered the CaaS Consumer APIs.
+</div>
+
+<details class="toolchain">
+  <summary><span class="id">9b-1</span> sgl lsp subcommand + LSP scaffolding (jsonrpc loop) <span class="est">M, ~3h</span></summary>
+</details>
+
+<details class="toolchain">
+  <summary><span class="id">9b-2</span> didOpen / didChange / didClose → Workspace.editDocument <span class="est">S, ~2h</span></summary>
+  <div class="deps"><strong>Depends on:</strong> 9b-1, CaaS-4</div>
+</details>
+
+<details class="toolchain">
+  <summary><span class="id">9b-3</span> publishDiagnostics ← Workspace change events + SemanticModel.diagnosticsIn <span class="est">S, ~2h</span></summary>
+  <div class="deps"><strong>Depends on:</strong> 9b-2, CaaS-6</div>
+</details>
+
+<details class="toolchain">
+  <summary><span class="id">9b-4</span> textDocument/definition ← Symbol.declarationLocation <span class="est">S, ~2h</span></summary>
+  <div class="deps"><strong>Depends on:</strong> 9b-2, CaaS-5</div>
+</details>
+
+<details class="toolchain">
+  <summary><span class="id">9b-5</span> textDocument/hover ← SemanticModel.typeOf + doc comment <span class="est">S, ~2h</span></summary>
+  <div class="deps"><strong>Depends on:</strong> 9b-2, CaaS-3</div>
+</details>
+
+<details class="toolchain">
+  <summary><span class="id">9b-6</span> textDocument/documentSymbol ← SyntaxTree walk <span class="est">S, ~1.5h</span></summary>
+  <div class="deps"><strong>Depends on:</strong> 9b-2, CaaS-2</div>
+</details>
+
+<details class="toolchain">
+  <summary><span class="id">9b-7</span> TextMate grammar for syntax highlighting <span class="est">M, ~4h</span></summary>
+</details>
+
+<details class="toolchain">
+  <summary><span class="id">9b-8</span> VS Code extension <span class="est">M, ~4h</span></summary>
+  <div class="deps"><strong>Depends on:</strong> 9b-1, 9b-7</div>
+</details>
+
+<details class="toolchain">
+  <summary><span class="id">9b-9</span> Neovim + Helix integration docs <span class="est">S, ~2h</span></summary>
+  <div class="deps"><strong>Depends on:</strong> 9b-8</div>
+</details>
+
+<!-- ================================================================== -->
+<h2>Summary</h2>
+
+<table>
+  <tr><th>Phase</th><th>Stories</th><th>Approx effort</th><th>Notes</th></tr>
+  <tr><td>9 — DWARF + LSP</td><td>14</td><td>~7 days</td><td>9a (5 stories, ~3d) for native debugging; 9b (9 stories, ~4d) for IDE</td></tr>
+  <tr style="background: var(--surface2); font-weight: 600;"><td>1.1 Total</td><td>~14 stories</td><td>~7 working days</td><td>All current v1.1 scope</td></tr>
+</table>
+
+</div>
+</body>
+</html>

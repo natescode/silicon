@@ -128,16 +128,16 @@
   phases:  <strong>Phase 0.5 — CaaS Foundation</strong> is required-for-1.0
   and must land <em>before</em> the boot/ port (Phase 3) so the self-hosted
   compiler inherits the right shape.  <strong>Phase 8.5 — CaaS Consumer
-  APIs</strong> is the rest:  some 1.0, some post-1.0 stretch.  Phase 9b
-  (LSP) consumes both.
+  APIs</strong> is the rest:  some 1.0, some post-1.0 stretch.  The LSP
+  (v1.1's Phase 9b) consumes both.
   <br/><br/>
   <strong>2. Interpreter-first debugging.</strong>  The Silicon
   interpreter (Phase 7) is the primary debug tool for 1.0 — it shows
   Silicon values as Silicon types and covers app-developer needs.  Native
-  DWARF emission (Phase 9a) is marked post-1.0 acceptable; native binaries
+  DWARF emission (v1.1's Phase 9a) is moved out of 1.0; native binaries
   still get function-name symbols for free from QBE/linker, so stack
-  traces stay readable.  Full source-line DWARF can land when there's
-  concrete demand for systems-level debugging of compiled artifacts.
+  traces stay readable.  Full source-line DWARF + LSP + IDE integration
+  land in v1.1 — see <a href="v1.1-user-stories.html">docs/v1.1-user-stories.html</a>.
 </div>
 
 <div class="legend">
@@ -166,7 +166,7 @@
     <li><a href="#phase-7-5">Phase 7.5 — <code>sgl</code> interpreter-backed subcommands</a></li>
     <li><a href="#phase-8">Phase 8 — Native backend (QBE)</a></li>
     <li><a href="#phase-caas">Phase 8.5 — CaaS Consumer APIs (workspace, symbols, incremental)</a></li>
-    <li><a href="#phase-9">Phase 9 — DWARF + LSP</a></li>
+    <li><a href="#phase-9">Phase 9 — DWARF + LSP <em style="color: var(--accent4); font-size: 0.85em;">[moved to v1.1]</em></a></li>
     <li><a href="#phase-10">Phase 10 — Stability + distribution</a></li>
   </ol>
 </div>
@@ -1338,7 +1338,9 @@
   Builds on Phase 0.5 (CaaS Foundation).  These stories add the
   consumer-facing APIs — workspace, symbols, incrementality, code
   actions — and rewrite existing CLI / formatter tools to be the first
-  real consumers of the foundation.  Phase 9b (LSP) consumes these.
+  real consumers of the foundation.  The LSP (v1.1's Phase 9b — see
+  <a href="v1.1-user-stories.html#phase-9">v1.1-user-stories.html</a>)
+  consumes these once 1.1 work begins.
   <br/><br/>
   Some stories here are <strong>required for 1.0</strong> (workspace,
   symbols, CLI rewrite, stability contract); others are
@@ -1361,7 +1363,7 @@
 
 <details class="caas">
   <summary><span class="id">CaaS-5</span> Symbol table API — declarations, references, navigation <span class="est">M, ~4h</span> <em style="color: var(--accent3); font-size: 0.78em;">[1.0]</em></summary>
-  <p class="goal">Public Symbol type with: name, kind (function/type/variable/strata), declaration location, list of reference locations, containing scope.  Powers go-to-definition, find-references, rename.  Required for LSP go-to-def and hover (Phase 9b).</p>
+  <p class="goal">Public Symbol type with: name, kind (function/type/variable/strata), declaration location, list of reference locations, containing scope.  Powers go-to-definition, find-references, rename.  Required for the LSP go-to-def and hover (v1.1's Phase 9b).</p>
   <div class="deps"><strong>Depends on:</strong> CaaS-4</div>
 </details>
 
@@ -1408,100 +1410,26 @@
 </details>
 
 <!-- ================================================================== -->
-<h2 id="phase-9">Phase 9 — DWARF + LSP</h2>
+<h2 id="phase-9">Phase 9 — DWARF + LSP <span style="color: var(--accent4); font-size: 0.75em; font-weight: normal;">[moved to v1.1]</span></h2>
 
-<h3>9a — DWARF debug info</h3>
-
-<div class="phase-intro" style="font-size: 0.85rem;">
-  The Silicon interpreter (Phase 7) is the primary debug story for 1.0 —
-  it operates on Silicon semantics, shows values as Silicon types, and
-  covers app-developer needs.  DWARF wins systems-level debugging of
-  native binaries (crash analysis, profilers, gdb on <code>sigilc</code>
-  itself) — a real but secondary concern.  All 9a stories are marked
-  <em>post-1.0 acceptable</em>; ship when there's concrete demand.
+<div class="phase-intro">
+  <strong>Phase 9 is officially planned for after 1.0.</strong>  See
+  <a href="v1.1-user-stories.html#phase-9"><code>docs/v1.1-user-stories.html</code></a>
+  for the full breakdown.
+  <br/><br/>
+  Both halves of Phase 9 were already trending out of 1.0 scope: 9a
+  (DWARF) was explicitly marked post-1.0 acceptable (the Silicon
+  interpreter + <code>sgl eval</code> covers Silicon-level debugging,
+  which is the 1.0 story), and 9b (LSP) depends on CaaS Consumer APIs
+  that are themselves partially post-1.0.  Most languages ship 1.0
+  without an LSP (Rust did, Zig did); moving the whole phase to v1.1
+  matches the realistic schedule.
   <br/><br/>
   Function-name symbols in native binaries come essentially free from
-  QBE → <code>as</code> → <code>ld</code> as long as functions are
-  emitted with proper names — so stack traces stay readable without
-  any DWARF work.  Full source-line info, variable inspection, and
-  IDE-level native debugging wait on Phase 9a being prioritised.
+  QBE → <code>as</code> → <code>ld</code> at 1.0; stack traces stay
+  readable without DWARF.  Full source-line info, variable inspection,
+  and IDE integration land in v1.1.
 </div>
-
-<details class="toolchain">
-  <summary><span class="id">9a-1</span> Thread sourceLocation through IR nodes <span class="est">L, ~6h</span> <em style="color: var(--accent4); font-size: 0.78em;">[post-1.0 acceptable]</em></summary>
-</details>
-
-<details class="toolchain">
-  <summary><span class="id">9a-2</span> Emit dbgloc directives in QBE output <span class="est">M, ~3h</span> <em style="color: var(--accent4); font-size: 0.78em;">[post-1.0 acceptable]</em></summary>
-  <div class="deps"><strong>Depends on:</strong> 9a-1, 8-6</div>
-</details>
-
-<details class="toolchain">
-  <summary><span class="id">9a-3</span> DW_TAG_subprogram for function names <span class="est">M, ~3h</span> <em style="color: var(--accent4); font-size: 0.78em;">[post-1.0 acceptable]</em></summary>
-  <div class="deps"><strong>Depends on:</strong> 9a-2</div>
-</details>
-
-<details class="toolchain">
-  <summary><span class="id">9a-4</span> Verify gdb/lldb source-level breakpoints work <span class="est">M, ~3h</span> <em style="color: var(--accent4); font-size: 0.78em;">[post-1.0 acceptable]</em></summary>
-  <div class="deps"><strong>Depends on:</strong> 9a-3</div>
-</details>
-
-<details class="toolchain">
-  <summary><span class="id">9a-5</span> Verify stack traces show Silicon function names <span class="est">S, ~2h</span> <em style="color: var(--accent4); font-size: 0.78em;">[post-1.0 acceptable]</em></summary>
-  <div class="deps"><strong>Depends on:</strong> 9a-4</div>
-</details>
-
-<h3>9b — LSP v1 (thin wrapper over CaaS)</h3>
-
-<div class="phase-intro" style="font-size: 0.85rem;">
-  Each LSP capability becomes a translation from an LSP request to a
-  call into the CaaS API.  No language-specific intelligence lives in
-  this layer — it's a protocol adapter.  Drops from estimated ~28h
-  (custom LSP) to ~14h (thin wrapper) thanks to Phase 8.5.
-</div>
-
-<details class="toolchain">
-  <summary><span class="id">9b-1</span> sgl lsp subcommand + LSP scaffolding (jsonrpc loop) <span class="est">M, ~3h</span></summary>
-</details>
-
-<details class="toolchain">
-  <summary><span class="id">9b-2</span> didOpen / didChange / didClose → Workspace.editDocument <span class="est">S, ~2h</span></summary>
-  <div class="deps"><strong>Depends on:</strong> 9b-1, CaaS-4</div>
-</details>
-
-<details class="toolchain">
-  <summary><span class="id">9b-3</span> publishDiagnostics ← Workspace change events + SemanticModel.diagnosticsIn <span class="est">S, ~2h</span></summary>
-  <div class="deps"><strong>Depends on:</strong> 9b-2, CaaS-6</div>
-</details>
-
-<details class="toolchain">
-  <summary><span class="id">9b-4</span> textDocument/definition ← Symbol.declarationLocation <span class="est">S, ~2h</span></summary>
-  <div class="deps"><strong>Depends on:</strong> 9b-2, CaaS-5</div>
-</details>
-
-<details class="toolchain">
-  <summary><span class="id">9b-5</span> textDocument/hover ← SemanticModel.typeOf + doc comment <span class="est">S, ~2h</span></summary>
-  <div class="deps"><strong>Depends on:</strong> 9b-2, CaaS-3</div>
-</details>
-
-<details class="toolchain">
-  <summary><span class="id">9b-6</span> textDocument/documentSymbol ← SyntaxTree walk <span class="est">S, ~1.5h</span></summary>
-  <div class="deps"><strong>Depends on:</strong> 9b-2, CaaS-2</div>
-</details>
-
-<details class="toolchain">
-  <summary><span class="id">9b-7</span> TextMate grammar for syntax highlighting <span class="est">M, ~4h</span></summary>
-</details>
-
-<details class="toolchain">
-  <summary><span class="id">9b-8</span> VS Code extension <span class="est">M, ~4h</span></summary>
-  <div class="deps"><strong>Depends on:</strong> 9b-1, 9b-7</div>
-</details>
-
-<details class="toolchain">
-  <summary><span class="id">9b-9</span> Neovim + Helix integration docs <span class="est">S, ~2h</span></summary>
-  <div class="deps"><strong>Depends on:</strong> 9b-8</div>
-</details>
 
 <!-- ================================================================== -->
 <h2 id="phase-10">Phase 10 — Stability + distribution</h2>
@@ -1600,10 +1528,10 @@
   <tr><td>7.5 — sgl interpreter-backed subcommands</td><td>4</td><td>~3 days</td><td>SR-1..SR-4 absorbed from old 6b-5/7/9/14; gated on Phase 7</td></tr>
   <tr><td>8 — Native backend (QBE)</td><td>14</td><td>~14 days</td><td>Backend-then-platforms-then-self-host</td></tr>
   <tr><td>8.5 — CaaS Consumer APIs</td><td>8</td><td>~12 days (1.0) + ~8 days (post-1.0)</td><td>CaaS-7, CaaS-8, CaaS-11 are post-1.0 acceptable</td></tr>
-  <tr><td>9 — LSP (DWARF deferred)</td><td>14</td><td>~4 days (1.0) + ~3 days (post-1.0)</td><td>9a stories all post-1.0; interpreter covers app-dev debugging</td></tr>
+  <tr style="opacity: 0.6;"><td>9 — DWARF + LSP <em style="color: var(--accent4); font-size: 0.85em;">[moved to v1.1]</em></td><td>—</td><td>—</td><td>See <a href="v1.1-user-stories.html">v1.1-user-stories.html</a>; 14 stories / ~7 days now scheduled post-1.0</td></tr>
   <tr><td>10 — Stability + distribution</td><td>15</td><td>~10 days</td><td>Mostly parallel; blocks on 8-12</td></tr>
-  <tr style="background: var(--surface2); font-weight: 600;"><td>1.0 Total</td><td>~175 stories</td><td>~149 working days (~7 months)</td><td>Required-for-1.0 only; excludes post-1.0 stretch</td></tr>
-  <tr style="font-size: 0.85em; color: var(--muted);"><td>+ post-1.0 stretch</td><td>~13 stories</td><td>~11 days</td><td>CaaS-7/8/11 + all of Phase 9a (DWARF); ship when bandwidth allows</td></tr>
+  <tr style="background: var(--surface2); font-weight: 600;"><td>1.0 Total</td><td>~161 stories</td><td>~142 working days (~6.5 months)</td><td>Required-for-1.0 only; v1.1 work in <a href="v1.1-user-stories.html">v1.1-user-stories.html</a></td></tr>
+  <tr style="font-size: 0.85em; color: var(--muted);"><td>+ post-1.0 stretch (in v1)</td><td>~3 stories</td><td>~8 days</td><td>CaaS-7 / 8 / 11 from Phase 8.5; remaining Phase 9 (DWARF + LSP) moved to v1.1</td></tr>
 </table>
 
 <p style="margin-top: 14px; font-size: 0.85rem; color: var(--muted);">
