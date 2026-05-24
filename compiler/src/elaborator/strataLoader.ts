@@ -42,10 +42,11 @@ import { getIRKind } from '../ir/irKinds'
 import { loadBuiltinStrata } from '../strata/index'
 import { builtinDefExpanders } from '../strata/defExpanders'
 import { compileHandlerBlock, compileComptimeHandler } from './strataBody'
+import { translateLegacyBlock } from './legacyBlockTranslator'
 import { registerBuiltinComptimeHandlers } from './comptimeBuiltins'
 // D-E-1: comptime engine for pre-compiling strata handlers @fns at
 // strata-load time.  See `compileStrataHandlers` call in buildStrataRegistry.
-import { compileStrataHandlers } from '../comptime/engine'
+import { compileStrataHandlers, compileHandlerToWasm } from '../comptime/engine'
 import parse from '../parser'
 import addToAstSemantics from '../ast/toAst'
 import siliconGrammar from '../grammar/SiliconGrammar'
@@ -86,6 +87,17 @@ export function buildStrataRegistry(
   // in the interpreter) is what lets user strata extend or override these
   // forms in the same way they extend runtime forms.
   registerBuiltinComptimeHandlers(registry)
+
+  // D-E-3: register built-in def expanders FIRST so that any auto-extracted
+  // inline-block handler (compiled on-demand during T2 processing of user
+  // strata) has access to the `function` expander when its synthetic @fn
+  // is lowered.  Order matters: T2 inline blocks → compileHandlerToWasm →
+  // lowerDefinition('@fn') → defExpanders.get('function').
+  for (const [codegenKind, exp] of Object.entries(builtinDefExpanders)) {
+    if (!registry.defExpanders.has(codegenKind)) {
+      registerDefExpander(registry, codegenKind, exp)
+    }
+  }
 
   // T0: built-in strata from .si files.  Process both legacy Elaboration
   // (`@stratum_keyword`/`@stratum_operator`) and the new unified `@stratum`
@@ -190,15 +202,6 @@ export function buildStrataRegistry(
 
   // Apply @@before / @@after ordering to per-phase handler lists (§4 Layer 4).
   applyHandlerOrdering(registry)
-
-  // Phase D: register built-in definition expanders (definition-kind lowering hooks).
-  // Only registers if a strata rich body hasn't already claimed the codegen kind —
-  // rich bodies win so users can override built-in behaviour from Silicon.
-  for (const [codegenKind, exp] of Object.entries(builtinDefExpanders)) {
-    if (!registry.defExpanders.has(codegenKind)) {
-      registerDefExpander(registry, codegenKind, exp)
-    }
-  }
 
   // D-E-1: pre-compile every claimed strata handler @fn so the
   // named-handler wrapper can rely on `registry.compiledHandlers` —
@@ -537,15 +540,100 @@ function buildPhaseHandler(
     ;(wrapper as any).__handlerName = handlerName
     return wrapper
   }
-  // Inline block — uses the strata-body interpreter directly.  Retained
-  // for backward-compat with tests + the small number of inline
-  // declarations.  Long-term: auto-extract to a synthetic @fn (similar
-  // to the named-handler path) once `&Compiler::*` callers migrate to
-  // `&compiler::*`.
-  const handler = compileHandlerBlock(arg, 'node')
-  ;(handler as any).__stratumName = stratumName
-  return handler
+  // Inline block — D-E-3 PR 1: auto-extract to a synthetic @fn via
+  // legacyBlockTranslator, compile through the Phase C engine, and
+  // dispatch via the same compiled-handler wrapper as named handlers.
+  // No interpreter call at fire time.
+  return makeAutoExtractedHandler(arg, registry, stratumName, 'phase')
 }
+
+/**
+ * Auto-extract an inline-block handler body into a synthetic top-level
+ * `@fn`, compile it through the comptime engine, and return a wrapper
+ * that dispatches to the compiled instance.  Used by buildPhaseHandler
+ * and buildComptimeHandler for the inline-block case.
+ *
+ * The `kind` parameter selects the wrapper shape:
+ *   'phase'    → (node, api) → IR
+ *   'comptime' → (rawArgs, api, evalArg) → value
+ */
+function makeAutoExtractedHandler(
+  block: any,
+  registry: ElaboratorRegistry,
+  stratumName: string,
+  kind: 'phase' | 'comptime',
+): any {
+  const paramName = kind === 'comptime' ? '__rawArgs' : 'node'
+  // Translate the legacy &Compiler::* AST to the new &compiler::* form.
+  const translatedBody = translateLegacyBlock(block, paramName)
+  const synthName = `__inline_${kind}_handler_${_inlineHandlerCounter++}`
+  registry.namedHandlers.set(synthName, { body: translatedBody, paramName })
+  registry.strataHandlerFnNames.add(synthName)
+
+  // Eagerly compile so the wrapper can dispatch via the compiled
+  // instance at fire time.  Uses the same engine as buildStrataRegistry's
+  // pre-compile pass (sync; wabt pre-init'd via top-level await).
+  try {
+    const compiled = compileHandlerToWasm(synthName, { type: 'Program', elements: [] } as any, registry)
+    registry.compiledHandlers.set(synthName, compiled)
+  } catch (e) {
+    throw new Error(
+      `[strata] inline handler in stratum '${stratumName}' failed to compile via auto-extract: ${(e as Error).message}`,
+    )
+  }
+
+  if (kind === 'phase') {
+    const wrapper = (node: any, api: any): any => {
+      const compiled = registry.compiledHandlers.get(synthName)!
+      const env = compiled.env
+      const prevCtx = env.ctx
+      const prevApi = env.api
+      env.ctx = api?.ctx
+      env.api = api
+      const nodeId = env.handles.intern(node)
+      const resultId = compiled.invoke(nodeId)
+      let result: any = resultId === 0 ? null : env.irHandles.get(resultId)
+      if (Array.isArray(result)) {
+        result = result.map((v) => typeof v === 'number' ? env.irHandles.get(v) : v).filter(Boolean)
+      }
+      env.handles.release(nodeId)
+      env.ctx = prevCtx
+      env.api = prevApi
+      return result ?? null
+    }
+    ;(wrapper as any).__stratumName = stratumName
+    ;(wrapper as any).__handlerName = synthName
+    return wrapper
+  }
+
+  // 'comptime' kind: receives (rawArgs, api, evalArg).  The synthetic
+  // handler's @fn body sees `__rawArgs` as its node-param.  Args are
+  // eagerly evaluated by evalArg before firing.
+  const wrapper = (rawArgs: any[], api: any, evalArg: (n: any) => any): any => {
+    const compiled = registry.compiledHandlers.get(synthName)!
+    const env = compiled.env
+    const prevCtx = env.ctx
+    const prevApi = env.api
+    env.ctx = api?.ctx
+    env.api = api
+    // Evaluate args via the supplied evaluator (matches legacy comptime
+    // semantics — args are values, not handles).
+    const evaluated = rawArgs.map(evalArg)
+    const nodeId = env.handles.intern(evaluated)
+    const resultId = compiled.invoke(nodeId)
+    const result = resultId === 0 ? null : env.irHandles.get(resultId)
+    env.handles.release(nodeId)
+    env.ctx = prevCtx
+    env.api = prevApi
+    return result
+  }
+  ;(wrapper as any).__stratumName = stratumName
+  ;(wrapper as any).__handlerName = synthName
+  return wrapper
+}
+
+/** Monotonic counter for synthetic auto-extracted handler names. */
+let _inlineHandlerCounter = 0
 
 /** Comptime variant of buildPhaseHandler — same Block-vs-Namespace dispatch
  *  but with the comptime handler signature (rawArgs, api, evalArg). */
@@ -572,9 +660,8 @@ function buildComptimeHandler(
     ;(wrapper as any).__stratumName = stratumName
     return wrapper
   }
-  const handler = compileComptimeHandler(arg)
-  ;(handler as any).__stratumName = stratumName
-  return handler
+  // Inline comptime block — D-E-3 PR 1: auto-extract via translator.
+  return makeAutoExtractedHandler(arg, registry, stratumName, 'comptime')
 }
 
 function findFunctionCallInItem(item: any): any {
