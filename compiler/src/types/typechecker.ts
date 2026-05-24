@@ -50,6 +50,8 @@
  */
 
 import type { Program } from '../ast/astNodes'
+import { SemanticModel, type Symbol as CaaSSymbol, type SymbolKind } from '../ast/semanticModel'
+import { toDiagnostic } from '../errors/diagnostic'
 import {
     type SiliconType,
     TypeInt,
@@ -117,6 +119,13 @@ interface Ctx {
     variantSchemes: Map<string, { tvars: string[]; fields: { name: string; type: SiliconType }[] }>
     // Stratum registry for user-defined operator type checking (optional).
     registry?: ElaboratorRegistry
+    // CaaS-2: authoritative type map — node object → SiliconType.
+    // SemanticModel wraps this; node.inferredType is a backward-compat stamp.
+    typeMap: WeakMap<object, SiliconType>
+    // CaaS-3: symbol resolution maps.
+    nodeToSymbolName: WeakMap<object, string>   // Namespace node → resolved name
+    symbolToNodes: Map<string, object[]>         // name → all reference nodes
+    definitionNodes: Map<string, object>         // name → Definition AST node
 }
 
 export interface FunctionSig {
@@ -207,15 +216,17 @@ function withScope(ctx: Ctx, fn: (inner: Ctx) => SiliconType): SiliconType {
 }
 
 /**
- * Result of `typecheck`: the (mutated in place) program plus collected errors.
- * Returning the program keeps this pass compositional with `elaborate` which
- * has the same shape.
+ * Result of `typecheck`: the program plus collected errors and a SemanticModel.
+ * The SemanticModel is the authoritative source for inferred types (CaaS-2+).
+ * `node.inferredType` is a backward-compat stamp kept for existing consumers.
  */
 export interface TypeCheckResult {
     program: Program
     errors: TypeError[]
     functions: Map<string, FunctionSig>
     typeAliases: Map<string, SiliconType>
+    /** CaaS-2: queryable semantic info. Use semanticModel.typeOf(node) over node.inferredType. */
+    semanticModel: SemanticModel
 }
 
 /**
@@ -227,6 +238,10 @@ export interface TypeCheckResult {
  *     if (errors.length) { ... }
  */
 export default function typecheck(program: Program, registry?: ElaboratorRegistry, moduleRegistry?: ModuleRegistry): TypeCheckResult {
+    const typeMap = new WeakMap<object, SiliconType>()
+    const nodeToSymbolName = new WeakMap<object, string>()
+    const symbolToNodes = new Map<string, object[]>()
+    const definitionNodes = new Map<string, object>()
     const ctx: Ctx = {
         errors: [],
         symbols: new Map(),
@@ -236,6 +251,10 @@ export default function typecheck(program: Program, registry?: ElaboratorRegistr
         typeVars: new Set(),
         variantSchemes: new Map(),
         registry,
+        typeMap,
+        nodeToSymbolName,
+        symbolToNodes,
+        definitionNodes,
     }
     // Pre-registration pass: seed module function signatures first so that
     // user-defined functions whose bodies call module functions can resolve
@@ -248,7 +267,14 @@ export default function typecheck(program: Program, registry?: ElaboratorRegistr
     for (const element of program.elements as any[]) {
         checkNode(element, ctx)
     }
-    return { program, errors: ctx.errors, functions: ctx.functions, typeAliases: ctx.typeAliases }
+    const semanticModel = new SemanticModel({
+        types: typeMap,
+        nodeToSymbolName,
+        symbols: buildSymbolTable(ctx),
+        symbolToNodes,
+        diagnostics: ctx.errors.map(e => toDiagnostic(e)),
+    })
+    return { program, errors: ctx.errors, functions: ctx.functions, typeAliases: ctx.typeAliases, semanticModel }
 }
 
 // ---------------------------------------------------------------------------
@@ -398,6 +424,9 @@ function preRegisterDefinitions(elements: any[], ctx: Ctx): void {
         if (!isMutable) {
             ctx.immutable.add(def.name.name)
         }
+
+        // CaaS-3: record definition node for symbol table construction.
+        ctx.definitionNodes.set(def.name.name, def)
     }
 }
 
@@ -684,12 +713,11 @@ function checkNode(node: any, ctx: Ctx): SiliconType {
         // don't contribute a type for it.
         default: t = TypeUnknown
     }
-    // Stamp the inferred type onto every node we visited. Nodes whose type
-    // declaration doesn't include `inferredType` simply gain an extra field;
-    // this is harmless and lets downstream consumers (codegen, debug dumps)
-    // read it uniformly.
-    if (t.kind !== 'Unknown') node.inferredType = t
-    else if (node.inferredType === undefined) node.inferredType = t
+    // Populate the authoritative WeakMap (CaaS-2 SemanticModel backing store).
+    ctx.typeMap.set(node, t)
+    // Backward-compat stamp so existing tests and consumers reading node.inferredType still work.
+    if (t.kind !== 'Unknown') (node as any).inferredType = t
+    else if ((node as any).inferredType === undefined) (node as any).inferredType = t
     return t
 }
 
@@ -1201,20 +1229,36 @@ function typeOfNamespace(ns: any, ctx: Ctx): SiliconType {
     const path: string[] = ns && ns.path ? ns.path : []
     const key = path.join('::')
     const t = ctx.symbols.get(key)
-    if (t) return t
+    if (t) {
+        recordSymbolRef(ns, key, ctx)
+        return t
+    }
     // Single-segment references — search by plain name too, so `x` and
     // `module::x` both resolve if one was registered.
     if (path.length === 1) {
         const t2 = ctx.symbols.get(path[0])
-        if (t2) return t2
+        if (t2) {
+            recordSymbolRef(ns, path[0], ctx)
+            return t2
+        }
         // Cross-check the function signature table. Function names stored there
         // but not yet in symbols (e.g. @extern with no binding) should not
         // produce false "unbound identifier" errors.
         const sig = ctx.functions.get(path[0])
-        if (sig) return FunctionOf(sig.params, sig.result)
+        if (sig) {
+            recordSymbolRef(ns, path[0], ctx)
+            return FunctionOf(sig.params, sig.result)
+        }
     }
     ctx.errors.push(unbound(key, ns.sourceLocation))
     return TypeUnknown
+}
+
+function recordSymbolRef(node: object, name: string, ctx: Ctx): void {
+    ctx.nodeToSymbolName.set(node, name)
+    const refs = ctx.symbolToNodes.get(name)
+    if (refs) refs.push(node)
+    else ctx.symbolToNodes.set(name, [node])
 }
 
 function typeOfBlock(block: any, ctx: Ctx): SiliconType {
@@ -1314,4 +1358,30 @@ function checkPolymorphicCall(
         }
     }
     return applySubst(instResult, subst)
+}
+
+// ---------------------------------------------------------------------------
+// CaaS-3: symbol table construction
+// ---------------------------------------------------------------------------
+
+function symbolKindFromKeyword(kw: string, paramCount: number): SymbolKind {
+    if (kw === '@stratum') return 'stratum'
+    if (kw === '@type' || kw === '@type_sum' || kw === '@enum' || kw === '@type_alias'
+        || kw === '@type_distinct' || kw === '@generic') return 'type'
+    if (kw === '@var' || kw === '@local') return 'variable'
+    if (paramCount > 0 || kw === '@fn' || kw === '@extern') return 'function'
+    return 'variable'
+}
+
+function buildSymbolTable(ctx: Ctx): Map<string, CaaSSymbol> {
+    const table = new Map<string, CaaSSymbol>()
+    for (const [name, defNode] of ctx.definitionNodes) {
+        const def = defNode as any
+        const kw: string = def.keyword ?? ''
+        const paramCount = (def.params || []).filter((p: any) => !p.isLiteral).length
+        const kind = symbolKindFromKeyword(kw, paramCount)
+        const type = ctx.symbols.get(name)
+        table.set(name, { name, kind, definitionNode: defNode, type })
+    }
+    return table
 }

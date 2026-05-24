@@ -54,8 +54,8 @@ if (elabErrors.length > 0) {
     process.exit(1)
 }
 
-// Stage 2.6: Type-check — annotate the AST with inferred types
-const { program: typedAST, errors: typeErrors, functions } = typecheck(elaboratedAST, registry)
+// Stage 2.6: Type-check — infer types, build SemanticModel (CaaS-2)
+const { program: typedAST, errors: typeErrors, functions, semanticModel } = typecheck(elaboratedAST, registry)
 
 if (typeErrors.length > 0) {
     console.error('Type errors:')
@@ -65,8 +65,8 @@ if (typeErrors.length > 0) {
     process.exit(1)
 }
 
-// Stage 3: Lower typed AST → IR → WAT
-const wat: string = compileToWat(typedAST, registry, functions)
+// Stage 3: Lower typed AST → IR → WAT (SemanticModel threaded through)
+const wat: string = compileToWat(typedAST, registry, functions, undefined, undefined, semanticModel)
 
 // ============================================================================
 // OUTPUT ARTIFACTS

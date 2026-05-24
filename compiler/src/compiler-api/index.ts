@@ -477,12 +477,13 @@ export function createCompilerAPI(ctx: CtxShape, fns: LowerFns): CompilerAPI {
     }
 
     /** Best-effort SiliconType for a call argument.  Priority:
-     *    1. typechecker-stamped inferredType
+     *    1. SemanticModel (CaaS-2) or legacy node.inferredType stamp
      *    2. literal AST shape
      *    3. local/param reference via ctx.locals (wasmType-only — i32→Int,
      *       i64→Int64, f32→Float; lossy but the common case in user code). */
     function inferArgType(arg: any): SiliconType | undefined {
-        if (arg?.inferredType && arg.inferredType.kind !== 'Unknown') return arg.inferredType
+        const fromModel = ctx.semanticModel?.typeOf(arg) ?? (arg?.inferredType as SiliconType | undefined)
+        if (fromModel && fromModel.kind !== 'Unknown') return fromModel
         const lit = literalNodeType(arg)
         if (lit) return lit
         let cur = arg

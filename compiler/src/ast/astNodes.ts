@@ -92,11 +92,8 @@ export interface Definition {
     params: Parameter[]
     binding?: Binding
     sourceLocation?: SourceLocation,
-    // This field can be used during elaboration to link this definition to a specific elaboration hook
-    // string: the name of the hook (e.g. 'functionDefinition', 'typeDefinition', etc.)
-    // false: if no hook applies -- built-in definitions or definitions that don't require elaboration
-    // null: not yet resolved
-    hook?: string | false // Resolved elaboration hook name (e.g. 'functionDefinition')
+    // Set once during elaboration (on a fresh cloned node), never mutated after.
+    readonly hook?: string | false // Resolved elaboration hook name (e.g. 'functionDefinition')
 }
 
 export interface Elaboration {
@@ -114,9 +111,9 @@ export interface ExpressionStart {
     kind: 'binOp' | 'functionCall' | 'expressionEnd'
     value: BinOp | FunctionCall | ExpressionEnd
     sourceLocation?: SourceLocation
-    // Populated by the type checker. Opaque here to avoid a circular import.
-    // Actual shape is SiliconType from '../types/types'.
-    inferredType?: any
+    // Set once by the typechecker; read by lowerer and tests. Use SemanticModel.typeOf()
+    // as the authoritative source — this field is the backward-compat stamp.
+    readonly inferredType?: any
 }
 
 export interface BinOp {
@@ -125,11 +122,8 @@ export interface BinOp {
     operator: string
     right: ExpressionEnd
     sourceLocation?: SourceLocation
-    // Semantics attached during elaboration phase
-    // Contains the StrataNode with semantic definition for this operator
-    semantics?: any  // StrataNode (avoid circular import)
-    // Populated by the type checker. SiliconType (opaque here to avoid cycles).
-    inferredType?: any
+    semantics?: any  // StrataNode — set during elaboration on a fresh cloned node
+    readonly inferredType?: any  // SiliconType — stamped once by typechecker
 }
 
 export interface FunctionCall {
@@ -138,8 +132,7 @@ export interface FunctionCall {
     isBuiltin: boolean
     args: ExpressionStart[]
     sourceLocation?: SourceLocation
-    // Populated by the type checker. SiliconType (opaque here to avoid cycles).
-    inferredType?: any
+    readonly inferredType?: any  // SiliconType — stamped once by typechecker
 }
 
 export interface ExpressionEnd {
@@ -147,8 +140,7 @@ export interface ExpressionEnd {
     kind: 'literal' | 'namespace' | 'block' | 'paren' | 'variantDecl'
     value: Literal | Namespace | Block | ExpressionStart | VariantDecl
     sourceLocation?: SourceLocation
-    // Populated by the type checker. SiliconType (opaque here to avoid cycles).
-    inferredType?: any
+    readonly inferredType?: any  // SiliconType — stamped once by typechecker
 }
 
 export interface Literal {

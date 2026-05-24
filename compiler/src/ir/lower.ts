@@ -18,6 +18,7 @@ import { type ElaboratorRegistry, lookupTypedOperator, lookupKeyword, lookupType
 import { resolveIntrinsicWasmInstr } from '../intrinsics'
 import type { FunctionSig } from '../types/typechecker'
 import type { ModuleRegistry } from '../modules/registry'
+import type { SemanticModel } from '../ast/semanticModel'
 import type {
     WasmValType, WasmType,
     IRModule, IRFunction, IRGlobal, IRImport, IRDataSegment, IRExport,
@@ -63,6 +64,8 @@ interface LowerCtx {
     currentStratum?: string
     /** Mutable ref written by the handler-firing loops so state('stratum') routes correctly. */
     currentStratumRef?: { name: string }
+    /** CaaS-2: authoritative type map. Preferred over node.inferredType for new code. */
+    semanticModel?: SemanticModel
 }
 
 interface StringAlloc {
@@ -77,6 +80,16 @@ function createStringAlloc(): StringAlloc {
 }
 
 const STRING_ENCODER = new TextEncoder()
+
+/**
+ * CaaS-2: read an AST node's inferred SiliconType.
+ * Prefers the SemanticModel WeakMap; falls back to the legacy node.inferredType
+ * stamp so existing code paths that build synthetic nodes (ir.test.ts, etc.)
+ * still work without a SemanticModel.
+ */
+function inferredTypeOf(node: any, ctx: LowerCtx): SiliconType | undefined {
+    return ctx.semanticModel?.typeOf(node) ?? node?.inferredType as SiliconType | undefined
+}
 
 /** Allocate a string in the static data region; returns its base address.
  *  Strings are encoded as UTF-8. Layout: [byte_len:i32 LE][utf8 bytes...].
@@ -169,6 +182,7 @@ export function lowerProgram(
     functionSigs: Map<string, FunctionSig>,
     moduleRegistry?: ModuleRegistry,
     options: LowerOptions = {},
+    semanticModel?: SemanticModel,
 ): IRModule {
     const target: LowerTarget = options.target ?? 'host'
     const currentStratumRef = { name: '__global__' }
@@ -186,6 +200,7 @@ export function lowerProgram(
         strings: createStringAlloc(),
         freshIdCounter: { n: 0 },
         currentStratumRef,
+        semanticModel,
     }
     // Pass the live ctx (not a snapshot) so $compiler is current when
     // recursively invoked methods (api.lowerExpr → lowerBinaryOp → on::lower
@@ -618,7 +633,7 @@ function lowerNamespace(n: any, ctx: LowerCtx): IRExpr {
         return { kind: 'GlobalGet', wasmType: ctx.globals.get(key)!, name: key }
     }
     // Fall back to global.get (may be a forward reference).
-    const inferT = n.inferredType as SiliconType | undefined
+    const inferT = inferredTypeOf(n, ctx)
     const wt: WasmValType = (inferT && inferT.kind !== 'Unknown') ? (wasmTypeOf(inferT) as WasmValType) : 'i32'
     return { kind: 'GlobalGet', wasmType: wt, name: key }
 }
@@ -650,7 +665,7 @@ function lowerBinaryOp(n: any, ctx: LowerCtx): IRExpr {
     const left = lowerExpr(n.left, ctx)
     const right = lowerExpr(n.right, ctx)
 
-    const inferT = n.inferredType as SiliconType | undefined
+    const inferT = inferredTypeOf(n, ctx)
     const resultWt: WasmValType = (inferT && inferT.kind !== 'Unknown')
         ? (wasmTypeOf(inferT) as WasmValType)
         : exprWasmType(left)
@@ -767,14 +782,14 @@ function lowerFunctionCall(n: any, ctx: LowerCtx): IRExpr {
     if (hasNameKeyed || hasWildcard) name = callName(n)
 
     if (n.isBuiltin) {
-        return lowerBuiltinCall(name, n.args || [], ctx, n.inferredType)
+        return lowerBuiltinCall(name, n.args || [], ctx, inferredTypeOf(n, ctx))
     }
 
     // WASM/IR intrinsic direct call (e.g. &WASM::i32_add 1, 2 or &IR::i32_add 1, 2).
     if (name.startsWith('WASM::') || name.startsWith('IR::')) {
         const resolvedInstr = resolveIntrinsicWasmInstr(name)
         const args = (n.args || []).map((a: any) => lowerExpr(a, ctx))
-        const inferT = n.inferredType as SiliconType | undefined
+        const inferT = inferredTypeOf(n, ctx)
         // WASM store / drop instructions are void at the WASM level — pin their
         // wasmType so downstream emit doesn't try to (drop ...) their non-result.
         const instr = resolvedInstr ?? name
@@ -794,7 +809,7 @@ function lowerFunctionCall(n: any, ctx: LowerCtx): IRExpr {
     const watName = watId(name)
     const args = (n.args || []).map((a: any) => lowerExpr(a, ctx))
     const sig = ctx.functions.get(watName)
-    const inferT = n.inferredType as SiliconType | undefined
+    const inferT = inferredTypeOf(n, ctx)
     const wt: WasmType = sig
         ? resolveWasmType(sig.result, resolveWasmType(inferT, 'void'))
         : resolveWasmType(inferT, 'void')
@@ -840,7 +855,7 @@ function lowerModuleCall(name: string, sepIdx: number, n: any, ctx: LowerCtx): I
 
 function lowerBuiltinCall(name: string, rawArgs: any[], ctx: LowerCtx, inferredType?: any): IRExpr {
     // Typed dispatch: try the first arg's type kind, fall back to the untyped entry.
-    const firstArgKind: string = (rawArgs[0] as any)?.inferredType?.kind ?? 'Int'
+    const firstArgKind: string = (inferredTypeOf(rawArgs[0], ctx) ?? (rawArgs[0] as any)?.inferredType)?.kind ?? 'Int'
     const kwEntry = lookupTypedKeyword(ctx.registry, name, firstArgKind) ?? lookupKeyword(ctx.registry, name)
     const intrinsic = kwEntry?.data?.intrinsic ?? ''
 

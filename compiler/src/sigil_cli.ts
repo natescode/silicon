@@ -84,7 +84,7 @@ async function compileFile(
     const ast: ASTNode = addToAstSemantics(siliconGrammar)(match!).toAst()
     const registry = buildStrataRegistry(ast as Program, extraSources)
     const { program: elaboratedAST } = elaborate(ast as Program, registry)
-    const { program: typedAST, errors: typeErrors, functions } = typecheck(elaboratedAST, registry)
+    const { program: typedAST, errors: typeErrors, functions, semanticModel } = typecheck(elaboratedAST, registry)
 
     if (typeErrors.length > 0) {
         emitDiagnostics(typeErrors.map(e => toDiagnostic(e, entryAbs)))
@@ -93,7 +93,7 @@ async function compileFile(
     await Bun.write('ast.json', JSON.stringify(typedAST, null, 2))
 
     if (emitWat) {
-        const wat = compileToWat(typedAST, registry, functions, undefined, { target })
+        const wat = compileToWat(typedAST, registry, functions, undefined, { target }, semanticModel)
         await Bun.write('main.wat', wat)
         console.log(`Compiled ${filename} → main.wat`)
     } else {

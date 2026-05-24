@@ -18,6 +18,7 @@ import type { Program } from '../ast/astNodes'
 import type { ElaboratorRegistry } from '../elaborator/registry'
 import type { FunctionSig } from '../types/typechecker'
 import type { ModuleRegistry } from '../modules/registry'
+import type { SemanticModel } from '../ast/semanticModel'
 import { buildPrelude } from './prelude-ir'
 import { emitWasmBinary } from './wasm-emitter'
 
@@ -121,8 +122,9 @@ export function compileToWat(
     functionSigs: Map<string, FunctionSig>,
     moduleRegistry?: ModuleRegistry,
     options: LowerOptions = {},
+    semanticModel?: SemanticModel,
 ): string {
-    const irModule = lowerProgram(program, registry, functionSigs, moduleRegistry, options)
+    const irModule = lowerProgram(program, registry, functionSigs, moduleRegistry, options, semanticModel)
     let std = loadStdWat()
     if (options.target === 'wasix') std = stripHostPrintImports(std)
     std = setHeapBase(std, computeHeapBase(irModule))
