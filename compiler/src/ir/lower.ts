@@ -629,14 +629,25 @@ function lowerBinaryOp(n: any, ctx: LowerCtx): IRExpr {
     // handler can read `left`/`right` via compiler_ast_node_field.  The
     // handler's IR return value is the emitted IR.
     //
+    // Typed dispatch first (e.g. `+:Float`) — preserves the Float / Int64
+    // overloads' precedence after they migrate to the new form (D-D-7c).
+    // Falls back to the bare-key handler (`+`) for the primary type.
+    //
     // Gated on `!intrinsic` so a typed legacy overload (e.g. `+:Float` →
     // IR::f32_add) keeps its precedence — without the gate, a migrated
     // primary `+` handler would override the Float overload.
-    if (!intrinsic && ctx.registry.handlers.lower.has(op)) {
-        const synthNode = { type: 'BinaryOp', operator: op, left: n.left, right: n.right, inferredType: inferT }
-        const results = fireHandlers(ctx.registry, 'lower', op, synthNode, ctx.$compiler!, ctx.currentStratumRef)
-        const result = results.length > 0 ? results[results.length - 1] : null
-        if (result) return result as IRExpr
+    if (!intrinsic) {
+        const typedKey = `${op}:${typeKind}`
+        const handlerKey =
+            ctx.registry.handlers.lower.has(typedKey) ? typedKey :
+            ctx.registry.handlers.lower.has(op)       ? op       :
+            ''
+        if (handlerKey) {
+            const synthNode = { type: 'BinaryOp', operator: op, left: n.left, right: n.right, inferredType: inferT }
+            const results = fireHandlers(ctx.registry, 'lower', handlerKey, synthNode, ctx.$compiler!, ctx.currentStratumRef)
+            const result = results.length > 0 ? results[results.length - 1] : null
+            if (result) return result as IRExpr
+        }
     }
 
     if (!intrinsic) {

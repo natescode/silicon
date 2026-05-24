@@ -394,7 +394,15 @@ function registerStratumDefinition(
         // so the keyword can't accidentally be used as a definition.
         registerElaborator(registry, 'keyword', token, stub)
       } else if (seg2 === 'operator')  { registerElaborator(registry, 'operator', token, stub) }
-      else if (seg2 === 'annotation') { registerAnnotation(registry, token, stub) }
+      else if (seg2 === 'typed_operator') {
+        // `register::typed_operator '+', 'Float'` — registers an overload
+        // for the operator under the compound key `${symbol}:${typeKind}`.
+        // Used by D-D-7c to migrate the f32 / i64 operator variants.
+        const typeKind = extractString(args[1])
+        if (!typeKind) continue
+        const compoundKey = `${token}:${typeKind}`
+        registry.operators[compoundKey] = stub
+      } else if (seg2 === 'annotation') { registerAnnotation(registry, token, stub) }
 
     } else if (seg1 === 'on') {
       // on::decl / on::call_site / on::annotation / on::lower / on::module_finalize

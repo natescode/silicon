@@ -257,46 +257,42 @@ test("buildStrataRegistry: '+' primary is the Int (i32) variant (D-D-7a migrated
     expect(registry.operators['+']?.type).not.toBe(StrataType.Constraint)
 })
 
-test("buildStrataRegistry: '+' has a Float overload (D-D-7c pending; legacy form)", () => {
-    // Note: the Float overload's StrataType used to be tagged Constraint
-    // because the legacy `+` was processed first.  With D-D-7a, the new-form
-    // `+` registers AFTER the legacy PlusFloat, so isConstraint check (which
-    // looks for an existing entry) doesn't fire — PlusFloat ends up tagged
-    // Operator instead.  Behaviorally identical; the test just asserts that
-    // the Float overload still carries the right intrinsic.
+// D-D-7c migrated: Float overloads no longer carry data.intrinsic — they
+// dispatch via the typed on::lower handler (registered under '+:Float' etc.).
+test("buildStrataRegistry: '+' has a Float overload (D-D-7c migrated)", () => {
     const registry = buildStrataRegistry(ASTFactory.program([]))
-    const floatOp = lookupTypedOperator(registry, '+', 'Float')
-    expect(floatOp?.data?.intrinsic).toBe('IR::f32_add')
+    expect(lookupTypedOperator(registry, '+', 'Float')).toBeDefined()
+    expect(registry.handlers.lower.has('+:Float')).toBe(true)
 })
 
-test("buildStrataRegistry: '-' has a Float overload (f32.sub)", () => {
+test("buildStrataRegistry: '-' has a Float overload (D-D-7c migrated)", () => {
     const registry = buildStrataRegistry(ASTFactory.program([]))
-    const floatOp = lookupTypedOperator(registry, '-', 'Float')
-    expect(floatOp?.data?.intrinsic).toBe('IR::f32_sub')
+    expect(lookupTypedOperator(registry, '-', 'Float')).toBeDefined()
+    expect(registry.handlers.lower.has('-:Float')).toBe(true)
 })
 
-test("buildStrataRegistry: '*' has a Float overload (f32.mul)", () => {
+test("buildStrataRegistry: '*' has a Float overload (D-D-7c migrated)", () => {
     const registry = buildStrataRegistry(ASTFactory.program([]))
-    const floatOp = lookupTypedOperator(registry, '*', 'Float')
-    expect(floatOp?.data?.intrinsic).toBe('IR::f32_mul')
+    expect(lookupTypedOperator(registry, '*', 'Float')).toBeDefined()
+    expect(registry.handlers.lower.has('*:Float')).toBe(true)
 })
 
-test("buildStrataRegistry: '/' has a Float overload (f32.div)", () => {
+test("buildStrataRegistry: '/' has a Float overload (D-D-7c migrated)", () => {
     const registry = buildStrataRegistry(ASTFactory.program([]))
-    const floatOp = lookupTypedOperator(registry, '/', 'Float')
-    expect(floatOp?.data?.intrinsic).toBe('IR::f32_div')
+    expect(lookupTypedOperator(registry, '/', 'Float')).toBeDefined()
+    expect(registry.handlers.lower.has('/:Float')).toBe(true)
 })
 
-test("buildStrataRegistry: '<' has a Float overload (f32.lt)", () => {
+test("buildStrataRegistry: '<' has a Float overload (D-D-7c migrated)", () => {
     const registry = buildStrataRegistry(ASTFactory.program([]))
-    const floatOp = lookupTypedOperator(registry, '<', 'Float')
-    expect(floatOp?.data?.intrinsic).toBe('IR::f32_lt')
+    expect(lookupTypedOperator(registry, '<', 'Float')).toBeDefined()
+    expect(registry.handlers.lower.has('<:Float')).toBe(true)
 })
 
-test("buildStrataRegistry: '==' has a Float overload (f32.eq)", () => {
+test("buildStrataRegistry: '==' has a Float overload (D-D-7c migrated)", () => {
     const registry = buildStrataRegistry(ASTFactory.program([]))
-    const floatOp = lookupTypedOperator(registry, '==', 'Float')
-    expect(floatOp?.data?.intrinsic).toBe('IR::f32_eq')
+    expect(lookupTypedOperator(registry, '==', 'Float')).toBeDefined()
+    expect(registry.handlers.lower.has('==:Float')).toBe(true)
 })
 
 test("buildStrataRegistry: bitwise '|' has no Float overload (no f32 counterpart) (D-D-4 migrated)", () => {
@@ -345,28 +341,28 @@ test("buildStrataRegistry: multi-step strata body extracts all steps as an array
     expect(bt?.[1]?.argRefs).toEqual([])
 })
 
-test("buildStrataRegistry: '>' has a Float overload (f32.gt)", () => {
+test("buildStrataRegistry: '>' has a Float overload (D-D-7c migrated)", () => {
     const registry = buildStrataRegistry(ASTFactory.program([]))
-    const floatOp = lookupTypedOperator(registry, '>', 'Float')
-    expect(floatOp?.data?.intrinsic).toBe('IR::f32_gt')
+    expect(lookupTypedOperator(registry, '>', 'Float')).toBeDefined()
+    expect(registry.handlers.lower.has('>:Float')).toBe(true)
 })
 
-test("buildStrataRegistry: '<=' has a Float overload (f32.le)", () => {
+test("buildStrataRegistry: '<=' has a Float overload (D-D-7c migrated)", () => {
     const registry = buildStrataRegistry(ASTFactory.program([]))
-    const floatOp = lookupTypedOperator(registry, '<=', 'Float')
-    expect(floatOp?.data?.intrinsic).toBe('IR::f32_le')
+    expect(lookupTypedOperator(registry, '<=', 'Float')).toBeDefined()
+    expect(registry.handlers.lower.has('<=:Float')).toBe(true)
 })
 
-test("buildStrataRegistry: '>=' has a Float overload (f32.ge)", () => {
+test("buildStrataRegistry: '>=' has a Float overload (D-D-7c migrated)", () => {
     const registry = buildStrataRegistry(ASTFactory.program([]))
-    const floatOp = lookupTypedOperator(registry, '>=', 'Float')
-    expect(floatOp?.data?.intrinsic).toBe('IR::f32_ge')
+    expect(lookupTypedOperator(registry, '>=', 'Float')).toBeDefined()
+    expect(registry.handlers.lower.has('>=:Float')).toBe(true)
 })
 
-test("buildStrataRegistry: '!=' has a Float overload (f32.ne)", () => {
+test("buildStrataRegistry: '!=' has a Float overload (D-D-7c migrated)", () => {
     const registry = buildStrataRegistry(ASTFactory.program([]))
-    const floatOp = lookupTypedOperator(registry, '!=', 'Float')
-    expect(floatOp?.data?.intrinsic).toBe('IR::f32_ne')
+    expect(lookupTypedOperator(registry, '!=', 'Float')).toBeDefined()
+    expect(registry.handlers.lower.has('!=:Float')).toBe(true)
 })
 
 test("buildStrataRegistry: '%' has no Float overload (D-D-7a migrated; Int primary)", () => {
