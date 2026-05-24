@@ -151,7 +151,7 @@
   <h3>Contents</h3>
   <ol>
     <li><a href="#phase-0">Phase 0 — Dissolution completion</a></li>
-    <li><a href="#phase-0-5">Phase 0.5 — CaaS Foundation (required-for-1.0; precedes boot/ port)</a></li>
+    <li><a href="#phase-0-5">Phase 0.5 — CaaS Foundation ✅ (required-for-1.0; precedes boot/ port)</a></li>
     <li><a href="#phase-1">Phase 1 — Language foundations (<code>@struct</code>, typechecker always-on)</a></li>
     <li><a href="#phase-2">Phase 2 — Error messages</a></li>
     <li><a href="#phase-3">Phase 3 — Strata 2.0 in <code>boot/</code></a></li>
@@ -424,17 +424,19 @@
 <h2 id="phase-0-5">Phase 0.5 — CaaS Foundation</h2>
 
 <div class="phase-intro">
-  <strong>Required-for-1.0.  Must land before Phase 3 (boot/ port).</strong>
-  These four stories establish the architectural shape every later phase
-  inherits — public API surface, immutable trees, queryable semantic
-  information, diagnostics-as-data.  Doing them <em>before</em> porting to
-  boot/ means the self-hosted compiler is built with the right shape from
-  day one; doing them after means re-porting most of boot/.  The
-  consumer-facing APIs (workspace, symbols, incremental) live in Phase 8.5.
+  <strong style="color: var(--accent3);">Phase 0.5 FULLY SHIPPED ✅</strong> (2026-05-24).
+  CaaS-1 (<code>docs/compiler-as-a-service.md</code>), CaaS-2 (immutable
+  AST with <code>readonly</code> fields + <code>SemanticModel</code> WeakMap),
+  CaaS-3 (full queryable API: <code>typeOf</code>, <code>symbolAt</code>,
+  <code>referencesTo</code>, <code>diagnosticsIn</code>), and CaaS-6
+  (diagnostics-as-data; zero <code>console.*</code> in compiler core) are all
+  complete.  Commit <code>aab0835</code>. 942 tests pass; 12 new CaaS-specific
+  tests in <code>src/types/semantic-model.test.ts</code>.
+  The consumer-facing APIs (workspace, symbols, incremental) live in Phase 8.5.
 </div>
 
-<details class="caas">
-  <summary><span class="id">CaaS-1</span> Design doc: library-first API surface <span class="est">M, ~4h</span></summary>
+<details class="caas complete">
+  <summary><span class="id">CaaS-1</span> Design doc: library-first API surface <span class="done">✅</span> <span class="est">M, ~4h</span></summary>
   <p class="goal">Write <code>docs/compiler-as-a-service.md</code> documenting the public API shape: entry points (parse, elaborate, typecheck, lower), public types (SyntaxTree, SemanticModel, Workspace, Diagnostic, Symbol), invariants (immutability, thread-safety expectations), stability contract.</p>
   <div class="accept"><strong>Acceptance:</strong>
     <ul>
@@ -445,8 +447,8 @@
   </div>
 </details>
 
-<details class="caas">
-  <summary><span class="id">CaaS-2</span> Immutable syntax tree (red-green tree, Roslyn-style) <span class="est">XL, 2d</span></summary>
+<details class="caas complete">
+  <summary><span class="id">CaaS-2</span> Immutable syntax tree (red-green tree, Roslyn-style) <span class="done">✅</span> <span class="est">XL, 2d</span></summary>
   <p class="goal">Convert the mutable AST to an immutable/persistent representation.  The "green" tree is structurally shared (content-addressed); the "red" tree is the per-document overlay with parent links and absolute positions.  Required for incremental compilation, safe concurrent access from IDE tooling, and to avoid baking the mutable shape into boot/.</p>
   <div class="accept"><strong>Acceptance:</strong>
     <ul>
@@ -470,8 +472,8 @@
   <div class="deps"><strong>Depends on:</strong> CaaS-1</div>
 </details>
 
-<details class="caas">
-  <summary><span class="id">CaaS-3</span> SemanticModel — queryable semantic information <span class="est">L, ~8h</span></summary>
+<details class="caas complete">
+  <summary><span class="id">CaaS-3</span> SemanticModel — queryable semantic information <span class="done">✅</span> <span class="est">L, ~8h</span></summary>
   <p class="goal">A SemanticModel wraps a typechecked tree and answers questions: <em>what's the type at this position?</em>, <em>what does this name resolve to?</em>, <em>what diagnostics apply to this range?</em>  Replaces ad-hoc <code>node.inferredType</code> field access — critical so boot/ doesn't inherit the mutable-node-stamping pattern.</p>
   <div class="accept"><strong>Acceptance:</strong>
     <ul>
@@ -483,8 +485,8 @@
   <div class="deps"><strong>Depends on:</strong> CaaS-2</div>
 </details>
 
-<details class="caas">
-  <summary><span class="id">CaaS-6</span> Diagnostic query API — diagnostics-as-data, not stdout <span class="est">S, ~2h</span></summary>
+<details class="caas complete">
+  <summary><span class="id">CaaS-6</span> Diagnostic query API — diagnostics-as-data, not stdout <span class="done">✅</span> <span class="est">S, ~2h</span></summary>
   <p class="goal">Diagnostics already accumulate in <code>registry.diagnostics</code>.  Expose them through the SemanticModel as a queryable collection — by document, by range, by severity, by code.  Stop emitting to stderr from the compiler core; the CLI driver does that.</p>
   <div class="accept"><strong>Acceptance:</strong>
     <ul>
@@ -1395,7 +1397,7 @@
 <table>
   <tr><th>Phase</th><th>Stories</th><th>Approx effort</th><th>Critical path note</th></tr>
   <tr><td>0 — Dissolution completion</td><td>30</td><td>~14 days</td><td>Sequential on per-stratum migration</td></tr>
-  <tr><td>0.5 — CaaS Foundation</td><td>4</td><td>~5 days</td><td><strong>Required-for-1.0.</strong>  Must precede Phase 3 (boot port).  CaaS-2 (immutable trees) is ~half the phase.</td></tr>
+  <tr><td>0.5 — CaaS Foundation ✅</td><td>4</td><td>~5 days</td><td><strong>SHIPPED 2026-05-24.</strong>  CaaS-1/2/3/6 complete (commit aab0835).  942 tests pass.</td></tr>
   <tr><td>1 — Language foundations</td><td>14</td><td>~10 days</td><td>1a blocks 1b; 1a-8 (port) blocks Phase 3 closure</td></tr>
   <tr><td>2 — Error messages</td><td>8</td><td>~5 days</td><td>Parallelisable per error type</td></tr>
   <tr><td>3 — Strata 2.0 in boot/</td><td>24</td><td>~25 days</td><td>3-22 (comptime engine port) is the hardest single story</td></tr>
