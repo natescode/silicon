@@ -1513,35 +1513,177 @@
 <!-- ================================================================== -->
 <h2 id="summary" style="border-color: var(--accent5);">Total effort summary</h2>
 
+<div style="background: var(--surface); border: 1px solid var(--border); border-left: 4px solid var(--accent3); border-radius: 8px; padding: 12px 18px; margin: 12px 0 18px; font-size: 0.88rem;">
+  <strong style="color: var(--accent3);">Velocity recalibration (2026-05-24).</strong>
+  Original estimates assumed ~1 story / day across all phases.  Observed
+  reality across the four shipped phases plus the Phase 3 boot/ sprint:
+  well-specced work (where src/ ships first as the reference) lands at
+  3–5× the originally estimated pace; novel work (Phase 7 interpreter,
+  Phase 8 QBE backend) tracks closer to 1.5–2× the original pace.  The
+  "Revised effort" column reflects that recalibration; shipped phases
+  show actual-vs-original.  ✅ rows count as zero remaining effort.
+</div>
+
 <table>
-  <tr><th>Phase</th><th>Stories</th><th>Approx effort</th><th>Critical path note</th></tr>
-  <tr><td>0 — Dissolution completion</td><td>30</td><td>~14 days</td><td>Sequential on per-stratum migration</td></tr>
-  <tr><td>0.5 — CaaS Foundation ✅</td><td>4</td><td>~5 days</td><td><strong>SHIPPED 2026-05-24.</strong>  CaaS-1/2/3/6 complete (commit aab0835).  942 tests pass.</td></tr>
-  <tr><td>1 — Language foundations</td><td>14</td><td>~10 days</td><td>1a blocks 1b; 1a-8 (port) blocks Phase 3 closure</td></tr>
-  <tr><td>2 — Error messages</td><td>8</td><td>~5 days</td><td>Parallelisable per error type</td></tr>
-  <tr><td>3 — Strata 2.0 in boot/</td><td>25</td><td>~25 days</td><td>3-22 production engine deferred to 8-9; 3-25 (@defer boot/ port) absorbed from old 4-5</td></tr>
-  <tr><td>3.5 — @comptime (user-level)</td><td>5</td><td>~3 days</td><td>Absorbed from old 6a; CT-4 (emitter-table migration) gated on 8-9</td></tr>
-  <tr><td>4 — @defer</td><td>4</td><td>~3 days</td><td>src/ side only; boot/ port is 3-25</td></tr>
-  <tr><td>5 — Generic stdlib + extensions</td><td>17</td><td>~18 days</td><td>5a depends on 1a; 5d-4 caps the phase</td></tr>
-  <tr><td>6 — sgl CLI</td><td>10</td><td>~10 days</td><td>Interpreter-backed subcommands moved to 7.5; @comptime moved to 3.5</td></tr>
-  <tr><td>7 — Silicon interpreter</td><td>16</td><td>~15 days</td><td>Linear within the phase</td></tr>
-  <tr><td>7.5 — sgl interpreter-backed subcommands</td><td>4</td><td>~3 days</td><td>SR-1..SR-4 absorbed from old 6b-5/7/9/14; gated on Phase 7</td></tr>
-  <tr><td>8 — Native backend (QBE)</td><td>14</td><td>~14 days</td><td>Backend-then-platforms-then-self-host</td></tr>
-  <tr><td>8.5 — CaaS Consumer APIs</td><td>8</td><td>~12 days (1.0) + ~8 days (post-1.0)</td><td>CaaS-7, CaaS-8, CaaS-11 are post-1.0 acceptable</td></tr>
-  <tr style="opacity: 0.6;"><td>9 — DWARF + LSP <em style="color: var(--accent4); font-size: 0.85em;">[moved to v1.1]</em></td><td>—</td><td>—</td><td>See <a href="v1.1-user-stories.html">v1.1-user-stories.html</a>; 14 stories / ~7 days now scheduled post-1.0</td></tr>
-  <tr><td>10 — Stability + distribution</td><td>15</td><td>~10 days</td><td>Mostly parallel; blocks on 8-12</td></tr>
-  <tr style="background: var(--surface2); font-weight: 600;"><td>1.0 Total</td><td>~161 stories</td><td>~142 working days (~6.5 months)</td><td>Required-for-1.0 only; v1.1 work in <a href="v1.1-user-stories.html">v1.1-user-stories.html</a></td></tr>
-  <tr style="font-size: 0.85em; color: var(--muted);"><td>+ post-1.0 stretch (in v1)</td><td>~3 stories</td><td>~8 days</td><td>CaaS-7 / 8 / 11 from Phase 8.5; remaining Phase 9 (DWARF + LSP) moved to v1.1</td></tr>
+  <tr><th>Phase</th><th>Status</th><th>Stories</th><th>Revised effort</th><th>Notes</th></tr>
+  <tr style="background: rgba(62, 207, 142, 0.08);">
+    <td>0 — Dissolution completion</td>
+    <td style="color: var(--accent3); font-weight: 700;">✅ SHIPPED</td>
+    <td>33 / 33</td>
+    <td><em>actual ~3 d</em> (est: 14 d)</td>
+    <td>All D-B/D-D/D-E stories shipped; AST interpreter retired.  Sub-splits expanded 30 → 33.</td>
+  </tr>
+  <tr style="background: rgba(62, 207, 142, 0.08);">
+    <td>0.5 — CaaS Foundation</td>
+    <td style="color: var(--accent3); font-weight: 700;">✅ SHIPPED</td>
+    <td>4 / 4</td>
+    <td><em>actual ~1 d</em> (est: 5 d)</td>
+    <td>Commit <code>aab0835</code> 2026-05-24.  CaaS-1/2/3/6.  942 tests pass.</td>
+  </tr>
+  <tr style="background: rgba(62, 207, 142, 0.08);">
+    <td>1 — Language foundations</td>
+    <td style="color: var(--accent3); font-weight: 700;">✅ SHIPPED</td>
+    <td>14 / 14</td>
+    <td><em>actual ~2 d</em> (est: 10 d)</td>
+    <td><code>@struct</code> + always-on typecheck.  Note: boot/ port (1a-8) was stashed-broken at the start of the Phase 3 sprint and is awaiting follow-up.</td>
+  </tr>
+  <tr style="background: rgba(62, 207, 142, 0.08);">
+    <td>2 — Error messages</td>
+    <td style="color: var(--accent3); font-weight: 700;">✅ SHIPPED</td>
+    <td>8 / 8</td>
+    <td><em>actual ~1 d</em> (est: 5 d)</td>
+    <td>Levenshtein hints, caret rendering, ArityMismatch (E0009), MissingReturn (E0008).</td>
+  </tr>
+  <tr style="background: rgba(247, 160, 108, 0.08);">
+    <td>3 — Strata 2.0 in boot/</td>
+    <td style="color: var(--accent4); font-weight: 700;">🟡 PARTIAL</td>
+    <td>11 / 25 + 2 stubs</td>
+    <td><em>~1.5 d done · ~8 d remain</em> (est: 25 d)</td>
+    <td>3-7/8/9/10/11/17/19/20/21/23/24 shipped; 3-15 (patch_types stub), 3-22 (engine skeleton; production = 8-9).  Remaining: 3-1..3-6 HM-lite, 3-12..14, 3-16, 3-18, 3-25 (<code>@defer</code> boot/ port).</td>
+  </tr>
+  <tr>
+    <td>3.5 — @comptime (user-level)</td>
+    <td style="color: var(--muted);">⬜ NOT STARTED</td>
+    <td>0 / 5</td>
+    <td>~2 d (est: 3 d)</td>
+    <td>CT-4 partial-marked (gated on 8-9).  CT-1..3, 5 work today against the AST interpreter.</td>
+  </tr>
+  <tr>
+    <td>4 — @defer (src/)</td>
+    <td style="color: var(--muted);">⬜ NOT STARTED</td>
+    <td>0 / 4</td>
+    <td>~2 d (est: 3 d)</td>
+    <td>src/ side only; boot/ port is 3-25.</td>
+  </tr>
+  <tr>
+    <td>5 — Generic stdlib + extensions</td>
+    <td style="color: var(--muted);">⬜ NOT STARTED</td>
+    <td>0 / 17</td>
+    <td>~10 d (est: 18 d)</td>
+    <td>Result / Option / Vec / HashMap + unsigned types + slices + first-class functions.  5d-4 caps the phase.</td>
+  </tr>
+  <tr>
+    <td>6 — sgl CLI</td>
+    <td style="color: var(--muted);">⬜ NOT STARTED</td>
+    <td>0 / 10</td>
+    <td>~5 d (est: 10 d)</td>
+    <td>Plumbing (init, build, check, fmt, add, registry, lockfile).  Parallelisable with Phase 7.</td>
+  </tr>
+  <tr>
+    <td>7 — Silicon interpreter</td>
+    <td style="color: var(--muted);">⬜ NOT STARTED</td>
+    <td>0 / 16</td>
+    <td>~10 d (est: 15 d)</td>
+    <td>Genuinely novel — tree-walking evaluator + closures + arena.  Cadence closer to original estimate than the boot/ ports.</td>
+  </tr>
+  <tr>
+    <td>7.5 — sgl interpreter-backed subcommands</td>
+    <td style="color: var(--muted);">⬜ NOT STARTED</td>
+    <td>0 / 4</td>
+    <td>~2 d (est: 3 d)</td>
+    <td>SR-1 run, SR-2 test, SR-3 eval, SR-4 acceptance.  Gated on Phase 7.</td>
+  </tr>
+  <tr>
+    <td>8 — Native backend (QBE)</td>
+    <td style="color: var(--muted);">⬜ NOT STARTED</td>
+    <td>0 / 14</td>
+    <td>~10 d (est: 14 d)</td>
+    <td>QBE IR emitter + as/ld + 8-9 (wasmtime-as-library, the production comptime engine).  Backend work is well-bounded but real.</td>
+  </tr>
+  <tr>
+    <td>8.5 — CaaS Consumer APIs</td>
+    <td style="color: var(--muted);">⬜ NOT STARTED</td>
+    <td>0 / 8</td>
+    <td>~7 d (1.0) + ~3 d (post-1.0)<br/><em style="color: var(--muted); font-size: 0.85em;">(est: 12 d + 8 d)</em></td>
+    <td>Consumer APIs: Workspace, Symbol, incremental, code actions.  CaaS-7 / 8 / 11 post-1.0.</td>
+  </tr>
+  <tr style="opacity: 0.6;">
+    <td>9 — DWARF + LSP <em style="color: var(--accent4); font-size: 0.85em;">[moved to v1.1]</em></td>
+    <td style="color: var(--muted);">—</td>
+    <td>—</td>
+    <td>—</td>
+    <td>See <a href="v1.1-user-stories.html">v1.1-user-stories.html</a>; ~14 stories / ~5 d revised post-1.0.</td>
+  </tr>
+  <tr>
+    <td>10 — Stability + distribution</td>
+    <td style="color: var(--muted);">⬜ NOT STARTED</td>
+    <td>0 / 15</td>
+    <td>~6 d (est: 10 d)</td>
+    <td>EBNF grammar, stability policy, packaging, installers.</td>
+  </tr>
+
+  <tr style="background: var(--surface2); border-top: 3px solid var(--accent3); font-weight: 600;">
+    <td>SHIPPED so far</td>
+    <td style="color: var(--accent3);">✅</td>
+    <td>59 / 59</td>
+    <td><em>~7 d actual</em> (est: 34 d)</td>
+    <td>Phases 0, 0.5, 1, 2 fully shipped + 11 stories of Phase 3.  ~5× faster than originally estimated.</td>
+  </tr>
+  <tr style="background: var(--surface2); border-top: 1px solid var(--border); font-weight: 600;">
+    <td>1.0 REMAINING</td>
+    <td style="color: var(--accent4);">🟡</td>
+    <td>~95 stories</td>
+    <td><strong style="color: var(--accent);">~62 working days (~3 months)</strong></td>
+    <td>Revised from ~108 days remaining at original-estimate cadence.  Phase 7 + 8 dominate.</td>
+  </tr>
+  <tr style="background: var(--surface2); font-weight: 600;">
+    <td>1.0 TOTAL</td>
+    <td></td>
+    <td>~154 stories</td>
+    <td><strong style="color: var(--accent);">~69 working days (~3.3 months)</strong> end-to-end<br/><em style="color: var(--muted); font-size: 0.85em;">(original estimate: 142 d / ~6.5 months)</em></td>
+    <td>~54% faster than original estimate.  v1.1 work tracked separately in <a href="v1.1-user-stories.html">v1.1-user-stories.html</a>.</td>
+  </tr>
+  <tr style="font-size: 0.85em; color: var(--muted);">
+    <td>+ post-1.0 stretch (in v1)</td>
+    <td>—</td>
+    <td>~3 stories</td>
+    <td>~3 d (est: 8 d)</td>
+    <td>CaaS-7 / 8 / 11 from Phase 8.5.  Phase 9 (DWARF + LSP) → v1.1.</td>
+  </tr>
 </table>
 
 <p style="margin-top: 14px; font-size: 0.85rem; color: var(--muted);">
-  Notes on the estimate: this is for one focused engineer working sequentially.
-  Many stories are parallelisable (different phases, different files).  A team
-  of three could plausibly compress to 3–4 months.  The estimate excludes
-  bug-fix capacity, design-revision rounds, and any feature creep — pad
-  20–30% for realism.  Stories sized XL should be split further when
-  approached; their estimates assume current scope, not future complexity
-  surprises.
+  <strong>Notes on the revised estimate.</strong>  The 3-month figure
+  assumes one focused engineer working sequentially, at the cadence
+  observed for shipped phases.  Many stories are parallelisable across
+  phases — a team of three could plausibly compress to 5–6 weeks.
+  <br/><br/>
+  <strong>Where the revised effort comes from.</strong>  Velocity on
+  shipped work (Phases 0, 0.5, 1, 2 + the Phase 3 sprint) ran ~5× the
+  original per-story estimate, driven by: (a) src/ shipping first as
+  the executable spec for boot/ ports, (b) tight build-and-byte-equal
+  feedback loops, (c) small per-commit slices with the test extension
+  inline.  Genuinely novel work — the Phase 7 Silicon interpreter, the
+  Phase 8 QBE backend — won't see that multiplier; their revised
+  effort is ~1.5× the original, not 5×.
+  <br/><br/>
+  <strong>Caveats.</strong>  Estimates exclude bug-fix capacity,
+  design-revision rounds, and feature creep — pad 20–30% for realism.
+  Stories sized XL should be split further when approached; their
+  estimates assume current scope, not future complexity surprises.
+  The Phase 1 boot/ port (1a-8) is stashed-broken and will need
+  re-debugging before it lands; that's not in the remaining-effort
+  total.
 </p>
 
 </div>
