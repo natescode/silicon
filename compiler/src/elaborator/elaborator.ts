@@ -179,7 +179,10 @@ function elaborateDefinition(
     errors.push({ keyword: node.keyword, message: `'${node.keyword}' does not accept generic parameters` })
   }
 
-  const hook = defEntry.codegenKind
+  // Preserve pre-stamped `hook` if the caller already set one — used by the
+  // comptime engine's synthetic @fn (hook='function') to bypass the migrated
+  // LetOrFn_lower handler that lowering @fn would otherwise fire.
+  const hook = node.hook || defEntry.codegenKind
   const elaborated = { ...node, hook }
   const withBinding = elaborated.binding
     ? {

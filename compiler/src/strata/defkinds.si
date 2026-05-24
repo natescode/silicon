@@ -1,19 +1,28 @@
-# LetDef carries the rich body for the 'function' codegen kind.  FnDef
-# registers the same dispatch intrinsic, so the LetDef expander handles both.
-@stratum_keyword LetDef ('@let', Node) = {
-  &IR::def_function;
-  @local name       := &Compiler::watId Node.name.name;
-  @local params     := &Compiler::lowerParams Node;
-  @local funcResult := &Compiler::lowerFunctionBody Node, params;
-  @local body       := funcResult.body;
-  @local locals     := funcResult.locals;
-  @local returnType := &Compiler::resolveFunctionReturnType Node, name, body;
-  &Compiler::ctx::globals::set name, 'i32';
-  &Compiler::ir::makeFunction name, params, returnType, locals, body;
+# D-D-11b: @let and @fn migrated to the new @stratum form.  Both share
+# the same handler (LetOrFn_lower) — @fn is a syntactic alias for @let
+# that conventionally marks function-style definitions.
+
+@stratum LetDef := {
+    &Compiler::register::keyword '@let';
+    &Compiler::on::lower '@let', LetOrFn_lower;
 };
 
-@stratum_keyword FnDef ('@fn', Node) = {
-  &IR::def_function;
+@stratum FnDef := {
+    &Compiler::register::keyword '@fn';
+    &Compiler::on::lower '@fn', LetOrFn_lower;
+};
+
+@fn LetOrFn_lower node:Int := {
+    @local name:Int       := &compiler::compiler_watId
+        (&compiler::compiler_ast_str_field node,
+            (&compiler::compiler_str_intern 'name.name', 0));
+    @local params:Int     := &compiler::compiler_lowerParams node;
+    @local funcResult:Int := &compiler::compiler_lowerFunctionBody node, params;
+    @local body:Int       := &compiler::compiler_funcResult_body funcResult;
+    @local locals:Int     := &compiler::compiler_funcResult_locals funcResult;
+    @local returnType:Int := &compiler::compiler_resolveFunctionReturnType node, name, body;
+    &compiler::compiler_ctx_globals_set name, (&compiler::compiler_str_intern 'i32', 0);
+    &compiler::ir_makeFunction name, params, returnType, locals, body
 };
 
 @stratum_keyword VarDef ('@var', Node) = {

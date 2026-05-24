@@ -346,10 +346,15 @@ function lowerDefinition(node: any, ctx: LowerCtx): any {
 
     // Strata 2.0: 'stratum_def' — keyword registered via register::keyword.
     // Fire on::lower handlers; their return value is the IR output.
-    if (hook === 'stratum_def') {
-        const token = node.keyword ?? ''
-        if (ctx.registry.handlers.lower.has(token)) {
-            const results = fireHandlers(ctx.registry, 'lower', token, node, ctx.$compiler!, ctx.currentStratumRef)
+    //
+    // Also fires when a migrated keyword has an on::lower handler registered
+    // but the test (or other caller) constructs the def with a legacy
+    // hook value (e.g. 'function', 'global') — preserves backward
+    // compatibility with tests that bypass elaboration.
+    const tokenForHandler = node.keyword ?? ''
+    if (hook === 'stratum_def' || (tokenForHandler && ctx.registry.handlers.lower.has(tokenForHandler))) {
+        if (ctx.registry.handlers.lower.has(tokenForHandler)) {
+            const results = fireHandlers(ctx.registry, 'lower', tokenForHandler, node, ctx.$compiler!, ctx.currentStratumRef)
             return results.length > 0 ? results[results.length - 1] : null
         }
         return null  // No on::lower handler → no WAT output (T-5: silent)

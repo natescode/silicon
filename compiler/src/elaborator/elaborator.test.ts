@@ -275,8 +275,8 @@ test("elaborate registers builtin elaborators for arithmetic operators", () => {
   }
 })
 
-// Test: @let definition gets hook = 'function' after elaboration
-test("elaborate sets hook 'function' on @let Definition", () => {
+// Test: @let definition gets hook = 'stratum_def' after elaboration (D-D-11b migrated)
+test("elaborate sets hook 'stratum_def' on @let Definition (D-D-11b migrated)", () => {
   const def = ASTFactory.definition('@let', ASTFactory.typedIdentifier('add'), [], undefined, undefined)
   const stmt = ASTFactory.statement('definition', def)
   const item = ASTFactory.item('statement', stmt)
@@ -288,7 +288,7 @@ test("elaborate sets hook 'function' on @let Definition", () => {
   const el = result.elements[0] as any
   const elaboratedDef = el.value.value.value
   expect(elaboratedDef.type).toBe('Definition')
-  expect(elaboratedDef.hook).toBe('function')
+  expect(elaboratedDef.hook).toBe('stratum_def')
 })
 
 // Test: unknown definition keyword produces an elaboration error
@@ -306,20 +306,21 @@ test("elaborate sets hook false on unknown definition keyword", () => {
   expect(errors[0].message).toContain('Unknown definition keyword')
 })
 
-// Test: defKinds registry is populated with @let
-test("elaborate registry contains @let def-kind", () => {
+// D-D-11b migrated: @let/@fn now use codegenKind 'stratum_def'.  The
+// engine's synthesised @fn still gets hook='function' via the elaborator's
+// preserve-pre-stamped-hook path (see elaborator.ts:182 comment).
+test("elaborate registry contains @let def-kind (D-D-11b migrated)", () => {
   const program = ASTFactory.program([])
   const { registry } = elaborate(program)
   expect(registry.defKinds['@let']).toBeDefined()
-  expect(registry.defKinds['@let'].codegenKind).toBe('function')
+  expect(registry.defKinds['@let'].codegenKind).toBe('stratum_def')
 })
 
-// Test: defKinds registry is populated with @fn
-test("elaborate registry contains @fn def-kind", () => {
+test("elaborate registry contains @fn def-kind (D-D-11b migrated)", () => {
   const program = ASTFactory.program([])
   const { registry } = elaborate(program)
   expect(registry.defKinds['@fn']).toBeDefined()
-  expect(registry.defKinds['@fn'].codegenKind).toBe('function')
+  expect(registry.defKinds['@fn'].codegenKind).toBe('stratum_def')
 })
 
 // Test: defKinds registry is populated with @var
@@ -359,9 +360,10 @@ test("elaborate: @if registered (D-D-2 migrated — StrataType.Keyword in new fo
   expect(registry.keywords['@if'].type).toBe(StrataType.Keyword)
 })
 
-test("elaborate: @let strata has StrataType.Definition", () => {
+test("elaborate: @let registered (D-D-11b migrated; StrataType.Keyword in new form)", () => {
   const { registry } = elaborate(ASTFactory.program([]))
-  expect(registry.keywords['@let'].type).toBe(StrataType.Definition)
+  expect(registry.keywords['@let']).toBeDefined()
+  expect(registry.keywords['@let'].type).toBe(StrataType.Keyword)
 })
 
 test("elaborate: '+' operator strata is registered (D-D-7a migrated; StrataType.Keyword)", () => {

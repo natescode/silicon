@@ -197,7 +197,33 @@ const typeRecordExpander: IRDefExpander = {
 // Registry
 // ---------------------------------------------------------------------------
 
+/**
+ * Function def expander — equivalent to the legacy LetDef body
+ * (`&IR::def_function; ...`).  Used by the engine's synthetic
+ * `@fn handlerName n:Int := body` lowering when @fn is still legacy
+ * (or as a fallback when other callers construct a function with
+ * `hook: 'function'` directly).
+ *
+ * D-D-11b note: with @fn/@let migrated to the new @stratum form via
+ * register::keyword, normal `@let foo :=`/`@fn foo :=` Definitions
+ * route through LetOrFn_lower (Silicon-side).  This expander only
+ * fires for callers that explicitly set hook='function' — chiefly
+ * `src/comptime/engine.ts` building its synthesised @fn for handler
+ * compilation, which cannot recursively trigger LetOrFn_lower (would
+ * be chicken-and-egg).
+ */
+const functionExpander: IRDefExpander = {
+    expand(def, name, api): IRFunction {
+        const params = api.lowerParams(def)
+        const { body, locals } = api.lowerFunctionBody(def, params)
+        const returnType = api.resolveFunctionReturnType(def, name, body)
+        api.ctx.globals.set(name, 'i32')
+        return api.ir.makeFunction(name, params, returnType, locals, body)
+    },
+}
+
 export const builtinDefExpanders: Record<string, IRDefExpander> = {
+    'function':    functionExpander,
     'type_sum':    sumTypeExpander,
     'type_record': typeRecordExpander,
 }

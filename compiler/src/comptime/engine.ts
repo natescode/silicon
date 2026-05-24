@@ -91,17 +91,22 @@ export async function compileHandlerToWasm(
     if (!handlerDef) {
         const entry = registry.namedHandlers.get(handlerName)
         if (entry) {
-            // Synthesise a minimal @fn Definition node so the rest of
-            // the pipeline (elaborate → lower) can process it normally.
+            // Synthesise a minimal Definition node so the rest of the
+            // pipeline (elaborate → lower) can process it.  We pin
+            // `hook: 'function'` and bypass the elaborator's hook
+            // re-stamp by passing it through unchanged.  Without this,
+            // post-D-D-11b migration the synthetic @fn would itself
+            // fire LetOrFn_lower (chicken-and-egg).
             handlerDef = {
                 type: 'Definition',
                 keyword: '@fn',
+                hook: 'function',
                 name: { type: 'TypedIdentifier', name: handlerName },
                 params: [{
                     type: 'Param', name: entry.paramName ?? 'node',
                     typeAnnotation: { type: 'TypeAnnotation', typename: 'Int' },
                 }],
-                binding: [{ expression: entry.body }],
+                binding: { type: 'Binding', expression: entry.body },
             }
         }
     }

@@ -102,10 +102,12 @@ test("buildStrataRegistry: registers @toInt and @toFloat cast strata (D-D-5 migr
 // Def-kinds registration
 // ---------------------------------------------------------------------------
 
-test("buildStrataRegistry: registers @let, @fn, @var def-kinds", () => {
+test("buildStrataRegistry: registers @let, @fn, @var def-kinds (D-D-11b migrated; @var still legacy)", () => {
     const registry = buildStrataRegistry(ASTFactory.program([]))
-    expect(registry.defKinds['@let']?.codegenKind).toBe('function')
-    expect(registry.defKinds['@fn']?.codegenKind).toBe('function')
+    // D-D-11b migrated @let/@fn — both now codegenKind 'stratum_def'.
+    // @var stays legacy (codegenKind 'global') pending D-D-11c.
+    expect(registry.defKinds['@let']?.codegenKind).toBe('stratum_def')
+    expect(registry.defKinds['@fn']?.codegenKind).toBe('stratum_def')
     expect(registry.defKinds['@var']?.codegenKind).toBe('global')
 })
 
