@@ -258,6 +258,24 @@
   @local ok_sub_a    := &@and ok_sub_ns, ok_sub_repl;
   @local ok_sub      := &@and ok_sub_a, ok_sub_kind;
 
+  # §5.4 type_format.  Format the Int scalar, the (T, Float) -> T
+  # function, and Array[Int]; spot-check first 3 bytes vs the
+  # expected prefix.
+  @local int_fmt := &type_format TYPE_INT_H;
+  @local int_fmt_len := &WASM::i32_load int_fmt;
+  @local int_fmt_b0  := &WASM::i32_load8_u (int_fmt + 4);    # 'I'
+  @local int_fmt_b1  := &WASM::i32_load8_u (int_fmt + 5);    # 'n'
+  @local int_fmt_b2  := &WASM::i32_load8_u (int_fmt + 6);    # 't'
+  @local arr_fmt := &type_format arr_int;
+  @local arr_fmt_len := &WASM::i32_load arr_fmt;
+  @local arr_fmt_b0  := &WASM::i32_load8_u (arr_fmt + 4);    # 'A'
+  @local ok_fmt_int   := &@and (int_fmt_len == 3),
+                              (&@and (int_fmt_b0 == 73), (int_fmt_b1 == 110));
+  @local ok_fmt_int_x := &@and (int_fmt_b2 == 116), (arr_fmt_b0 == 65);
+  @local ok_fmt_arr   := (arr_fmt_len == 10);              # "Array[Int]" = 10
+  @local ok_fmt_a := &@and ok_fmt_int, ok_fmt_int_x;
+  @local ok_fmt   := &@and ok_fmt_a, ok_fmt_arr;
+
   @local ok_a := &@and ok_count, ok_tier;
   @local ok_b := &@and ok_a, ok_hooks;
   @local ok_c := &@and ok_b, ok_state;
@@ -268,7 +286,8 @@
   @local ok_h := &@and ok_g, ok_diag;
   @local ok_i := &@and ok_h, ok_cycle;
   @local ok_j := &@and ok_i, ok_fire_all;
-  @local ok   := &@and ok_j, ok_sub;
+  @local ok_k := &@and ok_j, ok_sub;
+  @local ok   := &@and ok_k, ok_fmt;
   &@if ok,
     { &write_str 1, 'strata2 OK' },
     { &write_str 1, 'strata2 FAIL' };

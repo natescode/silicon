@@ -261,6 +261,132 @@
 #
 # Multi-binding substitution: chain calls.  E.g. to replace T with Int
 # and U with Float, call type_substitute_one twice.
+# ── Format (Strata 2.0 §5.4) ────────────────────────────────────────
+#
+# type_format type_h -> Silicon string pointer
+#
+# Renders a type handle as a human-readable Silicon string:
+#
+#   Int / Int64 / Float / String / Bool / Void / Unknown
+#   Array[ELEM]
+#   (P0, P1, ...) -> RESULT
+#   $NAME              (Variable)
+#   distinct NAME      (Distinct)
+#   sum NAME           (Sum)
+#
+# Output is a freshly-alloc'd, length-prefixed UTF-8 string suitable
+# for write_str.  Size-bounded by a 256-byte buffer — nested types
+# beyond ~40 deep will truncate (acceptable for diagnostics).
+@let TF_BUF_LEN:Int := 256;
+@var TF_BUF:Int := 0;
+@var TF_CUR:Int := 0;
+
+@fn tf_init := {
+  TF_BUF = &alloc (4 + TF_BUF_LEN);
+  TF_CUR = 0;
+};
+
+@fn tf_emit_byte b:Int := {
+  &@if (TF_CUR < TF_BUF_LEN), {
+    &WASM::i32_store8 (TF_BUF + 4 + TF_CUR), b;
+    TF_CUR = TF_CUR + 1;
+  };
+};
+
+@fn tf_emit_bytes ptr:Int, len:Int := {
+  @local i := 0;
+  &@loop (i < len), {
+    &tf_emit_byte (&WASM::i32_load8_u (ptr + i));
+    i = i + 1;
+  };
+};
+
+@fn tf_emit_lit lit_ptr:Int, lit_len:Int := {
+  &tf_emit_bytes lit_ptr, lit_len;
+};
+
+@fn tf_walk type_h:Int := {
+  @local k := &type_kind type_h;
+  &@if (k == SK_INT),    { &tf_emit_lit (&ty_lit_int_ptr),    3; &@return 0; };
+  &@if (k == SK_INT64),  { &tf_emit_lit (&ty_lit_int64_ptr),  5; &@return 0; };
+  &@if (k == SK_FLOAT),  { &tf_emit_lit (&ty_lit_float_ptr),  5; &@return 0; };
+  &@if (k == SK_STRING), { &tf_emit_lit (&ty_lit_string_ptr), 6; &@return 0; };
+  &@if (k == SK_BOOL),   { &tf_emit_lit (&ty_lit_bool_ptr),   4; &@return 0; };
+  &@if (k == SK_UNKNOWN),{ &tf_emit_lit (&ty_lit_void_ptr),   4; &@return 0; };
+  &@if (k == SK_VARIABLE), {
+    &tf_emit_byte 36;     # '$'
+    @local n_off := &type_field type_h, 1;
+    @local n_len := &type_field type_h, 2;
+    @local i := 0;
+    &@loop (i < n_len), {
+      &tf_emit_byte (&WASM::i32_load8_u (P_SRC + n_off + i));
+      i = i + 1;
+    };
+    &@return 0;
+  };
+  &@if (k == SK_ARRAY), {
+    @local arr_lit_ptr := (&str_ptr 'Array[') + 4;
+    &tf_emit_bytes arr_lit_ptr, 6;
+    @local elem := &type_field type_h, 1;
+    &tf_walk elem;
+    &tf_emit_byte 93;     # ']'
+    &@return 0;
+  };
+  &@if (k == SK_FUNCTION), {
+    &tf_emit_byte 40;     # '('
+    @local n := &type_field type_h, 1;
+    @local r := &type_field type_h, 2;
+    @local i := 0;
+    &@loop (i < n), {
+      &@if (i > 0), { &tf_emit_byte 44; &tf_emit_byte 32; };   # ", "
+      &tf_walk (&type_field type_h, (3 + i));
+      i = i + 1;
+    };
+    &tf_emit_byte 41;     # ')'
+    &tf_emit_byte 32;     # ' '
+    &tf_emit_byte 45;     # '-'
+    &tf_emit_byte 62;     # '>'
+    &tf_emit_byte 32;     # ' '
+    &tf_walk r;
+    &@return 0;
+  };
+  &@if (k == SK_DISTINCT), {
+    @local d_lit_ptr := (&str_ptr 'distinct ') + 4;
+    &tf_emit_bytes d_lit_ptr, 9;
+    @local n_off := &type_field type_h, 1;
+    @local n_len := &type_field type_h, 2;
+    @local i := 0;
+    &@loop (i < n_len), {
+      &tf_emit_byte (&WASM::i32_load8_u (P_SRC + n_off + i));
+      i = i + 1;
+    };
+    &@return 0;
+  };
+  &@if (k == SK_SUM), {
+    @local s_lit_ptr := (&str_ptr 'sum ') + 4;
+    &tf_emit_bytes s_lit_ptr, 4;
+    @local n_off := &type_field type_h, 1;
+    @local n_len := &type_field type_h, 2;
+    @local i := 0;
+    &@loop (i < n_len), {
+      &tf_emit_byte (&WASM::i32_load8_u (P_SRC + n_off + i));
+      i = i + 1;
+    };
+    &@return 0;
+  };
+  # Fallback for unknown kinds.
+  @local q_lit_ptr := (&str_ptr '?') + 4;
+  &tf_emit_bytes q_lit_ptr, 1;
+};
+
+# type_format type_h -> Silicon-string pointer (length-prefixed).
+@fn type_format:Int type_h:Int := {
+  &tf_init;
+  &tf_walk type_h;
+  &WASM::i32_store TF_BUF, TF_CUR;
+  TF_BUF
+};
+
 @fn type_substitute_one:Int tmpl:Int, name_off:Int, name_len:Int, repl:Int := {
   @local k := &type_kind tmpl;
   &@if (k == SK_VARIABLE), {
