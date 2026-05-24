@@ -622,3 +622,20 @@
   };
   fired
 };
+
+@fn fire_comptime_handlers:Int tok_off:Int, tok_len:Int := {
+  @local n := &vec_len H_COMPTIME_BODY;
+  @local i := 0;
+  @local fired := 0;
+  &@loop (i < n), {
+    @local h_off := &vec_get H_COMPTIME_TOK_OFF, i;
+    @local h_len := &vec_get H_COMPTIME_TOK_LEN, i;
+    &@if ((&fire_span_eq h_off, h_len, tok_off, tok_len) == 1), {
+      @local body := &vec_get H_COMPTIME_BODY, i;
+      &fire_one_handler body;
+      fired = fired + 1;
+    };
+    i = i + 1;
+  };
+  fired
+};

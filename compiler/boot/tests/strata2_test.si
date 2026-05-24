@@ -28,7 +28,7 @@
   # Source bundle: ONE @stratum unified-form definition registering
   # one keyword + one operator AND a handler in each of the four
   # phases (decl, callSite, annotation, module_finalize).
-  @local src := '@stratum Demo := { &Compiler::register::keyword \'@demo_kw\'; &Compiler::register::operator \'@@\'; &Compiler::on::decl \'@demo_kw\', { 1 }; &Compiler::on::callSite \'demo_fn\', { 2 }; &Compiler::on::annotation \'@@demo_ann\', { 3 }; &Compiler::on::module_finalize { 4 }; };';
+  @local src := '@stratum Demo := { &Compiler::register::keyword \'@demo_kw\'; &Compiler::register::operator \'@@\'; &Compiler::on::decl \'@demo_kw\', { 1 }; &Compiler::on::callSite \'demo_fn\', { 2 }; &Compiler::on::annotation \'@@demo_ann\', { 3 }; &Compiler::on::module_finalize { 4 }; &Compiler::on::comptime \'@if\', { 5 }; };';
   @local src_ptr := &str_ptr src;
   @local src_len := &WASM::i32_load src_ptr;
   @local src_bytes := src_ptr + 4;
@@ -53,10 +53,14 @@
   @local h_call   := &hook_callsite_count;
   @local h_ann    := &hook_annotation_count;
   @local h_fin    := &hook_finalize_count;
+  @local h_comp   := &hook_comptime_count;
   @local ok_count := &@and (kw_count == 1), (op_count == 1);
   @local ok_tier  := &@and (kw_tier == R_TIER_T1), (op_tier == R_TIER_T1);
-  @local ok_hooks := &@and (&@and (h_decl == 1), (h_call == 1)),
-                           (&@and (h_ann == 1),  (h_fin == 1));
+  @local ok_hooks_a := &@and (h_decl == 1), (h_call == 1);
+  @local ok_hooks_b := &@and (h_ann == 1), (h_fin == 1);
+  @local ok_hooks_c := (h_comp == 1);
+  @local ok_hooks_d := &@and ok_hooks_a, ok_hooks_b;
+  @local ok_hooks   := &@and ok_hooks_d, ok_hooks_c;
 
   # State buckets §5.7.  Use the stratum's defining-AST index as the
   # stratum-bucket id; mint a fresh instance bucket via state_instance_new.

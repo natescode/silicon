@@ -95,6 +95,7 @@
 @fn lit_callSite_ptr:Int   := { (&str_ptr 'callSite')        + 4 };
 @fn lit_annotation_ptr:Int := { (&str_ptr 'annotation')      + 4 };
 @fn lit_module_fin_ptr:Int := { (&str_ptr 'module_finalize') + 4 };
+@fn lit_comptime_ptr:Int   := { (&str_ptr 'comptime')        + 4 };
 
 # Does the source span at (off, len) start with the byte sequence at
 # (lit_ptr, lit_len)?
@@ -194,6 +195,7 @@
   &@if ((&span_eq_bytes s2_off, s2_len, (&lit_callSite_ptr),   8)  == 1), { found = 2; };
   &@if ((&span_eq_bytes s2_off, s2_len, (&lit_annotation_ptr), 10) == 1), { found = 3; };
   &@if ((&span_eq_bytes s2_off, s2_len, (&lit_module_fin_ptr), 15) == 1), { found = 4; };
+  &@if ((&span_eq_bytes s2_off, s2_len, (&lit_comptime_ptr),    8) == 1), { found = 5; };
   found
 };
 
@@ -241,7 +243,9 @@
           count = count + 1;
         };
       };
-      &@if (((pkind >= 1) * (pkind <= 3)) * (n_args >= 2) == 1), {
+      @local is_tok_phase := ((pkind >= 1) * (pkind <= 3))
+                           + (pkind == 5);
+      &@if ((is_tok_phase * (n_args >= 2)) == 1), {
         @local tok_arg  := &ast_field P_AST, stmt, CALL_FIELD_ARG0;
         @local body_arg := &ast_field P_AST, stmt, (CALL_FIELD_ARG0 + 1);
         @local ok_tok   := &@and ((&ast_kind P_AST, tok_arg) == AST_STRING_LIT),
@@ -252,6 +256,7 @@
           &@if (pkind == 1), { &register_decl_handler       tok_off, tok_len, body_arg; };
           &@if (pkind == 2), { &register_callsite_handler   tok_off, tok_len, body_arg; };
           &@if (pkind == 3), { &register_annotation_handler tok_off, tok_len, body_arg; };
+          &@if (pkind == 5), { &register_comptime_handler   tok_off, tok_len, body_arg; };
           count = count + 1;
         };
       };

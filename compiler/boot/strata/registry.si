@@ -85,6 +85,9 @@
   H_ANN_TOK_LEN  = &vec_new;
   H_ANN_BODY     = &vec_new;
   H_FINALIZE_BODY = &vec_new;
+  H_COMPTIME_TOK_OFF = &vec_new;
+  H_COMPTIME_TOK_LEN = &vec_new;
+  H_COMPTIME_BODY    = &vec_new;
   STATE_BUCKET  = &vec_new;
   STATE_KEY_OFF = &vec_new;
   STATE_KEY_LEN = &vec_new;
@@ -274,6 +277,16 @@
 
 @var H_FINALIZE_BODY:Int := 0;
 
+# Strata 2.0 also exposes an `on::comptime` phase (per the dissolution
+# plan, docs/comptime-via-compilation.md).  Handlers in this phase are
+# the comptime-evaluation rules for keywords/operators — e.g. the
+# comptime version of `@if` that selects a branch given a literal
+# condition, the comptime `==` that compares literals, etc.  Stored
+# the same shape as the other token-keyed phases.
+@var H_COMPTIME_TOK_OFF:Int := 0;
+@var H_COMPTIME_TOK_LEN:Int := 0;
+@var H_COMPTIME_BODY:Int    := 0;
+
 @fn register_decl_handler tok_off:Int, tok_len:Int, body:Int := {
   H_DECL_TOK_OFF = &vec_push H_DECL_TOK_OFF, tok_off;
   H_DECL_TOK_LEN = &vec_push H_DECL_TOK_LEN, tok_len;
@@ -296,11 +309,18 @@
   H_FINALIZE_BODY = &vec_push H_FINALIZE_BODY, body;
 };
 
+@fn register_comptime_handler tok_off:Int, tok_len:Int, body:Int := {
+  H_COMPTIME_TOK_OFF = &vec_push H_COMPTIME_TOK_OFF, tok_off;
+  H_COMPTIME_TOK_LEN = &vec_push H_COMPTIME_TOK_LEN, tok_len;
+  H_COMPTIME_BODY    = &vec_push H_COMPTIME_BODY, body;
+};
+
 # Counts.
 @fn hook_decl_count:Int     := { &vec_len H_DECL_BODY };
 @fn hook_callsite_count:Int := { &vec_len H_CALL_BODY };
 @fn hook_annotation_count:Int := { &vec_len H_ANN_BODY };
 @fn hook_finalize_count:Int := { &vec_len H_FINALIZE_BODY };
+@fn hook_comptime_count:Int := { &vec_len H_COMPTIME_BODY };
 
 # Field accessors.  `*_body i` returns the AST index of handler i's
 # body block; `*_tok_off/len` return the span of the token the handler
@@ -319,6 +339,10 @@
 @fn hook_annotation_body:Int    i:Int := { &vec_get H_ANN_BODY, i };
 
 @fn hook_finalize_body:Int i:Int := { &vec_get H_FINALIZE_BODY, i };
+
+@fn hook_comptime_tok_off:Int i:Int := { &vec_get H_COMPTIME_TOK_OFF, i };
+@fn hook_comptime_tok_len:Int i:Int := { &vec_get H_COMPTIME_TOK_LEN, i };
+@fn hook_comptime_body:Int    i:Int := { &vec_get H_COMPTIME_BODY, i };
 
 # ── State buckets (Strata 2.0 §5.7) ──────────────────────────────────
 #
