@@ -500,6 +500,9 @@ function buildPhaseHandler(
       const compiled = registry.compiledHandlers.get(handlerName)
       if (compiled) {
         const env = compiled.env
+        // Snapshot per-firing state so recursive firings don't trample.
+        const prevCtx = env.ctx
+        const prevApi = env.api
         env.ctx = api?.ctx
         env.api = api
         const nodeId = env.handles.intern(node)
@@ -513,9 +516,12 @@ function buildPhaseHandler(
           result = result.map((v) => typeof v === 'number' ? env.irHandles.get(v) : v).filter(Boolean)
         }
         env.handles.release(nodeId)
-        env.irHandles.clear()
-        env.ctx = undefined
-        env.api = undefined
+        // Note: do NOT clear env.irHandles — recursive firings share the
+        // env and would lose each other's handles mid-flight.  The
+        // process-wide growth is bounded by the number of IR nodes built
+        // during compilation; lifetime ends with the process.
+        env.ctx = prevCtx
+        env.api = prevApi
         return result ?? null
       }
       const entry = registry.namedHandlers.get(handlerName)

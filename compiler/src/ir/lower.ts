@@ -253,8 +253,13 @@ export function lowerProgram(
     }
 
     // Strata 2.0 §2: fire on::module_finalize handlers (T-5: build never fails).
-    for (const result of fireModuleFinalizeHandlers(registry, ctx.$compiler!, currentStratumRef)) {
-        append(result)
+    // Skipped during handler compilation — each handler's sub-lowerProgram
+    // shouldn't fire user finalize hooks (otherwise they'd fire once per
+    // handler in addition to the real user-program lowering).
+    if (!((registry as any).__compilingHandler)) {
+        for (const result of fireModuleFinalizeHandlers(registry, ctx.$compiler!, currentStratumRef)) {
+            append(result)
+        }
     }
 
     // Emit definitions pushed by module::push_definition during any phase.

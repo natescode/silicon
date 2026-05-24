@@ -1093,24 +1093,16 @@ export function createComptimeImports(env: ComptimeEnv): WebAssembly.Imports {
         if (!env.api) return 0
         const node = handles.get(nodeH)
         if (!node) return 0
-        try {
-            const ir = env.api.lowerExpr(node)
-            return ir ? env.irHandles.fresh(ir) : 0
-        } catch {
-            return 0
-        }
+        const ir = env.api.lowerExpr(node)
+        return ir ? env.irHandles.fresh(ir) : 0
     }
 
     const compiler_lowerExprIfDefined = (nodeH: number): number => {
         if (!env.api) return 0
         const node = handles.get(nodeH)
         if (!node) return 0
-        try {
-            const ir = env.api.lowerExprIfDefined(node)
-            return ir ? env.irHandles.fresh(ir) : 0
-        } catch {
-            return 0
-        }
+        const ir = env.api.lowerExprIfDefined(node)
+        return ir ? env.irHandles.fresh(ir) : 0
     }
 
     /** Lower a definition node's parameter list to IRParam[]; returns an
@@ -1119,13 +1111,9 @@ export function createComptimeImports(env: ComptimeEnv): WebAssembly.Imports {
         if (!env.api) return env.irHandles.fresh([])
         const node = handles.get(nodeH)
         if (!node) return env.irHandles.fresh([])
-        try {
-            const params = env.api.lowerParams(node)
-            const ids = params.map(p => env.irHandles.fresh(p))
-            return env.irHandles.fresh(ids as any)
-        } catch {
-            return env.irHandles.fresh([])
-        }
+        const params = env.api.lowerParams(node)
+        const ids = params.map(p => env.irHandles.fresh(p))
+        return env.irHandles.fresh(ids as any)
     }
 
     /**
@@ -1140,16 +1128,12 @@ export function createComptimeImports(env: ComptimeEnv): WebAssembly.Imports {
         const params = Array.isArray(rawParams)
             ? (rawParams as number[]).map(id => env.irHandles.get(id) as IRParam).filter(Boolean)
             : []
-        try {
-            const result = env.api.lowerFunctionBody(node, params)
-            const localIds = result.locals.map(l => env.irHandles.fresh(l))
-            return env.irHandles.fresh({
-                bodyH:    result.body ? env.irHandles.fresh(result.body) : 0,
-                localsH:  env.irHandles.fresh(localIds as any),
-            } as any)
-        } catch {
-            return 0
-        }
+        const result = env.api.lowerFunctionBody(node, params)
+        const localIds = result.locals.map(l => env.irHandles.fresh(l))
+        return env.irHandles.fresh({
+            bodyH:    result.body ? env.irHandles.fresh(result.body) : 0,
+            localsH:  env.irHandles.fresh(localIds as any),
+        } as any)
     }
 
     /** Read the `body` slot from a `lowerFunctionBody` result handle. */
