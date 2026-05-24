@@ -858,6 +858,12 @@
   <p class="goal">User-facing doc at <code>docs/strata-authoring-guide.md</code>.  Covers unified form, all five phase hooks, state API, module mutation, AST operations, types as data, diagnostics, a complete test recipe, tier model, observer-pattern composition, and the CompilerAPI stability contract.</p>
 </details>
 
+<details class="strata">
+  <summary><span class="id">3-25</span> Port @defer to boot/ <span class="est">M, ~4h</span></summary>
+  <div class="deps"><strong>Depends on:</strong> 4-4 (src/-side @defer + compiler's own arena cleanup rewritten to use it), Phase 3 boot/ surface (3-7 through 3-24)</div>
+  <p class="goal">Mirror the src/ @defer stratum in boot/.  Originally 4-5; relocated here as part of the "remaining boot/ work" bucket since Phase 4's stratum-authoring stories (4-1 through 4-4) land in src/ first and the boot/ port is the closing artefact of the Strata 2.0 boot/ surface, not the start of Phase 4.  Uses the on::decl + state 'stratum' + on::module_finalize pattern documented in <code>docs/strata-authoring-guide.md</code>; deferred bodies stash in stratum state during decl, emit as cleanup blocks during finalize.</p>
+</details>
+
 <!-- ================================================================== -->
 <h2 id="phase-4">Phase 4 — <code>@defer</code></h2>
 
@@ -879,10 +885,13 @@
   <div class="deps"><strong>Depends on:</strong> 4-3</div>
 </details>
 
-<details class="lang">
-  <summary><span class="id">4-5</span> Port @defer to boot/ <span class="est">M, ~4h</span></summary>
-  <div class="deps"><strong>Depends on:</strong> 4-4, Phase 3 complete</div>
-</details>
+<p style="color: var(--muted); font-style: italic; margin-top: 12px;">
+  <strong>Note:</strong> the original 4-5 "Port @defer to boot/" moved to
+  Phase 3 as <a href="#phase-3">story 3-25</a> — Phase 3 owns the
+  outstanding boot/ work for the Strata 2.0 surface.  Phase 4 closes when
+  src/-side 4-1 through 4-4 land; the boot/ port follows whenever the
+  rest of Phase 3 boot/ work is scheduled.
+</p>
 
 <!-- ================================================================== -->
 <h2 id="phase-5">Phase 5 — Generic stdlib + type system</h2>
@@ -1513,8 +1522,8 @@
   <tr><td>0.5 — CaaS Foundation ✅</td><td>4</td><td>~5 days</td><td><strong>SHIPPED 2026-05-24.</strong>  CaaS-1/2/3/6 complete (commit aab0835).  942 tests pass.</td></tr>
   <tr><td>1 — Language foundations</td><td>14</td><td>~10 days</td><td>1a blocks 1b; 1a-8 (port) blocks Phase 3 closure</td></tr>
   <tr><td>2 — Error messages</td><td>8</td><td>~5 days</td><td>Parallelisable per error type</td></tr>
-  <tr><td>3 — Strata 2.0 in boot/</td><td>24</td><td>~25 days</td><td>3-22 (comptime engine port) is the hardest single story</td></tr>
-  <tr><td>4 — @defer</td><td>5</td><td>~3 days</td><td>Blocks on Phase 3</td></tr>
+  <tr><td>3 — Strata 2.0 in boot/</td><td>25</td><td>~25 days</td><td>3-22 production engine deferred to 8-9; 3-25 (@defer boot/ port) absorbed from old 4-5</td></tr>
+  <tr><td>4 — @defer</td><td>4</td><td>~3 days</td><td>src/ side only; boot/ port is 3-25</td></tr>
   <tr><td>5 — Generic stdlib + extensions</td><td>17</td><td>~18 days</td><td>5a depends on 1a; 5d-4 caps the phase</td></tr>
   <tr><td>6 — @comptime + sgl CLI</td><td>19</td><td>~17 days</td><td>6b-5 blocks on Phase 7</td></tr>
   <tr><td>7 — Silicon interpreter</td><td>16</td><td>~15 days</td><td>Linear within the phase</td></tr>
