@@ -144,6 +144,8 @@ DEFAULT_TESTS=(
   "boot/tests/check_block_test.si"
   "boot/tests/check_kw_test.si"
   "boot/tests/check_array_test.si"
+  # Strata 2.0 (Phase 3)
+  "boot/tests/strata2_test.si"
 )
 
 if [ $# -gt 0 ]; then

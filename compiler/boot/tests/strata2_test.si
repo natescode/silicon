@@ -1,0 +1,46 @@
+# strata2_test — smoke test for Strata 2.0 unified-form loader.
+#
+# Verifies that the loader recognises the new `@stratum Name := { ... }`
+# unified form and registers `&Compiler::register::keyword` /
+# `&Compiler::register::operator` calls from the body.
+#
+# Self-contained: no external piping required.  Embeds a small strata
+# source bundle as a Silicon string literal, feeds it through the
+# lex/parse/loader pipeline, and asserts the resulting registry shape.
+
+@use '../std/io.si';
+@use '../std/arena.si';
+@use '../parser/tokens.si';
+@use '../parser/lex.si';
+@use '../parser/ast.si';
+@use '../parser/parse.si';
+@use '../strata/registry.si';
+@use '../strata/loader.si';
+
+@fn _start:Void := {
+  # Source bundle: ONE @stratum unified-form definition registering
+  # one keyword and one operator.
+  @local src := '@stratum Demo := { &Compiler::register::keyword \'@demo_kw\'; &Compiler::register::operator \'@@\'; };';
+  @local src_ptr := &str_ptr src;
+  @local src_len := &WASM::i32_load src_ptr;
+  @local src_bytes := src_ptr + 4;
+
+  # Lex + parse.
+  @local toks := &lex src_bytes, src_len;
+  @local prog := &parse src_bytes, src_len, toks;
+
+  # Load strata into the registry.
+  &registry_init;
+  &load_strata prog;
+
+  # Verify: exactly one keyword + one operator was registered from the
+  # unified form's body.
+  @local kw_count := &registry_kw_count;
+  @local op_count := &registry_op_count;
+  @local ok := &@and (kw_count == 1), (op_count == 1);
+  &@if ok,
+    { &write_str 1, 'strata2 OK' },
+    { &write_str 1, 'strata2 FAIL' };
+  &write_byte 1, 10;
+  &wasi_snapshot_preview1::proc_exit 0;
+};

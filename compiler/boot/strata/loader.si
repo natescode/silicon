@@ -29,6 +29,8 @@
 # Field offsets within an AST_CALL record:
 #   [kind, callee_idx, n_args, arg0, arg1, ...]
 @let CALL_FIELD_CALLEE:Int := 1;
+@let CALL_FIELD_N_ARGS:Int := 2;
+@let CALL_FIELD_ARG0:Int   := 3;
 
 # Field offsets within an AST_NAMESPACE record:
 #   [kind, n_segs, seg0_off, seg0_len, seg1_off, seg1_len, ...]
@@ -37,6 +39,25 @@
 @let NS_FIELD_SEG0_LEN:Int := 3;
 @let NS_FIELD_SEG1_OFF:Int := 4;
 @let NS_FIELD_SEG1_LEN:Int := 5;
+@let NS_FIELD_SEG2_OFF:Int := 6;
+@let NS_FIELD_SEG2_LEN:Int := 7;
+
+# Field offsets within an AST_STRING_LIT record:
+#   [kind, off, len] — off/len point to bytes INSIDE the quotes.
+@let STR_FIELD_OFF:Int := 1;
+@let STR_FIELD_LEN:Int := 2;
+
+# Field offsets within an AST_DEFINITION record:
+#   [kind, kw_off, kw_len, name_off, name_len, type_off, type_len,
+#    n_params, param0_idx, ..., binding_idx]
+# NOTE: elaborator.si also defines DEFL_FIELD_KW_OFF/KW_LEN/N_PARAMS,
+# but it is loaded AFTER loader.si in the bundle.  We use locally
+# scoped aliases (DEFL_*) here to avoid the WAT-level export
+# collision while keeping the strata loader self-contained.
+@let DEFL_FIELD_KW_OFF:Int   := 1;
+@let DEFL_FIELD_KW_LEN:Int   := 2;
+@let DEFL_FIELD_N_PARAMS:Int := 7;
+@let DEFL_HEADER_LEN:Int     := 8;
 
 # ── Helpers ──────────────────────────────────────────────────────────
 
@@ -59,6 +80,13 @@
 @fn lit_ir_ptr:Int       := { (&str_ptr 'IR') + 4 };
 @fn lit_def_ptr:Int      := { (&str_ptr 'def_') + 4 };
 @fn lit_meta_ptr:Int     := { (&str_ptr 'meta_') + 4 };
+
+# Literal byte sequences for matching @stratum unified-form bodies.
+@fn lit_stratum_ptr:Int  := { (&str_ptr '@stratum')  + 4 };
+@fn lit_compiler_ptr:Int := { (&str_ptr 'Compiler')  + 4 };
+@fn lit_register_ptr:Int := { (&str_ptr 'register')  + 4 };
+@fn lit_keyword_ptr:Int  := { (&str_ptr 'keyword')   + 4 };
+@fn lit_operator_ptr:Int := { (&str_ptr 'operator')  + 4 };
 
 # Does the source span at (off, len) start with the byte sequence at
 # (lit_ptr, lit_len)?
@@ -112,10 +140,92 @@
   1
 };
 
+# detect_register_call — given an AST_NAMESPACE node, returns:
+#   1 if it matches `Compiler::register::keyword`
+#   2 if it matches `Compiler::register::operator`
+#   0 otherwise.
+#
+# Strata 2.0 unified-form bodies use these calls in their decl:
+#   @stratum Counter := {
+#     &Compiler::register::keyword '@count';
+#   };
+@fn detect_register_call:Int ns_node:Int := {
+  &@if ((&ast_kind P_AST, ns_node) != AST_NAMESPACE), { &@return 0; };
+  &@if ((&ast_field P_AST, ns_node, NS_FIELD_N_SEGS) != 3), { &@return 0; };
+  @local s0_off := &ast_field P_AST, ns_node, NS_FIELD_SEG0_OFF;
+  @local s0_len := &ast_field P_AST, ns_node, NS_FIELD_SEG0_LEN;
+  &@if ((&span_eq_bytes s0_off, s0_len, (&lit_compiler_ptr), 8) != 1), { &@return 0; };
+  @local s1_off := &ast_field P_AST, ns_node, NS_FIELD_SEG1_OFF;
+  @local s1_len := &ast_field P_AST, ns_node, NS_FIELD_SEG1_LEN;
+  &@if ((&span_eq_bytes s1_off, s1_len, (&lit_register_ptr), 8) != 1), { &@return 0; };
+  @local s2_off := &ast_field P_AST, ns_node, NS_FIELD_SEG2_OFF;
+  @local s2_len := &ast_field P_AST, ns_node, NS_FIELD_SEG2_LEN;
+  @local found  := 0;
+  &@if ((&span_eq_bytes s2_off, s2_len, (&lit_keyword_ptr),  7) == 1), { found = 1; };
+  &@if ((&span_eq_bytes s2_off, s2_len, (&lit_operator_ptr), 8) == 1), { found = 2; };
+  found
+};
+
+# load_strata_body — walk a strata body block and process register
+# calls.  Each `&Compiler::register::keyword '@name';` adds the
+# symbol to the keyword table; the unified-form binding itself
+# serves as the semantics reference for the entry.  `elab_ref` is
+# the AST index used as the semantics pointer (caller picks the
+# binding-block index so existing semantics-walking code stays
+# valid).  Returns the count of strata registered.
+@fn load_strata_body:Int block:Int, elab_ref:Int := {
+  &@if ((&ast_kind P_AST, block) != AST_BLOCK), { &@return 0; };
+  @local n_stmts := &ast_field P_AST, block, BLOCK_FIELD_N_STMTS;
+  @local i := 0;
+  @local count := 0;
+  &@loop (i < n_stmts), {
+    @local stmt := &ast_field P_AST, block, (BLOCK_FIELD_FIRST_STMT + i);
+    &@if ((&ast_kind P_AST, stmt) == AST_CALL), {
+      @local callee  := &ast_field P_AST, stmt, CALL_FIELD_CALLEE;
+      @local n_args  := &ast_field P_AST, stmt, CALL_FIELD_N_ARGS;
+      @local rkind   := &detect_register_call callee;
+      &@if ((rkind > 0) * (n_args >= 1) == 1), {
+        @local arg0 := &ast_field P_AST, stmt, CALL_FIELD_ARG0;
+        &@if ((&ast_kind P_AST, arg0) == AST_STRING_LIT), {
+          @local sym_off := &ast_field P_AST, arg0, STR_FIELD_OFF;
+          @local sym_len := &ast_field P_AST, arg0, STR_FIELD_LEN;
+          &@if (rkind == 1), { &registry_add_keyword  sym_off, sym_len, elab_ref; };
+          &@if (rkind == 2), { &registry_add_operator sym_off, sym_len, elab_ref; };
+          count = count + 1;
+        };
+      };
+    };
+    i = i + 1;
+  };
+  count
+};
+
+# is_def_stratum — does an AST_DEFINITION node have keyword `@stratum`?
+@fn is_def_stratum:Int defn:Int := {
+  &@if ((&ast_kind P_AST, defn) != AST_DEFINITION), { &@return 0; };
+  @local kw_off := &ast_field P_AST, defn, DEFL_FIELD_KW_OFF;
+  @local kw_len := &ast_field P_AST, defn, DEFL_FIELD_KW_LEN;
+  &span_eq_bytes kw_off, kw_len, (&lit_stratum_ptr), 8
+};
+
+# load_stratum_unified — process one `@stratum Name := { body }` form.
+# Walks the binding-block looking for register calls, returns the
+# count of strata registered.  Skips non-@stratum definitions.
+@fn load_stratum_unified:Int defn:Int := {
+  &@if ((&is_def_stratum defn) != 1), { &@return 0; };
+  @local n_params    := &ast_field P_AST, defn, DEFL_FIELD_N_PARAMS;
+  @local binding_idx := DEFL_HEADER_LEN + n_params;
+  @local binding     := &ast_field P_AST, defn, binding_idx;
+  &@if (binding < 0), { &@return 0; };
+  &load_strata_body binding, binding
+};
+
 # load_strata — walk the program's elements; for each AST_ELABORATION,
 # dispatch to the operator or keyword table based on elab_kind.  For
-# keyword elaborations also try to detect a DefKind.  Caller must
-# `&registry_init` first.
+# keyword elaborations also try to detect a DefKind.  AST_DEFINITION
+# nodes with keyword `@stratum` (the Strata 2.0 unified form) are
+# routed through load_stratum_unified.  Caller must `&registry_init`
+# first.
 @fn load_strata:Int prog:Int := {
   @local n := &ast_field P_AST, prog, 1;
   @local i := 0;
@@ -135,6 +245,10 @@
           &detect_defkind sym_off, sym_len, semantics;
         };
       registered = registered + 1;
+    };
+    &@if (kind == AST_DEFINITION), {
+      @local added := &load_stratum_unified elem;
+      registered = registered + added;
     };
     i = i + 1;
   };
