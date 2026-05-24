@@ -163,6 +163,7 @@
     <li><a href="#phase-5">Phase 5 — Generic stdlib + type system</a></li>
     <li><a href="#phase-6">Phase 6 — <code>sgl</code> CLI</a></li>
     <li><a href="#phase-7">Phase 7 — Silicon interpreter</a></li>
+    <li><a href="#phase-7-5">Phase 7.5 — <code>sgl</code> interpreter-backed subcommands</a></li>
     <li><a href="#phase-8">Phase 8 — Native backend (QBE)</a></li>
     <li><a href="#phase-caas">Phase 8.5 — CaaS Consumer APIs (workspace, symbols, incremental)</a></li>
     <li><a href="#phase-9">Phase 9 — DWARF + LSP</a></li>
@@ -1079,28 +1080,13 @@
 </details>
 
 <details class="toolchain">
-  <summary><span class="id">6b-5</span> sgl run — interpreter-backed dev mode <span class="est">M, ~4h</span></summary>
-  <div class="deps"><strong>Depends on:</strong> 6b-2, Phase 7</div>
-</details>
-
-<details class="toolchain">
   <summary><span class="id">6b-6</span> sgl run --release — compile + execute <span class="est">M, ~3h</span></summary>
   <div class="deps"><strong>Depends on:</strong> 6b-4, Phase 8 substantially complete</div>
 </details>
 
 <details class="toolchain">
-  <summary><span class="id">6b-7</span> sgl test — @@test discovery and reporting <span class="est">M, ~4h</span></summary>
-  <div class="deps"><strong>Depends on:</strong> 6b-5</div>
-</details>
-
-<details class="toolchain">
   <summary><span class="id">6b-8</span> sgl check — typecheck only <span class="est">S, ~2h</span></summary>
   <div class="deps"><strong>Depends on:</strong> 6b-2</div>
-</details>
-
-<details class="toolchain">
-  <summary><span class="id">6b-9</span> sgl eval — REPL <span class="est">M, ~4h</span></summary>
-  <div class="deps"><strong>Depends on:</strong> Phase 7</div>
 </details>
 
 <details class="toolchain">
@@ -1121,10 +1107,16 @@
   <div class="deps"><strong>Depends on:</strong> 6b-11</div>
 </details>
 
-<details class="toolchain">
-  <summary><span class="id">6b-14</span> Acceptance: <code>sgl init &amp;&amp; sgl run</code> prints "Hello, world!" <span class="est">S, ~2h</span></summary>
-  <div class="deps"><strong>Depends on:</strong> 6b-3, 6b-5</div>
-</details>
+<p style="color: var(--muted); font-style: italic; margin-top: 12px;">
+  <strong>Note:</strong> the original interpreter-backed sgl subcommands
+  (old 6b-5 sgl run, 6b-7 sgl test, 6b-9 sgl eval, 6b-14 acceptance)
+  moved to <a href="#phase-7-5">Phase 7.5</a> as stories SR-1 through
+  SR-4 — they can't ship until the Silicon interpreter (Phase 7)
+  lands, so grouping them after Phase 7 reflects the actual scheduling
+  rather than inflating Phase 6's effort with blocked work.  Story IDs
+  6b-5 / 6b-7 / 6b-9 / 6b-14 are RETIRED; 6b-6 / 6b-8 / 6b-10..13
+  retain their numbers to keep existing cross-references stable.
+</p>
 
 <!-- ================================================================== -->
 <h2 id="phase-7">Phase 7 — Silicon interpreter</h2>
@@ -1213,6 +1205,50 @@
 <details class="runtime">
   <summary><span class="id">7-16</span> Regression: run boot/tests/*_test.si via interpreter <span class="est">M, ~4h</span></summary>
   <div class="deps"><strong>Depends on:</strong> 7-13</div>
+</details>
+
+<!-- ================================================================== -->
+<h2 id="phase-7-5">Phase 7.5 — <code>sgl</code> interpreter-backed subcommands</h2>
+
+<div class="phase-intro">
+  The four <code>sgl</code> subcommands that need the Silicon interpreter
+  (Phase 7) to run anything: <code>sgl run</code>, <code>sgl test</code>,
+  <code>sgl eval</code>, and the end-to-end <code>sgl init &amp;&amp; sgl
+  run</code> acceptance test.  Originally inside Phase 6 as 6b-5 / 6b-7 /
+  6b-9 / 6b-14; relocated here because their critical path is gated on
+  Phase 7 landing, not on the rest of the CLI plumbing.  Splitting them
+  out follows the same pattern used for Phase 0.5, 3.5, and 8.5 — work
+  that's logically attached to a phase but actually scheduled later
+  earns its own .5 slot.
+  <br/><br/>
+  CLI shape (binary scaffold, manifest parser, sgl init, sgl build,
+  sgl check, sgl fmt, sgl add, registry, lockfile) all stays in
+  Phase 6 — that work can proceed in parallel with Phase 7.  Phase 7.5
+  closes the loop once both Phase 6 and Phase 7 are far enough along.
+</div>
+
+<details class="toolchain">
+  <summary><span class="id">SR-1</span> sgl run — interpreter-backed dev mode <span class="est">M, ~4h</span></summary>
+  <div class="deps"><strong>Depends on:</strong> 6b-2 (manifest parser), Phase 7 (interpreter)</div>
+  <p class="goal">Was 6b-5.  <code>sgl run src/main.si</code> drives the Phase 7 interpreter directly — no WAT, no native binary.  Iterative dev loop is the headline 1.0 user experience.  <code>--release</code> falls through to 6b-6 once Phase 8 is far enough along.</p>
+</details>
+
+<details class="toolchain">
+  <summary><span class="id">SR-2</span> sgl test — @@test discovery and reporting <span class="est">M, ~4h</span></summary>
+  <div class="deps"><strong>Depends on:</strong> SR-1</div>
+  <p class="goal">Was 6b-7.  Finds <code>@@test</code>-annotated functions across the project, runs each via the interpreter, reports pass/fail.  Test discovery + assertion plumbing is Silicon-native — no external runner.</p>
+</details>
+
+<details class="toolchain">
+  <summary><span class="id">SR-3</span> sgl eval — REPL <span class="est">M, ~4h</span></summary>
+  <div class="deps"><strong>Depends on:</strong> Phase 7 (interpreter)</div>
+  <p class="goal">Was 6b-9.  Read-eval-print loop backed by the Phase 7 interpreter.  Values display as Silicon-native shapes (a <code>Result[T, E]</code> renders as the variant, not as an i32+i32 pair).  Primary debugging tool for Silicon code through 1.0.</p>
+</details>
+
+<details class="toolchain">
+  <summary><span class="id">SR-4</span> Acceptance: <code>sgl init &amp;&amp; sgl run</code> prints "Hello, world!" <span class="est">S, ~2h</span></summary>
+  <div class="deps"><strong>Depends on:</strong> 6b-3 (sgl init), SR-1 (sgl run)</div>
+  <p class="goal">Was 6b-14.  The end-to-end acceptance test for the entire toolchain.  Fresh install, scaffold, run, see output — under two minutes on Linux and macOS.  This is the 1.0 distribution gate.</p>
 </details>
 
 <!-- ================================================================== -->
@@ -1559,8 +1595,9 @@
   <tr><td>3.5 — @comptime (user-level)</td><td>5</td><td>~3 days</td><td>Absorbed from old 6a; CT-4 (emitter-table migration) gated on 8-9</td></tr>
   <tr><td>4 — @defer</td><td>4</td><td>~3 days</td><td>src/ side only; boot/ port is 3-25</td></tr>
   <tr><td>5 — Generic stdlib + extensions</td><td>17</td><td>~18 days</td><td>5a depends on 1a; 5d-4 caps the phase</td></tr>
-  <tr><td>6 — sgl CLI</td><td>14</td><td>~14 days</td><td>6b-5 blocks on Phase 7; @comptime moved to 3.5</td></tr>
+  <tr><td>6 — sgl CLI</td><td>10</td><td>~10 days</td><td>Interpreter-backed subcommands moved to 7.5; @comptime moved to 3.5</td></tr>
   <tr><td>7 — Silicon interpreter</td><td>16</td><td>~15 days</td><td>Linear within the phase</td></tr>
+  <tr><td>7.5 — sgl interpreter-backed subcommands</td><td>4</td><td>~3 days</td><td>SR-1..SR-4 absorbed from old 6b-5/7/9/14; gated on Phase 7</td></tr>
   <tr><td>8 — Native backend (QBE)</td><td>14</td><td>~14 days</td><td>Backend-then-platforms-then-self-host</td></tr>
   <tr><td>8.5 — CaaS Consumer APIs</td><td>8</td><td>~12 days (1.0) + ~8 days (post-1.0)</td><td>CaaS-7, CaaS-8, CaaS-11 are post-1.0 acceptable</td></tr>
   <tr><td>9 — LSP (DWARF deferred)</td><td>14</td><td>~4 days (1.0) + ~3 days (post-1.0)</td><td>9a stories all post-1.0; interpreter covers app-dev debugging</td></tr>
