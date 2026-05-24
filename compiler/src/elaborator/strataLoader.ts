@@ -43,6 +43,9 @@ import { loadBuiltinStrata } from '../strata/index'
 import { builtinDefExpanders } from '../strata/defExpanders'
 import { isRichBody, compileBodyToDefExpander, compileBodyToExpanderFn, compileHandlerBlock, compileComptimeHandler } from './strataBody'
 import { registerBuiltinComptimeHandlers } from './comptimeBuiltins'
+// D-E-1: comptime engine for pre-compiling strata handlers @fns at
+// strata-load time.  See `compileStrataHandlers` call in buildStrataRegistry.
+import { compileStrataHandlers } from '../comptime/engine'
 import parse from '../parser'
 import addToAstSemantics from '../ast/toAst'
 import siliconGrammar from '../grammar/SiliconGrammar'
@@ -196,6 +199,13 @@ export function buildStrataRegistry(
       registerDefExpander(registry, codegenKind, exp)
     }
   }
+
+  // D-E-1: pre-compile every claimed strata handler @fn so the
+  // named-handler wrapper can rely on `registry.compiledHandlers` —
+  // no interpreter fallback.  Static import — engine.ts loads via
+  // top-level await on wabt (codegen/toWasm.ts), which is fine since
+  // it's a one-time module-load cost.
+  compileStrataHandlers({ type: 'Program', elements: [] } as any, registry)
 
   return registry
 }
@@ -482,23 +492,26 @@ function buildPhaseHandler(
     // `&Compiler::*` calls don't get treated as runtime WASM calls.
     registry.strataHandlerFnNames.add(handlerName)
     const wrapper = (node: any, api: any): any => {
-      // Phase C bridge: prefer the compiled WASM instance if one has been
-      // built (via compileStrataHandlers).  Falls through to the interpreter
-      // otherwise.  Same observable behavior either way — that's the point.
+      // D-E-1: prefer the compiled WASM instance (pre-built in
+      // buildStrataRegistry's compileStrataHandlers pass).  Falls back to
+      // compileHandlerBlock — kept for backward-compat with tests that
+      // use the legacy `&Compiler::*` interpreter API in inline blocks.
+      // Full retirement requires updating those tests to use `&compiler::*`.
       const compiled = registry.compiledHandlers.get(handlerName)
       if (compiled) {
-        // Install per-firing env state — ctx/api so accessor imports work,
-        // node handle so the handler can read AST fields via compiler_arg
-        // and compiler_ast_field.
         const env = compiled.env
         env.ctx = api?.ctx
         env.api = api
         const nodeId = env.handles.intern(node)
         const resultId = compiled.invoke(nodeId)
-        // Recover the IR object from the returned irHandle.  0 → null IR.
-        const result = resultId === 0 ? null : env.irHandles.get(resultId)
-        // Per-firing cleanup so subsequent firings start from a clean slate
-        // (avoid leaking handles across calls).
+        let result: any = resultId === 0 ? null : env.irHandles.get(resultId)
+        // If the result is an array of handle ids (e.g. handlers that
+        // emit multiple IR globals/functions like @type_sum), resolve
+        // each id to its underlying IR object so lowerProgram's append
+        // can route them.
+        if (Array.isArray(result)) {
+          result = result.map((v) => typeof v === 'number' ? env.irHandles.get(v) : v).filter(Boolean)
+        }
         env.handles.release(nodeId)
         env.irHandles.clear()
         env.ctx = undefined
@@ -516,9 +529,14 @@ function buildPhaseHandler(
       return fn(node, api)
     }
     ;(wrapper as any).__stratumName = stratumName
+    ;(wrapper as any).__handlerName = handlerName
     return wrapper
   }
-  // Inline block (legacy / current default).
+  // Inline block — uses the strata-body interpreter directly.  Retained
+  // for backward-compat with tests + the small number of inline
+  // declarations.  Long-term: auto-extract to a synthetic @fn (similar
+  // to the named-handler path) once `&Compiler::*` callers migrate to
+  // `&compiler::*`.
   const handler = compileHandlerBlock(arg, 'node')
   ;(handler as any).__stratumName = stratumName
   return handler

@@ -28,7 +28,7 @@ import elaborate from '../elaborator/elaborator'
 import { lowerProgram } from '../ir/lower'
 import { emitModule } from '../ir/emit'
 import { loadStdWat } from '../codegen'
-import { watToWasm } from '../codegen/toWasm'
+import { watToWasm, watToWasmSync } from '../codegen/toWasm'
 import { loadModules } from '../modules/loader'
 import type { ModuleRegistry } from '../modules/registry'
 import { createComptimeEnv, createComptimeImports, type ComptimeEnv } from './imports'
@@ -77,17 +77,21 @@ export interface CompiledHandler {
  * Throws if the handler isn't found or compilation fails — callers
  * (`tryCompileHandler`) catch and fall back to the interpreter.
  */
-export async function compileHandlerToWasm(
+export function compileHandlerToWasm(
     handlerName: string,
     program: Program,
     registry: ElaboratorRegistry,
-): Promise<CompiledHandler> {
+): CompiledHandler {
     // Find the handler @fn — first in the user program, then fall back
     // to `registry.namedHandlers` which carries the body for built-in
     // strata handlers (loaded from src/strata/*.si).  Built-in handler
     // bodies aren't in the user program's AST, so without this lookup
     // every built-in handler migration would fail compilation.
     let handlerDef = findHandlerDef(handlerName, program)
+    // Pre-stamp `hook: 'function'` so the elaborator preserves it
+    // (handler def takes the legacy functionExpander path, bypassing the
+    // migrated LetOrFn_lower handler — chicken-and-egg break).
+    if (handlerDef) handlerDef = { ...handlerDef, hook: 'function' }
     if (!handlerDef) {
         const entry = registry.namedHandlers.get(handlerName)
         if (entry) {
@@ -131,6 +135,11 @@ export async function compileHandlerToWasm(
     const wasClaimed = registry.strataHandlerFnNames.has(handlerName)
     registry.strataHandlerFnNames.delete(handlerName)
     let wat: string
+    // Set a "compiling handler" flag on the registry so lower.ts knows to
+    // skip on::lower dispatch for migrated keywords inside this handler's
+    // body — breaks the chicken-and-egg where compiling LocalDef_lower
+    // needs LocalDef_lower already compiled (its body uses @local).
+    ;(registry as any).__compilingHandler = true
     try {
         // Elaborate first so the @fn gets its `hook: 'function'` stamp.
         const elaborated = elaborate(syntheticProg as any, registry)
@@ -153,10 +162,11 @@ export async function compileHandlerToWasm(
         wat = emitModule(mod, loadStdWat())
     } finally {
         if (wasClaimed) registry.strataHandlerFnNames.add(handlerName)
+        ;(registry as any).__compilingHandler = false
     }
 
-    // Assemble + instantiate.
-    const wasm = await watToWasm(wat)
+    // Assemble + instantiate — sync path (wabt was pre-init'd at module load).
+    const wasm = watToWasmSync(wat)
     const env = createComptimeEnv(registry)
     const imports = createComptimeImports(env)
     // std.wat declares `env::print` / `env::read` for host-embed runtimes.
@@ -169,8 +179,10 @@ export async function compileHandlerToWasm(
     }
     let instance: WebAssembly.Instance
     try {
-        const result = await WebAssembly.instantiate(wasm, imports)
-        instance = result.instance
+        // Sync instantiate — wabt-produced binary is valid, and the imports
+        // object is fully synchronous, so we can avoid the async overhead.
+        const mod = new WebAssembly.Module(wasm)
+        instance = new WebAssembly.Instance(mod, imports)
     } catch (e: any) {
         // Likely an unresolved @extern (`&Compiler::*` call) — Phase C
         // minimum can't handle those yet.  Re-throw with a clearer message.
@@ -197,45 +209,41 @@ export async function compileHandlerToWasm(
 }
 
 /** Best-effort: try to compile and return the instance, or `null` if
- *  compilation fails for any reason.  Callers should fall back to the
- *  interpreter path on `null`.  This is what makes Phase C an opt-in
- *  bridge: every handler that *can* compile runs as WASM; others stay
- *  on the interpreter until Phase D migrates them. */
-export async function tryCompileHandler(
+ *  compilation fails for any reason.  After D-E-1 the named-handler
+ *  wrapper requires a compiled instance — no interpreter fallback — so
+ *  null returns surface as build-time errors when the handler fires. */
+export function tryCompileHandler(
     handlerName: string,
     program: Program,
     registry: ElaboratorRegistry,
-): Promise<CompiledHandler | null> {
+): CompiledHandler | null {
     try {
-        return await compileHandlerToWasm(handlerName, program, registry)
+        return compileHandlerToWasm(handlerName, program, registry)
     } catch {
         return null
     }
 }
 
 /**
- * Opt-in pre-compile pass.  Walks every `@fn` claimed as a strata handler,
- * attempts to compile each to WASM, and stashes the successful ones in
- * `registry.compiledHandlers`.  The named-handler wrapper in strataLoader
- * checks this cache first at fire time — when a compiled instance exists,
- * the handler runs as WASM; otherwise it falls back to the interpreter.
+ * Pre-compile every `@fn` claimed as a strata handler, stashing the
+ * results in `registry.compiledHandlers`.  Synchronous — wabt is
+ * pre-initialised at module load and WebAssembly.Instance is sync.
  *
- * Async by nature (WebAssembly.instantiate).  Call after buildStrataRegistry
- * if you want compile-then-run active for this build.  Default Sigil
- * pipeline doesn't call it — interpreter remains the default until Phase D
- * has migrated every strata.  Returns the count of handlers compiled.
+ * After D-E-1, this must be called before any user code is lowered:
+ * the strataLoader wrapper requires a cached compiled handler and
+ * has no interpreter fallback.  Returns the count of handlers compiled.
  */
-export async function compileStrataHandlers(
+export function compileStrataHandlers(
     program: Program,
     registry: ElaboratorRegistry,
-): Promise<number> {
+): number {
     // Snapshot the set first — compileHandlerToWasm transiently mutates
     // it (delete-then-readd around the synthetic lowering), and iterating
     // a Set while it's being mutated has surprised us in test runners.
     const names = Array.from(registry.strataHandlerFnNames)
     let count = 0
     for (const name of names) {
-        const compiled = await tryCompileHandler(name, program, registry)
+        const compiled = tryCompileHandler(name, program, registry)
         if (compiled) {
             registry.compiledHandlers.set(name, compiled)
             count++
@@ -243,6 +251,7 @@ export async function compileStrataHandlers(
     }
     return count
 }
+
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Helpers

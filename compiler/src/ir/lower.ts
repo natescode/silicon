@@ -122,6 +122,25 @@ const lowerFns: LowerFns = {
 }
 
 // ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+/** True if `token` (a keyword like '@if' or operator like '+' or a typed
+ *  overload key like '+:Float') has at least one compiled handler in
+ *  `registry.compiledHandlers`.  Used to gate on::lower dispatch during
+ *  handler compilation — see __compilingHandler in lowerDefinition /
+ *  lowerBinaryOp / lowerBuiltinCall. */
+function hasCompiledHandlerFor(registry: ElaboratorRegistry, token: string): boolean {
+    const handlers = registry.handlers.lower.get(token)
+    if (!handlers) return false
+    for (const h of handlers) {
+        const name = (h as any).__handlerName as string | undefined
+        if (name && registry.compiledHandlers.has(name)) return true
+    }
+    return false
+}
+
+// ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
 
@@ -360,17 +379,24 @@ function lowerDefinition(node: any, ctx: LowerCtx): any {
     // Strata 2.0: 'stratum_def' — keyword registered via register::keyword.
     // Fire on::lower handlers; their return value is the IR output.
     //
-    // Also fires when a migrated keyword has an on::lower handler registered
-    // but the test (or other caller) constructs the def with a legacy
-    // hook value (e.g. 'function', 'global') — preserves backward
-    // compatibility with tests that bypass elaboration.
+    // D-E-1 chicken-and-egg break: when the comptime engine is itself
+    // compiling a strata handler @fn, it sets registry.__compilingHandler.
+    // In that mode, on::lower handlers fire ONLY if the handler is
+    // already compiled — otherwise we fall through to legacy code paths
+    // to avoid a cycle (compiling LocalDef_lower whose body uses @local
+    // would otherwise need LocalDef_lower already compiled).
     const tokenForHandler = node.keyword ?? ''
-    if (hook === 'stratum_def' || (tokenForHandler && ctx.registry.handlers.lower.has(tokenForHandler))) {
-        if (ctx.registry.handlers.lower.has(tokenForHandler)) {
+    const compilingHandler = (ctx.registry as any).__compilingHandler === true
+    const canFire = (token: string): boolean =>
+        ctx.registry.handlers.lower.has(token) &&
+        (!compilingHandler || hasCompiledHandlerFor(ctx.registry, token))
+    if (hook === 'stratum_def' || (tokenForHandler && canFire(tokenForHandler))) {
+        if (canFire(tokenForHandler)) {
             const results = fireHandlers(ctx.registry, 'lower', tokenForHandler, node, ctx.$compiler!, ctx.currentStratumRef)
             return results.length > 0 ? results[results.length - 1] : null
         }
-        return null  // No on::lower handler → no WAT output (T-5: silent)
+        if (!compilingHandler) return null  // No on::lower handler → no WAT output (T-5: silent)
+        // Fall through to legacy paths for uncompiled handlers during compile.
     }
 
     // No defExpander registered — type aliases produce no WAT, anything else is an error.
@@ -655,10 +681,14 @@ function lowerBinaryOp(n: any, ctx: LowerCtx): IRExpr {
     // IR::f32_add) keeps its precedence — without the gate, a migrated
     // primary `+` handler would override the Float overload.
     if (!intrinsic) {
+        const compilingHandler = (ctx.registry as any).__compilingHandler === true
         const typedKey = `${op}:${typeKind}`
+        const canFire = (key: string): boolean =>
+            ctx.registry.handlers.lower.has(key) &&
+            (!compilingHandler || hasCompiledHandlerFor(ctx.registry, key))
         const handlerKey =
-            ctx.registry.handlers.lower.has(typedKey) ? typedKey :
-            ctx.registry.handlers.lower.has(op)       ? op       :
+            canFire(typedKey) ? typedKey :
+            canFire(op)       ? op       :
             ''
         if (handlerKey) {
             const synthNode = { type: 'BinaryOp', operator: op, left: n.left, right: n.right, inferredType: inferT }
@@ -822,10 +852,13 @@ function lowerBuiltinCall(name: string, rawArgs: any[], ctx: LowerCtx, inferredT
     // migrated `@toInt` primary handler would override the legacy
     // `@toInt:Int64` overload.
     if (!intrinsic && ctx.registry.handlers.lower.has(name)) {
-        const synthNode = { type: 'FunctionCall', name: { type: 'Namespace', path: [name] }, args: rawArgs, inferredType }
-        const results = fireHandlers(ctx.registry, 'lower', name, synthNode, ctx.$compiler!, ctx.currentStratumRef)
-        const result = results.length > 0 ? results[results.length - 1] : null
-        if (result) return result as IRExpr
+        const compilingHandler = (ctx.registry as any).__compilingHandler === true
+        if (!compilingHandler || hasCompiledHandlerFor(ctx.registry, name)) {
+            const synthNode = { type: 'FunctionCall', name: { type: 'Namespace', path: [name] }, args: rawArgs, inferredType }
+            const results = fireHandlers(ctx.registry, 'lower', name, synthNode, ctx.$compiler!, ctx.currentStratumRef)
+            const result = results.length > 0 ? results[results.length - 1] : null
+            if (result) return result as IRExpr
+        }
     }
 
     // Generic builtin (e.g. @toInt, @toFloat, user-defined keyword strata).
@@ -897,7 +930,12 @@ function lowerAsStmt(node: any, ctx: LowerCtx): IRStmt | null {
         return null
     }
 
-    if (node.type === 'Definition' && node.hook === 'local') {
+    // Legacy @local in-function declaration.  After D-D-11a, @local has
+    // hook='stratum_def' instead of 'local', so we recognise by keyword
+    // too — only relevant during handler compilation (when on::lower
+    // dispatch is skipped) since the on::lower branch above normally
+    // handles migrated @local.
+    if (node.type === 'Definition' && (node.hook === 'local' || node.keyword === '@local')) {
         const name = watId(node.name?.name ?? '')
         let wasmType: WasmValType = 'i32'
         if (node.name?.typeAnnotation?.typename) {
@@ -932,7 +970,10 @@ function lowerAsStmt(node: any, ctx: LowerCtx): IRStmt | null {
     // (often null IR for declaration-only kinds) as a void statement.
     // Without this branch, the generic "expression statement" fallback below
     // would recurse via lowerDefinitionAsExpr → lowerAsStmt → infinite loop.
-    if (node.type === 'Definition' && node.hook === 'stratum_def') {
+    //
+    // Skipped during handler compilation (D-E-1 chicken-and-egg break) —
+    // see lowerDefinition's comment for context.
+    if (node.type === 'Definition' && node.hook === 'stratum_def' && !((ctx.registry as any).__compilingHandler)) {
         const keyword = node.keyword ?? ''
         if (ctx.registry.handlers.lower.has(keyword)) {
             const results = fireHandlers(ctx.registry, 'lower', keyword, node, ctx.$compiler!, ctx.currentStratumRef)
