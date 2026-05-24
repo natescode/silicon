@@ -158,9 +158,10 @@
     <li><a href="#phase-1">Phase 1 — Language foundations (<code>@struct</code>, typechecker always-on)</a></li>
     <li><a href="#phase-2">Phase 2 — Error messages</a></li>
     <li><a href="#phase-3">Phase 3 — Strata 2.0 in <code>boot/</code></a></li>
+    <li><a href="#phase-3-5">Phase 3.5 — <code>@comptime</code> (user-level)</a></li>
     <li><a href="#phase-4">Phase 4 — <code>@defer</code></a></li>
     <li><a href="#phase-5">Phase 5 — Generic stdlib + type system</a></li>
-    <li><a href="#phase-6">Phase 6 — <code>@comptime</code> + <code>sgl</code> CLI</a></li>
+    <li><a href="#phase-6">Phase 6 — <code>sgl</code> CLI</a></li>
     <li><a href="#phase-7">Phase 7 — Silicon interpreter</a></li>
     <li><a href="#phase-8">Phase 8 — Native backend (QBE)</a></li>
     <li><a href="#phase-caas">Phase 8.5 — CaaS Consumer APIs (workspace, symbols, incremental)</a></li>
@@ -894,6 +895,55 @@
 </p>
 
 <!-- ================================================================== -->
+<h2 id="phase-3-5">Phase 3.5 — <code>@comptime</code> (user-level)</h2>
+
+<div class="phase-intro">
+  Expose the strata body evaluator at user level via a <code>@comptime</code>
+  keyword.  Originally 6a in Phase 6; relocated here because <code>@comptime</code>
+  is a direct extension of the Strata 2.0 surface (the AST interpreter from
+  3-7..3-24 is already an evaluator over Compiler::*) rather than part of the
+  toolchain work that Phase 6 actually delivers (the <code>sgl</code> CLI in 6b).
+  Splitting it out follows the same pattern as Phase 0.5 (CaaS Foundation)
+  and 8.5 (CaaS Consumer APIs) — cross-cutting features get a .5 slot.
+  <br/><br/>
+  <strong>Engine dependency:</strong> CT-1 through CT-3 + CT-5 work today
+  against the AST interpreter shipped in Phase 3.  CT-4 (migrating the
+  emitter's opcode table to <code>@comptime</code>-generated code) needs the
+  production engine in 8-9 because the table generation pattern wants
+  <code>@loop</code> in handler bodies.  CT-4 is therefore gated on Phase 8.
+</div>
+
+<details class="lang">
+  <summary><span class="id">CT-1</span> Expose strata body evaluator at user-level @comptime <span class="est">M, ~4h</span></summary>
+  <div class="deps"><strong>Depends on:</strong> Phase 3 (the AST interpreter in boot/elab/body_rich.si)</div>
+  <p class="goal">Parser recognises <code>@comptime { ... }</code> as a new expression form.  Routes through <code>br_interpret_body</code> with the same scope + Compiler::* dispatch as a stratum handler body.  Constraints on the body match the comptime-engine limits in <code>docs/strata-authoring-guide.md</code> until 8-9 lands.</p>
+</details>
+
+<details class="lang">
+  <summary><span class="id">CT-2</span> @comptime in expression position (returns a value) <span class="est">M, ~3h</span></summary>
+  <div class="deps"><strong>Depends on:</strong> CT-1</div>
+  <p class="goal"><code>@let x:Int := @comptime { 6 * 7 };</code>.  The block's last expression becomes the inferred value at the call site.  Lowering replaces the @comptime expression with the evaluated literal so runtime code carries no trace.</p>
+</details>
+
+<details class="lang">
+  <summary><span class="id">CT-3</span> @comptime block — push_definition + module mutation <span class="est">M, ~4h</span></summary>
+  <div class="deps"><strong>Depends on:</strong> CT-2</div>
+  <p class="goal">Top-level <code>@comptime { &Compiler::module::push_definition ... };</code> works the same way an <code>on::module_finalize</code> handler does.  Drains R_PENDING_DEFS into the output module after the main lowering pass.</p>
+</details>
+
+<details class="lang partial">
+  <summary><span class="id">CT-4</span> Migrate emitter opcode table to @comptime-generated <span class="partial">🟡</span> <span class="est">M, ~4h</span></summary>
+  <div class="deps"><strong>Depends on:</strong> CT-3, <strong>8-9 (production comptime engine)</strong></div>
+  <p class="goal">Move <code>boot/emit/wat.si</code>'s opcode table from hand-written data to a <code>@comptime</code> block that generates it.  This is the litmus test that proves <code>@comptime</code> is strictly more powerful than Zig's — the block calls <code>api.module.push_definition</code> to emit a global.  Requires <code>@loop</code> in handler bodies (the table has 100+ entries; unrolling by hand defeats the demonstration), which the AST interpreter doesn't support.  Lands once 8-9 swaps wasmtime in.</p>
+</details>
+
+<details class="lang">
+  <summary><span class="id">CT-5</span> @assert in @comptime blocks <span class="est">S, ~2h</span></summary>
+  <div class="deps"><strong>Depends on:</strong> CT-2</div>
+  <p class="goal"><code>@comptime { @assert size_of Point == 8; };</code>.  If the assertion fails at compile time, emit a diag::error.  Useful for invariant checks against struct layouts and constant expressions.</p>
+</details>
+
+<!-- ================================================================== -->
 <h2 id="phase-5">Phase 5 — Generic stdlib + type system</h2>
 
 <h3>5a — Generic stdlib</h3>
@@ -997,33 +1047,16 @@
 </details>
 
 <!-- ================================================================== -->
-<h2 id="phase-6">Phase 6 — <code>@comptime</code> + <code>sgl</code> CLI</h2>
+<h2 id="phase-6">Phase 6 — <code>sgl</code> CLI</h2>
 
-<h3>6a — @comptime</h3>
-
-<details class="lang">
-  <summary><span class="id">6a-1</span> Expose strata body evaluator at user-level @comptime <span class="est">M, ~4h</span></summary>
-</details>
-
-<details class="lang">
-  <summary><span class="id">6a-2</span> @comptime in expression position (returns a value) <span class="est">M, ~3h</span></summary>
-  <div class="deps"><strong>Depends on:</strong> 6a-1</div>
-</details>
-
-<details class="lang">
-  <summary><span class="id">6a-3</span> @comptime block — push_definition + module mutation <span class="est">M, ~4h</span></summary>
-  <div class="deps"><strong>Depends on:</strong> 6a-2</div>
-</details>
-
-<details class="lang">
-  <summary><span class="id">6a-4</span> Migrate emitter opcode table to @comptime-generated <span class="est">M, ~4h</span></summary>
-  <div class="deps"><strong>Depends on:</strong> 6a-3</div>
-</details>
-
-<details class="lang">
-  <summary><span class="id">6a-5</span> @assert in @comptime blocks <span class="est">S, ~2h</span></summary>
-  <div class="deps"><strong>Depends on:</strong> 6a-2</div>
-</details>
+<p style="color: var(--muted); font-style: italic; margin-top: 12px;">
+  <strong>Note:</strong> the original 6a "<code>@comptime</code>" sub-phase
+  moved to <a href="#phase-3-5">Phase 3.5</a> as stories CT-1 through CT-5.
+  <code>@comptime</code> is conceptually an extension of the Strata 2.0
+  body evaluator (Phase 3), not part of the toolchain delivery (sgl CLI).
+  Phase 6 is now exclusively the CLI work; 6b-* IDs retained to keep
+  existing cross-references stable.
+</p>
 
 <h3>6b — <code>sgl</code> CLI</h3>
 
@@ -1523,9 +1556,10 @@
   <tr><td>1 — Language foundations</td><td>14</td><td>~10 days</td><td>1a blocks 1b; 1a-8 (port) blocks Phase 3 closure</td></tr>
   <tr><td>2 — Error messages</td><td>8</td><td>~5 days</td><td>Parallelisable per error type</td></tr>
   <tr><td>3 — Strata 2.0 in boot/</td><td>25</td><td>~25 days</td><td>3-22 production engine deferred to 8-9; 3-25 (@defer boot/ port) absorbed from old 4-5</td></tr>
+  <tr><td>3.5 — @comptime (user-level)</td><td>5</td><td>~3 days</td><td>Absorbed from old 6a; CT-4 (emitter-table migration) gated on 8-9</td></tr>
   <tr><td>4 — @defer</td><td>4</td><td>~3 days</td><td>src/ side only; boot/ port is 3-25</td></tr>
   <tr><td>5 — Generic stdlib + extensions</td><td>17</td><td>~18 days</td><td>5a depends on 1a; 5d-4 caps the phase</td></tr>
-  <tr><td>6 — @comptime + sgl CLI</td><td>19</td><td>~17 days</td><td>6b-5 blocks on Phase 7</td></tr>
+  <tr><td>6 — sgl CLI</td><td>14</td><td>~14 days</td><td>6b-5 blocks on Phase 7; @comptime moved to 3.5</td></tr>
   <tr><td>7 — Silicon interpreter</td><td>16</td><td>~15 days</td><td>Linear within the phase</td></tr>
   <tr><td>8 — Native backend (QBE)</td><td>14</td><td>~14 days</td><td>Backend-then-platforms-then-self-host</td></tr>
   <tr><td>8.5 — CaaS Consumer APIs</td><td>8</td><td>~12 days (1.0) + ~8 days (post-1.0)</td><td>CaaS-7, CaaS-8, CaaS-11 are post-1.0 acceptable</td></tr>
