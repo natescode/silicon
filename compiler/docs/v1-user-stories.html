@@ -170,16 +170,13 @@
 <h2 id="phase-0">Phase 0 — Dissolution completion</h2>
 
 <div class="phase-intro">
-  <strong style="color: var(--accent3);">All 13 D-B-* import-surface stories complete ✅</strong> and
-  <strong style="color: var(--accent3);">11-of-14 D-D-* migrations complete ✅</strong>
-  (2026-05-23).  Remaining: <strong>D-D-7c</strong> (Float/Int64 typed
-  operator overloads — needs <code>register::typed_operator</code> + typed
-  on::lower variants), <strong>D-D-11b</strong> (@let/@fn — function def-kind,
-  needs preScan-style forward-ref registration), <strong>D-D-11c</strong>
-  (@var/@extern — global preScan), <strong>D-D-11d</strong> (@type/@enum/@type_sum —
-  sumTypeExpander / typeRecordExpander rebuild as on::lower handlers).
-  Then Phase E (delete the interpreter).  See
-  <code>docs/comptime-via-compilation.md</code> for the full design.
+  <strong style="color: var(--accent3);">All 13 D-B-* import-surface stories complete ✅</strong>
+  and <strong style="color: var(--accent3);">all 14 D-D-* migrations complete ✅</strong>
+  (2026-05-23).  Every built-in stratum now uses the new <code>@stratum
+  := { register::…; on::lower …; }</code> form with handler @fns that
+  compile through the Phase C engine and have an interpreter compatibility
+  shim for the legacy path.  Phase E (delete the interpreter) is the
+  next milestone.  See <code>docs/comptime-via-compilation.md</code>.
 </div>
 
 <h3>0.B — Extend the Phase B import surface</h3>
@@ -347,9 +344,9 @@
   <div class="deps"><strong>Depends on:</strong> D-B-3</div>
 </details>
 
-<details class="dissolution">
-  <summary><span class="id">D-D-7c</span> Migrate <code>operators.si</code> — Float + Int64 variants (16 ops) <span class="done" style="color: var(--accent4);">◐ deferred</span> <span class="est">M, ~4h</span></summary>
-  <p style="color: var(--accent4); font-size: 0.85rem;"><strong>Status:</strong> Not yet migrated — the new register::operator only stores under the bare key.  Typed overloads (<code>+:Float</code>, <code>+:Int64</code>) still use <code>@stratum_operator</code>.  Needs a <code>register::typed_operator</code> + typed on::lower variants in the new form.</p>
+<details class="dissolution complete">
+  <summary><span class="id">D-D-7c</span> Migrate <code>operators.si</code> — Float + Int64 variants (21 ops) <span class="done">✅</span> <span class="est">M, ~4h</span></summary>
+  <p style="color: var(--accent3); font-size: 0.85rem;">All 10 Float (+,-,*,/,==,!=,<,>,<=,>=) and 11 Int64 overloads migrated.  Added <code>register::typed_operator '+', 'Float'</code> to the strata loader (registers under compound key <code>+:Float</code>) and typed on::lower handlers keyed by <code>op:typeKind</code>.  lowerBinaryOp's on::lower bridge now checks the typed key first.</p>
   <div class="deps"><strong>Depends on:</strong> D-D-7a, D-D-7b</div>
 </details>
 
@@ -377,19 +374,21 @@
   <div class="deps"><strong>Depends on:</strong> D-B-11</div>
 </details>
 
-<details class="dissolution">
-  <summary><span class="id">D-D-11b</span> Migrate <code>defkinds.si</code> — @let / @fn (function def-kind) <span class="est">L, ~6h</span></summary>
-  <p class="goal">The largest single legacy body — uses lowerParams, lowerFunctionBody, resolveFunctionReturnType, ir::makeFunction.  Touch-stone for whether the IR-handle ABI is genuinely sufficient.</p>
+<details class="dissolution complete">
+  <summary><span class="id">D-D-11b</span> Migrate <code>defkinds.si</code> — @let / @fn (function def-kind) <span class="done">✅</span> <span class="est">L, ~6h</span></summary>
+  <p style="color: var(--accent3); font-size: 0.85rem;">Both share one LetOrFn_lower handler that reads params, lowers function body, resolves return type, builds IRFunction.  Engine's synthetic @fn for handler compilation bypasses the migrated path by pre-stamping <code>hook: 'function'</code> (preserved by the elaborator), routing to a TS-side <code>functionExpander</code> that matches the legacy semantics — breaks the chicken-and-egg.</p>
   <div class="deps"><strong>Depends on:</strong> D-B-5, D-B-12</div>
 </details>
 
-<details class="dissolution">
-  <summary><span class="id">D-D-11c</span> Migrate <code>defkinds.si</code> — @var, @extern <span class="est">M, ~3h</span></summary>
+<details class="dissolution complete">
+  <summary><span class="id">D-D-11c</span> Migrate <code>defkinds.si</code> — @var, @extern <span class="done">✅</span> <span class="est">M, ~3h</span></summary>
+  <p style="color: var(--accent3); font-size: 0.85rem;">Both migrated.  Added <code>compiler_lowerGlobalInit</code> / <code>compiler_globalInit_init</code> / <code>compiler_globalInit_wasmType</code> / <code>compiler_lowerExternParams</code> / <code>compiler_lowerExternResult</code> imports.  lowerProgram preScan + lowerAsStmt extended to recognise migrated @var by keyword (preserves forward-ref globals + in-function local treatment).</p>
   <div class="deps"><strong>Depends on:</strong> D-B-5, D-B-12</div>
 </details>
 
-<details class="dissolution">
-  <summary><span class="id">D-D-11d</span> Migrate <code>defkinds.si</code> — @type, @enum, @type_sum (sum types) <span class="est">M, ~4h</span></summary>
+<details class="dissolution complete">
+  <summary><span class="id">D-D-11d</span> Migrate <code>defkinds.si</code> — @type, @enum, @type_sum (sum types) <span class="done">✅</span> <span class="est">M, ~4h</span></summary>
+  <p style="color: var(--accent3); font-size: 0.85rem;">All three migrated via a bridge approach: handlers delegate to TS-side <code>sumTypeExpander</code> / <code>typeRecordExpander</code> through new <code>compiler_expandSumType</code> / <code>compiler_expandTypeRecord</code> imports.  Variant-extraction + multi-IR construction logic stays in TS while registration moves to the new form.  lowerProgram preScan also fires the legacy expanders' preScan methods for migrated keywords.</p>
   <div class="deps"><strong>Depends on:</strong> D-D-11c</div>
 </details>
 
