@@ -692,21 +692,39 @@
   to land CaaS-1 through CaaS-3 + CaaS-6 in src/ first, then port the new
   shape to boot/.
   <br/><br/>
-  <strong>Status (2026-05-24):</strong> Phase 3 boot/ port substantially
-  complete.  Landed: 3-7, 3-8, 3-9, 3-10, 3-11, 3-15, 3-17, 3-19, 3-20,
-  3-21, 3-22 (skeleton), 3-23, 3-24.  The boot/ registry carries tier
-  tags, all five phase-hook tables (decl/callSite/annotation/finalize/
-  comptime), state buckets, AST handles + substitute + clone, type-as-data
-  Variable + substitute + format, diagnostics accumulator, T-6 cycle
-  detection, fire_*_handlers via br_interpret_body, comptime engine
-  skeleton, and a strata authoring guide at
+  <strong>Status (2026-05-24):</strong> Phase 3 boot/ port complete for
+  1.0 scope.  Landed: 3-7, 3-8, 3-9, 3-10, 3-11, 3-15, 3-17, 3-19, 3-20,
+  3-21, 3-22 (skeleton — see scope note below), 3-23, 3-24.  The boot/
+  registry carries tier tags, all five phase-hook tables
+  (decl/callSite/annotation/finalize/comptime), state buckets, AST
+  handles + substitute + clone, type-as-data Variable + substitute +
+  format, diagnostics accumulator, T-6 cycle detection,
+  fire_*_handlers via br_interpret_body, comptime engine skeleton,
+  and a strata authoring guide at
   <code>docs/strata-authoring-guide.md</code>.  <code>build.sh check</code>
   byte-equal at 92265 bytes; 21/21 boot tests pass with a
-  strata2_test.si exercising every surface.  Pending: full WASM-in-WASM
-  comptime engine (3-22 production), built-in T0 strata's actual
-  on::comptime population, integration of handler firing INTO
-  lower_program's main pass (currently firing is opt-in via direct
-  fire_*_handlers calls).
+  strata2_test.si exercising every surface.
+  <br/><br/>
+  <strong>3-22 scope decision:</strong> the full WASM-in-WASM comptime
+  engine is moved to <a href="#phase-8">Phase 8</a> (new story 8-9)
+  and reframed as <em>link wasmtime-as-library</em> rather than
+  <em>embed a wasm interpreter in Silicon</em>.  The src/ comptime
+  engine uses Bun's built-in <code>WebAssembly.instantiate</code>; the
+  boot/ analogue is the wasmtime C embedding API, available only once
+  Sigil compiles to native (Phase 8).  Pre-Phase-8, the AST
+  interpreter in <code>boot/elab/body_rich.si</code> is the 1.0
+  comptime engine — sufficient for every Strata 2.0 surface added in
+  3-1 through 3-21, with documented limits on handler-body Silicon
+  (no recursion, no @loop in handler bodies).  See
+  <code>docs/strata-authoring-guide.md</code> for the user-facing
+  contract.
+  <br/><br/>
+  <strong>Also pending:</strong> built-in T0 strata's actual
+  on::comptime population (mechanical embedded_bundle work),
+  integration of handler firing INTO lower_program's main pass
+  (currently firing is opt-in via direct fire_*_handlers calls; the
+  embedded bundle has no on::* handlers today, so auto-firing would
+  be a no-op).
 </div>
 
 <details class="strata">
@@ -819,9 +837,11 @@
 </details>
 
 <details class="strata">
-  <summary><span class="id">3-22</span> Port the comptime engine (compileStrataHandlers + WASM-in-WASM) <span class="est">XL, 2d</span> 🟡 SKELETON</summary>
-  <p class="goal">comptime_engine_init / compile_handler / invoke / count API shipped.  Default implementation forwards to br_interpret_body — "compiling" stores the AST ref, "invoking" interprets the AST.  Full WASM-in-WASM (embedded interpreter + WASM-as-imports CompilerAPI + IR-handle ABI) is the production replacement; signatures stay stable, only the function bodies change.  See <code>docs/comptime-via-compilation.md</code>.</p>
-  <div class="deps"><strong>Depends on:</strong> 3-1 through 3-21</div>
+  <summary><span class="id">3-22</span> Port the comptime engine (compileStrataHandlers + WASM-in-WASM) <span class="est">XL, 2d</span> 🟡 SKELETON; PRODUCTION DEFERRED TO 8-9</summary>
+  <p class="goal">comptime_engine_init / compile_handler / invoke / count API shipped.  Default implementation forwards to br_interpret_body — "compiling" stores the AST ref, "invoking" interprets the AST.  The 1.0 comptime engine IS the AST interpreter; handler bodies that only use the existing Compiler::* surface + arithmetic + @if work today.</p>
+  <p class="goal"><strong>Production path moved to Phase 8 (story 8-9).</strong>  Original plan was to embed a tiny WASM interpreter in Silicon (~2 days).  Reframed plan: link wasmtime as a C library from the native Phase 8 binary and call its embedding API.  Identical to how src/ uses Bun's <code>WebAssembly.instantiate</code> — no interpreter to author; wasmtime's Cranelift JIT does the work.  Gate: Phase 8 must land first.  Pre-Phase-8 (wasm-distributed sigilc), the AST interpreter remains the comptime engine, with the limits documented in <code>docs/strata-authoring-guide.md</code>.</p>
+  <p class="goal">See <code>docs/comptime-via-compilation.md</code> for the original dissolution design (still valid; only the wasm-runtime acquisition strategy changed).</p>
+  <div class="deps"><strong>Depends on:</strong> 3-1 through 3-21 (skeleton); 8-9 (production)</div>
 </details>
 
 <details class="strata">
@@ -1189,6 +1209,15 @@
 <details class="runtime">
   <summary><span class="id">8-8</span> Invoke as/ld pipeline; produce executable <span class="est">M, ~4h</span></summary>
   <div class="deps"><strong>Depends on:</strong> 8-6, 8-7</div>
+</details>
+
+<details class="runtime">
+  <summary><span class="id">8-9</span> Link wasmtime as C library; replace comptime engine skeleton <span class="est">M, ~4h</span></summary>
+  <div class="deps"><strong>Depends on:</strong> 8-8 (native binary), Phase 3 complete</div>
+  <p class="goal">This is what 3-22 reframes to once native compilation exists.  The Phase 3 skeleton at <code>comptime_engine_compile_handler</code> / <code>comptime_engine_invoke</code> currently forwards to <code>br_interpret_body</code> (the AST interpreter) — fine for handler bodies that don't need loops, recursion, or the full Silicon surface, but a dead-end for production strata authoring.</p>
+  <p class="goal">Native sigilc links <code>-lwasmtime</code> (stable C embedding API) and calls <code>wasm_engine_new</code> / <code>wasm_module_new</code> / <code>wasm_instance_new</code> / <code>wasm_func_call</code> from Silicon-via-FFI.  Handler bodies compile through the normal Silicon → WAT → wasm pipeline; the resulting wasm is instantiated and invoked through wasmtime's Cranelift JIT.  Identical mechanism to <code>src/comptime/engine.ts</code> which uses Bun's <code>WebAssembly.instantiate</code>; we are NOT writing a wasm interpreter.</p>
+  <p class="goal">Done when: a stratum on::module_finalize handler containing <code>@loop</code> and recursion compiles + runs at compile time + pushes a synthesised definition back to the module.  The AST interpreter in boot/elab/body_rich.si stops being the comptime engine for native targets; it can remain as a fallback for wasm-distributed sigilc, or be dissolved entirely once every built-in stratum migrates.</p>
+  <p class="goal">Open question: portability of the wasm-distributed <code>stage1.wasm</code>.  Wasm-target sigilc has no FFI to wasmtime — its comptime engine stays AST-interpreted (or grows a WASI extension on a per-runtime basis).  This is acceptable for 1.0 since native is the default target on tier-1 platforms; the WASI distribution becomes a "fallback shape" with reduced comptime capability documented in the release notes.</p>
 </details>
 
 <details class="runtime">

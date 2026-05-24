@@ -131,9 +131,89 @@ No token argument — there is only one finalize phase per stratum.
 ```
 
 Today this is registration-only; the comptime engine (3-22) routes through the
-existing body interpreter as a stub. When the WASM-in-WASM engine lands these
-handlers will fire automatically wherever a comptime-foldable expression
-appears.
+existing body interpreter as a stub.  When story 8-9 lands (Phase 8 + wasmtime
+as a linked C library) these handlers will fire under a real wasm runtime
+wherever a comptime-foldable expression appears.
+
+---
+
+## The comptime engine in Sigil 1.0
+
+**TL;DR**: the 1.0 comptime engine is the **AST interpreter** in
+`boot/elab/body_rich.si`.  Handler bodies are not compiled to wasm and run
+inside an embedded runtime — they're walked node-by-node by Silicon code.
+The full WASM-in-WASM dissolution arrives in 1.x via Phase 8 + 8-9 once
+native compilation lets us link wasmtime as a C library.
+
+This shapes what's allowed inside a handler body.
+
+### What works in handler bodies today
+
+- All `Compiler::*` surface calls — `register::*`, `on::*`, `state`,
+  `module::push_definition`, `ast::*`, `type::*`, `diag::*`, `ir::*`,
+  `ctx::*`, `lowerExpr`, `arg`, `watId`, `resolveType`, `assertDefined`.
+- Scalar arithmetic and comparisons on `Int` (`+`, `-`, `*`, `/`, `%`,
+  `==`, `!=`, `<`, `>`, `<=`, `>=`).
+- `@local name := expr;` bindings (resolved against the body scope).
+- `@if cond, { then }, { else }` — the AST interpreter has this hardcoded.
+- Hardcoded `@return`, `@break`, `@continue` work as expected at the
+  outermost handler level (but see limits below).
+
+### What doesn't work yet
+
+- **`@loop` in handler bodies.** The AST interpreter has no loop driver.
+  Workaround: unroll manually, or stash iteration state in
+  `state 'stratum'` across multiple `on::decl` firings.
+- **Recursion in handler bodies.** The interpreter has no call stack for
+  user-defined functions invoked from a handler.  You can call `&Compiler::*`
+  primitives freely; you cannot call your own `@fn foo := { ... }` recursively
+  from inside a handler.
+- **Generic user-defined Silicon functions called from a handler.**  Same
+  reason as recursion — the interpreter doesn't dispatch arbitrary `@fn`
+  calls.  Stick to `Compiler::*` calls + arithmetic + `@local`.
+- **`@match` inside a handler body.**  The AST interpreter doesn't lower
+  match arms.  Use chained `@if` instead.
+- **Strings other than as literal arguments to `Compiler::*` calls.**
+  No string manipulation, concatenation, or comparison inside a handler.
+  If you need to compare strings, do it via the type/AST handle layer —
+  the host-side primitives compare bytes for you.
+
+### Designing around the limits
+
+Most production strata don't actually need the missing pieces:
+
+- **`@defer`-style strata** stash deferred bodies in `state 'stratum'`
+  during `on::decl`; emit cleanup code in `on::module_finalize`.  No loop
+  needed — `module_finalize` fires once and walks the deferred list via
+  `Compiler::state::each` (a primitive, not user-side iteration).
+- **`@@derive Eq`-style strata** inspect `def.fields` from `on::annotation`
+  and emit one comparison per field.  The iteration over fields is a host
+  primitive (`Compiler::ast::children`), not a user-side `@loop`.
+- **Generic monomorphisation strata** capture the template in `on::decl`,
+  clone + substitute in `on::module_finalize` per requested instance.  No
+  recursion — substitution is a host primitive.
+
+The pattern: **anything that needs iteration runs as a host primitive,
+not as Silicon control flow in the handler body**.  The handler body
+orchestrates host primitives; it doesn't implement the algorithm itself.
+
+### When the limits start to bite
+
+When you genuinely need user-side iteration or recursion at compile time —
+typically for complex codegen like a regex compiler stratum, a
+state-machine generator, or a SQL parser stratum — you've hit the cases
+8-9 unlocks.  Track those needs in the issue tracker; they motivate the
+production engine's priority.
+
+### What 8-9 changes
+
+When Phase 8 + 8-9 ship, the AST interpreter becomes optional.  Native
+sigilc compiles handler bodies through the normal Silicon pipeline → wat
+→ wasm and runs them under wasmtime's Cranelift JIT.  At that point every
+Silicon feature is available in handler bodies — `@loop`, `@match`,
+recursion, user-defined functions, generics.  The `Compiler::*` API
+signatures stay identical, so handlers written today continue to work
+unchanged.
 
 ---
 
@@ -320,10 +400,21 @@ The `Compiler::*` surface is **stable across Sigil 1.x**. Specifically:
 - `ast::*` and `type::*` — stable APIs; new operations may be added.
 - `diag::error` / `diag::warn` — stable; never throws (T-5).
 
-Anything beyond this surface (the `Compiler::ir::*` builders, the internal
-field-offset constants, the `R_*` / `H_*` registry vecs) is private to the
-compiler implementation and may change without notice. Strata that touch
-those internals should expect to be rewritten when they break.
+The **comptime engine implementation** is *not* part of the stable surface
+— what works inside a handler body grows over time:
+
+- **1.0**: AST interpreter; `Compiler::*` + scalar arithmetic + `@if` +
+  `@local` (see "The comptime engine in Sigil 1.0" above).
+- **1.x (after Phase 8 + 8-9)**: wasmtime-backed; full Silicon surface in
+  handler bodies — `@loop`, `@match`, recursion, user-defined `@fn` calls.
+  Existing handlers written against the 1.0 limits will continue to work
+  unchanged; the API signatures don't change.
+
+Anything beyond the stable surface (the `Compiler::ir::*` builders, the
+internal field-offset constants, the `R_*` / `H_*` registry vecs) is
+private to the compiler implementation and may change without notice.
+Strata that touch those internals should expect to be rewritten when they
+break.
 
 ---
 
