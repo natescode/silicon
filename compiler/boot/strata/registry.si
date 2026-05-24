@@ -27,35 +27,65 @@
 @var R_OP_SYM_OFF:Int := 0;
 @var R_OP_SYM_LEN:Int := 0;
 @var R_OP_ELAB:Int    := 0;
+@var R_OP_TIER:Int    := 0;
 
 @var R_KW_SYM_OFF:Int := 0;
 @var R_KW_SYM_LEN:Int := 0;
 @var R_KW_ELAB:Int    := 0;
+@var R_KW_TIER:Int    := 0;
+
+# Strata 2.0 tier constants — per src/elaborator/strataLoader.ts.
+#
+#   T0 — built-in strata embedded in the compiler (boot/strata/builtin/*.si
+#        compiled into the embedded_bundle).  Always present; sort first.
+#   T1 — strata declared inline in the user program currently compiling.
+#   T2 — strata pulled in via @use'd dependencies (extraSources in src/).
+#
+# R_CURRENT_TIER is the tier tag attached to subsequent
+# registry_add_keyword/operator calls.  Callers that distinguish
+# (e.g. an embedded-bundle loader vs. user-source loader) set this
+# before calling load_strata.  Default T1 keeps the bulk of existing
+# call-sites tagged with the most common tier.
+@let R_TIER_T0:Int := 0;
+@let R_TIER_T1:Int := 1;
+@let R_TIER_T2:Int := 2;
+@var R_CURRENT_TIER:Int := 1;
+
+@fn registry_set_tier tier:Int := {
+  R_CURRENT_TIER = tier;
+};
+
+@fn registry_get_tier:Int := { R_CURRENT_TIER };
 
 # registry_init — call before populating.  Fresh vecs, ready for push.
 @fn registry_init := {
   R_OP_SYM_OFF = &vec_new;
   R_OP_SYM_LEN = &vec_new;
   R_OP_ELAB    = &vec_new;
+  R_OP_TIER    = &vec_new;
   R_KW_SYM_OFF = &vec_new;
   R_KW_SYM_LEN = &vec_new;
   R_KW_ELAB    = &vec_new;
+  R_KW_TIER    = &vec_new;
   R_DK_KW_OFF  = &vec_new;
   R_DK_KW_LEN  = &vec_new;
   R_DK_CG_OFF  = &vec_new;
   R_DK_CG_LEN  = &vec_new;
+  R_CURRENT_TIER = R_TIER_T1;
 };
 
 @fn registry_add_operator sym_off:Int, sym_len:Int, elab:Int := {
   R_OP_SYM_OFF = &vec_push R_OP_SYM_OFF, sym_off;
   R_OP_SYM_LEN = &vec_push R_OP_SYM_LEN, sym_len;
   R_OP_ELAB    = &vec_push R_OP_ELAB, elab;
+  R_OP_TIER    = &vec_push R_OP_TIER, R_CURRENT_TIER;
 };
 
 @fn registry_add_keyword sym_off:Int, sym_len:Int, elab:Int := {
   R_KW_SYM_OFF = &vec_push R_KW_SYM_OFF, sym_off;
   R_KW_SYM_LEN = &vec_push R_KW_SYM_LEN, sym_len;
   R_KW_ELAB    = &vec_push R_KW_ELAB, elab;
+  R_KW_TIER    = &vec_push R_KW_TIER, R_CURRENT_TIER;
 };
 
 # Entry counts.
@@ -117,6 +147,8 @@
 @fn registry_kw_sym_off:Int i:Int := { &vec_get R_KW_SYM_OFF, i };
 @fn registry_kw_sym_len:Int i:Int := { &vec_get R_KW_SYM_LEN, i };
 @fn registry_kw_elab:Int    i:Int := { &vec_get R_KW_ELAB, i };
+@fn registry_kw_tier:Int    i:Int := { &vec_get R_KW_TIER, i };
+@fn registry_op_tier:Int    i:Int := { &vec_get R_OP_TIER, i };
 
 # ── DefKind table ────────────────────────────────────────────────────
 # Maps a definition keyword (`@let`, `@fn`, …) to a codegen kind

@@ -29,15 +29,20 @@
   @local toks := &lex src_bytes, src_len;
   @local prog := &parse src_bytes, src_len, toks;
 
-  # Load strata into the registry.
+  # Load strata into the registry.  Default tier is T1 (inline in
+  # the user program).
   &registry_init;
   &load_strata prog;
 
   # Verify: exactly one keyword + one operator was registered from the
-  # unified form's body.
+  # unified form's body, each tagged with tier T1.
   @local kw_count := &registry_kw_count;
   @local op_count := &registry_op_count;
-  @local ok := &@and (kw_count == 1), (op_count == 1);
+  @local kw_tier  := &registry_kw_tier 0;
+  @local op_tier  := &registry_op_tier 0;
+  @local ok_count := &@and (kw_count == 1), (op_count == 1);
+  @local ok_tier  := &@and (kw_tier == R_TIER_T1), (op_tier == R_TIER_T1);
+  @local ok       := &@and ok_count, ok_tier;
   &@if ok,
     { &write_str 1, 'strata2 OK' },
     { &write_str 1, 'strata2 FAIL' };
