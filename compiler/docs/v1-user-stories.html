@@ -69,8 +69,11 @@
     summary .id { color: var(--muted); font-family: monospace; font-size: 0.85em; margin-right: 10px; }
     summary .est { float: right; color: var(--muted); font-size: 0.8em; background: var(--surface2); padding: 1px 8px; border-radius: 10px; }
     summary .done { color: var(--accent3); font-weight: 700; margin-left: 8px; }
+    summary .partial { color: var(--accent4); font-weight: 700; margin-left: 8px; }
     details.complete > summary { color: var(--accent3); }
     details.complete { border-left-color: var(--accent3) !important; opacity: 0.92; }
+    details.partial > summary { color: var(--accent4); }
+    details.partial { border-left-color: var(--accent4) !important; }
     .goal { font-size: 0.88rem; color: var(--muted); margin: 8px 0 10px; padding-left: 12px; border-left: 2px solid var(--border); }
     .accept { margin: 8px 0; font-size: 0.88rem; }
     .accept strong { color: var(--accent3); }
@@ -757,30 +760,30 @@
   <div class="deps"><strong>Depends on:</strong> 3-5</div>
 </details>
 
-<details class="strata">
-  <summary><span class="id">3-7</span> Port currentStratumRef + per-stratum state routing <span class="est">M, ~4h</span> ✅ DONE</summary>
+<details class="strata complete">
+  <summary><span class="id">3-7</span> Port currentStratumRef + per-stratum state routing <span class="done">✅</span> <span class="est">M, ~4h</span></summary>
   <p class="goal"><code>R_CURRENT_STRATUM_REF</code> @var + <code>state_set_current_stratum</code> setter + per-bucket state routing (stratum + instance scopes share one map keyed by bucket id; instance ids start at 1_000_000 to keep namespaces disjoint).</p>
 </details>
 
-<details class="strata">
-  <summary><span class="id">3-8</span> Port the @stratum unified-form loader <span class="est">L, ~6h</span> ✅ DONE</summary>
+<details class="strata complete">
+  <summary><span class="id">3-8</span> Port the @stratum unified-form loader <span class="done">✅</span> <span class="est">L, ~6h</span></summary>
   <p class="goal">Recognise <code>@stratum Name := { ... };</code> as a Definition kind.  Parse register::* / on::* calls in the body.  <code>load_strata</code> now dispatches both AST_ELABORATION (legacy) and AST_DEFINITION (Strata 2.0); <code>detect_register_call</code> and <code>detect_on_phase</code> route bodies through the matching tables.</p>
 </details>
 
-<details class="strata">
-  <summary><span class="id">3-9</span> Port phase-handler tables (decl, callSite, annotation, lower, module_finalize, comptime) <span class="est">L, ~6h</span> ✅ DONE (registration; firing in 3-10)</summary>
+<details class="strata complete">
+  <summary><span class="id">3-9</span> Port phase-handler tables (decl, callSite, annotation, lower, module_finalize, comptime) <span class="done">✅</span> <span class="est">L, ~6h</span></summary>
   <div class="deps"><strong>Depends on:</strong> 3-8</div>
-  <p class="goal">H_DECL_* / H_CALL_* / H_ANN_* / H_FINALIZE_BODY parallel vecs; <code>register_decl_handler</code>, <code>register_callsite_handler</code>, <code>register_annotation_handler</code>, <code>register_finalize_handler</code>.  Comptime phase (on::comptime) tracked separately under 3-21.</p>
+  <p class="goal">Registration shipped; firing landed under 3-10.  H_DECL_* / H_CALL_* / H_ANN_* / H_FINALIZE_BODY parallel vecs; <code>register_decl_handler</code>, <code>register_callsite_handler</code>, <code>register_annotation_handler</code>, <code>register_finalize_handler</code>.  Comptime phase (on::comptime) tracked separately under 3-21.</p>
 </details>
 
-<details class="strata">
-  <summary><span class="id">3-10</span> Port fireHandlers + stratumRef threading <span class="est">M, ~4h</span> ✅ DONE (opt-in firing)</summary>
+<details class="strata complete">
+  <summary><span class="id">3-10</span> Port fireHandlers + stratumRef threading <span class="done">✅</span> <span class="est">M, ~4h</span></summary>
   <div class="deps"><strong>Depends on:</strong> 3-9</div>
-  <p class="goal">fire_one_handler / fire_module_finalize_handlers / fire_decl_handlers / fire_callsite_handlers / fire_annotation_handlers / fire_comptime_handlers in boot/elab/body_rich.si — each calls br_interpret_body on registered handler bodies.  Integration INTO lower_program's main pass is opt-in for byte-equal safety (the embedded_bundle has no on::* handlers today, so the integrated path would be a no-op on the bundle but still grows the binary); deferred until a built-in stratum actually registers an on::* handler.</p>
+  <p class="goal">Opt-in firing helpers shipped.  fire_one_handler / fire_module_finalize_handlers / fire_decl_handlers / fire_callsite_handlers / fire_annotation_handlers / fire_comptime_handlers in boot/elab/body_rich.si — each calls br_interpret_body on registered handler bodies.  Integration INTO lower_program's main pass is opt-in for byte-equal safety (the embedded_bundle has no on::* handlers today, so the integrated path would be a no-op on the bundle but still grows the binary); deferred until a built-in stratum actually registers an on::* handler.</p>
 </details>
 
-<details class="strata">
-  <summary><span class="id">3-11</span> Port T-6 cycle detection on T0 DAG <span class="est">S, ~2h</span> ✅ DONE</summary>
+<details class="strata complete">
+  <summary><span class="id">3-11</span> Port T-6 cycle detection on T0 DAG <span class="done">✅</span> <span class="est">S, ~2h</span></summary>
   <div class="deps"><strong>Depends on:</strong> 3-10</div>
   <p class="goal">Kahn's-algorithm cycle detection over a CYCLE_FROM / CYCLE_TO edge graph.  <code>tier_cycle_check_and_emit</code> appends S0001 diagnostic on detection.</p>
 </details>
@@ -799,9 +802,9 @@
   <summary><span class="id">3-14</span> Port the @match arm-expression form + normalizeMatchArgs <span class="est">M, ~3h</span></summary>
 </details>
 
-<details class="strata">
-  <summary><span class="id">3-15</span> Port ast.capture_template + clone + substitute + patch_types <span class="est">L, ~6h</span> ✅ DONE (patch_types stub)</summary>
-  <p class="goal">capture_template + clone via AST_H_KIND / AST_H_AST handle table; substitute walks AST recursively, replacing Namespace nodes by name and rebuilding container nodes (BIN_OP, CALL, BLOCK, DEFINITION) with substituted children.  patch_types is a clone stub today — boot/'s AST doesn't carry inferredType yet (typed-IR carrier landing separately); stub keeps the API shape stable for handler code.</p>
+<details class="strata partial">
+  <summary><span class="id">3-15</span> Port ast.capture_template + clone + substitute + patch_types <span class="partial">🟡</span> <span class="est">L, ~6h</span></summary>
+  <p class="goal">capture_template + clone + substitute landed; patch_types is a clone stub.  Substitute walks AST recursively, replacing Namespace nodes by name and rebuilding container nodes (BIN_OP, CALL, BLOCK, DEFINITION) with substituted children.  patch_types waits on the typed-IR carrier (boot/'s AST doesn't yet stamp inferredType on nodes); stub keeps the API shape stable for handler code.</p>
 </details>
 
 <details class="strata">
@@ -809,8 +812,8 @@
   <div class="deps"><strong>Depends on:</strong> 3-15</div>
 </details>
 
-<details class="strata">
-  <summary><span class="id">3-17</span> Port type.* primitives (variable, substitute, equals, format) <span class="est">M, ~3h</span> ✅ DONE</summary>
+<details class="strata complete">
+  <summary><span class="id">3-17</span> Port type.* primitives (variable, substitute, equals, format) <span class="done">✅</span> <span class="est">M, ~3h</span></summary>
   <div class="deps"><strong>Depends on:</strong> 3-3</div>
   <p class="goal">SK_VARIABLE kind, <code>type_new_variable</code>, <code>type_substitute_one</code> (single-binding; chain calls for multi-binding), <code>type_equals</code> extended for Variable, <code>type_format</code> via 256-byte arena buffer + tf_walk recursing through type records.</p>
 </details>
@@ -820,38 +823,38 @@
   <div class="deps"><strong>Depends on:</strong> 3-17</div>
 </details>
 
-<details class="strata">
-  <summary><span class="id">3-19</span> Port module.push_definition / push_global accumulator <span class="est">M, ~3h</span> ✅ DONE</summary>
+<details class="strata complete">
+  <summary><span class="id">3-19</span> Port module.push_definition / push_global accumulator <span class="done">✅</span> <span class="est">M, ~3h</span></summary>
   <p class="goal">R_PENDING_DEFS vec, <code>module_push_definition</code> / <code>module_push_global</code> append helpers, <code>module_pending_reset</code> drain marker.  lower_program drain integration tracked under 3-10.</p>
 </details>
 
-<details class="strata">
-  <summary><span class="id">3-20</span> Port diag::error / warn accumulator (T-5 model) <span class="est">S, ~2h</span> ✅ DONE</summary>
+<details class="strata complete">
+  <summary><span class="id">3-20</span> Port diag::error / warn accumulator (T-5 model) <span class="done">✅</span> <span class="est">S, ~2h</span></summary>
   <p class="goal">DIAG_CODE / DIAG_SPAN / DIAG_MSG / DIAG_HINT / DIAG_SEVERITY parallel vecs.  <code>diag_error</code> / <code>diag_warn</code> never throw; <code>diag_count_by_severity</code> filters by sev.  T-5 runtime-trap codegen tracked under 3-10.</p>
 </details>
 
-<details class="strata">
-  <summary><span class="id">3-21</span> Port on::comptime + built-in comptime handlers (@nil, @not, ops) <span class="est">L, ~6h</span> ✅ DONE (registration)</summary>
+<details class="strata complete">
+  <summary><span class="id">3-21</span> Port on::comptime + built-in comptime handlers (@nil, @not, ops) <span class="done">✅</span> <span class="est">L, ~6h</span></summary>
   <div class="deps"><strong>Depends on:</strong> 3-10</div>
-  <p class="goal">H_COMPTIME_TOK_OFF/LEN/BODY parallel vecs, register_comptime_handler, fire_comptime_handlers, detect_on_phase returns 5 for 'comptime', loader dispatch.  Pre-populating built-in T0 comptime handlers (@if / @not / @nil / +, ==, ...) follows once the embedded_bundle gets its on::comptime calls added — mechanical work that doesn't gate the API.</p>
+  <p class="goal">Registration shipped.  H_COMPTIME_TOK_OFF/LEN/BODY parallel vecs, register_comptime_handler, fire_comptime_handlers, detect_on_phase returns 5 for 'comptime', loader dispatch.  Pre-populating built-in T0 comptime handlers (@if / @not / @nil / +, ==, ...) follows once the embedded_bundle gets its on::comptime calls added — mechanical work that doesn't gate the API.</p>
 </details>
 
-<details class="strata">
-  <summary><span class="id">3-22</span> Port the comptime engine (compileStrataHandlers + WASM-in-WASM) <span class="est">XL, 2d</span> 🟡 SKELETON; PRODUCTION DEFERRED TO 8-9</summary>
-  <p class="goal">comptime_engine_init / compile_handler / invoke / count API shipped.  Default implementation forwards to br_interpret_body — "compiling" stores the AST ref, "invoking" interprets the AST.  The 1.0 comptime engine IS the AST interpreter; handler bodies that only use the existing Compiler::* surface + arithmetic + @if work today.</p>
+<details class="strata partial">
+  <summary><span class="id">3-22</span> Port the comptime engine (compileStrataHandlers + WASM-in-WASM) <span class="partial">🟡</span> <span class="est">XL, 2d</span></summary>
+  <p class="goal">Skeleton shipped; production deferred to 8-9.  comptime_engine_init / compile_handler / invoke / count API live.  Default implementation forwards to br_interpret_body — "compiling" stores the AST ref, "invoking" interprets the AST.  The 1.0 comptime engine IS the AST interpreter; handler bodies that only use the existing Compiler::* surface + arithmetic + @if work today.</p>
   <p class="goal"><strong>Production path moved to Phase 8 (story 8-9).</strong>  Original plan was to embed a tiny WASM interpreter in Silicon (~2 days).  Reframed plan: link wasmtime as a C library from the native Phase 8 binary and call its embedding API.  Identical to how src/ uses Bun's <code>WebAssembly.instantiate</code> — no interpreter to author; wasmtime's Cranelift JIT does the work.  Gate: Phase 8 must land first.  Pre-Phase-8 (wasm-distributed sigilc), the AST interpreter remains the comptime engine, with the limits documented in <code>docs/strata-authoring-guide.md</code>.</p>
   <p class="goal">See <code>docs/comptime-via-compilation.md</code> for the original dissolution design (still valid; only the wasm-runtime acquisition strategy changed).</p>
   <div class="deps"><strong>Depends on:</strong> 3-1 through 3-21 (skeleton); 8-9 (production)</div>
 </details>
 
-<details class="strata">
-  <summary><span class="id">3-23</span> Write boot/tests/strata2_test.si covering all 56 src/ behaviours <span class="est">L, ~8h</span> ✅ DONE (single-file shape)</summary>
+<details class="strata complete">
+  <summary><span class="id">3-23</span> Write boot/tests/strata2_test.si covering all 56 src/ behaviours <span class="done">✅</span> <span class="est">L, ~8h</span></summary>
   <div class="deps"><strong>Depends on:</strong> 3-22</div>
-  <p class="goal">boot/tests/strata2_test.si exercises every API added in 3-1 through 3-22.  Single _start function with one boolean per check; split into per-behaviour files is a future shape change if the file count argues for it.  Generic-pattern / derive-pattern tests deferred until the firing integration into lower_program lands.</p>
+  <p class="goal">Single-file shape shipped.  boot/tests/strata2_test.si exercises every API added in 3-1 through 3-22.  Single _start function with one boolean per check; split into per-behaviour files is a future shape change if the file count argues for it.  Generic-pattern / derive-pattern tests deferred until the firing integration into lower_program lands.</p>
 </details>
 
-<details class="strata">
-  <summary><span class="id">3-24</span> Write the strata authoring guide <span class="est">L, ~6h</span> ✅ DONE</summary>
+<details class="strata complete">
+  <summary><span class="id">3-24</span> Write the strata authoring guide <span class="done">✅</span> <span class="est">L, ~6h</span></summary>
   <p class="goal">User-facing doc at <code>docs/strata-authoring-guide.md</code>.  Covers unified form, all five phase hooks, state API, module mutation, AST operations, types as data, diagnostics, a complete test recipe, tier model, observer-pattern composition, and the CompilerAPI stability contract.</p>
 </details>
 
