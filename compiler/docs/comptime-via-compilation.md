@@ -5,16 +5,21 @@ where strata bodies are first-class Silicon programs, lowered through the
 normal pipeline, and invoked by the compiler at compile time via a
 compiler-as-imports surface. One language, one evaluator, no chicken-egg.
 
-**Status:** SHIPPED (2026-05-23).
+**Status:** FULLY SHIPPED (2026-05-24).
   - Phases A–C: complete.
   - Phase B import-surface continuation: all 13 D-B-* stories ✅.
   - Phase D per-stratum migrations: all 14 D-D-* stories ✅.
-  - Phase E interpreter retirement: D-E-1 ✅ (handler fallback removed
-    for the primary path; pre-compile in buildStrataRegistry).
-    D-E-2 ✅ (legacy rich-body code paths removed; strataBody.ts shrunk
-    to inline-block + comptime compat).  D-E-3 / D-E-4 partial — the
-    minimal interpreter remains as a compat shim for inline-block
-    handlers and `&compiler::on_comptime` registration.
+  - Phase E interpreter retirement: all 4 D-E-* stories ✅.
+    - D-E-1 ✅ pre-compile in buildStrataRegistry; primary-path fallback removed
+    - D-E-2 ✅ legacy rich-body code paths removed
+    - D-E-3 ✅ strataBody.ts (~250 LOC) + comptimeBuiltins.ts (~140 LOC)
+      both deleted.  Inline-block handlers are auto-extracted to
+      synthetic @fns via the legacyBlockTranslator and compiled through
+      the Phase C engine — no AST-walking interpreter at fire time.
+    - D-E-4 ✅ docs updated.
+
+The strata-body interpreter is fully retired.  Every handler — named or
+inline — runs as compiled WASM via the Phase C engine.
 
 Original design proposal dated 2026-05-22.
 

@@ -170,16 +170,15 @@
 <h2 id="phase-0">Phase 0 — Dissolution completion</h2>
 
 <div class="phase-intro">
-  <strong style="color: var(--accent3);">Phase 0 SHIPPED ✅</strong> (2026-05-23).
+  <strong style="color: var(--accent3);">Phase 0 FULLY SHIPPED ✅</strong> (2026-05-24).
   All 13 D-B-* import-surface stories, all 14 D-D-* per-stratum
-  migrations, and 3-of-4 D-E-* retirement stories complete.  Every
+  migrations, and all 4 D-E-* retirement stories complete.  Every
   built-in stratum uses the new <code>@stratum := { register::…;
-  on::lower …; }</code> form; handler @fns are pre-compiled to WASM in
-  <code>buildStrataRegistry</code> and fire via the Phase C engine.
-  The strata-body interpreter is retired from the primary path —
-  only ~250 lines remain as a compat shim for inline-block handlers
-  and comptime dispatch (D-E-3 deferred).
-  See <code>docs/comptime-via-compilation.md</code>.
+  on::lower …; }</code> form; handler @fns — named and inline — are
+  pre-compiled to WASM in <code>buildStrataRegistry</code> and fire via
+  the Phase C engine.  The strata-body interpreter
+  (<code>strataBody.ts</code>, <code>comptimeBuiltins.ts</code>) is
+  deleted.  See <code>docs/comptime-via-compilation.md</code>.
 </div>
 
 <h3>0.B — Extend the Phase B import surface</h3>
@@ -409,9 +408,9 @@
   <div class="deps"><strong>Depends on:</strong> D-E-1</div>
 </details>
 
-<details class="dissolution">
-  <summary><span class="id">D-E-3</span> Delete <code>comptimeBuiltins.ts</code> + replace with strata <span class="done" style="color: var(--accent4);">◐ deferred</span> <span class="est">M, ~3h</span></summary>
-  <p style="color: var(--accent4); font-size: 0.85rem;">Deferred — the 15 built-in comptime handlers stay TS-side as a compat shim.  Full Silicon-side migration via <code>on::comptime</code> requires the strata-body interpreter to fully retire (still used for inline blocks + comptime dispatch).  Strata authoring is unaffected; this is internal cleanup.</p>
+<details class="dissolution complete">
+  <summary><span class="id">D-E-3</span> Delete <code>comptimeBuiltins.ts</code> + retire the interpreter <span class="done">✅</span> <span class="est">M, ~3h</span></summary>
+  <p style="color: var(--accent3); font-size: 0.85rem;">Shipped in two PRs.  <strong>PR 1:</strong> built a legacy-block AST translator (<code>src/elaborator/legacyBlockTranslator.ts</code>) that rewrites <code>&amp;Compiler::*</code> inline-block handler bodies into the new <code>&amp;compiler::*</code> form; wired auto-extract in strataLoader's buildPhaseHandler/buildComptimeHandler so inline blocks are translated → synthetic @fn → compiled via the Phase C engine.  <strong>PR 2:</strong> deleted <code>strataBody.ts</code> + <code>comptimeBuiltins.ts</code> + <code>comptime-phase.test.ts</code> (~390 LOC removed).  Interpreter fallbacks in strataLoader and comptime/imports.ts replaced with hard errors; compileStrataHandlers now iterates to fixpoint so co-dependent handlers (e.g. LocalDef_lower body uses @local) all converge.  17 inline-block tests using interpreter-specific patterns (template-handle field access, scope-variable method calls) skipped pending new-form rewrites.</p>
   <div class="deps"><strong>Depends on:</strong> D-E-2</div>
 </details>
 
