@@ -29,6 +29,7 @@
 @use '../ir/nodes.si';
 @use './body_scope.si';
 @use '../compiler_api/ctx.si';
+@use '../strata/registry.si';
 
 # ── Literal byte sequences ──────────────────────────────────────────
 @fn br_lit_compiler:Int := { (&str_ptr 'Compiler') + 4 };

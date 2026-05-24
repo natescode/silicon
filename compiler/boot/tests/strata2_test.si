@@ -231,6 +231,33 @@
 
   @local ok_fire_all := &@and ok_fire, ok_fire_cs;
 
+  # §5.5 ast_substitute.  Build a tiny snippet `T` (an AST_NAMESPACE
+  # with one segment), capture it, substitute T -> 42 (an int literal),
+  # then verify the new ast is the replacement.
+  @local sub_src := 'T';
+  @local sub_src_len := &WASM::i32_load (&str_ptr sub_src);
+  @local sub_src_bytes := (&str_ptr sub_src) + 4;
+  @local sub_toks := &lex sub_src_bytes, sub_src_len;
+  @local sub_prog := &parse sub_src_bytes, sub_src_len, sub_toks;
+  # The program has one element: a Namespace ['T'].
+  @local sub_node := &ast_field P_AST, sub_prog, 2;
+  @local sub_node_kind := &ast_kind P_AST, sub_node;
+  # Allocate a replacement: a fresh AST_INT_LIT 42.
+  @local repl_idx := &vec_offset P_AST;
+  P_AST = &ast_int_lit P_AST, 42;
+  # Get name span — seg0 of the captured Namespace.
+  @local name_off := &ast_field P_AST, sub_node, REGL_NS_SEG0_OFF;
+  @local name_len := &ast_field P_AST, sub_node, REGL_NS_SEG0_LEN;
+  @local cap_h := &ast_capture_template sub_node, AST_HANDLE_PRE;
+  @local sub_h := &ast_substitute cap_h, name_off, name_len, repl_idx;
+  @local sub_ast := &ast_handle_ast sub_h;
+  @local sub_ast_kind := &ast_kind P_AST, sub_ast;
+  @local ok_sub_ns   := (sub_node_kind == AST_NAMESPACE);
+  @local ok_sub_repl := (sub_ast == repl_idx);
+  @local ok_sub_kind := (sub_ast_kind == AST_INT_LIT);
+  @local ok_sub_a    := &@and ok_sub_ns, ok_sub_repl;
+  @local ok_sub      := &@and ok_sub_a, ok_sub_kind;
+
   @local ok_a := &@and ok_count, ok_tier;
   @local ok_b := &@and ok_a, ok_hooks;
   @local ok_c := &@and ok_b, ok_state;
@@ -240,7 +267,8 @@
   @local ok_g := &@and ok_f, ok_type;
   @local ok_h := &@and ok_g, ok_diag;
   @local ok_i := &@and ok_h, ok_cycle;
-  @local ok   := &@and ok_i, ok_fire_all;
+  @local ok_j := &@and ok_i, ok_fire_all;
+  @local ok   := &@and ok_j, ok_sub;
   &@if ok,
     { &write_str 1, 'strata2 OK' },
     { &write_str 1, 'strata2 FAIL' };

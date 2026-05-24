@@ -529,6 +529,183 @@
 @fn ast_handle_kind:Int handle:Int := { &vec_get AST_H_KIND, handle };
 @fn ast_handle_count:Int := { &vec_len AST_H_AST };
 
+# ── AST substitute / patch_types (Strata 2.0 §5.5) ──────────────────
+#
+# ast_substitute_walk node, name_off, name_len, repl
+#   Recursively walks node.  For any AST_NAMESPACE child whose first
+#   segment matches (name_off, name_len), the child index is rewritten
+#   to repl.  Container nodes (BLOCK, CALL, DEFINITION, BIN_OP) are
+#   rebuilt with the substituted children; leaf nodes pass through.
+#   Returns the new (or unchanged) node index.
+#
+# This is the simplest sufficient substitute: one binding per call,
+# matching only NAMESPACE's first segment.  Multi-binding callers
+# chain calls.  patch_types is the same shape but bound to the
+# typecheck context's inferredType registry (boot/types/check.si);
+# left as a stub here pending the typed-IR carrier integration.
+# Field-offset constants used by ast_substitute_walk.  Inlined here
+# (rather than imported from loader.si) so registry.si stays
+# self-contained — loader.si is loaded AFTER registry.si in the
+# bundle, so its @let names aren't visible from here.  Loader.si
+# uses these same numeric values via its own constants.
+@let REGL_NS_N_SEGS:Int    := 1;
+@let REGL_NS_SEG0_OFF:Int  := 2;
+@let REGL_NS_SEG0_LEN:Int  := 3;
+@let REGL_CALL_CALLEE:Int  := 1;
+@let REGL_CALL_N_ARGS:Int  := 2;
+@let REGL_CALL_ARG0:Int    := 3;
+@let REGL_DEF_HEADER_LEN:Int := 8;
+
+@fn ast_substitute_walk:Int node:Int, name_off:Int, name_len:Int, repl:Int := {
+  &@if (node < 0), { &@return node; };
+  @local k := &ast_kind P_AST, node;
+  # Namespace: check first-segment match.
+  &@if (k == AST_NAMESPACE), {
+    @local n_segs := &ast_field P_AST, node, REGL_NS_N_SEGS;
+    &@if (n_segs >= 1), {
+      @local s0_off := &ast_field P_AST, node, REGL_NS_SEG0_OFF;
+      @local s0_len := &ast_field P_AST, node, REGL_NS_SEG0_LEN;
+      &@if (s0_len == name_len), {
+        @local i := 0;
+        @local ok := 1;
+        &@loop ((ok == 1) * (i < s0_len) == 1), {
+          @local a := &WASM::i32_load8_u (P_SRC + s0_off + i);
+          @local b := &WASM::i32_load8_u (P_SRC + name_off + i);
+          &@if (a != b), { ok = 0; };
+          i = i + 1;
+        };
+        &@if (ok == 1), { &@return repl; };
+      };
+    };
+    &@return node;
+  };
+  # Leaves — pass through.
+  &@if (k == AST_INT_LIT),     { &@return node; };
+  &@if (k == AST_FLOAT_LIT),   { &@return node; };
+  &@if (k == AST_STRING_LIT),  { &@return node; };
+  &@if (k == AST_BOOL_LIT),    { &@return node; };
+  # BIN_OP [kind, op_off, op_len, left_idx, right_idx]
+  &@if (k == AST_BIN_OP), {
+    @local op_off := &ast_field P_AST, node, 1;
+    @local op_len := &ast_field P_AST, node, 2;
+    @local left   := &ast_field P_AST, node, 3;
+    @local right  := &ast_field P_AST, node, 4;
+    @local new_left  := &ast_substitute_walk left,  name_off, name_len, repl;
+    @local new_right := &ast_substitute_walk right, name_off, name_len, repl;
+    &@if ((new_left == left) * (new_right == right) == 1), { &@return node; };
+    @local new_n := &vec_offset P_AST;
+    P_AST = &ast_bin_op P_AST, op_off, op_len, new_left, new_right;
+    &@return new_n;
+  };
+  # CALL [kind, callee_idx, n_args, arg0_idx, ...]
+  &@if (k == AST_CALL), {
+    @local callee := &ast_field P_AST, node, REGL_CALL_CALLEE;
+    @local n_args := &ast_field P_AST, node, REGL_CALL_N_ARGS;
+    @local new_callee := &ast_substitute_walk callee, name_off, name_len, repl;
+    @local any_changed := &@if (new_callee == callee), { 0 }, { 1 };
+    @local new_args := &vec_new;
+    @local i := 0;
+    &@loop (i < n_args), {
+      @local a_old := &ast_field P_AST, node, (REGL_CALL_ARG0 + i);
+      @local a_new := &ast_substitute_walk a_old, name_off, name_len, repl;
+      &@if (a_new != a_old), { any_changed = 1; };
+      new_args = &vec_push new_args, a_new;
+      i = i + 1;
+    };
+    &@if (any_changed == 0), { &@return node; };
+    @local new_n := &vec_offset P_AST;
+    P_AST = &ast_call_start P_AST, new_callee, n_args;
+    @local j := 0;
+    &@loop (j < n_args), {
+      P_AST = &ast_call_arg P_AST, (&vec_get new_args, j);
+      j = j + 1;
+    };
+    &@return new_n;
+  };
+  # BLOCK [kind, n_stmts, has_trailing, stmt0_idx, ..., trailing_idx]
+  &@if (k == AST_BLOCK), {
+    @local n_stmts := &ast_field P_AST, node, 1;
+    @local has_trailing := &ast_field P_AST, node, 2;
+    @local total := n_stmts;
+    &@if (has_trailing == 1), { total = total + 1; };
+    @local new_stmts := &vec_new;
+    @local any_changed := 0;
+    @local i := 0;
+    &@loop (i < total), {
+      @local s_old := &ast_field P_AST, node, (3 + i);
+      @local s_new := &ast_substitute_walk s_old, name_off, name_len, repl;
+      &@if (s_new != s_old), { any_changed = 1; };
+      new_stmts = &vec_push new_stmts, s_new;
+      i = i + 1;
+    };
+    &@if (any_changed == 0), { &@return node; };
+    @local new_n := &vec_offset P_AST;
+    P_AST = &ast_block_start P_AST, n_stmts, has_trailing;
+    @local j := 0;
+    &@loop (j < total), {
+      P_AST = &ast_block_cell P_AST, (&vec_get new_stmts, j);
+      j = j + 1;
+    };
+    &@return new_n;
+  };
+  # DEFINITION [kind, kw_off, kw_len, name_off, name_len, type_off,
+  #             type_len, n_params, param0_idx, ..., binding_idx]
+  &@if (k == AST_DEFINITION), {
+    @local kw_off    := &ast_field P_AST, node, 1;
+    @local kw_len    := &ast_field P_AST, node, 2;
+    @local nm_off    := &ast_field P_AST, node, 3;
+    @local nm_len    := &ast_field P_AST, node, 4;
+    @local ty_off    := &ast_field P_AST, node, 5;
+    @local ty_len    := &ast_field P_AST, node, 6;
+    @local n_params  := &ast_field P_AST, node, 7;
+    @local new_params := &vec_new;
+    @local any_changed := 0;
+    @local i := 0;
+    &@loop (i < n_params), {
+      @local p_old := &ast_field P_AST, node, (REGL_DEF_HEADER_LEN + i);
+      @local p_new := &ast_substitute_walk p_old, name_off, name_len, repl;
+      &@if (p_new != p_old), { any_changed = 1; };
+      new_params = &vec_push new_params, p_new;
+      i = i + 1;
+    };
+    @local b_old := &ast_field P_AST, node, (REGL_DEF_HEADER_LEN + n_params);
+    @local b_new := &ast_substitute_walk b_old, name_off, name_len, repl;
+    &@if (b_new != b_old), { any_changed = 1; };
+    &@if (any_changed == 0), { &@return node; };
+    @local new_n := &vec_offset P_AST;
+    P_AST = &ast_definition_start P_AST,
+              kw_off, kw_len, nm_off, nm_len, ty_off, ty_len, n_params;
+    @local j := 0;
+    &@loop (j < n_params), {
+      P_AST = &ast_definition_cell P_AST, (&vec_get new_params, j);
+      j = j + 1;
+    };
+    P_AST = &ast_definition_cell P_AST, b_new;
+    &@return new_n;
+  };
+  node
+};
+
+# ast_substitute handle, name_off, name_len, repl
+#   Public surface: substitute on a captured AST handle.  Returns a
+#   FRESH handle id pointing at the substituted AST.  Original handle
+#   unchanged.
+@fn ast_substitute:Int handle:Int, name_off:Int, name_len:Int, repl:Int := {
+  @local orig_ast  := &vec_get AST_H_AST, handle;
+  @local orig_kind := &vec_get AST_H_KIND, handle;
+  @local new_ast   := &ast_substitute_walk orig_ast, name_off, name_len, repl;
+  &ast_handle_alloc new_ast, orig_kind
+};
+
+# ast_patch_types — stub.  In src/ this walks Definition nodes and
+# rewrites their inferredType field.  boot/ doesn't carry inferredType
+# on AST nodes today (the typed-IR carrier lands separately), so this
+# is a pass-through that just clones the handle.  Wire-up follows the
+# typed-IR slice.
+@fn ast_patch_types:Int handle:Int, name_off:Int, name_len:Int, repl:Int := {
+  &ast_clone handle
+};
+
 # ── Diagnostics (Strata 2.0 §6 / T-5) ────────────────────────────────
 #
 # `&Compiler::diag::error code, span, message, hint?` and
