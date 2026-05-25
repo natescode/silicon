@@ -1041,8 +1041,8 @@
 
 <details class="stdlib">
   <summary><span class="id">5a-7</span> Rewrite compiler's internal data structures using Vec/HashMap/Option <span class="est">L, ~8h</span></summary>
-  <div class="deps"><strong>Depends on:</strong> 5a-6</div>
-  <p style="color: var(--muted); font-style: italic;">Deferred — gated on Vec + HashMap shipping first.</p>
+  <div class="deps"><strong>Depends on:</strong> 5a-6 (HashMap shipped); also depends on the <code>boot/</code> Silicon compiler being open for revision.</div>
+  <p style="color: var(--muted); font-style: italic;"><strong>Deferred to the boot/ port sprint.</strong>  The "compiler's internal data structures" named in the roadmap (<code>registry.operators</code>, handler maps, string arenas) are TypeScript objects in <code>src/</code>; the meaningful rewrite is in <code>boot/</code>, where the self-hosted compiler currently uses hand-coded record types that the new <code>Vec[i32]</code> + <code>HashMap[i32 → i32]</code> stdlib types replace.  <code>CLAUDE.md</code> prohibits boot/ modifications in the current work bucket, so this story lands when boot/ opens up — likely alongside or shortly after story 3-26 (Phase 5 grammar revisions → boot/).  The <code>src/</code>-side prerequisite work (allocator primitives, Vec, HashMap as Silicon stdlib libraries) is complete and tested end-to-end through compiled wasm; the boot/ port is mechanical translation from there.</p>
 </details>
 
 <h3>5b — Unsigned integer types</h3>
