@@ -222,3 +222,58 @@ describe('Phase 5c-2: Slice[T] bounds-checked indexing', () => {
         expect(ex.test_byte_at_out()).toBe(1234)
     })
 })
+
+describe('Phase 5c-3: String → Slice[u8] bridge', () => {
+    test('string_as_slice reports the correct byte length', async () => {
+        const ex = await compileAndRun({
+            test_len_abc:  `{ @local s:Slice[u8] := &string_as_slice 'abc';   &slice_len s }`,
+            test_len_hi:   `{ @local s:Slice[u8] := &string_as_slice 'hi';    &slice_len s }`,
+            test_len_zero: `{ @local s:Slice[u8] := &string_as_slice '';      &slice_len s }`,
+        })
+        expect(ex.test_len_abc()).toBe(3)
+        expect(ex.test_len_hi()).toBe(2)
+        expect(ex.test_len_zero()).toBe(0)
+    })
+
+    test('slice_get_byte over a string slice yields the UTF-8 byte values', async () => {
+        const ex = await compileAndRun({
+            test_a:    `{ @local s:Slice[u8] := &string_as_slice 'abc'; &slice_get_byte s, 0 }`,
+            test_b:    `{ @local s:Slice[u8] := &string_as_slice 'abc'; &slice_get_byte s, 1 }`,
+            test_c:    `{ @local s:Slice[u8] := &string_as_slice 'abc'; &slice_get_byte s, 2 }`,
+            test_zero: `{ @local s:Slice[u8] := &string_as_slice 'A';   &slice_get_byte s, 0 }`,
+        })
+        expect(ex.test_a()).toBe(97)     // 'a'
+        expect(ex.test_b()).toBe(98)     // 'b'
+        expect(ex.test_c()).toBe(99)     // 'c'
+        expect(ex.test_zero()).toBe(65)  // 'A'
+    })
+
+    test('bounds-checked access composes with the string slice', async () => {
+        const ex = await compileAndRun({
+            test_in:  `{
+                @local s:Slice[u8] := &string_as_slice 'xyz';
+                &option_unwrap_or (&slice_at_byte s, 1), 0
+            }`,
+            test_out: `{
+                @local s:Slice[u8] := &string_as_slice 'xyz';
+                &option_unwrap_or (&slice_at_byte s, 99), 1234
+            }`,
+        })
+        expect(ex.test_in()).toBe(121)   // 'y'
+        expect(ex.test_out()).toBe(1234) // out-of-range → None → default
+    })
+
+    test('emoji round-trips its UTF-8 bytes via the slice', async () => {
+        // '☃' is U+2603 → 0xE2 0x98 0x83 in UTF-8 (3 bytes).
+        const ex = await compileAndRun({
+            test_len:  `{ @local s:Slice[u8] := &string_as_slice '☃'; &slice_len s }`,
+            test_b0:   `{ @local s:Slice[u8] := &string_as_slice '☃'; &slice_get_byte s, 0 }`,
+            test_b1:   `{ @local s:Slice[u8] := &string_as_slice '☃'; &slice_get_byte s, 1 }`,
+            test_b2:   `{ @local s:Slice[u8] := &string_as_slice '☃'; &slice_get_byte s, 2 }`,
+        })
+        expect(ex.test_len()).toBe(3)
+        expect(ex.test_b0()).toBe(0xE2)
+        expect(ex.test_b1()).toBe(0x98)
+        expect(ex.test_b2()).toBe(0x83)
+    })
+})

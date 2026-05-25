@@ -486,7 +486,17 @@ function buildDataSection(segments: IRDataSegment[]): WasmBuffer {
     return body
 }
 
-/** Decode a WAT-inline string (with \xx escapes) to raw bytes. */
+/** Decode a WAT-inline string (with \xx escapes) to raw bytes.
+ *
+ * Per the WAT spec the only \-escapes are \n \t \r \\ \" \' and \xx where
+ * xx is exactly two hex digits.  An earlier version had a `\0` shortcut
+ * branch that incorrectly intercepted the first character of \00-\0F hex
+ * escapes — emitting `\03` as `[0, '3']` instead of `[0x03]`.  That
+ * silently corrupted every string literal's length header (and zero
+ * bytes embedded in payloads) when compiled through the direct binary
+ * emitter; surfaced when slice's string_as_slice bridge (5c-3) tried
+ * to read the length prefix at runtime.
+ */
 function decodeWatString(encoded: string): number[] {
     const out: number[] = []
     let i = 0
@@ -499,8 +509,8 @@ function decodeWatString(encoded: string): number[] {
             else if (c === '\\') { out.push(92); i += 2 }
             else if (c === '"') { out.push(34); i += 2 }
             else if (c === '\'') { out.push(39); i += 2 }
-            else if (c === '0') { out.push(0); i += 2 }
-            else if (/[0-9a-fA-F]/.test(c) && i + 2 < encoded.length) {
+            else if (/[0-9a-fA-F]/.test(c) && i + 2 < encoded.length
+                     && /[0-9a-fA-F]/.test(encoded[i + 2])) {
                 out.push(parseInt(encoded.slice(i + 1, i + 3), 16)); i += 3
             } else {
                 out.push(encoded.charCodeAt(i)); i++

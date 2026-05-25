@@ -102,3 +102,22 @@
         { &Some (&slice_get_byte s, i) },
         { none_val }
 };
+
+# ── String → Slice[u8] bridge (5c-3) ──────────────────────────────────
+# Silicon strings are 4-byte-LE-length-prefixed UTF-8 buffers.  This
+# bridge yields a Slice[u8] that views the byte payload (the length
+# header is skipped — ptr advances past it).  The slice is a borrow:
+# its lifetime is bounded by whatever owns the underlying string.
+#
+# The element type tag `u8` is nominal — slice_get_byte / slice_set_byte
+# work on any Slice[T], so the tag exists to document intent and to
+# catch type errors (e.g. accidentally passing a Slice[Int] to a byte-
+# only consumer).
+#
+# Prelude provides &str_ptr / &str_len; both are pre-registered as
+# String → Int in the typechecker.
+@fn string_as_slice:Slice[u8] s:String := {
+    @local p:Int := &str_ptr s;
+    @local n:Int := &str_len s;
+    &Slice (p + 4), n
+};
