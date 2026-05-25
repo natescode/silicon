@@ -112,8 +112,8 @@
 <p class="subtitle">
   Session-sized work units to ship 1.0.  Stories are grouped by phase (matching
   <a href="sigil-1.0-roadmap.md" style="color: var(--accent);">sigil-1.0-roadmap.md</a>)
-  with the in-progress dissolution work as Phase 0 and a cross-cutting
-  Compiler-as-a-Service section as Phase 8.5.  Click any story to expand its
+  with the in-progress dissolution work as Phase 1 and a cross-cutting
+  Compiler-as-a-Service section as Phase 10.  Click any story to expand its
   goal, acceptance criteria, and subtasks.  Date: 2026-05-23.
 </p>
 
@@ -125,14 +125,14 @@
   (<code>sgl</code> tool, LSP server, IDE plugins, formatter, REPL, future
   analysers) uses the same public API surface.  LSP-protocol conformance is
   optional — the underlying API may be richer.  CaaS is split across two
-  phases:  <strong>Phase 0.5 — CaaS Foundation</strong> is required-for-1.0
-  and must land <em>before</em> the boot/ port (Phase 3) so the self-hosted
-  compiler inherits the right shape.  <strong>Phase 8.5 — CaaS Consumer
+  phases:  <strong>Phase 2 — CaaS Foundation</strong> is required-for-1.0
+  and must land <em>before</em> the boot/ port (Phase 7) so the self-hosted
+  compiler inherits the right shape.  <strong>Phase 10 — CaaS Consumer
   APIs</strong> is the rest:  some 1.0, some post-1.0 stretch.  The LSP
   (v1.1's Phase 9b) consumes both.
   <br/><br/>
   <strong>2. Interpreter-first debugging.</strong>  The Silicon
-  interpreter (Phase 7) is the primary debug tool for 1.0 — it shows
+  interpreter (Phase 11) is the primary debug tool for 1.0 — it shows
   Silicon values as Silicon types and covers app-developer needs.  Native
   DWARF emission (v1.1's Phase 9a) is moved out of 1.0; native binaries
   still get function-name symbols for free from QBE/linker, so stack
@@ -153,29 +153,28 @@
 <div class="toc">
   <h3>Contents</h3>
   <ol>
-    <li><a href="#phase-0">Phase 0 — Dissolution completion</a></li>
-    <li><a href="#phase-0-5">Phase 0.5 — CaaS Foundation ✅ (required-for-1.0; precedes boot/ port)</a></li>
-    <li><a href="#phase-1">Phase 1 — Language foundations (<code>@struct</code>, typechecker always-on)</a></li>
-    <li><a href="#phase-2">Phase 2 — Error messages</a></li>
-    <li><a href="#phase-3">Phase 3 — Strata 2.0 in <code>boot/</code></a></li>
-    <li><a href="#phase-3-5">Phase 3.5 — <code>@comptime</code> (user-level)</a></li>
-    <li><a href="#phase-4">Phase 4 — <code>@defer</code></a> ✅</li>
-    <li><a href="#phase-5">Phase 5 — Generic stdlib + type system</a> 🟡</li>
-    <li><a href="#phase-6">Phase 6 — <code>sgl</code> CLI</a> 🟡</li>
-    <li><a href="#phase-7">Phase 7 — Silicon interpreter</a></li>
-    <li><a href="#phase-7-5">Phase 7.5 — <code>sgl</code> interpreter-backed subcommands</a></li>
-    <li><a href="#phase-8">Phase 8 — Native backend (QBE)</a></li>
-    <li><a href="#phase-caas">Phase 8.5 — CaaS Consumer APIs (workspace, symbols, incremental)</a></li>
-    <li><a href="#phase-9">Phase 9 — DWARF + LSP <em style="color: var(--accent4); font-size: 0.85em;">[moved to v1.1]</em></a></li>
-    <li><a href="#phase-10">Phase 10 — Stability + distribution</a></li>
+    <li><a href="#phase-1">Phase 1 — Dissolution completion ✅</a></li>
+    <li><a href="#phase-2">Phase 2 — CaaS Foundation ✅ (required-for-1.0; precedes boot/ port)</a></li>
+    <li><a href="#phase-3">Phase 3 — Language foundations (<code>@struct</code>, typechecker always-on) ✅</a></li>
+    <li><a href="#phase-4">Phase 4 — Error messages ✅</a></li>
+    <li><a href="#phase-5">Phase 5 — <code>@defer</code> ✅</a></li>
+    <li><a href="#phase-6">Phase 6 — Generic stdlib + type system 🟡</a></li>
+    <li><a href="#phase-7">Phase 7 — boot/ port, <code>@comptime</code> + advanced stdlib</a></li>
+    <li><a href="#phase-8">Phase 8 — <code>sgl</code> CLI 🟡 (6/6 stories shipped)</a></li>
+    <li><a href="#phase-9">Phase 9 — Native backend (QBE)</a></li>
+    <li><a href="#phase-10">Phase 10 — CaaS Consumer APIs (workspace, symbols, incremental)</a></li>
+    <li><a href="#phase-11">Phase 11 — Silicon interpreter (written in Silicon, compiled to native via QBE)</a></li>
+    <li><a href="#phase-12">Phase 12 — <code>sgl</code> interpreter-backed subcommands</a></li>
+    <li><a href="#phase-13">Phase 13 — Stability + distribution</a></li>
+    <li><a href="#phase-14">Phase 14 — DWARF + LSP <em style="color: var(--accent4); font-size: 0.85em;">[moved to v1.1]</em></a></li>
   </ol>
 </div>
 
 <!-- ================================================================== -->
-<h2 id="phase-0">Phase 0 — Dissolution completion</h2>
+<h2 id="phase-1">Phase 1 — Dissolution completion</h2>
 
 <div class="phase-intro">
-  <strong style="color: var(--accent3);">Phase 0 FULLY SHIPPED ✅</strong> (2026-05-24).
+  <strong style="color: var(--accent3);">Phase 1 FULLY SHIPPED ✅</strong> (2026-05-24).
   All 13 D-B-* import-surface stories, all 14 D-D-* per-stratum
   migrations, and all 4 D-E-* retirement stories complete.  Every
   built-in stratum uses the new <code>@stratum := { register::…;
@@ -426,10 +425,10 @@
 </details>
 
 <!-- ================================================================== -->
-<h2 id="phase-0-5">Phase 0.5 — CaaS Foundation</h2>
+<h2 id="phase-2">Phase 2 — CaaS Foundation</h2>
 
 <div class="phase-intro">
-  <strong style="color: var(--accent3);">Phase 0.5 FULLY SHIPPED ✅</strong> (2026-05-24).
+  <strong style="color: var(--accent3);">Phase 2 FULLY SHIPPED ✅</strong> (2026-05-24).
   CaaS-1 (<code>docs/compiler-as-a-service.md</code>), CaaS-2 (immutable
   AST with <code>readonly</code> fields + <code>SemanticModel</code> WeakMap),
   CaaS-3 (full queryable API: <code>typeOf</code>, <code>symbolAt</code>,
@@ -437,7 +436,7 @@
   (diagnostics-as-data; zero <code>console.*</code> in compiler core) are all
   complete.  Commit <code>aab0835</code>. 942 tests pass; 12 new CaaS-specific
   tests in <code>src/types/semantic-model.test.ts</code>.
-  The consumer-facing APIs (workspace, symbols, incremental) live in Phase 8.5.
+  The consumer-facing APIs (workspace, symbols, incremental) live in Phase 10.
 </div>
 
 <details class="caas complete">
@@ -504,9 +503,9 @@
 </details>
 
 <!-- ================================================================== -->
-<h2 id="phase-1">Phase 1 — Language foundations</h2>
+<h2 id="phase-3">Phase 3 — Language foundations</h2>
 
-<p style="color: var(--accent3); font-size: 0.85rem;">Phase 1a (1a-1 through 1a-8) and Phase 1b (1b-1 through 1b-6) <strong>FULLY SHIPPED ✅</strong> (2026-05-24).
+<p style="color: var(--accent3); font-size: 0.85rem;">Phase 3a (1a-1 through 1a-8) and Phase 3b (1b-1 through 1b-6) <strong>FULLY SHIPPED ✅</strong> (2026-05-24).
   Constructor generation, field read/write, nested struct chains, typechecker support, and boot/ port (self-host gate passing) all complete.</p>
 
 <h3>1a — Product types (<code>@struct</code>)</h3>
@@ -559,7 +558,7 @@
 
 <details class="lang complete">
   <summary><span class="id">1a-8</span> Port @struct to boot/ <span class="done">✅</span> <span class="est">L, ~8h</span></summary>
-  <div class="deps"><strong>Depends on:</strong> 1a-7, Phase 3 substantially complete</div>
+  <div class="deps"><strong>Depends on:</strong> 1a-7, Phase 7 substantially complete</div>
   <p style="color: var(--accent3); font-size: 0.85rem;">Full @struct support added to <code>boot/ir/lower.si</code>: struct layout registry (STRUCT_NM/FIELD/LOCAL parallel vecs), <code>lower_struct_def</code> constructor builder, <code>lower_struct_field_read/store</code> chain helpers, pass-0a in <code>lower_program</code>, @local type tracking, n_segs≥2 dispatch for field read/write.  <code>StructDef</code> stratum added to <code>boot/strata/builtin/defkinds.si</code>.  <code>struct_init</code> wired in <code>boot/stage1.si</code>.  Embedded bundle regenerated.  <code>./build.sh check</code> fixed-point: byte-equal ✓.  All 20 boot tests pass.</p>
 </details>
 
@@ -599,9 +598,9 @@
 </details>
 
 <!-- ================================================================== -->
-<h2 id="phase-2">Phase 2 — Error messages</h2>
+<h2 id="phase-4">Phase 4 — Error messages</h2>
 
-<p style="color: var(--accent3); font-size: 0.85rem;">Phase 2 (2-1 through 2-8) <strong>FULLY SHIPPED ✅</strong> (2026-05-24).
+<p style="color: var(--accent3); font-size: 0.85rem;">Phase 4 (2-1 through 2-8) <strong>FULLY SHIPPED ✅</strong> (2026-05-24).
   Delivered: Levenshtein "did you mean" hints on unbound identifiers (<code>closest()</code> in
   <code>src/errors/diagnostic.ts</code>), Rust-style caret rendering in <code>renderPretty</code>
   (via <code>Diagnostic.snippet?</code>), <code>ArityMismatch</code> (E0009) and <code>MissingReturn</code> (E0008)
@@ -681,56 +680,202 @@
 </details>
 
 <!-- ================================================================== -->
-<h2 id="phase-3">Phase 3 — Strata 2.0 in <code>boot/</code></h2>
+<h2 id="phase-5">Phase 5 — <code>@defer</code></h2>
+
+<p style="color: var(--accent3); font-size: 0.85rem;">Phase 5 (4-1 through 4-4) <strong>FULLY SHIPPED ✅</strong> (2026-05-24).
+  <code>@defer</code> lives as an expression-keyword stratum in
+  <code>src/strata/control.si</code>; the lowering threads a per-function
+  <code>deferStack</code> on <code>LowerCtx</code>, with cleanup materialised in
+  LIFO order at every exit path — both the fall-through end of
+  <code>lowerFunctionBody</code> and every <code>&amp;@return</code> via the new
+  <code>compiler_emitReturn</code> primitive in <code>src/comptime/imports.ts</code>.
+  Non-void returns preserve the body's value through a synthetic
+  <code>__defer_result_N</code> local.  14 new tests (9 unit in
+  <code>src/strata/defer.test.ts</code> + 5 e2e against three new example
+  programs) cover registration, void/non-void cleanup, multi-defer LIFO,
+  early-<code>@return</code> integration, and the no-defer-no-wrap invariant.
+  Also fixed a latent fall-through bug in <code>lowerBuiltinCall</code> where
+  on::lower handlers returning a null IR (the legitimate "no inline IR"
+  answer that <code>@defer</code> needs) were emitting a phantom
+  <code>(call $kw …)</code> against an undefined function.
+  Full suite: 976 pass, 22 skip, 0 fail attributable to Phase 5 (the 8
+  pre-existing flaky property-test timeouts on this machine are unchanged).
+</p>
+
+<details class="lang complete">
+  <summary><span class="id">4-1</span> Design @defer stratum (state model, finalize semantics) <span class="done">✅</span> <span class="est">M, ~3h</span></summary>
+  <p class="goal">Per-function <code>deferStack: IRExpr[]</code> on <code>LowerCtx</code>, fresh per function-body lowering.  <code>@defer expr;</code> registered as an expression-keyword (parallel to <code>@return</code>); the on::lower handler pushes the lowered cleanup IR and emits no inline IR at the site.  Cleanup materialises at two exit sites: end-of-body wrap in <code>lowerFunctionBody</code>, and every <code>&amp;@return</code> via <code>compiler_emitReturn</code>.  LIFO order across both paths.  Non-void return values are hoisted into a synthetic <code>__defer_result_N</code> local so cleanup runs between the value's computation and its return.</p>
+</details>
+
+<details class="lang complete">
+  <summary><span class="id">4-2</span> Implement @defer as a stratum in src/strata/ <span class="done">✅</span> <span class="est">M, ~4h</span></summary>
+  <p class="goal"><code>Defer</code> stratum + <code>Defer_lower</code> @fn added to <code>src/strata/control.si</code>; <code>Return_lower</code> swapped to call the new <code>compiler_emitReturn</code> primitive instead of bare <code>ir_makeReturn</code>.  Two new host primitives in <code>src/comptime/imports.ts</code>: <code>compiler_registerDefer</code> (lowers args[0] and pushes onto <code>env.ctx.deferStack</code>) and <code>compiler_emitReturn</code> (wraps the return in a Block prefixed by LIFO-ordered cleanup ExprStmts when the stack is non-empty).  Extern signatures declared in <code>src/strata/modules/compiler.si</code>.  <code>LowerCtx.deferStack</code> initialised in all three ctx-creation sites (top-level, startCtx, lowerFunctionBody childCtx); drained by <code>wrapBodyWithDefers</code> at end of body lowering.  <code>CompilerCtx</code> exposes the stack as a <code>{push, drain, length}</code> accessor for the primitives to use.</p>
+</details>
+
+<details class="lang complete">
+  <summary><span class="id">4-3</span> Tests: early return / multiple returns / nested defer <span class="done">✅</span> <span class="est">M, ~3h</span></summary>
+  <div class="deps"><strong>Depends on:</strong> 4-2</div>
+  <p class="goal">9 unit tests in <code>src/strata/defer.test.ts</code> cover: <code>@defer</code> keyword registration, <code>Defer_lower</code> claimed as a named handler, handler compiles to WASM, single @defer in void body appends one cleanup ExprStmt, multiple @defers fire in LIFO source order, function with no @defer is not wrapped (no <code>__defer_result</code> in WAT), non-void function uses temp local with cleanup between LocalSet and trailing LocalGet, early <code>@return</code> emits cleanup before the return instruction, multiple defers + @return preserve LIFO across the return path.  All 9 pass.</p>
+</details>
+
+<details class="lang complete">
+  <summary><span class="id">4-4</span> Replace compiler's arena cleanup with @defer <span class="done">✅</span> <span class="est">M, ~4h</span></summary>
+  <div class="deps"><strong>Depends on:</strong> 4-3</div>
+  <p class="goal">Three new example files (<code>defer_basic.si</code>, <code>defer_lifo.si</code>, <code>defer_with_return.si</code>) under <code>src/e2e/examples/</code> demonstrate the acquire/defer-release pattern that compiler-internal code will adopt.  Five new e2e tests in <code>src/e2e/e2e.test.ts</code> exercise each example end-to-end through parse → strata → elaborate → typecheck → lower → emit, asserting on relative positions of cleanup vs. return in the emitted WAT.  The literal rewrite of <code>boot/</code> compiler arena cleanups defers to story 3-25 (Port @defer to boot/) per the CLAUDE.md constraint not to modify <code>boot/</code> Silicon files in this work bucket.</p>
+</details>
+
+<p style="color: var(--muted); font-style: italic; margin-top: 12px;">
+  <strong>Note:</strong> the original 4-5 "Port @defer to boot/" moved to
+  Phase 7 as <a href="#phase-7">story 3-25</a> — Phase 7 owns the
+  outstanding boot/ work for the Strata 2.0 surface.  Phase 5 closes when
+  src/-side 4-1 through 4-4 land; the boot/ port follows whenever the
+  rest of Phase 7 boot/ work is scheduled.
+</p>
+
+<!-- ================================================================== -->
+<h2 id="phase-6">Phase 6 — Generic stdlib + type system</h2>
+
+<p style="color: var(--accent4); font-size: 0.85rem;">Phase 6 <strong>PARTIAL 🟡</strong> (2026-05-24). 18/18 src/ stories shipped (5a-7 and 5c-4 moved to Phase 7 boot/ port). Originally
+  shipped; 6 deferred.  Shipped surface: <code>Option[T]</code>,
+  <code>Result[T, E]</code>, unsigned ints u8/u16/u32/u64 with
+  <code>*_u</code> codegen, <code>$fn</code> function-type annotation
+  resolving to <code>Function</code>-kind SiliconTypes, allocator
+  primitives (<code>realloc</code> + <code>mem_copy</code>),
+  <code>Vec[i32]</code> + <code>HashMap[i32 → i32]</code> stdlib
+  libraries, first-class functions via funcref table +
+  <code>@fnref</code> + <code>@call_indirect</code>, and the Vec.map
+  capstone proof, plus WASI bindings migrated to spec-correct
+  <code>u32</code> / <code>u64</code> via new <code>@toU32</code> +
+  <code>@toU64</code> casts.  All src/-scope Phase 6 work shipped — Workstreams A + B + C + D
+  complete, plus 5a-3 (<code>@try</code> unwrap).  The two remaining
+  stories (5a-7 compiler-internals refactor, 5c-4 (ptr,len)→Slice[u8]
+  migration) are explicitly boot/-port work and ride with story 3-26's
+  bucket (Phase 7); src/ Phase 6 is closed.
+</p>
+
+<h3>5a — Generic stdlib</h3>
+
+<details class="stdlib complete">
+  <summary><span class="id">5a-1</span> @generic Option as a stratum + Silicon source <span class="done">✅</span> <span class="est">M, ~3h</span></summary>
+  <p class="goal"><code>src/stdlib/option.si</code> declares <code>@type Option[T] := $Some value:T | $None;</code> and ships one helper: <code>option_unwrap_or[T] opt:Option[T], dflt:T</code>.  Single-arg parametric annotations work cleanly via existing HM-lite (38 unit tests + 33 integration tests from Phase 0 cover the inference path).  4 new tests in <code>src/stdlib/stdlib.test.ts</code> exercise standalone parse, mixed-type usage, nominal distinctness (<code>Option[Int]</code> ≠ <code>Option[Float]</code>), and end-to-end WAT compilation.</p>
+</details>
+
+<details class="stdlib complete">
+  <summary><span class="id">5a-2</span> @generic Result + helpers <span class="done">✅</span> <span class="est">M, ~4h</span></summary>
+  <div class="deps"><strong>Depends on:</strong> 5a-1</div>
+  <p class="goal"><code>src/stdlib/result.si</code> declares <code>@type Result[T, E] := $Ok value:T | $Err error:E;</code> plus two helpers: <code>result_unwrap_or[T, E] r:Result[T, E], dflt:T</code> and <code>result_is_ok[T, E] r:Result[T, E]</code>.  Multi-arg type annotations in parameter position were initially deferred when the surface bug hit; the Phase 5 grammar revision fixed the underlying PEG-backtracking issue (<code>typeArgs</code> rule now tolerates whitespace), so the helpers landed cleanly afterward.  6 new tests cover the type declaration, constructor inference, match-based consumption, the two helpers, and Option+Result coexistence.</p>
+  <p style="color: var(--muted); font-size: 0.85rem;"><strong>Scope note.</strong>  The <code>@try</code> shorthand originally bundled into this story migrated to <a href="#phase-5">5a-3</a>.  The <code>?</code> postfix operator originally also bundled in is dropped — Silicon's grammar bans postfix operators by design, so only the prefix-keyword <code>@try</code> form ships.</p>
+</details>
+
+<details class="stdlib complete">
+  <summary><span class="id">5a-3</span> <code>@try</code> unwrap shorthand for Result <span class="done">✅</span> <span class="est">M, ~2h</span></summary>
+  <p class="goal">New <code>@try</code> expression keyword registered in <code>src/strata/control.si</code>; lowering implemented in <code>src/ir/lower.ts:lowerTry</code>.  <code>&amp;@try r</code> evaluates <code>r</code> into a fresh local, branches on the tag byte, and either takes the Ok payload at offset +4 or <code>@return</code>s the original Result pointer unchanged so the Err propagates to the caller.  Because <code>@type Result[T, E]</code> lays out as <code>[tag:i32, field0:i32]</code> under <code>@struct</code>'s pad-to-max — Ok's value and Err's error share the same slot — Err propagation is a single pointer pass-through; no fresh allocation needed.  5 e2e tests in <code>src/stdlib/try.test.ts</code> cover Ok extraction, Err early-return, Err payload preservation, chained <code>@try</code> across two functions, and arity-error reporting.</p>
+  <p style="color: var(--accent4); font-size: 0.85rem;"><strong>Scope correction.</strong>  The original story name bundled <code>?</code> (postfix unwrap, Rust-style) into the same deliverable.  Silicon's grammar deliberately bans post-fix operators, so the <code>?</code> form is permanently off-spec.  Option's <code>@try</code> variant (early-return-on-None) is omitted from 1.0 — Option doesn't carry an error-channel payload to propagate, so the desugaring would need a return-type-aware decision (None of <code>Option[U]</code> vs <code>None</code> of the caller's Option).  Tracked as a separate 1.1 story.</p>
+</details>
+
+<details class="stdlib complete">
+  <summary><span class="id">5a-4</span> Vec[T] — growable array (alloc + grow + len + idx) <span class="done">✅</span> <span class="est">L, ~6h</span></summary>
+  <div class="deps"><strong>Depends on:</strong> allocator primitives <code>realloc</code> + <code>mem_copy</code> (Workstream A Step 1).</div>
+  <p class="goal"><code>src/stdlib/vec.si</code> ships <code>Vec[i32]</code> as a Silicon stdlib library (not a stratum — pure Silicon source compiled through the regular pipeline).  Split-header layout (12-byte header at the Vec pointer; data buffer separately allocated) keeps the header pointer stable across grow operations, so callers never have to rebind after a push.  API: <code>vec_new</code>, <code>vec_len</code>, <code>vec_capacity</code>, <code>vec_get_i32</code>, <code>vec_set_i32</code>, <code>vec_push_i32</code> (doubles capacity on overflow via <code>realloc</code>), <code>vec_pop_i32</code>.  6 runtime tests in <code>src/stdlib/vec.test.ts</code> compile + instantiate the wasm and exercise: header invariants, push/get round-trip below capacity, the grow-with-realloc path (2 → 4 → 8), set, pop, header-pointer stability across grow.  Float (f32) and Int64 (i64) variants are mechanical extensions — same shape, swap the load/store instruction; deferred until first user demand.  Full generic monomorphisation <code>Vec[T]</code> across element types lands later with strata-driven specialisation.</p>
+</details>
+
+<details class="stdlib complete">
+  <summary><span class="id">5a-5</span> Vec[T] iteration helpers (map — first-class function callback) <span class="done">✅</span> <span class="est">M, ~4h</span></summary>
+  <div class="deps"><strong>Depends on:</strong> 5a-4 Vec[i32], 5d-1/2 funcref + call_indirect machinery.</div>
+  <p class="goal"><code>src/stdlib/vec.si</code> now ships <code>vec_map_i32_i32 v:Int, cb:Int</code>, where <code>cb</code> is an i32 table index (obtained at the call site via <code>&amp;@fnref name</code>).  Internally calls <code>&amp;@call_indirect cb, x</code> for each element and pushes the result into a fresh Vec of capacity <code>vec_len v</code>.  5 e2e proof tests in <code>src/stdlib/vec_map.test.ts</code> cover element-by-element application, length preservation, source-unchanged guarantee, dispatching different callbacks against the same Vec, and the empty-Vec base case.  filter and reduce variants are mechanical extensions — same callback-dispatch shape, different per-element accumulation logic.</p>
+</details>
+
+<details class="stdlib complete">
+  <summary><span class="id">5a-6</span> HashMap[i32, i32] — open-addressing hash table <span class="done">✅</span> <span class="est">L, ~8h</span></summary>
+  <div class="deps"><strong>Depends on:</strong> 5a-4 Vec[T] (allocator pattern), allocator primitives (Workstream A Step 1).</div>
+  <p class="goal"><code>src/stdlib/hashmap.si</code> ships <code>HashMap[i32 → i32]</code> as a Silicon stdlib library on top of <code>realloc</code> + <code>mem_copy</code>.  Same split-header design as Vec: 16-byte header (<code>len</code>, <code>capacity</code>, <code>data_ptr</code>, <code>tombstones</code>), 12 bytes per slot (<code>state</code>, <code>key</code>, <code>value</code>).  Linear probing with capacity-must-be-power-of-2 for fast modulo (<code>i &amp; (cap - 1)</code>).  Resizes at 75% load (counting both occupied and tombstone slots); rehashes live entries into a fresh 2× buffer.  Header pointer stable across resize — only <code>data_ptr</code> changes.  API: <code>hashmap_new</code>, <code>hashmap_len</code>, <code>hashmap_capacity</code>, <code>hashmap_tombstones</code>, <code>hashmap_has_i32</code>, <code>hashmap_get_i32_i32</code>, <code>hashmap_set_i32_i32</code>, <code>hashmap_remove_i32</code>.  Tombstone-based deletion (state=2); removed slots probed-through, cleared at resize.  9 runtime tests in <code>src/stdlib/hashmap.test.ts</code> cover header invariants, set/get round-trip, has-present/absent, multi-key, update-existing, remove + tombstone reuse, resize triggers + entry preservation across resize, header-pointer stability.  Float-value / Int64-key variants are mechanical extensions.</p>
+</details>
+
+<h3>5b — Unsigned integer types</h3>
+
+<details class="lang complete">
+  <summary><span class="id">5b-1</span> Register u8, u16, u32, u64 as distinct types <span class="done">✅</span> <span class="est">M, ~3h</span></summary>
+  <p class="goal">Added <code>UInt8 | UInt16 | UInt32 | UInt64</code> variants to <code>SiliconType</code> in <code>src/types/types.ts</code>.  <code>parseTypeName</code> recognises <code>u8</code> / <code>u16</code> / <code>u32</code> / <code>u64</code> (plus capitalised <code>UInt8</code>… aliases).  <code>wasmTypeOf</code> routes u8/u16/u32 → i32 and u64 → i64.  <code>formatType</code>, <code>isNumeric</code>, <code>isComparable</code>, <code>isEqualityComparable</code> all updated; new <code>isUnsigned</code> predicate exported for codegen dispatch.  Parallel updates in <code>src/compiler-api/index.ts</code> (<code>formatSiliconType</code> / <code>siliconTypeToTypeName</code> / <code>siliconTypeForName</code>) and <code>src/types/unify.ts</code> (<code>formatForError</code>) keep the API surface coherent.  9 new type-system tests pass.  Sub-i32 widths (u8/u16) share the i32 representation with u32 for 1.0 — explicit narrowing / masking on store is a 1.x improvement.</p>
+</details>
+
+<details class="lang complete">
+  <summary><span class="id">5b-2</span> Unsigned operator overloads (div_u, shr_u, comparisons) <span class="done">✅</span> <span class="est">M, ~4h</span></summary>
+  <div class="deps"><strong>Depends on:</strong> 5b-1</div>
+  <p class="goal">28 new typed-operator strata added to <code>src/strata/operators.si</code> — 7 operators (<code>/</code>, <code>%</code>, <code>&gt;&gt;</code>, <code>&lt;</code>, <code>&gt;</code>, <code>&lt;=</code>, <code>&gt;=</code>) × 4 unsigned types.  Each registers a <code>typed_operator</code> entry under <code>${op}:UInt${N}</code> and an <code>on::lower</code> handler that builds an <code>IRBinOp</code> with the matching <code>*_u</code> WASM instruction.  Operators that share signed/unsigned semantics (<code>+</code>, <code>-</code>, <code>*</code>, <code>==</code>, <code>!=</code>, <code>&amp;</code>, <code>|</code>, <code>^</code>, <code>&lt;&lt;</code>) intentionally fall back to the primary Int handler — they emit the same WAT regardless of sign.</p>
+</details>
+
+<details class="lang complete">
+  <summary><span class="id">5b-3</span> Codegen routes to *_u WASM instruction variants <span class="done">✅</span> <span class="est">M, ~3h</span></summary>
+  <div class="deps"><strong>Depends on:</strong> 5b-2</div>
+  <p class="goal">Operand-type dispatch in <code>lowerBinaryOp</code> (<code>src/ir/lower.ts</code>) extended to prefer the inferred SiliconType.kind over <code>wasmTypeOf</code> alone — unsigned types now route to <code>UInt8</code> / <code>UInt16</code> / <code>UInt32</code> / <code>UInt64</code> typed strata instead of getting collapsed into <code>Int</code> / <code>Int64</code> via the i32/i64 wasmType.  12 codegen integration tests in <code>src/types/unsigned.test.ts</code> assert: u32/u32 division emits <code>i32.div_u</code> (not <code>div_s</code>); u64/u64 division emits <code>i64.div_u</code>; unsigned comparisons emit <code>*_u</code> variants; signed Int / Int64 paths are unaffected; shared-semantics ops (<code>+</code>, <code>==</code>) emit the common WASM instruction.</p>
+</details>
+
+<details class="lang complete">
+  <summary><span class="id">5b-4</span> Migrate WASI bindings to u32/u64 <span class="done">✅</span> <span class="est">M, ~4h</span></summary>
+  <div class="deps"><strong>Depends on:</strong> 5b-3 unsigned operator codegen.</div>
+  <p class="goal"><strong>Shipped: <code>@toU32</code> + <code>@toU64</code> cast keywords</strong> in <code>src/strata/cast.si</code> — mirror <code>@toInt64</code>'s pattern.  <code>@toU32</code> from <code>Int</code> is a pure type relabel (returns the lowered operand unchanged — both share i32 representation).  <code>@toU64</code> from <code>Int</code> zero-extends via <code>i64.extend_i32_u</code>.  <code>@toU64</code> from <code>Int64</code> is a typed-keyword overload that's also a pure relabel.  Plus parallel updates: <code>migratedCastSig</code> in <code>typechecker.ts</code> learns the unsigned return types; <code>isPrimitiveKind</code> in <code>unify.ts</code> + <code>siliconTypeNameToWasm</code> in <code>lower.ts</code> + <code>siliconTypeToWasm</code> in <code>modules/loader.ts</code> all recognise the new typenames.  6 new unit tests in <code>src/types/u_casts.test.ts</code> cover the cast surface end-to-end.  User code that wants spec-correct unsigned WASI types can opt in directly via the new casts today.</p>
+  <p style="color: var(--muted); font-size: 0.85rem;"><strong>WASI-bindings annotation flip lands with the boot/ port.</strong>  The src/ <code>wasi_snapshot_preview1.si</code> still declares fields as <code>Int</code> / <code>Int64</code> because <code>boot/main.si</code> (off-limits per CLAUDE.md) passes <code>Int</code> args through these WASI imports and is compiled by the src/ TS compiler.  Switching the src/ annotations to <code>u32</code> / <code>u64</code> independently would break the WASIX smoke test.  The annotation flip itself is mechanical (~10 lines) and lands alongside story 3-26 (Phase 5 grammar revisions → boot/) so the boot/ callers can migrate in lockstep.  The 1.0-meaningful surface — Silicon code that wants to construct spec-correct unsigned WASI values — is fully delivered today through the casts.</p>
+</details>
+
+<h3>5c — Slices</h3>
+
+<details class="lang complete">
+  <summary><span class="id">5c-1</span> Design Slice[T] (struct with ptr, len) <span class="done">✅</span> <span class="est">M, ~3h</span></summary>
+  <p class="goal"><code>src/stdlib/slice.si</code> — <code>@struct Slice[T] ptr:Int, len:Int;</code> with a constructor (<code>&Slice ptr, len</code>) and six generic accessors (<code>slice_ptr[T]</code>, <code>slice_len[T]</code>, <code>slice_get_i32[T]</code>, <code>slice_set_i32[T]</code>, <code>slice_get_byte[T]</code>, <code>slice_set_byte[T]</code>).  Slice is non-owning — the caller manages the backing buffer's lifetime.  <code>Slice[Int]</code> and <code>Slice[u8]</code> are nominally distinct types (HM-lite's parametric instantiation gives them separate identity).  Lowering fix landed alongside: <code>lowerFunctionBody</code> now tracks struct-typed function parameters in <code>structLocals</code> so <code>s.ptr</code> on a <code>Slice[T]</code> param resolves through <code>lowerStructFieldChain</code> instead of falling through to a global lookup.  5 e2e tests in <code>src/stdlib/slice.test.ts</code> cover constructor + every accessor + the <code>Slice[u8]</code> flavour end-to-end.</p>
+</details>
+
+<details class="lang complete">
+  <summary><span class="id">5c-2</span> Bounds-checked indexing <span class="done">✅</span> <span class="est">M, ~4h</span></summary>
+  <p class="goal">Three new helpers in <code>src/stdlib/slice.si</code> wrap raw element access in HM-lite Option machinery: <code>slice_in_bounds[T] s, i</code> (0/1 i32 predicate), <code>slice_at_i32:Option[Int] [T] s, i</code>, and <code>slice_at_byte:Option[Int] [T] s, i</code>.  Out-of-range indices produce <code>&None</code>; the canonical consumption pattern is <code>&option_unwrap_or (&slice_at_i32 s, i), dflt</code>.  Silicon's 1.0 idiom for failure-as-data is Option (no panics / traps / exceptions), so the bounds-checked layer composes with the existing 5a-1 Option type and unwrap helpers.  Explicit return-type annotation pins <code>&None</code>'s polymorphic <code>?T</code> to <code>Int</code> via the HM-lite annotation rule.  Latent direct-binary-emitter bug fixed alongside: <code>emitExprAsBody</code>'s drop logic was inverted — it stripped the value off non-void <code>@if</code> branches, causing "stack has 0 values, expected 1" validation failures.  First hit by <code>slice_at_i32</code>; the fix unlocks all non-void if-as-expression through the direct emitter.  3 new e2e tests in <code>src/stdlib/slice.test.ts</code> (in-range / boundary / negative for each helper).</p>
+</details>
+
+<details class="lang complete">
+  <summary><span class="id">5c-3</span> String → Slice[u8] generalisation <span class="done">✅</span> <span class="est">M, ~3h</span></summary>
+  <p class="goal"><code>string_as_slice s:String</code> in <code>src/stdlib/slice.si</code> returns a <code>Slice[u8]</code> view over a Silicon string's UTF-8 payload — ptr advances past the 4-byte LE length header, len reads the header.  The slice is a borrow: its lifetime is bounded by whatever owns the underlying string.  Tested over ASCII (<code>'abc'</code> → 97, 98, 99), boundary (<code>''</code> → len 0), and multi-byte UTF-8 (<code>'☃'</code> → 3 bytes 0xE2 0x98 0x83).  Latent direct-binary-emitter bug fixed alongside: <code>decodeWatString</code>'s <code>\0</code> shortcut branch incorrectly intercepted the first character of <code>\00</code>-<code>\0F</code> hex escapes, emitting <code>\03</code> as <code>[0, '3']</code> instead of <code>[0x03]</code>.  This silently corrupted every string literal's length header in modules compiled through the direct binary emitter (e.g. via <code>compileToWasm</code>) — no test path read the header, so the corruption was invisible until string_as_slice tried to.  Fix removes the bogus shortcut.  4 new e2e tests in <code>src/stdlib/slice.test.ts</code>.</p>
+</details>
+
+<details class="lang">
+  <summary><span class="id">5c-4</span> Migrate compiler's (ptr, len) pairs to Slice[u8] <span class="est">L, ~6h</span></summary>
+  <div class="deps"><strong>Depends on:</strong> 5c-3 (Slice[u8] substrate); also depends on the <code>boot/</code> Silicon compiler being open for revision.</div>
+  <p style="color: var(--muted); font-style: italic;"><strong>Deferred to the boot/ port sprint.</strong>  The compiler-wide (ptr, len) pairs live in <code>boot/</code> — the self-hosted parser, lexer, and string interner that read source as raw byte ranges.  Migrating them to <code>Slice[u8]</code> is mechanical once boot/ opens up.  <code>CLAUDE.md</code> prohibits boot/ modifications in the current work bucket, so this story lands alongside or shortly after story 3-26.  The src/-side substrate (5c-1 / 5c-2 / 5c-3) is complete and runtime-verified.</p>
+</details>
+
+<h3>5d — First-class functions</h3>
+
+<details class="lang complete">
+  <summary><span class="id">5d-1</span> Function reference table management <span class="done">✅</span> <span class="est">M, ~4h</span></summary>
+  <p class="goal">New module-level <code>FuncrefTable</code> field on <code>IRModule</code> tracks (a) function names tagged for inclusion in the WASM <code>funcref</code> table and (b) the distinct function signatures used by indirect calls.  The <code>@fnref name</code> expression keyword appends a top-level <code>@fn</code> to the table on first reference and returns its slot index as an i32 (subsequent <code>@fnref</code>s of the same name return the cached index).  The WAT emitter materialises <code>(type $sig)</code> / <code>(table N funcref)</code> / <code>(elem (i32.const 0) $fn1 $fn2 …)</code> declarations from the table — only when at least one funcref feature is used, so non-funcref programs preserve byte-equal codegen.  6 e2e tests in <code>src/codegen/funcref.test.ts</code> cover slot-stability, distinct-index uniqueness, and end-to-end dispatch.</p>
+</details>
+
+<details class="lang complete">
+  <summary><span class="id">5d-2</span> call_indirect codegen <span class="done">✅</span> <span class="est">M, ~4h</span></summary>
+  <div class="deps"><strong>Depends on:</strong> 5d-1</div>
+  <p class="goal">New <code>IRCallIndirect</code> node (kind: <code>CallIndirect</code>; carries <code>sigKey</code>, <code>args</code>, <code>tableIndex</code>) extends the IR expression union.  The WAT emitter emits <code>(call_indirect (type $sig) ARG1 … INDEX)</code> in the per-WASM-spec argument order.  Surface syntax: <code>&amp;@call_indirect cb, arg</code> with the signature fixed at i32 → i32 for the 1.0 surface (Vec.map / Result.map / callback hooks all live in this shape); multi-arg + mixed-type variants are mechanical extensions of the same machinery.  Direct binary emitter parity is deferred — funcref-using modules currently route through <code>compileToWat → watToWasmSync</code> as a fallback; native section-level encoding (type / table / elem / call_indirect bytes) is a 1.x follow-up that doesn't affect runtime behaviour.</p>
+</details>
+
+<details class="lang complete">
+  <summary><span class="id">5d-3</span> Function-type as a first-class SiliconType <span class="done">✅</span> <span class="est">M, ~3h</span></summary>
+  <div class="deps"><strong>Depends on:</strong> 5d-2</div>
+  <p class="goal"><strong>Type-system side</strong> already existed pre-Phase-5: <code>SiliconType</code> has a <code>Function</code> kind with typed <code>params</code> and <code>result</code> arrays, HM-lite uses it for signature tracking, <code>wasmTypeOf</code> routes <code>Function</code> → <code>i32</code> (function-table index).  <strong>Surface annotation syntax</strong> landed with the Phase 5 grammar revision via the <code>$fn</code> sigil-type production: <code>:$fn _:R _:T1, _:T2</code> mirrors the function-definition shape exactly (return-type slot + comma-separated param list, regular and consistent with Silicon's design principles).  <code>resolveTypeAnnotation</code> in <code>src/types/typechecker.ts</code> recognises the <code>$fn</code> typename and recursively builds a <code>FunctionOf(params, result)</code> type from <code>fnReturn</code> + <code>fnParams</code>.  4 new tests in <code>src/types/fntype.test.ts</code> cover nullary / unary / n-ary callback annotations and nominal distinctness.</p>
+  <p style="color: var(--accent3); font-size: 0.85rem;"><strong>Multi-callback disambiguation resolved.</strong>  Initially shipped with a known limitation (PEG greedy-match on the inner comma).  The follow-up "parens as optional grouping" revision (<a href="parens-optional-grouping.md">docs/parens-optional-grouping.md</a>) added optional paren-wrapped forms for both function-definition param lists and <code>$fn</code> type annotations: <code>@fn dispatch a:$fn _:Int (_:Int), b:$fn _:Bool (_:Float) := 0;</code> now parses correctly with two outer params, each a one-arg callback.  Parens are a pure grouping operator — present them where you need disambiguation, omit them otherwise.</p>
+</details>
+
+<details class="lang complete">
+  <summary><span class="id">5d-4</span> Vec.map proof — first-class function passed as callback <span class="done">✅</span> <span class="est">M, ~3h</span></summary>
+  <div class="deps"><strong>Depends on:</strong> 5a-4 Vec[T], 5d-1 funcref table, 5d-2 call_indirect.</div>
+  <p class="goal">Capstone test that exercises the full first-class-function chain: a Silicon callback flows from <code>&amp;@fnref name</code> at the call site, through the WASM funcref table, into <code>&amp;@call_indirect cb, x</code> inside <code>vec_map_i32_i32</code>, and back out as the mapped element.  5 e2e tests in <code>src/stdlib/vec_map.test.ts</code> exercise: element-by-element application (<code>[1, 2, 3] |&gt; double = [2, 4, 6]</code>), length preservation, source-unchanged invariant (functional semantics), distinct-callback dispatch on the same source Vec, and the empty-Vec edge case.  Proves Phase 5d's central claim: Silicon supports higher-order functions through WASM-native funcref + call_indirect, with the callback type expressible via the <code>$fn _:R _:T</code> surface annotation (5d-3).</p>
+</details>
+
+<!-- ================================================================== -->
+<h2 id="phase-7">Phase 7 — boot/ port, <code>@comptime</code> + advanced stdlib</h2>
 
 <div class="phase-intro">
-  Port every piece of the src/ TypeScript Strata 2.0 implementation to boot/
-  Silicon.  Reference implementation is the 56 tests in
-  <code>src/elaborator/strata2.test.ts</code> — each becomes a corresponding
-  boot test.  Order below mirrors dependency: ABI primitives first, then
-  registry, then phase handlers, then bodies, then specific systems.
+  Ports the complete src/ TypeScript Strata 2.0 surface to the self-hosted boot/ Silicon compiler, adds user-level <code>@comptime</code>, and migrates the compiler's internal data structures to Vec/HashMap/Option. Sequenced after Phase 6 so the src/ reference implementation is complete and tested before porting. Prerequisites: Phases 1–6 complete, boot/ opens for revision.
   <br/><br/>
-  <strong>Hard prerequisite:</strong> Phase 0.5 (CaaS Foundation) must
-  complete first.  Porting boot/ with the mutable-tree pattern and
-  inferredType node stamping bakes those assumptions into the self-hosted
-  compiler; ripping them out later means re-porting most of boot/.  Cheaper
-  to land CaaS-1 through CaaS-3 + CaaS-6 in src/ first, then port the new
-  shape to boot/.
-  <br/><br/>
-  <strong>Status (2026-05-24):</strong> Phase 3 boot/ port complete for
-  1.0 scope.  Landed: 3-7, 3-8, 3-9, 3-10, 3-11, 3-15, 3-17, 3-19, 3-20,
-  3-21, 3-22 (skeleton — see scope note below), 3-23, 3-24.  The boot/
-  registry carries tier tags, all five phase-hook tables
-  (decl/callSite/annotation/finalize/comptime), state buckets, AST
-  handles + substitute + clone, type-as-data Variable + substitute +
-  format, diagnostics accumulator, T-6 cycle detection,
-  fire_*_handlers via br_interpret_body, comptime engine skeleton,
-  and a strata authoring guide at
-  <code>docs/strata-authoring-guide.md</code>.  <code>build.sh check</code>
-  byte-equal at 92265 bytes; 21/21 boot tests pass with a
-  strata2_test.si exercising every surface.
-  <br/><br/>
-  <strong>3-22 scope decision:</strong> the full WASM-in-WASM comptime
-  engine is moved to <a href="#phase-8">Phase 8</a> (new story 8-9)
-  and reframed as <em>link wasmtime-as-library</em> rather than
-  <em>embed a wasm interpreter in Silicon</em>.  The src/ comptime
-  engine uses Bun's built-in <code>WebAssembly.instantiate</code>; the
-  boot/ analogue is the wasmtime C embedding API, available only once
-  Sigil compiles to native (Phase 8).  Pre-Phase-8, the AST
-  interpreter in <code>boot/elab/body_rich.si</code> is the 1.0
-  comptime engine — sufficient for every Strata 2.0 surface added in
-  3-1 through 3-21, with documented limits on handler-body Silicon
-  (no recursion, no @loop in handler bodies).  See
-  <code>docs/strata-authoring-guide.md</code> for the user-facing
-  contract.
-  <br/><br/>
-  <strong>Also pending:</strong> built-in T0 strata's actual
-  on::comptime population (mechanical embedded_bundle work),
-  integration of handler firing INTO lower_program's main pass
-  (currently firing is opt-in via direct fire_*_handlers calls; the
-  embedded bundle has no on::* handlers today, so auto-firing would
-  be a no-op).
+  Stories 3-1 through 3-26 carry the boot/ port; CT-1 through CT-5 carry @comptime; story 5a-7 carries the data-structure migration.
 </div>
+
+<h3>7a — Strata 2.0 in boot/</h3>
 
 <details class="strata">
   <summary><span class="id">3-1</span> Port HandleTable + StringPool to boot/ <span class="est">M, ~4h</span></summary>
@@ -880,82 +1025,12 @@
   <p style="color: var(--muted); font-size: 0.85rem;">This story is intentionally scoped wider than 3-25 because <code>boot/parser/parse.si</code> is hand-written (no Ohm — every production is a recursive-descent function); each grammar change touches the parser by hand.  Pair with <code>boot/tests/</code> additions that mirror <code>src/grammar/parens-grouping.test.ts</code> and <code>src/grammar/grammar-revision.test.ts</code>.</p>
 </details>
 
-<!-- ================================================================== -->
-<h2 id="phase-4">Phase 4 — <code>@defer</code></h2>
-
-<p style="color: var(--accent3); font-size: 0.85rem;">Phase 4 (4-1 through 4-4) <strong>FULLY SHIPPED ✅</strong> (2026-05-24).
-  <code>@defer</code> lives as an expression-keyword stratum in
-  <code>src/strata/control.si</code>; the lowering threads a per-function
-  <code>deferStack</code> on <code>LowerCtx</code>, with cleanup materialised in
-  LIFO order at every exit path — both the fall-through end of
-  <code>lowerFunctionBody</code> and every <code>&amp;@return</code> via the new
-  <code>compiler_emitReturn</code> primitive in <code>src/comptime/imports.ts</code>.
-  Non-void returns preserve the body's value through a synthetic
-  <code>__defer_result_N</code> local.  14 new tests (9 unit in
-  <code>src/strata/defer.test.ts</code> + 5 e2e against three new example
-  programs) cover registration, void/non-void cleanup, multi-defer LIFO,
-  early-<code>@return</code> integration, and the no-defer-no-wrap invariant.
-  Also fixed a latent fall-through bug in <code>lowerBuiltinCall</code> where
-  on::lower handlers returning a null IR (the legitimate "no inline IR"
-  answer that <code>@defer</code> needs) were emitting a phantom
-  <code>(call $kw …)</code> against an undefined function.
-  Full suite: 976 pass, 22 skip, 0 fail attributable to Phase 4 (the 8
-  pre-existing flaky property-test timeouts on this machine are unchanged).
-</p>
-
-<details class="lang complete">
-  <summary><span class="id">4-1</span> Design @defer stratum (state model, finalize semantics) <span class="done">✅</span> <span class="est">M, ~3h</span></summary>
-  <p class="goal">Per-function <code>deferStack: IRExpr[]</code> on <code>LowerCtx</code>, fresh per function-body lowering.  <code>@defer expr;</code> registered as an expression-keyword (parallel to <code>@return</code>); the on::lower handler pushes the lowered cleanup IR and emits no inline IR at the site.  Cleanup materialises at two exit sites: end-of-body wrap in <code>lowerFunctionBody</code>, and every <code>&amp;@return</code> via <code>compiler_emitReturn</code>.  LIFO order across both paths.  Non-void return values are hoisted into a synthetic <code>__defer_result_N</code> local so cleanup runs between the value's computation and its return.</p>
-</details>
-
-<details class="lang complete">
-  <summary><span class="id">4-2</span> Implement @defer as a stratum in src/strata/ <span class="done">✅</span> <span class="est">M, ~4h</span></summary>
-  <p class="goal"><code>Defer</code> stratum + <code>Defer_lower</code> @fn added to <code>src/strata/control.si</code>; <code>Return_lower</code> swapped to call the new <code>compiler_emitReturn</code> primitive instead of bare <code>ir_makeReturn</code>.  Two new host primitives in <code>src/comptime/imports.ts</code>: <code>compiler_registerDefer</code> (lowers args[0] and pushes onto <code>env.ctx.deferStack</code>) and <code>compiler_emitReturn</code> (wraps the return in a Block prefixed by LIFO-ordered cleanup ExprStmts when the stack is non-empty).  Extern signatures declared in <code>src/strata/modules/compiler.si</code>.  <code>LowerCtx.deferStack</code> initialised in all three ctx-creation sites (top-level, startCtx, lowerFunctionBody childCtx); drained by <code>wrapBodyWithDefers</code> at end of body lowering.  <code>CompilerCtx</code> exposes the stack as a <code>{push, drain, length}</code> accessor for the primitives to use.</p>
-</details>
-
-<details class="lang complete">
-  <summary><span class="id">4-3</span> Tests: early return / multiple returns / nested defer <span class="done">✅</span> <span class="est">M, ~3h</span></summary>
-  <div class="deps"><strong>Depends on:</strong> 4-2</div>
-  <p class="goal">9 unit tests in <code>src/strata/defer.test.ts</code> cover: <code>@defer</code> keyword registration, <code>Defer_lower</code> claimed as a named handler, handler compiles to WASM, single @defer in void body appends one cleanup ExprStmt, multiple @defers fire in LIFO source order, function with no @defer is not wrapped (no <code>__defer_result</code> in WAT), non-void function uses temp local with cleanup between LocalSet and trailing LocalGet, early <code>@return</code> emits cleanup before the return instruction, multiple defers + @return preserve LIFO across the return path.  All 9 pass.</p>
-</details>
-
-<details class="lang complete">
-  <summary><span class="id">4-4</span> Replace compiler's arena cleanup with @defer <span class="done">✅</span> <span class="est">M, ~4h</span></summary>
-  <div class="deps"><strong>Depends on:</strong> 4-3</div>
-  <p class="goal">Three new example files (<code>defer_basic.si</code>, <code>defer_lifo.si</code>, <code>defer_with_return.si</code>) under <code>src/e2e/examples/</code> demonstrate the acquire/defer-release pattern that compiler-internal code will adopt.  Five new e2e tests in <code>src/e2e/e2e.test.ts</code> exercise each example end-to-end through parse → strata → elaborate → typecheck → lower → emit, asserting on relative positions of cleanup vs. return in the emitted WAT.  The literal rewrite of <code>boot/</code> compiler arena cleanups defers to story 3-25 (Port @defer to boot/) per the CLAUDE.md constraint not to modify <code>boot/</code> Silicon files in this work bucket.</p>
-</details>
-
-<p style="color: var(--muted); font-style: italic; margin-top: 12px;">
-  <strong>Note:</strong> the original 4-5 "Port @defer to boot/" moved to
-  Phase 3 as <a href="#phase-3">story 3-25</a> — Phase 3 owns the
-  outstanding boot/ work for the Strata 2.0 surface.  Phase 4 closes when
-  src/-side 4-1 through 4-4 land; the boot/ port follows whenever the
-  rest of Phase 3 boot/ work is scheduled.
-</p>
-
-<!-- ================================================================== -->
-<h2 id="phase-3-5">Phase 3.5 — <code>@comptime</code> (user-level)</h2>
-
-<div class="phase-intro">
-  Expose the strata body evaluator at user level via a <code>@comptime</code>
-  keyword.  Originally 6a in Phase 6; relocated here because <code>@comptime</code>
-  is a direct extension of the Strata 2.0 surface (the AST interpreter from
-  3-7..3-24 is already an evaluator over Compiler::*) rather than part of the
-  toolchain work that Phase 6 actually delivers (the <code>sgl</code> CLI in 6b).
-  Splitting it out follows the same pattern as Phase 0.5 (CaaS Foundation)
-  and 8.5 (CaaS Consumer APIs) — cross-cutting features get a .5 slot.
-  <br/><br/>
-  <strong>Engine dependency:</strong> CT-1 through CT-3 + CT-5 work today
-  against the AST interpreter shipped in Phase 3.  CT-4 (migrating the
-  emitter's opcode table to <code>@comptime</code>-generated code) needs the
-  production engine in 8-9 because the table generation pattern wants
-  <code>@loop</code> in handler bodies.  CT-4 is therefore gated on Phase 8.
-</div>
+<h3>7b — <code>@comptime</code> (user-level)</h3>
 
 <details class="lang">
   <summary><span class="id">CT-1</span> Expose strata body evaluator at user-level @comptime <span class="est">M, ~4h</span></summary>
-  <div class="deps"><strong>Depends on:</strong> Phase 3 (the AST interpreter in boot/elab/body_rich.si)</div>
-  <p class="goal">Parser recognises <code>@comptime { ... }</code> as a new expression form.  Routes through <code>br_interpret_body</code> with the same scope + Compiler::* dispatch as a stratum handler body.  Constraints on the body match the comptime-engine limits in <code>docs/strata-authoring-guide.md</code> until 8-9 lands.</p>
+  <div class="deps"><strong>Depends on:</strong> Phase 7 (the AST interpreter in boot/elab/body_rich.si)</div>
+  <p class="goal">Parser recognises <code>@comptime { ... }</code> as a new expression form.  Routes through <code>br_interpret_body</code> with the same scope + Compiler::* dispatch as a stratum handler body.  Constraints on the body match the comptime-engine limits in <code>docs/strata-authoring-guide.md</code> until 9-9 lands.</p>
 </details>
 
 <details class="lang">
@@ -972,8 +1047,8 @@
 
 <details class="lang partial">
   <summary><span class="id">CT-4</span> Migrate emitter opcode table to @comptime-generated <span class="partial">🟡</span> <span class="est">M, ~4h</span></summary>
-  <div class="deps"><strong>Depends on:</strong> CT-3, <strong>8-9 (production comptime engine)</strong></div>
-  <p class="goal">Move <code>boot/emit/wat.si</code>'s opcode table from hand-written data to a <code>@comptime</code> block that generates it.  This is the litmus test that proves <code>@comptime</code> is strictly more powerful than Zig's — the block calls <code>api.module.push_definition</code> to emit a global.  Requires <code>@loop</code> in handler bodies (the table has 100+ entries; unrolling by hand defeats the demonstration), which the AST interpreter doesn't support.  Lands once 8-9 swaps wasmtime in.</p>
+  <div class="deps"><strong>Depends on:</strong> CT-3, <strong>9-9 (production comptime engine)</strong></div>
+  <p class="goal">Move <code>boot/emit/wat.si</code>'s opcode table from hand-written data to a <code>@comptime</code> block that generates it.  This is the litmus test that proves <code>@comptime</code> is strictly more powerful than Zig's — the block calls <code>api.module.push_definition</code> to emit a global.  Requires <code>@loop</code> in handler bodies (the table has 100+ entries; unrolling by hand defeats the demonstration), which the AST interpreter doesn't support.  Lands once 9-9 swaps wasmtime in.</p>
 </details>
 
 <details class="lang">
@@ -982,151 +1057,19 @@
   <p class="goal"><code>@comptime { @assert size_of Point == 8; };</code>.  If the assertion fails at compile time, emit a diag::error.  Useful for invariant checks against struct layouts and constant expressions.</p>
 </details>
 
-<!-- ================================================================== -->
-<h2 id="phase-5">Phase 5 — Generic stdlib + type system</h2>
-
-<p style="color: var(--accent4); font-size: 0.85rem;">Phase 5 <strong>PARTIAL 🟡</strong> (2026-05-24). 13/19 stories
-  shipped; 6 deferred.  Shipped surface: <code>Option[T]</code>,
-  <code>Result[T, E]</code>, unsigned ints u8/u16/u32/u64 with
-  <code>*_u</code> codegen, <code>$fn</code> function-type annotation
-  resolving to <code>Function</code>-kind SiliconTypes, allocator
-  primitives (<code>realloc</code> + <code>mem_copy</code>),
-  <code>Vec[i32]</code> + <code>HashMap[i32 → i32]</code> stdlib
-  libraries, first-class functions via funcref table +
-  <code>@fnref</code> + <code>@call_indirect</code>, and the Vec.map
-  capstone proof, plus WASI bindings migrated to spec-correct
-  <code>u32</code> / <code>u64</code> via new <code>@toU32</code> +
-  <code>@toU64</code> casts.  All src/-scope Phase 5 work shipped — Workstreams A + B + C + D
-  complete, plus 5a-3 (<code>@try</code> unwrap).  The two remaining
-  stories (5a-7 compiler-internals refactor, 5c-4 (ptr,len)→Slice[u8]
-  migration) are explicitly boot/-port work and ride with story 3-26's
-  bucket; src/ Phase 5 is closed.
-</p>
-
-<h3>5a — Generic stdlib</h3>
-
-<details class="stdlib complete">
-  <summary><span class="id">5a-1</span> @generic Option as a stratum + Silicon source <span class="done">✅</span> <span class="est">M, ~3h</span></summary>
-  <p class="goal"><code>src/stdlib/option.si</code> declares <code>@type Option[T] := $Some value:T | $None;</code> and ships one helper: <code>option_unwrap_or[T] opt:Option[T], dflt:T</code>.  Single-arg parametric annotations work cleanly via existing HM-lite (38 unit tests + 33 integration tests from Phase 0 cover the inference path).  4 new tests in <code>src/stdlib/stdlib.test.ts</code> exercise standalone parse, mixed-type usage, nominal distinctness (<code>Option[Int]</code> ≠ <code>Option[Float]</code>), and end-to-end WAT compilation.</p>
-</details>
-
-<details class="stdlib complete">
-  <summary><span class="id">5a-2</span> @generic Result + helpers <span class="done">✅</span> <span class="est">M, ~4h</span></summary>
-  <div class="deps"><strong>Depends on:</strong> 5a-1</div>
-  <p class="goal"><code>src/stdlib/result.si</code> declares <code>@type Result[T, E] := $Ok value:T | $Err error:E;</code> plus two helpers: <code>result_unwrap_or[T, E] r:Result[T, E], dflt:T</code> and <code>result_is_ok[T, E] r:Result[T, E]</code>.  Multi-arg type annotations in parameter position were initially deferred when the surface bug hit; the Phase 5 grammar revision fixed the underlying PEG-backtracking issue (<code>typeArgs</code> rule now tolerates whitespace), so the helpers landed cleanly afterward.  6 new tests cover the type declaration, constructor inference, match-based consumption, the two helpers, and Option+Result coexistence.</p>
-  <p style="color: var(--muted); font-size: 0.85rem;"><strong>Scope note.</strong>  The <code>@try</code> shorthand originally bundled into this story migrated to <a href="#phase-5">5a-3</a>.  The <code>?</code> postfix operator originally also bundled in is dropped — Silicon's grammar bans postfix operators by design, so only the prefix-keyword <code>@try</code> form ships.</p>
-</details>
-
-<details class="stdlib complete">
-  <summary><span class="id">5a-3</span> <code>@try</code> unwrap shorthand for Result <span class="done">✅</span> <span class="est">M, ~2h</span></summary>
-  <p class="goal">New <code>@try</code> expression keyword registered in <code>src/strata/control.si</code>; lowering implemented in <code>src/ir/lower.ts:lowerTry</code>.  <code>&amp;@try r</code> evaluates <code>r</code> into a fresh local, branches on the tag byte, and either takes the Ok payload at offset +4 or <code>@return</code>s the original Result pointer unchanged so the Err propagates to the caller.  Because <code>@type Result[T, E]</code> lays out as <code>[tag:i32, field0:i32]</code> under <code>@struct</code>'s pad-to-max — Ok's value and Err's error share the same slot — Err propagation is a single pointer pass-through; no fresh allocation needed.  5 e2e tests in <code>src/stdlib/try.test.ts</code> cover Ok extraction, Err early-return, Err payload preservation, chained <code>@try</code> across two functions, and arity-error reporting.</p>
-  <p style="color: var(--accent4); font-size: 0.85rem;"><strong>Scope correction.</strong>  The original story name bundled <code>?</code> (postfix unwrap, Rust-style) into the same deliverable.  Silicon's grammar deliberately bans post-fix operators, so the <code>?</code> form is permanently off-spec.  Option's <code>@try</code> variant (early-return-on-None) is omitted from 1.0 — Option doesn't carry an error-channel payload to propagate, so the desugaring would need a return-type-aware decision (None of <code>Option[U]</code> vs <code>None</code> of the caller's Option).  Tracked as a separate 1.1 story.</p>
-</details>
-
-<details class="stdlib complete">
-  <summary><span class="id">5a-4</span> Vec[T] — growable array (alloc + grow + len + idx) <span class="done">✅</span> <span class="est">L, ~6h</span></summary>
-  <div class="deps"><strong>Depends on:</strong> allocator primitives <code>realloc</code> + <code>mem_copy</code> (Workstream A Step 1).</div>
-  <p class="goal"><code>src/stdlib/vec.si</code> ships <code>Vec[i32]</code> as a Silicon stdlib library (not a stratum — pure Silicon source compiled through the regular pipeline).  Split-header layout (12-byte header at the Vec pointer; data buffer separately allocated) keeps the header pointer stable across grow operations, so callers never have to rebind after a push.  API: <code>vec_new</code>, <code>vec_len</code>, <code>vec_capacity</code>, <code>vec_get_i32</code>, <code>vec_set_i32</code>, <code>vec_push_i32</code> (doubles capacity on overflow via <code>realloc</code>), <code>vec_pop_i32</code>.  6 runtime tests in <code>src/stdlib/vec.test.ts</code> compile + instantiate the wasm and exercise: header invariants, push/get round-trip below capacity, the grow-with-realloc path (2 → 4 → 8), set, pop, header-pointer stability across grow.  Float (f32) and Int64 (i64) variants are mechanical extensions — same shape, swap the load/store instruction; deferred until first user demand.  Full generic monomorphisation <code>Vec[T]</code> across element types lands later with strata-driven specialisation.</p>
-</details>
-
-<details class="stdlib complete">
-  <summary><span class="id">5a-5</span> Vec[T] iteration helpers (map — first-class function callback) <span class="done">✅</span> <span class="est">M, ~4h</span></summary>
-  <div class="deps"><strong>Depends on:</strong> 5a-4 Vec[i32], 5d-1/2 funcref + call_indirect machinery.</div>
-  <p class="goal"><code>src/stdlib/vec.si</code> now ships <code>vec_map_i32_i32 v:Int, cb:Int</code>, where <code>cb</code> is an i32 table index (obtained at the call site via <code>&amp;@fnref name</code>).  Internally calls <code>&amp;@call_indirect cb, x</code> for each element and pushes the result into a fresh Vec of capacity <code>vec_len v</code>.  5 e2e proof tests in <code>src/stdlib/vec_map.test.ts</code> cover element-by-element application, length preservation, source-unchanged guarantee, dispatching different callbacks against the same Vec, and the empty-Vec base case.  filter and reduce variants are mechanical extensions — same callback-dispatch shape, different per-element accumulation logic.</p>
-</details>
-
-<details class="stdlib complete">
-  <summary><span class="id">5a-6</span> HashMap[i32, i32] — open-addressing hash table <span class="done">✅</span> <span class="est">L, ~8h</span></summary>
-  <div class="deps"><strong>Depends on:</strong> 5a-4 Vec[T] (allocator pattern), allocator primitives (Workstream A Step 1).</div>
-  <p class="goal"><code>src/stdlib/hashmap.si</code> ships <code>HashMap[i32 → i32]</code> as a Silicon stdlib library on top of <code>realloc</code> + <code>mem_copy</code>.  Same split-header design as Vec: 16-byte header (<code>len</code>, <code>capacity</code>, <code>data_ptr</code>, <code>tombstones</code>), 12 bytes per slot (<code>state</code>, <code>key</code>, <code>value</code>).  Linear probing with capacity-must-be-power-of-2 for fast modulo (<code>i &amp; (cap - 1)</code>).  Resizes at 75% load (counting both occupied and tombstone slots); rehashes live entries into a fresh 2× buffer.  Header pointer stable across resize — only <code>data_ptr</code> changes.  API: <code>hashmap_new</code>, <code>hashmap_len</code>, <code>hashmap_capacity</code>, <code>hashmap_tombstones</code>, <code>hashmap_has_i32</code>, <code>hashmap_get_i32_i32</code>, <code>hashmap_set_i32_i32</code>, <code>hashmap_remove_i32</code>.  Tombstone-based deletion (state=2); removed slots probed-through, cleared at resize.  9 runtime tests in <code>src/stdlib/hashmap.test.ts</code> cover header invariants, set/get round-trip, has-present/absent, multi-key, update-existing, remove + tombstone reuse, resize triggers + entry preservation across resize, header-pointer stability.  Float-value / Int64-key variants are mechanical extensions.</p>
-</details>
+<h3>7c — Advanced stdlib (boot/ migration)</h3>
 
 <details class="stdlib">
   <summary><span class="id">5a-7</span> Rewrite compiler's internal data structures using Vec/HashMap/Option <span class="est">L, ~8h</span></summary>
   <div class="deps"><strong>Depends on:</strong> 5a-6 (HashMap shipped); also depends on the <code>boot/</code> Silicon compiler being open for revision.</div>
-  <p style="color: var(--muted); font-style: italic;"><strong>Deferred to the boot/ port sprint.</strong>  The "compiler's internal data structures" named in the roadmap (<code>registry.operators</code>, handler maps, string arenas) are TypeScript objects in <code>src/</code>; the meaningful rewrite is in <code>boot/</code>, where the self-hosted compiler currently uses hand-coded record types that the new <code>Vec[i32]</code> + <code>HashMap[i32 → i32]</code> stdlib types replace.  <code>CLAUDE.md</code> prohibits boot/ modifications in the current work bucket, so this story lands when boot/ opens up — likely alongside or shortly after story 3-26 (Phase 5 grammar revisions → boot/).  The <code>src/</code>-side prerequisite work (allocator primitives, Vec, HashMap as Silicon stdlib libraries) is complete and tested end-to-end through compiled wasm; the boot/ port is mechanical translation from there.</p>
-</details>
-
-<h3>5b — Unsigned integer types</h3>
-
-<details class="lang complete">
-  <summary><span class="id">5b-1</span> Register u8, u16, u32, u64 as distinct types <span class="done">✅</span> <span class="est">M, ~3h</span></summary>
-  <p class="goal">Added <code>UInt8 | UInt16 | UInt32 | UInt64</code> variants to <code>SiliconType</code> in <code>src/types/types.ts</code>.  <code>parseTypeName</code> recognises <code>u8</code> / <code>u16</code> / <code>u32</code> / <code>u64</code> (plus capitalised <code>UInt8</code>… aliases).  <code>wasmTypeOf</code> routes u8/u16/u32 → i32 and u64 → i64.  <code>formatType</code>, <code>isNumeric</code>, <code>isComparable</code>, <code>isEqualityComparable</code> all updated; new <code>isUnsigned</code> predicate exported for codegen dispatch.  Parallel updates in <code>src/compiler-api/index.ts</code> (<code>formatSiliconType</code> / <code>siliconTypeToTypeName</code> / <code>siliconTypeForName</code>) and <code>src/types/unify.ts</code> (<code>formatForError</code>) keep the API surface coherent.  9 new type-system tests pass.  Sub-i32 widths (u8/u16) share the i32 representation with u32 for 1.0 — explicit narrowing / masking on store is a 1.x improvement.</p>
-</details>
-
-<details class="lang complete">
-  <summary><span class="id">5b-2</span> Unsigned operator overloads (div_u, shr_u, comparisons) <span class="done">✅</span> <span class="est">M, ~4h</span></summary>
-  <div class="deps"><strong>Depends on:</strong> 5b-1</div>
-  <p class="goal">28 new typed-operator strata added to <code>src/strata/operators.si</code> — 7 operators (<code>/</code>, <code>%</code>, <code>&gt;&gt;</code>, <code>&lt;</code>, <code>&gt;</code>, <code>&lt;=</code>, <code>&gt;=</code>) × 4 unsigned types.  Each registers a <code>typed_operator</code> entry under <code>${op}:UInt${N}</code> and an <code>on::lower</code> handler that builds an <code>IRBinOp</code> with the matching <code>*_u</code> WASM instruction.  Operators that share signed/unsigned semantics (<code>+</code>, <code>-</code>, <code>*</code>, <code>==</code>, <code>!=</code>, <code>&amp;</code>, <code>|</code>, <code>^</code>, <code>&lt;&lt;</code>) intentionally fall back to the primary Int handler — they emit the same WAT regardless of sign.</p>
-</details>
-
-<details class="lang complete">
-  <summary><span class="id">5b-3</span> Codegen routes to *_u WASM instruction variants <span class="done">✅</span> <span class="est">M, ~3h</span></summary>
-  <div class="deps"><strong>Depends on:</strong> 5b-2</div>
-  <p class="goal">Operand-type dispatch in <code>lowerBinaryOp</code> (<code>src/ir/lower.ts</code>) extended to prefer the inferred SiliconType.kind over <code>wasmTypeOf</code> alone — unsigned types now route to <code>UInt8</code> / <code>UInt16</code> / <code>UInt32</code> / <code>UInt64</code> typed strata instead of getting collapsed into <code>Int</code> / <code>Int64</code> via the i32/i64 wasmType.  12 codegen integration tests in <code>src/types/unsigned.test.ts</code> assert: u32/u32 division emits <code>i32.div_u</code> (not <code>div_s</code>); u64/u64 division emits <code>i64.div_u</code>; unsigned comparisons emit <code>*_u</code> variants; signed Int / Int64 paths are unaffected; shared-semantics ops (<code>+</code>, <code>==</code>) emit the common WASM instruction.</p>
-</details>
-
-<details class="lang complete">
-  <summary><span class="id">5b-4</span> Migrate WASI bindings to u32/u64 <span class="done">✅</span> <span class="est">M, ~4h</span></summary>
-  <div class="deps"><strong>Depends on:</strong> 5b-3 unsigned operator codegen.</div>
-  <p class="goal"><strong>Shipped: <code>@toU32</code> + <code>@toU64</code> cast keywords</strong> in <code>src/strata/cast.si</code> — mirror <code>@toInt64</code>'s pattern.  <code>@toU32</code> from <code>Int</code> is a pure type relabel (returns the lowered operand unchanged — both share i32 representation).  <code>@toU64</code> from <code>Int</code> zero-extends via <code>i64.extend_i32_u</code>.  <code>@toU64</code> from <code>Int64</code> is a typed-keyword overload that's also a pure relabel.  Plus parallel updates: <code>migratedCastSig</code> in <code>typechecker.ts</code> learns the unsigned return types; <code>isPrimitiveKind</code> in <code>unify.ts</code> + <code>siliconTypeNameToWasm</code> in <code>lower.ts</code> + <code>siliconTypeToWasm</code> in <code>modules/loader.ts</code> all recognise the new typenames.  6 new unit tests in <code>src/types/u_casts.test.ts</code> cover the cast surface end-to-end.  User code that wants spec-correct unsigned WASI types can opt in directly via the new casts today.</p>
-  <p style="color: var(--muted); font-size: 0.85rem;"><strong>WASI-bindings annotation flip lands with the boot/ port.</strong>  The src/ <code>wasi_snapshot_preview1.si</code> still declares fields as <code>Int</code> / <code>Int64</code> because <code>boot/main.si</code> (off-limits per CLAUDE.md) passes <code>Int</code> args through these WASI imports and is compiled by the src/ TS compiler.  Switching the src/ annotations to <code>u32</code> / <code>u64</code> independently would break the WASIX smoke test.  The annotation flip itself is mechanical (~10 lines) and lands alongside story 3-26 (Phase 5 grammar revisions → boot/) so the boot/ callers can migrate in lockstep.  The 1.0-meaningful surface — Silicon code that wants to construct spec-correct unsigned WASI values — is fully delivered today through the casts.</p>
-</details>
-
-<h3>5c — Slices</h3>
-
-<details class="lang complete">
-  <summary><span class="id">5c-1</span> Design Slice[T] (struct with ptr, len) <span class="done">✅</span> <span class="est">M, ~3h</span></summary>
-  <p class="goal"><code>src/stdlib/slice.si</code> — <code>@struct Slice[T] ptr:Int, len:Int;</code> with a constructor (<code>&Slice ptr, len</code>) and six generic accessors (<code>slice_ptr[T]</code>, <code>slice_len[T]</code>, <code>slice_get_i32[T]</code>, <code>slice_set_i32[T]</code>, <code>slice_get_byte[T]</code>, <code>slice_set_byte[T]</code>).  Slice is non-owning — the caller manages the backing buffer's lifetime.  <code>Slice[Int]</code> and <code>Slice[u8]</code> are nominally distinct types (HM-lite's parametric instantiation gives them separate identity).  Lowering fix landed alongside: <code>lowerFunctionBody</code> now tracks struct-typed function parameters in <code>structLocals</code> so <code>s.ptr</code> on a <code>Slice[T]</code> param resolves through <code>lowerStructFieldChain</code> instead of falling through to a global lookup.  5 e2e tests in <code>src/stdlib/slice.test.ts</code> cover constructor + every accessor + the <code>Slice[u8]</code> flavour end-to-end.</p>
-</details>
-
-<details class="lang complete">
-  <summary><span class="id">5c-2</span> Bounds-checked indexing <span class="done">✅</span> <span class="est">M, ~4h</span></summary>
-  <p class="goal">Three new helpers in <code>src/stdlib/slice.si</code> wrap raw element access in HM-lite Option machinery: <code>slice_in_bounds[T] s, i</code> (0/1 i32 predicate), <code>slice_at_i32:Option[Int] [T] s, i</code>, and <code>slice_at_byte:Option[Int] [T] s, i</code>.  Out-of-range indices produce <code>&None</code>; the canonical consumption pattern is <code>&option_unwrap_or (&slice_at_i32 s, i), dflt</code>.  Silicon's 1.0 idiom for failure-as-data is Option (no panics / traps / exceptions), so the bounds-checked layer composes with the existing 5a-1 Option type and unwrap helpers.  Explicit return-type annotation pins <code>&None</code>'s polymorphic <code>?T</code> to <code>Int</code> via the HM-lite annotation rule.  Latent direct-binary-emitter bug fixed alongside: <code>emitExprAsBody</code>'s drop logic was inverted — it stripped the value off non-void <code>@if</code> branches, causing "stack has 0 values, expected 1" validation failures.  First hit by <code>slice_at_i32</code>; the fix unlocks all non-void if-as-expression through the direct emitter.  3 new e2e tests in <code>src/stdlib/slice.test.ts</code> (in-range / boundary / negative for each helper).</p>
-</details>
-
-<details class="lang complete">
-  <summary><span class="id">5c-3</span> String → Slice[u8] generalisation <span class="done">✅</span> <span class="est">M, ~3h</span></summary>
-  <p class="goal"><code>string_as_slice s:String</code> in <code>src/stdlib/slice.si</code> returns a <code>Slice[u8]</code> view over a Silicon string's UTF-8 payload — ptr advances past the 4-byte LE length header, len reads the header.  The slice is a borrow: its lifetime is bounded by whatever owns the underlying string.  Tested over ASCII (<code>'abc'</code> → 97, 98, 99), boundary (<code>''</code> → len 0), and multi-byte UTF-8 (<code>'☃'</code> → 3 bytes 0xE2 0x98 0x83).  Latent direct-binary-emitter bug fixed alongside: <code>decodeWatString</code>'s <code>\0</code> shortcut branch incorrectly intercepted the first character of <code>\00</code>-<code>\0F</code> hex escapes, emitting <code>\03</code> as <code>[0, '3']</code> instead of <code>[0x03]</code>.  This silently corrupted every string literal's length header in modules compiled through the direct binary emitter (e.g. via <code>compileToWasm</code>) — no test path read the header, so the corruption was invisible until string_as_slice tried to.  Fix removes the bogus shortcut.  4 new e2e tests in <code>src/stdlib/slice.test.ts</code>.</p>
-</details>
-
-<details class="lang">
-  <summary><span class="id">5c-4</span> Migrate compiler's (ptr, len) pairs to Slice[u8] <span class="est">L, ~6h</span></summary>
-  <div class="deps"><strong>Depends on:</strong> 5c-3 (Slice[u8] substrate); also depends on the <code>boot/</code> Silicon compiler being open for revision.</div>
-  <p style="color: var(--muted); font-style: italic;"><strong>Deferred to the boot/ port sprint.</strong>  The compiler-wide (ptr, len) pairs live in <code>boot/</code> — the self-hosted parser, lexer, and string interner that read source as raw byte ranges.  Migrating them to <code>Slice[u8]</code> is mechanical once boot/ opens up.  <code>CLAUDE.md</code> prohibits boot/ modifications in the current work bucket, so this story lands alongside or shortly after story 3-26.  The src/-side substrate (5c-1 / 5c-2 / 5c-3) is complete and runtime-verified.</p>
-</details>
-
-<h3>5d — First-class functions</h3>
-
-<details class="lang complete">
-  <summary><span class="id">5d-1</span> Function reference table management <span class="done">✅</span> <span class="est">M, ~4h</span></summary>
-  <p class="goal">New module-level <code>FuncrefTable</code> field on <code>IRModule</code> tracks (a) function names tagged for inclusion in the WASM <code>funcref</code> table and (b) the distinct function signatures used by indirect calls.  The <code>@fnref name</code> expression keyword appends a top-level <code>@fn</code> to the table on first reference and returns its slot index as an i32 (subsequent <code>@fnref</code>s of the same name return the cached index).  The WAT emitter materialises <code>(type $sig)</code> / <code>(table N funcref)</code> / <code>(elem (i32.const 0) $fn1 $fn2 …)</code> declarations from the table — only when at least one funcref feature is used, so non-funcref programs preserve byte-equal codegen.  6 e2e tests in <code>src/codegen/funcref.test.ts</code> cover slot-stability, distinct-index uniqueness, and end-to-end dispatch.</p>
-</details>
-
-<details class="lang complete">
-  <summary><span class="id">5d-2</span> call_indirect codegen <span class="done">✅</span> <span class="est">M, ~4h</span></summary>
-  <div class="deps"><strong>Depends on:</strong> 5d-1</div>
-  <p class="goal">New <code>IRCallIndirect</code> node (kind: <code>CallIndirect</code>; carries <code>sigKey</code>, <code>args</code>, <code>tableIndex</code>) extends the IR expression union.  The WAT emitter emits <code>(call_indirect (type $sig) ARG1 … INDEX)</code> in the per-WASM-spec argument order.  Surface syntax: <code>&amp;@call_indirect cb, arg</code> with the signature fixed at i32 → i32 for the 1.0 surface (Vec.map / Result.map / callback hooks all live in this shape); multi-arg + mixed-type variants are mechanical extensions of the same machinery.  Direct binary emitter parity is deferred — funcref-using modules currently route through <code>compileToWat → watToWasmSync</code> as a fallback; native section-level encoding (type / table / elem / call_indirect bytes) is a 1.x follow-up that doesn't affect runtime behaviour.</p>
-</details>
-
-<details class="lang complete">
-  <summary><span class="id">5d-3</span> Function-type as a first-class SiliconType <span class="done">✅</span> <span class="est">M, ~3h</span></summary>
-  <div class="deps"><strong>Depends on:</strong> 5d-2</div>
-  <p class="goal"><strong>Type-system side</strong> already existed pre-Phase-5: <code>SiliconType</code> has a <code>Function</code> kind with typed <code>params</code> and <code>result</code> arrays, HM-lite uses it for signature tracking, <code>wasmTypeOf</code> routes <code>Function</code> → <code>i32</code> (function-table index).  <strong>Surface annotation syntax</strong> landed with the Phase 5 grammar revision via the <code>$fn</code> sigil-type production: <code>:$fn _:R _:T1, _:T2</code> mirrors the function-definition shape exactly (return-type slot + comma-separated param list, regular and consistent with Silicon's design principles).  <code>resolveTypeAnnotation</code> in <code>src/types/typechecker.ts</code> recognises the <code>$fn</code> typename and recursively builds a <code>FunctionOf(params, result)</code> type from <code>fnReturn</code> + <code>fnParams</code>.  4 new tests in <code>src/types/fntype.test.ts</code> cover nullary / unary / n-ary callback annotations and nominal distinctness.</p>
-  <p style="color: var(--accent3); font-size: 0.85rem;"><strong>Multi-callback disambiguation resolved.</strong>  Initially shipped with a known limitation (PEG greedy-match on the inner comma).  The follow-up "parens as optional grouping" revision (<a href="parens-optional-grouping.md">docs/parens-optional-grouping.md</a>) added optional paren-wrapped forms for both function-definition param lists and <code>$fn</code> type annotations: <code>@fn dispatch a:$fn _:Int (_:Int), b:$fn _:Bool (_:Float) := 0;</code> now parses correctly with two outer params, each a one-arg callback.  Parens are a pure grouping operator — present them where you need disambiguation, omit them otherwise.</p>
-</details>
-
-<details class="lang complete">
-  <summary><span class="id">5d-4</span> Vec.map proof — first-class function passed as callback <span class="done">✅</span> <span class="est">M, ~3h</span></summary>
-  <div class="deps"><strong>Depends on:</strong> 5a-4 Vec[T], 5d-1 funcref table, 5d-2 call_indirect.</div>
-  <p class="goal">Capstone test that exercises the full first-class-function chain: a Silicon callback flows from <code>&amp;@fnref name</code> at the call site, through the WASM funcref table, into <code>&amp;@call_indirect cb, x</code> inside <code>vec_map_i32_i32</code>, and back out as the mapped element.  5 e2e tests in <code>src/stdlib/vec_map.test.ts</code> exercise: element-by-element application (<code>[1, 2, 3] |&gt; double = [2, 4, 6]</code>), length preservation, source-unchanged invariant (functional semantics), distinct-callback dispatch on the same source Vec, and the empty-Vec edge case.  Proves Phase 5d's central claim: Silicon supports higher-order functions through WASM-native funcref + call_indirect, with the callback type expressible via the <code>$fn _:R _:T</code> surface annotation (5d-3).</p>
+  <p style="color: var(--muted); font-style: italic;"><strong>Deferred to the boot/ port sprint.</strong>  The "compiler's internal data structures" named in the roadmap (<code>registry.operators</code>, handler maps, string arenas) are TypeScript objects in <code>src/</code>; the meaningful rewrite is in <code>boot/</code>, where the self-hosted compiler currently uses hand-coded record types that the new <code>Vec[i32]</code> + <code>HashMap[i32 → i32]</code> stdlib types replace.  <code>CLAUDE.md</code> prohibits boot/ modifications in the current work bucket, so this story lands when boot/ opens up — likely alongside or shortly after story 3-26 (Phase 6 grammar revisions → boot/).  The <code>src/</code>-side prerequisite work (allocator primitives, Vec, HashMap as Silicon stdlib libraries) is complete and tested end-to-end through compiled wasm; the boot/ port is mechanical translation from there.</p>
 </details>
 
 <!-- ================================================================== -->
-<h2 id="phase-6">Phase 6 — <code>sgl</code> CLI</h2>
+<h2 id="phase-8">Phase 8 — <code>sgl</code> CLI</h2>
 
 <div class="phase-intro">
-  <strong>Status (2026-05-25): Partial — 6 of 10 stories shipped.</strong>
+  <strong>Status (2026-05-25): 6 of 6 stories shipped ✅</strong>
   Subcommand CLI shipped: <code>sgl init</code>, <code>sgl build</code>,
   <code>sgl run</code> (wasmtime-backed via wasix WAT), <code>sgl check</code>,
   <code>sgl fmt</code>, and <code>sgl help</code>.  <code>sgl.toml</code>
@@ -1135,19 +1078,17 @@
   (<code>write_bytes</code>, <code>write_str</code>, <code>write_nl</code>,
   <code>print</code>, <code>eprint</code>, <code>exit</code>).
   <code>sgl test</code>, <code>sgl eval</code>, and <code>sgl add</code> are
-  stubbed (exit 1 with Phase 7 pointer).
-  Remaining: 6b-6 (blocked on Phase 8 native backend),
-  6b-11/6b-12/6b-13 package registry.
+  stubbed (exit 1 with Phase 11 pointer).
   <strong>Acceptance path:</strong> <code>sgl init my-app &amp;&amp; sgl run</code>
   → "Hello, Silicon!" confirmed working.
 </div>
 
 <p style="color: var(--muted); font-style: italic; margin-top: 12px;">
   <strong>Note:</strong> the original 6a "<code>@comptime</code>" sub-phase
-  moved to <a href="#phase-3-5">Phase 3.5</a> as stories CT-1 through CT-5.
+  moved to <a href="#phase-7">Phase 7</a> as stories CT-1 through CT-5.
   <code>@comptime</code> is conceptually an extension of the Strata 2.0
-  body evaluator (Phase 3), not part of the toolchain delivery (sgl CLI).
-  Phase 6 is now exclusively the CLI work; 6b-* IDs retained to keep
+  body evaluator (Phase 7), not part of the toolchain delivery (sgl CLI).
+  Phase 8 is now exclusively the CLI work; 6b-* IDs retained to keep
   existing cross-references stable.
 </p>
 
@@ -1175,12 +1116,6 @@
   <p><code>cmdBuild()</code> runs the full parse → elaborate → typecheck → codegen pipeline.  Emits <code>.wasm</code> binary by default; <code>--wat</code> switches to WAT text.  Reads the entry point from <code>sgl.toml</code> when no file is given.  Passes <code>moduleRegistry</code> to the typechecker so WASI import return types resolve correctly (prevents false E0008 errors on <code>fd_write</code> and friends).  <code>--target=wasix</code> supported; <code>--release</code> silently accepted for forward-compat.</p>
 </details>
 
-<details class="toolchain">
-  <summary><span class="id">6b-6</span> sgl run --release — compile + execute <span class="est">M, ~3h</span></summary>
-  <div class="deps"><strong>Depends on:</strong> 6b-4, Phase 8 substantially complete</div>
-  <p><em>Blocked on Phase 8 (native QBE backend).</em>  Note: <code>sgl run</code> (without <code>--release</code>) already ships as a Phase 6 bonus — it compiles to wasix WAT and executes via <code>wasmtime</code>, bridging the gap until the native backend lands.  The <code>--release</code> flag is accepted and silently ignored for forward-compat.</p>
-</details>
-
 <details class="toolchain complete">
   <summary><span class="id">6b-8</span> sgl check — typecheck only <span class="done">✅</span> <span class="est">S, ~2h</span></summary>
   <div class="deps"><strong>Depends on:</strong> 6b-2</div>
@@ -1191,6 +1126,187 @@
   <summary><span class="id">6b-10</span> sgl fmt — formatter <span class="done">✅</span> <span class="est">L, ~6h</span></summary>
   <p><code>cmdFmt()</code> in <code>src/sigil_cli.ts</code> + <code>src/fmt/formatter.ts</code>.  Parses source to AST, then reconstructs canonical Silicon: 4-space indentation, bare-style definition params, blank lines between top-level definitions.  Flags: <code>--check</code> (exit 1 if file would change — idempotency gate for CI), <code>--stdout</code> (print to stdout, don't modify file).  Idempotent: formatting a file twice produces the same output.
   Known limitations: single-line <code>#</code> comments are stripped by the grammar before the AST is built and therefore cannot be preserved; <code>##</code> DocComments are preserved.  The <code>.</code> field-access separator is normalised to <code>::</code> (both forms are semantically equivalent — the lowerer resolves field vs. module access at compile time).</p>
+</details>
+
+<p style="color: var(--muted); font-style: italic; margin-top: 12px;">
+  <strong>Note:</strong> the original interpreter-backed sgl subcommands
+  (old 6b-5 sgl run, 6b-7 sgl test, 6b-9 sgl eval, 6b-14 acceptance)
+  moved to <a href="#phase-12">Phase 12</a> as stories SR-1 through
+  SR-4 — they can't ship until the Silicon interpreter (Phase 11)
+  lands, so grouping them after Phase 11 reflects the actual scheduling
+  rather than inflating Phase 8's effort with blocked work.  Story IDs
+  6b-5 / 6b-7 / 6b-9 / 6b-14 are RETIRED; 6b-8 / 6b-10
+  retain their numbers to keep existing cross-references stable.
+  Stories 6b-6, 6b-11, 6b-12, 6b-13 moved to Phase 10 (CaaS Consumer
+  APIs) under the new 10d — sgl package toolchain subsection.
+</p>
+
+<!-- ================================================================== -->
+<h2 id="phase-9">Phase 9 — Native backend (QBE)</h2>
+
+<details class="runtime">
+  <summary><span class="id">8-1</span> QBE IR emitter scaffolding + module skeleton <span class="est">M, ~4h</span></summary>
+</details>
+
+<details class="runtime">
+  <summary><span class="id">8-2</span> Emit Const / BinOp / LocalGet / LocalSet to QBE text IR <span class="est">M, ~4h</span></summary>
+  <div class="deps"><strong>Depends on:</strong> 8-1</div>
+</details>
+
+<details class="runtime">
+  <summary><span class="id">8-3</span> Emit Call / Return <span class="est">M, ~3h</span></summary>
+  <div class="deps"><strong>Depends on:</strong> 8-2</div>
+</details>
+
+<details class="runtime">
+  <summary><span class="id">8-4</span> Emit If / Loop / Break / Continue as basic blocks + jumps <span class="est">L, ~6h</span></summary>
+  <div class="deps"><strong>Depends on:</strong> 8-3</div>
+</details>
+
+<details class="runtime">
+  <summary><span class="id">8-5</span> Emit Global / Import / Export <span class="est">M, ~3h</span></summary>
+  <div class="deps"><strong>Depends on:</strong> 8-3</div>
+</details>
+
+<details class="runtime">
+  <summary><span class="id">8-6</span> Emit Function decl + body + signature <span class="est">M, ~4h</span></summary>
+  <div class="deps"><strong>Depends on:</strong> 8-4</div>
+</details>
+
+<details class="runtime">
+  <summary><span class="id">8-7</span> Bundle QBE binary inside sgl <span class="est">M, ~3h</span></summary>
+</details>
+
+<details class="runtime">
+  <summary><span class="id">8-8</span> Invoke as/ld pipeline; produce executable <span class="est">M, ~4h</span></summary>
+  <div class="deps"><strong>Depends on:</strong> 8-6, 8-7</div>
+</details>
+
+<details class="runtime">
+  <summary><span class="id">8-9</span> Link wasmtime as C library; replace comptime engine skeleton <span class="est">M, ~4h</span></summary>
+  <div class="deps"><strong>Depends on:</strong> 8-8 (native binary), Phase 7 complete</div>
+  <p class="goal">This is what 3-22 reframes to once native compilation exists.  The Phase 3 skeleton at <code>comptime_engine_compile_handler</code> / <code>comptime_engine_invoke</code> currently forwards to <code>br_interpret_body</code> (the AST interpreter) — fine for handler bodies that don't need loops, recursion, or the full Silicon surface, but a dead-end for production strata authoring.</p>
+  <p class="goal">Native sigilc links <code>-lwasmtime</code> (stable C embedding API) and calls <code>wasm_engine_new</code> / <code>wasm_module_new</code> / <code>wasm_instance_new</code> / <code>wasm_func_call</code> from Silicon-via-FFI.  Handler bodies compile through the normal Silicon → WAT → wasm pipeline; the resulting wasm is instantiated and invoked through wasmtime's Cranelift JIT.  Identical mechanism to <code>src/comptime/engine.ts</code> which uses Bun's <code>WebAssembly.instantiate</code>; we are NOT writing a wasm interpreter.</p>
+  <p class="goal">Done when: a stratum on::module_finalize handler containing <code>@loop</code> and recursion compiles + runs at compile time + pushes a synthesised definition back to the module.  The AST interpreter in boot/elab/body_rich.si stops being the comptime engine for native targets; it can remain as a fallback for wasm-distributed sigilc, or be dissolved entirely once every built-in stratum migrates.</p>
+  <p class="goal">Open question: portability of the wasm-distributed <code>stage1.wasm</code>.  Wasm-target sigilc has no FFI to wasmtime — its comptime engine stays AST-interpreted (or grows a WASI extension on a per-runtime basis).  This is acceptable for 1.0 since native is the default target on tier-1 platforms; the WASI distribution becomes a "fallback shape" with reduced comptime capability documented in the release notes.</p>
+</details>
+
+<details class="runtime">
+  <summary><span class="id">8-9</span> Linux x86-64 platform support + CI <span class="est">M, ~4h</span></summary>
+  <div class="deps"><strong>Depends on:</strong> 8-8</div>
+</details>
+
+<details class="runtime">
+  <summary><span class="id">8-10</span> Linux ARM64 platform support + CI <span class="est">M, ~4h</span></summary>
+  <div class="deps"><strong>Depends on:</strong> 8-9</div>
+</details>
+
+<details class="runtime">
+  <summary><span class="id">8-11</span> macOS ARM64 (Apple Silicon) platform support + CI <span class="est">M, ~4h</span></summary>
+  <div class="deps"><strong>Depends on:</strong> 8-9</div>
+</details>
+
+<details class="runtime">
+  <summary><span class="id">8-12</span> macOS x86-64 platform support + CI <span class="est">M, ~3h</span></summary>
+  <div class="deps"><strong>Depends on:</strong> 8-11</div>
+</details>
+
+<details class="runtime">
+  <summary><span class="id">8-13</span> Self-host: native sigilc compiles itself <span class="est">L, ~8h</span></summary>
+  <div class="deps"><strong>Depends on:</strong> 8-12</div>
+</details>
+
+<details class="runtime">
+  <summary><span class="id">8-14</span> Byte-equal WAT output verification across backends <span class="est">M, ~3h</span></summary>
+  <div class="deps"><strong>Depends on:</strong> 8-13</div>
+</details>
+
+<!-- ================================================================== -->
+<h2 id="phase-10">Phase 10 — CaaS Consumer APIs</h2>
+
+<div class="phase-intro">
+  Builds on Phase 2 (CaaS Foundation).  These stories add the
+  consumer-facing APIs — workspace, symbols, incrementality, code
+  actions — and rewrite existing CLI / formatter tools to be the first
+  real consumers of the foundation.  The LSP (v1.1's Phase 9b — see
+  <a href="v1.1-user-stories.html#phase-9">v1.1-user-stories.html</a>)
+  consumes these once 1.1 work begins.
+  <br/><br/>
+  Some stories here are <strong>required for 1.0</strong> (workspace,
+  symbols, CLI rewrite, stability contract); others are
+  <strong>post-1.0 acceptable</strong> (incremental parsing/typecheck,
+  code actions) and labelled accordingly in their summaries.
+</div>
+
+<details class="caas">
+  <summary><span class="id">CaaS-4</span> Workspace abstraction — multi-document project state <span class="est">M, ~4h</span> <em style="color: var(--accent3); font-size: 0.78em;">[1.0]</em></summary>
+  <p class="goal">A Workspace holds a set of Documents (files).  Each Document has a content version, a parsed SyntaxTree, and a derived SemanticModel.  Operations on the Workspace: open/close/edit/save documents; query across all documents.</p>
+  <div class="accept"><strong>Acceptance:</strong>
+    <ul>
+      <li>API: <code>workspace.openDocument(uri, content)</code>, <code>workspace.editDocument(uri, edits)</code>, <code>workspace.closeDocument(uri)</code>.</li>
+      <li>Change events fire when documents are modified; consumers can subscribe.</li>
+      <li>Cross-document references (a function in file A used in file B) resolve correctly.</li>
+    </ul>
+  </div>
+  <div class="deps"><strong>Depends on:</strong> CaaS-3</div>
+</details>
+
+<details class="caas">
+  <summary><span class="id">CaaS-5</span> Symbol table API — declarations, references, navigation <span class="est">M, ~4h</span> <em style="color: var(--accent3); font-size: 0.78em;">[1.0]</em></summary>
+  <p class="goal">Public Symbol type with: name, kind (function/type/variable/strata), declaration location, list of reference locations, containing scope.  Powers go-to-definition, find-references, rename.  Required for the LSP go-to-def and hover (v1.1's Phase 9b).</p>
+  <div class="deps"><strong>Depends on:</strong> CaaS-4</div>
+</details>
+
+<details class="caas">
+  <summary><span class="id">CaaS-7</span> Incremental parser — re-parse only changed documents <span class="est">L, ~8h</span> <em style="color: var(--accent4); font-size: 0.78em;">[post-1.0 acceptable]</em></summary>
+  <p class="goal">When a document is edited, re-parse only that document.  Downstream artifacts (SemanticModel, diagnostics) invalidate per-document.  No full-project reparse.  Pure perf optimisation — 1.0 ships without it (full reparse on change) and the LSP is still usable for moderately sized projects.</p>
+  <div class="accept"><strong>Acceptance:</strong>
+    <ul>
+      <li>Editing one document leaves other documents' SyntaxTrees unchanged.</li>
+      <li>Sub-document incremental parsing (only re-parse the changed subtree) is a stretch goal; full-document re-parse is the floor.</li>
+    </ul>
+  </div>
+  <div class="deps"><strong>Depends on:</strong> CaaS-2, CaaS-4</div>
+</details>
+
+<details class="caas">
+  <summary><span class="id">CaaS-8</span> Incremental typecheck — semantic delta propagation <span class="est">L, ~8h</span> <em style="color: var(--accent4); font-size: 0.78em;">[post-1.0 acceptable]</em></summary>
+  <p class="goal">When document A changes and B doesn't, B's SemanticModel only re-runs if A's exports actually changed (signatures, types, registered strata).  Salsa-style query memoisation.  Like CaaS-7, a perf concern — 1.0 ships without it.</p>
+  <div class="deps"><strong>Depends on:</strong> CaaS-7</div>
+</details>
+
+<details class="caas">
+  <summary><span class="id">CaaS-9</span> CLI rewrite — sgl as a library consumer <span class="est">M, ~4h</span> <em style="color: var(--accent3); font-size: 0.78em;">[1.0]</em></summary>
+  <p class="goal">Rewrite <code>sgl build</code> / <code>run</code> / <code>check</code> to use only the public CaaS API.  Proves the API is sufficient for a real consumer.  Any internal-only access needed → either expose it or change the implementation.</p>
+  <div class="deps"><strong>Depends on:</strong> CaaS-3, CaaS-6, 6b-1</div>
+</details>
+
+<details class="caas">
+  <summary><span class="id">CaaS-10</span> Stability contract for the CaaS API <span class="est">S, ~2h</span> <em style="color: var(--accent3); font-size: 0.78em;">[1.0]</em></summary>
+  <p class="goal">Part of Phase 10 stability work.  Declare the CaaS API surface stable at 1.0: additive changes are fine, removals/breaks require a major version.  Internal refactors are unconstrained.  Document which subsystems can call which.</p>
+  <div class="deps"><strong>Depends on:</strong> CaaS-9, 10b-1</div>
+</details>
+
+<details class="caas">
+  <summary><span class="id">CaaS-11</span> Code action / quick-fix API surface <span class="est">M, ~4h</span> <em style="color: var(--accent4); font-size: 0.78em;">[post-1.0 acceptable]</em></summary>
+  <p class="goal">A CodeAction takes a diagnostic and produces zero or more TextEdits that fix it.  Foundational for Roslyn-style "Press Ctrl+. to fix this error" workflows in IDEs.  Strata authors can register code actions for their diagnostics.  Nice IDE polish but not blocking 1.0.</p>
+  <div class="deps"><strong>Depends on:</strong> CaaS-6</div>
+</details>
+
+<details class="caas">
+  <summary><span class="id">CaaS-12</span> Formatter as a CaaS consumer (sgl fmt rewrite) <span class="est">M, ~4h</span> <em style="color: var(--accent3); font-size: 0.78em;">[1.0]</em></summary>
+  <p class="goal">Re-implement <code>sgl fmt</code> (originally story 6b-10) on top of the SyntaxTree API.  No re-parsing in the formatter — it reads the tree.  Proves the API supports format-style tooling.</p>
+  <div class="deps"><strong>Depends on:</strong> CaaS-2, 6b-10 superseded</div>
+</details>
+
+<h3>10d — sgl package toolchain <em style="color: var(--accent4); font-size: 0.85em;">[post-1.0 acceptable]</em></h3>
+
+<p style="color: var(--muted); font-size: 0.88rem; margin-bottom: 8px;">These four stories were deferred from Phase 8 (sgl CLI).  Package registry and lockfile work is post-1.0 acceptable; 6b-6 is blocked on Phase 9 (native QBE backend).</p>
+
+<details class="toolchain">
+  <summary><span class="id">6b-6</span> sgl run --release — compile + execute <span class="est">M, ~3h</span></summary>
+  <div class="deps"><strong>Depends on:</strong> 6b-4, Phase 9 (native QBE backend) substantially complete</div>
+  <p><em>Blocked on Phase 9 (native QBE backend).</em>  Note: <code>sgl run</code> (without <code>--release</code>) already ships as a Phase 8 bonus — it compiles to wasix WAT and executes via <code>wasmtime</code>, bridging the gap until the native backend lands.  The <code>--release</code> flag is accepted and silently ignored for forward-compat.</p>
 </details>
 
 <details class="toolchain">
@@ -1207,25 +1323,16 @@
   <div class="deps"><strong>Depends on:</strong> 6b-11</div>
 </details>
 
-<p style="color: var(--muted); font-style: italic; margin-top: 12px;">
-  <strong>Note:</strong> the original interpreter-backed sgl subcommands
-  (old 6b-5 sgl run, 6b-7 sgl test, 6b-9 sgl eval, 6b-14 acceptance)
-  moved to <a href="#phase-7-5">Phase 7.5</a> as stories SR-1 through
-  SR-4 — they can't ship until the Silicon interpreter (Phase 7)
-  lands, so grouping them after Phase 7 reflects the actual scheduling
-  rather than inflating Phase 6's effort with blocked work.  Story IDs
-  6b-5 / 6b-7 / 6b-9 / 6b-14 are RETIRED; 6b-6 / 6b-8 / 6b-10..13
-  retain their numbers to keep existing cross-references stable.
-</p>
-
 <!-- ================================================================== -->
-<h2 id="phase-7">Phase 7 — Silicon interpreter</h2>
+<h2 id="phase-11">Phase 11 — Silicon interpreter</h2>
 
 <div class="phase-intro">
   Tree-walking interpreter for Silicon, written in Silicon.  Drives
   <code>sgl run</code>, <code>sgl test</code>, <code>sgl eval</code>.
   Generalises the strata body evaluator from a subset to the full Silicon
   surface.
+  <br/><br/>
+  <strong>Sequencing note:</strong> intentionally placed after boot/ (Phase 7) and QBE (Phase 9) so the interpreter can be written in Silicon and compiled to native for production performance.  Writing it before native compilation exists would require the interpreter to run interpreted — a 10–100× slowdown that makes it unusable as a dev tool.
 </div>
 
 <details class="runtime">
@@ -1308,29 +1415,29 @@
 </details>
 
 <!-- ================================================================== -->
-<h2 id="phase-7-5">Phase 7.5 — <code>sgl</code> interpreter-backed subcommands</h2>
+<h2 id="phase-12">Phase 12 — <code>sgl</code> interpreter-backed subcommands</h2>
 
 <div class="phase-intro">
   The four <code>sgl</code> subcommands that need the Silicon interpreter
-  (Phase 7) to run anything: <code>sgl run</code>, <code>sgl test</code>,
+  (Phase 11) to run anything: <code>sgl run</code>, <code>sgl test</code>,
   <code>sgl eval</code>, and the end-to-end <code>sgl init &amp;&amp; sgl
-  run</code> acceptance test.  Originally inside Phase 6 as 6b-5 / 6b-7 /
+  run</code> acceptance test.  Originally inside Phase 8 as 6b-5 / 6b-7 /
   6b-9 / 6b-14; relocated here because their critical path is gated on
-  Phase 7 landing, not on the rest of the CLI plumbing.  Splitting them
-  out follows the same pattern used for Phase 0.5, 3.5, and 8.5 — work
+  Phase 11 landing, not on the rest of the CLI plumbing.  Splitting them
+  out follows the same pattern used for Phase 2, 7, and 10 — work
   that's logically attached to a phase but actually scheduled later
-  earns its own .5 slot.
+  earns its own slot.
   <br/><br/>
   CLI shape (binary scaffold, manifest parser, sgl init, sgl build,
   sgl check, sgl fmt, sgl add, registry, lockfile) all stays in
-  Phase 6 — that work can proceed in parallel with Phase 7.  Phase 7.5
-  closes the loop once both Phase 6 and Phase 7 are far enough along.
+  Phase 8 — that work can proceed in parallel with Phase 11.  Phase 12
+  closes the loop once both Phase 8 and Phase 11 are far enough along.
 </div>
 
 <details class="toolchain">
   <summary><span class="id">SR-1</span> sgl run — interpreter-backed dev mode <span class="est">M, ~4h</span></summary>
-  <div class="deps"><strong>Depends on:</strong> 6b-2 (manifest parser), Phase 7 (interpreter)</div>
-  <p class="goal">Was 6b-5.  <code>sgl run src/main.si</code> drives the Phase 7 interpreter directly — no WAT, no native binary.  Iterative dev loop is the headline 1.0 user experience.  <code>--release</code> falls through to 6b-6 once Phase 8 is far enough along.</p>
+  <div class="deps"><strong>Depends on:</strong> 6b-2 (manifest parser), Phase 11 (interpreter)</div>
+  <p class="goal">Was 6b-5.  <code>sgl run src/main.si</code> drives the Phase 11 interpreter directly — no WAT, no native binary.  Iterative dev loop is the headline 1.0 user experience.  <code>--release</code> falls through to 6b-6 once Phase 8 is far enough along.</p>
 </details>
 
 <details class="toolchain">
@@ -1341,8 +1448,8 @@
 
 <details class="toolchain">
   <summary><span class="id">SR-3</span> sgl eval — REPL <span class="est">M, ~4h</span></summary>
-  <div class="deps"><strong>Depends on:</strong> Phase 7 (interpreter)</div>
-  <p class="goal">Was 6b-9.  Read-eval-print loop backed by the Phase 7 interpreter.  Values display as Silicon-native shapes (a <code>Result[T, E]</code> renders as the variant, not as an i32+i32 pair).  Primary debugging tool for Silicon code through 1.0.</p>
+  <div class="deps"><strong>Depends on:</strong> Phase 11 (interpreter)</div>
+  <p class="goal">Was 6b-9.  Read-eval-print loop backed by the Phase 11 interpreter.  Values display as Silicon-native shapes (a <code>Result[T, E]</code> renders as the variant, not as an i32+i32 pair).  Primary debugging tool for Silicon code through 1.0.</p>
 </details>
 
 <details class="toolchain">
@@ -1352,187 +1459,7 @@
 </details>
 
 <!-- ================================================================== -->
-<h2 id="phase-8">Phase 8 — Native backend (QBE)</h2>
-
-<details class="runtime">
-  <summary><span class="id">8-1</span> QBE IR emitter scaffolding + module skeleton <span class="est">M, ~4h</span></summary>
-</details>
-
-<details class="runtime">
-  <summary><span class="id">8-2</span> Emit Const / BinOp / LocalGet / LocalSet to QBE text IR <span class="est">M, ~4h</span></summary>
-  <div class="deps"><strong>Depends on:</strong> 8-1</div>
-</details>
-
-<details class="runtime">
-  <summary><span class="id">8-3</span> Emit Call / Return <span class="est">M, ~3h</span></summary>
-  <div class="deps"><strong>Depends on:</strong> 8-2</div>
-</details>
-
-<details class="runtime">
-  <summary><span class="id">8-4</span> Emit If / Loop / Break / Continue as basic blocks + jumps <span class="est">L, ~6h</span></summary>
-  <div class="deps"><strong>Depends on:</strong> 8-3</div>
-</details>
-
-<details class="runtime">
-  <summary><span class="id">8-5</span> Emit Global / Import / Export <span class="est">M, ~3h</span></summary>
-  <div class="deps"><strong>Depends on:</strong> 8-3</div>
-</details>
-
-<details class="runtime">
-  <summary><span class="id">8-6</span> Emit Function decl + body + signature <span class="est">M, ~4h</span></summary>
-  <div class="deps"><strong>Depends on:</strong> 8-4</div>
-</details>
-
-<details class="runtime">
-  <summary><span class="id">8-7</span> Bundle QBE binary inside sgl <span class="est">M, ~3h</span></summary>
-</details>
-
-<details class="runtime">
-  <summary><span class="id">8-8</span> Invoke as/ld pipeline; produce executable <span class="est">M, ~4h</span></summary>
-  <div class="deps"><strong>Depends on:</strong> 8-6, 8-7</div>
-</details>
-
-<details class="runtime">
-  <summary><span class="id">8-9</span> Link wasmtime as C library; replace comptime engine skeleton <span class="est">M, ~4h</span></summary>
-  <div class="deps"><strong>Depends on:</strong> 8-8 (native binary), Phase 3 complete</div>
-  <p class="goal">This is what 3-22 reframes to once native compilation exists.  The Phase 3 skeleton at <code>comptime_engine_compile_handler</code> / <code>comptime_engine_invoke</code> currently forwards to <code>br_interpret_body</code> (the AST interpreter) — fine for handler bodies that don't need loops, recursion, or the full Silicon surface, but a dead-end for production strata authoring.</p>
-  <p class="goal">Native sigilc links <code>-lwasmtime</code> (stable C embedding API) and calls <code>wasm_engine_new</code> / <code>wasm_module_new</code> / <code>wasm_instance_new</code> / <code>wasm_func_call</code> from Silicon-via-FFI.  Handler bodies compile through the normal Silicon → WAT → wasm pipeline; the resulting wasm is instantiated and invoked through wasmtime's Cranelift JIT.  Identical mechanism to <code>src/comptime/engine.ts</code> which uses Bun's <code>WebAssembly.instantiate</code>; we are NOT writing a wasm interpreter.</p>
-  <p class="goal">Done when: a stratum on::module_finalize handler containing <code>@loop</code> and recursion compiles + runs at compile time + pushes a synthesised definition back to the module.  The AST interpreter in boot/elab/body_rich.si stops being the comptime engine for native targets; it can remain as a fallback for wasm-distributed sigilc, or be dissolved entirely once every built-in stratum migrates.</p>
-  <p class="goal">Open question: portability of the wasm-distributed <code>stage1.wasm</code>.  Wasm-target sigilc has no FFI to wasmtime — its comptime engine stays AST-interpreted (or grows a WASI extension on a per-runtime basis).  This is acceptable for 1.0 since native is the default target on tier-1 platforms; the WASI distribution becomes a "fallback shape" with reduced comptime capability documented in the release notes.</p>
-</details>
-
-<details class="runtime">
-  <summary><span class="id">8-9</span> Linux x86-64 platform support + CI <span class="est">M, ~4h</span></summary>
-  <div class="deps"><strong>Depends on:</strong> 8-8</div>
-</details>
-
-<details class="runtime">
-  <summary><span class="id">8-10</span> Linux ARM64 platform support + CI <span class="est">M, ~4h</span></summary>
-  <div class="deps"><strong>Depends on:</strong> 8-9</div>
-</details>
-
-<details class="runtime">
-  <summary><span class="id">8-11</span> macOS ARM64 (Apple Silicon) platform support + CI <span class="est">M, ~4h</span></summary>
-  <div class="deps"><strong>Depends on:</strong> 8-9</div>
-</details>
-
-<details class="runtime">
-  <summary><span class="id">8-12</span> macOS x86-64 platform support + CI <span class="est">M, ~3h</span></summary>
-  <div class="deps"><strong>Depends on:</strong> 8-11</div>
-</details>
-
-<details class="runtime">
-  <summary><span class="id">8-13</span> Self-host: native sigilc compiles itself <span class="est">L, ~8h</span></summary>
-  <div class="deps"><strong>Depends on:</strong> 8-12</div>
-</details>
-
-<details class="runtime">
-  <summary><span class="id">8-14</span> Byte-equal WAT output verification across backends <span class="est">M, ~3h</span></summary>
-  <div class="deps"><strong>Depends on:</strong> 8-13</div>
-</details>
-
-<!-- ================================================================== -->
-<h2 id="phase-caas">Phase 8.5 — CaaS Consumer APIs</h2>
-
-<div class="phase-intro">
-  Builds on Phase 0.5 (CaaS Foundation).  These stories add the
-  consumer-facing APIs — workspace, symbols, incrementality, code
-  actions — and rewrite existing CLI / formatter tools to be the first
-  real consumers of the foundation.  The LSP (v1.1's Phase 9b — see
-  <a href="v1.1-user-stories.html#phase-9">v1.1-user-stories.html</a>)
-  consumes these once 1.1 work begins.
-  <br/><br/>
-  Some stories here are <strong>required for 1.0</strong> (workspace,
-  symbols, CLI rewrite, stability contract); others are
-  <strong>post-1.0 acceptable</strong> (incremental parsing/typecheck,
-  code actions) and labelled accordingly in their summaries.
-</div>
-
-<details class="caas">
-  <summary><span class="id">CaaS-4</span> Workspace abstraction — multi-document project state <span class="est">M, ~4h</span> <em style="color: var(--accent3); font-size: 0.78em;">[1.0]</em></summary>
-  <p class="goal">A Workspace holds a set of Documents (files).  Each Document has a content version, a parsed SyntaxTree, and a derived SemanticModel.  Operations on the Workspace: open/close/edit/save documents; query across all documents.</p>
-  <div class="accept"><strong>Acceptance:</strong>
-    <ul>
-      <li>API: <code>workspace.openDocument(uri, content)</code>, <code>workspace.editDocument(uri, edits)</code>, <code>workspace.closeDocument(uri)</code>.</li>
-      <li>Change events fire when documents are modified; consumers can subscribe.</li>
-      <li>Cross-document references (a function in file A used in file B) resolve correctly.</li>
-    </ul>
-  </div>
-  <div class="deps"><strong>Depends on:</strong> CaaS-3</div>
-</details>
-
-<details class="caas">
-  <summary><span class="id">CaaS-5</span> Symbol table API — declarations, references, navigation <span class="est">M, ~4h</span> <em style="color: var(--accent3); font-size: 0.78em;">[1.0]</em></summary>
-  <p class="goal">Public Symbol type with: name, kind (function/type/variable/strata), declaration location, list of reference locations, containing scope.  Powers go-to-definition, find-references, rename.  Required for the LSP go-to-def and hover (v1.1's Phase 9b).</p>
-  <div class="deps"><strong>Depends on:</strong> CaaS-4</div>
-</details>
-
-<details class="caas">
-  <summary><span class="id">CaaS-7</span> Incremental parser — re-parse only changed documents <span class="est">L, ~8h</span> <em style="color: var(--accent4); font-size: 0.78em;">[post-1.0 acceptable]</em></summary>
-  <p class="goal">When a document is edited, re-parse only that document.  Downstream artifacts (SemanticModel, diagnostics) invalidate per-document.  No full-project reparse.  Pure perf optimisation — 1.0 ships without it (full reparse on change) and the LSP is still usable for moderately sized projects.</p>
-  <div class="accept"><strong>Acceptance:</strong>
-    <ul>
-      <li>Editing one document leaves other documents' SyntaxTrees unchanged.</li>
-      <li>Sub-document incremental parsing (only re-parse the changed subtree) is a stretch goal; full-document re-parse is the floor.</li>
-    </ul>
-  </div>
-  <div class="deps"><strong>Depends on:</strong> CaaS-2, CaaS-4</div>
-</details>
-
-<details class="caas">
-  <summary><span class="id">CaaS-8</span> Incremental typecheck — semantic delta propagation <span class="est">L, ~8h</span> <em style="color: var(--accent4); font-size: 0.78em;">[post-1.0 acceptable]</em></summary>
-  <p class="goal">When document A changes and B doesn't, B's SemanticModel only re-runs if A's exports actually changed (signatures, types, registered strata).  Salsa-style query memoisation.  Like CaaS-7, a perf concern — 1.0 ships without it.</p>
-  <div class="deps"><strong>Depends on:</strong> CaaS-7</div>
-</details>
-
-<details class="caas">
-  <summary><span class="id">CaaS-9</span> CLI rewrite — sgl as a library consumer <span class="est">M, ~4h</span> <em style="color: var(--accent3); font-size: 0.78em;">[1.0]</em></summary>
-  <p class="goal">Rewrite <code>sgl build</code> / <code>run</code> / <code>check</code> to use only the public CaaS API.  Proves the API is sufficient for a real consumer.  Any internal-only access needed → either expose it or change the implementation.</p>
-  <div class="deps"><strong>Depends on:</strong> CaaS-3, CaaS-6, 6b-1</div>
-</details>
-
-<details class="caas">
-  <summary><span class="id">CaaS-10</span> Stability contract for the CaaS API <span class="est">S, ~2h</span> <em style="color: var(--accent3); font-size: 0.78em;">[1.0]</em></summary>
-  <p class="goal">Part of Phase 10 stability work.  Declare the CaaS API surface stable at 1.0: additive changes are fine, removals/breaks require a major version.  Internal refactors are unconstrained.  Document which subsystems can call which.</p>
-  <div class="deps"><strong>Depends on:</strong> CaaS-9, 10b-1</div>
-</details>
-
-<details class="caas">
-  <summary><span class="id">CaaS-11</span> Code action / quick-fix API surface <span class="est">M, ~4h</span> <em style="color: var(--accent4); font-size: 0.78em;">[post-1.0 acceptable]</em></summary>
-  <p class="goal">A CodeAction takes a diagnostic and produces zero or more TextEdits that fix it.  Foundational for Roslyn-style "Press Ctrl+. to fix this error" workflows in IDEs.  Strata authors can register code actions for their diagnostics.  Nice IDE polish but not blocking 1.0.</p>
-  <div class="deps"><strong>Depends on:</strong> CaaS-6</div>
-</details>
-
-<details class="caas">
-  <summary><span class="id">CaaS-12</span> Formatter as a CaaS consumer (sgl fmt rewrite) <span class="est">M, ~4h</span> <em style="color: var(--accent3); font-size: 0.78em;">[1.0]</em></summary>
-  <p class="goal">Re-implement <code>sgl fmt</code> (originally story 6b-10) on top of the SyntaxTree API.  No re-parsing in the formatter — it reads the tree.  Proves the API supports format-style tooling.</p>
-  <div class="deps"><strong>Depends on:</strong> CaaS-2, 6b-10 superseded</div>
-</details>
-
-<!-- ================================================================== -->
-<h2 id="phase-9">Phase 9 — DWARF + LSP <span style="color: var(--accent4); font-size: 0.75em; font-weight: normal;">[moved to v1.1]</span></h2>
-
-<div class="phase-intro">
-  <strong>Phase 9 is officially planned for after 1.0.</strong>  See
-  <a href="v1.1-user-stories.html#phase-9"><code>docs/v1.1-user-stories.html</code></a>
-  for the full breakdown.
-  <br/><br/>
-  Both halves of Phase 9 were already trending out of 1.0 scope: 9a
-  (DWARF) was explicitly marked post-1.0 acceptable (the Silicon
-  interpreter + <code>sgl eval</code> covers Silicon-level debugging,
-  which is the 1.0 story), and 9b (LSP) depends on CaaS Consumer APIs
-  that are themselves partially post-1.0.  Most languages ship 1.0
-  without an LSP (Rust did, Zig did); moving the whole phase to v1.1
-  matches the realistic schedule.
-  <br/><br/>
-  Function-name symbols in native binaries come essentially free from
-  QBE → <code>as</code> → <code>ld</code> at 1.0; stack traces stay
-  readable without DWARF.  Full source-line info, variable inspection,
-  and IDE integration land in v1.1.
-</div>
-
-<!-- ================================================================== -->
-<h2 id="phase-10">Phase 10 — Stability + distribution</h2>
+<h2 id="phase-13">Phase 13 — Stability + distribution</h2>
 
 <h3>10a — Grammar specification</h3>
 
@@ -1611,15 +1538,37 @@
 </details>
 
 <!-- ================================================================== -->
+<h2 id="phase-14">Phase 14 — DWARF + LSP <span style="color: var(--accent4); font-size: 0.75em; font-weight: normal;">[moved to v1.1]</span></h2>
+
+<div class="phase-intro">
+  <strong>Phase 14 is officially planned for after 1.0.</strong>  See
+  <a href="v1.1-user-stories.html#phase-9"><code>docs/v1.1-user-stories.html</code></a>
+  for the full breakdown.
+  <br/><br/>
+  Both halves of Phase 14 were already trending out of 1.0 scope: 9a
+  (DWARF) was explicitly marked post-1.0 acceptable (the Silicon
+  interpreter + <code>sgl eval</code> covers Silicon-level debugging,
+  which is the 1.0 story), and 9b (LSP) depends on CaaS Consumer APIs
+  that are themselves partially post-1.0.  Most languages ship 1.0
+  without an LSP (Rust did, Zig did); moving the whole phase to v1.1
+  matches the realistic schedule.
+  <br/><br/>
+  Function-name symbols in native binaries come essentially free from
+  QBE → <code>as</code> → <code>ld</code> at 1.0; stack traces stay
+  readable without DWARF.  Full source-line info, variable inspection,
+  and IDE integration land in v1.1.
+</div>
+
+<!-- ================================================================== -->
 <h2 id="summary" style="border-color: var(--accent5);">Total effort summary</h2>
 
 <div style="background: var(--surface); border: 1px solid var(--border); border-left: 4px solid var(--accent3); border-radius: 8px; padding: 12px 18px; margin: 12px 0 18px; font-size: 0.88rem;">
   <strong style="color: var(--accent3);">Velocity recalibration (2026-05-24).</strong>
   Original estimates assumed ~1 story / day across all phases.  Observed
-  reality across the four shipped phases plus the Phase 3 boot/ sprint:
+  reality across the six shipped phases plus the Phase 7 boot/ sprint:
   well-specced work (where src/ ships first as the reference) lands at
-  3–5× the originally estimated pace; novel work (Phase 7 interpreter,
-  Phase 8 QBE backend) tracks closer to 1.5–2× the original pace.  The
+  3–5× the originally estimated pace; novel work (Phase 11 interpreter,
+  Phase 9 QBE backend) tracks closer to 1.5–2× the original pace.  The
   "Revised effort" column reflects that recalibration; shipped phases
   show actual-vs-original.  ✅ rows count as zero remaining effort.
 </div>
@@ -1627,109 +1576,102 @@
 <table>
   <tr><th>Phase</th><th>Status</th><th>Stories</th><th>Revised effort</th><th>Notes</th></tr>
   <tr style="background: rgba(62, 207, 142, 0.08);">
-    <td>0 — Dissolution completion</td>
+    <td>1 — Dissolution completion</td>
     <td style="color: var(--accent3); font-weight: 700;">✅ SHIPPED</td>
     <td>33 / 33</td>
     <td><em>actual ~3 d</em> (est: 14 d)</td>
     <td>All D-B/D-D/D-E stories shipped; AST interpreter retired.  Sub-splits expanded 30 → 33.</td>
   </tr>
   <tr style="background: rgba(62, 207, 142, 0.08);">
-    <td>0.5 — CaaS Foundation</td>
+    <td>2 — CaaS Foundation</td>
     <td style="color: var(--accent3); font-weight: 700;">✅ SHIPPED</td>
     <td>4 / 4</td>
     <td><em>actual ~1 d</em> (est: 5 d)</td>
     <td>Commit <code>aab0835</code> 2026-05-24.  CaaS-1/2/3/6.  942 tests pass.</td>
   </tr>
   <tr style="background: rgba(62, 207, 142, 0.08);">
-    <td>1 — Language foundations</td>
+    <td>3 — Language foundations</td>
     <td style="color: var(--accent3); font-weight: 700;">✅ SHIPPED</td>
     <td>14 / 14</td>
     <td><em>actual ~2 d</em> (est: 10 d)</td>
-    <td><code>@struct</code> + always-on typecheck.  Note: boot/ port (1a-8) was stashed-broken at the start of the Phase 3 sprint and is awaiting follow-up.</td>
+    <td><code>@struct</code> + always-on typecheck.  Note: boot/ port (1a-8) was stashed-broken at the start of the Phase 7 sprint and is awaiting follow-up.</td>
   </tr>
   <tr style="background: rgba(62, 207, 142, 0.08);">
-    <td>2 — Error messages</td>
+    <td>4 — Error messages</td>
     <td style="color: var(--accent3); font-weight: 700;">✅ SHIPPED</td>
     <td>8 / 8</td>
     <td><em>actual ~1 d</em> (est: 5 d)</td>
     <td>Levenshtein hints, caret rendering, ArityMismatch (E0009), MissingReturn (E0008).</td>
   </tr>
-  <tr style="background: rgba(247, 160, 108, 0.08);">
-    <td>3 — Strata 2.0 in boot/</td>
-    <td style="color: var(--accent4); font-weight: 700;">🟡 PARTIAL</td>
-    <td>11 / 26 + 2 stubs</td>
-    <td><em>~1.5 d done · ~9 d remain</em> (est: 26 d)</td>
-    <td>3-7/8/9/10/11/17/19/20/21/23/24 shipped; 3-15 (patch_types stub), 3-22 (engine skeleton; production = 8-9).  Remaining: 3-1..3-6 HM-lite, 3-12..14, 3-16, 3-18, 3-25 (<code>@defer</code> boot/ port), 3-26 (Phase 5 grammar revisions → boot/).</td>
-  </tr>
-  <tr>
-    <td>3.5 — @comptime (user-level)</td>
-    <td style="color: var(--muted);">⬜ NOT STARTED</td>
-    <td>0 / 5</td>
-    <td>~2 d (est: 3 d)</td>
-    <td>CT-4 partial-marked (gated on 8-9).  CT-1..3, 5 work today against the AST interpreter.</td>
-  </tr>
   <tr style="background: rgba(62, 207, 142, 0.08);">
-    <td>4 — @defer (src/)</td>
+    <td>5 — @defer (src/)</td>
     <td style="color: var(--accent3); font-weight: 700;">✅ SHIPPED</td>
     <td>4 / 4</td>
     <td><em>actual ~0.5 d</em> (est: 3 d)</td>
-    <td>2026-05-24.  Expression-keyword stratum, LIFO cleanup at end-of-body + every <code>&amp;@return</code>, non-void return via temp local.  14 new tests (9 unit + 5 e2e).  boot/ port is 3-25.</td>
+    <td>2026-05-24.  Expression-keyword stratum, LIFO cleanup at end-of-body + every <code>&amp;@return</code>, non-void return via temp local.  14 new tests (9 unit + 5 e2e).  boot/ port is 3-25 (Phase 7).</td>
   </tr>
   <tr style="background: rgba(247, 160, 108, 0.08);">
-    <td>5 — Generic stdlib + extensions</td>
+    <td>6 — Generic stdlib + type system</td>
     <td style="color: var(--accent4); font-weight: 700;">🟡 PARTIAL</td>
-    <td>13 / 19</td>
-    <td><em>~3 d done · ~3.5 d remain</em> (est: 18 d)</td>
-    <td><strong>Src/ scope complete.</strong>  Shipped: 5a-1 Option, 5a-2 Result + helpers, 5a-3 <code>@try</code> unwrap shorthand, 5a-4 Vec[i32], 5a-5 vec_map, 5a-6 HashMap[i32→i32], 5b-1 unsigned types, 5b-2 unsigned operator overloads, 5b-3 *_u codegen, 5b-4 <code>@toU32</code> / <code>@toU64</code> casts, 5c-1 Slice[T] type + accessors, 5c-2 bounds-checked Option-returning indexing, 5c-3 String → Slice[u8] bridge, 5d-1 funcref table, 5d-2 call_indirect codegen, 5d-3 <code>$fn</code> surface annotation, 5d-4 Vec.map proof.  Plus allocator primitives (<code>realloc</code> + <code>mem_copy</code>) in the prelude.  Two stories ride with story 3-26's boot/ port: 5a-7 (compiler internals → Vec/HashMap/Option) and 5c-4 ((ptr,len) → Slice[u8]) — both are mechanical boot/ rewrites gated on boot/ opening up.</td>
+    <td>18 / 18</td>
+    <td><em>~3 d done · src/ complete</em> (est: 18 d)</td>
+    <td><strong>Src/ scope complete.</strong>  Shipped: 5a-1..5a-6, 5a-3 <code>@try</code>, 5b-1..5b-4, 5c-1..5c-3, 5d-1..5d-4, allocator primitives.  5a-7 and 5c-4 (boot/ migration) moved to Phase 7.</td>
+  </tr>
+  <tr style="background: rgba(247, 160, 108, 0.08);">
+    <td>7 — boot/ port, @comptime + advanced stdlib</td>
+    <td style="color: var(--accent4); font-weight: 700;">🟡 PARTIAL</td>
+    <td>11 / 32 + 2 stubs</td>
+    <td><em>~1.5 d done · ~11 d remain</em> (est: 31 d)</td>
+    <td>Combines old Phase 3 (3-1..3-26), Phase 3.5 (CT-1..CT-5), and story 5a-7.  3-7/8/9/10/11/17/19/20/21/23/24 shipped; 3-15 (patch_types stub), 3-22 (engine skeleton; production = 9-9).  Remaining: 3-1..3-6 HM-lite, 3-12..14, 3-16, 3-18, 3-25 (<code>@defer</code> boot/ port), 3-26 (grammar revisions → boot/), CT-1..5, 5a-7.</td>
+  </tr>
+  <tr style="background: rgba(62, 207, 142, 0.08);">
+    <td>8 — sgl CLI</td>
+    <td style="color: var(--accent3); font-weight: 700;">✅ SHIPPED</td>
+    <td>6 / 6</td>
+    <td><em>actual ~1 d</em> (est: 6 d)</td>
+    <td>6b-1/2/3/4/8/10 all shipped.  6b-6/11/12/13 moved to Phase 10 (post-1.0 package toolchain).</td>
   </tr>
   <tr>
-    <td>6 — sgl CLI</td>
-    <td style="color: var(--muted);">⬜ NOT STARTED</td>
-    <td>0 / 10</td>
-    <td>~5 d (est: 10 d)</td>
-    <td>Plumbing (init, build, check, fmt, add, registry, lockfile).  Parallelisable with Phase 7.</td>
-  </tr>
-  <tr>
-    <td>7 — Silicon interpreter</td>
-    <td style="color: var(--muted);">⬜ NOT STARTED</td>
-    <td>0 / 16</td>
-    <td>~10 d (est: 15 d)</td>
-    <td>Genuinely novel — tree-walking evaluator + closures + arena.  Cadence closer to original estimate than the boot/ ports.</td>
-  </tr>
-  <tr>
-    <td>7.5 — sgl interpreter-backed subcommands</td>
-    <td style="color: var(--muted);">⬜ NOT STARTED</td>
-    <td>0 / 4</td>
-    <td>~2 d (est: 3 d)</td>
-    <td>SR-1 run, SR-2 test, SR-3 eval, SR-4 acceptance.  Gated on Phase 7.</td>
-  </tr>
-  <tr>
-    <td>8 — Native backend (QBE)</td>
+    <td>9 — Native backend (QBE)</td>
     <td style="color: var(--muted);">⬜ NOT STARTED</td>
     <td>0 / 14</td>
     <td>~10 d (est: 14 d)</td>
-    <td>QBE IR emitter + as/ld + 8-9 (wasmtime-as-library, the production comptime engine).  Backend work is well-bounded but real.</td>
+    <td>QBE IR emitter + as/ld + 9-9 (wasmtime-as-library, the production comptime engine).  Backend work is well-bounded but real.</td>
   </tr>
   <tr>
-    <td>8.5 — CaaS Consumer APIs</td>
+    <td>10 — CaaS Consumer APIs</td>
     <td style="color: var(--muted);">⬜ NOT STARTED</td>
-    <td>0 / 8</td>
-    <td>~7 d (1.0) + ~3 d (post-1.0)<br/><em style="color: var(--muted); font-size: 0.85em;">(est: 12 d + 8 d)</em></td>
-    <td>Consumer APIs: Workspace, Symbol, incremental, code actions.  CaaS-7 / 8 / 11 post-1.0.</td>
-  </tr>
-  <tr style="opacity: 0.6;">
-    <td>9 — DWARF + LSP <em style="color: var(--accent4); font-size: 0.85em;">[moved to v1.1]</em></td>
-    <td style="color: var(--muted);">—</td>
-    <td>—</td>
-    <td>—</td>
-    <td>See <a href="v1.1-user-stories.html">v1.1-user-stories.html</a>; ~14 stories / ~5 d revised post-1.0.</td>
+    <td>0 / 12</td>
+    <td>~7 d (1.0) + ~3 d (post-1.0)<br/><em style="color: var(--muted); font-size: 0.85em;">(est: 14 d)</em></td>
+    <td>Consumer APIs: Workspace, Symbol, incremental, code actions.  CaaS-7 / 8 / 11 post-1.0.  Also includes 6b-6/11/12/13 sgl package toolchain (post-1.0 acceptable).</td>
   </tr>
   <tr>
-    <td>10 — Stability + distribution</td>
+    <td>11 — Silicon interpreter</td>
+    <td style="color: var(--muted);">⬜ NOT STARTED</td>
+    <td>0 / 16</td>
+    <td>~10 d (est: 15 d)</td>
+    <td>Genuinely novel — tree-walking evaluator + closures + arena, written in Silicon + compiled to native via Phase 9 QBE.  Cadence closer to original estimate than the boot/ ports.</td>
+  </tr>
+  <tr>
+    <td>12 — sgl interpreter-backed subcommands</td>
+    <td style="color: var(--muted);">⬜ NOT STARTED</td>
+    <td>0 / 4</td>
+    <td>~2 d (est: 3 d)</td>
+    <td>SR-1 run, SR-2 test, SR-3 eval, SR-4 acceptance.  Gated on Phase 11.</td>
+  </tr>
+  <tr>
+    <td>13 — Stability + distribution</td>
     <td style="color: var(--muted);">⬜ NOT STARTED</td>
     <td>0 / 15</td>
     <td>~6 d (est: 10 d)</td>
     <td>EBNF grammar, stability policy, packaging, installers.</td>
+  </tr>
+  <tr style="opacity: 0.6;">
+    <td>14 — DWARF + LSP <em style="color: var(--accent4); font-size: 0.85em;">[moved to v1.1]</em></td>
+    <td style="color: var(--muted);">—</td>
+    <td>—</td>
+    <td>—</td>
+    <td>See <a href="v1.1-user-stories.html">v1.1-user-stories.html</a>; ~14 stories / ~5 d revised post-1.0.</td>
   </tr>
 
   <tr style="background: var(--surface2); border-top: 3px solid var(--accent3); font-weight: 600;">
@@ -1737,14 +1679,14 @@
     <td style="color: var(--accent3);">✅</td>
     <td>76 / 76</td>
     <td><em>~10.5 d actual</em> (est: 44 d)</td>
-    <td>Phases 0, 0.5, 1, 2, 4 fully shipped + 11 stories of Phase 3 + 13 stories of Phase 5 (5a-1, 5a-2, 5a-4, 5a-5, 5a-6, 5b-1, 5b-2, 5b-3, 5b-4, 5d-1, 5d-2, 5d-3, 5d-4) + allocator primitives in the prelude.  ~5× faster than originally estimated.</td>
+    <td>Phases 1, 2, 3, 4, 5, 8 fully shipped + 11 stories of Phase 7 + 18 stories of Phase 6 (full src/ scope).  ~5× faster than originally estimated.</td>
   </tr>
   <tr style="background: var(--surface2); border-top: 1px solid var(--border); font-weight: 600;">
     <td>1.0 REMAINING</td>
     <td style="color: var(--accent4);">🟡</td>
     <td>~79 stories</td>
     <td><strong style="color: var(--accent);">~51 working days (~2.5 months)</strong></td>
-    <td>Phase 7 + 8 dominate (interpreter + native backend).  Phase 5 carries 13 deferred stories that need dedicated sprints (Vec / HashMap allocator infra, call_indirect WASM tables, slice migration).</td>
+    <td>Phase 11 + 9 dominate (interpreter + native backend).  Phase 7 carries the boot/ port work.</td>
   </tr>
   <tr style="background: var(--surface2); font-weight: 600;">
     <td>1.0 TOTAL</td>
@@ -1756,9 +1698,9 @@
   <tr style="font-size: 0.85em; color: var(--muted);">
     <td>+ post-1.0 stretch (in v1)</td>
     <td>—</td>
-    <td>~3 stories</td>
-    <td>~3 d (est: 8 d)</td>
-    <td>CaaS-7 / 8 / 11 from Phase 8.5.  Phase 9 (DWARF + LSP) → v1.1.</td>
+    <td>~7 stories</td>
+    <td>~5 d (est: 10 d)</td>
+    <td>CaaS-7 / 8 / 11 from Phase 10; 6b-6/11/12/13 sgl package toolchain from Phase 10.  Phase 14 (DWARF + LSP) → v1.1.</td>
   </tr>
 </table>
 
@@ -1769,23 +1711,23 @@
   phases — a team of three could plausibly compress to 5–6 weeks.
   <br/><br/>
   <strong>Where the revised effort comes from.</strong>  Velocity on
-  shipped work (Phases 0, 0.5, 1, 2, 4 + the Phase 3 sprint + the
-  shipped third of Phase 5 — stdlib types, unsigned ints, and
+  shipped work (Phases 1, 2, 3, 4, 5, 8 + the Phase 7 boot/ sprint + the
+  full src/ scope of Phase 6 — stdlib types, unsigned ints, and
   <code>$fn</code> surface annotation) ran ~5× the original per-story
   estimate, driven by: (a) src/ shipping first as the executable spec
   for boot/ ports, (b) tight build-and-byte-equal feedback loops,
   (c) small per-commit slices with the test extension inline,
-  (d) the Phase 5 grammar revision retired two long-standing surface
+  (d) the Phase 6 grammar revision retired two long-standing surface
   ambiguities (multi-arg typeArgs whitespace, function-type
-  annotation), unblocking helpers that had been deferred.  Genuinely novel work — the Phase 7 Silicon interpreter, the
-  Phase 8 QBE backend — won't see that multiplier; their revised
+  annotation), unblocking helpers that had been deferred.  Genuinely novel work — the Phase 11 Silicon interpreter, the
+  Phase 9 QBE backend — won't see that multiplier; their revised
   effort is ~1.5× the original, not 5×.
   <br/><br/>
   <strong>Caveats.</strong>  Estimates exclude bug-fix capacity,
   design-revision rounds, and feature creep — pad 20–30% for realism.
   Stories sized XL should be split further when approached; their
   estimates assume current scope, not future complexity surprises.
-  The Phase 1 boot/ port (1a-8) is stashed-broken and will need
+  The Phase 3 boot/ port (1a-8) is stashed-broken and will need
   re-debugging before it lands; that's not in the remaining-effort
   total.
 </p>
