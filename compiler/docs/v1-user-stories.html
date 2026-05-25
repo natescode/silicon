@@ -1217,9 +1217,10 @@
   <p class="goal">Done: <code>.github/workflows/native-macos-arm64.yml</code> — <code>macos-14</code> runner (Apple Silicon), <code>brew install qbe</code>, Xcode clang as cc, full test:qbe suite.  e2e test updated: macOS ARM64 hostQbeArch check ('arm64') + Mach-O magic bytes check (0xCF 0xFA 0xED 0xFE).</p>
 </details>
 
-<details class="runtime">
-  <summary><span class="id">8-12</span> macOS x86-64 platform support + CI <span class="est">M, ~3h</span></summary>
+<details class="runtime done">
+  <summary><span class="id">8-12</span> macOS x86-64 platform support + CI <span class="est">M, ~3h</span> ✓</summary>
   <div class="deps"><strong>Depends on:</strong> 8-11</div>
+  <p class="goal">Done: <code>.github/workflows/native-macos-x64.yml</code> — <code>macos-13</code> runner (Intel), <code>brew install qbe</code>, Xcode clang as cc, full test:qbe suite.  e2e test updated: macOS x86-64 hostQbeArch check ('amd64_sysv'); Mach-O magic check from 8-11 covers both macOS arches.</p>
 </details>
 
 <details class="runtime">

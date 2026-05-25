@@ -1,0 +1,66 @@
+name: Native Backend (macOS x86-64)
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'src/codegen/qbe/**'
+      - 'src/sigil_cli.ts'
+      - '.github/workflows/native-macos-x64.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'src/codegen/qbe/**'
+      - 'src/sigil_cli.ts'
+      - '.github/workflows/native-macos-x64.yml'
+
+jobs:
+  native-macos-x64:
+    name: QBE native backend — macOS x86-64
+    runs-on: macos-13
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Install QBE
+        run: brew install qbe
+
+      - name: Verify toolchain
+        run: |
+          qbe -h 2>&1 | head -3 || true
+          cc --version | head -1
+          uname -m
+
+      # On macOS x86-64 the hostQbeArch check validates 'amd64_sysv'.
+      - name: Run QBE tests (unit + integration + e2e)
+        run: bun run test:qbe
+
+      - name: sgl run --native smoke test (exit 0)
+        run: |
+          echo '@fn main:Int := 0;' > /tmp/smoke_zero.si
+          bun run src/sigil_cli.ts run --native /tmp/smoke_zero.si
+          echo "Exit code: $?"
+
+      - name: sgl run --native smoke test (exit 42 — expect failure captured)
+        run: |
+          echo '@fn main:Int := 42;' > /tmp/smoke42.si
+          bun run src/sigil_cli.ts run --native /tmp/smoke42.si || code=$?
+          echo "Program exited with code ${code:-0}"
+          [ "${code:-0}" -eq 42 ] && echo "PASS: got expected exit code 42"
+
+      - name: sgl build --native smoke test
+        run: |
+          echo '@fn main:Int := 0;' > /tmp/arith.si
+          bun run src/sigil_cli.ts build --native /tmp/arith.si
+          ./arith
+          echo "Exit code from ./arith: $?"
