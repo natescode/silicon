@@ -1144,33 +1144,39 @@
 <!-- ================================================================== -->
 <h2 id="phase-9">Phase 9 — Native backend (QBE)</h2>
 
-<details class="runtime">
+<details class="runtime done">
   <summary><span class="id">8-1</span> QBE IR emitter scaffolding + module skeleton <span class="est">M, ~4h</span></summary>
+  <p class="done-note">✓ Direct typed-AST → QBE text (no WASM IR intermediate). Types.ts: SiliconType→QbeType, lookupOpToQbe. Lower.ts: @fn/@extern/@var skeletons. 45 tests.</p>
 </details>
 
-<details class="runtime">
+<details class="runtime done">
   <summary><span class="id">8-2</span> Emit Const / BinOp / LocalGet / LocalSet to QBE text IR <span class="est">M, ~4h</span></summary>
   <div class="deps"><strong>Depends on:</strong> 8-1</div>
+  <p class="done-note">✓ IntLiteral/FloatLiteral/BooleanLiteral, BinaryOp via lookupOpToQbe, Namespace local reads, Block trailing.</p>
 </details>
 
-<details class="runtime">
+<details class="runtime done">
   <summary><span class="id">8-3</span> Emit Call / Return <span class="est">M, ~3h</span></summary>
   <div class="deps"><strong>Depends on:</strong> 8-2</div>
+  <p class="done-note">✓ User function calls, @extern calls, @return builtin, void vs returning dispatch, typed args.</p>
 </details>
 
-<details class="runtime">
+<details class="runtime done">
   <summary><span class="id">8-4</span> Emit If / Loop / Break / Continue as basic blocks + jumps <span class="est">L, ~6h</span></summary>
   <div class="deps"><strong>Depends on:</strong> 8-3</div>
+  <p class="done-note">✓ @if → jnz + phi, @loop → head/exit blocks, @break/@continue → jmp, @local declarations, blockStart terminator check.</p>
 </details>
 
-<details class="runtime">
+<details class="runtime done">
   <summary><span class="id">8-5</span> Emit Global / Import / Export <span class="est">M, ~3h</span></summary>
   <div class="deps"><strong>Depends on:</strong> 8-3</div>
+  <p class="done-note">✓ @var data declarations with actual init values, loadw/storew in function bodies, Float/Int64 alignment.</p>
 </details>
 
-<details class="runtime">
+<details class="runtime done">
   <summary><span class="id">8-6</span> Emit Function decl + body + signature <span class="est">M, ~4h</span></summary>
   <div class="deps"><strong>Depends on:</strong> 8-4</div>
+  <p class="done-note">✓ @defer LIFO cleanup at all ret sites (early @return + trailing). 74 total tests. End-to-end: safe_div, clamp, quad.</p>
 </details>
 
 <details class="runtime">
