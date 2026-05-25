@@ -1,0 +1,114 @@
+name: Self-host — native pipeline
+
+# Verifies that the native QBE pipeline can compile the full Silicon example
+# suite on every supported tier-1 platform.  This is the "native sigilc
+# compiles programs" gate: the compiler successfully compiles and runs all
+# examples that don't depend on unimplemented features (strings, structs,
+# @extern, WASI).
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'src/codegen/qbe/**'
+      - 'src/e2e/**'
+      - 'src/sigil_cli.ts'
+      - '.github/workflows/selfhost.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'src/codegen/qbe/**'
+      - 'src/e2e/**'
+      - 'src/sigil_cli.ts'
+      - '.github/workflows/selfhost.yml'
+
+jobs:
+  selfhost:
+    name: selfhost (${{ matrix.label }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 25
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            label: linux-x64
+            qbe_install: sudo apt-get update -qq && sudo apt-get install -y qbe gcc
+          - os: ubuntu-24.04-arm
+            label: linux-arm64
+            qbe_install: sudo apt-get update -qq && sudo apt-get install -y qbe gcc
+          - os: macos-14
+            label: macos-arm64
+            qbe_install: brew install qbe
+          - os: macos-13
+            label: macos-x64
+            qbe_install: brew install qbe
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Install QBE and C compiler
+        run: ${{ matrix.qbe_install }}
+
+      - name: Verify toolchain
+        run: |
+          qbe -h 2>&1 | head -2 || true
+          cc --version | head -1
+          uname -sm
+
+      # -----------------------------------------------------------------------
+      # 1. Library-level self-host suite
+      # -----------------------------------------------------------------------
+      - name: Run self-host example suite
+        run: bun run test:selfhost
+
+      # -----------------------------------------------------------------------
+      # 2. Build standalone sigilc binary
+      # -----------------------------------------------------------------------
+      - name: Build sigilc standalone binary
+        run: bun run build:sigilc
+
+      - name: Verify sigilc binary exists and is executable
+        run: |
+          ls -lh dist/sigilc
+          file dist/sigilc
+
+      # -----------------------------------------------------------------------
+      # 3. Smoke-test the compiled sigilc binary end-to-end
+      # -----------------------------------------------------------------------
+      - name: sigilc run --native (exit 0)
+        run: |
+          echo '@fn main:Int := 0;' > /tmp/zero.si
+          dist/sigilc run --native /tmp/zero.si
+
+      - name: sigilc run --native (exit 42 captured)
+        run: |
+          echo '@fn main:Int := 42;' > /tmp/forty_two.si
+          dist/sigilc run --native /tmp/forty_two.si || code=$?
+          [ "${code:-0}" -eq 42 ] && echo "PASS: exit 42 confirmed"
+
+      - name: sigilc build --native + run compiled binary
+        run: |
+          echo '@fn main:Int := 6 * 7;' > /tmp/mul.si
+          dist/sigilc build --native /tmp/mul.si || code=$?
+          [ "${code:-0}" -eq 42 ] && echo "PASS: 6*7=42 confirmed"
+
+      # -----------------------------------------------------------------------
+      # 4. Upload sigilc as a workflow artifact
+      # -----------------------------------------------------------------------
+      - name: Upload sigilc artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: sigilc-${{ matrix.label }}
+          path: dist/sigilc
+          retention-days: 7

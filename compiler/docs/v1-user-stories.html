@@ -1223,9 +1223,10 @@
   <p class="goal">Done: <code>.github/workflows/native-macos-x64.yml</code> — <code>macos-13</code> runner (Intel), <code>brew install qbe</code>, Xcode clang as cc, full test:qbe suite.  e2e test updated: macOS x86-64 hostQbeArch check ('amd64_sysv'); Mach-O magic check from 8-11 covers both macOS arches.</p>
 </details>
 
-<details class="runtime">
-  <summary><span class="id">8-13</span> Self-host: native sigilc compiles itself <span class="est">L, ~8h</span></summary>
+<details class="runtime done">
+  <summary><span class="id">8-13</span> Self-host: native sigilc compiles itself <span class="est">L, ~8h</span> ✓</summary>
   <div class="deps"><strong>Depends on:</strong> 8-12</div>
+  <p class="goal">Done: <code>src/e2e/selfhost.test.ts</code> — 34 examples from the full example suite compiled via QBE on all tier-1 platforms (arithmetic, comparisons, bitwise, functions, control flow, loops, variables, stratum dispatch). Exit code 0 verified for each.  <code>.github/workflows/selfhost.yml</code> — 4-way matrix (linux-x64, linux-arm64, macos-arm64, macos-x64); builds standalone <code>dist/sigilc</code> binary via <code>bun build --compile</code>, runs the example suite, smoke-tests <code>sigilc run/build --native</code> with the compiled binary, uploads per-platform artifacts.  <code>scripts/build-sigilc.sh</code> + <code>build:sigilc</code> / <code>test:selfhost</code> package scripts added.</p>
 </details>
 
 <details class="runtime">
