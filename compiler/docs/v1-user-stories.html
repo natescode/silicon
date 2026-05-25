@@ -866,6 +866,20 @@
   <p class="goal">Mirror the src/ @defer stratum in boot/.  Originally 4-5; relocated here as part of the "remaining boot/ work" bucket since Phase 4's stratum-authoring stories (4-1 through 4-4) land in src/ first and the boot/ port is the closing artefact of the Strata 2.0 boot/ surface, not the start of Phase 4.  Uses the on::decl + state 'stratum' + on::module_finalize pattern documented in <code>docs/strata-authoring-guide.md</code>; deferred bodies stash in stratum state during decl, emit as cleanup blocks during finalize.</p>
 </details>
 
+<details class="strata">
+  <summary><span class="id">3-26</span> Port the Phase 5 grammar revisions to boot/ <span class="est">L, ~8h</span></summary>
+  <div class="deps"><strong>Depends on:</strong> src/-side revisions landed (commits <code>68cbf2a</code> grammar bundled pass + <code>9d3a62e</code> parens-as-optional-grouping).  No src/-side blockers.</div>
+  <p class="goal">Mirror the four grammar changes shipped in <code>src/grammar/silicon-official.ohm</code> over to <code>boot/parser/parse.si</code> (the hand-written bootstrapped parser) so the boot/ compiler accepts the same surface forms the src/ TS compiler does.  The revisions to port:</p>
+  <ol style="font-size: 0.9rem;">
+    <li><strong>Discard <code>_</code> identifier</strong> in name position (<code>@fn _:Int := 42;</code>, <code>_:T</code> typed-discard parameter slots).</li>
+    <li><strong><code>$fn</code> sigil function-type production</strong> (<code>:$fn _:R _:T1, _:T2</code>) — surface annotation for <code>Function</code>-kind <code>SiliconType</code>s, mirroring function-definition shape.</li>
+    <li><strong>Multi-arg <code>typeArgs</code> whitespace fix</strong> — <code>Result[T, E]</code> (with space) must capture both type args; the boot/ parser's typeArg-list handler needs whitespace-tolerant comma handling.</li>
+    <li><strong>Parens as optional grouping</strong> for function-definition param lists and <code>$fn</code> type annotations — paren-first PEG ordering, both forms produce identical AST.</li>
+  </ol>
+  <p class="goal">Also retire the legacy <code>@stratum_operator</code> / <code>@stratum_keyword</code> Elaboration productions from <code>boot/parser/parse.si</code> in the same pass, but <strong>only after</strong> every boot/ built-in stratum has been migrated to the unified <code>@stratum := { ... }</code> form (most are; a few in <code>boot/strata/builtin/</code> may still use the legacy shape).  The byte-equal self-host gate (<code>./build.sh check</code>) is the binding constraint: <code>stage1.wasm</code> must continue to compile its own source to a byte-identical seed.  Recommend implementing as several small commits, each preserving byte-equal, rather than one big bang.</p>
+  <p style="color: var(--muted); font-size: 0.85rem;">This story is intentionally scoped wider than 3-25 because <code>boot/parser/parse.si</code> is hand-written (no Ohm — every production is a recursive-descent function); each grammar change touches the parser by hand.  Pair with <code>boot/tests/</code> additions that mirror <code>src/grammar/parens-grouping.test.ts</code> and <code>src/grammar/grammar-revision.test.ts</code>.</p>
+</details>
+
 <!-- ================================================================== -->
 <h2 id="phase-4">Phase 4 — <code>@defer</code></h2>
 
@@ -1618,9 +1632,9 @@
   <tr style="background: rgba(247, 160, 108, 0.08);">
     <td>3 — Strata 2.0 in boot/</td>
     <td style="color: var(--accent4); font-weight: 700;">🟡 PARTIAL</td>
-    <td>11 / 25 + 2 stubs</td>
-    <td><em>~1.5 d done · ~8 d remain</em> (est: 25 d)</td>
-    <td>3-7/8/9/10/11/17/19/20/21/23/24 shipped; 3-15 (patch_types stub), 3-22 (engine skeleton; production = 8-9).  Remaining: 3-1..3-6 HM-lite, 3-12..14, 3-16, 3-18, 3-25 (<code>@defer</code> boot/ port).</td>
+    <td>11 / 26 + 2 stubs</td>
+    <td><em>~1.5 d done · ~9 d remain</em> (est: 26 d)</td>
+    <td>3-7/8/9/10/11/17/19/20/21/23/24 shipped; 3-15 (patch_types stub), 3-22 (engine skeleton; production = 8-9).  Remaining: 3-1..3-6 HM-lite, 3-12..14, 3-16, 3-18, 3-25 (<code>@defer</code> boot/ port), 3-26 (Phase 5 grammar revisions → boot/).</td>
   </tr>
   <tr>
     <td>3.5 — @comptime (user-level)</td>
@@ -1703,15 +1717,15 @@
   <tr style="background: var(--surface2); border-top: 1px solid var(--border); font-weight: 600;">
     <td>1.0 REMAINING</td>
     <td style="color: var(--accent4);">🟡</td>
-    <td>~85 stories</td>
-    <td><strong style="color: var(--accent);">~57 working days (~2.7 months)</strong></td>
+    <td>~86 stories</td>
+    <td><strong style="color: var(--accent);">~58 working days (~2.7 months)</strong></td>
     <td>Phase 7 + 8 dominate (interpreter + native backend).  Phase 5 carries 13 deferred stories that need dedicated sprints (Vec / HashMap allocator infra, call_indirect WASM tables, slice migration).</td>
   </tr>
   <tr style="background: var(--surface2); font-weight: 600;">
     <td>1.0 TOTAL</td>
     <td></td>
-    <td>~154 stories</td>
-    <td><strong style="color: var(--accent);">~65 working days (~3.1 months)</strong> end-to-end<br/><em style="color: var(--muted); font-size: 0.85em;">(original estimate: 142 d / ~6.5 months)</em></td>
+    <td>~155 stories</td>
+    <td><strong style="color: var(--accent);">~66 working days (~3.1 months)</strong> end-to-end<br/><em style="color: var(--muted); font-size: 0.85em;">(original estimate: 142 d / ~6.5 months)</em></td>
     <td>~54% faster than original estimate.  v1.1 work tracked separately in <a href="v1.1-user-stories.html">v1.1-user-stories.html</a>.</td>
   </tr>
   <tr style="font-size: 0.85em; color: var(--muted);">
