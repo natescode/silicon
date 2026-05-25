@@ -157,6 +157,17 @@ describe('lowerToQbe — @var globals', () => {
         expect(out).toContain('w 0')
     })
 
+    test('@var with non-zero init emits the actual value', () => {
+        const out = toQbe(`@var answer:Int := 42;`)
+        expect(out).toContain('w 42')
+    })
+
+    test('@var Float emits an s-typed data declaration', () => {
+        const out = toQbe(`@var pi:Float := 3.14;`)
+        expect(out).toContain('data $pi')
+        expect(out).toContain('s ')
+    })
+
     test('global appears before functions in output', () => {
         const out = toQbe(`
             @var x:Int := 0;
@@ -165,6 +176,32 @@ describe('lowerToQbe — @var globals', () => {
         const globalPos = out.indexOf('data $x')
         const funcPos   = out.indexOf('function')
         expect(globalPos).toBeLessThan(funcPos)
+    })
+
+    test('global read in function body emits loadw', () => {
+        const out = toQbe(`
+            @var g:Int := 0;
+            @fn read_g:Int := g;
+        `)
+        expect(out).toContain('loadw $g')
+    })
+
+    test('global write in function body emits storew', () => {
+        const out = toQbe(`
+            @var g:Int := 0;
+            @fn set_g := { g = 99; };
+        `)
+        expect(out).toContain('storew')
+        expect(out).toContain('$g')
+    })
+
+    test('global read-modify-write emits load + op + store', () => {
+        const out = toQbe(`
+            @var counter:Int := 0;
+            @fn inc := { counter = counter + 1; };
+        `)
+        expect(out).toContain('loadw $counter')
+        expect(out).toContain('storew')
     })
 })
 

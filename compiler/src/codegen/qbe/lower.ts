@@ -194,9 +194,10 @@ export function lowerToQbe(
         if (node.keyword === '@var' || node.hook === 'global') {
             const rawName = node.name?.name ?? node.name ?? ''
             const name = qbeName(rawName)
-            const sig = functionSigs.get(name)
-            const qt = sig ? siliconTypeToQbe(sig.result) : 'w'
-            mod.globalTypes.set(name, qt)
+            // Type comes from the typechecker's inferredType on the definition node,
+            // not from functionSigs (which only contains function signatures).
+            const stype: SiliconType | undefined = node.inferredType as any
+            mod.globalTypes.set(name, siliconTypeToQbe(stype))
         }
     }
 
@@ -332,8 +333,27 @@ function lowerGlobalVarDef(node: any, mod: QbeModCtx): void {
     const name = qbeName(rawName)
 
     const qt = mod.globalTypes.get(name) ?? 'w'
-    // Story 8-5 will lower the init expression; for now use 0.
-    mod.globalData.push(`data $${name} = align 4 { ${qt} 0 }`)
+    const align = qt === 'l' ? 8 : 4
+
+    // Evaluate constant initializer.  Only literal values are supported here;
+    // complex expressions would require a constructor function (future story).
+    const initExpr = node.binding?.expression
+    const initVal = constInitVal(initExpr, qt)
+
+    mod.globalData.push(`data $${name} = align ${align} { ${qt} ${initVal} }`)
+}
+
+/** Extract a QBE-literal init value from a constant expression, or 0. */
+function constInitVal(expr: any, qt: QbeType): string {
+    if (!expr) return '0'
+    const n = unwrap(expr)
+    if (!n) return '0'
+    switch (n.type) {
+        case 'IntLiteral':     return String(n.value ?? 0)
+        case 'FloatLiteral':   return qt === 's' ? `s_${n.value ?? 0}` : String(n.value ?? 0)
+        case 'BooleanLiteral': return n.value === true ? '1' : '0'
+        default:               return '0'
+    }
 }
 
 // ---------------------------------------------------------------------------
