@@ -996,9 +996,11 @@
   <code>@fnref</code> + <code>@call_indirect</code>, and the Vec.map
   capstone proof, plus WASI bindings migrated to spec-correct
   <code>u32</code> / <code>u64</code> via new <code>@toU32</code> +
-  <code>@toU64</code> casts.  Workstreams A + B substantively
-  complete; only 5a-7 (boot/ compiler refactor) and Workstream C
-  (slices via generic structs) remain, plus 5a-3 (@try unwrap).
+  <code>@toU64</code> casts.  All src/-scope Phase 5 work shipped — Workstreams A + B + C + D
+  complete, plus 5a-3 (<code>@try</code> unwrap).  The two remaining
+  stories (5a-7 compiler-internals refactor, 5c-4 (ptr,len)→Slice[u8]
+  migration) are explicitly boot/-port work and ride with story 3-26's
+  bucket; src/ Phase 5 is closed.
 </p>
 
 <h3>5a — Generic stdlib</h3>
@@ -1015,11 +1017,10 @@
   <p style="color: var(--muted); font-size: 0.85rem;"><strong>Scope note.</strong>  The <code>@try</code> shorthand originally bundled into this story migrated to <a href="#phase-5">5a-3</a>.  The <code>?</code> postfix operator originally also bundled in is dropped — Silicon's grammar bans postfix operators by design, so only the prefix-keyword <code>@try</code> form ships.</p>
 </details>
 
-<details class="stdlib">
-  <summary><span class="id">5a-3</span> <code>@try</code> unwrap shorthand for Result and Option <span class="est">M, ~2h</span></summary>
-  <div class="deps"><strong>Depends on:</strong> 5a-2</div>
-  <p style="color: var(--muted); font-style: italic;">Deferred — the <code>@try</code> prefix keyword desugars <code>&amp;@try r</code> to <code>&amp;@match r, $Ok v =&gt; v, $Err e =&gt; (&amp;@return (&amp;Err e))</code> via an <code>on::callSite</code> stratum that rewrites the AST in expression position.  Implementation only; the multi-arg-typeArgs grammar fix the story originally also depended on already landed in the Phase 5 grammar revision.</p>
-  <p style="color: var(--accent4); font-size: 0.85rem;"><strong>Scope correction.</strong>  The original story name bundled <code>?</code> (postfix unwrap, Rust-style) into the same deliverable.  Silicon's grammar deliberately bans post-fix operators — every operator is binary infix or prefix-via-keyword — so the <code>?</code> form is permanently off-spec.  <code>@try</code> (prefix expression keyword) is the canonical Silicon form and the only one to ship.  Effort revised down to ~2h.</p>
+<details class="stdlib complete">
+  <summary><span class="id">5a-3</span> <code>@try</code> unwrap shorthand for Result <span class="done">✅</span> <span class="est">M, ~2h</span></summary>
+  <p class="goal">New <code>@try</code> expression keyword registered in <code>src/strata/control.si</code>; lowering implemented in <code>src/ir/lower.ts:lowerTry</code>.  <code>&amp;@try r</code> evaluates <code>r</code> into a fresh local, branches on the tag byte, and either takes the Ok payload at offset +4 or <code>@return</code>s the original Result pointer unchanged so the Err propagates to the caller.  Because <code>@type Result[T, E]</code> lays out as <code>[tag:i32, field0:i32]</code> under <code>@struct</code>'s pad-to-max — Ok's value and Err's error share the same slot — Err propagation is a single pointer pass-through; no fresh allocation needed.  5 e2e tests in <code>src/stdlib/try.test.ts</code> cover Ok extraction, Err early-return, Err payload preservation, chained <code>@try</code> across two functions, and arity-error reporting.</p>
+  <p style="color: var(--accent4); font-size: 0.85rem;"><strong>Scope correction.</strong>  The original story name bundled <code>?</code> (postfix unwrap, Rust-style) into the same deliverable.  Silicon's grammar deliberately bans post-fix operators, so the <code>?</code> form is permanently off-spec.  Option's <code>@try</code> variant (early-return-on-None) is omitted from 1.0 — Option doesn't carry an error-channel payload to propagate, so the desugaring would need a return-type-aware decision (None of <code>Option[U]</code> vs <code>None</code> of the caller's Option).  Tracked as a separate 1.1 story.</p>
 </details>
 
 <details class="stdlib complete">
@@ -1091,8 +1092,8 @@
 
 <details class="lang">
   <summary><span class="id">5c-4</span> Migrate compiler's (ptr, len) pairs to Slice[u8] <span class="est">L, ~6h</span></summary>
-  <div class="deps"><strong>Depends on:</strong> 5c-3</div>
-  <p style="color: var(--muted); font-style: italic;">Deferred — compiler-wide refactor that depends on the slice substrate.</p>
+  <div class="deps"><strong>Depends on:</strong> 5c-3 (Slice[u8] substrate); also depends on the <code>boot/</code> Silicon compiler being open for revision.</div>
+  <p style="color: var(--muted); font-style: italic;"><strong>Deferred to the boot/ port sprint.</strong>  The compiler-wide (ptr, len) pairs live in <code>boot/</code> — the self-hosted parser, lexer, and string interner that read source as raw byte ranges.  Migrating them to <code>Slice[u8]</code> is mechanical once boot/ opens up.  <code>CLAUDE.md</code> prohibits boot/ modifications in the current work bucket, so this story lands alongside or shortly after story 3-26.  The src/-side substrate (5c-1 / 5c-2 / 5c-3) is complete and runtime-verified.</p>
 </details>
 
 <h3>5d — First-class functions</h3>
@@ -1654,7 +1655,7 @@
     <td style="color: var(--accent4); font-weight: 700;">🟡 PARTIAL</td>
     <td>13 / 19</td>
     <td><em>~3 d done · ~3.5 d remain</em> (est: 18 d)</td>
-    <td>Shipped: 5a-1 Option, 5a-2 Result + helpers, 5a-4 Vec[i32], 5a-5 vec_map, 5a-6 HashMap[i32→i32], 5b-1 unsigned types, 5b-2 unsigned operator overloads, 5b-3 *_u codegen, 5b-4 <code>@toU32</code> / <code>@toU64</code> casts (binding annotation flip rides with story 3-26), 5c-1 Slice[T] type + accessors, 5c-2 bounds-checked Option-returning indexing, 5c-3 String → Slice[u8] bridge, 5d-1 funcref table, 5d-2 call_indirect codegen, 5d-3 <code>$fn</code> surface annotation, 5d-4 Vec.map proof.  Plus allocator primitives (<code>realloc</code> + <code>mem_copy</code>) in the prelude.  Remaining: 5a-3 (@try unwrap), 5a-7 (boot/ compiler refactor), 5c-4 compiler internals refactor (deferred to story 3-26's boot/ bucket).</td>
+    <td><strong>Src/ scope complete.</strong>  Shipped: 5a-1 Option, 5a-2 Result + helpers, 5a-3 <code>@try</code> unwrap shorthand, 5a-4 Vec[i32], 5a-5 vec_map, 5a-6 HashMap[i32→i32], 5b-1 unsigned types, 5b-2 unsigned operator overloads, 5b-3 *_u codegen, 5b-4 <code>@toU32</code> / <code>@toU64</code> casts, 5c-1 Slice[T] type + accessors, 5c-2 bounds-checked Option-returning indexing, 5c-3 String → Slice[u8] bridge, 5d-1 funcref table, 5d-2 call_indirect codegen, 5d-3 <code>$fn</code> surface annotation, 5d-4 Vec.map proof.  Plus allocator primitives (<code>realloc</code> + <code>mem_copy</code>) in the prelude.  Two stories ride with story 3-26's boot/ port: 5a-7 (compiler internals → Vec/HashMap/Option) and 5c-4 ((ptr,len) → Slice[u8]) — both are mechanical boot/ rewrites gated on boot/ opening up.</td>
   </tr>
   <tr>
     <td>6 — sgl CLI</td>

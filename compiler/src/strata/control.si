@@ -49,3 +49,13 @@
 @stratum CallIndirect := {
     &Compiler::register::expression_keyword '@call_indirect';
 };
+
+# Phase 5a-3 — Result early-return shorthand.
+# `&@try r` desugars to a small inline expression: if the Result's tag
+# byte is Ok (0), take the payload value; otherwise `@return` the
+# original Result pointer unchanged (Err propagates).  Hardcoded in
+# `lower.ts:lowerTry` because it needs to allocate a fresh local and
+# construct a multi-statement Block with a trailing If.
+@stratum Try := {
+    &Compiler::register::expression_keyword '@try';
+};
