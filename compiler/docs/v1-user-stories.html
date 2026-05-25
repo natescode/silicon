@@ -985,18 +985,19 @@
 <!-- ================================================================== -->
 <h2 id="phase-5">Phase 5 — Generic stdlib + type system</h2>
 
-<p style="color: var(--accent4); font-size: 0.85rem;">Phase 5 <strong>PARTIAL 🟡</strong> (2026-05-24). 7/19 stories
-  shipped (5a-1, 5a-2, 5a-4, 5b-1, 5b-2, 5b-3, 5d-3); 12 deferred to
-  follow-up sprints.  Shipped pieces unblock real user-facing code:
+<p style="color: var(--accent4); font-size: 0.85rem;">Phase 5 <strong>PARTIAL 🟡</strong> (2026-05-24). 8/19 stories
+  shipped (5a-1, 5a-2, 5a-4, 5a-6, 5b-1, 5b-2, 5b-3, 5d-3); 11 deferred
+  to follow-up sprints.  Shipped pieces unblock real user-facing code:
   <code>Option[T]</code> with helpers, <code>Result[T, E]</code> as a
   type + helpers + match-driven consumption, full unsigned-integer
   codegen routing for u8/u16/u32/u64, surface annotation syntax for
   function types (<code>:$fn _:R _:T1, _:T2</code>) resolving to
   <code>Function</code>-kind <code>SiliconType</code>s, allocator
-  primitives (<code>realloc</code> + <code>mem_copy</code>) added to
-  the prelude, and <code>Vec[i32]</code> as a Silicon stdlib library
-  on top of them.  Workstream A (Vec → HashMap → compiler-internals
-  refactor) is in flight; B (call_indirect for first-class fns) and C
+  primitives (<code>realloc</code> + <code>mem_copy</code>) in the
+  prelude, and <code>Vec[i32]</code> + <code>HashMap[i32 → i32]</code>
+  as Silicon stdlib libraries on top of them.  Workstream A
+  (allocator → Vec → HashMap → compiler-internals refactor) only needs
+  5a-7 to close out; B (call_indirect for first-class fns) and C
   (slices via generic structs) remain.
 </p>
 
@@ -1032,10 +1033,10 @@
   <p style="color: var(--muted); font-style: italic;">Deferred — chained on 5a-4 + 5d-1/2.</p>
 </details>
 
-<details class="stdlib">
-  <summary><span class="id">5a-6</span> HashMap[K, V] — open-addressing hash table <span class="est">L, ~8h</span></summary>
-  <div class="deps"><strong>Depends on:</strong> 5a-4</div>
-  <p style="color: var(--muted); font-style: italic;">Deferred — needs a hash function stratum, an allocator, and the multi-arg type-annotation grammar fix.  Easily a multi-day deliverable on its own.</p>
+<details class="stdlib complete">
+  <summary><span class="id">5a-6</span> HashMap[i32, i32] — open-addressing hash table <span class="done">✅</span> <span class="est">L, ~8h</span></summary>
+  <div class="deps"><strong>Depends on:</strong> 5a-4 Vec[T] (allocator pattern), allocator primitives (Workstream A Step 1).</div>
+  <p class="goal"><code>src/stdlib/hashmap.si</code> ships <code>HashMap[i32 → i32]</code> as a Silicon stdlib library on top of <code>realloc</code> + <code>mem_copy</code>.  Same split-header design as Vec: 16-byte header (<code>len</code>, <code>capacity</code>, <code>data_ptr</code>, <code>tombstones</code>), 12 bytes per slot (<code>state</code>, <code>key</code>, <code>value</code>).  Linear probing with capacity-must-be-power-of-2 for fast modulo (<code>i &amp; (cap - 1)</code>).  Resizes at 75% load (counting both occupied and tombstone slots); rehashes live entries into a fresh 2× buffer.  Header pointer stable across resize — only <code>data_ptr</code> changes.  API: <code>hashmap_new</code>, <code>hashmap_len</code>, <code>hashmap_capacity</code>, <code>hashmap_tombstones</code>, <code>hashmap_has_i32</code>, <code>hashmap_get_i32_i32</code>, <code>hashmap_set_i32_i32</code>, <code>hashmap_remove_i32</code>.  Tombstone-based deletion (state=2); removed slots probed-through, cleared at resize.  9 runtime tests in <code>src/stdlib/hashmap.test.ts</code> cover header invariants, set/get round-trip, has-present/absent, multi-key, update-existing, remove + tombstone reuse, resize triggers + entry preservation across resize, header-pointer stability.  Float-value / Int64-key variants are mechanical extensions.</p>
 </details>
 
 <details class="stdlib">
@@ -1652,9 +1653,9 @@
   <tr style="background: rgba(247, 160, 108, 0.08);">
     <td>5 — Generic stdlib + extensions</td>
     <td style="color: var(--accent4); font-weight: 700;">🟡 PARTIAL</td>
-    <td>7 / 19</td>
-    <td><em>~1 d done · ~7 d remain</em> (est: 18 d)</td>
-    <td>Shipped: 5a-1 Option stdlib + helpers, 5a-2 Result + helpers, 5a-4 Vec[i32], 5b-1 unsigned types, 5b-2 unsigned operator overloads, 5b-3 *_u codegen routing, 5d-3 <code>$fn</code> surface annotation.  Plus allocator primitives (<code>realloc</code> + <code>mem_copy</code>) added to the prelude.  Remaining: 5a-3 (? unwrap), 5a-5/6/7 (Vec iteration / HashMap / compiler refactor), 5b-4 (WASI migration), 5c-1..4 (slices), 5d-1/2/4 (call_indirect + Vec.map proof).</td>
+    <td>8 / 19</td>
+    <td><em>~1.5 d done · ~6 d remain</em> (est: 18 d)</td>
+    <td>Shipped: 5a-1 Option stdlib + helpers, 5a-2 Result + helpers, 5a-4 Vec[i32], 5a-6 HashMap[i32→i32], 5b-1 unsigned types, 5b-2 unsigned operator overloads, 5b-3 *_u codegen routing, 5d-3 <code>$fn</code> surface annotation.  Plus allocator primitives (<code>realloc</code> + <code>mem_copy</code>) in the prelude.  Remaining: 5a-3 (? unwrap), 5a-5 (Vec iteration — chained on first-class fns), 5a-7 (compiler refactor), 5b-4 (WASI migration), 5c-1..4 (slices), 5d-1/2/4 (call_indirect + Vec.map proof).</td>
   </tr>
   <tr>
     <td>6 — sgl CLI</td>
@@ -1709,15 +1710,15 @@
   <tr style="background: var(--surface2); border-top: 3px solid var(--accent3); font-weight: 600;">
     <td>SHIPPED so far</td>
     <td style="color: var(--accent3);">✅</td>
-    <td>70 / 70</td>
-    <td><em>~8.5 d actual</em> (est: 40 d)</td>
-    <td>Phases 0, 0.5, 1, 2, 4 fully shipped + 11 stories of Phase 3 + 7 stories of Phase 5 (5a-1, 5a-2, 5a-4, 5b-1, 5b-2, 5b-3, 5d-3) + allocator primitives in the prelude.  ~5× faster than originally estimated.</td>
+    <td>71 / 71</td>
+    <td><em>~9 d actual</em> (est: 40 d)</td>
+    <td>Phases 0, 0.5, 1, 2, 4 fully shipped + 11 stories of Phase 3 + 8 stories of Phase 5 (5a-1, 5a-2, 5a-4, 5a-6, 5b-1, 5b-2, 5b-3, 5d-3) + allocator primitives in the prelude.  ~5× faster than originally estimated.</td>
   </tr>
   <tr style="background: var(--surface2); border-top: 1px solid var(--border); font-weight: 600;">
     <td>1.0 REMAINING</td>
     <td style="color: var(--accent4);">🟡</td>
-    <td>~85 stories</td>
-    <td><strong style="color: var(--accent);">~57 working days (~2.7 months)</strong></td>
+    <td>~84 stories</td>
+    <td><strong style="color: var(--accent);">~56 working days (~2.7 months)</strong></td>
     <td>Phase 7 + 8 dominate (interpreter + native backend).  Phase 5 carries 13 deferred stories that need dedicated sprints (Vec / HashMap allocator infra, call_indirect WASM tables, slice migration).</td>
   </tr>
   <tr style="background: var(--surface2); font-weight: 600;">
