@@ -59,12 +59,15 @@ Silicon {
   octLiteral = "0c" octDigit+ ("_" octDigit+)*
   octDigit = "0".."7"
   booleanLiteral = "@true" | "@false"
-  Definition = defKw typedIdentifier GenericParams? ListOf<ParamLiteral, ","> Binding?
+  Definition = defKw typedIdentifier GenericParams? Params Binding?
+  Params =
+    | "(" ListOf<ParamLiteral, ","> ")"     -- paren
+    | ListOf<ParamLiteral, ",">             -- bare
   defKw = "@" ~reservedId identifier
   reservedId = ("true" | "false") ~identTail
   Binding = ":=" ExpressionStart
   GenericParams = "[" ListOf<identifier, ","> "]"
-  ParamLiteral = 
+  ParamLiteral =
     | typedIdentifier -- typedId
     | Literal -- literal
   keyword = "@" identifier
@@ -74,8 +77,10 @@ Silicon {
     | ":" sigilFnType                       -- fn
     | ":" identifier typeArgs?              -- simple
   sigilFnType =
-    | "$" identifier space+ typedIdentifier space+ sigilFnParams   -- withParams
-    | "$" identifier space+ typedIdentifier                        -- nullary
+    | "$" identifier space+ typedIdentifier space+ "(" space* ")"            -- parenEmpty
+    | "$" identifier space+ typedIdentifier space+ "(" sigilFnParams ")"     -- parenParams
+    | "$" identifier space+ typedIdentifier space+ sigilFnParams             -- bareParams
+    | "$" identifier space+ typedIdentifier                                   -- nullary
   sigilFnParams = typedIdentifier (space* "," space* typedIdentifier)*
   typeArgs = "[" space* typeArg (space* "," space* typeArg)* space* "]"
   typeArg = identifier typeArgs?
