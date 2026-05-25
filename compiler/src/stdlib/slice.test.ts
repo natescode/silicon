@@ -1,0 +1,142 @@
+/**
+ * Phase 5c-1 — stdlib Slice[T] runtime tests.
+ *
+ * Compiles a Silicon program that @use's src/stdlib/slice.si, allocates
+ * a backing buffer via &alloc, constructs a Slice through the
+ * @struct-generated constructor (&Slice ptr, len), and exercises every
+ * accessor (slice_ptr / slice_len / slice_get_i32 / slice_set_i32 /
+ * slice_get_byte / slice_set_byte) end-to-end through compiled wasm.
+ */
+
+import { test, expect, describe } from 'bun:test'
+import { join } from 'path'
+import { readFileSync } from 'fs'
+import { compileToWasm } from '../codegen/index'
+import siliconGrammar from '../grammar/SiliconGrammar'
+import parse from '../parser'
+import { addToAstSemantics } from '../ast/index'
+import { buildStrataRegistry, elaborate } from '../elaborator/index'
+import { typecheck } from '../types/index'
+import type { Program } from '../ast/astNodes'
+
+const sliceSrc = readFileSync(join(__dirname, 'slice.si'), 'utf-8')
+
+interface Exports {
+    memory: WebAssembly.Memory
+    [name: string]: any
+}
+
+async function compileAndRun(testFns: Record<string, string>): Promise<Exports> {
+    const userFns = Object.entries(testFns)
+        .map(([name, body]) => `@fn ${name}:Int := ${body};`)
+        .join('\n')
+    const userExports = Object.keys(testFns)
+        .map(name => `@export ${name};`)
+        .join('\n')
+    const source = `${sliceSrc}\n${userFns}\n${userExports}`
+
+    const match = parse(source)
+    const ast = addToAstSemantics(siliconGrammar)(match).toAst() as Program
+    const registry = buildStrataRegistry(ast)
+    const { program: elaborated } = elaborate(ast, registry)
+    const { program: typed, functions } = typecheck(elaborated, registry)
+    const bin = compileToWasm(typed, registry, functions)
+    const mod = await WebAssembly.instantiate(bin, {
+        env: { print: () => {}, read: () => 0 },
+    })
+    return mod.instance.exports as unknown as Exports
+}
+
+describe('Phase 5c-1: Slice[T] runtime', () => {
+    test('slice_ptr / slice_len expose the constructor fields', async () => {
+        const ex = await compileAndRun({
+            test_ptr: `{
+                @local buf:Int := &alloc 16;
+                @local s:Slice[Int] := &Slice buf, 4;
+                (&slice_ptr s) - buf
+            }`,
+            test_len: `{
+                @local buf:Int := &alloc 16;
+                @local s:Slice[Int] := &Slice buf, 4;
+                &slice_len s
+            }`,
+        })
+        expect(ex.test_ptr()).toBe(0)   // slice_ptr returns exactly the buffer base
+        expect(ex.test_len()).toBe(4)
+    })
+
+    test('slice_get_i32 / slice_set_i32 round-trip 4-byte elements', async () => {
+        const ex = await compileAndRun({
+            test_set_get: `{
+                @local buf:Int := &alloc 16;
+                @local s:Slice[Int] := &Slice buf, 4;
+                &slice_set_i32 s, 0, 100;
+                &slice_set_i32 s, 1, 200;
+                &slice_set_i32 s, 2, 300;
+                &slice_set_i32 s, 3, 400;
+                (&slice_get_i32 s, 0) + (&slice_get_i32 s, 1)
+                + (&slice_get_i32 s, 2) + (&slice_get_i32 s, 3)
+            }`,
+        })
+        expect(ex.test_set_get()).toBe(1000)  // 100+200+300+400
+    })
+
+    test('slice_get_byte / slice_set_byte address individual bytes', async () => {
+        const ex = await compileAndRun({
+            test_bytes: `{
+                @local buf:Int := &alloc 8;
+                @local s:Slice[Int] := &Slice buf, 8;
+                &slice_set_byte s, 0, 65;
+                &slice_set_byte s, 1, 66;
+                &slice_set_byte s, 2, 67;
+                &slice_set_byte s, 7, 200;
+                (&slice_get_byte s, 0) + (&slice_get_byte s, 1)
+                + (&slice_get_byte s, 2) + (&slice_get_byte s, 7)
+            }`,
+            test_byte_unsigned: `{
+                @local buf:Int := &alloc 4;
+                @local s:Slice[Int] := &Slice buf, 4;
+                &slice_set_byte s, 0, 255;
+                &slice_get_byte s, 0
+            }`,
+        })
+        expect(ex.test_bytes()).toBe(398)        // 65+66+67+200
+        expect(ex.test_byte_unsigned()).toBe(255) // zero-extended, not sign-extended
+    })
+
+    test('Slice[T] is nominally distinct per T', async () => {
+        // Slice[Int] and Slice[u8] are distinct types — accessors
+        // parameterised by T accept either, but a Slice[Int]-only
+        // helper would not accept a Slice[u8] (verified by the type
+        // checker; this test just confirms the [u8] flavour compiles
+        // and runs end-to-end).
+        const ex = await compileAndRun({
+            test_u8_slice: `{
+                @local buf:Int := &alloc 4;
+                @local s:Slice[u8] := &Slice buf, 4;
+                &slice_set_byte s, 0, 1;
+                &slice_set_byte s, 1, 2;
+                &slice_set_byte s, 2, 4;
+                &slice_set_byte s, 3, 8;
+                (&slice_get_byte s, 0) + (&slice_get_byte s, 1)
+                + (&slice_get_byte s, 2) + (&slice_get_byte s, 3)
+            }`,
+        })
+        expect(ex.test_u8_slice()).toBe(15)
+    })
+
+    test('slice_len reflects construction; mutations do not affect length', async () => {
+        const ex = await compileAndRun({
+            test_len_after_writes: `{
+                @local buf:Int := &alloc 16;
+                @local s:Slice[Int] := &Slice buf, 4;
+                &slice_set_i32 s, 0, 99;
+                &slice_set_i32 s, 1, 99;
+                &slice_set_i32 s, 2, 99;
+                &slice_set_i32 s, 3, 99;
+                &slice_len s
+            }`,
+        })
+        expect(ex.test_len_after_writes()).toBe(4)
+    })
+})

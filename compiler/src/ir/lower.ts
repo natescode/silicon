@@ -496,6 +496,17 @@ export function lowerFunctionBody(
         deferStack: [],
         structLocals: new Map(ctx.structLocals),
     }
+    // Track struct-typed params so `.field` access on a param resolves
+    // through lowerStructFieldChain instead of falling through to a global
+    // lookup.  Generic struct params (`s:Slice[T]`) key by the base name
+    // — that's what structTypes is keyed by.
+    for (const p of node.params || []) {
+        if (p.isLiteral || !p.typeAnnotation) continue
+        const rawTypeName = p.typeAnnotation.typename
+        if (rawTypeName && ctx.registry?.structTypes?.has(rawTypeName)) {
+            childCtx.structLocals.set(watId(p.name), rawTypeName)
+        }
+    }
     childCtx.$compiler = createCompilerAPI(childCtx, lowerFns)
 
     let body: IRExpr | undefined

@@ -1074,10 +1074,9 @@
 
 <h3>5c — Slices</h3>
 
-<details class="lang">
-  <summary><span class="id">5c-1</span> Design Slice[T] (struct with ptr, len) <span class="est">M, ~3h</span></summary>
-  <div class="deps"><strong>Depends on:</strong> 1a-5</div>
-  <p style="color: var(--muted); font-style: italic;">Deferred — needs a struct-with-generic-parameter, which the bootstrap's <code>@struct</code> stratum doesn't yet support (struct fields are concrete types only).  Generic structs are tracked separately under Phase 1's 1a-6 follow-up.</p>
+<details class="lang complete">
+  <summary><span class="id">5c-1</span> Design Slice[T] (struct with ptr, len) <span class="done">✅</span> <span class="est">M, ~3h</span></summary>
+  <p class="goal"><code>src/stdlib/slice.si</code> — <code>@struct Slice[T] ptr:Int, len:Int;</code> with a constructor (<code>&Slice ptr, len</code>) and six generic accessors (<code>slice_ptr[T]</code>, <code>slice_len[T]</code>, <code>slice_get_i32[T]</code>, <code>slice_set_i32[T]</code>, <code>slice_get_byte[T]</code>, <code>slice_set_byte[T]</code>).  Slice is non-owning — the caller manages the backing buffer's lifetime.  <code>Slice[Int]</code> and <code>Slice[u8]</code> are nominally distinct types (HM-lite's parametric instantiation gives them separate identity).  Lowering fix landed alongside: <code>lowerFunctionBody</code> now tracks struct-typed function parameters in <code>structLocals</code> so <code>s.ptr</code> on a <code>Slice[T]</code> param resolves through <code>lowerStructFieldChain</code> instead of falling through to a global lookup.  5 e2e tests in <code>src/stdlib/slice.test.ts</code> cover constructor + every accessor + the <code>Slice[u8]</code> flavour end-to-end.</p>
 </details>
 
 <details class="lang">
@@ -1657,7 +1656,7 @@
     <td style="color: var(--accent4); font-weight: 700;">🟡 PARTIAL</td>
     <td>13 / 19</td>
     <td><em>~3 d done · ~3.5 d remain</em> (est: 18 d)</td>
-    <td>Shipped: 5a-1 Option, 5a-2 Result + helpers, 5a-4 Vec[i32], 5a-5 vec_map, 5a-6 HashMap[i32→i32], 5b-1 unsigned types, 5b-2 unsigned operator overloads, 5b-3 *_u codegen, 5b-4 <code>@toU32</code> / <code>@toU64</code> casts (binding annotation flip rides with story 3-26), 5d-1 funcref table, 5d-2 call_indirect codegen, 5d-3 <code>$fn</code> surface annotation, 5d-4 Vec.map proof.  Plus allocator primitives (<code>realloc</code> + <code>mem_copy</code>) in the prelude.  Remaining: 5a-3 (@try unwrap), 5a-7 (boot/ compiler refactor), 5c-1..4 (slices via generic structs).</td>
+    <td>Shipped: 5a-1 Option, 5a-2 Result + helpers, 5a-4 Vec[i32], 5a-5 vec_map, 5a-6 HashMap[i32→i32], 5b-1 unsigned types, 5b-2 unsigned operator overloads, 5b-3 *_u codegen, 5b-4 <code>@toU32</code> / <code>@toU64</code> casts (binding annotation flip rides with story 3-26), 5c-1 Slice[T] type + accessors, 5d-1 funcref table, 5d-2 call_indirect codegen, 5d-3 <code>$fn</code> surface annotation, 5d-4 Vec.map proof.  Plus allocator primitives (<code>realloc</code> + <code>mem_copy</code>) in the prelude.  Remaining: 5a-3 (@try unwrap), 5a-7 (boot/ compiler refactor), 5c-2 bounds-checked indexing, 5c-3 String → Slice[u8], 5c-4 compiler internals refactor.</td>
   </tr>
   <tr>
     <td>6 — sgl CLI</td>
