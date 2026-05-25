@@ -223,7 +223,15 @@ function emitExpr(e: IRExpr, buf: WasmBuffer, ctx: EmitCtx, isUser: boolean,
 function emitExprAsBody(e: IRExpr, buf: WasmBuffer, ctx: EmitCtx, isUser: boolean,
                         localIdxOf: (name: string) => number, voidCtx: boolean): void {
     emitExpr(e, buf, ctx, isUser, localIdxOf)
-    if (!voidCtx && producesValue(e)) {
+    // Drop a stray value only when we're in a void context (the surrounding
+    // block / function expects nothing on the stack).  The inverted form
+    // (`!voidCtx && producesValue`) was a latent bug: it dropped the value
+    // an `@if` expression's i32 branch was meant to leave on the stack,
+    // causing "stack has 0 values, expected 1" validation failures.  The
+    // bug only surfaced when an @if-as-expression with non-void branches
+    // ran through the direct binary emitter — first hit by slice_at_i32
+    // (5c-2) returning Option[Int] from its then/else arms.
+    if (voidCtx && producesValue(e)) {
         buf.u8(0x1A) // drop
     }
 }

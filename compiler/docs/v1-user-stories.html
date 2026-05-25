@@ -1079,10 +1079,9 @@
   <p class="goal"><code>src/stdlib/slice.si</code> — <code>@struct Slice[T] ptr:Int, len:Int;</code> with a constructor (<code>&Slice ptr, len</code>) and six generic accessors (<code>slice_ptr[T]</code>, <code>slice_len[T]</code>, <code>slice_get_i32[T]</code>, <code>slice_set_i32[T]</code>, <code>slice_get_byte[T]</code>, <code>slice_set_byte[T]</code>).  Slice is non-owning — the caller manages the backing buffer's lifetime.  <code>Slice[Int]</code> and <code>Slice[u8]</code> are nominally distinct types (HM-lite's parametric instantiation gives them separate identity).  Lowering fix landed alongside: <code>lowerFunctionBody</code> now tracks struct-typed function parameters in <code>structLocals</code> so <code>s.ptr</code> on a <code>Slice[T]</code> param resolves through <code>lowerStructFieldChain</code> instead of falling through to a global lookup.  5 e2e tests in <code>src/stdlib/slice.test.ts</code> cover constructor + every accessor + the <code>Slice[u8]</code> flavour end-to-end.</p>
 </details>
 
-<details class="lang">
-  <summary><span class="id">5c-2</span> Bounds-checked indexing via on::callSite <span class="est">M, ~4h</span></summary>
-  <div class="deps"><strong>Depends on:</strong> 5c-1</div>
-  <p style="color: var(--muted); font-style: italic;">Deferred — chained on 5c-1.</p>
+<details class="lang complete">
+  <summary><span class="id">5c-2</span> Bounds-checked indexing <span class="done">✅</span> <span class="est">M, ~4h</span></summary>
+  <p class="goal">Three new helpers in <code>src/stdlib/slice.si</code> wrap raw element access in HM-lite Option machinery: <code>slice_in_bounds[T] s, i</code> (0/1 i32 predicate), <code>slice_at_i32:Option[Int] [T] s, i</code>, and <code>slice_at_byte:Option[Int] [T] s, i</code>.  Out-of-range indices produce <code>&None</code>; the canonical consumption pattern is <code>&option_unwrap_or (&slice_at_i32 s, i), dflt</code>.  Silicon's 1.0 idiom for failure-as-data is Option (no panics / traps / exceptions), so the bounds-checked layer composes with the existing 5a-1 Option type and unwrap helpers.  Explicit return-type annotation pins <code>&None</code>'s polymorphic <code>?T</code> to <code>Int</code> via the HM-lite annotation rule.  Latent direct-binary-emitter bug fixed alongside: <code>emitExprAsBody</code>'s drop logic was inverted — it stripped the value off non-void <code>@if</code> branches, causing "stack has 0 values, expected 1" validation failures.  First hit by <code>slice_at_i32</code>; the fix unlocks all non-void if-as-expression through the direct emitter.  3 new e2e tests in <code>src/stdlib/slice.test.ts</code> (in-range / boundary / negative for each helper).</p>
 </details>
 
 <details class="lang">
@@ -1656,7 +1655,7 @@
     <td style="color: var(--accent4); font-weight: 700;">🟡 PARTIAL</td>
     <td>13 / 19</td>
     <td><em>~3 d done · ~3.5 d remain</em> (est: 18 d)</td>
-    <td>Shipped: 5a-1 Option, 5a-2 Result + helpers, 5a-4 Vec[i32], 5a-5 vec_map, 5a-6 HashMap[i32→i32], 5b-1 unsigned types, 5b-2 unsigned operator overloads, 5b-3 *_u codegen, 5b-4 <code>@toU32</code> / <code>@toU64</code> casts (binding annotation flip rides with story 3-26), 5c-1 Slice[T] type + accessors, 5d-1 funcref table, 5d-2 call_indirect codegen, 5d-3 <code>$fn</code> surface annotation, 5d-4 Vec.map proof.  Plus allocator primitives (<code>realloc</code> + <code>mem_copy</code>) in the prelude.  Remaining: 5a-3 (@try unwrap), 5a-7 (boot/ compiler refactor), 5c-2 bounds-checked indexing, 5c-3 String → Slice[u8], 5c-4 compiler internals refactor.</td>
+    <td>Shipped: 5a-1 Option, 5a-2 Result + helpers, 5a-4 Vec[i32], 5a-5 vec_map, 5a-6 HashMap[i32→i32], 5b-1 unsigned types, 5b-2 unsigned operator overloads, 5b-3 *_u codegen, 5b-4 <code>@toU32</code> / <code>@toU64</code> casts (binding annotation flip rides with story 3-26), 5c-1 Slice[T] type + accessors, 5c-2 bounds-checked Option-returning indexing, 5d-1 funcref table, 5d-2 call_indirect codegen, 5d-3 <code>$fn</code> surface annotation, 5d-4 Vec.map proof.  Plus allocator primitives (<code>realloc</code> + <code>mem_copy</code>) in the prelude.  Remaining: 5a-3 (@try unwrap), 5a-7 (boot/ compiler refactor), 5c-3 String → Slice[u8], 5c-4 compiler internals refactor.</td>
   </tr>
   <tr>
     <td>6 — sgl CLI</td>

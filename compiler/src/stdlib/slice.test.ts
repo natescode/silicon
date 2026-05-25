@@ -20,6 +20,7 @@ import { typecheck } from '../types/index'
 import type { Program } from '../ast/astNodes'
 
 const sliceSrc = readFileSync(join(__dirname, 'slice.si'), 'utf-8')
+const optionSrc = readFileSync(join(__dirname, 'option.si'), 'utf-8')
 
 interface Exports {
     memory: WebAssembly.Memory
@@ -33,7 +34,9 @@ async function compileAndRun(testFns: Record<string, string>): Promise<Exports> 
     const userExports = Object.keys(testFns)
         .map(name => `@export ${name};`)
         .join('\n')
-    const source = `${sliceSrc}\n${userFns}\n${userExports}`
+    // option.si must come before slice.si because slice's bounds-checked
+    // accessors construct Option values via &Some / &None.
+    const source = `${optionSrc}\n${sliceSrc}\n${userFns}\n${userExports}`
 
     const match = parse(source)
     const ast = addToAstSemantics(siliconGrammar)(match).toAst() as Program
@@ -138,5 +141,84 @@ describe('Phase 5c-1: Slice[T] runtime', () => {
             }`,
         })
         expect(ex.test_len_after_writes()).toBe(4)
+    })
+})
+
+describe('Phase 5c-2: Slice[T] bounds-checked indexing', () => {
+    test('slice_in_bounds returns 1 for in-range, 0 for out-of-range', async () => {
+        const ex = await compileAndRun({
+            test_in_lo:   `{
+                @local buf:Int := &alloc 16;
+                @local s:Slice[Int] := &Slice buf, 4;
+                &slice_in_bounds s, 0
+            }`,
+            test_in_hi:   `{
+                @local buf:Int := &alloc 16;
+                @local s:Slice[Int] := &Slice buf, 4;
+                &slice_in_bounds s, 3
+            }`,
+            test_out_neg: `{
+                @local buf:Int := &alloc 16;
+                @local s:Slice[Int] := &Slice buf, 4;
+                &slice_in_bounds s, (0 - 1)
+            }`,
+            test_out_eq:  `{
+                @local buf:Int := &alloc 16;
+                @local s:Slice[Int] := &Slice buf, 4;
+                &slice_in_bounds s, 4
+            }`,
+            test_out_far: `{
+                @local buf:Int := &alloc 16;
+                @local s:Slice[Int] := &Slice buf, 4;
+                &slice_in_bounds s, 999
+            }`,
+        })
+        expect(ex.test_in_lo()).toBe(1)
+        expect(ex.test_in_hi()).toBe(1)
+        expect(ex.test_out_neg()).toBe(0)
+        expect(ex.test_out_eq()).toBe(0)
+        expect(ex.test_out_far()).toBe(0)
+    })
+
+    test('slice_at_i32 returns Some(v) in range, None out of range — composed via option_unwrap_or', async () => {
+        const ex = await compileAndRun({
+            test_at_in: `{
+                @local buf:Int := &alloc 16;
+                @local s:Slice[Int] := &Slice buf, 4;
+                &slice_set_i32 s, 2, 777;
+                &option_unwrap_or (&slice_at_i32 s, 2), 0
+            }`,
+            test_at_eq: `{
+                @local buf:Int := &alloc 16;
+                @local s:Slice[Int] := &Slice buf, 4;
+                &option_unwrap_or (&slice_at_i32 s, 4), 1234
+            }`,
+            test_at_neg: `{
+                @local buf:Int := &alloc 16;
+                @local s:Slice[Int] := &Slice buf, 4;
+                &option_unwrap_or (&slice_at_i32 s, (0 - 1)), 1234
+            }`,
+        })
+        expect(ex.test_at_in()).toBe(777)
+        expect(ex.test_at_eq()).toBe(1234)
+        expect(ex.test_at_neg()).toBe(1234)
+    })
+
+    test('slice_at_byte returns Some(byte) in range, None out of range', async () => {
+        const ex = await compileAndRun({
+            test_byte_at_in: `{
+                @local buf:Int := &alloc 8;
+                @local s:Slice[Int] := &Slice buf, 8;
+                &slice_set_byte s, 5, 42;
+                &option_unwrap_or (&slice_at_byte s, 5), 0
+            }`,
+            test_byte_at_out: `{
+                @local buf:Int := &alloc 8;
+                @local s:Slice[Int] := &Slice buf, 8;
+                &option_unwrap_or (&slice_at_byte s, 99), 1234
+            }`,
+        })
+        expect(ex.test_byte_at_in()).toBe(42)
+        expect(ex.test_byte_at_out()).toBe(1234)
     })
 })

@@ -60,3 +60,45 @@
     @local p:Int := s.ptr;
     &WASM::i32_store8 (p + i), x
 };
+
+# ── Bounds-checked indexing (5c-2) ────────────────────────────────────
+# Silicon's 1.0 idiom for failure-as-data is `Option[T]` (no panics, no
+# exceptions, no traps).  The bounds-checked accessors below return
+# `&Some v` when `i ∈ [0, len)` and `&None` otherwise.  Callers compose
+# them with `&@match` or `&option_unwrap_or`.
+#
+# These pair with the raw `slice_get_*` accessors above — use the raw
+# form in trusted, already-bounds-checked code (e.g. a `@loop` whose
+# header constrains `i`); use the `slice_at_*` form at trust boundaries
+# where the index could be anything.
+#
+# Prerequisite: `@use src/stdlib/option.si;` before this file so the
+# `Option[T]` type and the Some / None constructors are in scope.
+
+# 0 ≤ i < s.len  →  the canonical in-range predicate.  Silicon's `&`
+# isn't a binary operator, so we nest `&@if` instead of `cond1 && cond2`.
+@fn slice_in_bounds[T] s:Slice[T], i:Int := {
+    @local len:Int := s.len;
+    &@if i >= 0,
+        { &@if i < len, { 1 }, { 0 } },
+        { 0 }
+};
+
+# `&None` alone is `Option[?T]` — pin it to `Option[Int]` via an
+# annotated `@local` so HM-lite can unify both @if branches.  Without
+# the annotation the typechecker reports a "branch type mismatch:
+# Option[Int] vs Option[?T1]" because the call site has no other context
+# to ground T.
+@fn slice_at_i32:Option[Int] [T] s:Slice[T], i:Int := {
+    @local none_val:Option[Int] := &None;
+    &@if (&slice_in_bounds s, i),
+        { &Some (&slice_get_i32 s, i) },
+        { none_val }
+};
+
+@fn slice_at_byte:Option[Int] [T] s:Slice[T], i:Int := {
+    @local none_val:Option[Int] := &None;
+    &@if (&slice_in_bounds s, i),
+        { &Some (&slice_get_byte s, i) },
+        { none_val }
+};
