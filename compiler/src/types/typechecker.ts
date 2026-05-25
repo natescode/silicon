@@ -82,7 +82,10 @@ import {
     heterogeneousArray,
     annotationMismatch,
     immutableAssignment,
+    arityMismatch,
+    missingReturn,
 } from './errors'
+import { closest } from '../errors/diagnostic'
 import { getWasmIntrinsic } from '../intrinsics'
 import { type ElaboratorRegistry, lookupOperator, lookupTypedOperator, lookupKeyword, lookupTypedKeyword } from '../elaborator/registry'
 import { intrinsicSignature, type TypeSig } from './intrinsicSig'
@@ -119,6 +122,9 @@ interface Ctx {
     // `Option[Int]` binds `v:Int`, not the hardcoded TypeInt of yesteryear.
     // Keyed by `${SumName}::${VariantName}`.
     variantSchemes: Map<string, { tvars: string[]; fields: { name: string; type: SiliconType }[] }>
+    // Struct field types — maps struct type name → field name → SiliconType.
+    // Populated by preRegisterStructType for @struct definitions.
+    structFields: Map<string, Map<string, SiliconType>>
     // Stratum registry for user-defined operator type checking (optional).
     registry?: ElaboratorRegistry
     // CaaS-2: authoritative type map — node object → SiliconType.
@@ -275,6 +281,7 @@ export default function typecheck(program: Program, registry?: ElaboratorRegistr
         typeAliases: new Map(),
         typeVars: new Set(),
         variantSchemes: new Map(),
+        structFields: new Map(),
         registry,
         typeMap,
         nodeToSymbolName,
@@ -388,6 +395,7 @@ function isRecordSumKeyword(kw: string): boolean {
 function isTypeDeclKeyword(kw: string): boolean {
     return kw === '@type_alias' || kw === '@type_distinct'
         || isSumKeyword(kw) || isRecordSumKeyword(kw)
+        || kw === '@struct'
 }
 
 function preRegisterDefinitions(elements: any[], ctx: Ctx): void {
@@ -464,6 +472,11 @@ function preRegisterTypeDecl(def: any, ctx: Ctx): void {
     const name: string = def.name.name
     const kw: string = def.keyword ?? ''
 
+    if (kw === '@struct') {
+        preRegisterStructType(def, ctx)
+        return
+    }
+
     if (isSumKeyword(kw)) {
         preRegisterSumType(def, ctx)
         return
@@ -489,6 +502,33 @@ function preRegisterTypeDecl(def: any, ctx: Ctx): void {
         // Distinct: opaque — `age` is a new type incompatible with `Int`.
         ctx.typeAliases.set(name, DistinctOf(name, underlying))
     }
+}
+
+/**
+ * Register an `@struct` definition: creates a named pointer type in
+ * typeAliases, records field names+types in structFields for field-access
+ * type-checking, and registers the constructor function signature.
+ */
+function preRegisterStructType(def: any, ctx: Ctx): void {
+    const name: string = def.name.name
+    const structType = DistinctOf(name, TypeInt)
+    ctx.typeAliases.set(name, structType)
+
+    const fieldMap = new Map<string, SiliconType>()
+    const paramTypes: SiliconType[] = []
+    for (const p of def.params ?? []) {
+        const param = p.value ?? p
+        const fieldName: string = param.name ?? ''
+        const typeName: string = param.typeAnnotation?.typename ?? 'Int'
+        const fieldType = resolveType(typeName, ctx) ?? TypeInt
+        if (fieldName) fieldMap.set(fieldName, fieldType)
+        paramTypes.push(fieldType)
+    }
+    ctx.structFields.set(name, fieldMap)
+
+    ctx.functions.set(name, { params: paramTypes, result: structType })
+    ctx.symbols.set(name, FunctionOf(paramTypes, structType))
+    ctx.immutable.add(name)
 }
 
 /**
@@ -836,6 +876,22 @@ function checkDefinition(d: any, ctx: Ctx): SiliconType {
         }
     }
 
+    // Missing-return check: if a function has a declared non-void return type
+    // and a body, but the body type came out Unknown, the body doesn't produce
+    // a value on (at least) the primary path.  Only flag when the annotation is
+    // explicit — without an annotation we have no expectation to enforce.
+    const hasParams = (d.params ?? []).some((p: any) => !p.isLiteral)
+    if (
+        d.name?.name &&
+        d.binding &&
+        annotated &&
+        annotated.kind !== 'Unknown' &&
+        bodyType.kind === 'Unknown' &&
+        hasParams
+    ) {
+        ctx.errors.push(missingReturn(d.name.name, annotated, d.sourceLocation))
+    }
+
     if (d.name && d.name.name) {
         const paramTypes: SiliconType[] = []
         for (const param of d.params || []) {
@@ -1060,11 +1116,7 @@ function checkFunctionCall(call: any, ctx: Ctx): SiliconType {
         if (sig) {
             // Arity check — avoids silent acceptance of `&WASM::i32_add 1`.
             if (argTypes.length !== sig.params.length) {
-                ctx.errors.push({
-                    kind: 'Mismatch',
-                    message: `${name} expects ${sig.params.length} argument(s), got ${argTypes.length}`,
-                    sourceLocation: call.sourceLocation,
-                })
+                ctx.errors.push(arityMismatch(name, sig.params.length, argTypes.length, call.sourceLocation))
             } else {
                 for (let i = 0; i < sig.params.length; i++) {
                     const expected = sig.params[i]
@@ -1082,11 +1134,7 @@ function checkFunctionCall(call: any, ctx: Ctx): SiliconType {
     const sig = ctx.functions.get(name)
     if (sig) {
         if (argTypes.length !== sig.params.length) {
-            ctx.errors.push({
-                kind: 'Mismatch',
-                message: `'${name}' expects ${sig.params.length} argument(s), got ${argTypes.length}`,
-                sourceLocation: call.sourceLocation,
-            })
+            ctx.errors.push(arityMismatch(name, sig.params.length, argTypes.length, call.sourceLocation))
             return sig.result
         }
         return checkPolymorphicCall(name, sig, argTypes, call, ctx)
@@ -1283,7 +1331,34 @@ function typeOfNamespace(ns: any, ctx: Ctx): SiliconType {
             return FunctionOf(sig.params, sig.result)
         }
     }
-    ctx.errors.push(unbound(key, ns.sourceLocation))
+    // Struct field access: `p.x` or `p.start.x` (nested) — walk the path chain.
+    if (path.length >= 2) {
+        const baseType = ctx.symbols.get(path[0])
+        if (baseType) {
+            let currentType: SiliconType = baseType
+            for (let i = 1; i < path.length; i++) {
+                const structName = currentType.kind === 'Distinct' ? currentType.name : undefined
+                if (!structName) break
+                const fields = ctx.structFields.get(structName)
+                if (!fields) break
+                const fieldType = fields.get(path[i])
+                if (fieldType === undefined) {
+                    ctx.errors.push(unbound(`${structName}.${path[i]}`, ns.sourceLocation))
+                    return TypeUnknown
+                }
+                if (i === path.length - 1) {
+                    recordSymbolRef(ns, key, ctx)
+                    return fieldType
+                }
+                currentType = fieldType
+            }
+        }
+    }
+    const candidates = [...ctx.symbols.keys(), ...ctx.functions.keys()]
+    const suggestion = closest(key, candidates)
+    const err = unbound(key, ns.sourceLocation)
+    if (suggestion) err.hint = `did you mean '${suggestion}'?`
+    ctx.errors.push(err)
     return TypeUnknown
 }
 

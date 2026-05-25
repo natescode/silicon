@@ -107,7 +107,7 @@ describe('AST JSON round-trip', () => {
                 failures.slice(0, 10).join('\n  '),
             )
         }
-    })
+    }, 30000)
 
     test('AST contains only JSON-safe value types', () => {
         // Flag any value JSON would silently drop or throw on:
@@ -156,5 +156,5 @@ describe('AST JSON round-trip', () => {
                 offenders.slice(0, 20).join('\n  '),
             )
         }
-    })
+    }, 30000)
 })

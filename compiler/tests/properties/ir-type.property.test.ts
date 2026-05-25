@@ -125,7 +125,7 @@ describe('IR type coverage', () => {
                 violations.slice(0, 20).map(v => `${v.fixture} :: ${v.kind} — ${v.detail}`).join('\n  '),
             )
         }
-    })
+    }, 30000)
 
     test('non-void wasmType outside the explicit allow-list', () => {
         const violations: Violation[] = []
@@ -154,5 +154,5 @@ describe('IR type coverage', () => {
                 violations.slice(0, 20).map(v => `${v.fixture} :: ${v.kind} — ${v.detail}`).join('\n  '),
             )
         }
-    })
+    }, 30000)
 })

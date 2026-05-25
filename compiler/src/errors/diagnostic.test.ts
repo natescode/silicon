@@ -10,6 +10,8 @@ import {
     parseDiagnostic,
     renderJson,
     renderPretty,
+    levenshtein,
+    closest,
     type Diagnostic,
 } from './diagnostic'
 import type { TypeError } from '../types/errors'
@@ -21,6 +23,7 @@ describe('TYPE_ERROR_CODES', () => {
             'UnknownType', 'Mismatch', 'InvalidOperator',
             'UnboundIdentifier', 'HeterogeneousArray',
             'Annotation', 'ImmutableAssignment',
+            'MissingReturn', 'ArityMismatch',
         ] as const
         for (const k of expectedKinds) {
             expect(TYPE_ERROR_CODES[k]).toMatch(/^E\d{4}$/)
@@ -151,5 +154,60 @@ describe('renderPretty', () => {
             message: 'irk',
         }
         expect(renderPretty([d])).toContain('<unknown>')
+    })
+
+    test('renders snippet and caret when snippet is present', () => {
+        const d: Diagnostic = {
+            phase: 'typecheck',
+            code: 'E0002',
+            span: { file: 'main.si', line: 3, col: 5, length: 3 },
+            message: 'expected Int, got Float',
+            snippet: '    x + 3.14',
+        }
+        const out = renderPretty([d])
+        expect(out).toContain('    x + 3.14')
+        // caret starts at col 5 (1-based) → 4 spaces then ^^^
+        expect(out).toContain('    ^^^')
+    })
+
+    test('hint is threaded from TypeError via toDiagnostic', () => {
+        const err: TypeError = {
+            kind: 'UnboundIdentifier',
+            message: "unbound identifier 'fooBar'",
+            hint: "did you mean 'foobar'?",
+        }
+        const d = toDiagnostic(err)
+        expect(d.hint).toBe("did you mean 'foobar'?")
+        expect(renderPretty([d])).toContain("hint: did you mean 'foobar'?")
+    })
+})
+
+describe('levenshtein', () => {
+    test('identical strings → 0', () => expect(levenshtein('foo', 'foo')).toBe(0))
+    test('single insertion → 1', () => expect(levenshtein('foo', 'fooo')).toBe(1))
+    test('single deletion → 1', () => expect(levenshtein('foo', 'fo')).toBe(1))
+    test('single substitution → 1', () => expect(levenshtein('foo', 'boo')).toBe(1))
+    test('empty string → length of other', () => expect(levenshtein('', 'abc')).toBe(3))
+    test('typical typo', () => expect(levenshtein('length', 'lenght')).toBe(2))
+})
+
+describe('closest', () => {
+    test('returns the best match within default threshold', () => {
+        const result = closest('lenght', ['length', 'width', 'height'])
+        expect(result).toBe('length')
+    })
+
+    test('returns undefined when no candidate is close enough', () => {
+        const result = closest('xyz', ['length', 'width', 'height'])
+        expect(result).toBeUndefined()
+    })
+
+    test('respects custom maxDist', () => {
+        expect(closest('foo', ['bar'], 1)).toBeUndefined()
+        expect(closest('foo', ['bar'], 3)).toBe('bar')
+    })
+
+    test('returns undefined for empty candidate list', () => {
+        expect(closest('foo', [])).toBeUndefined()
     })
 })

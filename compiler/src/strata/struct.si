@@ -1,0 +1,18 @@
+# Phase 1a — @struct stratum (product types)
+#
+# Registers the @struct keyword.  The lowering handler delegates to the
+# TypeScript-side structExpander (src/strata/defExpanders.ts) via the
+# compiler_expandStruct comptime import, which generates the constructor
+# function and registers the field layout for field-access lowering.
+#
+# Syntax:  @struct Point x:Int, y:Int;
+#   Fields are the definition's param list (same position as @fn params).
+#   The generated constructor is named after the struct ($Point).
+#   Field access (p.x) and field write (p.x = v) are handled in lower.ts.
+
+@stratum StructDef := {
+    &Compiler::register::keyword '@struct';
+    &Compiler::on::lower '@struct', StructDef_lower;
+};
+
+@fn StructDef_lower node:Int := &compiler::compiler_expandStruct node;

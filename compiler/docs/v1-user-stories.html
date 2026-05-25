@@ -161,7 +161,7 @@
     <li><a href="#phase-3-5">Phase 3.5 — <code>@comptime</code> (user-level)</a></li>
     <li><a href="#phase-4">Phase 4 — <code>@defer</code></a> ✅</li>
     <li><a href="#phase-5">Phase 5 — Generic stdlib + type system</a> 🟡</li>
-    <li><a href="#phase-6">Phase 6 — <code>sgl</code> CLI</a></li>
+    <li><a href="#phase-6">Phase 6 — <code>sgl</code> CLI</a> 🟡</li>
     <li><a href="#phase-7">Phase 7 — Silicon interpreter</a></li>
     <li><a href="#phase-7-5">Phase 7.5 — <code>sgl</code> interpreter-backed subcommands</a></li>
     <li><a href="#phase-8">Phase 8 — Native backend (QBE)</a></li>
@@ -1125,6 +1125,23 @@
 <!-- ================================================================== -->
 <h2 id="phase-6">Phase 6 — <code>sgl</code> CLI</h2>
 
+<div class="phase-intro">
+  <strong>Status (2026-05-25): Partial — 6 of 10 stories shipped.</strong>
+  Subcommand CLI shipped: <code>sgl init</code>, <code>sgl build</code>,
+  <code>sgl run</code> (wasmtime-backed via wasix WAT), <code>sgl check</code>,
+  <code>sgl fmt</code>, and <code>sgl help</code>.  <code>sgl.toml</code>
+  manifest parsing ships with <code>sgl build</code>/<code>run</code>/<code>check</code>/<code>fmt</code>.
+  <code>src/stdlib/io.si</code> created with portable WASI I/O helpers
+  (<code>write_bytes</code>, <code>write_str</code>, <code>write_nl</code>,
+  <code>print</code>, <code>eprint</code>, <code>exit</code>).
+  <code>sgl test</code>, <code>sgl eval</code>, and <code>sgl add</code> are
+  stubbed (exit 1 with Phase 7 pointer).
+  Remaining: 6b-6 (blocked on Phase 8 native backend),
+  6b-11/6b-12/6b-13 package registry.
+  <strong>Acceptance path:</strong> <code>sgl init my-app &amp;&amp; sgl run</code>
+  → "Hello, Silicon!" confirmed working.
+</div>
+
 <p style="color: var(--muted); font-style: italic; margin-top: 12px;">
   <strong>Note:</strong> the original 6a "<code>@comptime</code>" sub-phase
   moved to <a href="#phase-3-5">Phase 3.5</a> as stories CT-1 through CT-5.
@@ -1136,36 +1153,44 @@
 
 <h3>6b — <code>sgl</code> CLI</h3>
 
-<details class="toolchain">
-  <summary><span class="id">6b-1</span> sgl binary scaffold + subcommand routing <span class="est">M, ~3h</span></summary>
+<details class="toolchain complete">
+  <summary><span class="id">6b-1</span> sgl binary scaffold + subcommand routing <span class="done">✅</span> <span class="est">M, ~3h</span></summary>
+  <p><code>src/sigil_cli.ts</code> rewritten as a full subcommand-dispatching CLI (<code>#!/usr/bin/env bun</code>).  Flag parser handles <code>--pretty</code>, <code>--wat</code>, <code>--wasm</code>, <code>--target=&lt;t&gt;</code>, <code>--strata &lt;f&gt;</code>, <code>--release</code>.  Switch-based routing dispatches to <code>cmdInit</code>, <code>cmdBuild</code>, <code>cmdRun</code>, <code>cmdCheck</code>, and stubs for <code>test</code>/<code>eval</code>/<code>add</code>/<code>fmt</code>.  <code>sgl help</code> / <code>--help</code> / <code>-h</code> print the full usage text.</p>
 </details>
 
-<details class="toolchain">
-  <summary><span class="id">6b-2</span> sgl.toml manifest parser <span class="est">M, ~3h</span></summary>
+<details class="toolchain complete">
+  <summary><span class="id">6b-2</span> sgl.toml manifest parser <span class="done">✅</span> <span class="est">M, ~3h</span></summary>
+  <p>Minimal TOML reader (<code>readSglToml()</code>) handles <code>[section]</code> + <code>key = "value"</code> format — no external dependency.  Parses <code>[package]</code> (name, version, entry) and <code>[dependencies]</code>.  <code>resolveEntry()</code> checks the positional arg first, falls back to <code>sgl.toml</code> entry, then <code>src/main.si</code>, then exits with a helpful message.  Used by <code>build</code>, <code>run</code>, and <code>check</code>.</p>
 </details>
 
-<details class="toolchain">
-  <summary><span class="id">6b-3</span> sgl init — scaffold a project <span class="est">M, ~3h</span></summary>
+<details class="toolchain complete">
+  <summary><span class="id">6b-3</span> sgl init — scaffold a project <span class="done">✅</span> <span class="est">M, ~3h</span></summary>
   <div class="deps"><strong>Depends on:</strong> 6b-1, 6b-2</div>
+  <p><code>cmdInit()</code> creates a <code>sgl.toml</code> manifest and <code>src/main.si</code> hello-world skeleton.  The template uses <code>wasi_snapshot_preview1::fd_write</code> via <code>scratch_alloc</code>/<code>str_ptr</code>/<code>str_len</code> — no <code>@extern</code> needed (all pre-registered).  Skips files that already exist to support re-running in-place.  Acceptance: <code>sgl init /tmp/sgl-hello &amp;&amp; sgl run /tmp/sgl-hello/src/main.si</code> → "Hello, Silicon!" verified working.</p>
 </details>
 
-<details class="toolchain">
-  <summary><span class="id">6b-4</span> sgl build — compile to default target <span class="est">M, ~4h</span></summary>
+<details class="toolchain complete">
+  <summary><span class="id">6b-4</span> sgl build — compile to default target <span class="done">✅</span> <span class="est">M, ~4h</span></summary>
   <div class="deps"><strong>Depends on:</strong> 6b-2</div>
+  <p><code>cmdBuild()</code> runs the full parse → elaborate → typecheck → codegen pipeline.  Emits <code>.wasm</code> binary by default; <code>--wat</code> switches to WAT text.  Reads the entry point from <code>sgl.toml</code> when no file is given.  Passes <code>moduleRegistry</code> to the typechecker so WASI import return types resolve correctly (prevents false E0008 errors on <code>fd_write</code> and friends).  <code>--target=wasix</code> supported; <code>--release</code> silently accepted for forward-compat.</p>
 </details>
 
 <details class="toolchain">
   <summary><span class="id">6b-6</span> sgl run --release — compile + execute <span class="est">M, ~3h</span></summary>
   <div class="deps"><strong>Depends on:</strong> 6b-4, Phase 8 substantially complete</div>
+  <p><em>Blocked on Phase 8 (native QBE backend).</em>  Note: <code>sgl run</code> (without <code>--release</code>) already ships as a Phase 6 bonus — it compiles to wasix WAT and executes via <code>wasmtime</code>, bridging the gap until the native backend lands.  The <code>--release</code> flag is accepted and silently ignored for forward-compat.</p>
 </details>
 
-<details class="toolchain">
-  <summary><span class="id">6b-8</span> sgl check — typecheck only <span class="est">S, ~2h</span></summary>
+<details class="toolchain complete">
+  <summary><span class="id">6b-8</span> sgl check — typecheck only <span class="done">✅</span> <span class="est">S, ~2h</span></summary>
   <div class="deps"><strong>Depends on:</strong> 6b-2</div>
+  <p><code>cmdCheck()</code> runs parse → elaborate → typecheck and exits 0 on success (<code>&lt;file&gt;: OK</code>) or 1 with diagnostics on stderr (JSON by default, human-readable with <code>--pretty</code>).  No output file written.  Passes <code>moduleRegistry</code> to the typechecker, same as <code>sgl build</code>, so WASI imports resolve cleanly.</p>
 </details>
 
-<details class="toolchain">
-  <summary><span class="id">6b-10</span> sgl fmt — formatter <span class="est">L, ~6h</span></summary>
+<details class="toolchain complete">
+  <summary><span class="id">6b-10</span> sgl fmt — formatter <span class="done">✅</span> <span class="est">L, ~6h</span></summary>
+  <p><code>cmdFmt()</code> in <code>src/sigil_cli.ts</code> + <code>src/fmt/formatter.ts</code>.  Parses source to AST, then reconstructs canonical Silicon: 4-space indentation, bare-style definition params, blank lines between top-level definitions.  Flags: <code>--check</code> (exit 1 if file would change — idempotency gate for CI), <code>--stdout</code> (print to stdout, don't modify file).  Idempotent: formatting a file twice produces the same output.
+  Known limitations: single-line <code>#</code> comments are stripped by the grammar before the AST is built and therefore cannot be preserved; <code>##</code> DocComments are preserved.  The <code>.</code> field-access separator is normalised to <code>::</code> (both forms are semantically equivalent — the lowerer resolves field vs. module access at compile time).</p>
 </details>
 
 <details class="toolchain">

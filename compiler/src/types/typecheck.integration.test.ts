@@ -185,7 +185,7 @@ test('wrong arg type at user function call site errors', () => {
 test('wrong arity at user function call site errors', () => {
     const { errors } = check('@let add x:Int, y:Int := x + y; &add 1;')
     expect(errors.length).toBeGreaterThan(0)
-    expect(errors[0].kind).toBe('Mismatch')
+    expect(errors[0].kind).toBe('ArityMismatch')
 })
 
 // ------------------------------------------------------------------
@@ -448,8 +448,8 @@ test('@extern: call with wrong arg type is a Mismatch', () => {
     expect(errors[0].kind).toBe('Mismatch')
 })
 
-test('@extern: wrong arity is a Mismatch', () => {
+test('@extern: wrong arity is an ArityMismatch', () => {
     const { errors } = check('@extern add x:Int, y:Int; &add 1;')
     expect(errors.length).toBeGreaterThan(0)
-    expect(errors[0].kind).toBe('Mismatch')
+    expect(errors[0].kind).toBe('ArityMismatch')
 })

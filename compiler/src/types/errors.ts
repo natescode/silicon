@@ -27,11 +27,15 @@ export type TypeErrorKind =
     | 'HeterogeneousArray'    // Array literal elements do not all share a type
     | 'Annotation'            // Initializer doesn't match declared annotation
     | 'ImmutableAssignment'   // Assignment to an immutable binding (@let, @fn, @extern)
+    | 'MissingReturn'         // Non-void function body does not produce a value
+    | 'ArityMismatch'         // Wrong number of arguments at a call site
 
 export interface TypeError {
     kind: TypeErrorKind
     message: string
     sourceLocation?: SourceLocation
+    /** Optional secondary advice surfaced as hint in the rendered Diagnostic. */
+    hint?: string
 }
 
 /**
@@ -127,6 +131,39 @@ export function immutableAssignment(name: string, sourceLocation?: SourceLocatio
     return {
         kind: 'ImmutableAssignment',
         message: `'${name}' is immutable and cannot be reassigned`,
+        sourceLocation,
+    }
+}
+
+/**
+ * Factory — wrong number of arguments at a call site.
+ */
+export function arityMismatch(
+    name: string,
+    expected: number,
+    actual: number,
+    sourceLocation?: SourceLocation,
+    hint?: string,
+): TypeError {
+    return {
+        kind: 'ArityMismatch',
+        message: `'${name}' expects ${expected} argument(s), got ${actual}`,
+        sourceLocation,
+        hint,
+    }
+}
+
+/**
+ * Factory — non-void function body does not produce a value on all paths.
+ */
+export function missingReturn(
+    name: string,
+    declared: SiliconType,
+    sourceLocation?: SourceLocation,
+): TypeError {
+    return {
+        kind: 'MissingReturn',
+        message: `'${name}' is declared to return ${formatType(declared)} but body may not produce a value`,
         sourceLocation,
     }
 }

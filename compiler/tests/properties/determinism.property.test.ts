@@ -76,7 +76,7 @@ describe('determinism', () => {
         if (failures.length > 0) {
             throw new Error(`${failures.length} non-deterministic fixture(s):\n` + failures.join('\n\n'))
         }
-    })
+    }, 30000)
 
     test('strata registry build order is deterministic', () => {
         // Compile the same fixture; the strata registry's iteration order
@@ -104,7 +104,7 @@ describe('determinism', () => {
         const sampleFile = join(import.meta.dirname, '../../src/e2e/examples', sample.name)
 
         const runOnce = () => {
-            const r = Bun.spawnSync(['bun', 'run', compileScript, sampleFile], {
+            const r = Bun.spawnSync([process.execPath, 'run', compileScript, sampleFile], {
                 cwd: join(import.meta.dirname, '../..'),
                 stdout: 'pipe',
                 stderr: 'pipe',

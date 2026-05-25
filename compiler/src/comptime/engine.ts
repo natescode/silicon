@@ -50,6 +50,25 @@ function getBuiltinModuleRegistry(): ModuleRegistry {
     return _builtinModules
 }
 
+/**
+ * Process-lifetime cache of compiled `WebAssembly.Module` objects for T0
+ * (built-in strata) handlers.  T0 handler WAT is deterministic — same body
+ * source + same T0 registry state = same WAT every time — so we only pay
+ * the `watToWasmSync` + `WebAssembly.Module` cost once per process, not once
+ * per `buildStrataRegistry` call.
+ *
+ * Only populated when `(registry as any).__t0Phase === true` (set by
+ * `strataLoader.ts` around the T0 `compileStrataHandlers` call).
+ * T1/T2 user-defined handlers are never cached here.
+ */
+const _t0ModuleCache = new Map<string, WebAssembly.Module>()
+
+/** Clear the T0 handler module cache.  Only needed in tests that swap out
+ *  built-in strata source between calls. */
+export function clearT0ModuleCache(): void {
+    _t0ModuleCache.clear()
+}
+
 /** A compiled handler instance — the result of running an @fn through the
  *  WASM pipeline.  `invoke(arg)` calls the exported function with a single
  *  i32 argument (the AST node handle) and returns the i32 result. */
@@ -83,6 +102,66 @@ export function compileHandlerToWasm(
     program: Program,
     registry: ElaboratorRegistry,
 ): CompiledHandler {
+    const isT0Phase = (registry as any).__t0Phase === true
+
+    // T0 fast path: if we already compiled this handler's WebAssembly.Module
+    // in a prior buildStrataRegistry call, skip the entire elaborate/lower/emit/
+    // watToWasmSync pipeline — just re-instantiate with the new registry's imports.
+    let cachedMod = isT0Phase ? _t0ModuleCache.get(handlerName) : undefined
+    if (!cachedMod) {
+        // Full pipeline — find the @fn, elaborate, lower, emit WAT, compile.
+        // Mutates nothing on the hot path; the result is stashed in cachedMod
+        // and optionally added to _t0ModuleCache below.
+        cachedMod = _compileHandlerToModule(handlerName, program, registry)
+        if (isT0Phase) _t0ModuleCache.set(handlerName, cachedMod)
+    }
+
+    // Always instantiate fresh so the handler's imports are bound to the
+    // current registry (pendingDefinitions, diagnostics, etc. are per-compile).
+    const env = createComptimeEnv(registry)
+    const imports = createComptimeImports(env)
+    // std.wat declares `env::print` / `env::read` for host-embed runtimes.
+    // Handlers never use these — but the module still requires the imports
+    // to instantiate.  Stub them: print is a no-op, read returns 0.
+    ;(imports as any).env = {
+        print: (_: number) => {},
+        read:  () => 0,
+        ...((imports as any).env ?? {}),
+    }
+    let instance: WebAssembly.Instance
+    try {
+        instance = new WebAssembly.Instance(cachedMod, imports)
+    } catch (e: any) {
+        throw new Error(
+            `[comptime] instantiation failed for '${handlerName}' — likely uses ` +
+            `&Compiler::* calls not yet wired to imports. Falling back to interpreter is correct.`
+            + ` Cause: ${e.message ?? e}`
+        )
+    }
+
+    const exportFn = (instance.exports as any)[handlerName]
+    if (typeof exportFn !== 'function') {
+        throw new Error(`[comptime] export '${handlerName}' not found or not a function`)
+    }
+    const memory = (instance.exports as any).memory as WebAssembly.Memory | undefined
+    if (memory) env.memory = memory
+
+    return {
+        invoke: (arg: number) => Number(exportFn(arg) ?? 0),
+        env,
+    }
+}
+
+/**
+ * Compile an @fn body to a `WebAssembly.Module` (no instantiation).
+ * This is the expensive part: elaborate → lower → emit → watToWasmSync.
+ * Called only when the T0 module cache misses.
+ */
+function _compileHandlerToModule(
+    handlerName: string,
+    program: Program,
+    registry: ElaboratorRegistry,
+): WebAssembly.Module {
     // Find the handler @fn — first in the user program, then fall back
     // to `registry.namedHandlers` which carries the body for built-in
     // strata handlers (loaded from src/strata/*.si).  Built-in handler
@@ -180,47 +259,11 @@ export function compileHandlerToWasm(
         ;(registry as any).__compilingHandler = false
     }
 
-    // Assemble + instantiate — sync path (wabt was pre-init'd at module load).
+    // Assemble — sync path (wabt was pre-init'd at module load).
+    // Returns the compiled module; instantiation happens in compileHandlerToWasm
+    // so each call gets a fresh instance bound to its own registry.
     const wasm = watToWasmSync(wat)
-    const env = createComptimeEnv(registry)
-    const imports = createComptimeImports(env)
-    // std.wat declares `env::print` / `env::read` for host-embed runtimes.
-    // Handlers never use these — but the module still requires the imports
-    // to instantiate.  Stub them: print is a no-op, read returns 0.
-    ;(imports as any).env = {
-        print: (_: number) => {},
-        read:  () => 0,
-        ...((imports as any).env ?? {}),
-    }
-    let instance: WebAssembly.Instance
-    try {
-        // Sync instantiate — wabt-produced binary is valid, and the imports
-        // object is fully synchronous, so we can avoid the async overhead.
-        const mod = new WebAssembly.Module(wasm)
-        instance = new WebAssembly.Instance(mod, imports)
-    } catch (e: any) {
-        // Likely an unresolved @extern (`&Compiler::*` call) — Phase C
-        // minimum can't handle those yet.  Re-throw with a clearer message.
-        throw new Error(
-            `[comptime] instantiation failed for '${handlerName}' — likely uses ` +
-            `&Compiler::* calls not yet wired to imports. Falling back to interpreter is correct.`
-            + ` Cause: ${e.message ?? e}`
-        )
-    }
-
-    const exportFn = (instance.exports as any)[handlerName]
-    if (typeof exportFn !== 'function') {
-        throw new Error(`[comptime] export '${handlerName}' not found or not a function`)
-    }
-    // Capture the handler's memory so imports like `compiler_str_intern`
-    // can read Silicon string literals out of it.  std.wat exports "memory".
-    const memory = (instance.exports as any).memory as WebAssembly.Memory | undefined
-    if (memory) env.memory = memory
-
-    return {
-        invoke: (arg: number) => Number(exportFn(arg) ?? 0),
-        env,
-    }
+    return new WebAssembly.Module(wasm)
 }
 
 /** Best-effort: try to compile and return the instance, or `null` if

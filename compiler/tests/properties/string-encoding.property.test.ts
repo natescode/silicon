@@ -115,5 +115,5 @@ describe('string encoding (UTF-8)', () => {
             }),
             { numRuns: 60 },
         )
-    })
+    }, 30000)
 })

@@ -45,6 +45,14 @@ import addToAstSemantics from '../ast/toAst'
 import siliconGrammar from '../grammar/SiliconGrammar'
 
 // ---------------------------------------------------------------------------
+// Module-level T0 cache
+// ---------------------------------------------------------------------------
+
+// Cache the parsed built-in strata AST — it's 58KB of .si source that never
+// changes between calls, so we pay the ~100ms parse cost only once per process.
+let _cachedBuiltinProg: ReturnType<typeof parseStrataSourceAsProgram> | undefined | null = undefined
+
+// ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
 
@@ -94,7 +102,10 @@ export function buildStrataRegistry(
   // `@stratum_keyword` / `@stratum_operator` forms were retired in the
   // Phase 5 grammar revision; every built-in stratum uses the unified
   // form today.
-  const builtinProg = parseStrataSourceAsProgram(loadBuiltinStrata())
+  if (_cachedBuiltinProg === undefined) {
+    _cachedBuiltinProg = parseStrataSourceAsProgram(loadBuiltinStrata())
+  }
+  const builtinProg = _cachedBuiltinProg
   if (builtinProg) {
     for (const el of (builtinProg.elements ?? []) as any[]) {
       const def = unwrapToDefinition(el)
@@ -179,7 +190,15 @@ export function buildStrataRegistry(
   // no interpreter fallback.  Static import — engine.ts loads via
   // top-level await on wabt (codegen/toWasm.ts), which is fine since
   // it's a one-time module-load cost.
-  compileStrataHandlers({ type: 'Program', elements: [] } as any, registry)
+  // __t0Phase tells engine.ts to cache the compiled WebAssembly.Module
+  // objects keyed by handler name — subsequent calls re-instantiate from
+  // the cache (fast) instead of recompiling WAT → WASM from scratch.
+  ;(registry as any).__t0Phase = true
+  try {
+    compileStrataHandlers({ type: 'Program', elements: [] } as any, registry)
+  } finally {
+    ;(registry as any).__t0Phase = false
+  }
 
   return registry
 }

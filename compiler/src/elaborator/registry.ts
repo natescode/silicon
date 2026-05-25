@@ -22,6 +22,24 @@ import type { IRExpanderFn, IRDefExpander } from '../ir/expander'
 import type { Diagnostic } from '../errors/diagnostic'
 
 // ─────────────────────────────────────────────────────────────────────────────
+// @struct layout registry
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface StructFieldLayout {
+    name: string
+    typeName: string
+    wasmType: 'i32' | 'f32' | 'i64'
+    offset: number
+    size: number
+}
+
+export interface StructLayout {
+    name: string
+    fields: StructFieldLayout[]
+    size: number
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Strata 2.0 — Phase handler types
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -112,6 +130,9 @@ export interface ElaboratorRegistry {
     // ── Per-stratum state storage (state 'stratum' scope) ─────────────────────
     stratumState: Map<string, Map<string, any>>
 
+    // ── @struct layout registry ────────────────────────────────────────────────
+    structTypes: Map<string, StructLayout>
+
     // ── Dissolution Phase A: named-handler bodies ─────────────────────────────
     /** `@fn` body blocks keyed by function name.  Populated by a pre-pass
      *  over program elements so that strata handlers referencing `@fn` by
@@ -167,6 +188,7 @@ export function createElaboratorRegistry(): ElaboratorRegistry {
         namedHandlers: new Map(),
         strataHandlerFnNames: new Set(),
         compiledHandlers: new Map(),
+        structTypes: new Map(),
     }
 }
 
@@ -383,6 +405,7 @@ export function mergeRegistries(target: ElaboratorRegistry, source: ElaboratorRe
         namedHandlers:       new Map([...target.namedHandlers, ...source.namedHandlers]),
         strataHandlerFnNames: new Set([...target.strataHandlerFnNames, ...source.strataHandlerFnNames]),
         compiledHandlers:    new Map([...target.compiledHandlers, ...source.compiledHandlers]),
+        structTypes:         new Map([...target.structTypes, ...source.structTypes]),
     }
 }
 

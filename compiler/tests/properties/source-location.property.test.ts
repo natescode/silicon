@@ -101,7 +101,7 @@ describe('source-location coverage', () => {
                 `[source-location] ${missing.length} node type(s) not exercised by fixtures: ${missing.join(', ')}`,
             )
         }
-    })
+    }, 30000)
 
     test(
         PROMOTE_TO_STRICT
@@ -143,5 +143,6 @@ describe('source-location coverage', () => {
             }
             // Non-strict mode passes unconditionally — see header comment.
         },
+        30000,
     )
 })

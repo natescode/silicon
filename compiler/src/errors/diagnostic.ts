@@ -42,6 +42,13 @@ export interface Diagnostic {
     hint?: string
     /** Optional related notes — already-formatted Diagnostic records. */
     notes?: Diagnostic[]
+    /**
+     * Optional verbatim source line for caret rendering.  When present,
+     * `renderPretty` will emit the snippet and a `^` underline below the
+     * message, Rust-style.  Set by the pipeline at the point closest to the
+     * source text (parser or semantic model lookup).
+     */
+    snippet?: string
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -58,6 +65,8 @@ export const TYPE_ERROR_CODES: Record<TypeErrorKind, string> = {
     HeterogeneousArray:  'E0005',  // array literal elements do not share a type
     Annotation:          'E0006',  // initializer doesn't match declared annotation
     ImmutableAssignment: 'E0007',  // assignment to an immutable binding
+    MissingReturn:       'E0008',  // non-void function body may not produce a value
+    ArityMismatch:       'E0009',  // wrong number of arguments at call site
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -75,12 +84,14 @@ export function spanFromLocation(loc: SourceLocation | undefined, file = ''): So
 
 /** Lift a TypeError into a Diagnostic in the typecheck phase. */
 export function toDiagnostic(err: TypeError, file = ''): Diagnostic {
-    return {
+    const d: Diagnostic = {
         phase: 'typecheck',
         code: TYPE_ERROR_CODES[err.kind],
         span: spanFromLocation(err.sourceLocation, file),
         message: err.message,
     }
+    if (err.hint) d.hint = err.hint
+    return d
 }
 
 /** Lift a parse error (Error instance from parser.ts) into a Diagnostic. */
@@ -95,6 +106,52 @@ export function parseDiagnostic(err: Error, file = ''): Diagnostic {
         span: { file, line, col, length: 0 },
         message: err.message.replace(/^Parse error:\s*/, ''),
     }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// "Did you mean" — Levenshtein-based nearest-name suggestions
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Classic Levenshtein edit distance.  O(m·n) time, O(n) space.
+ * Returns the minimum number of single-character edits (insert, delete,
+ * substitute) to transform `a` into `b`.
+ */
+export function levenshtein(a: string, b: string): number {
+    const m = a.length
+    const n = b.length
+    // row[j] = distance from a[0..i] to b[0..j] — updated in-place
+    const row: number[] = Array.from({ length: n + 1 }, (_, j) => j)
+    for (let i = 1; i <= m; i++) {
+        let prev = i
+        for (let j = 1; j <= n; j++) {
+            const next = a[i - 1] === b[j - 1]
+                ? row[j - 1]
+                : 1 + Math.min(row[j - 1], prev, row[j])
+            row[j - 1] = prev
+            prev = next
+        }
+        row[n] = prev
+    }
+    return row[n]
+}
+
+/**
+ * Return the element of `candidates` closest to `query` by Levenshtein
+ * distance, or `undefined` if `candidates` is empty or the closest match is
+ * more than `maxDist` edits away (default 3).
+ */
+export function closest(query: string, candidates: string[], maxDist = 3): string | undefined {
+    let best: string | undefined
+    let bestDist = maxDist + 1
+    for (const c of candidates) {
+        const d = levenshtein(query, c)
+        if (d < bestDist) {
+            bestDist = d
+            best = c
+        }
+    }
+    return bestDist <= maxDist ? best : undefined
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -113,10 +170,17 @@ export function renderPretty(diags: Diagnostic[]): string {
             ? `${d.span.file || '<input>'}:${d.span.line}:${d.span.col}`
             : '<unknown>'
         const head = `${d.code} [${d.phase}] ${where}: ${d.message}`
+        let caret = ''
+        if (d.snippet) {
+            const col = Math.max(0, d.span.col - 1)  // convert to 0-based
+            const len = Math.max(1, d.span.length)
+            const underline = ' '.repeat(col) + '^'.repeat(len)
+            caret = `\n  ${d.snippet}\n  ${underline}`
+        }
         const hint = d.hint ? `\n  hint: ${d.hint}` : ''
         const notes = d.notes && d.notes.length > 0
             ? '\n' + d.notes.map(n => `  note ${n.code}: ${n.message}`).join('\n')
             : ''
-        return head + hint + notes
+        return head + caret + hint + notes
     }).join('\n')
 }

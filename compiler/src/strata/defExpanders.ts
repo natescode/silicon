@@ -18,6 +18,7 @@
 
 import type { IRDefExpander } from '../ir/expander'
 import type { IRGlobal, IRFunction, IRStmt, IRExpr } from '../ir/nodes'
+import type { StructLayout, StructFieldLayout } from '../elaborator/registry'
 
 // ---------------------------------------------------------------------------
 // Utilities — pure AST shape inspection, no compiler context required
@@ -194,6 +195,95 @@ const typeRecordExpander: IRDefExpander = {
 }
 
 // ---------------------------------------------------------------------------
+// @struct — flat record type with named fields and no variant tag.
+//
+// Declaration syntax:  @struct Point x:Int, y:Int;
+// Fields come from def.params — same position as function parameters.
+// Layout: contiguous, each field 4 bytes (i32/f32) or 8 bytes (i64).
+// Constructor function: $Point(x: i32, y: i32): i32
+//   allocates size bytes via alloc(), stores fields, returns pointer.
+// ---------------------------------------------------------------------------
+
+function fieldWasmType(typeName: string): 'i32' | 'f32' | 'i64' {
+    if (typeName === 'Float') return 'f32'
+    if (typeName === 'Int64' || typeName === 'i64') return 'i64'
+    return 'i32'
+}
+
+function fieldSize(wasmType: 'i32' | 'f32' | 'i64'): number {
+    return wasmType === 'i64' ? 8 : 4
+}
+
+function extractStructFields(def: any): StructFieldLayout[] {
+    const fields: StructFieldLayout[] = []
+    let offset = 0
+    for (const p of def.params ?? []) {
+        const param = p.value ?? p  // unwrap Parameter wrapper if present
+        const name: string = param.name ?? ''
+        const typeName: string = param.typeAnnotation?.typename ?? 'Int'
+        const wt = fieldWasmType(typeName)
+        const size = fieldSize(wt)
+        fields.push({ name, typeName, wasmType: wt, offset, size })
+        offset += size
+    }
+    return fields
+}
+
+const structExpander: IRDefExpander = {
+    preScan(def, api) {
+        const structName = def.name?.name ?? ''
+        const ctorName = api.watId(structName)
+        api.ctx.globals.set(ctorName, 'i32')
+    },
+
+    expand(def, _name, api): IRFunction {
+        const structName = def.name?.name ?? ''
+        const fields = extractStructFields(def)
+        const totalSize = fields.reduce((acc, f) => acc + f.size, 0)
+
+        // Register the struct layout so field-access lowering can look it up.
+        const layout: StructLayout = { name: structName, fields, size: totalSize }
+        api.ctx.structTypes.set(structName, layout)
+
+        // Constructor: allocate memory, store each field, return pointer.
+        const ctorName = api.watId(structName)
+        const params = fields.map(f => ({ name: f.name, wasmType: f.wasmType }))
+        const localPtr = api.ir.makeLocal('__rec', 'i32')
+        const stmts: IRStmt[] = []
+
+        const storeAt = (off: number, wt: 'i32' | 'f32' | 'i64', value: IRExpr): IRStmt => {
+            const instr = wt === 'f32' ? 'f32.store' : wt === 'i64' ? 'i64.store' : 'i32.store'
+            const ptrExpr: IRExpr = off === 0
+                ? api.ir.makeLocalGet('__rec', 'i32')
+                : api.ir.makeBinOp('i32.add',
+                    api.ir.makeLocalGet('__rec', 'i32'),
+                    api.ir.makeConst(off, 'i32'),
+                    'i32')
+            return {
+                kind: 'ExprStmt',
+                expr: {
+                    kind: 'Call',
+                    wasmType: 'void',
+                    callee: instr,
+                    callKind: 'instr',
+                    args: [ptrExpr, value],
+                } as any,
+            }
+        }
+
+        stmts.push(api.ir.makeLocalSet('__rec',
+            api.ir.makeCall('alloc', [api.ir.makeConst(totalSize, 'i32')], 'i32', 'user')))
+
+        for (const f of fields) {
+            stmts.push(storeAt(f.offset, f.wasmType, api.ir.makeLocalGet(f.name, f.wasmType)))
+        }
+
+        const body = api.ir.makeBlock(stmts, api.ir.makeLocalGet('__rec', 'i32'), 'i32')
+        return api.ir.makeFunction(ctorName, params, 'i32', [localPtr], body)
+    },
+}
+
+// ---------------------------------------------------------------------------
 // Registry
 // ---------------------------------------------------------------------------
 
@@ -226,12 +316,8 @@ export const builtinDefExpanders: Record<string, IRDefExpander> = {
     'function':    functionExpander,
     'type_sum':    sumTypeExpander,
     'type_record': typeRecordExpander,
+    'struct':      structExpander,
 }
 
-/** Exposed for D-D-11d migrations.  The @type_sum / @enum / @type
- *  handlers in src/strata/defkinds.si call into these via
- *  `&compiler::compiler_expandSumType` / `compiler_expandTypeRecord`
- *  instead of re-implementing the variant extraction + IR construction
- *  in Silicon.  Once the new-form has full preScan + multi-IR-return
- *  support, these can be deleted in favour of pure Silicon handlers. */
-export { sumTypeExpander, typeRecordExpander }
+/** Exposed for D-D-11d migrations and the compiler_expandStruct comptime hook. */
+export { sumTypeExpander, typeRecordExpander, structExpander }
