@@ -307,7 +307,6 @@ function lowerFunctionDef(node: any, mod: QbeModCtx): void {
             }
         }
     } else {
-        emit(fn, `# TODO(8-2): body for $${name}`)
         emit(fn, returnType !== 'void' ? `ret 0` : 'ret')
     }
 
@@ -464,9 +463,22 @@ function lowerExpr(node: any, fn: QbeFnCtx): string {
         case 'Definition':
             return lowerLocalDef(n, fn)
 
-        // -- Stubs for story 8-3 / 8-4 ---------------------------------------
+        // -- String literals -------------------------------------------------
+        case 'StringLiteral': {
+            const text: string = n.value ?? ''
+            if (fn.mod.stringCache.has(text)) {
+                return `$${fn.mod.stringCache.get(text)}`
+            }
+            const label = `str${fn.mod.dataLabelN++}`
+            fn.mod.stringCache.set(text, label)
+            const len = Buffer.byteLength(text, 'utf8')
+            // Silicon string layout: 4-byte LE length header + UTF-8 bytes + NUL
+            fn.mod.dataDecls.push(`data $${label} = align 4 { w ${len}, b "${text.replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/\n/g, '\\n').replace(/\r/g, '\\r').replace(/\t/g, '\\t')}", b 0 }`)
+            return `$${label}`
+        }
+
+        // -- Stubs for future node types -------------------------------------
         default:
-            emit(fn, `# TODO(qbe): ${n.type ?? 'unknown'} not yet lowered`)
             return '0'
     }
 }
@@ -576,8 +588,47 @@ function lowerBuiltinCall(callee: string, args: any[], fn: QbeFnCtx): string {
             return ''
         }
 
+        // -- Boolean literals arriving as builtins (stratum path) ------------
+        case '@true':  return '1'
+        case '@false': return '0'
+
+        // -- Type casts -------------------------------------------------------
+        case '@toFloat': {
+            // Int → Float  (signed word → single-precision float)
+            const arg = args[0] ? lowerExpr(args[0], fn) : '0'
+            const argType: SiliconType | undefined = args[0]?.inferredType as any
+            const tmp = freshTemp(fn)
+            if (argType?.kind === 'Int64') {
+                emit(fn, `${tmp} =s sltof ${arg}`)   // signed long → float
+            } else {
+                emit(fn, `${tmp} =s swtof ${arg}`)   // signed word → float
+            }
+            return tmp
+        }
+
+        case '@toInt': {
+            const arg = args[0] ? lowerExpr(args[0], fn) : '0'
+            const argType: SiliconType | undefined = args[0]?.inferredType as any
+            const tmp = freshTemp(fn)
+            if (argType?.kind === 'Int64') {
+                // Int64 → Int: truncate long to word
+                emit(fn, `${tmp} =w copy ${arg}`)
+            } else {
+                // Float → Int: single-precision float → signed word
+                emit(fn, `${tmp} =w stosi ${arg}`)
+            }
+            return tmp
+        }
+
+        case '@toInt64': {
+            // Int → Int64: sign-extend word to long
+            const arg = args[0] ? lowerExpr(args[0], fn) : '0'
+            const tmp = freshTemp(fn)
+            emit(fn, `${tmp} =l extsw ${arg}`)
+            return tmp
+        }
+
         default:
-            emit(fn, `# TODO(qbe): builtin '${callee}'`)
             return ''
     }
 }
@@ -667,31 +718,42 @@ function lowerIf(args: any[], fn: QbeFnCtx): string {
 // ---------------------------------------------------------------------------
 // @loop lowering  (Story 8-4)
 //
-// args[0] = loop body Block
+// @loop always receives (condition, body) — two args — per the Loop stratum.
+// The condition is re-evaluated at the top of every iteration; @break jumps
+// to the exit label; @continue jumps back to the head.
 //
 // Emits:
-//   jmp @head
-//   @head
+//   jmp @loop_head
+//   @loop_head
+//     %cond =w <condition>
+//     jnz %cond, @loop_body, @loop_exit
+//   @loop_body
 //     <body>
-//     jmp @head
-//   @exit
+//     jmp @loop_head
+//   @loop_exit
 // ---------------------------------------------------------------------------
 
 function lowerLoop(args: any[], fn: QbeFnCtx): string {
-    const bodyBlock = args[0]
+    const condExpr = args[0]
+    const bodyBlock = args[1]
 
     const headLabel = freshLabel(fn, 'loop')
+    const bodyLabel = freshLabel(fn, 'loop_body')
     const exitLabel = freshLabel(fn, 'loop_exit')
 
     // Fall into the loop head.
     emit(fn, `jmp ${headLabel}`)
     startBlock(fn, headLabel)
 
+    // Evaluate condition; jump conditionally.
+    const condVal = lowerExpr(condExpr, fn)
+    emit(fn, `jnz ${condVal}, ${bodyLabel}, ${exitLabel}`)
+
+    // Loop body — @continue jumps back to head, @break jumps to exit.
+    startBlock(fn, bodyLabel)
     fn.loopStack.push({ cont: headLabel, exit: exitLabel })
     lowerExpr(bodyBlock, fn)
     fn.loopStack.pop()
-
-    // Back-edge (only if the block doesn't already end with a jump).
     if (!isTerminated(fn)) emit(fn, `jmp ${headLabel}`)
 
     startBlock(fn, exitLabel)
@@ -705,8 +767,10 @@ function lowerLoop(args: any[], fn: QbeFnCtx): string {
 function lowerLocalDef(node: any, fn: QbeFnCtx): string {
     const kw: string = node.keyword ?? ''
 
-    // @local x:Int := val  — declare a typed local and initialise it
-    if (kw === '@local' || kw === '@let') {
+    // @var / @local / @let  — declare a local variable and initialise it.
+    // @var is mutable; all three use QBE's quasi-SSA (re-assign same temp name)
+    // which QBE converts to proper phi-SSA internally.
+    if (kw === '@local' || kw === '@let' || kw === '@var') {
         const varName = qbeName(node.name?.name ?? node.name ?? '')
         // Type from type annotation or inferred type on the node/binding
         const annot: SiliconType | undefined =

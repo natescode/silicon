@@ -57,7 +57,7 @@ const BOTH_BACKENDS: string[] = [
     'if_else_expr.si',
     'if_in_block.si',
     'early_return.si',
-    // count_loop.si uses @var inside a function (QBE @var-in-fn deferred)
+    'count_loop.si',
     'var_global.si',
     'var_mutation.si',
     'local_set_fix.si',
@@ -266,15 +266,13 @@ describe('QBE IR regression snapshots — known-good function shapes', () => {
         expect(qbe).toContain('jmp')
     })
 
-    test('@loop lowers to QBE head/exit label pair', () => {
-        // Uses @local (not @var) since @var inside functions is deferred.
+    test('@loop lowers to QBE head/exit label pair with jnz condition', () => {
         const qbe = toQbeIr(
-            '@fn f := { @local n:Int := 0; &@loop n < 5, { n = n + 1; }; n };'
+            '@fn f := { @var n:Int := 0; &@loop n < 5, { n = n + 1; }; n };'
         )
-        // Loop head and exit labels must be present.
-        expect(qbe).toContain('@loop')
-        expect(qbe).toContain('@loop_exit')
-        // Must have a jump of some kind (jnz for conditional, jmp for back-edge).
-        expect(qbe).toMatch(/j(nz|mp)/)
+        expect(qbe).toContain('@loop')       // loop head
+        expect(qbe).toContain('@loop_exit')  // exit label
+        expect(qbe).toContain('jnz')         // conditional jump on condition
+        expect(qbe).toContain('jmp')         // back-edge jump
     })
 })
