@@ -1211,9 +1211,10 @@
   <p class="goal">Done: <code>.github/workflows/native-arm64.yml</code> — <code>ubuntu-24.04-arm</code> job, same pipeline as 8-9 (apt install qbe gcc, test:qbe, sgl run/build --native smoke tests).  <code>native.e2e.test.ts</code> updated with ARM64 <code>hostQbeArch</code> check ('arm64').</p>
 </details>
 
-<details class="runtime">
-  <summary><span class="id">8-11</span> macOS ARM64 (Apple Silicon) platform support + CI <span class="est">M, ~4h</span></summary>
+<details class="runtime done">
+  <summary><span class="id">8-11</span> macOS ARM64 (Apple Silicon) platform support + CI <span class="est">M, ~4h</span> ✓</summary>
   <div class="deps"><strong>Depends on:</strong> 8-9</div>
+  <p class="goal">Done: <code>.github/workflows/native-macos-arm64.yml</code> — <code>macos-14</code> runner (Apple Silicon), <code>brew install qbe</code>, Xcode clang as cc, full test:qbe suite.  e2e test updated: macOS ARM64 hostQbeArch check ('arm64') + Mach-O magic bytes check (0xCF 0xFA 0xED 0xFE).</p>
 </details>
 
 <details class="runtime">

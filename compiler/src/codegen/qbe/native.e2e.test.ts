@@ -260,6 +260,14 @@ describe('native — platform', () => {
         expect(hostQbeArch()).toBe('arm64')
     })
 
+    test('hostQbeArch returns expected value on macOS ARM64', () => {
+        if (os.platform() !== 'darwin' || os.arch() !== 'arm64') {
+            console.log('  (skipped: not macOS ARM64)')
+            return
+        }
+        expect(hostQbeArch()).toBe('arm64')
+    })
+
     test('QBE IR contains expected type for Int return', () => {
         if (SKIP) { skip(); return }
         const { typedAST, registry, functions } = compileToTyped('@fn main:Int := 42;')
@@ -281,6 +289,22 @@ describe('native — platform', () => {
             expect(bytes[1]).toBe(0x45)  // 'E'
             expect(bytes[2]).toBe(0x4c)  // 'L'
             expect(bytes[3]).toBe(0x46)  // 'F'
+        } finally { fs.rmSync(tmpDir, { recursive: true, force: true }) }
+    })
+
+    test('assembled output is Mach-O on macOS', async () => {
+        if (SKIP) { skip(); return }
+        if (os.platform() !== 'darwin') { skip('(skipped: not macOS)'); return }
+
+        const tmpDir = await fsp.mkdtemp(path.join(os.tmpdir(), 'sgl-e2e-'))
+        try {
+            const exe = await compileNative('@fn main:Int := 0;', tmpDir)
+            const bytes = await fsp.readFile(exe)
+            // 64-bit Mach-O little-endian magic: 0xCF 0xFA 0xED 0xFE
+            expect(bytes[0]).toBe(0xcf)
+            expect(bytes[1]).toBe(0xfa)
+            expect(bytes[2]).toBe(0xed)
+            expect(bytes[3]).toBe(0xfe)
         } finally { fs.rmSync(tmpDir, { recursive: true, force: true }) }
     })
 })
