@@ -22,6 +22,7 @@ import { spawnSync } from 'node:child_process'
 import parse from './parser'
 import { addToAstSemantics, type ASTNode, type Program } from './ast'
 import { compileToWat, compileToWasm, type LowerTarget } from './codegen'
+import { lowerToQbe, findQbe, invokeQbe, hostQbeArch, downloadAndBuildQbe, QBE_INSTALL_HINT } from './codegen/qbe'
 import { elaborate, buildStrataRegistry } from './elaborator'
 import { typecheck, formatTypeError } from './types'
 import { siliconGrammar } from './grammar'
@@ -45,6 +46,7 @@ Commands:
   build [file]    Compile to .wasm (default) or .wat
   run   [file]    Compile and execute via wasmtime
   check [file]    Typecheck only; print diagnostics, no output file
+  setup           Download and install the QBE native backend toolchain
   test  [file]    Run @@test-annotated functions (requires Phase 7)
   eval            Interactive REPL (requires Phase 7)
   add   <pkg>     Add a package dependency (requires package registry)
@@ -57,8 +59,9 @@ Global flags:
 
 Build / run flags:
   --wat           Emit .wat text instead of .wasm binary
+  --native        Compile via QBE to native assembly (requires qbe; see sgl setup)
   --target=<t>    Compilation target: host (default) | wasix
-  --release       Optimise (run only; reserved for Phase 8 native backend)
+  --release       Optimise (future: passed through to qbe when --native)
 
 Format flags (sgl fmt only):
   --check         Exit 1 if formatted output differs from the input file
@@ -73,7 +76,8 @@ Examples:
   sgl build src/main.si
   sgl run   src/main.si
   sgl check src/main.si
-  sgl run   --wat src/main.si
+  sgl build --native src/main.si   # QBE native backend → .s assembly
+  sgl setup                         # install qbe into ~/.sgl/bin/
 `
 
 // ---------------------------------------------------------------------------
@@ -137,6 +141,7 @@ interface CompileOptions {
     target: LowerTarget
     pretty: boolean
     wat: boolean
+    native: boolean
 }
 
 async function compileFile(
@@ -253,6 +258,13 @@ async function cmdInit(args: string[]): Promise<void> {
 
 async function cmdBuild(positional: string | undefined, opts: CompileOptions): Promise<void> {
     const entry = resolveEntry(positional, process.cwd())
+
+    // Native backend: Silicon → QBE IR → assembly via qbe
+    if (opts.native) {
+        await cmdBuildNative(entry, opts)
+        return
+    }
+
     const { wat, binary } = await compileFile(entry, opts)
 
     await fsp.writeFile('ast.json', JSON.stringify({}, null, 2))  // placeholder
@@ -265,6 +277,76 @@ async function cmdBuild(positional: string | undefined, opts: CompileOptions): P
         const outPath = path.basename(entry, '.si') + '.wasm'
         await fsp.writeFile(outPath, binary)
         console.log(`Compiled ${entry} → ${outPath} (${binary.byteLength} bytes)`)
+    }
+}
+
+/**
+ * Native build pipeline (story 8-7):
+ *   Silicon → QBE IR → assembly (.s) via qbe
+ *
+ * Story 8-8 will extend this to invoke as/ld and produce an ELF executable.
+ */
+async function cmdBuildNative(entry: string, opts: CompileOptions): Promise<void> {
+    const qbeBin = findQbe()
+    if (!qbeBin) {
+        console.error(QBE_INSTALL_HINT)
+        process.exit(1)
+    }
+
+    const rawSource = await fsp.readFile(entry, 'utf-8')
+    const entryAbs  = path.resolve(entry)
+    const { source } = resolveUses(rawSource, entryAbs)
+    const extraSources: string[] = await Promise.all(
+        opts.strataFiles.map(f => fsp.readFile(f, 'utf-8'))
+    )
+
+    function emitDiagnostics(diags: any[]): never {
+        const rendered = opts.pretty ? renderPretty(diags) : renderJson(diags)
+        process.stderr.write(rendered + '\n')
+        process.exit(1)
+    }
+
+    let match: any
+    try { match = parse(source) }
+    catch (err) { emitDiagnostics([parseDiagnostic(err as Error, entryAbs)]) }
+
+    const ast: any  = addToAstSemantics(siliconGrammar)(match).toAst()
+    const registry  = buildStrataRegistry(ast, extraSources)
+    const { program: elabAST } = elaborate(ast, registry)
+    const moduleRegistry = loadModules(path.dirname(entryAbs))
+    const { program: typedAST, errors: typeErrors, functions } =
+        typecheck(elabAST, registry, moduleRegistry)
+
+    if (typeErrors.length > 0) {
+        emitDiagnostics(typeErrors.map((e: any) => toDiagnostic(e, entryAbs)))
+    }
+
+    const qbeIr  = lowerToQbe(typedAST, registry, functions)
+    const asmOut = invokeQbe(qbeBin, qbeIr, hostQbeArch())
+
+    const outPath = path.basename(entry, '.si') + '.s'
+    await fsp.writeFile(outPath, asmOut)
+    console.log(`Compiled ${entry} → ${outPath}  (via qbe ${qbeBin})`)
+}
+
+// ---------------------------------------------------------------------------
+// sgl setup — install qbe toolchain
+// ---------------------------------------------------------------------------
+
+async function cmdSetup(): Promise<void> {
+    const existing = findQbe()
+    if (existing) {
+        console.log(`qbe already available at: ${existing}`)
+        console.log('Nothing to do.')
+        return
+    }
+    try {
+        await downloadAndBuildQbe(msg => console.log(`  ${msg}`))
+        console.log('\nsgl setup complete. Run `sgl build --native` to use the native backend.')
+    } catch (e: any) {
+        console.error(`\nsgl setup failed: ${e.message}`)
+        console.error(QBE_INSTALL_HINT)
+        process.exit(1)
     }
 }
 
@@ -438,6 +520,7 @@ const rest = argv.slice(1)
 const strataFiles: string[] = []
 let positional: string | undefined
 let emitWat = false
+let native  = false
 let target: LowerTarget = 'host'
 let pretty = false
 let fmtCheck = false
@@ -451,6 +534,8 @@ for (let i = 0; i < rest.length; i++) {
         strataFiles.push(next)
     } else if (arg === '--wat') {
         emitWat = true
+    } else if (arg === '--native') {
+        native = true
     } else if (arg === '--wasm') {
         // no-op: .wasm is default
     } else if (arg === '--pretty') {
@@ -475,12 +560,15 @@ for (let i = 0; i < rest.length; i++) {
     }
 }
 
-const opts: CompileOptions = { strataFiles, target, pretty, wat: emitWat }
+const opts: CompileOptions = { strataFiles, target, pretty, wat: emitWat, native }
 
 try {
     switch (subcommand) {
         case 'init':
             await cmdInit(rest.filter(a => !a.startsWith('-')))
+            break
+        case 'setup':
+            await cmdSetup()
             break
         case 'build':
             await cmdBuild(positional, opts)
