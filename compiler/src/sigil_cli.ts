@@ -22,7 +22,10 @@ import { spawnSync } from 'node:child_process'
 import parse from './parser'
 import { addToAstSemantics, type ASTNode, type Program } from './ast'
 import { compileToWat, compileToWasm, type LowerTarget } from './codegen'
-import { lowerToQbe, findQbe, invokeQbe, hostQbeArch, downloadAndBuildQbe, QBE_INSTALL_HINT } from './codegen/qbe'
+import {
+    lowerToQbe, findQbe, invokeQbe, hostQbeArch, downloadAndBuildQbe, QBE_INSTALL_HINT,
+    findCc, link, injectMainWrapper, defaultExePath, CC_INSTALL_HINT,
+} from './codegen/qbe'
 import { elaborate, buildStrataRegistry } from './elaborator'
 import { typecheck, formatTypeError } from './types'
 import { siliconGrammar } from './grammar'
@@ -281,18 +284,10 @@ async function cmdBuild(positional: string | undefined, opts: CompileOptions): P
 }
 
 /**
- * Native build pipeline (story 8-7):
- *   Silicon → QBE IR → assembly (.s) via qbe
- *
- * Story 8-8 will extend this to invoke as/ld and produce an ELF executable.
+ * Shared front-end: parse + elaborate + typecheck + QBE IR lowering.
+ * Returns QBE IR text with a main wrapper injected when needed.
  */
-async function cmdBuildNative(entry: string, opts: CompileOptions): Promise<void> {
-    const qbeBin = findQbe()
-    if (!qbeBin) {
-        console.error(QBE_INSTALL_HINT)
-        process.exit(1)
-    }
-
+async function compileToQbeIr(entry: string, opts: CompileOptions): Promise<string> {
     const rawSource = await fsp.readFile(entry, 'utf-8')
     const entryAbs  = path.resolve(entry)
     const { source } = resolveUses(rawSource, entryAbs)
@@ -321,12 +316,32 @@ async function cmdBuildNative(entry: string, opts: CompileOptions): Promise<void
         emitDiagnostics(typeErrors.map((e: any) => toDiagnostic(e, entryAbs)))
     }
 
-    const qbeIr  = lowerToQbe(typedAST, registry, functions)
+    return injectMainWrapper(lowerToQbe(typedAST, registry, functions))
+}
+
+/**
+ * Native build pipeline (stories 8-7 + 8-8):
+ *   Silicon → QBE IR → assembly (.s) → native executable via cc
+ */
+async function cmdBuildNative(entry: string, opts: CompileOptions): Promise<void> {
+    const qbeBin = findQbe()
+    if (!qbeBin) { console.error(QBE_INSTALL_HINT); process.exit(1) }
+    const ccBin = findCc()
+    if (!ccBin)  { console.error(CC_INSTALL_HINT);  process.exit(1) }
+
+    const qbeIr  = await compileToQbeIr(entry, opts)
     const asmOut = invokeQbe(qbeBin, qbeIr, hostQbeArch())
 
-    const outPath = path.basename(entry, '.si') + '.s'
-    await fsp.writeFile(outPath, asmOut)
-    console.log(`Compiled ${entry} → ${outPath}  (via qbe ${qbeBin})`)
+    const stem    = path.basename(entry, '.si')
+    const asmPath = stem + '.s'
+    const exePath = defaultExePath(entry)
+
+    await fsp.writeFile(asmPath, asmOut)
+    link(ccBin, asmPath, exePath)
+    // Remove the intermediate .s unless --save-temps is requested (future flag)
+    try { fs.unlinkSync(asmPath) } catch { /* best-effort */ }
+
+    console.log(`Compiled ${entry} → ${exePath}`)
 }
 
 // ---------------------------------------------------------------------------
@@ -356,6 +371,12 @@ async function cmdSetup(): Promise<void> {
 
 async function cmdRun(positional: string | undefined, opts: CompileOptions): Promise<void> {
     const entry = resolveEntry(positional, process.cwd())
+
+    // Native backend: compile to a temp executable and run it directly.
+    if (opts.native) {
+        await cmdRunNative(entry, opts)
+        return
+    }
 
     // wasix target so wasmtime can invoke _start directly
     const runOpts: CompileOptions = { ...opts, target: 'wasix', wat: true }
@@ -390,6 +411,28 @@ async function cmdRun(positional: string | undefined, opts: CompileOptions): Pro
         throw e
     } finally {
         try { fs.unlinkSync(tmp) } catch { /* best-effort cleanup */ }
+    }
+}
+
+async function cmdRunNative(entry: string, opts: CompileOptions): Promise<void> {
+    const qbeBin = findQbe()
+    if (!qbeBin) { console.error(QBE_INSTALL_HINT); process.exit(1) }
+    const ccBin = findCc()
+    if (!ccBin)  { console.error(CC_INSTALL_HINT);  process.exit(1) }
+
+    const qbeIr  = await compileToQbeIr(entry, opts)
+    const asmOut = invokeQbe(qbeBin, qbeIr, hostQbeArch())
+
+    const tmpDir  = fs.mkdtempSync(path.join(os.tmpdir(), 'sgl-run-'))
+    const asmPath = path.join(tmpDir, 'prog.s')
+    const exePath = path.join(tmpDir, os.platform() === 'win32' ? 'prog.exe' : 'prog')
+    try {
+        fs.writeFileSync(asmPath, asmOut)
+        link(ccBin, asmPath, exePath)
+        const result = spawnSync(exePath, [], { stdio: 'inherit' })
+        process.exit(result.status ?? 0)
+    } finally {
+        try { fs.rmSync(tmpDir, { recursive: true, force: true }) } catch { /* best-effort */ }
     }
 }
 
