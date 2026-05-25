@@ -75,6 +75,8 @@ interface QbeFnCtx {
     lines: string[]
     /** Current block label (written as `@label` at the start of a block). */
     currentBlock: string
+    /** Index into lines[] where the current basic block started (after the label line). */
+    blockStart: number
 
     /** Monotonically increasing temp counter: %t0, %t1, … */
     tempN: number
@@ -102,7 +104,7 @@ function freshMod(functionSigs: Map<string, FunctionSig>): QbeModCtx {
 
 function freshFn(mod: QbeModCtx, returnType: QbeReturnType): QbeFnCtx {
     return {
-        mod, lines: [], currentBlock: '@start',
+        mod, lines: [], currentBlock: '@start', blockStart: 0,
         tempN: 0, labelN: 0,
         locals: new Map(), loopStack: [], deferStack: [],
         returnType,
@@ -122,10 +124,21 @@ function emit(fn: QbeFnCtx, line: string): void {
     fn.lines.push(`\t${line}`)
 }
 
+/** True if the current basic block already ends with a terminator instruction. */
+function isTerminated(fn: QbeFnCtx): boolean {
+    for (let i = fn.lines.length - 1; i >= fn.blockStart; i--) {
+        const t = fn.lines[i].trim()
+        if (t === '' || t.startsWith('#')) continue
+        return t.startsWith('jmp') || t.startsWith('ret') || t.startsWith('jnz')
+    }
+    return false
+}
+
 /** Switch to a new basic block: record the label line then update currentBlock. */
 function startBlock(fn: QbeFnCtx, label: string): void {
     fn.lines.push(label)
     fn.currentBlock = label
+    fn.blockStart = fn.lines.length  // instructions after this index belong to the new block
 }
 
 // ---------------------------------------------------------------------------
@@ -269,7 +282,7 @@ function lowerFunctionDef(node: any, mod: QbeModCtx): void {
     const retPrefix = returnType !== 'void' ? `${returnType} ` : ''
     const header = `function ${retPrefix}$${name}(${paramStr}) {`
 
-    // Emit the entry block.
+    // Emit the entry block — startBlock records the blockStart index.
     startBlock(fn, '@start')
 
     // Lower the body expression if present; placeholder if not.
@@ -277,7 +290,7 @@ function lowerFunctionDef(node: any, mod: QbeModCtx): void {
     const bodyExpr = node.binding?.expression ?? node.body ?? null
     if (bodyExpr) {
         const trailing = lowerExpr(bodyExpr, fn)
-        if (!fn.lines.some(l => l.trim().startsWith('ret'))) {
+        if (!isTerminated(fn)) {
             if (returnType !== 'void' && trailing) {
                 emit(fn, `ret ${trailing}`)
             } else {
@@ -392,23 +405,27 @@ function lowerExpr(node: any, fn: QbeFnCtx): string {
 
         // -- Block -----------------------------------------------------------
         case 'Block': {
-            const stmts: any[] = n.statements ?? n.stmts ?? []
+            const stmts: any[] = n.items ?? n.statements ?? n.stmts ?? []
             for (const s of stmts) lowerExpr(s, fn)
-            const trail = n.expression ?? n.trailing ?? n.result
+            const trail = n.trailing ?? n.expression ?? n.result
             return trail ? lowerExpr(trail, fn) : ''
         }
 
-        // -- Assignment (x := val) ------------------------------------------
+        // -- Assignment (x = val) -------------------------------------------
+        // Parser produces target as a Namespace node, not a plain name field.
         case 'Assignment': {
-            const varName = qbeName(n.name?.name ?? n.name ?? '')
+            const targetNode = n.target ?? n.name
+            const varName = qbeName(
+                Array.isArray(targetNode?.path)
+                    ? (targetNode.path as string[])[0] ?? ''
+                    : targetNode?.name ?? targetNode ?? ''
+            )
             const val = lowerExpr(n.value, fn)
             const qt = fn.locals.get(varName) ?? fn.mod.globalTypes.get(varName) ?? 'w'
-            if (fn.locals.has(varName)) {
-                emit(fn, `%${varName} =${qt} copy ${val}`)
-            } else if (fn.mod.globalTypes.has(varName)) {
+            if (fn.mod.globalTypes.has(varName)) {
                 emit(fn, `store${qt} ${val}, $${varName}`)
             } else {
-                // First assignment — infer type and register as local
+                // Registers local on first assignment if not already declared.
                 fn.locals.set(varName, qt)
                 emit(fn, `%${varName} =${qt} copy ${val}`)
             }
@@ -475,31 +492,79 @@ function lowerBinaryOp(node: any, fn: QbeFnCtx): string {
 }
 
 // ---------------------------------------------------------------------------
-// Function call lowering  (Story 8-3 scaffold)
+// Function call lowering  (Story 8-3)
 // ---------------------------------------------------------------------------
 
 function lowerFunctionCall(node: any, fn: QbeFnCtx): string {
-    const callee: string = qbeName(node.callee?.name ?? node.name ?? '')
+    // Callee is a Namespace node { path: ['name'] } or a plain string.
+    const nameNode = node.name ?? node.callee
+    const callee: string =
+        Array.isArray(nameNode?.path)
+            ? qbeName((nameNode.path as string[])[0] ?? '')
+            : qbeName(typeof nameNode === 'string' ? nameNode : (nameNode?.name ?? ''))
+
     const args: any[] = node.args ?? node.arguments ?? []
-    return lowerCall(callee, args, fn)
+
+    // Builtin keywords that map to QBE control instructions.
+    if (node.isBuiltin) return lowerBuiltinCall(callee, args, fn)
+
+    return lowerCall(callee, args, fn, node)
 }
 
-function lowerCall(callee: string, args: any[], fn: QbeFnCtx): string {
+function lowerBuiltinCall(callee: string, args: any[], fn: QbeFnCtx): string {
+    switch (callee) {
+        case '@return': {
+            if (args.length > 0) {
+                const val = lowerExpr(args[0], fn)
+                emit(fn, `ret ${val}`)
+            } else {
+                emit(fn, 'ret')
+            }
+            return ''
+        }
+
+        case '@if':
+            return lowerIf(args, fn)
+
+        case '@loop':
+            return lowerLoop(args, fn)
+
+        case '@break': {
+            const top = fn.loopStack[fn.loopStack.length - 1]
+            if (top) emit(fn, `jmp ${top.exit}`)
+            else emit(fn, '# @break outside loop')
+            return ''
+        }
+
+        case '@continue': {
+            const top = fn.loopStack[fn.loopStack.length - 1]
+            if (top) emit(fn, `jmp ${top.cont}`)
+            else emit(fn, '# @continue outside loop')
+            return ''
+        }
+
+        default:
+            emit(fn, `# TODO(qbe): builtin '${callee}'`)
+            return ''
+    }
+}
+
+function lowerCall(callee: string, args: any[], fn: QbeFnCtx, callNode?: any): string {
     const argVals = args.map(a => lowerExpr(a, fn))
 
     // Build typed argument list for QBE: `w %x`, `s s_1.0`, …
     const typedArgs = argVals.map((v, i) => {
-        const argNode = args[i]
-        const argType: SiliconType | undefined = argNode?.inferredType as any
-        const qt = siliconTypeToQbe(argType)
-        return `${qt} ${v}`
+        const argType: SiliconType | undefined = args[i]?.inferredType as any
+        return `${siliconTypeToQbe(argType)} ${v}`
     }).join(', ')
 
-    // Determine the return type from the function signature table.
+    // Return type: prefer the typechecker's function sig, fall back to the
+    // call site's inferred type (populated by the typechecker for all calls).
     const sig = fn.mod.functionSigs.get(callee)
+    const callSiteType: SiliconType | undefined = callNode?.inferredType as any
     const retType: QbeReturnType = sig
         ? siliconTypeToQbeReturn(sig.result)
-        : 'void'
+        : siliconTypeToQbeReturn(callSiteType)
 
     if (retType === 'void') {
         emit(fn, `call $${callee}(${typedArgs})`)
@@ -508,6 +573,96 @@ function lowerCall(callee: string, args: any[], fn: QbeFnCtx): string {
     const tmp = freshTemp(fn)
     emit(fn, `${tmp} =${retType} call $${callee}(${typedArgs})`)
     return tmp
+}
+
+// ---------------------------------------------------------------------------
+// @if lowering  (Story 8-4)
+//
+// args[0] = condition expr
+// args[1] = then-Block
+// args[2] = else-Block (optional)
+//
+// Value-returning @if (used in expression position) emits phi at merge.
+// Statement-level @if (result discarded) avoids the phi overhead.
+// ---------------------------------------------------------------------------
+
+function lowerIf(args: any[], fn: QbeFnCtx): string {
+    const cond      = args[0]
+    const thenBlock = args[1]
+    const elseBlock = args[2]
+
+    const hasElse = !!elseBlock
+
+    const condVal = lowerExpr(cond, fn)
+
+    const thenLabel  = freshLabel(fn, 'then')
+    const elseLabel  = hasElse ? freshLabel(fn, 'else') : ''
+    const mergeLabel = freshLabel(fn, 'end')
+
+    emit(fn, `jnz ${condVal}, ${thenLabel}, ${hasElse ? elseLabel : mergeLabel}`)
+
+    // Then arm
+    startBlock(fn, thenLabel)
+    const thenVal = lowerExpr(thenBlock, fn)
+    const thenExit = fn.currentBlock
+    if (!isTerminated(fn)) emit(fn, `jmp ${mergeLabel}`)
+
+    // Else arm (if present)
+    let elseVal = ''
+    let elseExit = ''
+    if (hasElse) {
+        startBlock(fn, elseLabel)
+        elseVal = lowerExpr(elseBlock, fn)
+        elseExit = fn.currentBlock
+        if (!isTerminated(fn)) emit(fn, `jmp ${mergeLabel}`)
+    }
+
+    startBlock(fn, mergeLabel)
+
+    // Emit phi if both arms produced a value and we're in expression position.
+    if (hasElse && thenVal && elseVal && thenVal !== '' && elseVal !== '') {
+        const resultType: SiliconType | undefined = thenBlock?.inferredType as any
+        const qt = siliconTypeToQbe(resultType)
+        const tmp = freshTemp(fn)
+        emit(fn, `${tmp} =${qt} phi ${thenExit} ${thenVal}, ${elseExit} ${elseVal}`)
+        return tmp
+    }
+
+    return ''
+}
+
+// ---------------------------------------------------------------------------
+// @loop lowering  (Story 8-4)
+//
+// args[0] = loop body Block
+//
+// Emits:
+//   jmp @head
+//   @head
+//     <body>
+//     jmp @head
+//   @exit
+// ---------------------------------------------------------------------------
+
+function lowerLoop(args: any[], fn: QbeFnCtx): string {
+    const bodyBlock = args[0]
+
+    const headLabel = freshLabel(fn, 'loop')
+    const exitLabel = freshLabel(fn, 'loop_exit')
+
+    // Fall into the loop head.
+    emit(fn, `jmp ${headLabel}`)
+    startBlock(fn, headLabel)
+
+    fn.loopStack.push({ cont: headLabel, exit: exitLabel })
+    lowerExpr(bodyBlock, fn)
+    fn.loopStack.pop()
+
+    // Back-edge (only if the block doesn't already end with a jump).
+    if (!isTerminated(fn)) emit(fn, `jmp ${headLabel}`)
+
+    startBlock(fn, exitLabel)
+    return ''
 }
 
 // ---------------------------------------------------------------------------
@@ -520,23 +675,16 @@ function lowerLocalDef(node: any, fn: QbeFnCtx): string {
     // @local x:Int := val  — declare a typed local and initialise it
     if (kw === '@local' || kw === '@let') {
         const varName = qbeName(node.name?.name ?? node.name ?? '')
-        const typeAnnot: SiliconType | undefined = node.body?.inferredType as any
-        const qt = siliconTypeToQbe(typeAnnot)
+        // Type from type annotation or inferred type on the node/binding
+        const annot: SiliconType | undefined =
+            (node.inferredType as SiliconType | undefined) ??
+            (node.binding?.expression?.inferredType as SiliconType | undefined)
+        const qt = siliconTypeToQbe(annot)
         fn.locals.set(varName, qt)
-        if (node.body) {
-            const val = lowerExpr(node.body, fn)
+        const bodyExpr = node.binding?.expression ?? node.body ?? null
+        if (bodyExpr) {
+            const val = lowerExpr(bodyExpr, fn)
             emit(fn, `%${varName} =${qt} copy ${val}`)
-        }
-        return ''
-    }
-
-    // @return expr
-    if (kw === '@return') {
-        if (node.body) {
-            const val = lowerExpr(node.body, fn)
-            emit(fn, `ret ${val}`)
-        } else {
-            emit(fn, 'ret')
         }
         return ''
     }

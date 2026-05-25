@@ -217,3 +217,148 @@ describe('lowerToQbe — binary arithmetic', () => {
         expect(instrCount).toBeGreaterThanOrEqual(2)
     })
 })
+
+// ---------------------------------------------------------------------------
+// Call lowering  (Story 8-3)
+// ---------------------------------------------------------------------------
+
+describe('lowerToQbe — function calls', () => {
+    test('user function call emits QBE call instruction', () => {
+        const out = toQbe(`
+            @fn add:Int a:Int, b:Int := a + b;
+            @fn main:Int := &add 1, 2;
+        `)
+        expect(out).toContain('call $add(')
+    })
+
+    test('user function call result stored in temp', () => {
+        const out = toQbe(`
+            @fn double:Int x:Int := x + x;
+            @fn main:Int := &double 5;
+        `)
+        expect(out).toMatch(/%t\d+ =w call \$double/)
+    })
+
+    test('extern function call emits QBE call instruction', () => {
+        const out = toQbe(`
+            @extern write:Int fd:Int, buf:Int, len:Int;
+            @fn f:Int := &write 1, 2, 3;
+        `)
+        expect(out).toContain('call $write(')
+    })
+
+    test('void function call emits call without assignment', () => {
+        const out = toQbe(`
+            @fn noop := {};
+            @fn caller := { &noop; };
+        `)
+        // void call — no assignment, just bare call
+        expect(out).toMatch(/\tcall \$noop\(\)/)
+    })
+
+    test('call with typed args emits correct types', () => {
+        const out = toQbe(`
+            @fn add:Int a:Int, b:Int := a + b;
+            @fn main:Int := &add 10, 20;
+        `)
+        expect(out).toContain('w 10')
+        expect(out).toContain('w 20')
+    })
+})
+
+describe('lowerToQbe — @return', () => {
+    test('@return in function body emits ret instruction', () => {
+        const out = toQbe(`@fn f:Int x:Int := { &@return x; x };`)
+        expect(out).toContain('ret %x')
+    })
+
+    test('@return with literal emits ret literal', () => {
+        const out = toQbe(`@fn zero:Int := { &@return 0; 1 };`)
+        expect(out).toContain('ret 0')
+    })
+
+    test('early @return stops at first ret, trailing expr also has ret', () => {
+        const out = toQbe(`@fn f:Int x:Int := { &@return 0; x };`)
+        // At least one ret 0 appears
+        expect(out).toContain('ret 0')
+    })
+})
+
+// ---------------------------------------------------------------------------
+// Control flow  (Story 8-4)
+// ---------------------------------------------------------------------------
+
+describe('lowerToQbe — @local variable declarations', () => {
+    test('@local Int declaration emits copy instruction', () => {
+        const out = toQbe(`@fn f:Int := { @local x:Int := 5; x };`)
+        expect(out).toContain('=w copy 5')
+    })
+
+    test('@local variable is readable after declaration', () => {
+        const out = toQbe(`@fn f:Int := { @local x:Int := 42; x };`)
+        expect(out).toContain('ret %x')
+    })
+
+    test('assignment to local emits copy', () => {
+        const out = toQbe(`@fn f:Int := { @local x:Int := 0; x = 7; x };`)
+        expect(out).toContain('=w copy 7')
+    })
+})
+
+describe('lowerToQbe — @if', () => {
+    test('@if with no else emits jnz + block labels', () => {
+        const out = toQbe(`@fn f := { @local x:Int := 0; &@if x == 0, { x = 1 }; };`)
+        expect(out).toContain('jnz')
+        expect(out).toMatch(/@\w+/)
+    })
+
+    test('@if with else emits two branches', () => {
+        const out = toQbe(`@fn abs:Int x:Int := &@if x < 0, { 0 - x }, { x };`)
+        // Both 0 - x and the else branch should appear
+        expect(out).toContain('jnz')
+        // Two block labels: then + else
+        const labels = (out.match(/^@\w+/gm) ?? []).filter(l => l !== '@start')
+        expect(labels.length).toBeGreaterThanOrEqual(2)
+    })
+
+    test('@if condition uses the correct comparison instruction', () => {
+        const out = toQbe(`@fn f:Int x:Int := &@if x == 0, { 1 }, { 0 };`)
+        expect(out).toContain('ceqw')
+        expect(out).toContain('jnz')
+    })
+
+    test('@if result is returned from function', () => {
+        const out = toQbe(`@fn sign:Int x:Int := &@if x < 0, { 0 - 1 }, { 1 };`)
+        expect(out).toContain('ret')
+    })
+})
+
+describe('lowerToQbe — @loop / @break', () => {
+    test('@loop emits a loop head block', () => {
+        const out = toQbe(`@fn f := { &@loop { &@break }; };`)
+        // Must have at least two labels: the loop head + exit
+        const labels = (out.match(/^@\w+/gm) ?? []).filter(l => l !== '@start')
+        expect(labels.length).toBeGreaterThanOrEqual(2)
+    })
+
+    test('@break emits a jump to the loop exit label', () => {
+        const out = toQbe(`@fn f := { &@loop { &@break }; };`)
+        // A jmp instruction that targets a loop exit label must appear
+        expect(out).toMatch(/jmp @\w+/)
+    })
+
+    test('loop body executes until @break', () => {
+        const out = toQbe(`
+            @fn count:Int := {
+                @local i:Int := 0;
+                &@loop {
+                    i = i + 1;
+                    &@if i == 3, { &@break };
+                };
+                i
+            };
+        `)
+        expect(out).toContain('jnz')
+        expect(out).toMatch(/jmp @\w+/)
+    })
+})
