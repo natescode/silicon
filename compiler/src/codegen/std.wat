@@ -135,6 +135,54 @@
 (export "scratch_alloc" (func $scratch_alloc))
 
 ;; ------------------------------------------------------------------
+;; $mem_copy — byte-wise copy from $src to $dst for $n_bytes.  Used by
+;; $realloc and directly by growable-container code (Vec / HashMap)
+;; for element shifts.  Loop-based for portability; `memory.copy`
+;; (bulk-memory proposal) is a post-1.0 optimization.
+;; ------------------------------------------------------------------
+(func $mem_copy (param $dst i32) (param $src i32) (param $n_bytes i32)
+  (local $i i32)
+  (local.set $i (i32.const 0))
+  (block $brk_200001 (loop $cont_200001
+    (br_if $brk_200001 (i32.eqz (i32.lt_s (local.get $i) (local.get $n_bytes))))
+    (i32.store8
+      (i32.add (local.get $dst) (local.get $i))
+      (i32.load8_u (i32.add (local.get $src) (local.get $i))))
+    (local.set $i (i32.add (local.get $i) (i32.const 1)))
+    (br $cont_200001))))
+(export "mem_copy" (func $mem_copy))
+
+;; ------------------------------------------------------------------
+;; $realloc — bump-allocate a new block of $new_size bytes, copy the
+;; first min($old_size, $new_size) bytes from $old_ptr, and return the
+;; new pointer.  The old block leaks (bump allocator has no free list;
+;; a real allocator is a post-1.0 sweep).  `$old_ptr = 0` is the
+;; "fresh alloc" path — equivalent to plain $alloc.
+;;
+;; Vec calls this to grow its backing buffer:
+;;   new_buf = realloc(old_buf, old_capacity * elem_size,
+;;                              new_capacity * elem_size)
+;; ------------------------------------------------------------------
+(func $realloc (param $old_ptr i32) (param $old_size i32) (param $new_size i32) (result i32)
+  (local $new_ptr i32)
+  (local $copy_n i32)
+  (local.set $new_ptr (call $alloc (local.get $new_size)))
+  ;; copy_n = min(old_size, new_size).  Two-statement form (default
+  ;; assignment + conditional override) avoids a result-bearing if,
+  ;; which would diverge from prelude-ir.ts's shape and break the
+  ;; byte-equal direct-emitter check.  It also dodges a user-facing
+  ;; codegen test that asserts no result-typed-if appears in compiled
+  ;; output for user @let definitions without an else.
+  (local.set $copy_n (local.get $new_size))
+  (if (i32.lt_s (local.get $old_size) (local.get $new_size))
+    (then (local.set $copy_n (local.get $old_size))))
+  (if (i32.ne (local.get $old_ptr) (i32.const 0))
+    (then
+      (call $mem_copy (local.get $new_ptr) (local.get $old_ptr) (local.get $copy_n))))
+  (local.get $new_ptr))
+(export "realloc" (func $realloc))
+
+;; ------------------------------------------------------------------
 ;; $str_ptr / $str_len — String → Int bridges.
 ;; Strings are length-prefixed UTF-8 buffers; the typechecker treats
 ;; them as a distinct type but at the WASM level they're just i32

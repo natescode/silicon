@@ -165,6 +165,79 @@ function buildScratchAlloc(): IRFunction {
     return fn('scratch_alloc', [['n', i32]], i32, [], body)
 }
 
+// ── Phase 5 Workstream A — allocator primitives for growable containers ──
+//
+// `mem_copy` is a byte-wise copy: `dst = src` for `n_bytes`.  Used by
+// `realloc` (below) and directly by Vec/HashMap implementations that need
+// to shift elements (e.g. vec_insert / vec_remove).  Loop-based for
+// portability; a `memory.copy` (bulk-memory proposal) variant is a
+// post-1.0 optimization.
+function buildMemCopy(): IRFunction {
+    const LOOP_ID = 200001
+    const body = vblock(
+        ls('i', c(0)),
+        stmtExpr(loop(LOOP_ID,
+            binop('i32.lt_s', lg('i'), lg('n_bytes')),
+            vblock(
+                stmtExpr(instr2('i32.store8', void_,
+                    binop('i32.add', lg('dst'), lg('i')),
+                    instr1('i32.load8_u', i32,
+                        binop('i32.add', lg('src'), lg('i'))))),
+                ls('i', binop('i32.add', lg('i'), c(1))),
+            ),
+        )),
+    )
+    return fn('mem_copy',
+        [['dst', i32], ['src', i32], ['n_bytes', i32]],
+        void_,
+        [['i', i32]],
+        body)
+}
+
+// `realloc(old_ptr, old_size, new_size)` — bump-allocate a new block of
+// `new_size` bytes, byte-copy the first `min(old_size, new_size)` bytes
+// from the old block, return the new pointer.  The old block is
+// abandoned (the bump allocator has no free list, so its memory is
+// permanently lost — acceptable for 1.0; a real free-list allocator is
+// a post-1.0 sweep).
+//
+// Used by Vec to grow its backing buffer when capacity is exhausted:
+//
+//   new_buf = realloc(old_buf, old_capacity * elem_size,
+//                              new_capacity * elem_size)
+//
+// `old_size = 0` is the "fresh alloc" path — equivalent to plain alloc.
+function buildRealloc(): IRFunction {
+    const newPtr = lg('new_ptr')
+    const copyN = lg('copy_n')
+    const body = block([
+        // Allocate the new block first.
+        ls('new_ptr', ucall('alloc', i32, lg('new_size'))),
+        // copy_n = min(old_size, new_size).  Two-statement form (default
+        // assignment + conditional override) avoids a result-bearing if,
+        // which would diverge from the parallel std.wat shape (breaking
+        // the byte-equal direct-emitter check) and trip a user-facing
+        // codegen test that asserts user @let definitions without an
+        // else don't emit a result-typed-if.
+        ls('copy_n', lg('new_size')),
+        stmtExpr(iif(
+            binop('i32.lt_s', lg('old_size'), lg('new_size')),
+            vblock(ls('copy_n', lg('old_size'))),
+        )),
+        // mem_copy(new_ptr, old_ptr, copy_n) — but only if old_ptr is
+        // non-zero (sentinel for "no previous block").
+        stmtExpr(iif(
+            binop('i32.ne', lg('old_ptr'), c(0)),
+            vblock(stmtExpr(ucall('mem_copy', void_, newPtr, lg('old_ptr'), copyN))),
+        )),
+    ], newPtr)
+    return fn('realloc',
+        [['old_ptr', i32], ['old_size', i32], ['new_size', i32]],
+        i32,
+        [['new_ptr', i32], ['copy_n', i32]],
+        body)
+}
+
 function buildStrPtr(): IRFunction {
     return fn('str_ptr', [['s', i32]], i32, [], lg('s'))
 }
@@ -322,6 +395,8 @@ export function buildPrelude(heapBase: number, includeHostIO: boolean): PreludeS
         buildAllocArray(),
         buildAllocString(),
         buildScratchAlloc(),
+        buildMemCopy(),
+        buildRealloc(),
         buildStrPtr(),
         buildStrLen(),
         buildHeapGet(),
@@ -344,6 +419,8 @@ export function buildPrelude(heapBase: number, includeHostIO: boolean): PreludeS
     const funcExports: IRExport[] = [
         { kind: 'Export', alias: 'alloc',         internalName: 'alloc',         what: 'func' },
         { kind: 'Export', alias: 'scratch_alloc', internalName: 'scratch_alloc', what: 'func' },
+        { kind: 'Export', alias: 'mem_copy',      internalName: 'mem_copy',      what: 'func' },
+        { kind: 'Export', alias: 'realloc',       internalName: 'realloc',       what: 'func' },
     ]
 
     return { imports, globals, functions, funcExports, memoryPages: 1 }
