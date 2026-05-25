@@ -997,14 +997,13 @@
 <details class="stdlib complete">
   <summary><span class="id">5a-2</span> @generic Result + @try shorthand <span class="done">✅</span> <span class="est">M, ~4h</span></summary>
   <div class="deps"><strong>Depends on:</strong> 5a-1</div>
-  <p class="goal"><code>src/stdlib/result.si</code> declares <code>@type Result[T, E] := $Ok value:T | $Err error:E;</code>.  Variant constructors <code>&amp;Ok</code> / <code>&amp;Err</code> work in any expression position; consumers pattern-match directly via <code>&amp;@match r, $Ok v =&gt; v, $Err _e =&gt; 0</code>.  4 new tests cover the type declaration, constructor inference, match-based consumption, and Option+Result coexistence.</p>
-  <p style="color: var(--accent4); font-size: 0.85rem;"><strong>Grammar limitation surfaced.</strong>  Multi-arg type annotations (<code>:Result[T, E]</code> in return-type / let-binding position) get mis-parsed: the PEG parser backtracks the <code>[T, E]</code> past the annotation slot and consumes it as the function's <code>GenericParams</code>, leaving the annotation with bare <code>typename: 'Result'</code> and no <code>typeArgs</code>.  Workaround: don't annotate the binding; let inference flow from constructor args.  Lifting the limitation requires a lookahead-aware grammar refactor — blocked on <code>CLAUDE.md</code>'s no-grammar-changes rule and tracked as part of 5a-3.</p>
+  <p class="goal"><code>src/stdlib/result.si</code> declares <code>@type Result[T, E] := $Ok value:T | $Err error:E;</code> plus two helpers: <code>result_unwrap_or[T, E] r:Result[T, E], dflt:T</code> and <code>result_is_ok[T, E] r:Result[T, E]</code>.  Multi-arg type annotations in parameter position were initially deferred when surface bug hit; the Phase 5 grammar revision fixed the underlying PEG-backtracking issue (<code>typeArgs</code> rule now tolerates whitespace), so the helpers landed cleanly afterward.  6 new tests cover the type declaration, constructor inference, match-based consumption, the two helpers, and Option+Result coexistence.</p>
 </details>
 
 <details class="stdlib">
   <summary><span class="id">5a-3</span> ? unwrap shorthand for Result / Option <span class="est">M, ~3h</span></summary>
   <div class="deps"><strong>Depends on:</strong> 5a-2</div>
-  <p style="color: var(--muted); font-style: italic;">Deferred — needs an <code>on::callSite</code> stratum that desugars to <code>&amp;@match</code> in expression position, plus the lookahead-aware grammar refactor noted in 5a-2.  Both are individually larger than the single-session budget here.</p>
+  <p style="color: var(--muted); font-style: italic;">Deferred — needs an <code>on::callSite</code> stratum that desugars to <code>&amp;@match</code> in expression position.  (The multi-arg-typeArgs grammar fix that this depended on landed in the Phase 5 grammar revision; only the callSite-stratum implementation remains.)</p>
 </details>
 
 <details class="stdlib">

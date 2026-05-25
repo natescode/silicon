@@ -106,8 +106,6 @@ describe('Phase 5a-2: Result stdlib', () => {
         // Without an explicit type annotation on the binding the inferred
         // type is `Result[Int, ?E]` for &Ok 42 — the constructor is
         // polymorphic in E since &Ok doesn't carry the error type.
-        // This proves the variant constructors lower correctly even when
-        // the annotation-position multi-arg limitation prevents pinning.
         const { errors } = await compile(`${resultSrc}
             @fn pick:Int := {
                 @local r := &Ok 42;
@@ -115,6 +113,23 @@ describe('Phase 5a-2: Result stdlib', () => {
                     $Ok v   => v,
                     $Err _e => 0
             };
+        `)
+        expect(errors.length).toBe(0)
+    })
+
+    test('result_unwrap_or takes Result[T, E] as a parameter (multi-arg grammar fix)', async () => {
+        // This call exercises the previously-blocked path: a function whose
+        // parameter is `:Result[T, E]`.  Before the Phase 5 grammar
+        // revision the parser silently lost the `[T, E]` to GenericParams.
+        const { errors } = await compile(`${resultSrc}
+            @fn pick:Int := &result_unwrap_or (&Ok 42), 0;
+        `)
+        expect(errors.length).toBe(0)
+    })
+
+    test('result_is_ok returns Bool from a Result[T, E] parameter', async () => {
+        const { errors } = await compile(`${resultSrc}
+            @fn check:Bool := &result_is_ok (&Ok 42);
         `)
         expect(errors.length).toBe(0)
     })
