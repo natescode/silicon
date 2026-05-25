@@ -995,15 +995,16 @@
 </details>
 
 <details class="stdlib complete">
-  <summary><span class="id">5a-2</span> @generic Result + @try shorthand <span class="done">✅</span> <span class="est">M, ~4h</span></summary>
+  <summary><span class="id">5a-2</span> @generic Result + helpers <span class="done">✅</span> <span class="est">M, ~4h</span></summary>
   <div class="deps"><strong>Depends on:</strong> 5a-1</div>
-  <p class="goal"><code>src/stdlib/result.si</code> declares <code>@type Result[T, E] := $Ok value:T | $Err error:E;</code> plus two helpers: <code>result_unwrap_or[T, E] r:Result[T, E], dflt:T</code> and <code>result_is_ok[T, E] r:Result[T, E]</code>.  Multi-arg type annotations in parameter position were initially deferred when surface bug hit; the Phase 5 grammar revision fixed the underlying PEG-backtracking issue (<code>typeArgs</code> rule now tolerates whitespace), so the helpers landed cleanly afterward.  6 new tests cover the type declaration, constructor inference, match-based consumption, the two helpers, and Option+Result coexistence.</p>
+  <p class="goal"><code>src/stdlib/result.si</code> declares <code>@type Result[T, E] := $Ok value:T | $Err error:E;</code> plus two helpers: <code>result_unwrap_or[T, E] r:Result[T, E], dflt:T</code> and <code>result_is_ok[T, E] r:Result[T, E]</code>.  Multi-arg type annotations in parameter position were initially deferred when the surface bug hit; the Phase 5 grammar revision fixed the underlying PEG-backtracking issue (<code>typeArgs</code> rule now tolerates whitespace), so the helpers landed cleanly afterward.  6 new tests cover the type declaration, constructor inference, match-based consumption, the two helpers, and Option+Result coexistence.</p>
+  <p style="color: var(--muted); font-size: 0.85rem;"><strong>Scope note.</strong>  The <code>@try</code> shorthand originally bundled into this story migrated to <a href="#phase-5">5a-3</a> alongside the <code>?</code> operator — both are <code>on::callSite</code> desugarings to <code>&amp;@match</code> and share the same implementation path.</p>
 </details>
 
 <details class="stdlib">
-  <summary><span class="id">5a-3</span> ? unwrap shorthand for Result / Option <span class="est">M, ~3h</span></summary>
+  <summary><span class="id">5a-3</span> <code>?</code> / <code>@try</code> unwrap shorthand for Result and Option <span class="est">M, ~3h</span></summary>
   <div class="deps"><strong>Depends on:</strong> 5a-2</div>
-  <p style="color: var(--muted); font-style: italic;">Deferred — needs an <code>on::callSite</code> stratum that desugars to <code>&amp;@match</code> in expression position.  (The multi-arg-typeArgs grammar fix that this depended on landed in the Phase 5 grammar revision; only the callSite-stratum implementation remains.)</p>
+  <p style="color: var(--muted); font-style: italic;">Deferred — both <code>?</code> (postfix operator) and <code>@try</code> (expression keyword) desugar to <code>&amp;@match r, $Ok v =&gt; v, $Err e =&gt; (&amp;@return (&amp;Err e))</code> via an <code>on::callSite</code> stratum that rewrites the call AST in expression position.  The multi-arg-typeArgs grammar fix this depended on landed in the Phase 5 grammar revision; only the callSite-stratum implementation remains.</p>
 </details>
 
 <details class="stdlib">
@@ -1730,10 +1731,14 @@
   <br/><br/>
   <strong>Where the revised effort comes from.</strong>  Velocity on
   shipped work (Phases 0, 0.5, 1, 2, 4 + the Phase 3 sprint + the
-  type-system half of Phase 5) ran ~5× the original per-story estimate,
-  driven by: (a) src/ shipping first as the executable spec for boot/
-  ports, (b) tight build-and-byte-equal feedback loops, (c) small
-  per-commit slices with the test extension inline.  Genuinely novel work — the Phase 7 Silicon interpreter, the
+  shipped third of Phase 5 — stdlib types, unsigned ints, and
+  <code>$fn</code> surface annotation) ran ~5× the original per-story
+  estimate, driven by: (a) src/ shipping first as the executable spec
+  for boot/ ports, (b) tight build-and-byte-equal feedback loops,
+  (c) small per-commit slices with the test extension inline,
+  (d) the Phase 5 grammar revision retired two long-standing surface
+  ambiguities (multi-arg typeArgs whitespace, function-type
+  annotation), unblocking helpers that had been deferred.  Genuinely novel work — the Phase 7 Silicon interpreter, the
   Phase 8 QBE backend — won't see that multiplier; their revised
   effort is ~1.5× the original, not 5×.
   <br/><br/>
