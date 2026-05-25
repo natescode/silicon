@@ -1179,13 +1179,15 @@
   <p class="done-note">✓ @defer LIFO cleanup at all ret sites (early @return + trailing). 74 total tests. End-to-end: safe_div, clamp, quad.</p>
 </details>
 
-<details class="runtime">
+<details class="runtime done">
   <summary><span class="id">8-7</span> Bundle QBE binary inside sgl <span class="est">M, ~3h</span></summary>
+  <p class="done-note">✓ backend.ts: findQbe/requireQbe/invokeQbe/hostQbeArch/downloadAndBuildQbe. sgl build --native → .s; sgl setup downloads+builds qbe into ~/.sgl/bin/. 15 unit tests.</p>
 </details>
 
-<details class="runtime">
+<details class="runtime done">
   <summary><span class="id">8-8</span> Invoke as/ld pipeline; produce executable <span class="est">M, ~4h</span></summary>
   <div class="deps"><strong>Depends on:</strong> 8-6, 8-7</div>
+  <p class="done-note">✓ linker.ts: findCc/link/hasQbeMain/injectMainWrapper/defaultExePath. sgl build --native → executable (qbe+cc pipeline, .s removed). sgl run --native → temp compile+exec. 19 unit + 2 integration tests.</p>
 </details>
 
 <details class="runtime">
