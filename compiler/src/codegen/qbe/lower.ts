@@ -124,6 +124,13 @@ function emit(fn: QbeFnCtx, line: string): void {
     fn.lines.push(`\t${line}`)
 }
 
+/** Emit all deferred cleanup expressions in LIFO order (last-in, first-out). */
+function emitDeferred(fn: QbeFnCtx): void {
+    for (let i = fn.deferStack.length - 1; i >= 0; i--) {
+        fn.deferStack[i]()
+    }
+}
+
 /** True if the current basic block already ends with a terminator instruction. */
 function isTerminated(fn: QbeFnCtx): boolean {
     for (let i = fn.lines.length - 1; i >= fn.blockStart; i--) {
@@ -292,6 +299,7 @@ function lowerFunctionDef(node: any, mod: QbeModCtx): void {
     if (bodyExpr) {
         const trailing = lowerExpr(bodyExpr, fn)
         if (!isTerminated(fn)) {
+            emitDeferred(fn)
             if (returnType !== 'void' && trailing) {
                 emit(fn, `ret ${trailing}`)
             } else {
@@ -534,12 +542,17 @@ function lowerFunctionCall(node: any, fn: QbeFnCtx): string {
 function lowerBuiltinCall(callee: string, args: any[], fn: QbeFnCtx): string {
     switch (callee) {
         case '@return': {
-            if (args.length > 0) {
-                const val = lowerExpr(args[0], fn)
-                emit(fn, `ret ${val}`)
-            } else {
-                emit(fn, 'ret')
-            }
+            const val = args.length > 0 ? lowerExpr(args[0], fn) : ''
+            emitDeferred(fn)
+            if (val) emit(fn, `ret ${val}`)
+            else     emit(fn, 'ret')
+            return ''
+        }
+
+        case '@defer': {
+            // Capture the deferred expression; run it LIFO at every ret site.
+            const deferredExpr = args[0]
+            fn.deferStack.push(() => { lowerExpr(deferredExpr, fn) })
             return ''
         }
 

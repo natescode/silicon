@@ -399,3 +399,93 @@ describe('lowerToQbe — @loop / @break', () => {
         expect(out).toMatch(/jmp @\w+/)
     })
 })
+
+// ---------------------------------------------------------------------------
+// @defer  (Story 8-6)
+// ---------------------------------------------------------------------------
+
+describe('lowerToQbe — @defer', () => {
+    test('@defer cleanup runs before normal function return', () => {
+        const out = toQbe(`
+            @extern cleanup:Int h:Int;
+            @fn f:Int h:Int := {
+                &@defer &cleanup h;
+                h
+            };
+        `)
+        // The call to cleanup must appear before the final ret
+        const cleanupPos = out.indexOf('call $cleanup')
+        const retPos     = out.lastIndexOf('ret ')
+        expect(cleanupPos).toBeGreaterThan(-1)
+        expect(cleanupPos).toBeLessThan(retPos)
+    })
+
+    test('@defer runs before early @return', () => {
+        const out = toQbe(`
+            @extern release:Int h:Int;
+            @fn f:Int flag:Int, h:Int := {
+                &@defer &release h;
+                &@if flag == 0, { &@return 0 };
+                h
+            };
+        `)
+        // release must appear before both ret 0 (early) and the trailing ret
+        expect(out).toContain('call $release')
+    })
+
+    test('@defer LIFO: last registered runs first', () => {
+        const out = toQbe(`
+            @extern a:Int;
+            @extern b:Int;
+            @fn f := {
+                &@defer &a;
+                &@defer &b;
+            };
+        `)
+        const posA = out.indexOf('call $a')
+        const posB = out.indexOf('call $b')
+        // b was deferred last, so b runs before a
+        expect(posB).toBeLessThan(posA)
+    })
+})
+
+// ---------------------------------------------------------------------------
+// End-to-end complete function lowering  (Story 8-6)
+// ---------------------------------------------------------------------------
+
+describe('lowerToQbe — complete function lowering', () => {
+    test('safe_div: early return + arithmetic', () => {
+        const out = toQbe(`
+            @fn safe_div:Int a:Int, b:Int := {
+                &@if b == 0, { &@return 0 };
+                a / b
+            };
+        `)
+        expect(out).toContain('ceqw')
+        expect(out).toContain('ret 0')
+        expect(out).toContain('div')
+    })
+
+    test('clamp: multi-branch mutation + return', () => {
+        const out = toQbe(`
+            @fn clamp:Int x:Int, lo:Int, hi:Int := {
+                @local r:Int := x;
+                &@if r < lo, { r = lo };
+                &@if r > hi, { r = hi };
+                r
+            };
+        `)
+        expect(out).toContain('csltw')
+        expect(out).toContain('csgtw')
+        expect(out).toContain('ret')
+    })
+
+    test('nested calls: double + quad', () => {
+        const out = toQbe(`
+            @fn double:Int x:Int := x + x;
+            @fn quad:Int x:Int := &double (&double x);
+        `)
+        const doubleCount = (out.match(/call \$double/g) ?? []).length
+        expect(doubleCount).toBe(2)
+    })
+})
