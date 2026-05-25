@@ -252,6 +252,14 @@ describe('native — platform', () => {
         expect(hostQbeArch()).toBe('amd64_sysv')
     })
 
+    test('hostQbeArch returns expected value on ARM64 Linux', () => {
+        if (os.platform() !== 'linux' || os.arch() !== 'arm64') {
+            console.log('  (skipped: not Linux ARM64)')
+            return
+        }
+        expect(hostQbeArch()).toBe('arm64')
+    })
+
     test('QBE IR contains expected type for Int return', () => {
         if (SKIP) { skip(); return }
         const { typedAST, registry, functions } = compileToTyped('@fn main:Int := 42;')

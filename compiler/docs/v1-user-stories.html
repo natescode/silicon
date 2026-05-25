@@ -1205,9 +1205,10 @@
   <p class="goal">Done: <code>.github/workflows/native.yml</code> — ubuntu-latest job that installs qbe+gcc via apt, runs the full <code>test:qbe</code> suite (126 tests including integration + e2e that previously skipped), and smoke-tests <code>sgl build --native</code> and <code>sgl run --native</code> end-to-end.  <code>src/codegen/qbe/native.e2e.test.ts</code> — 15 platform e2e tests: arithmetic exit codes (const/add/sub/mul/zero), control flow (@if true/false/compare), function calls (helper/arg/recursive fib), locals (@local read/mutate), platform checks (hostQbeArch, ELF magic).  Package script <code>test:qbe</code> added.</p>
 </details>
 
-<details class="runtime">
-  <summary><span class="id">8-10</span> Linux ARM64 platform support + CI <span class="est">M, ~4h</span></summary>
+<details class="runtime done">
+  <summary><span class="id">8-10</span> Linux ARM64 platform support + CI <span class="est">M, ~4h</span> ✓</summary>
   <div class="deps"><strong>Depends on:</strong> 8-9</div>
+  <p class="goal">Done: <code>.github/workflows/native-arm64.yml</code> — <code>ubuntu-24.04-arm</code> job, same pipeline as 8-9 (apt install qbe gcc, test:qbe, sgl run/build --native smoke tests).  <code>native.e2e.test.ts</code> updated with ARM64 <code>hostQbeArch</code> check ('arm64').</p>
 </details>
 
 <details class="runtime">
