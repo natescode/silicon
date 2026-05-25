@@ -127,6 +127,10 @@ function formatForError(t: SiliconType): string {
         case 'Float':    return 'Float'
         case 'String':   return 'String'
         case 'Bool':     return 'Bool'
+        case 'UInt8':    return 'u8'
+        case 'UInt16':   return 'u16'
+        case 'UInt32':   return 'u32'
+        case 'UInt64':   return 'u64'
         case 'Void':     return 'Void'
         case 'Unknown':  return '<unknown>'
         case 'Variable': return t.name

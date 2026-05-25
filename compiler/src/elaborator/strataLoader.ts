@@ -18,14 +18,11 @@
 
 import {
   type Program,
-  type Elaboration,
 } from '../ast/astNodes'
 import {
   createElaboratorRegistry,
   registerElaborator,
   registerAnnotation,
-  registerTypedOperator,
-  registerTypedKeyword,
   registerDefExpander,
   registerPhaseHandler,
   registerComptimeHandler,
@@ -35,10 +32,8 @@ import {
   type StratumTier,
   type StratumMeta,
 } from './registry'
-import { StrataType, type StrataNode, type StrataData, strataTypeFromIntrinsic } from './strataenum'
-import { intrinsicSignature } from '../types/intrinsicSig'
-import { registerDefKind, type CodegenKind } from './defkinds'
-import { getIRKind } from '../ir/irKinds'
+import { StrataType, type StrataNode } from './strataenum'
+import { registerDefKind } from './defkinds'
 import { loadBuiltinStrata } from '../strata/index'
 import { builtinDefExpanders } from '../strata/defExpanders'
 import { translateLegacyBlock } from './legacyBlockTranslator'
@@ -93,19 +88,12 @@ export function buildStrataRegistry(
     }
   }
 
-  // T0: built-in strata from .si files.  Process both legacy Elaboration
-  // (`@stratum_keyword`/`@stratum_operator`) and the new unified `@stratum`
-  // form so future migrations of builtin strata can mix the two while the
-  // dissolution moves forward incrementally.
-  for (const elab of parseBuiltinStrata()) {
-    registerElaboration(registry, elab, 'T0')
-  }
-  // Also walk builtin sources as a Program AST to pick up @stratum
-  // unified-form Definitions and top-level @fn handler bodies — same
-  // shape as the T1 pre-pass.  Per-file failures here are tolerated:
-  // if a builtin source doesn't parse cleanly as a full program (some
-  // legacy-only files won't), we keep going with the Elaboration-only
-  // processing above.
+  // T0: built-in strata from .si files.  Walk the source as a Program
+  // AST to pick up @stratum unified-form Definitions and top-level @fn
+  // handler bodies — same shape as the T1 pre-pass.  Legacy
+  // `@stratum_keyword` / `@stratum_operator` forms were retired in the
+  // Phase 5 grammar revision; every built-in stratum uses the unified
+  // form today.
   const builtinProg = parseStrataSourceAsProgram(loadBuiltinStrata())
   if (builtinProg) {
     for (const el of (builtinProg.elements ?? []) as any[]) {
@@ -124,15 +112,12 @@ export function buildStrataRegistry(
     }
   }
 
-  // T2: external strata files supplied by the caller.
+  // T2: external strata files supplied by the caller.  Process
+  // @stratum unified-form definitions AND top-level @fn handler bodies
+  // — same shape as the T0/T1 pre-passes.  Without the @fn capture,
+  // on::* references to extraSource-defined handlers can't resolve at
+  // fire time.
   for (const source of extraSources) {
-    for (const elab of parseStrataSource(source)) {
-      registerElaboration(registry, elab, 'T2')
-    }
-    // Also process @stratum unified-form definitions AND top-level @fn
-    // handler bodies — same shape as the T0/T1 pre-passes.  Without the
-    // @fn capture, on::* references to extraSource-defined handlers
-    // can't resolve at fire time.
     const parsed = parseStrataSourceAsProgram(source)
     for (const el of (parsed?.elements ?? []) as any[]) {
       const def = unwrapToDefinition(el)
@@ -174,17 +159,9 @@ export function buildStrataRegistry(
 
   // T1: inline user-defined strata from the program AST.
   for (const element of ast.elements as any[]) {
-    let elab: Elaboration | undefined
-    if (element.type === 'Elaboration') {
-      elab = element as Elaboration
-    } else if (element.type === 'Element' && element.kind === 'elaboration') {
-      elab = element.value as Elaboration
-    }
-    if (elab) {
-      registerElaboration(registry, elab, 'T1')
-      continue
-    }
-    // @stratum unified form — Definition keyword '@stratum'.
+    // @stratum unified form — Definition keyword '@stratum'.  Legacy
+    // Elaboration-based forms (`@stratum_operator` / `@stratum_keyword`)
+    // were retired with the Phase 5 grammar revision.
     const def = unwrapToDefinition(element)
     if (def?.keyword === '@stratum') {
       registerStratumDefinition(registry, def, 'T1')
@@ -211,73 +188,6 @@ export function buildStrataRegistry(
 // Internal helpers
 // ---------------------------------------------------------------------------
 
-/** Register a single Elaboration node into the registry. */
-function registerElaboration(registry: ElaboratorRegistry, elab: Elaboration, tier: StratumTier = 'T0'): void {
-  const baseNode = elaborationToStrataNode(elab)
-  const symbol = symbolToString(elab.symbol)
-  const sig = baseNode.data?.typeSignature
-
-  if (elab.kind === 'operator' && sig && sig.params.length > 0) {
-    const typeKind = sig.params[0].kind  // 'Int', 'Float', 'Bool', etc.
-
-    // Tag as Constraint when another variant of this symbol is already registered.
-    const isConstraint = registry.operators[symbol] != null
-    const node: StrataNode = isConstraint
-      ? { ...baseNode, type: StrataType.Constraint }
-      : baseNode
-
-    // Store under compound typed key (e.g. '+:Float').
-    registerTypedOperator(registry, symbol, typeKind, node)
-
-    // Also set as the primary entry if this is the first registration for this symbol.
-    if (!registry.operators[symbol]) {
-      registerElaborator(registry, 'operator', symbol, baseNode)
-    }
-  } else if (elab.kind === 'keyword' && sig && sig.params.length > 0) {
-    const typeKind = sig.params[0].kind  // 'Int', 'Float', etc.
-
-    // Tag as Constraint when another variant of this keyword is already registered.
-    const isConstraint = registry.keywords[symbol] != null
-    const node: StrataNode = isConstraint
-      ? { ...baseNode, type: StrataType.Constraint }
-      : baseNode
-
-    // Store under compound typed key (e.g. '@toFloat:Int').
-    registerTypedKeyword(registry, symbol, typeKind, node)
-
-    // Also set as the primary entry if this is the first registration for this keyword.
-    if (!registry.keywords[symbol]) {
-      registerElaborator(registry, 'keyword', symbol, baseNode)
-    }
-  } else {
-    // No type constraint: plain registration (last-one-wins primary).
-    registerElaborator(registry, elab.kind, symbol, baseNode)
-  }
-
-  const codegenKind = codegenKindFromIntrinsic(baseNode.data?.intrinsic)
-  if (codegenKind) {
-    registerDefKind(registry.defKinds, {
-      keyword: symbol,
-      codegenKind,
-      allowsParams: codegenKind === 'function' || codegenKind === 'extern',
-      allowsBinding: codegenKind !== 'extern' && codegenKind !== 'export',
-      allowsGenerics: codegenKind === 'function',
-    })
-  }
-
-  // D-E-2: rich-body path removed.  All built-in strata are migrated to
-  // the new @stratum + @fn-handler form (D-D-* complete).  User-defined
-  // @stratum_keyword bodies with &Compiler::* calls are no longer
-  // supported — they need to be rewritten in the new form.
-}
-
-/** Parse a Silicon source string and return all Elaboration nodes found. */
-function parseStrataSource(source: string): Elaboration[] {
-  const match = parse(source)
-  const ast = addToAstSemantics(siliconGrammar)(match).toAst() as Program
-  return (ast.elements as any[]).filter(el => el.type === 'Elaboration') as Elaboration[]
-}
-
 /** Parse a Silicon source string and return the full Program AST. */
 function parseStrataSourceAsProgram(source: string): Program | null {
   try {
@@ -286,11 +196,6 @@ function parseStrataSourceAsProgram(source: string): Program | null {
   } catch {
     return null
   }
-}
-
-/** Built-in strata loaded from .si files in src/strata/. */
-function parseBuiltinStrata(): Elaboration[] {
-  return parseStrataSource(loadBuiltinStrata())
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -770,139 +675,3 @@ function applyHandlerOrdering(_registry: ElaboratorRegistry): void {
     // closures requires handler tagging — deferred to a future revision.
 }
 
-/** Normalize an Elaboration symbol to a plain string. */
-function symbolToString(symbol: any): string {
-  if (typeof symbol === 'string') return symbol
-  if (symbol && symbol.type === 'StringLiteral') return symbol.value
-  return String(symbol)
-}
-
-/** Map an IR::def_* or IR::meta_* intrinsic to the corresponding codegen kind. */
-function codegenKindFromIntrinsic(intrinsic: string | undefined): CodegenKind | undefined {
-  return getIRKind(intrinsic ?? '')?.codegenKind
-}
-
-/**
- * Convert an Elaboration AST node to a StrataNode.
- * Extracts the WASM intrinsic and body template from the body so downstream
- * phases (codegen, type checker) can use them without re-walking the AST.
- * The raw body AST is NOT stored — only the derived data is kept.
- */
-function elaborationToStrataNode(elaboration: Elaboration): StrataNode {
-  const intrinsic = extractIntrinsicFromBody(elaboration.semantics)
-  const bodyTemplate = extractBodyTemplate(elaboration.semantics as any, elaboration.nodeParamName)
-  const kind = elaboration.kind as 'operator' | 'keyword'
-  const data: StrataData = {
-    nodeParamName: elaboration.nodeParamName,
-    intrinsic,
-    bodyTemplate,
-    typeSignature: intrinsic ? intrinsicSignature(intrinsic) : undefined,
-  }
-  return {
-    type: strataTypeFromIntrinsic(intrinsic, kind),
-    discriminant: symbolToString(elaboration.symbol),
-    data,
-  }
-}
-
-/**
- * Walk the strata body AST and extract ALL WASM function calls as an ordered
- * sequence of steps.  Each step captures the intrinsic name and which node
- * references (left / right) appear as explicit arguments.
- *
- * Steps with no argRefs implicitly consume the top of the WAT operand stack
- * (i.e. the result produced by the previous step).
- */
-function extractBodyTemplate(
-  body: any,
-  nodeParamName: string
-): StrataData['bodyTemplate'] {
-  if (!body || !Array.isArray(body.items)) return undefined
-  const steps: NonNullable<StrataData['bodyTemplate']> = []
-  for (const item of body.items) {
-    if (!item || typeof item !== 'object') continue
-    const fc = findFunctionCall(item.value ?? item)
-    if (!fc) continue
-
-    const argRefs = (fc.args ?? []).map((arg: any): 'left' | 'right' | 'unknown' => {
-      const ns = findNamespace(arg)
-      if (!ns) return 'unknown'
-      const nsStr = (ns.path as string[]).join('.')
-      if (nsStr === `${nodeParamName}.left`) return 'left'
-      if (nsStr === `${nodeParamName}.right`) return 'right'
-      return 'unknown'
-    })
-
-    const name = fc.name
-    if (!name) continue
-
-    if (name.type === 'Namespace') {
-      const path = name.path as string[]
-      if (path[0] === 'WASM' || path[0] === 'IR') {
-        // WASM/IR intrinsic — existing behaviour
-        steps.push({ intrinsic: path.join('::'), argRefs })
-      } else if (path.length === 1) {
-        // Plain Silicon function call (e.g. &str_concat)
-        steps.push({ userFunc: path[0], argRefs })
-      }
-    } else if (typeof name === 'string') {
-      steps.push({ userFunc: name, argRefs })
-    }
-  }
-  return steps.length > 0 ? steps : undefined
-}
-
-/** Walk an AST node tree looking for the first FunctionCall whose name is a WASM namespace. */
-function extractIntrinsicFromBody(node: any): string | undefined {
-  if (!node || typeof node !== 'object') return undefined
-  if (Array.isArray(node)) {
-    for (const child of node) {
-      const r = extractIntrinsicFromBody(child)
-      if (r) return r
-    }
-    return undefined
-  }
-  if (node.type === 'FunctionCall') {
-    const name = node.name
-    if (name && Array.isArray(name.path) && (name.path[0] === 'WASM' || name.path[0] === 'IR')) {
-      return name.path.join('::')
-    }
-  }
-  for (const key of Object.keys(node)) {
-    if (key === 'type' || key === 'sourceLocation' || key === 'inferredType') continue
-    const child = node[key]
-    if (child && typeof child === 'object') {
-      const r = extractIntrinsicFromBody(child)
-      if (r) return r
-    }
-  }
-  return undefined
-}
-
-function findFunctionCall(node: any): any {
-  if (!node || typeof node !== 'object') return undefined
-  if (node.type === 'FunctionCall') return node
-  for (const key of Object.keys(node)) {
-    if (key === 'sourceLocation' || key === 'inferredType') continue
-    const child = node[key]
-    if (child && typeof child === 'object') {
-      const r = findFunctionCall(child)
-      if (r) return r
-    }
-  }
-  return undefined
-}
-
-function findNamespace(node: any): any {
-  if (!node || typeof node !== 'object') return undefined
-  if (node.type === 'Namespace') return node
-  for (const key of Object.keys(node)) {
-    if (key === 'sourceLocation' || key === 'inferredType') continue
-    const child = node[key]
-    if (child && typeof child === 'object') {
-      const r = findNamespace(child)
-      if (r) return r
-    }
-  }
-  return undefined
-}

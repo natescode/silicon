@@ -21,7 +21,6 @@ import {
   type Item,
   type ExpressionStart,
   type BinOp,
-  type Elaboration,
 } from '../ast/astNodes'
 import {
   lookupOperator,
@@ -83,7 +82,6 @@ function elaborateNode(node: any, registry: ElaboratorRegistry, errors: Elaborat
     case 'BooleanLiteral':
     case 'StringLiteral':
     case 'Namespace':
-    case 'Elaboration':
     case 'DocComment':
     case 'TypeAnnotation':
     case 'TypedIdentifier':
@@ -113,7 +111,7 @@ function elaborateNode(node: any, registry: ElaboratorRegistry, errors: Elaborat
       return { ...node, elements: node.elements.map((el: any) => elaborateNode(el, registry, errors)) }
 
     case 'Element': {
-      if (node.kind === 'elaboration' || node.kind === 'docComment') return node
+      if (node.kind === 'docComment') return node
       if (node.kind === 'item') return { ...node, value: elaborateNode(node.value, registry, errors) }
       return node
     }
@@ -159,6 +157,11 @@ function elaborateDefinition(
   registry: ElaboratorRegistry,
   errors: ElaborationError[],
 ): any {
+  // @stratum is a compile-time directive consumed by buildStrataRegistry;
+  // it produces no runtime IR and has no defKind entry.  Same guard the
+  // lowerer uses — see src/ir/lower.ts lowerDefinition.
+  if (node.keyword === '@stratum') return node
+
   const defEntry = lookupDefKindEntry(registry, node.keyword)
 
   if (!defEntry) {

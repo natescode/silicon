@@ -20,7 +20,17 @@
     &Compiler::register::expression_keyword '@return';
     &Compiler::on::lower '@return', Return_lower;
 };
+# Phase 4: route through compiler_emitReturn so pending @defer cleanups
+# run in LIFO order before the Return instruction.  Reduces to plain
+# ir_makeReturn when the current function has no defers.
 @fn Return_lower node:Int :=
-    &compiler::ir_makeReturn
-        (&compiler::compiler_lowerExprIfDefined
-            (&compiler::compiler_arg node, 0));
+    &compiler::compiler_emitReturn (&compiler::compiler_arg node, 0);
+
+@stratum Defer := {
+    &Compiler::register::expression_keyword '@defer';
+    &Compiler::on::lower '@defer', Defer_lower;
+};
+# Phase 4: defer registration.  Lowers args[0] and pushes the resulting IR
+# onto the current function's deferStack; emits no inline IR at the site.
+@fn Defer_lower node:Int :=
+    &compiler::compiler_registerDefer node;

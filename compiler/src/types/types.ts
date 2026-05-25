@@ -37,6 +37,17 @@ export type SiliconType =
     | { kind: 'Float' }
     | { kind: 'String' }
     | { kind: 'Bool' }
+    // Phase 5b — unsigned integer types.  At the WASM level u8/u16/u32 map
+    // to i32 and u64 maps to i64; the distinction is enforced by the type
+    // checker and routes through the *_u WASM instruction variants for
+    // div, rem, shr, and the four unsigned comparisons.  u8 and u16 share
+    // the i32 representation with u32 for 1.0 — explicit narrowing /
+    // masking on store is a 1.x improvement; users that need exact
+    // wrap-around semantics should cast through u32 and mask explicitly.
+    | { kind: 'UInt8'  }
+    | { kind: 'UInt16' }
+    | { kind: 'UInt32' }
+    | { kind: 'UInt64' }
     | { kind: 'Array'; element: SiliconType }
     | { kind: 'Function'; params: SiliconType[]; result: SiliconType }
     // A user-defined distinct type. Structurally identical to `underlying` in
@@ -103,6 +114,10 @@ export const TypeInt64: SiliconType = { kind: 'Int64' }
 export const TypeFloat: SiliconType = { kind: 'Float' }
 export const TypeString: SiliconType = { kind: 'String' }
 export const TypeBool: SiliconType = { kind: 'Bool' }
+export const TypeUInt8:  SiliconType = { kind: 'UInt8'  }
+export const TypeUInt16: SiliconType = { kind: 'UInt16' }
+export const TypeUInt32: SiliconType = { kind: 'UInt32' }
+export const TypeUInt64: SiliconType = { kind: 'UInt64' }
 export const TypeUnknown: SiliconType = { kind: 'Unknown' }
 
 /**
@@ -153,8 +168,12 @@ export function wasmTypeOf(t: SiliconType): WasmType {
         case 'String':   // pointer
         case 'Array':    // pointer
         case 'Function': // function table index
+        case 'UInt8':    // sub-i32 widths share the i32 representation
+        case 'UInt16':
+        case 'UInt32':
             return 'i32'
         case 'Int64':
+        case 'UInt64':
             return 'i64'
         case 'Float':
             return 'f32'
@@ -163,8 +182,11 @@ export function wasmTypeOf(t: SiliconType): WasmType {
         case 'Sum':
             return 'i32'
         case 'Unknown':
+        case 'Variable':
+        case 'Void':
             // Conservative: assume i32 so codegen still emits something plausible
-            // when a type error has been reported upstream.
+            // when a type error has been reported upstream (Variable should be
+            // substituted before codegen; Void is unit and never carries a value).
             return 'i32'
     }
 }
@@ -219,6 +241,10 @@ export function formatType(t: SiliconType): string {
         case 'Float': return 'Float'
         case 'String': return 'String'
         case 'Bool': return 'Bool'
+        case 'UInt8':  return 'u8'
+        case 'UInt16': return 'u16'
+        case 'UInt32': return 'u32'
+        case 'UInt64': return 'u64'
         case 'Array': return `Array[${formatType(t.element)}]`
         case 'Function': return `Function(${t.params.map(formatType).join(', ')}) -> ${formatType(t.result)}`
         case 'Distinct': return t.name
@@ -229,6 +255,7 @@ export function formatType(t: SiliconType): string {
             return `${t.name}(${t.variants.join(' | ')})`
         }
         case 'Variable': return t.name
+        case 'Void': return 'Void'
         case 'Unknown': return '<unknown>'
     }
 }
@@ -257,6 +284,11 @@ export function parseTypeName(name: string, aliases?: Map<string, SiliconType>):
         case 'Float': return TypeFloat
         case 'String': return TypeString
         case 'Bool': return TypeBool
+        // Phase 5b — unsigned integer types.
+        case 'u8':  case 'UInt8':  return TypeUInt8
+        case 'u16': case 'UInt16': return TypeUInt16
+        case 'u32': case 'UInt32': return TypeUInt32
+        case 'u64': case 'UInt64': return TypeUInt64
         // Functions declared `:Void` have no return type; we model that as
         // TypeUnknown so callers don't try to read a value off the call.
         // The bootstrap recognises :Void natively (see boot/ir/lower.si
@@ -277,6 +309,14 @@ export function parseTypeName(name: string, aliases?: Map<string, SiliconType>):
  */
 export function isNumeric(t: SiliconType): boolean {
     return t.kind === 'Int' || t.kind === 'Int64' || t.kind === 'Float'
+        || t.kind === 'UInt8' || t.kind === 'UInt16'
+        || t.kind === 'UInt32' || t.kind === 'UInt64'
+}
+
+/** Phase 5b — true when `t` is an unsigned integer type. */
+export function isUnsigned(t: SiliconType): boolean {
+    return t.kind === 'UInt8' || t.kind === 'UInt16'
+        || t.kind === 'UInt32' || t.kind === 'UInt64'
 }
 
 /**
@@ -285,6 +325,8 @@ export function isNumeric(t: SiliconType): boolean {
  */
 export function isComparable(t: SiliconType): boolean {
     return t.kind === 'Int' || t.kind === 'Int64' || t.kind === 'Float' || t.kind === 'Bool'
+        || t.kind === 'UInt8' || t.kind === 'UInt16'
+        || t.kind === 'UInt32' || t.kind === 'UInt64'
 }
 
 /**
@@ -293,4 +335,6 @@ export function isComparable(t: SiliconType): boolean {
  */
 export function isEqualityComparable(t: SiliconType): boolean {
     return t.kind === 'Int' || t.kind === 'Int64' || t.kind === 'Float' || t.kind === 'Bool' || t.kind === 'String' || t.kind === 'Sum'
+        || t.kind === 'UInt8' || t.kind === 'UInt16'
+        || t.kind === 'UInt32' || t.kind === 'UInt64'
 }

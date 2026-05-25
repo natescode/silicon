@@ -1104,6 +1104,52 @@ export function createComptimeImports(env: ComptimeEnv): WebAssembly.Imports {
         return ir ? env.irHandles.fresh(ir) : 0
     }
 
+    /** Phase 4 (@defer): lower args[0] of `node` and push the result onto
+     *  the current function's deferStack.  Site itself emits no IR — the
+     *  cleanup is materialised at function exit (end-of-body or @return).
+     *  Returns 0 (IR_NULL). */
+    const compiler_registerDefer = (nodeH: number): number => {
+        if (!env.api || !env.ctx) return 0
+        const node = handles.get(nodeH)
+        const args = node?.args
+        if (!Array.isArray(args) || args.length === 0) return 0
+        const ir = env.api.lowerExprIfDefined(args[0])
+        if (ir) env.ctx.deferStack.push(ir)
+        return 0
+    }
+
+    /** Phase 4: emit a return that runs any pending defers in LIFO order
+     *  before the return itself.  Used by Return_lower in place of the
+     *  plain `ir_makeReturn` so early returns honour deferred cleanup.
+     *  `argNodeH` is the argument-node handle returned by `compiler_arg`
+     *  (or 0 for a void return).  Peeks (does not drain) the deferStack —
+     *  the end-of-body wrap in `lowerFunctionBody` owns drain lifetime so
+     *  the fall-through exit path also gets cleanup. */
+    const compiler_emitReturn = (argNodeH: number): number => {
+        const valueIR = argNodeH === 0 || !env.api
+            ? undefined
+            : (env.api.lowerExprIfDefined(handles.get(argNodeH)) ?? undefined)
+        const deferAccess = env.ctx?.deferStack
+        const defersLen = deferAccess?.length() ?? 0
+        if (defersLen === 0) {
+            return env.irHandles.fresh({ kind: 'Return', value: valueIR } as IRExpr)
+        }
+        // Peek via drain+refill (no read-only accessor exists today).
+        const snapshot = deferAccess!.drain()
+        for (const d of snapshot) deferAccess!.push(d)
+        const cleanupStmts: any[] = []
+        for (let i = snapshot.length - 1; i >= 0; i--) {
+            cleanupStmts.push({ kind: 'ExprStmt', expr: snapshot[i] })
+        }
+        const retStmt = { kind: 'ExprStmt', expr: { kind: 'Return', value: valueIR } }
+        return env.irHandles.fresh({
+            kind: 'Block',
+            wasmType: 'void',
+            stmts: [...cleanupStmts, retStmt],
+            trailing: undefined,
+        } as IRExpr)
+    }
+
     /** Lower a definition node's parameter list to IRParam[]; returns an
      *  arr handle whose elements are IRParam-handle ids. */
     const compiler_lowerParams = (nodeH: number): number => {
@@ -1244,6 +1290,19 @@ export function createComptimeImports(env: ComptimeEnv): WebAssembly.Imports {
         }
     }
 
+    const compiler_expandStruct = (nodeH: number): number => {
+        if (!env.api) return env.irHandles.fresh(null)
+        const node = handles.get(nodeH)
+        if (!node) return env.irHandles.fresh(null)
+        try {
+            const { structExpander } = require('../strata/defExpanders') as typeof import('../strata/defExpanders')
+            const ir = structExpander.expand(node, '', env.api)
+            return env.irHandles.fresh(ir)
+        } catch {
+            return env.irHandles.fresh(null)
+        }
+    }
+
     const compiler_lowerExternResult = (nodeH: number): number => {
         if (!env.api) return 0
         const node = handles.get(nodeH)
@@ -1374,12 +1433,13 @@ export function createComptimeImports(env: ComptimeEnv): WebAssembly.Imports {
             ast_capture_template, ast_clone, ast_with_keyword, ast_with_name,
             ast_rewrite_call, ast_patch_types,
             compiler_lowerExpr, compiler_lowerExprIfDefined,
+            compiler_registerDefer, compiler_emitReturn,
             compiler_lowerParams, compiler_lowerFunctionBody,
             compiler_funcResult_body, compiler_funcResult_locals,
             compiler_resolveFunctionReturnType, compiler_resolveType,
             compiler_lowerGlobalInit, compiler_globalInit_init, compiler_globalInit_wasmType,
             compiler_lowerExternParams, compiler_lowerExternResult,
-            compiler_expandMatchChain, compiler_expandSumType, compiler_expandTypeRecord,
+            compiler_expandMatchChain, compiler_expandSumType, compiler_expandTypeRecord, compiler_expandStruct,
             test_observe,
         },
     }

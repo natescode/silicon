@@ -21,7 +21,6 @@ import {
   type Item,
   type Statement,
   type Assignment,
-  type Elaboration
 } from "../ast/astNodes"
 import { StrataType } from "./strataenum"
 
@@ -83,29 +82,6 @@ function createCustomOpBinOpAST(): Program {
   return ASTFactory.program([element])
 }
 
-/**
- * Helper: Create an elaborator (operator definition) AST
- *
- * @stratum Plus (Operator, "+", Node) = {
- *   &WASM::i32_add Node.left, Node.right;
- * };
- */
-function createPlusElaboratorAST(): Elaboration {
-  // Create the body: &WASM::i32_add Node.left, Node.right;
-  // This is simplified - just a placeholder expression
-  const bodyExp = ASTFactory.expressionStart(
-    'expressionEnd',
-    ASTFactory.expressionEnd('literal', ASTFactory.literal('int', ASTFactory.intLiteral('0', 'decimal')))
-  )
-
-  return ASTFactory.elaboration(
-    'operator',
-    'Plus',
-    '+',
-    'Node',
-    bodyExp
-  )
-}
 
 // Test 1: elaborate is a function
 test("elaborate is a function", () => {
@@ -155,48 +131,9 @@ test("elaborate leaves BinOp semantics undefined when operator not registered", 
   }
 })
 
-// Test 6: attaches semantics to BinOp when operator is registered
-test("elaborate attaches semantics to BinOp when operator is registered", () => {
-  // Create a program with both an elaborator definition and a binary operation
-  const plusElab = createPlusElaboratorAST()
-  const elaboElement = ASTFactory.element_elaboration(plusElab)
-
-  // Create binary operation
-  const left1 = ASTFactory.intLiteral('1', 'decimal')
-  const leftLit1 = ASTFactory.literal('int', left1)
-  const leftExpEnd1 = ASTFactory.expressionEnd('literal', leftLit1)
-  const leftExp1 = ASTFactory.expressionStart('expressionEnd', leftExpEnd1)
-
-  const right1 = ASTFactory.intLiteral('2', 'decimal')
-  const rightLit1 = ASTFactory.literal('int', right1)
-  const rightExpEnd1 = ASTFactory.expressionEnd('literal', rightLit1)
-
-  const binOp1 = ASTFactory.binOp(leftExp1, '+', rightExpEnd1)
-  const exp1 = ASTFactory.expressionStart('binOp', binOp1)
-  const item1 = ASTFactory.item('expression', exp1)
-  const itemElement = ASTFactory.element('item', item1)
-
-  // Combine into a program
-  const program1 = ASTFactory.program([elaboElement, itemElement])
-
-  // Elaborate
-  const { program: result1 } = elaborate(program1)
-
-  // Extract the BinOp from the second element
-  const secondElement = result1.elements[1]
-  if (secondElement.kind === 'item') {
-    const item = secondElement.value as Item
-    if (item.kind === 'expression') {
-      const expr = item.value as ExpressionStart
-      if (expr.kind === 'binOp') {
-        const elaboratedBinOp = expr.value as BinOp
-        // Should have semantics attached now
-        expect(elaboratedBinOp.semantics).toBeDefined()
-        expect(elaboratedBinOp.semantics?.discriminant).toBe('+')
-      }
-    }
-  }
-})
+// Test 6 (legacy Elaboration-based attach-semantics test) removed by the
+// Phase 5 grammar revision.  Equivalent coverage for the unified
+// @stratum form lives in src/elaborator/strata2.test.ts.
 
 // Test 7: elaborates nested expressions
 test("elaborate elaborates nested expressions", () => {
@@ -231,28 +168,8 @@ test("elaborate elaborates nested expressions", () => {
   // Just verify it doesn't crash and produces a valid AST
 })
 
-// Test 8: registry building from elaborations
-test("elaborate extracts elaborations from program", () => {
-  const elab1 = createPlusElaboratorAST()
-  const elab2 = ASTFactory.elaboration(
-    'operator',
-    'Minus',
-    '-',
-    'Node',
-    ASTFactory.expressionStart(
-      'expressionEnd',
-      ASTFactory.expressionEnd('literal', ASTFactory.literal('int', ASTFactory.intLiteral('0', 'decimal')))
-    )
-  )
-
-  const elem1 = ASTFactory.element_elaboration(elab1)
-  const elem2 = ASTFactory.element_elaboration(elab2)
-  const program = ASTFactory.program([elem1, elem2])
-
-  const { program: result } = elaborate(program)
-  // Should complete without error
-  expect(result.type).toBe('Program')
-})
+// Test 8 (legacy Elaboration-extraction test) removed by the Phase 5
+// grammar revision — strata2.test.ts covers @stratum extraction.
 
 // Test 9: builtin elaborators are registered
 test("elaborate registers builtin elaborators for arithmetic operators", () => {

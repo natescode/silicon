@@ -52,6 +52,11 @@ interface LowerCtx {
     loopStack: number[]
     /** Monotonically increasing loop counter for unique labels. */
     loopCount: { n: number }
+    /** Phase 4: deferred cleanup expressions for the current function body.
+     *  Pushed in source order by `@defer` sites; drained in LIFO order at
+     *  function exit (end-of-body in `lowerFunctionBody` and every `@return`
+     *  site via `compiler_emitReturn`). */
+    deferStack: IRExpr[]
     /** @local declarations collected during the current function body walk. */
     pendingLocals: IRLocal[]
     /** String literal allocator state (shared across the module). */
@@ -66,6 +71,8 @@ interface LowerCtx {
     currentStratumRef?: { name: string }
     /** CaaS-2: authoritative type map. Preferred over node.inferredType for new code. */
     semanticModel?: SemanticModel
+    /** Maps local/global variable names to their Silicon struct type name when they hold a struct pointer. */
+    structLocals: Map<string, string>
 }
 
 interface StringAlloc {
@@ -196,11 +203,13 @@ export function lowerProgram(
         pendingImports: new Map(),
         loopStack: [],
         loopCount: { n: 0 },
+        deferStack: [],
         pendingLocals: [],
         strings: createStringAlloc(),
         freshIdCounter: { n: 0 },
         currentStratumRef,
         semanticModel,
+        structLocals: new Map(),
     }
     // Pass the live ctx (not a snapshot) so $compiler is current when
     // recursively invoked methods (api.lowerExpr → lowerBinaryOp → on::lower
@@ -235,6 +244,7 @@ export function lowerProgram(
             const exp =
                 node.keyword === '@enum' || node.keyword === '@type_sum' ? ctx.registry.defExpanders.get('type_sum') :
                 node.keyword === '@type' ? ctx.registry.defExpanders.get('type_record') :
+                node.keyword === '@struct' ? ctx.registry.defExpanders.get('struct') :
                 undefined
             exp?.preScan?.(node, ctx.$compiler!)
         }
@@ -301,12 +311,14 @@ export function lowerProgram(
         locals: new Map(),
         pendingLocals: [],
         loopStack: [],
+        deferStack: [],
+        structLocals: new Map(),
     }
     startCtx.$compiler = createCompilerAPI(startCtx, lowerFns)
     const startStmts: IRStmt[] = []
     for (const el of program.elements as any[]) {
         const node = unwrap(el)
-        if (!node || node.type === 'Definition' || node.type === 'Elaboration') continue
+        if (!node || node.type === 'Definition') continue
         const stmt = lowerAsStmt(node, startCtx)
         if (stmt) startStmts.push(stmt)
     }
@@ -466,6 +478,8 @@ export function lowerFunctionBody(
         locals: new Map([...ctx.locals, ...paramLocals]),
         pendingLocals: [],
         loopStack: [],
+        deferStack: [],
+        structLocals: new Map(ctx.structLocals),
     }
     childCtx.$compiler = createCompilerAPI(childCtx, lowerFns)
 
@@ -475,7 +489,35 @@ export function lowerFunctionBody(
         const expr = binding.expression ?? binding
         body = lowerExpr(expr, childCtx)
     }
+    // Phase 4: drain pending @defer cleanups into the function tail.  Defers
+    // run in LIFO order; for a non-void body the trailing value is hoisted
+    // into a synthetic local so cleanup can execute between the value's
+    // computation and its return.
+    if (childCtx.deferStack.length > 0 && body) {
+        body = wrapBodyWithDefers(body, childCtx)
+    }
     return { body, locals: childCtx.pendingLocals }
+}
+
+function wrapBodyWithDefers(body: IRExpr, ctx: LowerCtx): IRExpr {
+    const defers = ctx.deferStack
+    const bodyType = exprWasmType(body)
+    const cleanupStmts: IRStmt[] = []
+    for (let i = defers.length - 1; i >= 0; i--) {
+        cleanupStmts.push({ kind: 'ExprStmt', expr: defers[i] })
+    }
+    if (bodyType === 'void') {
+        return { kind: 'Block', wasmType: 'void', stmts: [{ kind: 'ExprStmt', expr: body }, ...cleanupStmts], trailing: undefined }
+    }
+    const tmpName = `__defer_result_${ctx.freshIdCounter.n++}`
+    const wasmValType = bodyType as WasmValType
+    ctx.pendingLocals.push({ name: tmpName, wasmType: wasmValType })
+    return {
+        kind: 'Block',
+        wasmType: bodyType,
+        stmts: [{ kind: 'LocalSet', name: tmpName, value: body }, ...cleanupStmts],
+        trailing: { kind: 'LocalGet', wasmType: bodyType, name: tmpName },
+    }
 }
 
 /**
@@ -607,8 +649,72 @@ function lowerExpr(node: any, ctx: LowerCtx): IRExpr {
     }
 }
 
+/**
+ * Resolve a chain of struct field accesses for paths of length >= 1.
+ * baseKey is the watId of the first path segment (the root local/global),
+ * currentStructName is its struct type, and remaining is path[1..].
+ * Returns null if any segment doesn't resolve as a struct field.
+ */
+function lowerStructFieldChain(
+    baseKey: string,
+    currentStructName: string,
+    remaining: string[],
+    ctx: LowerCtx,
+): IRExpr | null {
+    // Build the root pointer expression.
+    let ptr: IRExpr = ctx.locals.has(baseKey)
+        ? { kind: 'LocalGet', wasmType: 'i32', name: baseKey }
+        : { kind: 'GlobalGet', wasmType: 'i32', name: baseKey }
+
+    let structName = currentStructName
+    for (let i = 0; i < remaining.length; i++) {
+        const fieldName = remaining[i]
+        const layout = ctx.registry?.structTypes?.get(structName)
+        const field = layout?.fields.find(f => f.name === fieldName)
+        if (!field) return null
+
+        const addr: IRExpr = field.offset === 0 ? ptr : {
+            kind: 'BinOp', wasmType: 'i32', instr: 'i32.add',
+            left: ptr, right: { kind: 'Const', wasmType: 'i32', value: field.offset },
+        }
+        const loadInstr = field.wasmType === 'f32' ? 'f32.load'
+            : field.wasmType === 'i64' ? 'i64.load' : 'i32.load'
+        const loaded: IRExpr = {
+            kind: 'Call', wasmType: field.wasmType, callee: loadInstr,
+            callKind: 'instr', args: [addr],
+        } as any
+
+        if (i === remaining.length - 1) {
+            // Last segment — return the loaded value.
+            return loaded
+        }
+        // Intermediate segment — must be a struct-typed field (i32 pointer).
+        // Continue chaining with the loaded pointer as the new base.
+        if (field.typeName && ctx.registry?.structTypes?.has(field.typeName)) {
+            structName = field.typeName
+            ptr = loaded
+        } else {
+            return null
+        }
+    }
+    return null
+}
+
 function lowerNamespace(n: any, ctx: LowerCtx): IRExpr {
     const path: string[] = n.path ?? []
+
+    // Struct field read: p.x or p.start.x (nested) where each segment after the
+    // first is a struct field name. Path length >= 2 with the first segment being
+    // a local/global holding a struct pointer.
+    if (path.length >= 2) {
+        const baseKey = watId(path[0])
+        const structName = ctx.structLocals.get(baseKey)
+        if (structName) {
+            const result = lowerStructFieldChain(baseKey, structName, path.slice(1), ctx)
+            if (result) return result
+        }
+    }
+
     // Join path then apply watId so Color::Red → Color_Red, matching how globals are keyed.
     const key = watId(path.join('::'))
 
@@ -646,6 +752,56 @@ function extractNamespacePath(node: any): string[] {
     return []
 }
 
+/**
+ * Build a store instruction for a nested struct field write.
+ * Chains i32.load for all intermediate segments, then emits a store for the last.
+ * Returns null if the path doesn't resolve as struct fields.
+ */
+function lowerStructFieldStore(
+    baseKey: string,
+    currentStructName: string,
+    remaining: string[],
+    value: IRExpr,
+    ctx: LowerCtx,
+): IRExpr | null {
+    if (remaining.length === 0) return null
+    let ptr: IRExpr = ctx.locals.has(baseKey)
+        ? { kind: 'LocalGet', wasmType: 'i32', name: baseKey }
+        : { kind: 'GlobalGet', wasmType: 'i32', name: baseKey }
+
+    let structName = currentStructName
+    for (let i = 0; i < remaining.length; i++) {
+        const fieldName = remaining[i]
+        const layout = ctx.registry?.structTypes?.get(structName)
+        const field = layout?.fields.find(f => f.name === fieldName)
+        if (!field) return null
+
+        const addr: IRExpr = field.offset === 0 ? ptr : {
+            kind: 'BinOp', wasmType: 'i32', instr: 'i32.add',
+            left: ptr, right: { kind: 'Const', wasmType: 'i32', value: field.offset },
+        }
+
+        if (i === remaining.length - 1) {
+            // Last segment — emit the store.
+            const storeInstr = field.wasmType === 'f32' ? 'f32.store'
+                : field.wasmType === 'i64' ? 'i64.store' : 'i32.store'
+            const storeStmt: IRStmt = {
+                kind: 'ExprStmt',
+                expr: { kind: 'Call', wasmType: 'void', callee: storeInstr, callKind: 'instr', args: [addr, value] } as any,
+            }
+            return { kind: 'Block', wasmType: 'void', stmts: [storeStmt] }
+        }
+        // Intermediate segment — load the pointer and continue.
+        if (field.typeName && ctx.registry?.structTypes?.has(field.typeName)) {
+            structName = field.typeName
+            ptr = { kind: 'Call', wasmType: 'i32', callee: 'i32.load', callKind: 'instr', args: [addr] } as any
+        } else {
+            return null
+        }
+    }
+    return null
+}
+
 function lowerBinaryOp(n: any, ctx: LowerCtx): IRExpr {
     const op: string = n.operator
 
@@ -653,9 +809,21 @@ function lowerBinaryOp(n: any, ctx: LowerCtx): IRExpr {
     // a trailing `;` as a BinaryOp rather than an Assignment node. Recover by
     // treating the left side as the assignment target.
     if (op === '=') {
-        const path = extractNamespacePath(n.left).map(watId)
-        const target = path.join('::')
+        const rawPath = extractNamespacePath(n.left)
+        const path = rawPath.map(watId)
         const value = lowerExpr(n.right, ctx)
+
+        // Struct field write: p.x = val or p.start.x = val (nested)
+        if (rawPath.length >= 2) {
+            const baseKey = path[0]
+            const structName = ctx.structLocals.get(baseKey)
+            if (structName) {
+                const storeResult = lowerStructFieldStore(baseKey, structName, rawPath.slice(1), value, ctx)
+                if (storeResult) return storeResult
+            }
+        }
+
+        const target = path.join('::')
         const setStmt: IRStmt = ctx.locals.has(target)
             ? { kind: 'LocalSet', name: target, value }
             : { kind: 'GlobalSet', name: target, value }
@@ -672,12 +840,22 @@ function lowerBinaryOp(n: any, ctx: LowerCtx): IRExpr {
 
     // Bitwise ops are always i32; other ops follow the operand type.
     // Operand-type dispatch picks the strata variant: 'Int' (i32),
-    // 'Int64' (i64), or 'Float' (f32).  Bitwise ops short-circuit
-    // to 'Int' since the i64 bitwise overloads aren't implemented yet.
+    // 'Int64' (i64), 'Float' (f32), or — Phase 5b — UInt8/16/32/64.
+    // Prefer the inferred SiliconType.kind so unsigned types route to
+    // their typed_operator strata instead of getting collapsed into the
+    // signed Int / Int64 buckets via wasmTypeOf.
     const isBitwise = ['|', '^', '<<', '>>'].includes(op)
+    const leftInferT = inferredTypeOf(n.left, ctx)
     const leftWt = exprWasmType(left)
+    const unsignedKind =
+        leftInferT?.kind === 'UInt8'  ? 'UInt8'  :
+        leftInferT?.kind === 'UInt16' ? 'UInt16' :
+        leftInferT?.kind === 'UInt32' ? 'UInt32' :
+        leftInferT?.kind === 'UInt64' ? 'UInt64' :
+        undefined
     const typeKind = isBitwise
-        ? 'Int'
+        ? (unsignedKind ?? 'Int')
+        : unsignedKind != null ? unsignedKind
         : leftWt === 'f32' ? 'Float'
         : leftWt === 'i64' ? 'Int64'
         : 'Int'
@@ -886,6 +1064,10 @@ function lowerBuiltinCall(name: string, rawArgs: any[], ctx: LowerCtx, inferredT
             const results = fireHandlers(ctx.registry, 'lower', handlerKey, synthNode, ctx.$compiler!, ctx.currentStratumRef)
             const result = results.length > 0 ? results[results.length - 1] : null
             if (result) return result as IRExpr
+            // Handler fired but returned no IR (e.g. @defer registers a side-effect
+            // into ctx state and emits nothing at the call site).  Treat as Nop —
+            // never fall through to the phantom "(call $defer ...)" generic path.
+            return nop()
         }
     }
 
@@ -966,8 +1148,13 @@ function lowerAsStmt(node: any, ctx: LowerCtx): IRStmt | null {
     if (node.type === 'Definition' && (node.hook === 'local' || node.keyword === '@local')) {
         const name = watId(node.name?.name ?? '')
         let wasmType: WasmValType = 'i32'
-        if (node.name?.typeAnnotation?.typename) {
-            wasmType = siliconTypeNameToWasm(node.name.typeAnnotation.typename)
+        const rawTypeName = node.name?.typeAnnotation?.typename
+        if (rawTypeName) {
+            wasmType = siliconTypeNameToWasm(rawTypeName)
+        }
+        // Track struct locals so field-access lowering can find the layout.
+        if (rawTypeName && ctx.registry?.structTypes?.has(rawTypeName)) {
+            ctx.structLocals.set(name, rawTypeName)
         }
         // Hoist by name: multiple `@local x := ...` in different branches
         // (lexer / parser dispatch loops do this heavily) collapse to a
@@ -1003,6 +1190,14 @@ function lowerAsStmt(node: any, ctx: LowerCtx): IRStmt | null {
     // see lowerDefinition's comment for context.
     if (node.type === 'Definition' && node.hook === 'stratum_def' && !((ctx.registry as any).__compilingHandler)) {
         const keyword = node.keyword ?? ''
+        // Track @local vars that hold struct pointers so field-access lowering works.
+        if (keyword === '@local') {
+            const localName = watId(node.name?.name ?? '')
+            const rawTypeName = node.name?.typeAnnotation?.typename
+            if (rawTypeName && ctx.registry?.structTypes?.has(rawTypeName)) {
+                ctx.structLocals.set(localName, rawTypeName)
+            }
+        }
         if (ctx.registry.handlers.lower.has(keyword)) {
             const results = fireHandlers(ctx.registry, 'lower', keyword, node, ctx.$compiler!, ctx.currentStratumRef)
             const result = results.length > 0 ? results[results.length - 1] : null

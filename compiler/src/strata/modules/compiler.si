@@ -135,6 +135,8 @@
 # ── Lowering helpers (require env.api — set per firing) ────────────────
 @extern compiler_lowerExpr:Int            nodeH:Int;
 @extern compiler_lowerExprIfDefined:Int   nodeH:Int;
+@extern compiler_registerDefer:Int        nodeH:Int;
+@extern compiler_emitReturn:Int           argNodeH:Int;
 @extern compiler_lowerParams:Int          nodeH:Int;
 @extern compiler_lowerFunctionBody:Int    nodeH:Int, paramsArrH:Int;
 @extern compiler_funcResult_body:Int      resultH:Int;
@@ -149,6 +151,7 @@
 @extern compiler_lowerExternResult:Int    nodeH:Int;
 @extern compiler_expandSumType:Int        nodeH:Int;
 @extern compiler_expandTypeRecord:Int     nodeH:Int;
+@extern compiler_expandStruct:Int         nodeH:Int;
 
 # ── Test-only ───────────────────────────────────────────────────────────
 @extern test_observe                  value:Int;

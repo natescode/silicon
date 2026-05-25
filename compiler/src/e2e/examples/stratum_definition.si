@@ -1,8 +1,6 @@
-## Example Stratum definition for the '+' operator
-## Defines the semantic elaboration (code generation) for the + operator
-@stratum_operator Plus ('+', Node) = {
-  &WASM::i32_add Node.left, Node.right;
-};
-
-## Now use the operator - it will be elaborated according to the stratum above
+## Verifies that the built-in `+` stratum (defined in src/strata/operators.si
+## via the unified `@stratum Plus := { ... }; @fn Plus_lower ...` form) is
+## correctly registered and dispatches `1 + 2` to i32.add at codegen time.
+## The legacy `@stratum_operator Plus ('+', Node) = { ... }` form was retired
+## as part of the Phase 5 grammar revision pass.
 1 + 2;

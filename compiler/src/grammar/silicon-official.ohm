@@ -2,7 +2,6 @@ Silicon {
   Program = Element*
   Element =
     | Item ";" -- item
-    | Elaboration ";" -- elaboration
     | DocComment -- docComment
   Item = 
     | Statement -- statement
@@ -69,22 +68,20 @@ Silicon {
     | typedIdentifier -- typedId
     | Literal -- literal
   keyword = "@" identifier
-  
-  Elaboration =
-    | "@stratum_operator" OperatorDefinition -- operator
-    | "@stratum_keyword" KeywordDefinition -- keyword
-  OperatorDefinition = identifier "(" OperatorSymbol "," identifier ")" "=" StrataBody
-  KeywordDefinition = identifier "(" KeywordName "," identifier ")" "=" StrataBody
-  OperatorSymbol = stringLiteral
-  KeywordName = stringLiteral
-  StrataBody = "{" (Item ";")* "}"
-  
+
   typedIdentifier = identifier type?
-  type = ":" identifier typeArgs?
-  typeArgs = "[" typeArg ("," typeArg)* "]"
+  type =
+    | ":" sigilFnType                       -- fn
+    | ":" identifier typeArgs?              -- simple
+  sigilFnType =
+    | "$" identifier space+ typedIdentifier space+ sigilFnParams   -- withParams
+    | "$" identifier space+ typedIdentifier                        -- nullary
+  sigilFnParams = typedIdentifier (space* "," space* typedIdentifier)*
+  typeArgs = "[" space* typeArg (space* "," space* typeArg)* space* "]"
   typeArg = identifier typeArgs?
   identifier =
-      letter identTail*                     -- normal
+      "_" ~identTail                        -- discard
+    | letter identTail*                     -- normal
     | "_" identTail+                        -- underscoreStart
   identTail = letter | digit | "_"
   comment = "#" (~lineTerminator any)*

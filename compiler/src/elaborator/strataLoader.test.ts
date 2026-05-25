@@ -144,33 +144,10 @@ test("buildStrataRegistry: '+' is registered (D-D-7a migrated; dispatches via on
 // User-defined strata from AST are picked up
 // ---------------------------------------------------------------------------
 
-test("buildStrataRegistry: user-defined @stratum_operator is registered", () => {
-    const elab = ASTFactory.elaboration('operator', 'Custom', '@@', 'Node', undefined)
-    const element = ASTFactory.element_elaboration(elab)
-    const program = ASTFactory.program([element])
-    const registry = buildStrataRegistry(program)
-    expect(registry.operators['@@']).toBeDefined()
-    expect(registry.operators['@@'].discriminant).toBe('@@')
-})
-
-test("buildStrataRegistry: user-defined @stratum_keyword is registered", () => {
-    const elab = ASTFactory.elaboration('keyword', 'MyKw', '@mykw', 'Node', undefined)
-    const element = ASTFactory.element_elaboration(elab)
-    const program = ASTFactory.program([element])
-    const registry = buildStrataRegistry(program)
-    expect(registry.keywords['@mykw']).toBeDefined()
-    expect(registry.keywords['@mykw'].discriminant).toBe('@mykw')
-})
-
-test("buildStrataRegistry: user strata override builtin on symbol clash", () => {
-    // A user-defined '+' stratum should overwrite the builtin one.
-    const elab = ASTFactory.elaboration('operator', 'CustomPlus', '+', 'Node', undefined)
-    const element = ASTFactory.element_elaboration(elab)
-    const program = ASTFactory.program([element])
-    const registry = buildStrataRegistry(program)
-    // The user's entry wins (no intrinsic since body was undefined).
-    expect(registry.operators['+'].data?.intrinsic).toBeUndefined()
-})
+// Legacy `@stratum_operator` / `@stratum_keyword` registration coverage
+// was removed by the Phase 5 grammar revision.  Equivalent unified-form
+// coverage lives in src/elaborator/strata2.test.ts (T0/T1/T2 tier tests +
+// override semantics).
 
 // ---------------------------------------------------------------------------
 // Independence from elaborate()
@@ -238,14 +215,9 @@ test("buildStrataRegistry: control strata have no typeSignature (they are struct
     expect(registry.keywords['@loop'].data?.typeSignature).toBeUndefined()
 })
 
-test("buildStrataRegistry: user-defined strata with unknown intrinsic have undefined typeSignature", () => {
-    const elab = ASTFactory.elaboration('operator', 'Custom', '@@', 'Node', undefined)
-    const element = ASTFactory.element_elaboration(elab)
-    const program = ASTFactory.program([element])
-    const registry = buildStrataRegistry(program)
-    // No body → no intrinsic → no typeSignature.
-    expect(registry.operators['@@'].data?.typeSignature).toBeUndefined()
-})
+// Legacy Elaboration-based intrinsic / typeSignature test removed by the
+// Phase 5 grammar revision — the unified @stratum form has no body-based
+// intrinsic inference, so the test premise no longer applies.
 
 // ---------------------------------------------------------------------------
 // Round 36: typed operator overloads via StrataType.Constraint
@@ -313,35 +285,8 @@ test("buildStrataRegistry: lookupTypedOperator returns primary for unknown typeK
     expect(result).toBeDefined()
 })
 
-test("buildStrataRegistry: user-defined typed overload is registered under compound key", () => {
-    const src = `@stratum_operator MyPlus ('+', Node) = { &WASM::f32_add Node.left, Node.right; };`
-    const match = parse(src)
-    const prog = addToAstSemantics(siliconGrammar)(match).toAst() as any
-    const registry = buildStrataRegistry(prog)
-    const floatOp = lookupTypedOperator(registry, '+', 'Float')
-    expect(floatOp?.data?.intrinsic).toBe('WASM::f32_add')
-    // User's float variant overrides the builtin Float overload.
-    expect(floatOp?.type).toBe(StrataType.Constraint)
-})
-
-// ---------------------------------------------------------------------------
-// Round 34: multi-step strata bodies
-// ---------------------------------------------------------------------------
-
-test("buildStrataRegistry: multi-step strata body extracts all steps as an array", () => {
-    // Drive through the full parse → registry path by parsing inline Silicon source.
-    const src = `@stratum_operator Weird ('??', Node) = { &WASM::i32_add Node.left, Node.right; &WASM::i32_eqz; };`
-    const match = parse(src)
-    const prog = addToAstSemantics(siliconGrammar)(match).toAst() as any
-    const registry = buildStrataRegistry(prog)
-    const bt = registry.operators['??']?.data?.bodyTemplate
-    expect(Array.isArray(bt)).toBe(true)
-    expect(bt?.length).toBe(2)
-    expect(bt?.[0]?.intrinsic).toBe('WASM::i32_add')
-    expect(bt?.[0]?.argRefs).toEqual(['left', 'right'])
-    expect(bt?.[1]?.intrinsic).toBe('WASM::i32_eqz')
-    expect(bt?.[1]?.argRefs).toEqual([])
-})
+// User-defined typed-overload + multi-step body coverage moved to
+// src/elaborator/strata2.test.ts under the unified @stratum form.
 
 test("buildStrataRegistry: '>' has a Float overload (D-D-7c migrated)", () => {
     const registry = buildStrataRegistry(ASTFactory.program([]))

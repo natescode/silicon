@@ -15,7 +15,7 @@
 
 import type { FunctionSig } from '../types/typechecker'
 import type { ModuleRegistry } from '../modules/registry'
-import type { ElaboratorRegistry, ComptimeHandler } from '../elaborator/registry'
+import type { ElaboratorRegistry, ComptimeHandler, StructLayout } from '../elaborator/registry'
 import { getStratumState, lookupComptimeHandler } from '../elaborator/registry'
 import { lookupDefKind } from '../elaborator/defkinds'
 import { normalizeMatchArgs } from '../ast/matchArms'
@@ -62,6 +62,8 @@ interface CtxShape {
     pendingLocals:  IRLocal[]
     loopStack:      number[]
     loopCount:      { n: number }
+    /** Phase 4: pending @defer cleanup IR for the current function body. */
+    deferStack?:    IRExpr[]
     functions:       Map<string, FunctionSig>
     moduleRegistry?: ModuleRegistry
     freshIdCounter:  { n: number }
@@ -130,12 +132,23 @@ export interface CompilerCtx {
         pop(): number | undefined
         peek(): number | undefined
     }
+    /** Phase 4: per-function deferred cleanup expressions. */
+    deferStack: {
+        push(expr: IRExpr): void
+        drain(): IRExpr[]
+        length(): number
+    }
     /** Allocate the next monotonic loop/block ID. */
     nextLoopId(): number
     functionSigs: {
         get(name: string): FunctionSig | undefined
     }
     moduleRegistry?: ModuleRegistry
+    structTypes: {
+        set(name: string, layout: StructLayout): void
+        get(name: string): StructLayout | undefined
+        has(name: string): boolean
+    }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -358,9 +371,23 @@ export function createCompilerAPI(ctx: CtxShape, fns: LowerFns): CompilerAPI {
             pop:  ()   => ctx.loopStack.pop(),
             peek: ()   => ctx.loopStack.at(-1),
         },
+        deferStack: {
+            push:   (expr) => { (ctx.deferStack ??= []).push(expr) },
+            drain:  ()     => {
+                const arr = ctx.deferStack ?? []
+                ctx.deferStack = []
+                return arr
+            },
+            length: ()     => (ctx.deferStack?.length ?? 0),
+        },
         nextLoopId:    () => ctx.loopCount.n++,
         functionSigs:  { get: (name) => ctx.functions.get(name) },
         moduleRegistry: ctx.moduleRegistry,
+        structTypes: {
+            set: (name, layout) => ctx.registry?.structTypes?.set(name, layout),
+            get: (name)         => ctx.registry?.structTypes?.get(name),
+            has: (name)         => ctx.registry?.structTypes?.has(name) ?? false,
+        },
     }
 
     const ir: IRBuilders = {
@@ -419,6 +446,10 @@ export function createCompilerAPI(ctx: CtxShape, fns: LowerFns): CompilerAPI {
             case 'Float':    return 'Float'
             case 'String':   return 'String'
             case 'Bool':     return 'Bool'
+            case 'UInt8':    return 'u8'
+            case 'UInt16':   return 'u16'
+            case 'UInt32':   return 'u32'
+            case 'UInt64':   return 'u64'
             case 'Void':     return 'Void'
             case 'Unknown':  return 'Unknown'
             case 'Array':    return `Array[${formatSiliconType(t.element)}]`
@@ -436,6 +467,10 @@ export function createCompilerAPI(ctx: CtxShape, fns: LowerFns): CompilerAPI {
             case 'Float':  return 'Float'
             case 'Bool':   return 'Bool'
             case 'String': return 'String'
+            case 'UInt8':  return 'u8'
+            case 'UInt16': return 'u16'
+            case 'UInt32': return 'u32'
+            case 'UInt64': return 'u64'
             case 'Void':   return 'Void'
             case 'Distinct': return (t as any).name ?? 'Unknown'
             case 'Sum':      return (t as any).name ?? 'Unknown'
@@ -445,6 +480,7 @@ export function createCompilerAPI(ctx: CtxShape, fns: LowerFns): CompilerAPI {
 
     const BUILTIN_TYPE_NAMES = new Set([
         'Int', 'Int32', 'Int64', 'Float', 'Bool', 'String', 'Void',
+        'u8', 'u16', 'u32', 'u64',
     ])
 
     function siliconTypeForName(name: string | undefined): SiliconType {
@@ -455,6 +491,10 @@ export function createCompilerAPI(ctx: CtxShape, fns: LowerFns): CompilerAPI {
             case 'Float':  return { kind: 'Float' }
             case 'Bool':   return { kind: 'Bool' }
             case 'String': return { kind: 'String' }
+            case 'u8':     return { kind: 'UInt8' }
+            case 'u16':    return { kind: 'UInt16' }
+            case 'u32':    return { kind: 'UInt32' }
+            case 'u64':    return { kind: 'UInt64' }
             case 'Void':   return { kind: 'Void' }
             default:       return { kind: 'Unknown' }
         }

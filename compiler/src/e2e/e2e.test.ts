@@ -16,7 +16,7 @@ import { test, expect } from "bun:test";
 import { readFileSync } from "fs";
 import { join } from "path";
 import { parse } from "../parser/index.ts";
-import { addToAstSemantics, ASTFactory, type ASTNode, type Program, type Elaboration, type ExpressionStart, type BinaryOp } from "../ast/index.ts";
+import { addToAstSemantics, ASTFactory, type ASTNode, type Program, type ExpressionStart, type BinaryOp } from "../ast/index.ts";
 import { compileToWat } from "../codegen/index.ts";
 import { buildStrataRegistry, elaborate } from "../elaborator/index.ts";
 import { typecheck, formatTypeError } from "../types/index.ts";
@@ -1441,6 +1441,67 @@ test("Round 27: @return registered in registry as keyword stratum (D-D-8 migrate
     expect(registry.handlers.lower.has('@return')).toBe(true)
 });
 
+// ============================================================================
+// Phase 4: @defer cleanup stratum
+// ============================================================================
+
+test("Phase 4: @defer registered in registry as expression-keyword stratum", () => {
+    const { registry } = elaborate(ASTFactory.program([]))
+    expect(registry.keywords['@defer']).toBeDefined()
+    expect(registry.handlers.lower.has('@defer')).toBe(true)
+});
+
+test("Phase 4: defer_basic.si — cleanup appended after body", () => {
+    const result = compileSource(loadExample("defer_basic.si"));
+    expect(result.success).toBe(true);
+    const uw = userWat(result.wat!)
+    expect(uw).toContain("call $acquire");
+    expect(uw).toContain("call $release");
+    // The defer site itself emits nothing; cleanup appears via the wrap.
+    // Cleanup call appears after acquire (cannot precede the local set).
+    const acquireIdx = uw.indexOf("call $acquire");
+    const releaseIdx = uw.indexOf("call $release");
+    expect(releaseIdx).toBeGreaterThan(acquireIdx);
+});
+
+test("Phase 4: defer_lifo.si — multiple defers fire in LIFO order", () => {
+    const result = compileSource(loadExample("defer_lifo.si"));
+    expect(result.success).toBe(true);
+    const uw = userWat(result.wat!)
+    // Cleanup order should be c → b → a (LIFO of registration order).
+    const cIdx = uw.indexOf("call $release_c");
+    const bIdx = uw.indexOf("call $release_b");
+    const aIdx = uw.indexOf("call $release_a");
+    expect(cIdx).toBeGreaterThan(0);
+    expect(bIdx).toBeGreaterThan(cIdx);
+    expect(aIdx).toBeGreaterThan(bIdx);
+});
+
+test("Phase 4: defer_with_return.si — early @return runs cleanup before return", () => {
+    const result = compileSource(loadExample("defer_with_return.si"));
+    expect(result.success).toBe(true);
+    const uw = userWat(result.wat!)
+    expect(uw).toContain("call $release");
+    expect(uw).toContain("return");
+    // The first occurrence of `release` must precede the first `return` —
+    // proving the @return path bundles cleanup ahead of the unwinding control flow.
+    const releaseIdx = uw.indexOf("call $release");
+    const returnIdx = uw.indexOf("return");
+    expect(returnIdx).toBeGreaterThan(releaseIdx);
+});
+
+test("Phase 4: @defer site itself produces no inline IR", () => {
+    // A function whose only statement is @defer should not call any function
+    // at the defer site — the cleanup is only materialised at function exit.
+    const src = `@extern cleanup; @fn empty := { &@defer &cleanup };`
+    const result = compileSource(src);
+    expect(result.success).toBe(true);
+    const uw = userWat(result.wat!)
+    // Cleanup must appear exactly once (the end-of-body wrap), not twice.
+    const cleanupCount = (uw.match(/call \$cleanup/g) || []).length;
+    expect(cleanupCount).toBe(1);
+});
+
 test("Round 27: @toFloat — cast_to_float.si compiles successfully", () => {
     const result = compileSource(loadExample("cast_to_float.si"));
     expect(result.success).toBe(true);
@@ -1587,28 +1648,10 @@ test("Round 28: heterogeneous comparison types is a type error", () => {
 });
 
 // ============================================================================
-// Round 34: multi-step strata bodies
+// Round 34: built-in strata bodies (legacy @stratum_operator coverage
+// removed by the Phase 5 grammar revision — equivalent unified-form
+// coverage lives in src/elaborator/strata2.test.ts)
 // ============================================================================
-
-test("Round 34: multi-step operator strata emits both instructions in sequence", () => {
-    // A user-defined '??' that adds then immediately converts the result to a bool
-    // via i32.eqz (two-step body: i32_add → i32_eqz).
-    const src = [
-        "@stratum_operator AddThenNot ('??', Node) = { &WASM::i32_add Node.left, Node.right; &WASM::i32_eqz; };",
-        "@let f a:Int, b:Int := { a ?? b };",
-    ].join("\n")
-    const result = compileSource(src)
-
-    expect(result.success).toBe(true)
-    const uw = userWat(result.wat!)
-    // Step 1: the add instruction must appear.
-    expect(uw).toContain("i32.add")
-    // Step 2: the eqz instruction must appear after the add.
-    expect(uw).toContain("i32.eqz")
-    const addIdx = uw.indexOf("i32.add")
-    const eqzIdx = uw.indexOf("i32.eqz")
-    expect(eqzIdx).toBeGreaterThan(addIdx)
-})
 
 test("Round 34: single-step strata body still works (regression)", () => {
     const result = compileSource("@let f a:Int, b:Int := { a + b };")
@@ -1625,69 +1668,15 @@ test("Round 34: '+' dispatches via on::lower handler (D-D-7a migrated)", () => {
 
 // ============================================================================
 // Round 35: strata imports — external strata sources via compileWithStrata
+// (legacy @stratum_operator / @stratum_keyword coverage removed by the
+// Phase 5 grammar revision; T2 external-source tier and registration are
+// covered by src/elaborator/strata2.test.ts via the unified @stratum form)
 // ============================================================================
 
-test("Round 35: operator strata from external source is usable in main program", () => {
-    const strataSource = `@stratum_operator Triple ('***', Node) = { &WASM::i32_mul Node.left, Node.right; };`
-    const mainSource = `@let f a:Int, b:Int := { a *** b };`
-    const result = compileWithStrata(strataSource, mainSource)
-
-    expect(result.success).toBe(true)
-    expect(result.wat).toContain("i32.mul")
-    expect(result.wat).toContain("(func $f")
-})
-
-test("Round 35: keyword strata from external source is usable in main program", () => {
-    const strataSource = `@stratum_keyword Twice ('@twice', Node) = { &WASM::i32_add; };`
-    const mainSource = `@let f a:Int := { &@twice a, a };`
-    const result = compileWithStrata(strataSource, mainSource)
-
-    expect(result.success).toBe(true)
-    expect(result.wat).toContain("i32.add")
-})
-
-test("Round 35: multiple strata sources are all registered", () => {
-    const mathStrata = `@stratum_operator Double ('**', Node) = { &WASM::i32_mul Node.left, Node.right; };`
-    const cmpStrata  = `@stratum_operator Same ('~~', Node) = { &WASM::i32_eq Node.left, Node.right; };`
-    const mainSource = `@let f a:Int, b:Int := { a ** b }; @let g a:Int, b:Int := { a ~~ b };`
-    const result = compileWithStrata([mathStrata, cmpStrata], mainSource)
-
-    expect(result.success).toBe(true)
-    expect(result.wat).toContain("i32.mul")
-    expect(result.wat).toContain("i32.eq")
-})
-
-test("Round 35: inline program strata override external strata on same symbol", () => {
-    // External strata maps '^^^' to i32.mul; program overrides it with i32.add.
-    const strataSource = `@stratum_operator ExtOp ('^^^', Node) = { &WASM::i32_mul Node.left, Node.right; };`
-    const mainSource = [
-        `@stratum_operator InlineOp ('^^^', Node) = { &WASM::i32_add Node.left, Node.right; };`,
-        `@let f a:Int, b:Int := { a ^^^ b };`,
-    ].join("\n")
-    const result = compileWithStrata(strataSource, mainSource)
-
-    expect(result.success).toBe(true)
-    // The inline override wins: i32.add, not i32.mul.
-    const uw = userWat(result.wat!)
-    expect(uw).toContain("i32.add")
-    expect(uw).not.toContain("i32.mul")
-})
-
-test("Round 35: unknown operator from external strata causes elaboration error without it", () => {
+test("Round 35: unknown operator without registering strata causes elaboration error", () => {
     // Compiling '***' without loading the strata that defines it should fail.
     const result = compileSource(`@let f a:Int, b:Int := { a *** b };`)
     expect(result.success).toBe(false)
-})
-
-test("Round 35: buildStrataRegistry extraSources registers before program AST strata", () => {
-    const { registry: regWithout } = elaborate(ASTFactory.program([]))
-    // Load a strata source that defines a new operator.
-    const extraSource = `@stratum_operator NewOp ('$$$', Node) = { &WASM::i32_add Node.left, Node.right; };`
-    const registry = buildStrataRegistry(ASTFactory.program([]), [extraSource])
-    expect(registry.operators['$$$']).toBeDefined()
-    expect(registry.operators['$$$'].data?.intrinsic).toBe('WASM::i32_add')
-    // The registry without extra sources should not have it.
-    expect(regWithout.operators['$$$']).toBeUndefined()
 })
 
 // ---------------------------------------------------------------------------
@@ -1722,34 +1711,9 @@ test("Round 36: Float division uses f32.div", () => {
     expect(userWat(result.wat!)).toContain('f32.div')
 })
 
-test("Round 36: user-defined operator with Int and Float overloads dispatches by operand type", () => {
-    const strataSource = [
-        `@stratum_operator Combine_Int ('^^', Node) = { &WASM::i32_add Node.left, Node.right; };`,
-        `@stratum_operator Combine_Float ('^^', Node) = { &WASM::f32_add Node.left, Node.right; };`,
-    ].join('\n')
-    const intSource = `@let f a:Int, b:Int := { a ^^ b };`
-    const floatSource = `@let f a:Float, b:Float := { a ^^ b };`
-
-    const intResult = compileWithStrata(strataSource, intSource)
-    expect(intResult.success).toBe(true)
-    expect(userWat(intResult.wat!)).toContain('i32.add')
-    expect(userWat(intResult.wat!)).not.toContain('f32.add')
-
-    const floatResult = compileWithStrata(strataSource, floatSource)
-    expect(floatResult.success).toBe(true)
-    expect(userWat(floatResult.wat!)).toContain('f32.add')
-    expect(userWat(floatResult.wat!)).not.toContain('i32.add')
-})
-
-test("Round 36: typed overload type-checks correctly — Float operands with Float overload is no error", () => {
-    const strataSource = [
-        `@stratum_operator CombineInt ('^^', Node) = { &WASM::i32_add Node.left, Node.right; };`,
-        `@stratum_operator CombineFloat ('^^', Node) = { &WASM::f32_add Node.left, Node.right; };`,
-    ].join('\n')
-    const result = compileWithStrata(strataSource, `@let f a:Float, b:Float := { a ^^ b };`)
-    expect(result.success).toBe(true)
-    expect(result.error).toBeNull()
-})
+// User-defined typed-operator overload coverage (Int / Float dispatch on
+// the same symbol) moved to src/elaborator/strata2.test.ts under the
+// unified @stratum form.
 
 // ---------------------------------------------------------------------------
 // Round 37: || strata consistency, keyword typed dispatch, @export metadata strata
@@ -1787,24 +1751,9 @@ test("Round 37: @export unknown keyword is an elaboration error without grammar 
     expect(result.success).toBe(true)
 })
 
-test("Round 37: user-defined keyword strata with Int and Float overloads dispatch by first arg type", () => {
-    // @neg:Int → i32.eqz (unary), @neg:Float → f32.neg (unary).
-    // The Float variant registers as a typed overload; the Int variant is the primary.
-    const strataSource = [
-        `@stratum_keyword NegI ('@neg', Node) = { &WASM::i32_eqz; };`,
-        `@stratum_keyword NegF ('@neg', Node) = { &WASM::f32_neg; };`,
-    ].join('\n')
-    // Int call path falls back to the primary @neg (i32.eqz).
-    const intResult = compileWithStrata(strataSource, `@let f a:Int := { &@neg a };`)
-    expect(intResult.success).toBe(true)
-    expect(userWat(intResult.wat!)).toContain('i32.eqz')
-    expect(userWat(intResult.wat!)).not.toContain('f32.neg')
-    // Float call path uses the typed @neg:Float overload (f32.neg).
-    const floatResult = compileWithStrata(strataSource, `@let f a:Float := { &@neg a };`)
-    expect(floatResult.success).toBe(true)
-    expect(userWat(floatResult.wat!)).toContain('f32.neg')
-    expect(userWat(floatResult.wat!)).not.toContain('i32.eqz')
-})
+// User-defined typed-keyword overload coverage (Int / Float dispatch on
+// the same keyword) moved to src/elaborator/strata2.test.ts under the
+// unified @stratum form.
 
 // ---------------------------------------------------------------------------
 // Round 43: @match trailing default — catch-all arm (even arg count)
@@ -2106,4 +2055,161 @@ test("Phase D i64: wasi_snapshot_preview1.path_open module registry declares i64
     expect(result.wat).toMatch(
         /\(import "wasi_snapshot_preview1" "path_open"[^)]+\(param i32\) \(param i32\) \(param i32\) \(param i32\) \(param i32\) \(param i64\) \(param i64\) \(param i32\) \(param i32\)/
     )
+})
+
+// ============================================================================
+// Phase 1a — @struct product types
+// ============================================================================
+
+test("Phase 1a @struct: generates constructor function", () => {
+    const result = compileSource(`
+        @struct Point x:Int, y:Int;
+        @fn main := {
+            @local p:Point := &Point 3, 7;
+            p.x
+        };
+    `)
+    expect(result.success).toBe(true)
+    // Constructor function named $Point
+    expect(result.wat).toContain('(func $Point')
+    // Constructor allocates memory
+    expect(result.wat).toContain('alloc')
+})
+
+test("Phase 1a @struct: constructor stores fields at correct offsets", () => {
+    const result = compileSource(`
+        @struct Point x:Int, y:Int;
+        @fn main := {
+            @local p:Point := &Point 3, 7;
+            p.x
+        };
+    `)
+    expect(result.success).toBe(true)
+    // x stored at offset 0, y at offset 4
+    expect(result.wat).toContain('i32.store')
+})
+
+test("Phase 1a @struct: field read generates i32.load", () => {
+    const result = compileSource(loadExample('struct_basic.si'))
+    expect(result.success).toBe(true)
+    // p.x → (i32.load (local.get $p))
+    expect(result.wat).toContain('i32.load')
+})
+
+test("Phase 1a @struct: typechecker recognises struct type annotation", () => {
+    const result = compileSource(`
+        @struct Point x:Int, y:Int;
+        @fn main := {
+            @local p:Point := &Point 3, 7;
+            p.x
+        };
+    `)
+    expect(result.success).toBe(true)
+    expect(result.error).toBeNull()
+})
+
+test("Phase 1a @struct: typechecker resolves field type for p.x as Int", () => {
+    const result = compileSource(`
+        @struct Point x:Int, y:Int;
+        @fn get_x p:Point := p.x;
+    `)
+    expect(result.success).toBe(true)
+    expect(result.error).toBeNull()
+})
+
+// ============================================================================
+// Phase 1a-6 — Nested struct support
+// ============================================================================
+
+test("Phase 1a-6 nested @struct: field read on outer struct compiles", () => {
+    const result = compileSource(`
+        @struct Point x:Int, y:Int;
+        @struct Rect origin:Point, width:Int, height:Int;
+        @fn main := {
+            @local p:Point := &Point 3, 7;
+            @local r:Rect := &Rect p, 100, 50;
+            r.width
+        };
+    `)
+    expect(result.success).toBe(true)
+    expect(result.wat).toContain('(func $Point')
+    expect(result.wat).toContain('(func $Rect')
+    expect(result.wat).toContain('i32.load')
+})
+
+test("Phase 1a-6 nested @struct: struct example file compiles", () => {
+    const result = compileSource(loadExample('struct_nested.si'))
+    expect(result.success).toBe(true)
+    expect(result.wat).toContain('i32.load')
+})
+
+test("Phase 1a-6 nested @struct: typechecker resolves outer field type", () => {
+    const result = compileSource(`
+        @struct Point x:Int, y:Int;
+        @struct Rect origin:Point, width:Int, height:Int;
+        @fn get_width r:Rect := r.width;
+    `)
+    expect(result.success).toBe(true)
+    expect(result.error).toBeNull()
+})
+
+test("Phase 1a-6 nested @struct: field write on nested struct compiles", () => {
+    const result = compileSource(`
+        @struct Point x:Int, y:Int;
+        @struct Rect origin:Point, width:Int, height:Int;
+        @fn update_width r:Rect, w:Int := {
+            r.width = w;
+            r.width
+        };
+    `)
+    expect(result.success).toBe(true)
+    expect(result.wat).toContain('i32.store')
+    expect(result.wat).toContain('i32.load')
+})
+
+// ============================================================================
+// Phase 1a-7 — Compiler aggregate types modelled as @struct
+// ============================================================================
+
+test("Phase 1a-7 struct aggregates: Token struct models compiler data", () => {
+    const result = compileSource(`
+        @struct Token kind:Int, start:Int, len:Int;
+        @fn make_token kind:Int, start:Int, len:Int := &Token kind, start, len;
+        @fn token_kind t:Token := t.kind;
+        @fn token_start t:Token := t.start;
+        @fn token_len t:Token := t.len;
+    `)
+    expect(result.success).toBe(true)
+    expect(result.wat).toContain('(func $Token')
+    expect(result.wat).toContain('(func $make_token')
+    expect(result.wat).toContain('(func $token_kind')
+    expect(result.wat).toContain('i32.load')
+})
+
+test("Phase 1a-7 struct aggregates: Span struct with read/write", () => {
+    const result = compileSource(`
+        @struct Span start:Int, end:Int;
+        @fn span_len s:Span := s.end - s.start;
+        @fn span_shift s:Span, delta:Int := {
+            s.start = s.start + delta;
+            s.end = s.end + delta
+        };
+    `)
+    expect(result.success).toBe(true)
+    expect(result.wat).toContain('(func $Span')
+    expect(result.wat).toContain('i32.store')
+    expect(result.wat).toContain('i32.sub')
+})
+
+test("Phase 1a-7 struct aggregates: nested node models AST-like structure", () => {
+    const result = compileSource(`
+        @struct Span start:Int, end:Int;
+        @struct ASTNode kind:Int, span:Span, value:Int;
+        @fn node_kind n:ASTNode := n.kind;
+        @fn node_value n:ASTNode := n.value;
+    `)
+    expect(result.success).toBe(true)
+    expect(result.wat).toContain('(func $Span')
+    expect(result.wat).toContain('(func $ASTNode')
+    expect(result.wat).toContain('i32.load')
 })

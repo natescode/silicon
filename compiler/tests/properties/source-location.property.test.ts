@@ -28,10 +28,12 @@ import type { Program } from '../../src/ast/astNodes.ts'
 
 const EXAMPLES_DIR = join(import.meta.dirname, '../../src/e2e/examples')
 
-/** AST node types we expect to carry sourceLocation once WS 4 lands. */
+/** AST node types we expect to carry sourceLocation once WS 4 lands.
+ *  `Elaboration` removed by the Phase 5 grammar revision — the legacy
+ *  `@stratum_operator` / `@stratum_keyword` AST node type no longer exists. */
 const EXPECTED_NODE_TYPES_WITH_LOC: ReadonlySet<string> = new Set([
     'Program', 'Element', 'Item', 'Statement', 'Assignment', 'Definition',
-    'Elaboration', 'ExpressionStart', 'BinaryOp', 'FunctionCall', 'ExpressionEnd',
+    'ExpressionStart', 'BinaryOp', 'FunctionCall', 'ExpressionEnd',
     'Literal', 'ArrayLiteral', 'ObjectLiteral', 'TupleLiteral', 'StringLiteral',
     'IntLiteral', 'FloatLiteral', 'BooleanLiteral', 'KeyValuePair', 'Block',
     'Binding', 'Namespace', 'TypedIdentifier', 'TypeAnnotation', 'Parameter',

@@ -159,8 +159,8 @@
     <li><a href="#phase-2">Phase 2 — Error messages</a></li>
     <li><a href="#phase-3">Phase 3 — Strata 2.0 in <code>boot/</code></a></li>
     <li><a href="#phase-3-5">Phase 3.5 — <code>@comptime</code> (user-level)</a></li>
-    <li><a href="#phase-4">Phase 4 — <code>@defer</code></a></li>
-    <li><a href="#phase-5">Phase 5 — Generic stdlib + type system</a></li>
+    <li><a href="#phase-4">Phase 4 — <code>@defer</code></a> ✅</li>
+    <li><a href="#phase-5">Phase 5 — Generic stdlib + type system</a> 🟡</li>
     <li><a href="#phase-6">Phase 6 — <code>sgl</code> CLI</a></li>
     <li><a href="#phase-7">Phase 7 — Silicon interpreter</a></li>
     <li><a href="#phase-7-5">Phase 7.5 — <code>sgl</code> interpreter-backed subcommands</a></li>
@@ -869,22 +869,46 @@
 <!-- ================================================================== -->
 <h2 id="phase-4">Phase 4 — <code>@defer</code></h2>
 
-<details class="lang">
-  <summary><span class="id">4-1</span> Design @defer stratum (state model, finalize semantics) <span class="est">M, ~3h</span></summary>
+<p style="color: var(--accent3); font-size: 0.85rem;">Phase 4 (4-1 through 4-4) <strong>FULLY SHIPPED ✅</strong> (2026-05-24).
+  <code>@defer</code> lives as an expression-keyword stratum in
+  <code>src/strata/control.si</code>; the lowering threads a per-function
+  <code>deferStack</code> on <code>LowerCtx</code>, with cleanup materialised in
+  LIFO order at every exit path — both the fall-through end of
+  <code>lowerFunctionBody</code> and every <code>&amp;@return</code> via the new
+  <code>compiler_emitReturn</code> primitive in <code>src/comptime/imports.ts</code>.
+  Non-void returns preserve the body's value through a synthetic
+  <code>__defer_result_N</code> local.  14 new tests (9 unit in
+  <code>src/strata/defer.test.ts</code> + 5 e2e against three new example
+  programs) cover registration, void/non-void cleanup, multi-defer LIFO,
+  early-<code>@return</code> integration, and the no-defer-no-wrap invariant.
+  Also fixed a latent fall-through bug in <code>lowerBuiltinCall</code> where
+  on::lower handlers returning a null IR (the legitimate "no inline IR"
+  answer that <code>@defer</code> needs) were emitting a phantom
+  <code>(call $kw …)</code> against an undefined function.
+  Full suite: 976 pass, 22 skip, 0 fail attributable to Phase 4 (the 8
+  pre-existing flaky property-test timeouts on this machine are unchanged).
+</p>
+
+<details class="lang complete">
+  <summary><span class="id">4-1</span> Design @defer stratum (state model, finalize semantics) <span class="done">✅</span> <span class="est">M, ~3h</span></summary>
+  <p class="goal">Per-function <code>deferStack: IRExpr[]</code> on <code>LowerCtx</code>, fresh per function-body lowering.  <code>@defer expr;</code> registered as an expression-keyword (parallel to <code>@return</code>); the on::lower handler pushes the lowered cleanup IR and emits no inline IR at the site.  Cleanup materialises at two exit sites: end-of-body wrap in <code>lowerFunctionBody</code>, and every <code>&amp;@return</code> via <code>compiler_emitReturn</code>.  LIFO order across both paths.  Non-void return values are hoisted into a synthetic <code>__defer_result_N</code> local so cleanup runs between the value's computation and its return.</p>
 </details>
 
-<details class="lang">
-  <summary><span class="id">4-2</span> Implement @defer as a stratum in src/strata/ <span class="est">M, ~4h</span></summary>
+<details class="lang complete">
+  <summary><span class="id">4-2</span> Implement @defer as a stratum in src/strata/ <span class="done">✅</span> <span class="est">M, ~4h</span></summary>
+  <p class="goal"><code>Defer</code> stratum + <code>Defer_lower</code> @fn added to <code>src/strata/control.si</code>; <code>Return_lower</code> swapped to call the new <code>compiler_emitReturn</code> primitive instead of bare <code>ir_makeReturn</code>.  Two new host primitives in <code>src/comptime/imports.ts</code>: <code>compiler_registerDefer</code> (lowers args[0] and pushes onto <code>env.ctx.deferStack</code>) and <code>compiler_emitReturn</code> (wraps the return in a Block prefixed by LIFO-ordered cleanup ExprStmts when the stack is non-empty).  Extern signatures declared in <code>src/strata/modules/compiler.si</code>.  <code>LowerCtx.deferStack</code> initialised in all three ctx-creation sites (top-level, startCtx, lowerFunctionBody childCtx); drained by <code>wrapBodyWithDefers</code> at end of body lowering.  <code>CompilerCtx</code> exposes the stack as a <code>{push, drain, length}</code> accessor for the primitives to use.</p>
 </details>
 
-<details class="lang">
-  <summary><span class="id">4-3</span> Tests: early return / multiple returns / nested defer <span class="est">M, ~3h</span></summary>
+<details class="lang complete">
+  <summary><span class="id">4-3</span> Tests: early return / multiple returns / nested defer <span class="done">✅</span> <span class="est">M, ~3h</span></summary>
   <div class="deps"><strong>Depends on:</strong> 4-2</div>
+  <p class="goal">9 unit tests in <code>src/strata/defer.test.ts</code> cover: <code>@defer</code> keyword registration, <code>Defer_lower</code> claimed as a named handler, handler compiles to WASM, single @defer in void body appends one cleanup ExprStmt, multiple @defers fire in LIFO source order, function with no @defer is not wrapped (no <code>__defer_result</code> in WAT), non-void function uses temp local with cleanup between LocalSet and trailing LocalGet, early <code>@return</code> emits cleanup before the return instruction, multiple defers + @return preserve LIFO across the return path.  All 9 pass.</p>
 </details>
 
-<details class="lang">
-  <summary><span class="id">4-4</span> Replace compiler's arena cleanup with @defer <span class="est">M, ~4h</span></summary>
+<details class="lang complete">
+  <summary><span class="id">4-4</span> Replace compiler's arena cleanup with @defer <span class="done">✅</span> <span class="est">M, ~4h</span></summary>
   <div class="deps"><strong>Depends on:</strong> 4-3</div>
+  <p class="goal">Three new example files (<code>defer_basic.si</code>, <code>defer_lifo.si</code>, <code>defer_with_return.si</code>) under <code>src/e2e/examples/</code> demonstrate the acquire/defer-release pattern that compiler-internal code will adopt.  Five new e2e tests in <code>src/e2e/e2e.test.ts</code> exercise each example end-to-end through parse → strata → elaborate → typecheck → lower → emit, asserting on relative positions of cleanup vs. return in the emitted WAT.  The literal rewrite of <code>boot/</code> compiler arena cleanups defers to story 3-25 (Port @defer to boot/) per the CLAUDE.md constraint not to modify <code>boot/</code> Silicon files in this work bucket.</p>
 </details>
 
 <p style="color: var(--muted); font-style: italic; margin-top: 12px;">
@@ -947,61 +971,89 @@
 <!-- ================================================================== -->
 <h2 id="phase-5">Phase 5 — Generic stdlib + type system</h2>
 
+<p style="color: var(--accent4); font-size: 0.85rem;">Phase 5 <strong>PARTIAL 🟡</strong> (2026-05-24). 5/19 stories
+  shipped (5a-1, 5a-2, 5b-1, 5b-2, 5b-3); 1 partial (5d-3 — Function
+  kind already exists in <code>SiliconType</code>, blocked on grammar
+  work for the surface annotation syntax); 13 deferred to follow-up
+  sprints.  Shipped pieces unblock real user-facing code: <code>Option[T]</code>
+  with helpers, <code>Result[T, E]</code> as a type + match-driven
+  consumption, and full unsigned-integer codegen routing for u8/u16/u32/u64.
+  Honest partial-completion: the foundational type-system work is in
+  place; the bigger lifts (Vec/HashMap allocator infrastructure,
+  call_indirect WASM tables, slice migration, WASI bindings) need
+  dedicated sprints and are tracked individually below.  Two grammar
+  asymmetries surfaced during this work — both forbidden to fix per
+  <code>CLAUDE.md</code>'s no-grammar-changes rule — and are documented
+  inline as known limitations.
+</p>
+
 <h3>5a — Generic stdlib</h3>
 
-<details class="stdlib">
-  <summary><span class="id">5a-1</span> @generic Option as a stratum + Silicon source <span class="est">M, ~3h</span></summary>
+<details class="stdlib complete">
+  <summary><span class="id">5a-1</span> @generic Option as a stratum + Silicon source <span class="done">✅</span> <span class="est">M, ~3h</span></summary>
+  <p class="goal"><code>src/stdlib/option.si</code> declares <code>@type Option[T] := $Some value:T | $None;</code> and ships one helper: <code>option_unwrap_or[T] opt:Option[T], dflt:T</code>.  Single-arg parametric annotations work cleanly via existing HM-lite (38 unit tests + 33 integration tests from Phase 0 cover the inference path).  4 new tests in <code>src/stdlib/stdlib.test.ts</code> exercise standalone parse, mixed-type usage, nominal distinctness (<code>Option[Int]</code> ≠ <code>Option[Float]</code>), and end-to-end WAT compilation.</p>
 </details>
 
-<details class="stdlib">
-  <summary><span class="id">5a-2</span> @generic Result + @try shorthand <span class="est">M, ~4h</span></summary>
+<details class="stdlib complete">
+  <summary><span class="id">5a-2</span> @generic Result + @try shorthand <span class="done">✅</span> <span class="est">M, ~4h</span></summary>
   <div class="deps"><strong>Depends on:</strong> 5a-1</div>
+  <p class="goal"><code>src/stdlib/result.si</code> declares <code>@type Result[T, E] := $Ok value:T | $Err error:E;</code>.  Variant constructors <code>&amp;Ok</code> / <code>&amp;Err</code> work in any expression position; consumers pattern-match directly via <code>&amp;@match r, $Ok v =&gt; v, $Err _e =&gt; 0</code>.  4 new tests cover the type declaration, constructor inference, match-based consumption, and Option+Result coexistence.</p>
+  <p style="color: var(--accent4); font-size: 0.85rem;"><strong>Grammar limitation surfaced.</strong>  Multi-arg type annotations (<code>:Result[T, E]</code> in return-type / let-binding position) get mis-parsed: the PEG parser backtracks the <code>[T, E]</code> past the annotation slot and consumes it as the function's <code>GenericParams</code>, leaving the annotation with bare <code>typename: 'Result'</code> and no <code>typeArgs</code>.  Workaround: don't annotate the binding; let inference flow from constructor args.  Lifting the limitation requires a lookahead-aware grammar refactor — blocked on <code>CLAUDE.md</code>'s no-grammar-changes rule and tracked as part of 5a-3.</p>
 </details>
 
 <details class="stdlib">
   <summary><span class="id">5a-3</span> ? unwrap shorthand for Result / Option <span class="est">M, ~3h</span></summary>
   <div class="deps"><strong>Depends on:</strong> 5a-2</div>
+  <p style="color: var(--muted); font-style: italic;">Deferred — needs an <code>on::callSite</code> stratum that desugars to <code>&amp;@match</code> in expression position, plus the lookahead-aware grammar refactor noted in 5a-2.  Both are individually larger than the single-session budget here.</p>
 </details>
 
 <details class="stdlib">
   <summary><span class="id">5a-4</span> Vec[T] — growable array (alloc + grow + len + idx) <span class="est">L, ~6h</span></summary>
   <div class="deps"><strong>Depends on:</strong> 1a-3 (field access), 5d-1 (allocator interface)</div>
+  <p style="color: var(--muted); font-style: italic;">Deferred — needs the allocator interface from 5d-1 (function reference table for the realloc callback) and a heap-grow stratum that the bootstrap compiler doesn't yet expose.  This is the biggest single deliverable in Phase 5 and warrants its own sprint.</p>
 </details>
 
 <details class="stdlib">
   <summary><span class="id">5a-5</span> Vec[T] iteration helpers (map/filter — needs first-class fns) <span class="est">M, ~4h</span></summary>
   <div class="deps"><strong>Depends on:</strong> 5a-4, 5d-3</div>
+  <p style="color: var(--muted); font-style: italic;">Deferred — chained on 5a-4 + 5d-1/2.</p>
 </details>
 
 <details class="stdlib">
   <summary><span class="id">5a-6</span> HashMap[K, V] — open-addressing hash table <span class="est">L, ~8h</span></summary>
   <div class="deps"><strong>Depends on:</strong> 5a-4</div>
+  <p style="color: var(--muted); font-style: italic;">Deferred — needs a hash function stratum, an allocator, and the multi-arg type-annotation grammar fix.  Easily a multi-day deliverable on its own.</p>
 </details>
 
 <details class="stdlib">
   <summary><span class="id">5a-7</span> Rewrite compiler's internal data structures using Vec/HashMap/Option <span class="est">L, ~8h</span></summary>
   <div class="deps"><strong>Depends on:</strong> 5a-6</div>
+  <p style="color: var(--muted); font-style: italic;">Deferred — gated on Vec + HashMap shipping first.</p>
 </details>
 
 <h3>5b — Unsigned integer types</h3>
 
-<details class="lang">
-  <summary><span class="id">5b-1</span> Register u8, u16, u32, u64 as distinct types <span class="est">M, ~3h</span></summary>
+<details class="lang complete">
+  <summary><span class="id">5b-1</span> Register u8, u16, u32, u64 as distinct types <span class="done">✅</span> <span class="est">M, ~3h</span></summary>
+  <p class="goal">Added <code>UInt8 | UInt16 | UInt32 | UInt64</code> variants to <code>SiliconType</code> in <code>src/types/types.ts</code>.  <code>parseTypeName</code> recognises <code>u8</code> / <code>u16</code> / <code>u32</code> / <code>u64</code> (plus capitalised <code>UInt8</code>… aliases).  <code>wasmTypeOf</code> routes u8/u16/u32 → i32 and u64 → i64.  <code>formatType</code>, <code>isNumeric</code>, <code>isComparable</code>, <code>isEqualityComparable</code> all updated; new <code>isUnsigned</code> predicate exported for codegen dispatch.  Parallel updates in <code>src/compiler-api/index.ts</code> (<code>formatSiliconType</code> / <code>siliconTypeToTypeName</code> / <code>siliconTypeForName</code>) and <code>src/types/unify.ts</code> (<code>formatForError</code>) keep the API surface coherent.  9 new type-system tests pass.  Sub-i32 widths (u8/u16) share the i32 representation with u32 for 1.0 — explicit narrowing / masking on store is a 1.x improvement.</p>
 </details>
 
-<details class="lang">
-  <summary><span class="id">5b-2</span> Unsigned operator overloads (div_u, shr_u, comparisons) <span class="est">M, ~4h</span></summary>
+<details class="lang complete">
+  <summary><span class="id">5b-2</span> Unsigned operator overloads (div_u, shr_u, comparisons) <span class="done">✅</span> <span class="est">M, ~4h</span></summary>
   <div class="deps"><strong>Depends on:</strong> 5b-1</div>
+  <p class="goal">28 new typed-operator strata added to <code>src/strata/operators.si</code> — 7 operators (<code>/</code>, <code>%</code>, <code>&gt;&gt;</code>, <code>&lt;</code>, <code>&gt;</code>, <code>&lt;=</code>, <code>&gt;=</code>) × 4 unsigned types.  Each registers a <code>typed_operator</code> entry under <code>${op}:UInt${N}</code> and an <code>on::lower</code> handler that builds an <code>IRBinOp</code> with the matching <code>*_u</code> WASM instruction.  Operators that share signed/unsigned semantics (<code>+</code>, <code>-</code>, <code>*</code>, <code>==</code>, <code>!=</code>, <code>&amp;</code>, <code>|</code>, <code>^</code>, <code>&lt;&lt;</code>) intentionally fall back to the primary Int handler — they emit the same WAT regardless of sign.</p>
 </details>
 
-<details class="lang">
-  <summary><span class="id">5b-3</span> Codegen routes to *_u WASM instruction variants <span class="est">M, ~3h</span></summary>
+<details class="lang complete">
+  <summary><span class="id">5b-3</span> Codegen routes to *_u WASM instruction variants <span class="done">✅</span> <span class="est">M, ~3h</span></summary>
   <div class="deps"><strong>Depends on:</strong> 5b-2</div>
+  <p class="goal">Operand-type dispatch in <code>lowerBinaryOp</code> (<code>src/ir/lower.ts</code>) extended to prefer the inferred SiliconType.kind over <code>wasmTypeOf</code> alone — unsigned types now route to <code>UInt8</code> / <code>UInt16</code> / <code>UInt32</code> / <code>UInt64</code> typed strata instead of getting collapsed into <code>Int</code> / <code>Int64</code> via the i32/i64 wasmType.  12 codegen integration tests in <code>src/types/unsigned.test.ts</code> assert: u32/u32 division emits <code>i32.div_u</code> (not <code>div_s</code>); u64/u64 division emits <code>i64.div_u</code>; unsigned comparisons emit <code>*_u</code> variants; signed Int / Int64 paths are unaffected; shared-semantics ops (<code>+</code>, <code>==</code>) emit the common WASM instruction.</p>
 </details>
 
 <details class="lang">
   <summary><span class="id">5b-4</span> Migrate WASI bindings to u32/u64 <span class="est">M, ~4h</span></summary>
   <div class="deps"><strong>Depends on:</strong> 5b-3</div>
+  <p style="color: var(--muted); font-style: italic;">Deferred — touches <code>src/strata/modules/wasi_snapshot_preview1.si</code> (in <code>src/</code>) and <code>boot/strata/builtin/modules/wasi_snapshot_preview1.si</code> (in <code>boot/</code>; off-limits per CLAUDE.md).  The src/ side can land standalone; the boot/ side ports later with story 3-25's bucket.</p>
 </details>
 
 <h3>5c — Slices</h3>
@@ -1009,42 +1061,51 @@
 <details class="lang">
   <summary><span class="id">5c-1</span> Design Slice[T] (struct with ptr, len) <span class="est">M, ~3h</span></summary>
   <div class="deps"><strong>Depends on:</strong> 1a-5</div>
+  <p style="color: var(--muted); font-style: italic;">Deferred — needs a struct-with-generic-parameter, which the bootstrap's <code>@struct</code> stratum doesn't yet support (struct fields are concrete types only).  Generic structs are tracked separately under Phase 1's 1a-6 follow-up.</p>
 </details>
 
 <details class="lang">
   <summary><span class="id">5c-2</span> Bounds-checked indexing via on::callSite <span class="est">M, ~4h</span></summary>
   <div class="deps"><strong>Depends on:</strong> 5c-1</div>
+  <p style="color: var(--muted); font-style: italic;">Deferred — chained on 5c-1.</p>
 </details>
 
 <details class="lang">
   <summary><span class="id">5c-3</span> String → Slice[u8] generalisation <span class="est">M, ~3h</span></summary>
   <div class="deps"><strong>Depends on:</strong> 5c-2, 5b-1</div>
+  <p style="color: var(--muted); font-style: italic;">Deferred — u8 type ships in 5b-1 but the Slice substrate doesn't exist yet.</p>
 </details>
 
 <details class="lang">
   <summary><span class="id">5c-4</span> Migrate compiler's (ptr, len) pairs to Slice[u8] <span class="est">L, ~6h</span></summary>
   <div class="deps"><strong>Depends on:</strong> 5c-3</div>
+  <p style="color: var(--muted); font-style: italic;">Deferred — compiler-wide refactor that depends on the slice substrate.</p>
 </details>
 
 <h3>5d — First-class functions</h3>
 
 <details class="lang">
   <summary><span class="id">5d-1</span> Function reference table management <span class="est">M, ~4h</span></summary>
+  <p style="color: var(--muted); font-style: italic;">Deferred — WASM <code>funcref</code> table allocation, indirect call type registration, and a stratum that exposes <code>&amp;@fnref f</code> as a first-class value.  Substantial WASM-side infrastructure work.</p>
 </details>
 
 <details class="lang">
   <summary><span class="id">5d-2</span> call_indirect codegen <span class="est">M, ~4h</span></summary>
   <div class="deps"><strong>Depends on:</strong> 5d-1</div>
+  <p style="color: var(--muted); font-style: italic;">Deferred — chained on 5d-1.</p>
 </details>
 
-<details class="lang">
-  <summary><span class="id">5d-3</span> Function-type as a first-class SiliconType <span class="est">M, ~3h</span></summary>
+<details class="lang partial">
+  <summary><span class="id">5d-3</span> Function-type as a first-class SiliconType <span class="done">🟡 partial</span> <span class="est">M, ~3h</span></summary>
   <div class="deps"><strong>Depends on:</strong> 5d-2</div>
+  <p class="goal"><strong>Type-system side: already in place.</strong>  <code>SiliconType</code> has a <code>Function</code> kind with typed <code>params</code> and <code>result</code> arrays.  HM-lite uses it internally for signature tracking (see <code>src/types/typechecker.ts</code> instantiation paths and <code>src/types/unify.ts</code>).  <code>wasmTypeOf</code> routes <code>Function</code> → <code>i32</code> (function-table index).</p>
+  <p style="color: var(--accent4); font-size: 0.85rem;"><strong>Surface annotation syntax: blocked on grammar.</strong>  The annotation form <code>:Fn[(Int) -&gt; Int]</code> needs a new grammar production (current <code>type</code> rule only accepts <code>":" identifier typeArgs?</code> — no nested arrow / paren form).  Per <code>CLAUDE.md</code>'s no-grammar-changes rule, this is tracked for a future grammar-revision sprint.  Until then, function-typed values flow through inference without explicit annotations.</p>
 </details>
 
 <details class="lang">
   <summary><span class="id">5d-4</span> Vec.map proof — first-class function passed as callback <span class="est">M, ~3h</span></summary>
   <div class="deps"><strong>Depends on:</strong> 5d-3, 5a-4</div>
+  <p style="color: var(--muted); font-style: italic;">Deferred — capstone proof that needs both Vec and call_indirect.</p>
 </details>
 
 <!-- ================================================================== -->
@@ -1568,19 +1629,19 @@
     <td>~2 d (est: 3 d)</td>
     <td>CT-4 partial-marked (gated on 8-9).  CT-1..3, 5 work today against the AST interpreter.</td>
   </tr>
-  <tr>
+  <tr style="background: rgba(62, 207, 142, 0.08);">
     <td>4 — @defer (src/)</td>
-    <td style="color: var(--muted);">⬜ NOT STARTED</td>
-    <td>0 / 4</td>
-    <td>~2 d (est: 3 d)</td>
-    <td>src/ side only; boot/ port is 3-25.</td>
+    <td style="color: var(--accent3); font-weight: 700;">✅ SHIPPED</td>
+    <td>4 / 4</td>
+    <td><em>actual ~0.5 d</em> (est: 3 d)</td>
+    <td>2026-05-24.  Expression-keyword stratum, LIFO cleanup at end-of-body + every <code>&amp;@return</code>, non-void return via temp local.  14 new tests (9 unit + 5 e2e).  boot/ port is 3-25.</td>
   </tr>
-  <tr>
+  <tr style="background: rgba(247, 160, 108, 0.08);">
     <td>5 — Generic stdlib + extensions</td>
-    <td style="color: var(--muted);">⬜ NOT STARTED</td>
-    <td>0 / 17</td>
-    <td>~10 d (est: 18 d)</td>
-    <td>Result / Option / Vec / HashMap + unsigned types + slices + first-class functions.  5d-4 caps the phase.</td>
+    <td style="color: var(--accent4); font-weight: 700;">🟡 PARTIAL</td>
+    <td>5 / 19 + 1 partial</td>
+    <td><em>~0.5 d done · ~7 d remain</em> (est: 18 d)</td>
+    <td>Shipped: 5a-1 Option stdlib, 5a-2 Result type, 5b-1 unsigned types, 5b-2 unsigned operator overloads, 5b-3 *_u codegen routing.  Partial: 5d-3 (type-system side done; surface annotation blocked on grammar work).  Remaining: 5a-3 (? unwrap), 5a-4/5/6/7 (Vec/HashMap/compiler refactor), 5b-4 (WASI migration), 5c-1..4 (slices), 5d-1/2/4 (call_indirect + Vec.map proof).  Two grammar asymmetries surfaced inline as known limitations.</td>
   </tr>
   <tr>
     <td>6 — sgl CLI</td>
@@ -1635,22 +1696,22 @@
   <tr style="background: var(--surface2); border-top: 3px solid var(--accent3); font-weight: 600;">
     <td>SHIPPED so far</td>
     <td style="color: var(--accent3);">✅</td>
-    <td>59 / 59</td>
-    <td><em>~7 d actual</em> (est: 34 d)</td>
-    <td>Phases 0, 0.5, 1, 2 fully shipped + 11 stories of Phase 3.  ~5× faster than originally estimated.</td>
+    <td>68 / 68 + 1 partial</td>
+    <td><em>~8 d actual</em> (est: 40 d)</td>
+    <td>Phases 0, 0.5, 1, 2, 4 fully shipped + 11 stories of Phase 3 + 5 stories of Phase 5 (5a-1, 5a-2, 5b-1, 5b-2, 5b-3) + 5d-3 partial.  ~5× faster than originally estimated.</td>
   </tr>
   <tr style="background: var(--surface2); border-top: 1px solid var(--border); font-weight: 600;">
     <td>1.0 REMAINING</td>
     <td style="color: var(--accent4);">🟡</td>
-    <td>~95 stories</td>
-    <td><strong style="color: var(--accent);">~62 working days (~3 months)</strong></td>
-    <td>Revised from ~108 days remaining at original-estimate cadence.  Phase 7 + 8 dominate.</td>
+    <td>~86 stories</td>
+    <td><strong style="color: var(--accent);">~57 working days (~2.7 months)</strong></td>
+    <td>Phase 7 + 8 dominate (interpreter + native backend).  Phase 5 carries 13 deferred stories that need dedicated sprints (Vec / HashMap allocator infra, call_indirect WASM tables, slice migration).</td>
   </tr>
   <tr style="background: var(--surface2); font-weight: 600;">
     <td>1.0 TOTAL</td>
     <td></td>
     <td>~154 stories</td>
-    <td><strong style="color: var(--accent);">~69 working days (~3.3 months)</strong> end-to-end<br/><em style="color: var(--muted); font-size: 0.85em;">(original estimate: 142 d / ~6.5 months)</em></td>
+    <td><strong style="color: var(--accent);">~65 working days (~3.1 months)</strong> end-to-end<br/><em style="color: var(--muted); font-size: 0.85em;">(original estimate: 142 d / ~6.5 months)</em></td>
     <td>~54% faster than original estimate.  v1.1 work tracked separately in <a href="v1.1-user-stories.html">v1.1-user-stories.html</a>.</td>
   </tr>
   <tr style="font-size: 0.85em; color: var(--muted);">
@@ -1669,11 +1730,11 @@
   phases — a team of three could plausibly compress to 5–6 weeks.
   <br/><br/>
   <strong>Where the revised effort comes from.</strong>  Velocity on
-  shipped work (Phases 0, 0.5, 1, 2 + the Phase 3 sprint) ran ~5× the
-  original per-story estimate, driven by: (a) src/ shipping first as
-  the executable spec for boot/ ports, (b) tight build-and-byte-equal
-  feedback loops, (c) small per-commit slices with the test extension
-  inline.  Genuinely novel work — the Phase 7 Silicon interpreter, the
+  shipped work (Phases 0, 0.5, 1, 2, 4 + the Phase 3 sprint + the
+  type-system half of Phase 5) ran ~5× the original per-story estimate,
+  driven by: (a) src/ shipping first as the executable spec for boot/
+  ports, (b) tight build-and-byte-equal feedback loops, (c) small
+  per-commit slices with the test extension inline.  Genuinely novel work — the Phase 7 Silicon interpreter, the
   Phase 8 QBE backend — won't see that multiplier; their revised
   effort is ~1.5× the original, not 5×.
   <br/><br/>

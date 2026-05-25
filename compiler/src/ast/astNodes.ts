@@ -22,7 +22,6 @@ export type ASTNode =
     | Statement
     | Assignment
     | Definition
-    | Elaboration
     | ExpressionStart
     | BinOp
     | FunctionCall
@@ -52,8 +51,8 @@ export interface Program {
 
 export interface Element {
     type: 'Element'
-    kind: 'item' | 'docComment' | 'elaboration'
-    value: Item | DocComment | Elaboration
+    kind: 'item' | 'docComment'
+    value: Item | DocComment
     sourceLocation?: SourceLocation
 }
 
@@ -94,16 +93,6 @@ export interface Definition {
     sourceLocation?: SourceLocation,
     // Set once during elaboration (on a fresh cloned node), never mutated after.
     readonly hook?: string | false // Resolved elaboration hook name (e.g. 'functionDefinition')
-}
-
-export interface Elaboration {
-    type: 'Elaboration'
-    kind: 'operator' | 'keyword'
-    name: string                // e.g., "Plus"
-    symbol: string              // e.g., "+" for operators, or "@if" for keywords
-    nodeParamName: string       // e.g., "Node" - the variable name for node context
-    semantics?: ExpressionStart // Optional: The body containing semantic rules
-    sourceLocation?: SourceLocation
 }
 
 export interface ExpressionStart {
@@ -260,6 +249,14 @@ export interface TypeAnnotation {
      *  stratum.  Existing typechecker/lowerer ignore this field — undefined
      *  for non-parameterised type annotations. */
     typeArgs?: TypeArg[]
+    /** Phase 5 sigil function-type (`:$fn _:R _:T1, _:T2`).  When present,
+     *  `typename === '$fn'` and `typeArgs` is undefined.  The shape mirrors
+     *  a function definition: `fnReturn` is the return-type slot (a
+     *  typedIdentifier whose name is typically `_`), `fnParams` is the
+     *  arg-type slots (each a typedIdentifier).  Empty `fnParams` means
+     *  a nullary function (`:$fn _:R`). */
+    fnReturn?: TypedIdentifier
+    fnParams?: TypedIdentifier[]
     sourceLocation?: SourceLocation
 }
 
@@ -295,10 +292,6 @@ export const ASTFactory = {
         return { type: 'Element', kind, value }
     },
 
-    element_elaboration(elaboration: Elaboration): Element {
-        return { type: 'Element', kind: 'elaboration', value: elaboration }
-    },
-
     item(kind: 'statement' | 'expression', value: Statement | ExpressionStart): Item {
         return { type: 'Item', kind, value }
     },
@@ -323,16 +316,6 @@ export const ASTFactory = {
         binding?: Binding
     ): Definition {
         return { type: 'Definition', keyword, name, generics, params, binding }
-    },
-
-    elaboration(
-        kind: 'operator' | 'keyword',
-        name: string,
-        symbol: string,
-        nodeParamName: string,
-        semantics?: ExpressionStart
-    ): Elaboration {
-        return { type: 'Elaboration', kind, name, symbol, nodeParamName, semantics }
     },
 
     expressionStart(kind: 'binOp' | 'functionCall' | 'expressionEnd', value: BinOp | FunctionCall | ExpressionEnd): ExpressionStart {
@@ -409,6 +392,10 @@ export const ASTFactory = {
 
     typeAnnotation(typename: string, typeArgs?: TypeArg[]): TypeAnnotation {
         return { type: 'TypeAnnotation', typename, typeArgs }
+    },
+
+    fnTypeAnnotation(fnReturn: TypedIdentifier, fnParams: TypedIdentifier[]): TypeAnnotation {
+        return { type: 'TypeAnnotation', typename: '$fn', fnReturn, fnParams }
     },
 
     parameter(name: string, typeAnnotation?: TypeAnnotation, isLiteral?: boolean, value?: Literal): Parameter {

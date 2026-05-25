@@ -23,7 +23,7 @@
  */
 
 import * as ohm from 'ohm-js'
-import { ASTFactory } from './astNodes'
+import { ASTFactory, type TypedIdentifier } from './astNodes'
 
 /**
  * Create semantic actions for transforming parse trees to AST
@@ -40,10 +40,6 @@ export default function addToAstSemantics(siliconGrammar: ohm.Grammar): ohm.Sema
 
         Element_item(item, _semi) {
             return item.toAst()
-        },
-
-        Element_elaboration(elaboration, _semi) {
-            return elaboration.toAst()
         },
 
         Element_docComment(docComment) {
@@ -102,43 +98,6 @@ export default function addToAstSemantics(siliconGrammar: ohm.Grammar): ohm.Sema
         GenericParams(_open, params, _close) {
             const paramList = params.asIteration().children.map((p: any) => p.sourceString)
             return ASTFactory.genericParams(paramList)
-        },
-
-        Elaboration_operator(_keyword, def) {
-            return def.toAst()
-        },
-
-        Elaboration_keyword(_keyword, def) {
-            return def.toAst()
-        },
-
-        OperatorDefinition(name, _open, symbol, _comma, nodeParam, _close, _eq, body) {
-            const elaborationName = name.sourceString
-            const operatorSymbol = symbol.toAst()
-            const nodeParamName = nodeParam.sourceString
-            const semanticsBody = body.toAst()
-            return ASTFactory.elaboration('operator', elaborationName, operatorSymbol, nodeParamName, semanticsBody)
-        },
-
-        KeywordDefinition(name, _open, keywordName, _comma, nodeParam, _close, _eq, body) {
-            const elaborationName = name.sourceString
-            const kwName = keywordName.toAst()
-            const nodeParamName = nodeParam.sourceString
-            const semanticsBody = body.toAst()
-            return ASTFactory.elaboration('keyword', elaborationName, kwName, nodeParamName, semanticsBody)
-        },
-
-        OperatorSymbol(stringLit) {
-            return stringLit.toAst()
-        },
-
-        KeywordName(stringLit) {
-            return stringLit.toAst()
-        },
-
-        StrataBody(_open, items, _semis, _close) {
-            const itemList = items.children.map((itemNode: any) => itemNode.toAst())
-            return ASTFactory.block(itemList)
         },
 
         ExpressionStart_binChain(left, binOps, endOps) {
@@ -362,7 +321,7 @@ export default function addToAstSemantics(siliconGrammar: ohm.Grammar): ohm.Sema
             return ASTFactory.typedIdentifier(name, typeAnnotation)
         },
 
-        type(_colon, ident, typeArgsOpt) {
+        type_simple(_colon, ident, typeArgsOpt) {
             // typeArgsOpt is the iter for `typeArgs?`. Descend into the single
             // child if present (Ohm v16 has no default `_iter` action).
             const typeArgs = typeArgsOpt.children.length > 0
@@ -371,7 +330,35 @@ export default function addToAstSemantics(siliconGrammar: ohm.Grammar): ohm.Sema
             return ASTFactory.typeAnnotation(ident.sourceString, typeArgs)
         },
 
-        typeArgs(_lb, first, _commas, rest, _rb) {
+        type_fn(_colon, sigil) {
+            return sigil.toAst()
+        },
+
+        // Phase 5 — sigil function-type `$fn _:R _:T1, _:T2`.  The structure
+        // mirrors a function definition exactly: a return-type slot
+        // (typedIdentifier) plus an optional comma-separated param list.
+        sigilFnType_withParams(_dollar, ident, _ws1, retSlot, _ws2, params) {
+            const fnReturn = retSlot.toAst() as TypedIdentifier
+            const fnParams = params.toAst() as TypedIdentifier[]
+            const ann = ASTFactory.fnTypeAnnotation(fnReturn, fnParams)
+            ann.typename = `$${ident.sourceString}`
+            return ann
+        },
+
+        sigilFnType_nullary(_dollar, ident, _ws1, retSlot) {
+            const fnReturn = retSlot.toAst() as TypedIdentifier
+            const ann = ASTFactory.fnTypeAnnotation(fnReturn, [])
+            ann.typename = `$${ident.sourceString}`
+            return ann
+        },
+
+        sigilFnParams(first, _ws1, _commas, _ws2, rest) {
+            const items: TypedIdentifier[] = [first.toAst()]
+            for (const r of rest.children) items.push(r.toAst())
+            return items
+        },
+
+        typeArgs(_lb, _ws1, first, _ws2, _commas, _ws3, rest, _ws4, _rb) {
             const items: any[] = [first.toAst()]
             for (const r of rest.children) items.push(r.toAst())
             return items
@@ -392,6 +379,10 @@ export default function addToAstSemantics(siliconGrammar: ohm.Grammar): ohm.Sema
         ParamLiteral_literal(lit) {
             const literalAst = lit.toAst()
             return ASTFactory.parameter('_param', undefined, true, literalAst)
+        },
+
+        identifier_discard(_underscore) {
+            return '_'
         },
 
         identifier_normal(letter, rest) {

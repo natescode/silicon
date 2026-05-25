@@ -1,16 +1,11 @@
 /**
- * Dissolution Phase D groundwork — T0 (builtin) strata can use the new
- * `@stratum := { ... }` unified form alongside the legacy
- * `@stratum_keyword` form.
- *
- * Before this work, the T0 loader only processed Elaboration nodes
- * (legacy form).  Builtin .si files that used the new form would be
- * silently skipped.  Now the T0 loader walks the program AST too and
- * picks up @stratum + @fn declarations the same way T1 does.
- *
- * These tests don't modify any existing builtin strata — they just
- * verify the new path is open so per-file migration (Phase D) becomes
- * mechanical: rewrite a stratum, run the suite, repeat.
+ * T0 (builtin) strata loader smoke tests for the unified
+ * `@stratum := { ... }` form.  Originally written as Phase-D dissolution
+ * groundwork when the unified form coexisted with the legacy
+ * Elaboration-based shape; the legacy shape was retired in the Phase 5
+ * grammar revision, so these tests now just verify the T0 loader still
+ * picks up unified-form strata from both builtin .si files and
+ * extraSources.
  */
 
 import { test, expect, describe } from 'bun:test'
@@ -51,8 +46,8 @@ describe('T0 loader accepts the new @stratum + @fn forms', () => {
 
     test('all 768 existing tests still pass — legacy T0 strata unaffected', () => {
         // Sanity: building the registry with the standard pipeline still
-        // works after the T0 loader extension.  Every legacy
-        // @stratum_keyword in src/strata/ continues to register.
+        // works after the T0 loader extension.  Every builtin stratum in
+        // src/strata/ continues to register through the unified form.
         const registry = buildStrataRegistry({ type: 'Program', elements: [] } as any)
         // Some load-bearing legacy strata that must still be present:
         expect(registry.operators['+']).toBeDefined()

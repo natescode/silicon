@@ -1,0 +1,30 @@
+# Phase 5a-2 — stdlib Result[T, E] type.
+#
+# Result models a computation that may succeed with a T or fail with an E.
+# Implemented as a parametric sum type with two type parameters.
+#
+#   @use '/path/to/sigil/src/stdlib/result.si';
+#   @local ok  := &Ok 42;        ;; inferred Result[Int, ?E]
+#   @local err := &Err 'oops';   ;; inferred Result[?T, String]
+#
+# Pattern-match directly with `&@match`:
+#   &@match r,
+#       $Ok v   => v,
+#       $Err _e => 0
+#
+# **Grammar limitation (1.0, tracked for follow-up).**  Multi-arg type
+# annotations like `:Result[T, E]` in *return-type* or *let-binding*
+# position get mis-parsed: PEG backtracks the `[T, E]` past the
+# annotation slot and consumes it as the function's `GenericParams`
+# instead.  Workarounds in 1.0:
+#   1. Don't annotate `:Result[T, E]` directly; let inference flow from
+#      `&Ok` / `&Err` constructor args.
+#   2. Or wrap the call in a non-generic `@fn` whose return type is a
+#      concrete monomorphisation (`:Result_Int_String`) declared via a
+#      `@type` alias.
+# Single-arg parametric types (Option[T]) are unaffected — see
+# `option.si` for the full helper pattern.  Lifting the limitation is
+# tracked in story 5a-3 (the parser needs a lookahead-aware refactor;
+# CLAUDE.md forbids grammar changes in this work bucket).
+
+@type Result[T, E] := $Ok value:T | $Err error:E;
