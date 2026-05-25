@@ -111,8 +111,24 @@ export interface IRNop { kind: 'Nop' }
 /** WAT unreachable — bottom type, used as the else-arm of exhaustive match. */
 export interface IRUnreachable { kind: 'Unreachable' }
 
+/**
+ * Indirect call through a `funcref` table slot.  Phase 5 Workstream B
+ * — first-class function values.  `tableIndex` is the i32 slot in the
+ * module's funcref table (typically obtained via `@fnref name`);
+ * `sigKey` names the function-type entry the call must match.  Args
+ * are passed in source order; the table index is emitted last in WAT
+ * per the call_indirect convention.
+ */
+export interface IRCallIndirect {
+    kind: 'CallIndirect'
+    wasmType: WasmType
+    sigKey: string
+    args: IRExpr[]
+    tableIndex: IRExpr
+}
+
 export type IRExpr =
-    | IRConst | IRLocalGet | IRGlobalGet | IRBinOp | IRCall
+    | IRConst | IRLocalGet | IRGlobalGet | IRBinOp | IRCall | IRCallIndirect
     | IRBlock | IRIf | IRLoop | IRBreak | IRContinue | IRReturn | IRNop | IRUnreachable
 
 // ---------------------------------------------------------------------------
@@ -175,6 +191,23 @@ export interface IRExport {
     what: 'func' | 'global'
 }
 
+/** Per-module funcref-table state — Phase 5 Workstream B (first-class
+ *  functions).  Populated by `@fnref name` strata; consumed by the
+ *  WAT / binary emitters to emit (table funcref), (type ...), and
+ *  (elem ...) declarations.  Undefined / empty when no funcref is
+ *  used, so non-funcref programs emit identical bytes as before. */
+export interface FuncrefTable {
+    /** Function names tagged for inclusion in the table, in slot order
+     *  (entries[i] is at table slot i). */
+    entries: string[]
+    /** Distinct function signatures used by call_indirect sites, keyed
+     *  by `sigKey` (e.g. '__fn_i_i').  The order is the type-section
+     *  index — `signatures[0]` is type index 0 in the (type) section.
+     *  This is module-level state shared by every call_indirect site
+     *  in the module. */
+    signatures: Array<{ key: string; params: WasmValType[]; result: WasmType }>
+}
+
 export interface IRModule {
     kind: 'Module'
     imports: IRImport[]
@@ -183,6 +216,9 @@ export interface IRModule {
     dataSegments: IRDataSegment[]
     /** Exports emitted from @export declarations. */
     exports: IRExport[]
+    /** Funcref + call_indirect machinery.  Undefined for non-funcref
+     *  programs (keeps the byte-equal codegen test passing). */
+    funcrefTable?: FuncrefTable
 }
 
 /** Sentinel callee name for array-literal IR nodes, shared between lower.ts and emit.ts. */

@@ -21,6 +21,7 @@ import type { ModuleRegistry } from '../modules/registry'
 import type { SemanticModel } from '../ast/semanticModel'
 import { buildPrelude } from './prelude-ir'
 import { emitWasmBinary } from './wasm-emitter'
+import { watToWasmSync } from './toWasm'
 
 export type { LowerTarget, LowerOptions } from '../ir/lower'
 
@@ -144,6 +145,16 @@ export function compileToWasm(
     options: LowerOptions = {},
 ): Uint8Array {
     const irModule = lowerProgram(program, registry, functionSigs, moduleRegistry, options)
+    // Phase 5 Workstream B — funcref-using modules currently route
+    // through the WAT path because the direct binary emitter doesn't
+    // yet support (type), (table funcref), (elem), or call_indirect
+    // sections.  Non-funcref modules use the direct path unchanged,
+    // preserving the byte-equal-to-WAT codegen-test contract.  Direct
+    // emitter parity is tracked as a follow-up.
+    if (irModule.funcrefTable) {
+        const wat = compileToWat(program, registry, functionSigs, moduleRegistry, options)
+        return watToWasmSync(wat)
+    }
     const heapBase = computeHeapBase(irModule)
     const prelude = buildPrelude(heapBase, options.target !== 'wasix')
     return emitWasmBinary(prelude, irModule)

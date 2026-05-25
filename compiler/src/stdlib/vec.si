@@ -99,3 +99,26 @@
     &WASM::i32_store v, new_len;
     x
 };
+
+# Phase 5a-5 / 5d-4 — Vec.map proof.
+# Apply `cb` (an i32 → i32 callback obtained via @fnref) to each element
+# and return a new Vec holding the results.  Capacity of the result Vec
+# is the source Vec's length so no growth happens during the map loop.
+#
+# Signature is hardcoded i32 → i32 for the 1.0 surface; Float and Int64
+# callback variants are mechanical extensions of the same machinery.
+#
+#   @fn double:Int x:Int := x * 2;
+#   @local doubled:Int := &vec_map_i32_i32 v, (&@fnref double);
+@fn vec_map_i32_i32:Int v:Int, cb:Int := {
+    @local len:Int := &vec_len v;
+    @local result:Int := &vec_new len;
+    @var i:Int := 0;
+    &@loop i < len, {
+        @local x:Int := &vec_get_i32 v, i;
+        @local y:Int := &@call_indirect cb, x;
+        &vec_push_i32 result, y;
+        i = i + 1;
+    };
+    result
+};

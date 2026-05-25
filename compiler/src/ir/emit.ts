@@ -26,6 +26,32 @@ export function emitModule(mod: IRModule, stdWat: string): string {
 
     for (const imp of mod.imports) parts.push(emitImport(imp))
     parts.push(stdWat)
+    // Phase 5 Workstream B — funcref table declarations.  Emitted only
+    // when at least one `@fnref` / `@call_indirect` was used (the field
+    // is absent otherwise, preserving byte-equal emission for non-funcref
+    // programs).  Signatures and entries are emitted independently so a
+    // function body containing `@call_indirect` still compiles even
+    // when the program doesn't call `@fnref` (e.g. a stdlib `vec_map`
+    // that's defined but never invoked from user code).
+    if (mod.funcrefTable) {
+        for (const sig of mod.funcrefTable.signatures) {
+            const params = sig.params.map(p => `(param ${p})`).join(' ')
+            const result = sig.result !== 'void' ? `(result ${sig.result})` : ''
+            const header = [params, result].filter(Boolean).join(' ')
+            parts.push(`(type $${sig.key} (func ${header}))`)
+        }
+        // Table size: at least the number of entries.  Size 0 is valid
+        // (a table that's declared but never indexed); call_indirect
+        // through such a table would trap at runtime, which is the
+        // correct semantics for "function with @call_indirect defined
+        // but no callable target supplied."
+        const tableSize = mod.funcrefTable.entries.length
+        parts.push(`(table ${tableSize} funcref)`)
+        if (tableSize > 0) {
+            const elems = mod.funcrefTable.entries.map(n => `$${n}`).join(' ')
+            parts.push(`(elem (i32.const 0) ${elems})`)
+        }
+    }
     for (const g of mod.globals)  parts.push(emitGlobal(g))
     for (const f of mod.functions) parts.push(emitFunction(f))
     for (const exp of mod.exports) parts.push(emitExplicitExport(exp))
@@ -95,6 +121,15 @@ export function emitExpr(e: IRExpr): string {
 
         case 'Call':
             return emitCall(e)
+
+        case 'CallIndirect': {
+            // call_indirect WAT shape:
+            //   (call_indirect (type $sig) ARG1 ARG2 ... INDEX)
+            // Args come first in source order; the table index is last.
+            const args = e.args.map(a => emitExpr(a)).join(' ')
+            const idx = emitExpr(e.tableIndex)
+            return `(call_indirect (type $${e.sigKey}) ${args} ${idx})`.replace(/\s+/g, ' ')
+        }
 
         case 'Block':
             return emitBlock(e)
@@ -205,6 +240,7 @@ function isVoidIR(e: IRExpr): boolean {
         case 'Block':
         case 'If':
         case 'Call':
+        case 'CallIndirect':
         case 'BinOp':
         case 'Const':
         case 'LocalGet':

@@ -52,6 +52,10 @@ interface LowerCtx {
     loopStack: number[]
     /** Monotonically increasing loop counter for unique labels. */
     loopCount: { n: number }
+    /** Phase 5 Workstream B — funcref table state.  Populated by
+     *  `@fnref` (adds an entry) and `@call_indirect` (adds a signature).
+     *  Drained into IRModule.funcrefTable at the end of lowerProgram. */
+    funcrefTable: import('./nodes').FuncrefTable
     /** Phase 4: deferred cleanup expressions for the current function body.
      *  Pushed in source order by `@defer` sites; drained in LIFO order at
      *  function exit (end-of-body in `lowerFunctionBody` and every `@return`
@@ -210,6 +214,7 @@ export function lowerProgram(
         currentStratumRef,
         semanticModel,
         structLocals: new Map(),
+        funcrefTable: { entries: [], signatures: [] },
     }
     // Pass the live ctx (not a snapshot) so $compiler is current when
     // recursively invoked methods (api.lowerExpr → lowerBinaryOp → on::lower
@@ -351,6 +356,16 @@ export function lowerProgram(
         functions,
         dataSegments: ctx.strings.segments,
         exports: irExports,
+        // Phase 5 Workstream B — populated by `@fnref` / `@call_indirect`
+        // strata; absent for programs that don't use them so non-funcref
+        // codegen stays byte-equal.  Either entries or signatures being
+        // non-empty triggers emission — a program with `@call_indirect`
+        // but no `@fnref` still needs the (type) declaration so the
+        // call_indirect bytecode references a valid type index.
+        funcrefTable: ctx.funcrefTable
+            && (ctx.funcrefTable.entries.length > 0 || ctx.funcrefTable.signatures.length > 0)
+            ? ctx.funcrefTable
+            : undefined,
     }
 }
 
@@ -1032,6 +1047,16 @@ function lowerModuleCall(name: string, sepIdx: number, n: any, ctx: LowerCtx): I
 }
 
 function lowerBuiltinCall(name: string, rawArgs: any[], ctx: LowerCtx, inferredType?: any): IRExpr {
+    // Phase 5 Workstream B — `@fnref` and `@call_indirect`.  Hardcoded
+    // here rather than via on::lower handlers because they need direct
+    // access to ctx.funcrefTable for module-level state mutation, and
+    // they're the only keywords with that requirement.
+    if (name === '@fnref') {
+        return lowerFnRef(rawArgs, ctx)
+    }
+    if (name === '@call_indirect') {
+        return lowerCallIndirect(rawArgs, ctx)
+    }
     // Typed dispatch: try the first arg's type kind, fall back to the untyped entry.
     const firstArgKind: string = (inferredTypeOf(rawArgs[0], ctx) ?? (rawArgs[0] as any)?.inferredType)?.kind ?? 'Int'
     const kwEntry = lookupTypedKeyword(ctx.registry, name, firstArgKind) ?? lookupKeyword(ctx.registry, name)
@@ -1082,6 +1107,69 @@ function lowerBuiltinCall(name: string, rawArgs: any[], ctx: LowerCtx, inferredT
     // Unknown builtin — call by name (user-defined stratum that calls a Silicon function).
     const kwName = watId(name.replace(/^@/, ''))
     return { kind: 'Call', wasmType: wt, callee: kwName, callKind: 'user', args }
+}
+
+// ── Phase 5 Workstream B — funcref + call_indirect ────────────────────
+
+/**
+ * `&@fnref name` — produce the i32 table index for top-level @fn `name`.
+ * Adds the function to ctx.funcrefTable.entries on first reference;
+ * returns the existing slot index on subsequent references so
+ * `@fnref add_one == @fnref add_one` is true.
+ */
+function lowerFnRef(rawArgs: any[], ctx: LowerCtx): IRExpr {
+    if (rawArgs.length !== 1) {
+        throw new IRLowerError(`@fnref expects exactly 1 argument (a function name), got ${rawArgs.length}`)
+    }
+    const arg = unwrap(rawArgs[0])
+    // Extract the function name.  Accept Namespace, raw identifier
+    // string, or wrapped forms.
+    let name: string | undefined
+    if (arg?.type === 'Namespace' && Array.isArray(arg.path) && arg.path.length === 1) {
+        name = arg.path[0]
+    } else if (typeof arg === 'string') {
+        name = arg
+    }
+    if (!name) {
+        throw new IRLowerError(`@fnref: argument must be a function name (a bare identifier), got ${JSON.stringify(arg).slice(0, 80)}`)
+    }
+    const target = watId(name)
+    const table = ctx.funcrefTable
+    let idx = table.entries.indexOf(target)
+    if (idx < 0) {
+        idx = table.entries.length
+        table.entries.push(target)
+    }
+    // Ensure the default signature is registered (i32 → i32 for 1.0).
+    if (table.signatures.length === 0) {
+        table.signatures.push({ key: '__fn_i_i', params: ['i32'], result: 'i32' })
+    }
+    return { kind: 'Const', wasmType: 'i32', value: idx }
+}
+
+/**
+ * `&@call_indirect cb, arg` — invoke the function whose table index is
+ * `cb` with one i32 argument, returning i32.  Signature is fixed at
+ * i32 → i32 for the 1.0 surface; multi-arg / mixed-type variants are
+ * mechanical extensions of the same machinery.
+ */
+function lowerCallIndirect(rawArgs: any[], ctx: LowerCtx): IRExpr {
+    if (rawArgs.length !== 2) {
+        throw new IRLowerError(`@call_indirect expects exactly 2 arguments (cb, arg), got ${rawArgs.length}`)
+    }
+    const table = ctx.funcrefTable
+    if (table.signatures.length === 0) {
+        table.signatures.push({ key: '__fn_i_i', params: ['i32'], result: 'i32' })
+    }
+    const cb = lowerExpr(rawArgs[0], ctx)
+    const arg = lowerExpr(rawArgs[1], ctx)
+    return {
+        kind: 'CallIndirect',
+        wasmType: 'i32',
+        sigKey: '__fn_i_i',
+        args: [arg],
+        tableIndex: cb,
+    }
 }
 
 function lowerBlock(n: any, ctx: LowerCtx): IRBlock {
@@ -1266,6 +1354,7 @@ export function exprWasmType(e: IRExpr): WasmType {
         case 'GlobalGet': return e.wasmType
         case 'BinOp':   return e.wasmType
         case 'Call':    return e.wasmType
+        case 'CallIndirect': return e.wasmType
         case 'Block':   return e.wasmType
         case 'If':      return e.wasmType
         case 'Loop':        return 'void'

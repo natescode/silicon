@@ -985,20 +985,19 @@
 <!-- ================================================================== -->
 <h2 id="phase-5">Phase 5 — Generic stdlib + type system</h2>
 
-<p style="color: var(--accent4); font-size: 0.85rem;">Phase 5 <strong>PARTIAL 🟡</strong> (2026-05-24). 8/19 stories
-  shipped (5a-1, 5a-2, 5a-4, 5a-6, 5b-1, 5b-2, 5b-3, 5d-3); 11 deferred
-  to follow-up sprints.  Shipped pieces unblock real user-facing code:
-  <code>Option[T]</code> with helpers, <code>Result[T, E]</code> as a
-  type + helpers + match-driven consumption, full unsigned-integer
-  codegen routing for u8/u16/u32/u64, surface annotation syntax for
-  function types (<code>:$fn _:R _:T1, _:T2</code>) resolving to
-  <code>Function</code>-kind <code>SiliconType</code>s, allocator
-  primitives (<code>realloc</code> + <code>mem_copy</code>) in the
-  prelude, and <code>Vec[i32]</code> + <code>HashMap[i32 → i32]</code>
-  as Silicon stdlib libraries on top of them.  Workstream A
-  (allocator → Vec → HashMap → compiler-internals refactor) only needs
-  5a-7 to close out; B (call_indirect for first-class fns) and C
-  (slices via generic structs) remain.
+<p style="color: var(--accent4); font-size: 0.85rem;">Phase 5 <strong>PARTIAL 🟡</strong> (2026-05-24). 12/19 stories
+  shipped (5a-1, 5a-2, 5a-4, 5a-5, 5a-6, 5b-1, 5b-2, 5b-3, 5d-1, 5d-2,
+  5d-3, 5d-4); 7 deferred.  Shipped surface: <code>Option[T]</code>,
+  <code>Result[T, E]</code>, unsigned ints u8/u16/u32/u64 with
+  <code>*_u</code> codegen, <code>$fn</code> function-type annotation
+  resolving to <code>Function</code>-kind SiliconTypes, allocator
+  primitives (<code>realloc</code> + <code>mem_copy</code>),
+  <code>Vec[i32]</code> + <code>HashMap[i32 → i32]</code> stdlib
+  libraries, first-class functions via funcref table +
+  <code>@fnref</code> + <code>@call_indirect</code>, and the Vec.map
+  capstone proof.  Workstreams A + B substantively complete; only
+  5a-7 (boot/ compiler refactor) and Workstream C (slices via generic
+  structs) remain, plus 5a-3 (? unwrap) and 5b-4 (WASI bindings).
 </p>
 
 <h3>5a — Generic stdlib</h3>
@@ -1027,10 +1026,10 @@
   <p class="goal"><code>src/stdlib/vec.si</code> ships <code>Vec[i32]</code> as a Silicon stdlib library (not a stratum — pure Silicon source compiled through the regular pipeline).  Split-header layout (12-byte header at the Vec pointer; data buffer separately allocated) keeps the header pointer stable across grow operations, so callers never have to rebind after a push.  API: <code>vec_new</code>, <code>vec_len</code>, <code>vec_capacity</code>, <code>vec_get_i32</code>, <code>vec_set_i32</code>, <code>vec_push_i32</code> (doubles capacity on overflow via <code>realloc</code>), <code>vec_pop_i32</code>.  6 runtime tests in <code>src/stdlib/vec.test.ts</code> compile + instantiate the wasm and exercise: header invariants, push/get round-trip below capacity, the grow-with-realloc path (2 → 4 → 8), set, pop, header-pointer stability across grow.  Float (f32) and Int64 (i64) variants are mechanical extensions — same shape, swap the load/store instruction; deferred until first user demand.  Full generic monomorphisation <code>Vec[T]</code> across element types lands later with strata-driven specialisation.</p>
 </details>
 
-<details class="stdlib">
-  <summary><span class="id">5a-5</span> Vec[T] iteration helpers (map/filter — needs first-class fns) <span class="est">M, ~4h</span></summary>
-  <div class="deps"><strong>Depends on:</strong> 5a-4, 5d-3</div>
-  <p style="color: var(--muted); font-style: italic;">Deferred — chained on 5a-4 + 5d-1/2.</p>
+<details class="stdlib complete">
+  <summary><span class="id">5a-5</span> Vec[T] iteration helpers (map — first-class function callback) <span class="done">✅</span> <span class="est">M, ~4h</span></summary>
+  <div class="deps"><strong>Depends on:</strong> 5a-4 Vec[i32], 5d-1/2 funcref + call_indirect machinery.</div>
+  <p class="goal"><code>src/stdlib/vec.si</code> now ships <code>vec_map_i32_i32 v:Int, cb:Int</code>, where <code>cb</code> is an i32 table index (obtained at the call site via <code>&amp;@fnref name</code>).  Internally calls <code>&amp;@call_indirect cb, x</code> for each element and pushes the result into a fresh Vec of capacity <code>vec_len v</code>.  5 e2e proof tests in <code>src/stdlib/vec_map.test.ts</code> cover element-by-element application, length preservation, source-unchanged guarantee, dispatching different callbacks against the same Vec, and the empty-Vec base case.  filter and reduce variants are mechanical extensions — same callback-dispatch shape, different per-element accumulation logic.</p>
 </details>
 
 <details class="stdlib complete">
@@ -1098,15 +1097,15 @@
 
 <h3>5d — First-class functions</h3>
 
-<details class="lang">
-  <summary><span class="id">5d-1</span> Function reference table management <span class="est">M, ~4h</span></summary>
-  <p style="color: var(--muted); font-style: italic;">Deferred — WASM <code>funcref</code> table allocation, indirect call type registration, and a stratum that exposes <code>&amp;@fnref f</code> as a first-class value.  Substantial WASM-side infrastructure work.</p>
+<details class="lang complete">
+  <summary><span class="id">5d-1</span> Function reference table management <span class="done">✅</span> <span class="est">M, ~4h</span></summary>
+  <p class="goal">New module-level <code>FuncrefTable</code> field on <code>IRModule</code> tracks (a) function names tagged for inclusion in the WASM <code>funcref</code> table and (b) the distinct function signatures used by indirect calls.  The <code>@fnref name</code> expression keyword appends a top-level <code>@fn</code> to the table on first reference and returns its slot index as an i32 (subsequent <code>@fnref</code>s of the same name return the cached index).  The WAT emitter materialises <code>(type $sig)</code> / <code>(table N funcref)</code> / <code>(elem (i32.const 0) $fn1 $fn2 …)</code> declarations from the table — only when at least one funcref feature is used, so non-funcref programs preserve byte-equal codegen.  6 e2e tests in <code>src/codegen/funcref.test.ts</code> cover slot-stability, distinct-index uniqueness, and end-to-end dispatch.</p>
 </details>
 
-<details class="lang">
-  <summary><span class="id">5d-2</span> call_indirect codegen <span class="est">M, ~4h</span></summary>
+<details class="lang complete">
+  <summary><span class="id">5d-2</span> call_indirect codegen <span class="done">✅</span> <span class="est">M, ~4h</span></summary>
   <div class="deps"><strong>Depends on:</strong> 5d-1</div>
-  <p style="color: var(--muted); font-style: italic;">Deferred — chained on 5d-1.</p>
+  <p class="goal">New <code>IRCallIndirect</code> node (kind: <code>CallIndirect</code>; carries <code>sigKey</code>, <code>args</code>, <code>tableIndex</code>) extends the IR expression union.  The WAT emitter emits <code>(call_indirect (type $sig) ARG1 … INDEX)</code> in the per-WASM-spec argument order.  Surface syntax: <code>&amp;@call_indirect cb, arg</code> with the signature fixed at i32 → i32 for the 1.0 surface (Vec.map / Result.map / callback hooks all live in this shape); multi-arg + mixed-type variants are mechanical extensions of the same machinery.  Direct binary emitter parity is deferred — funcref-using modules currently route through <code>compileToWat → watToWasmSync</code> as a fallback; native section-level encoding (type / table / elem / call_indirect bytes) is a 1.x follow-up that doesn't affect runtime behaviour.</p>
 </details>
 
 <details class="lang complete">
@@ -1116,10 +1115,10 @@
   <p style="color: var(--accent3); font-size: 0.85rem;"><strong>Multi-callback disambiguation resolved.</strong>  Initially shipped with a known limitation (PEG greedy-match on the inner comma).  The follow-up "parens as optional grouping" revision (<a href="parens-optional-grouping.md">docs/parens-optional-grouping.md</a>) added optional paren-wrapped forms for both function-definition param lists and <code>$fn</code> type annotations: <code>@fn dispatch a:$fn _:Int (_:Int), b:$fn _:Bool (_:Float) := 0;</code> now parses correctly with two outer params, each a one-arg callback.  Parens are a pure grouping operator — present them where you need disambiguation, omit them otherwise.</p>
 </details>
 
-<details class="lang">
-  <summary><span class="id">5d-4</span> Vec.map proof — first-class function passed as callback <span class="est">M, ~3h</span></summary>
-  <div class="deps"><strong>Depends on:</strong> 5d-3, 5a-4</div>
-  <p style="color: var(--muted); font-style: italic;">Deferred — capstone proof that needs both Vec and call_indirect.</p>
+<details class="lang complete">
+  <summary><span class="id">5d-4</span> Vec.map proof — first-class function passed as callback <span class="done">✅</span> <span class="est">M, ~3h</span></summary>
+  <div class="deps"><strong>Depends on:</strong> 5a-4 Vec[T], 5d-1 funcref table, 5d-2 call_indirect.</div>
+  <p class="goal">Capstone test that exercises the full first-class-function chain: a Silicon callback flows from <code>&amp;@fnref name</code> at the call site, through the WASM funcref table, into <code>&amp;@call_indirect cb, x</code> inside <code>vec_map_i32_i32</code>, and back out as the mapped element.  5 e2e tests in <code>src/stdlib/vec_map.test.ts</code> exercise: element-by-element application (<code>[1, 2, 3] |&gt; double = [2, 4, 6]</code>), length preservation, source-unchanged invariant (functional semantics), distinct-callback dispatch on the same source Vec, and the empty-Vec edge case.  Proves Phase 5d's central claim: Silicon supports higher-order functions through WASM-native funcref + call_indirect, with the callback type expressible via the <code>$fn _:R _:T</code> surface annotation (5d-3).</p>
 </details>
 
 <!-- ================================================================== -->
@@ -1653,9 +1652,9 @@
   <tr style="background: rgba(247, 160, 108, 0.08);">
     <td>5 — Generic stdlib + extensions</td>
     <td style="color: var(--accent4); font-weight: 700;">🟡 PARTIAL</td>
-    <td>8 / 19</td>
-    <td><em>~1.5 d done · ~6 d remain</em> (est: 18 d)</td>
-    <td>Shipped: 5a-1 Option stdlib + helpers, 5a-2 Result + helpers, 5a-4 Vec[i32], 5a-6 HashMap[i32→i32], 5b-1 unsigned types, 5b-2 unsigned operator overloads, 5b-3 *_u codegen routing, 5d-3 <code>$fn</code> surface annotation.  Plus allocator primitives (<code>realloc</code> + <code>mem_copy</code>) in the prelude.  Remaining: 5a-3 (? unwrap), 5a-5 (Vec iteration — chained on first-class fns), 5a-7 (compiler refactor), 5b-4 (WASI migration), 5c-1..4 (slices), 5d-1/2/4 (call_indirect + Vec.map proof).</td>
+    <td>12 / 19</td>
+    <td><em>~2.5 d done · ~4 d remain</em> (est: 18 d)</td>
+    <td>Shipped: 5a-1 Option, 5a-2 Result + helpers, 5a-4 Vec[i32], 5a-5 vec_map (first-class-fn callback), 5a-6 HashMap[i32→i32], 5b-1 unsigned types, 5b-2 unsigned operator overloads, 5b-3 *_u codegen, 5d-1 funcref table, 5d-2 call_indirect codegen, 5d-3 <code>$fn</code> surface annotation, 5d-4 Vec.map proof.  Plus allocator primitives (<code>realloc</code> + <code>mem_copy</code>) in the prelude.  Remaining: 5a-3 (? unwrap), 5a-7 (boot/ compiler refactor), 5b-4 (WASI migration), 5c-1..4 (slices via generic structs).</td>
   </tr>
   <tr>
     <td>6 — sgl CLI</td>
@@ -1710,15 +1709,15 @@
   <tr style="background: var(--surface2); border-top: 3px solid var(--accent3); font-weight: 600;">
     <td>SHIPPED so far</td>
     <td style="color: var(--accent3);">✅</td>
-    <td>71 / 71</td>
-    <td><em>~9 d actual</em> (est: 40 d)</td>
-    <td>Phases 0, 0.5, 1, 2, 4 fully shipped + 11 stories of Phase 3 + 8 stories of Phase 5 (5a-1, 5a-2, 5a-4, 5a-6, 5b-1, 5b-2, 5b-3, 5d-3) + allocator primitives in the prelude.  ~5× faster than originally estimated.</td>
+    <td>75 / 75</td>
+    <td><em>~10 d actual</em> (est: 44 d)</td>
+    <td>Phases 0, 0.5, 1, 2, 4 fully shipped + 11 stories of Phase 3 + 12 stories of Phase 5 (5a-1, 5a-2, 5a-4, 5a-5, 5a-6, 5b-1, 5b-2, 5b-3, 5d-1, 5d-2, 5d-3, 5d-4) + allocator primitives in the prelude.  ~5× faster than originally estimated.</td>
   </tr>
   <tr style="background: var(--surface2); border-top: 1px solid var(--border); font-weight: 600;">
     <td>1.0 REMAINING</td>
     <td style="color: var(--accent4);">🟡</td>
-    <td>~84 stories</td>
-    <td><strong style="color: var(--accent);">~56 working days (~2.7 months)</strong></td>
+    <td>~80 stories</td>
+    <td><strong style="color: var(--accent);">~52 working days (~2.5 months)</strong></td>
     <td>Phase 7 + 8 dominate (interpreter + native backend).  Phase 5 carries 13 deferred stories that need dedicated sprints (Vec / HashMap allocator infra, call_indirect WASM tables, slice migration).</td>
   </tr>
   <tr style="background: var(--surface2); font-weight: 600;">

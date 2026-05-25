@@ -34,3 +34,18 @@
 # onto the current function's deferStack; emits no inline IR at the site.
 @fn Defer_lower node:Int :=
     &compiler::compiler_registerDefer node;
+
+# Phase 5 Workstream B — first-class functions.
+# `@fnref name` produces the i32 table index of a top-level @fn,
+# adding it to the module's funcref table on demand.
+# `@call_indirect cb, arg` invokes the function whose table index is
+# `cb` with one i32 argument, returning i32 — the 1.0 surface fixes the
+# signature to i32 → i32 (the common case for Vec.map / Result.map);
+# multi-arg / mixed-type variants are mechanical extensions.
+@stratum FnRef := {
+    &Compiler::register::expression_keyword '@fnref';
+};
+
+@stratum CallIndirect := {
+    &Compiler::register::expression_keyword '@call_indirect';
+};
