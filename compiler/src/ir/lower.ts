@@ -1380,7 +1380,10 @@ function callName(n: any): string {
 
 function siliconTypeNameToWasm(typename: string): WasmValType {
     if (typename === 'Float') return 'f32'
-    if (typename === 'Int64' || typename === 'i64') return 'i64'
+    // i64-width types: Int64, u64, and the low-level escape hatch alias.
+    if (typename === 'Int64' || typename === 'UInt64' || typename === 'u64' || typename === 'i64') return 'i64'
+    // Everything else (Int, Bool, String, Array, Function, u8/u16/u32, …)
+    // shares the i32 WASM representation.
     return 'i32'
 }
 

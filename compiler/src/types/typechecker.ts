@@ -59,6 +59,8 @@ import {
     TypeFloat,
     TypeString,
     TypeBool,
+    TypeUInt32,
+    TypeUInt64,
     TypeUnknown,
     ArrayOf,
     FunctionOf,
@@ -1115,6 +1117,14 @@ function checkFunctionCall(call: any, ctx: Ctx): SiliconType {
                 name === '@toInt' && firstArgKind === 'Int64' ? { params: [TypeInt64], result: TypeInt } :
                 name === '@toInt'   ? { params: [TypeFloat], result: TypeInt   } :
                 name === '@toInt64' ? { params: [TypeInt],   result: TypeInt64 } :
+                // Phase 5b-4 — unsigned-integer casts.  @toU32 is a pure
+                // type relabel (Int → u32 shares i32 at the WASM level);
+                // @toU64 zero-extends from Int (→ u64) or relabels from
+                // Int64 (→ u64).  Used for WASI bindings + any user code
+                // that wants explicit unsigned types.
+                name === '@toU32' ? { params: [TypeInt],   result: TypeUInt32 } :
+                name === '@toU64' && firstArgKind === 'Int64' ? { params: [TypeInt64], result: TypeUInt64 } :
+                name === '@toU64' ? { params: [TypeInt],   result: TypeUInt64 } :
                 undefined
             // Prefer the pre-derived TypeSig stored in the registry; fall back to
             // deriving from the intrinsic name for strata loaded before Round 30.

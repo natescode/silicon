@@ -66,3 +66,40 @@
         (&compiler::compiler_str_intern 'i32', 0),
         (&compiler::compiler_str_intern 'instr', 0)
 };
+
+# Phase 5b-4 — unsigned-integer casts (Int → u32, Int → u64,
+# Int64 → u64).  Int → u32 is a pure type relabel (both share the
+# i32 WASM representation); the handler just returns the lowered
+# operand IR with no wrapping instruction.  Int → u64 zero-extends
+# via i64.extend_i32_u.  Int64 → u64 is a pure type relabel
+# (both share the i64 WASM representation), handled via a
+# typed_keyword overload below.
+
+@stratum ToU32 := {
+    &Compiler::register::expression_keyword '@toU32';
+    &Compiler::on::lower '@toU32', ToU32_lower;
+};
+@fn ToU32_lower node:Int :=
+    &compiler::compiler_lowerExpr (&compiler::compiler_arg node, 0);
+
+@stratum ToU64 := {
+    &Compiler::register::expression_keyword '@toU64';
+    &Compiler::on::lower '@toU64', ToU64_lower;
+};
+@fn ToU64_lower node:Int := {
+    @local args:Int := &compiler::compiler_arr_new;
+    &compiler::compiler_arr_push args,
+        (&compiler::compiler_lowerExpr (&compiler::compiler_arg node, 0));
+    &compiler::ir_makeCall
+        (&compiler::compiler_str_intern 'i64.extend_i32_u', 0),
+        args,
+        (&compiler::compiler_str_intern 'i64', 0),
+        (&compiler::compiler_str_intern 'instr', 0)
+};
+
+@stratum ToU64FromInt64 := {
+    &Compiler::register::typed_keyword '@toU64', 'Int64';
+    &Compiler::on::lower '@toU64:Int64', ToU64FromInt64_lower;
+};
+@fn ToU64FromInt64_lower node:Int :=
+    &compiler::compiler_lowerExpr (&compiler::compiler_arg node, 0);

@@ -217,6 +217,7 @@ function bindVar(name: string, t: SiliconType, s: Subst): Subst {
 function isPrimitiveKind(k: SiliconType['kind']): boolean {
     return k === 'Int' || k === 'Int64' || k === 'Float'
         || k === 'String' || k === 'Bool' || k === 'Void'
+        || k === 'UInt8' || k === 'UInt16' || k === 'UInt32' || k === 'UInt64'
 }
 
 // ---------------------------------------------------------------------------

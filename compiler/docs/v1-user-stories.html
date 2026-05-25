@@ -986,8 +986,8 @@
 <h2 id="phase-5">Phase 5 — Generic stdlib + type system</h2>
 
 <p style="color: var(--accent4); font-size: 0.85rem;">Phase 5 <strong>PARTIAL 🟡</strong> (2026-05-24). 12/19 stories
-  shipped (5a-1, 5a-2, 5a-4, 5a-5, 5a-6, 5b-1, 5b-2, 5b-3, 5d-1, 5d-2,
-  5d-3, 5d-4); 7 deferred.  Shipped surface: <code>Option[T]</code>,
+  shipped + 1 partial (5b-4 — casts shipped, binding migration
+  deferred); 6 deferred.  Shipped surface: <code>Option[T]</code>,
   <code>Result[T, E]</code>, unsigned ints u8/u16/u32/u64 with
   <code>*_u</code> codegen, <code>$fn</code> function-type annotation
   resolving to <code>Function</code>-kind SiliconTypes, allocator
@@ -995,9 +995,11 @@
   <code>Vec[i32]</code> + <code>HashMap[i32 → i32]</code> stdlib
   libraries, first-class functions via funcref table +
   <code>@fnref</code> + <code>@call_indirect</code>, and the Vec.map
-  capstone proof.  Workstreams A + B substantively complete; only
-  5a-7 (boot/ compiler refactor) and Workstream C (slices via generic
-  structs) remain, plus 5a-3 (@try unwrap) and 5b-4 (WASI bindings).
+  capstone proof, plus WASI bindings migrated to spec-correct
+  <code>u32</code> / <code>u64</code> via new <code>@toU32</code> +
+  <code>@toU64</code> casts.  Workstreams A + B substantively
+  complete; only 5a-7 (boot/ compiler refactor) and Workstream C
+  (slices via generic structs) remain, plus 5a-3 (@try unwrap).
 </p>
 
 <h3>5a — Generic stdlib</h3>
@@ -1064,10 +1066,11 @@
   <p class="goal">Operand-type dispatch in <code>lowerBinaryOp</code> (<code>src/ir/lower.ts</code>) extended to prefer the inferred SiliconType.kind over <code>wasmTypeOf</code> alone — unsigned types now route to <code>UInt8</code> / <code>UInt16</code> / <code>UInt32</code> / <code>UInt64</code> typed strata instead of getting collapsed into <code>Int</code> / <code>Int64</code> via the i32/i64 wasmType.  12 codegen integration tests in <code>src/types/unsigned.test.ts</code> assert: u32/u32 division emits <code>i32.div_u</code> (not <code>div_s</code>); u64/u64 division emits <code>i64.div_u</code>; unsigned comparisons emit <code>*_u</code> variants; signed Int / Int64 paths are unaffected; shared-semantics ops (<code>+</code>, <code>==</code>) emit the common WASM instruction.</p>
 </details>
 
-<details class="lang">
-  <summary><span class="id">5b-4</span> Migrate WASI bindings to u32/u64 <span class="est">M, ~4h</span></summary>
-  <div class="deps"><strong>Depends on:</strong> 5b-3</div>
-  <p style="color: var(--muted); font-style: italic;">Deferred — touches <code>src/strata/modules/wasi_snapshot_preview1.si</code> (in <code>src/</code>) and <code>boot/strata/builtin/modules/wasi_snapshot_preview1.si</code> (in <code>boot/</code>; off-limits per CLAUDE.md).  The src/ side can land standalone; the boot/ side ports later with story 3-25's bucket.</p>
+<details class="lang partial">
+  <summary><span class="id">5b-4</span> Migrate WASI bindings to u32/u64 <span class="done">🟡 partial</span> <span class="est">M, ~4h</span></summary>
+  <div class="deps"><strong>Depends on:</strong> 5b-3 unsigned operator codegen.</div>
+  <p class="goal"><strong>Shipped: <code>@toU32</code> + <code>@toU64</code> cast keywords</strong> in <code>src/strata/cast.si</code> — mirror <code>@toInt64</code>'s pattern.  <code>@toU32</code> from <code>Int</code> is a pure type relabel (returns the lowered operand unchanged — both share i32 representation).  <code>@toU64</code> from <code>Int</code> zero-extends via <code>i64.extend_i32_u</code>.  <code>@toU64</code> from <code>Int64</code> is a typed-keyword overload that's also a pure relabel.  Plus parallel updates: <code>migratedCastSig</code> in <code>typechecker.ts</code> learns the unsigned return types; <code>isPrimitiveKind</code> in <code>unify.ts</code> + <code>siliconTypeNameToWasm</code> in <code>lower.ts</code> + <code>siliconTypeToWasm</code> in <code>modules/loader.ts</code> all recognise the new typenames.  6 new unit tests in <code>src/types/u_casts.test.ts</code> cover the cast surface end-to-end.  User code that wants spec-correct unsigned WASI types can opt in directly via the new casts today.</p>
+  <p style="color: var(--accent4); font-size: 0.85rem;"><strong>Deferred: WASI-bindings annotation migration.</strong>  Initially attempted but had to be rolled back — <code>boot/main.si</code> (the self-hosted compiler's entry point, off-limits per CLAUDE.md) calls <code>&amp;wasi_snapshot_preview1::fd_write</code>, <code>fd_read</code>, and <code>proc_exit</code> with <code>Int</code> args, and is compiled through the src/ TS compiler.  Changing <code>src/strata/modules/wasi_snapshot_preview1.si</code>'s annotations to <code>u32</code> / <code>u64</code> breaks the WASIX smoke test that builds boot/main.si.  The full annotation migration lands when boot/ opens up alongside story 3-26 — at that point the boot/ callers can migrate in lockstep with the src/ bindings.</p>
 </details>
 
 <h3>5c — Slices</h3>
@@ -1653,9 +1656,9 @@
   <tr style="background: rgba(247, 160, 108, 0.08);">
     <td>5 — Generic stdlib + extensions</td>
     <td style="color: var(--accent4); font-weight: 700;">🟡 PARTIAL</td>
-    <td>12 / 19</td>
-    <td><em>~2.5 d done · ~4 d remain</em> (est: 18 d)</td>
-    <td>Shipped: 5a-1 Option, 5a-2 Result + helpers, 5a-4 Vec[i32], 5a-5 vec_map (first-class-fn callback), 5a-6 HashMap[i32→i32], 5b-1 unsigned types, 5b-2 unsigned operator overloads, 5b-3 *_u codegen, 5d-1 funcref table, 5d-2 call_indirect codegen, 5d-3 <code>$fn</code> surface annotation, 5d-4 Vec.map proof.  Plus allocator primitives (<code>realloc</code> + <code>mem_copy</code>) in the prelude.  Remaining: 5a-3 (@try unwrap), 5a-7 (boot/ compiler refactor), 5b-4 (WASI migration), 5c-1..4 (slices via generic structs).</td>
+    <td>12 / 19 + 1 partial</td>
+    <td><em>~3 d done · ~3.5 d remain</em> (est: 18 d)</td>
+    <td>Shipped: 5a-1 Option, 5a-2 Result + helpers, 5a-4 Vec[i32], 5a-5 vec_map, 5a-6 HashMap[i32→i32], 5b-1 unsigned types, 5b-2 unsigned operator overloads, 5b-3 *_u codegen, 5d-1 funcref table, 5d-2 call_indirect codegen, 5d-3 <code>$fn</code> surface annotation, 5d-4 Vec.map proof.  Partial: 5b-4 (<code>@toU32</code> / <code>@toU64</code> casts shipped; binding annotation migration deferred — boot/main.si callers off-limits).  Plus allocator primitives (<code>realloc</code> + <code>mem_copy</code>) in the prelude.  Remaining: 5a-3 (@try unwrap), 5a-7 (boot/ compiler refactor), 5c-1..4 (slices via generic structs).</td>
   </tr>
   <tr>
     <td>6 — sgl CLI</td>
@@ -1710,9 +1713,9 @@
   <tr style="background: var(--surface2); border-top: 3px solid var(--accent3); font-weight: 600;">
     <td>SHIPPED so far</td>
     <td style="color: var(--accent3);">✅</td>
-    <td>75 / 75</td>
-    <td><em>~10 d actual</em> (est: 44 d)</td>
-    <td>Phases 0, 0.5, 1, 2, 4 fully shipped + 11 stories of Phase 3 + 12 stories of Phase 5 (5a-1, 5a-2, 5a-4, 5a-5, 5a-6, 5b-1, 5b-2, 5b-3, 5d-1, 5d-2, 5d-3, 5d-4) + allocator primitives in the prelude.  ~5× faster than originally estimated.</td>
+    <td>75 / 75 + 1 partial</td>
+    <td><em>~10.5 d actual</em> (est: 44 d)</td>
+    <td>Phases 0, 0.5, 1, 2, 4 fully shipped + 11 stories of Phase 3 + 12 stories of Phase 5 (5a-1, 5a-2, 5a-4, 5a-5, 5a-6, 5b-1, 5b-2, 5b-3, 5d-1, 5d-2, 5d-3, 5d-4) + 5b-4 partial (casts shipped, binding migration deferred) + allocator primitives in the prelude.  ~5× faster than originally estimated.</td>
   </tr>
   <tr style="background: var(--surface2); border-top: 1px solid var(--border); font-weight: 600;">
     <td>1.0 REMAINING</td>

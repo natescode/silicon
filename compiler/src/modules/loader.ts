@@ -40,11 +40,11 @@ function unwrap(node: any): any {
     return node
 }
 
-// Silicon types map to WASM value types: Float → f32, Int64 → i64,
-// everything else (Int, Int32, Bool, String, pointer-ish) → i32.
+// Silicon types map to WASM value types: Float → f32, Int64/u64 → i64,
+// everything else (Int, Int32, Bool, String, pointer-ish, u8/u16/u32) → i32.
 function siliconTypeToWasm(typename: string): WasmValType {
     if (typename === 'Float') return 'f32'
-    if (typename === 'Int64' || typename === 'i64') return 'i64'
+    if (typename === 'Int64' || typename === 'UInt64' || typename === 'u64' || typename === 'i64') return 'i64'
     return 'i32'
 }
 

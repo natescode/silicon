@@ -10,6 +10,15 @@
 #
 # Reference: https://github.com/WebAssembly/WASI/blob/main/legacy/preview1/docs/WASI.md
 # Restricted to the surface listed in bootstrap-plan.html §5.3.
+#
+# Phase 5b-4 status: type annotations stay at `:Int` / `:Int64` for
+# compatibility with the (off-limits) `boot/main.si`, which calls
+# fd_write / fd_read / proc_exit with `Int` args and is compiled
+# through this compiler.  The full u32/u64 migration ships when boot/
+# opens up alongside story 3-26 (Phase 5 grammar revisions → boot/).
+# The supporting `@toU32` / `@toU64` cast keywords from 5b-4 ARE
+# shipped today (src/strata/cast.si) so user code that wants
+# spec-correct unsigned types can opt in directly.
 
 # ---- I/O ----
 @extern fd_write:Int           fd:Int, iovs_ptr:Int, iovs_len:Int, nwritten_out:Int;
