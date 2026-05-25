@@ -172,15 +172,38 @@ function resolveVariantFieldTypes(discT: SiliconType, variantName: string, ctx: 
     return scheme.fields.map(f => applySubst(f.type, subst))
 }
 
-/** Resolve a full TypeAnnotation, honouring `typeArgs` for parametric Sums.
+/** Resolve a full TypeAnnotation, honouring `typeArgs` for parametric Sums
+ *  and `fnReturn`/`fnParams` for sigil function types.
+ *
  *  `:Option[Int]` → `Sum('Option', variants, [TypeInt])`.
  *  `:Option[Float]` → `Sum('Option', variants, [TypeFloat])` — distinct
  *  from `:Option[Int]` by typeEquals.
+ *  `:$fn _:R _:T1, _:T2` → `Function([T1, T2], R)` — Phase 5d-3 surface
+ *  syntax mirrors a function definition's shape.
  *
  *  Falls back to `resolveType` for non-parametric annotations so existing
  *  callers keep working. */
 function resolveTypeAnnotation(ann: any, ctx: Ctx): SiliconType | undefined {
     if (!ann) return undefined
+    // Phase 5d-3: sigil function-type annotation.  fnReturn is the
+    // return-type slot (a typedIdentifier whose typeAnnotation carries
+    // the actual return type); fnParams is the comma-separated arg-type
+    // slots in the same shape.  Both nest TypeAnnotations so we recurse.
+    if (ann.typename === '$fn') {
+        const retT = ann.fnReturn?.typeAnnotation
+            ? resolveTypeAnnotation(ann.fnReturn.typeAnnotation, ctx)
+            : TypeUnknown
+        if (!retT) return undefined
+        const paramTs: SiliconType[] = []
+        for (const slot of (ann.fnParams ?? [])) {
+            const pt = slot?.typeAnnotation
+                ? resolveTypeAnnotation(slot.typeAnnotation, ctx)
+                : TypeUnknown
+            if (!pt) return undefined
+            paramTs.push(pt)
+        }
+        return FunctionOf(paramTs, retT)
+    }
     const base = resolveType(ann.typename, ctx)
     if (!base) return undefined
     const typeArgs: any[] = ann.typeArgs ?? []
