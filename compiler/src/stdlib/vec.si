@@ -1,0 +1,101 @@
+# Phase 5a-4 — stdlib Vec[T] growable array.
+#
+# Phase 5 ships Vec specialised for i32-sized elements (Int, Bool,
+# String, and any pointer-typed value).  Float (f32) and Int64 (i64)
+# variants are mechanical extensions — same shape, swap the load/store
+# instruction.  Generic monomorphisation of Vec[T] across all element
+# types is a 1.x improvement that lands with full strata-driven
+# specialisation; the 1.0 surface uses `vec_*_i32` directly.
+#
+# Layout (12-byte header at `v`, separate element buffer at `data_ptr`):
+#
+#     v + 0:  len       : i32
+#     v + 4:  capacity  : i32
+#     v + 8:  data_ptr  : i32  (pointer to the heap-allocated element buffer)
+#
+# This split-header layout keeps the Vec value (the header pointer)
+# stable across grow operations — only `data_ptr` changes on realloc.
+# Callers don't have to rebind the variable after a push.
+#
+#   @use '/path/to/sigil/src/stdlib/vec.si';
+#   @local v := &vec_new 4;          ;; initial capacity 4
+#   &vec_push_i32 v, 42;
+#   &vec_push_i32 v, 99;
+#   @local x:Int := &vec_get_i32 v, 0;
+#   @local n:Int := &vec_len v;      ;; 2
+
+# ── Vec[i32] API ───────────────────────────────────────────────────────
+#
+# `&alloc`, `&realloc`, and `&mem_copy` resolve to the prelude functions
+# at codegen — the compiler emits `(call $alloc ...)` / `(call $realloc
+# ...)` and the prelude provides the implementations.  No explicit
+# @extern declaration is needed (and using one would inadvertently
+# create an `env.alloc` host import).
+
+# Allocate a new Vec with the given initial capacity (in elements).
+# Returns the header pointer.  Capacity must be at least 1 — vec_new
+# always allocates a backing buffer up front so vec_push_i32's
+# grow-on-full path doesn't have to handle the "no buffer yet" case.
+@fn vec_new:Int initial_capacity:Int := {
+    @local v:Int := &alloc 12;
+    @local cap:Int := initial_capacity;
+    @local data:Int := &alloc (cap * 4);
+    &WASM::i32_store v, 0;                       # len = 0
+    &WASM::i32_store (v + 4), cap;               # capacity
+    &WASM::i32_store (v + 8), data;              # data_ptr
+    v
+};
+
+# Read len from the header.
+@fn vec_len:Int v:Int := &WASM::i32_load v;
+
+# Read capacity from the header.
+@fn vec_capacity:Int v:Int := &WASM::i32_load (v + 4);
+
+# Read data_ptr from the header.  Internal helper; callers should use
+# the typed get/set/push accessors below rather than touch raw memory.
+@fn vec_data_ptr:Int v:Int := &WASM::i32_load (v + 8);
+
+# Read element i (0-indexed).  Caller is responsible for bounds.
+# (Bounds-checked indexing is the slice-stratum job — 5c-2 — and lives
+# at a higher abstraction layer.)
+@fn vec_get_i32:Int v:Int, i:Int := {
+    @local data:Int := &vec_data_ptr v;
+    &WASM::i32_load (data + (i * 4))
+};
+
+# Write `x` at element i (0-indexed).  Caller is responsible for bounds.
+@fn vec_set_i32 v:Int, i:Int, x:Int := {
+    @local data:Int := &vec_data_ptr v;
+    &WASM::i32_store (data + (i * 4)), x
+};
+
+# Append `x` to the Vec.  Grows the backing buffer if len == capacity:
+# new capacity is 2× the old (or 4 for a 0-capacity Vec — shouldn't
+# happen with vec_new's initial allocation, but defensive).
+@fn vec_push_i32 v:Int, x:Int := {
+    @local len:Int := &vec_len v;
+    @local cap:Int := &vec_capacity v;
+    &@if (len == cap), {
+        @local new_cap:Int := cap * 2;
+        @local data:Int := &vec_data_ptr v;
+        @local new_data:Int := &realloc data, (cap * 4), (new_cap * 4);
+        &WASM::i32_store (v + 4), new_cap;       # capacity = new_cap
+        &WASM::i32_store (v + 8), new_data       # data_ptr = new_data
+    };
+    @local data2:Int := &vec_data_ptr v;
+    &WASM::i32_store (data2 + (len * 4)), x;
+    &WASM::i32_store v, (len + 1)                # len = len + 1
+};
+
+# Remove and return the last element.  Caller responsible for ensuring
+# the Vec is non-empty (no automatic trap for 1.0 — bounds checks live
+# in the slice stratum layer at 5c-2).
+@fn vec_pop_i32:Int v:Int := {
+    @local len:Int := &vec_len v;
+    @local new_len:Int := len - 1;
+    @local data:Int := &vec_data_ptr v;
+    @local x:Int := &WASM::i32_load (data + (new_len * 4));
+    &WASM::i32_store v, new_len;
+    x
+};

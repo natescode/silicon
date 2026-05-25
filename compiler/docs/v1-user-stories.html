@@ -985,20 +985,19 @@
 <!-- ================================================================== -->
 <h2 id="phase-5">Phase 5 — Generic stdlib + type system</h2>
 
-<p style="color: var(--accent4); font-size: 0.85rem;">Phase 5 <strong>PARTIAL 🟡</strong> (2026-05-24). 6/19 stories
-  shipped (5a-1, 5a-2, 5b-1, 5b-2, 5b-3, 5d-3); 13 deferred to follow-up
-  sprints.  Shipped pieces unblock real user-facing code: <code>Option[T]</code>
-  with helpers, <code>Result[T, E]</code> as a type + helpers + match-driven
-  consumption, full unsigned-integer codegen routing for u8/u16/u32/u64,
-  and surface annotation syntax for function types (<code>:$fn _:R _:T1, _:T2</code>)
-  resolving to <code>Function</code>-kind <code>SiliconType</code>s.
-  The Phase 5 grammar revision unblocked multi-arg type annotations
-  (<code>:Result[T, E]</code> in parameter position) and added the
-  <code>$fn</code> sigil-type production, retiring the two grammar
-  asymmetries that had been documented as limitations.  The bigger
-  lifts (Vec/HashMap allocator infrastructure, call_indirect WASM
-  tables, slice migration, WASI bindings) need dedicated sprints and
-  are tracked individually below.
+<p style="color: var(--accent4); font-size: 0.85rem;">Phase 5 <strong>PARTIAL 🟡</strong> (2026-05-24). 7/19 stories
+  shipped (5a-1, 5a-2, 5a-4, 5b-1, 5b-2, 5b-3, 5d-3); 12 deferred to
+  follow-up sprints.  Shipped pieces unblock real user-facing code:
+  <code>Option[T]</code> with helpers, <code>Result[T, E]</code> as a
+  type + helpers + match-driven consumption, full unsigned-integer
+  codegen routing for u8/u16/u32/u64, surface annotation syntax for
+  function types (<code>:$fn _:R _:T1, _:T2</code>) resolving to
+  <code>Function</code>-kind <code>SiliconType</code>s, allocator
+  primitives (<code>realloc</code> + <code>mem_copy</code>) added to
+  the prelude, and <code>Vec[i32]</code> as a Silicon stdlib library
+  on top of them.  Workstream A (Vec → HashMap → compiler-internals
+  refactor) is in flight; B (call_indirect for first-class fns) and C
+  (slices via generic structs) remain.
 </p>
 
 <h3>5a — Generic stdlib</h3>
@@ -1021,10 +1020,10 @@
   <p style="color: var(--muted); font-style: italic;">Deferred — both <code>?</code> (postfix operator) and <code>@try</code> (expression keyword) desugar to <code>&amp;@match r, $Ok v =&gt; v, $Err e =&gt; (&amp;@return (&amp;Err e))</code> via an <code>on::callSite</code> stratum that rewrites the call AST in expression position.  The multi-arg-typeArgs grammar fix this depended on landed in the Phase 5 grammar revision; only the callSite-stratum implementation remains.</p>
 </details>
 
-<details class="stdlib">
-  <summary><span class="id">5a-4</span> Vec[T] — growable array (alloc + grow + len + idx) <span class="est">L, ~6h</span></summary>
-  <div class="deps"><strong>Depends on:</strong> 1a-3 (field access), 5d-1 (allocator interface)</div>
-  <p style="color: var(--muted); font-style: italic;">Deferred — needs the allocator interface from 5d-1 (function reference table for the realloc callback) and a heap-grow stratum that the bootstrap compiler doesn't yet expose.  This is the biggest single deliverable in Phase 5 and warrants its own sprint.</p>
+<details class="stdlib complete">
+  <summary><span class="id">5a-4</span> Vec[T] — growable array (alloc + grow + len + idx) <span class="done">✅</span> <span class="est">L, ~6h</span></summary>
+  <div class="deps"><strong>Depends on:</strong> allocator primitives <code>realloc</code> + <code>mem_copy</code> (Workstream A Step 1).</div>
+  <p class="goal"><code>src/stdlib/vec.si</code> ships <code>Vec[i32]</code> as a Silicon stdlib library (not a stratum — pure Silicon source compiled through the regular pipeline).  Split-header layout (12-byte header at the Vec pointer; data buffer separately allocated) keeps the header pointer stable across grow operations, so callers never have to rebind after a push.  API: <code>vec_new</code>, <code>vec_len</code>, <code>vec_capacity</code>, <code>vec_get_i32</code>, <code>vec_set_i32</code>, <code>vec_push_i32</code> (doubles capacity on overflow via <code>realloc</code>), <code>vec_pop_i32</code>.  6 runtime tests in <code>src/stdlib/vec.test.ts</code> compile + instantiate the wasm and exercise: header invariants, push/get round-trip below capacity, the grow-with-realloc path (2 → 4 → 8), set, pop, header-pointer stability across grow.  Float (f32) and Int64 (i64) variants are mechanical extensions — same shape, swap the load/store instruction; deferred until first user demand.  Full generic monomorphisation <code>Vec[T]</code> across element types lands later with strata-driven specialisation.</p>
 </details>
 
 <details class="stdlib">
@@ -1653,9 +1652,9 @@
   <tr style="background: rgba(247, 160, 108, 0.08);">
     <td>5 — Generic stdlib + extensions</td>
     <td style="color: var(--accent4); font-weight: 700;">🟡 PARTIAL</td>
-    <td>6 / 19</td>
-    <td><em>~0.75 d done · ~7 d remain</em> (est: 18 d)</td>
-    <td>Shipped: 5a-1 Option stdlib + helpers, 5a-2 Result + helpers, 5b-1 unsigned types, 5b-2 unsigned operator overloads, 5b-3 *_u codegen routing, 5d-3 <code>$fn</code> surface annotation.  Remaining: 5a-3 (? unwrap), 5a-4/5/6/7 (Vec/HashMap/compiler refactor), 5b-4 (WASI migration), 5c-1..4 (slices), 5d-1/2/4 (call_indirect + Vec.map proof).</td>
+    <td>7 / 19</td>
+    <td><em>~1 d done · ~7 d remain</em> (est: 18 d)</td>
+    <td>Shipped: 5a-1 Option stdlib + helpers, 5a-2 Result + helpers, 5a-4 Vec[i32], 5b-1 unsigned types, 5b-2 unsigned operator overloads, 5b-3 *_u codegen routing, 5d-3 <code>$fn</code> surface annotation.  Plus allocator primitives (<code>realloc</code> + <code>mem_copy</code>) added to the prelude.  Remaining: 5a-3 (? unwrap), 5a-5/6/7 (Vec iteration / HashMap / compiler refactor), 5b-4 (WASI migration), 5c-1..4 (slices), 5d-1/2/4 (call_indirect + Vec.map proof).</td>
   </tr>
   <tr>
     <td>6 — sgl CLI</td>
@@ -1710,15 +1709,15 @@
   <tr style="background: var(--surface2); border-top: 3px solid var(--accent3); font-weight: 600;">
     <td>SHIPPED so far</td>
     <td style="color: var(--accent3);">✅</td>
-    <td>69 / 69</td>
-    <td><em>~8.25 d actual</em> (est: 40 d)</td>
-    <td>Phases 0, 0.5, 1, 2, 4 fully shipped + 11 stories of Phase 3 + 6 stories of Phase 5 (5a-1, 5a-2, 5b-1, 5b-2, 5b-3, 5d-3).  ~5× faster than originally estimated.</td>
+    <td>70 / 70</td>
+    <td><em>~8.5 d actual</em> (est: 40 d)</td>
+    <td>Phases 0, 0.5, 1, 2, 4 fully shipped + 11 stories of Phase 3 + 7 stories of Phase 5 (5a-1, 5a-2, 5a-4, 5b-1, 5b-2, 5b-3, 5d-3) + allocator primitives in the prelude.  ~5× faster than originally estimated.</td>
   </tr>
   <tr style="background: var(--surface2); border-top: 1px solid var(--border); font-weight: 600;">
     <td>1.0 REMAINING</td>
     <td style="color: var(--accent4);">🟡</td>
-    <td>~86 stories</td>
-    <td><strong style="color: var(--accent);">~58 working days (~2.7 months)</strong></td>
+    <td>~85 stories</td>
+    <td><strong style="color: var(--accent);">~57 working days (~2.7 months)</strong></td>
     <td>Phase 7 + 8 dominate (interpreter + native backend).  Phase 5 carries 13 deferred stories that need dedicated sprints (Vec / HashMap allocator infra, call_indirect WASM tables, slice migration).</td>
   </tr>
   <tr style="background: var(--surface2); font-weight: 600;">
