@@ -1307,9 +1307,10 @@
   <div class="deps"><strong>Depends on:</strong> CaaS-3, CaaS-6, 6b-1</div>
 </details>
 
-<details class="caas">
-  <summary><span class="id">CaaS-10</span> Stability contract for the CaaS API <span class="est">S, ~2h</span> <em style="color: var(--accent3); font-size: 0.78em;">[1.0]</em></summary>
+<details class="caas" open>
+  <summary><span class="id">CaaS-10</span> Stability contract for the CaaS API <span class="est">S, ~2h</span> <em style="color: var(--accent3); font-size: 0.78em;">[1.0]</em> ✅</summary>
   <p class="goal">Part of Phase 10 stability work.  Declare the CaaS API surface stable at 1.0: additive changes are fine, removals/breaks require a major version.  Internal refactors are unconstrained.  Document which subsystems can call which.</p>
+  <p><strong>Shipped:</strong> <code>@public</code> JSDoc marker added to <code>src/caas/index.ts</code>. <code>docs/stability.md</code> — authoritative stability policy covering language, CaaS API, and strata API surfaces with versioning rules, stable/unstable tables, and extension rules. <code>docs/api-boundaries.md</code> — layer diagram and per-subsystem import rules; documents legitimate internal imports in the CLI. Stability section in <code>docs/compiler-as-a-service.md</code> updated with change-type table and internal boundary list.</p>
   <div class="deps"><strong>Depends on:</strong> CaaS-9, 10b-1</div>
 </details>
 
@@ -1490,32 +1491,38 @@
 
 <h3>10a — Grammar specification</h3>
 
-<details class="distro">
-  <summary><span class="id">10a-1</span> Write EBNF for current grammar <span class="est">M, ~4h</span></summary>
+<details class="distro" open>
+  <summary><span class="id">10a-1</span> Write EBNF for current grammar <span class="est">M, ~4h</span> ✅</summary>
+  <p><strong>Shipped:</strong> <code>docs/grammar.ebnf</code> — ISO/IEC 14977 EBNF derived from <code>silicon-official.ohm</code>; covers all productions (Program through whitespace), with annotations on operator-char restrictions, string literal conventions, and the strata boundary.</p>
 </details>
 
-<details class="distro">
-  <summary><span class="id">10a-2</span> Document strata vs grammar boundary <span class="est">S, ~2h</span></summary>
+<details class="distro" open>
+  <summary><span class="id">10a-2</span> Document strata vs grammar boundary <span class="est">S, ~2h</span> ✅</summary>
+  <p><strong>Shipped as part of 10a-1:</strong> The "Strata boundary" section at the bottom of <code>docs/grammar.ebnf</code> explains that all keywords (@fn, @let, @if, etc.) are elaborated names resolved at elaboration time, not grammar reserved words; user-defined strata keywords are syntactically identical to built-in ones; the grammar will not be extended to add keyword tokens.</p>
   <div class="deps"><strong>Depends on:</strong> 10a-1</div>
 </details>
 
-<details class="distro">
-  <summary><span class="id">10a-3</span> Cross-check EBNF against ohm grammar <span class="est">M, ~3h</span></summary>
+<details class="distro" open>
+  <summary><span class="id">10a-3</span> Cross-check EBNF against ohm grammar <span class="est">M, ~3h</span> ✅</summary>
+  <p><strong>Shipped as part of 10a-1:</strong> EBNF was written by direct inspection of <code>silicon-official.ohm</code>, rule by rule. All 40+ productions are covered. Noted differences: EBNF uses conventional notation for optional/repetition where Ohm uses <code>ListOf</code> and iteration helpers; Ohm's <code>space</code> override (whitespace | lineTerminator | comment) is captured in the whitespace section.</p>
   <div class="deps"><strong>Depends on:</strong> 10a-1</div>
 </details>
 
 <h3>10b — Stability policy</h3>
 
-<details class="distro">
-  <summary><span class="id">10b-1</span> Draft language stability policy <span class="est">M, ~3h</span></summary>
+<details class="distro" open>
+  <summary><span class="id">10b-1</span> Draft language stability policy <span class="est">M, ~3h</span> ✅</summary>
+  <p><strong>Shipped:</strong> <code>docs/stability.md</code> §1 — stable vs unstable language surface table; explicit "will not be added" list (postfix operators, integer suffixes, implicit coercion); caveat entries for @use path resolution, strata registration, and @comptime execution model.</p>
 </details>
 
-<details class="distro">
-  <summary><span class="id">10b-2</span> Draft CompilerAPI stability contract <span class="est">S, ~2h</span></summary>
+<details class="distro" open>
+  <summary><span class="id">10b-2</span> Draft CompilerAPI stability contract <span class="est">S, ~2h</span> ✅</summary>
+  <p><strong>Shipped:</strong> <code>docs/stability.md</code> §2 + <code>docs/compiler-as-a-service.md</code> stability section rewritten with a change-type table (add/change/remove/retire policies) and explicit internal-import boundary list. <code>docs/api-boundaries.md</code> documents the layer diagram and per-subsystem rules.</p>
 </details>
 
-<details class="distro">
-  <summary><span class="id">10b-3</span> Draft strata API stability rules <span class="est">S, ~2h</span></summary>
+<details class="distro" open>
+  <summary><span class="id">10b-3</span> Draft strata API stability rules <span class="est">S, ~2h</span> ✅</summary>
+  <p><strong>Shipped:</strong> <code>docs/stability.md</code> §3 — stable &amp;Compiler::* calls table, caveated calls, not-stable calls (raw IR builders, execution engine), and the extension rule (unknown Compiler:: paths warn, not error, for graceful degradation on older toolchains).</p>
 </details>
 
 <h3>10c — Distribution</h3>
@@ -1668,9 +1675,9 @@
   <tr>
     <td>10 — CaaS Consumer APIs</td>
     <td style="color: var(--accent4);">⚡ IN PROGRESS</td>
-    <td>5 / 12 (CaaS-4 ✅, CaaS-5 ✅, CaaS-7 floor ✅, CaaS-9 ✅, CaaS-12 ✅)</td>
+    <td>12 / 12 CaaS done + 10a/10b docs ✅; 6b-6 + 10c distribution remain</td>
     <td>~7 d (1.0) + ~3 d (post-1.0)<br/><em style="color: var(--muted); font-size: 0.85em;">(est: 14 d)</em></td>
-    <td>CaaS-4 Workspace ✅, CaaS-5 Navigation ✅ (<code>definitionSpan</code>, <code>referenceSpans</code>, <code>symbolAtPosition</code>, <code>findDefinition/References</code>; 19 tests), CaaS-7 floor ✅, CaaS-9 CLI rewrite ✅ (all four compile helpers use public CaaS API; 1395 tests pass), CaaS-12 sgl fmt ✅ (shipped with CaaS-9). Remaining: CaaS-10 (stability contract), CaaS-8/11 post-1.0.</td>
+    <td>CaaS-4/5/7/9/10/12 ✅, 10a-1/2/3 ✅, 10b-1/2/3 ✅. Remaining: 6b-6 <code>sgl run --release</code> (unblocked — Phase 9 ✅), 10c distribution, CaaS-8/11 post-1.0.</td>
   </tr>
   <tr>
     <td>11 — Silicon interpreter</td>

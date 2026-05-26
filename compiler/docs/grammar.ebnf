@@ -1,0 +1,236 @@
+(*
+  Silicon 1.0 — Formal Grammar (EBNF)
+
+  Notation follows ISO/IEC 14977 with these extensions:
+    [ … ]   optional
+    { … }   zero or more repetitions
+    ( … )   grouping
+    |       alternation
+    " … "   terminal string
+    (* … *) comment
+
+  This grammar is derived from src/grammar/silicon-official.ohm (the Ohm.js
+  source of truth used by the src/ TypeScript compiler) and from the
+  hand-written boot/ parser in boot/parser/parse.si.  The Ohm file is the
+  reference implementation; this EBNF is the human-readable specification.
+
+  See docs/stability.md for the stability contract on this grammar.
+  See docs/strata.md for how strata extend the keyword/operator surface
+  without grammar changes.
+*)
+
+(* ── Top level ──────────────────────────────────────────────────────────── *)
+
+Program     = { Element } ;
+
+Element     = Item ";"
+            | DocComment
+            ;
+
+Item        = Statement
+            | Expression
+            ;
+
+Statement   = Assignment
+            | Definition
+            ;
+
+DocComment  = "##" { doc-char } ;
+doc-char    = (* any character except newline *) ;
+
+(* ── Assignments and definitions ────────────────────────────────────────── *)
+
+Assignment  = Namespace "=" Expression ;
+
+Definition  = def-kw TypedIdentifier [ GenericParams ] Params [ Binding ] ;
+
+def-kw      = "@" identifier ;   (* e.g. @fn, @let, @var, @type, @struct *)
+
+Binding     = ":=" Expression ;
+
+GenericParams = "[" identifier { "," identifier } "]" ;
+
+Params      = "(" [ ParamLiteral { "," ParamLiteral } ] ")"
+            | [ ParamLiteral { "," ParamLiteral } ]          (* bare form *)
+            ;
+
+ParamLiteral = TypedIdentifier
+             | Literal
+             ;
+
+(* ── Expressions ────────────────────────────────────────────────────────── *)
+
+(*
+  Expressions are prefix-keyword or left-associative binary chains.
+  There is no precedence table: all operators associate left-to-right.
+  Precedence is expressed via parentheses or nested calls.
+*)
+
+Expression  = ExprEnd { BinOp ExprEnd } ;
+
+ExprEnd     = Literal
+            | FunctionCall
+            | VariantDecl
+            | Namespace
+            | Block
+            | "(" Expression ")"
+            ;
+
+BinOp       = operator-char { operator-char } ;
+operator-char
+            = "=" | "<" | ">" | "!" | "+" | "-" | "*" | "/" | "%"
+            | "^" | "|" | "~" | "?"
+            ;
+            (* Note: "&", "@", "$", ".", ":" are NOT valid operator characters —
+               they are reserved for call sigils, keyword sigils, variant sigils,
+               namespace separators, and type annotations respectively. *)
+
+(* ── Function calls ─────────────────────────────────────────────────────── *)
+
+FunctionCall = "&" FunctionCallBody ;
+
+FunctionCallBody
+            = Keyword CallArgs       (* built-in keyword call *)
+            | Namespace CallArgs     (* user-defined function call *)
+            ;
+
+CallArgs    = Expression { "," Expression }   (* at least one argument *)
+            | (* empty — when followed by ";", ")", "}", ",", or EOF *)
+            ;
+
+Keyword     = "@" identifier ;
+
+(* ── Blocks ─────────────────────────────────────────────────────────────── *)
+
+Block       = "{" { Item ";" } [ Expression ] "}" ;
+
+(* ── Variant declarations ────────────────────────────────────────────────── *)
+
+VariantDecl = "$" identifier { TypedIdentifier } ;
+            (* e.g.  $Some value:Int   $None   $Circle r:Int *)
+
+(* ── Namespace paths ─────────────────────────────────────────────────────── *)
+
+Namespace   = identifier { ("::" | ".") identifier } ;
+            (* e.g.  foo   module::bar   std.io *)
+
+(* ── Literals ────────────────────────────────────────────────────────────── *)
+
+Literal     = ArrayLiteral
+            | ObjectLiteral
+            | TupleLiteral
+            | StringLiteral
+            | FloatLiteral
+            | IntLiteral
+            | BooleanLiteral
+            ;
+
+ArrayLiteral  = "$[" [ Expression { "," Expression } ] "]" ;
+ObjectLiteral = "${" [ KeyValuePair { "," KeyValuePair } ] "}" ;
+TupleLiteral  = "$(" [ Expression { "," Expression } ] ")" ;
+
+KeyValuePair  = TypedIdentifier "=" Expression ;
+
+StringLiteral = "'" { string-char } "'" ;
+string-char   = (* any character except "'", "\", and line terminators *) ;
+
+IntLiteral    = DecLiteral | BinLiteral | HexLiteral | OctLiteral ;
+
+DecLiteral    = digit { digit } { "_" digit { digit } } ;
+FloatLiteral  = digit { digit } "." digit { digit } ;
+BinLiteral    = "0b" bit { bit } { "_" bit { bit } } ;
+HexLiteral    = "0x" hex-digit { hex-digit } { "_" hex-digit { hex-digit } } ;
+OctLiteral    = "0c" oct-digit { oct-digit } { "_" oct-digit { oct-digit } } ;
+
+BooleanLiteral = "@true" | "@false" ;
+
+bit           = "0" | "1" ;
+oct-digit     = "0" | "1" | "2" | "3" | "4" | "5" | "6" | "7" ;
+hex-digit     = digit | "a".."f" | "A".."F" ;
+
+(* ── Types ───────────────────────────────────────────────────────────────── *)
+
+TypedIdentifier = identifier [ Type ] ;
+
+Type        = ":" SigilFnType        (* function type: $fn _:R _:A, _:B *)
+            | ":" identifier [ TypeArgs ]  (* simple or generic: Int, Option[Int] *)
+            ;
+
+TypeArgs    = "[" TypeArg { "," TypeArg } "]" ;
+TypeArg     = identifier [ TypeArgs ] ;
+
+(*
+  Function type — mirrors Definition syntax; allows zero or more param slots.
+  Examples:
+    $fn _:Int _:Int, _:Int    — function (Int, Int) -> Int
+    $fn _:Bool                — nullary function -> Bool
+    $fn _:Unit ()             — explicit empty-paren nullary
+*)
+
+SigilFnType = "$" identifier TypedIdentifier                              (* nullary *)
+            | "$" identifier TypedIdentifier "(" ")"                      (* paren empty *)
+            | "$" identifier TypedIdentifier "(" SigilFnParams ")"        (* paren params *)
+            | "$" identifier TypedIdentifier SigilFnParams                (* bare params *)
+            ;
+
+SigilFnParams = TypedIdentifier { "," TypedIdentifier } ;
+
+(* ── Identifiers ─────────────────────────────────────────────────────────── *)
+
+identifier  = "_"                                   (* discard — no binding *)
+            | letter { letter | digit | "_" }
+            | "_" (letter | digit | "_") { letter | digit | "_" }
+            ;
+
+letter      = "a".."z" | "A".."Z" ;
+digit       = "0".."9" ;
+
+(* ── Whitespace and comments ─────────────────────────────────────────────── *)
+
+(*
+  Whitespace and comments are ignored everywhere between tokens.
+  They are not listed in production rules above for clarity.
+*)
+
+whitespace    = " " | "\t" | "\x0B" | "\x0C" | " " | "﻿"
+              | (* Unicode space separators U+2000–U+200B, U+3000 *)
+              ;
+
+line-end      = "\n" | "\r" | " " | " " ;
+
+line-comment  = "#" { (* any char except line-end *) } line-end ;
+
+doc-comment   = "##" { (* any char except line-end *) } line-end ;
+
+(*
+  Notes:
+  - "#" starts a line comment; "##" starts a doc comment attached to the
+    next definition.  Both are consumed as whitespace during parsing.
+  - String literals use "'" (single quote).  There are no escape sequences
+    in 1.0 — use raw bytes or unicode code points via WASM intrinsics.
+*)
+
+(* ── Strata boundary ─────────────────────────────────────────────────────── *)
+
+(*
+  This grammar defines the fixed syntactic skeleton of Silicon.  It is
+  intentionally minimal and stable.
+
+  All keywords other than those built into the grammar skeleton (@true, @false)
+  are resolved at elaboration time via the strata registry.  This means:
+
+    - @fn, @let, @var, @type, @struct, @enum, @if, @loop, @match, @return,
+      @defer, @try, @extern, @use — all are elaborated keywords, not grammar
+      reserved words.
+
+    - User-defined strata keywords (@my_kw) are syntactically identical to
+      any other @identifier.  The grammar accepts them; the elaborator resolves
+      them.
+
+    - The grammar will NOT be extended to add new keyword tokens.  New
+      language features ride the existing Definition and FunctionCall forms
+      via new strata entries.
+
+  See docs/strata.md for authoring strata; docs/strata-authoring-guide.md for
+  the &Compiler::* API; docs/stability.md §1 for the language stability rules.
+*)
