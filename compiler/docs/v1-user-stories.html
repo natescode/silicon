@@ -1190,15 +1190,6 @@
   <p class="done-note">✓ linker.ts: findCc/link/hasQbeMain/injectMainWrapper/defaultExePath. sgl build --native → executable (qbe+cc pipeline, .s removed). sgl run --native → temp compile+exec. 19 unit + 2 integration tests.</p>
 </details>
 
-<details class="runtime">
-  <summary><span class="id">8-9</span> Link wasmtime as C library; replace comptime engine skeleton <span class="est">M, ~4h</span></summary>
-  <div class="deps"><strong>Depends on:</strong> 8-8 (native binary), Phase 7 complete</div>
-  <p class="goal">This is what 3-22 reframes to once native compilation exists.  The Phase 3 skeleton at <code>comptime_engine_compile_handler</code> / <code>comptime_engine_invoke</code> currently forwards to <code>br_interpret_body</code> (the AST interpreter) — fine for handler bodies that don't need loops, recursion, or the full Silicon surface, but a dead-end for production strata authoring.</p>
-  <p class="goal">Native sigilc links <code>-lwasmtime</code> (stable C embedding API) and calls <code>wasm_engine_new</code> / <code>wasm_module_new</code> / <code>wasm_instance_new</code> / <code>wasm_func_call</code> from Silicon-via-FFI.  Handler bodies compile through the normal Silicon → WAT → wasm pipeline; the resulting wasm is instantiated and invoked through wasmtime's Cranelift JIT.  Identical mechanism to <code>src/comptime/engine.ts</code> which uses Bun's <code>WebAssembly.instantiate</code>; we are NOT writing a wasm interpreter.</p>
-  <p class="goal">Done when: a stratum on::module_finalize handler containing <code>@loop</code> and recursion compiles + runs at compile time + pushes a synthesised definition back to the module.  The AST interpreter in boot/elab/body_rich.si stops being the comptime engine for native targets; it can remain as a fallback for wasm-distributed sigilc, or be dissolved entirely once every built-in stratum migrates.</p>
-  <p class="goal">Open question: portability of the wasm-distributed <code>stage1.wasm</code>.  Wasm-target sigilc has no FFI to wasmtime — its comptime engine stays AST-interpreted (or grows a WASI extension on a per-runtime basis).  This is acceptable for 1.0 since native is the default target on tier-1 platforms; the WASI distribution becomes a "fallback shape" with reduced comptime capability documented in the release notes.</p>
-</details>
-
 <details class="runtime done">
   <summary><span class="id">8-9</span> Linux x86-64 platform support + CI <span class="est">M, ~4h</span> ✓</summary>
   <div class="deps"><strong>Depends on:</strong> 8-8</div>
