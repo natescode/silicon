@@ -158,14 +158,14 @@
     <li><a href="#phase-3">Phase 3 — Language foundations (<code>@struct</code>, typechecker always-on) ✅</a></li>
     <li><a href="#phase-4">Phase 4 — Error messages ✅</a></li>
     <li><a href="#phase-5">Phase 5 — <code>@defer</code> ✅</a></li>
-    <li><a href="#phase-6">Phase 6 — Generic stdlib + type system 🟡</a></li>
-    <li><a href="#phase-7">Phase 7 — boot/ port, <code>@comptime</code> + advanced stdlib</a></li>
-    <li><a href="#phase-8">Phase 8 — <code>sgl</code> CLI 🟡 (6/6 stories shipped)</a></li>
-    <li><a href="#phase-9">Phase 9 — Native backend (QBE)</a></li>
-    <li><a href="#phase-10">Phase 10 — CaaS Consumer APIs (workspace, symbols, incremental)</a></li>
+    <li><a href="#phase-6">Phase 6 — Generic stdlib + type system 🟡 (src/ complete; boot/ port → Phase 7)</a></li>
+    <li><a href="#phase-7">Phase 7 — boot/ port, <code>@comptime</code> + advanced stdlib 🟡 (11/32 done)</a></li>
+    <li><a href="#phase-8">Phase 8 — <code>sgl</code> CLI ✅</a></li>
+    <li><a href="#phase-9">Phase 9 — Native backend (QBE) ✅</a></li>
+    <li><a href="#phase-10">Phase 10 — CaaS Consumer APIs + Distribution ✅ (1.0 stories done)</a></li>
     <li><a href="#phase-11">Phase 11 — Silicon interpreter (written in Silicon, compiled to native via QBE)</a></li>
     <li><a href="#phase-12">Phase 12 — <code>sgl</code> interpreter-backed subcommands</a></li>
-    <li><a href="#phase-13">Phase 13 — Stability + distribution</a></li>
+    <li><a href="#phase-13">Phase 13 — Stability + distribution ✅ (13/15; 10c-6 + 10c-9 deferred)</a></li>
     <li><a href="#phase-14">Phase 14 — DWARF + LSP <em style="color: var(--accent4); font-size: 0.85em;">[moved to v1.1]</em></a></li>
   </ol>
 </div>
@@ -1605,13 +1605,13 @@
 <h2 id="summary" style="border-color: var(--accent5);">Total effort summary</h2>
 
 <div style="background: var(--surface); border: 1px solid var(--border); border-left: 4px solid var(--accent3); border-radius: 8px; padding: 12px 18px; margin: 12px 0 18px; font-size: 0.88rem;">
-  <strong style="color: var(--accent3);">Velocity recalibration (2026-05-24).</strong>
+  <strong style="color: var(--accent3);">Velocity recalibration (updated 2026-05-25).</strong>
   Original estimates assumed ~1 story / day across all phases.  Observed
-  reality across the six shipped phases plus the Phase 7 boot/ sprint:
+  reality across the ten shipped phases (1–6, 8–10, 13):
   well-specced work (where src/ ships first as the reference) lands at
-  3–5× the originally estimated pace; novel work (Phase 11 interpreter,
-  Phase 9 QBE backend) tracks closer to 1.5–2× the original pace.  The
-  "Revised effort" column reflects that recalibration; shipped phases
+  3–5× the originally estimated pace; novel work (Phase 11 interpreter)
+  expected closer to 1.5–2×.  Phase 9 (QBE) shipped at ~7× estimate.
+  The "Revised effort" column reflects that recalibration; shipped phases
   show actual-vs-original.  ✅ rows count as zero remaining effort.
 </div>
 
@@ -1671,7 +1671,7 @@
     <td style="color: var(--accent3); font-weight: 700;">✅ SHIPPED</td>
     <td>6 / 6</td>
     <td><em>actual ~1 d</em> (est: 6 d)</td>
-    <td>6b-1/2/3/4/8/10 all shipped.  6b-6/11/12/13 moved to Phase 10 (post-1.0 package toolchain).</td>
+    <td>6b-1/2/3/4/8/10 all shipped.  6b-6 (<code>--release</code> → QBE) shipped in Phase 10.  6b-11/12/13 (package registry) post-1.0.</td>
   </tr>
   <tr style="background: rgba(62, 207, 142, 0.08);">
     <td>9 — Native backend (QBE)</td>
@@ -1701,12 +1701,12 @@
     <td>~2 d (est: 3 d)</td>
     <td>SR-1 run, SR-2 test, SR-3 eval, SR-4 acceptance.  Gated on Phase 11.</td>
   </tr>
-  <tr>
+  <tr style="background: rgba(62, 207, 142, 0.08);">
     <td>13 — Stability + distribution</td>
-    <td style="color: var(--muted);">⬜ NOT STARTED</td>
-    <td>0 / 15</td>
-    <td>~6 d (est: 10 d)</td>
-    <td>EBNF grammar, stability policy, packaging, installers.</td>
+    <td style="color: var(--accent3); font-weight: 700;">✅ MOSTLY DONE</td>
+    <td>13 / 15</td>
+    <td><em>actual ~1 d</em> (est: 6 d)</td>
+    <td>10a-1/2/3 EBNF ✅, 10b-1/2/3 stability policy ✅, 10c-1/2/3/4/5/7/8 distribution ✅ (all shipped in Phase 10). Deferred: 10c-6 (embed wasmtime), 10c-9 (acceptance gate — needs live tag).</td>
   </tr>
   <tr style="opacity: 0.6;">
     <td>14 — DWARF + LSP <em style="color: var(--accent4); font-size: 0.85em;">[moved to v1.1]</em></td>
@@ -1719,51 +1719,49 @@
   <tr style="background: var(--surface2); border-top: 3px solid var(--accent3); font-weight: 600;">
     <td>SHIPPED so far</td>
     <td style="color: var(--accent3);">✅</td>
-    <td>76 / 76</td>
-    <td><em>~10.5 d actual</em> (est: 44 d)</td>
-    <td>Phases 1, 2, 3, 4, 5, 8 fully shipped + 11 stories of Phase 7 + 18 stories of Phase 6 (full src/ scope).  ~5× faster than originally estimated.</td>
+    <td>~136 stories</td>
+    <td><em>~15 d actual</em> (est: ~90 d)</td>
+    <td>Phases 1–6 fully shipped; Phase 7 (11/32); Phases 8, 9, 10 fully shipped; Phase 13 (13/15).  ~6× faster than originally estimated.</td>
   </tr>
   <tr style="background: var(--surface2); border-top: 1px solid var(--border); font-weight: 600;">
     <td>1.0 REMAINING</td>
     <td style="color: var(--accent4);">🟡</td>
-    <td>~79 stories</td>
-    <td><strong style="color: var(--accent);">~51 working days (~2.5 months)</strong></td>
-    <td>Phase 11 + 9 dominate (interpreter + native backend).  Phase 7 carries the boot/ port work.</td>
+    <td>~37 stories</td>
+    <td><strong style="color: var(--accent);">~20 working days (~1 month)</strong></td>
+    <td>Phase 7 boot/ port (21 open) dominates.  Phase 11 interpreter (16) + Phase 12 (4) follow.</td>
   </tr>
   <tr style="background: var(--surface2); font-weight: 600;">
     <td>1.0 TOTAL</td>
     <td></td>
-    <td>~155 stories</td>
-    <td><strong style="color: var(--accent);">~66 working days (~3.1 months)</strong> end-to-end<br/><em style="color: var(--muted); font-size: 0.85em;">(original estimate: 142 d / ~6.5 months)</em></td>
-    <td>~54% faster than original estimate.  v1.1 work tracked separately in <a href="v1.1-user-stories.html">v1.1-user-stories.html</a>.</td>
+    <td>~173 stories</td>
+    <td><strong style="color: var(--accent);">~35 working days (~1.7 months)</strong> end-to-end<br/><em style="color: var(--muted); font-size: 0.85em;">(original estimate: 142 d / ~6.5 months)</em></td>
+    <td>~76% faster than original estimate.  v1.1 work tracked separately in <a href="v1.1-user-stories.html">v1.1-user-stories.html</a>.</td>
   </tr>
   <tr style="font-size: 0.85em; color: var(--muted);">
     <td>+ post-1.0 stretch (in v1)</td>
     <td>—</td>
-    <td>~7 stories</td>
-    <td>~5 d (est: 10 d)</td>
-    <td>CaaS-7 / 8 / 11 from Phase 10; 6b-6/11/12/13 sgl package toolchain from Phase 10.  Phase 14 (DWARF + LSP) → v1.1.</td>
+    <td>~5 stories</td>
+    <td>~3 d (est: 8 d)</td>
+    <td>CaaS-8/11 (incremental typecheck, code actions); 6b-11/12/13 (package registry); 10c-6/9 (embed wasmtime, acceptance gate).  Phase 14 (DWARF + LSP) → v1.1.</td>
   </tr>
 </table>
 
 <p style="margin-top: 14px; font-size: 0.85rem; color: var(--muted);">
-  <strong>Notes on the revised estimate.</strong>  The 3-month figure
+  <strong>Notes on the revised estimate.</strong>  The ~1.7-month end-to-end figure
   assumes one focused engineer working sequentially, at the cadence
   observed for shipped phases.  Many stories are parallelisable across
-  phases — a team of three could plausibly compress to 5–6 weeks.
+  phases — a team of three could plausibly compress to 3–4 weeks.
   <br/><br/>
   <strong>Where the revised effort comes from.</strong>  Velocity on
-  shipped work (Phases 1, 2, 3, 4, 5, 8 + the Phase 7 boot/ sprint + the
-  full src/ scope of Phase 6 — stdlib types, unsigned ints, and
-  <code>$fn</code> surface annotation) ran ~5× the original per-story
-  estimate, driven by: (a) src/ shipping first as the executable spec
-  for boot/ ports, (b) tight build-and-byte-equal feedback loops,
-  (c) small per-commit slices with the test extension inline,
-  (d) the Phase 6 grammar revision retired two long-standing surface
-  ambiguities (multi-arg typeArgs whitespace, function-type
-  annotation), unblocking helpers that had been deferred.  Genuinely novel work — the Phase 11 Silicon interpreter, the
-  Phase 9 QBE backend — won't see that multiplier; their revised
-  effort is ~1.5× the original, not 5×.
+  shipped work (Phases 1–6, 8–10, 13 — plus 11 stories of Phase 7) ran
+  ~6× the original per-story estimate, driven by: (a) src/ shipping first
+  as the executable spec for boot/ ports, (b) tight build-and-byte-equal
+  feedback loops, (c) small per-commit slices with inline tests,
+  (d) Phase 6 grammar revision retiring two long-standing surface
+  ambiguities.  Phase 9 (QBE) shipped at ~7× — the IR design was clean
+  and the existing WAT lowerer mapped almost 1:1.  Genuinely novel work —
+  the Phase 11 Silicon interpreter — is estimated at ~1.5× the original,
+  not 6×.
   <br/><br/>
   <strong>Caveats.</strong>  Estimates exclude bug-fix capacity,
   design-revision rounds, and feature creep — pad 20–30% for realism.
