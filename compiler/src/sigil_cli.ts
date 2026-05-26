@@ -19,21 +19,19 @@ import * as fsp from 'node:fs/promises'
 import * as path from 'node:path'
 import * as os from 'node:os'
 import { spawnSync } from 'node:child_process'
-import parse from './parser'
-import { addToAstSemantics, type ASTNode, type Program } from './ast'
-import { compileToWat, compileToWasm, type LowerTarget } from './codegen'
+// Public CaaS API — the only entry point for the compile pipeline.
+import { parse, buildRegistry, elaborate, typecheck, lower } from './caas/index'
+import type { Diagnostic } from './errors/diagnostic'
+
+// Legitimately internal: not yet in the CaaS API surface.
+import { compileToWasm, type LowerTarget } from './codegen'
 import {
     lowerToQbe, findQbe, invokeQbe, hostQbeArch, downloadAndBuildQbe, QBE_INSTALL_HINT,
     findCc, link, injectMainWrapper, defaultExePath, CC_INSTALL_HINT,
 } from './codegen/qbe'
-import { elaborate, buildStrataRegistry } from './elaborator'
-import { typecheck, formatTypeError } from './types'
-import { siliconGrammar } from './grammar'
 import { resolveUses } from './modules/useResolver'
 import { loadModules } from './modules'
-import {
-    toDiagnostic, parseDiagnostic, renderJson, renderPretty, type Diagnostic
-} from './errors/diagnostic'
+import { renderJson, renderPretty } from './errors/diagnostic'
 import { formatProgram } from './fmt/formatter'
 
 // ---------------------------------------------------------------------------
@@ -147,42 +145,44 @@ interface CompileOptions {
     native: boolean
 }
 
+function emitDiagnostics(diags: readonly Diagnostic[], opts: CompileOptions): never {
+    const rendered = opts.pretty ? renderPretty(diags as Diagnostic[]) : renderJson(diags as Diagnostic[])
+    process.stderr.write(rendered + '\n')
+    process.exit(1)
+}
+
 async function compileFile(
     filename: string,
     opts: CompileOptions,
 ): Promise<{ wat: string; binary: Uint8Array }> {
     const rawSource = await fsp.readFile(filename, 'utf-8')
-    const entryAbs = path.resolve(filename)
+    const entryAbs  = path.resolve(filename)
     const { source } = resolveUses(rawSource, entryAbs)
-
     const extraSources: string[] = await Promise.all(
         opts.strataFiles.map(f => fsp.readFile(f, 'utf-8'))
     )
+    const moduleReg = loadModules(path.dirname(entryAbs))
 
-    function emitDiagnostics(diags: Diagnostic[]): never {
-        const rendered = opts.pretty ? renderPretty(diags) : renderJson(diags)
-        process.stderr.write(rendered + '\n')
-        process.exit(1)
-    }
+    // ── CaaS pipeline ──────────────────────────────────────────────────────
+    const { tree, diagnostics: parseErrs } = parse(source, { file: entryAbs })
+    if (parseErrs.length) emitDiagnostics(parseErrs, opts)
 
-    let match
-    try { match = parse(source) }
-    catch (err) { emitDiagnostics([parseDiagnostic(err as Error, entryAbs)]) }
+    const registry = buildRegistry(tree, extraSources)
+    const { tree: elab, registry: reg, diagnostics: elabErrs } = elaborate(tree, registry)
+    if (elabErrs.length) emitDiagnostics(elabErrs, opts)
 
-    const ast: ASTNode = addToAstSemantics(siliconGrammar)(match!).toAst()
-    const registry = buildStrataRegistry(ast as Program, extraSources)
-    const { program: elaboratedAST } = elaborate(ast as Program, registry)
-    const moduleRegistry = loadModules(path.dirname(entryAbs))
-    const { program: typedAST, errors: typeErrors, functions, semanticModel } =
-        typecheck(elaboratedAST, registry, moduleRegistry)
+    const { tree: checked, model, _functions, diagnostics: typeErrs } =
+        typecheck(elab, reg, { moduleRegistry: moduleReg })
+    if (typeErrs.length) emitDiagnostics(typeErrs, opts)
 
-    if (typeErrors.length > 0) {
-        emitDiagnostics(typeErrors.map(e => toDiagnostic(e, entryAbs)))
-    }
+    const { wat, diagnostics: lowerErrs } =
+        lower(checked, reg, model, { target: opts.target, moduleRegistry: moduleReg, _functions })
+    if (lowerErrs.length) emitDiagnostics(lowerErrs, opts)
 
-    const lowOpts = { target: opts.target }
-    const wat = compileToWat(typedAST, registry, functions, moduleRegistry, lowOpts, semanticModel)
-    const binary = compileToWasm(typedAST, registry, functions, moduleRegistry, lowOpts)
+    // Binary emit is not yet in the CaaS API — use the internal path.
+    const binary = compileToWasm(
+        checked.program, reg, _functions, moduleReg, { target: opts.target },
+    )
     return { wat, binary }
 }
 
@@ -294,29 +294,22 @@ async function compileToQbeIr(entry: string, opts: CompileOptions): Promise<stri
     const extraSources: string[] = await Promise.all(
         opts.strataFiles.map(f => fsp.readFile(f, 'utf-8'))
     )
+    const moduleReg = loadModules(path.dirname(entryAbs))
 
-    function emitDiagnostics(diags: any[]): never {
-        const rendered = opts.pretty ? renderPretty(diags) : renderJson(diags)
-        process.stderr.write(rendered + '\n')
-        process.exit(1)
-    }
+    // ── CaaS pipeline ──────────────────────────────────────────────────────
+    const { tree, diagnostics: parseErrs } = parse(source, { file: entryAbs })
+    if (parseErrs.length) emitDiagnostics(parseErrs, opts)
 
-    let match: any
-    try { match = parse(source) }
-    catch (err) { emitDiagnostics([parseDiagnostic(err as Error, entryAbs)]) }
+    const registry = buildRegistry(tree, extraSources)
+    const { tree: elab, registry: reg, diagnostics: elabErrs } = elaborate(tree, registry)
+    if (elabErrs.length) emitDiagnostics(elabErrs, opts)
 
-    const ast: any  = addToAstSemantics(siliconGrammar)(match).toAst()
-    const registry  = buildStrataRegistry(ast, extraSources)
-    const { program: elabAST } = elaborate(ast, registry)
-    const moduleRegistry = loadModules(path.dirname(entryAbs))
-    const { program: typedAST, errors: typeErrors, functions } =
-        typecheck(elabAST, registry, moduleRegistry)
+    const { tree: checked, _functions, diagnostics: typeErrs } =
+        typecheck(elab, reg, { moduleRegistry: moduleReg })
+    if (typeErrs.length) emitDiagnostics(typeErrs, opts)
 
-    if (typeErrors.length > 0) {
-        emitDiagnostics(typeErrors.map((e: any) => toDiagnostic(e, entryAbs)))
-    }
-
-    return injectMainWrapper(lowerToQbe(typedAST, registry, functions))
+    // QBE lowering is not yet in the CaaS API — use the internal path.
+    return injectMainWrapper(lowerToQbe(checked.program, reg, _functions))
 }
 
 /**
@@ -441,34 +434,25 @@ async function cmdRunNative(entry: string, opts: CompileOptions): Promise<void> 
 // ---------------------------------------------------------------------------
 
 async function cmdCheck(positional: string | undefined, opts: CompileOptions): Promise<void> {
-    const entry = resolveEntry(positional, process.cwd())
+    const entry     = resolveEntry(positional, process.cwd())
     const rawSource = await fsp.readFile(entry, 'utf-8')
-    const entryAbs = path.resolve(entry)
+    const entryAbs  = path.resolve(entry)
     const { source } = resolveUses(rawSource, entryAbs)
-
     const extraSources: string[] = await Promise.all(
         opts.strataFiles.map(f => fsp.readFile(f, 'utf-8'))
     )
+    const moduleReg = loadModules(path.dirname(entryAbs))
 
-    function emitDiagnostics(diags: Diagnostic[]): never {
-        const rendered = opts.pretty ? renderPretty(diags) : renderJson(diags)
-        process.stderr.write(rendered + '\n')
-        process.exit(1)
-    }
+    // ── CaaS pipeline ──────────────────────────────────────────────────────
+    const { tree, diagnostics: parseErrs } = parse(source, { file: entryAbs })
+    if (parseErrs.length) emitDiagnostics(parseErrs, opts)
 
-    let match
-    try { match = parse(source) }
-    catch (err) { emitDiagnostics([parseDiagnostic(err as Error, entryAbs)]) }
+    const registry = buildRegistry(tree, extraSources)
+    const { tree: elab, registry: reg, diagnostics: elabErrs } = elaborate(tree, registry)
+    if (elabErrs.length) emitDiagnostics(elabErrs, opts)
 
-    const ast: ASTNode = addToAstSemantics(siliconGrammar)(match!).toAst()
-    const registry = buildStrataRegistry(ast as Program, extraSources)
-    const { program: elaboratedAST } = elaborate(ast as Program, registry)
-    const moduleRegistry = loadModules(path.dirname(entryAbs))
-    const { errors: typeErrors } = typecheck(elaboratedAST, registry, moduleRegistry)
-
-    if (typeErrors.length > 0) {
-        emitDiagnostics(typeErrors.map(e => toDiagnostic(e, entryAbs)))
-    }
+    const { diagnostics: typeErrs } = typecheck(elab, reg, { moduleRegistry: moduleReg })
+    if (typeErrs.length) emitDiagnostics(typeErrs, opts)
 
     console.log(`${entry}: OK`)
 }
@@ -509,17 +493,10 @@ async function cmdFmt(
     const entryAbs = path.resolve(entry)
     const { source } = resolveUses(original, entryAbs)
 
-    let match
-    try { match = parse(source) }
-    catch (err) {
-        const diag = parseDiagnostic(err as Error, entryAbs)
-        const rendered = opts.pretty ? renderPretty([diag]) : renderJson([diag])
-        process.stderr.write(rendered + '\n')
-        process.exit(1)
-    }
+    const { tree, diagnostics: parseErrs } = parse(source, { file: entryAbs })
+    if (parseErrs.length) emitDiagnostics(parseErrs, opts)
 
-    const ast = addToAstSemantics(siliconGrammar)(match!).toAst()
-    const formatted = formatProgram(ast as any)
+    const formatted = formatProgram(tree.program as any)
 
     if (check) {
         if (formatted !== original) {

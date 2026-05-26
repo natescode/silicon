@@ -11,6 +11,8 @@
 
 import type { SiliconType } from '../types/types'
 import type { Diagnostic, SourceSpan } from '../errors/diagnostic'
+import { spanFromLocation } from '../errors/diagnostic'
+import type { SourceLocation } from './astNodes'
 
 // ---------------------------------------------------------------------------
 // Public types
@@ -24,6 +26,8 @@ export interface Symbol {
     readonly kind: SymbolKind
     readonly definitionNode: object  // Definition AST node
     readonly type: SiliconType | undefined
+    /** Source span of the definition's name identifier, if location info is available. */
+    readonly definitionSpan?: SourceSpan
 }
 
 /** A half-open [start, end) line/col range for diagnostic queries. */
@@ -43,6 +47,7 @@ export class SemanticModel {
     readonly #nodeToSymbolName: WeakMap<object, string>
     readonly #symbols: ReadonlyMap<string, Symbol>
     readonly #symbolToNodes: ReadonlyMap<string, readonly object[]>
+    readonly #symbolToSpans: ReadonlyMap<string, readonly SourceSpan[]>
     readonly allDiagnostics: readonly Diagnostic[]
 
     constructor(opts: SemanticModelOpts) {
@@ -50,6 +55,7 @@ export class SemanticModel {
         this.#nodeToSymbolName = opts.nodeToSymbolName ?? new WeakMap()
         this.#symbols = opts.symbols ?? new Map()
         this.#symbolToNodes = opts.symbolToNodes ?? new Map()
+        this.#symbolToSpans = opts.symbolToSpans ?? new Map()
         this.allDiagnostics = opts.diagnostics ?? []
     }
 
@@ -89,6 +95,42 @@ export class SemanticModel {
         return this.#symbolToNodes.get(symbol.name) ?? []
     }
 
+    /**
+     * All source spans where `symbol` is referenced (call sites, uses).
+     * Returns an empty array when location info was not recorded (e.g. in
+     * unit-test ASTs built without going through the Ohm parser).
+     */
+    referenceSpans(symbol: Symbol): readonly SourceSpan[] {
+        return this.#symbolToSpans.get(symbol.name) ?? []
+    }
+
+    /**
+     * Find the symbol whose definition or a reference occupies `(line, col)`.
+     *
+     * Searches definition spans first, then all reference spans.  Both are
+     * 1-based (matching Ohm's `getLineAndColumn()` output).
+     *
+     * Returns `undefined` when no span covers the position, or when location
+     * info was not recorded (pre-Ohm ASTs in unit tests).
+     */
+    symbolAtPosition(line: number, col: number): Symbol | undefined {
+        // Check definition sites.
+        for (const sym of this.#symbols.values()) {
+            if (sym.definitionSpan && spanContainsPos(sym.definitionSpan, line, col)) {
+                return sym
+            }
+        }
+        // Check reference sites.
+        for (const [name, spans] of this.#symbolToSpans) {
+            for (const span of spans) {
+                if (spanContainsPos(span, line, col)) {
+                    return this.#symbols.get(name)
+                }
+            }
+        }
+        return undefined
+    }
+
     // ── diagnostic queries ────────────────────────────────────────────────────
 
     /**
@@ -104,6 +146,13 @@ export class SemanticModel {
 // ---------------------------------------------------------------------------
 // Internal helpers
 // ---------------------------------------------------------------------------
+
+/** True when the 1-based `(line, col)` cursor falls inside `span`. */
+function spanContainsPos(span: SourceSpan, line: number, col: number): boolean {
+    if (span.length === 0) return false
+    if (span.line !== line) return false
+    return col >= span.col && col < span.col + span.length
+}
 
 function spanOverlaps(span: SourceSpan, range: SourceRange): boolean {
     const spanEnd = { line: span.line, col: span.col + span.length }
@@ -128,6 +177,8 @@ export interface SemanticModelOpts {
     symbols?: ReadonlyMap<string, Symbol>
     /** Symbol name → all reference nodes (for referencesTo). */
     symbolToNodes?: ReadonlyMap<string, readonly object[]>
+    /** Symbol name → source spans of all references (for referenceSpans, symbolAtPosition). */
+    symbolToSpans?: ReadonlyMap<string, readonly SourceSpan[]>
     /** All type-phase diagnostics. */
     diagnostics?: readonly Diagnostic[]
 }

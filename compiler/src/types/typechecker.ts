@@ -51,7 +51,7 @@
 
 import type { Program } from '../ast/astNodes'
 import { SemanticModel, type Symbol as CaaSSymbol, type SymbolKind } from '../ast/semanticModel'
-import { toDiagnostic } from '../errors/diagnostic'
+import { toDiagnostic, spanFromLocation, type SourceSpan } from '../errors/diagnostic'
 import {
     type SiliconType,
     TypeInt,
@@ -134,6 +134,8 @@ interface Ctx {
     nodeToSymbolName: WeakMap<object, string>   // Namespace node → resolved name
     symbolToNodes: Map<string, object[]>         // name → all reference nodes
     definitionNodes: Map<string, object>         // name → Definition AST node
+    // CaaS-5: source spans for each reference site (for referenceSpans / symbolAtPosition).
+    symbolToSpans: Map<string, SourceSpan[]>
 }
 
 export interface FunctionSig {
@@ -272,6 +274,7 @@ export default function typecheck(program: Program, registry?: ElaboratorRegistr
     const typeMap = new WeakMap<object, SiliconType>()
     const nodeToSymbolName = new WeakMap<object, string>()
     const symbolToNodes = new Map<string, object[]>()
+    const symbolToSpans = new Map<string, SourceSpan[]>()
     const definitionNodes = new Map<string, object>()
     const ctx: Ctx = {
         errors: [],
@@ -286,6 +289,7 @@ export default function typecheck(program: Program, registry?: ElaboratorRegistr
         typeMap,
         nodeToSymbolName,
         symbolToNodes,
+        symbolToSpans,
         definitionNodes,
     }
     // Pre-registration pass: seed module function signatures first so that
@@ -304,6 +308,7 @@ export default function typecheck(program: Program, registry?: ElaboratorRegistr
         nodeToSymbolName,
         symbols: buildSymbolTable(ctx),
         symbolToNodes,
+        symbolToSpans,
         diagnostics: ctx.errors.map(e => toDiagnostic(e)),
     })
     return { program, errors: ctx.errors, functions: ctx.functions, typeAliases: ctx.typeAliases, semanticModel }
@@ -1109,6 +1114,12 @@ function checkFunctionCall(call: any, ctx: Ctx): SiliconType {
     else if (call.name && Array.isArray(call.name.path)) name = call.name.path.join('::')
     else name = ''
 
+    // CaaS-5: record the call-site namespace node as a reference so that
+    // symbolAtPosition / referenceSpans can navigate to it.
+    if (name && call.name && typeof call.name === 'object') {
+        recordSymbolRef(call.name, name, ctx)
+    }
+
     // WASM intrinsics have known signatures derivable from their names.
     const intr = getWasmIntrinsic(name)
     if (intr) {
@@ -1367,6 +1378,14 @@ function recordSymbolRef(node: object, name: string, ctx: Ctx): void {
     const refs = ctx.symbolToNodes.get(name)
     if (refs) refs.push(node)
     else ctx.symbolToNodes.set(name, [node])
+    // CaaS-5: record the source span for this reference so symbolAtPosition works.
+    const loc = (node as any).sourceLocation
+    if (loc) {
+        const span = spanFromLocation(loc)
+        const spans = ctx.symbolToSpans.get(name)
+        if (spans) spans.push(span)
+        else ctx.symbolToSpans.set(name, [span])
+    }
 }
 
 function typeOfBlock(block: any, ctx: Ctx): SiliconType {
@@ -1489,7 +1508,8 @@ function buildSymbolTable(ctx: Ctx): Map<string, CaaSSymbol> {
         const paramCount = (def.params || []).filter((p: any) => !p.isLiteral).length
         const kind = symbolKindFromKeyword(kw, paramCount)
         const type = ctx.symbols.get(name)
-        table.set(name, { name, kind, definitionNode: defNode, type })
+        const definitionSpan = def.sourceLocation ? spanFromLocation(def.sourceLocation) : undefined
+        table.set(name, { name, kind, definitionNode: defNode, type, definitionSpan })
     }
     return table
 }

@@ -23,7 +23,25 @@
  */
 
 import * as ohm from 'ohm-js'
-import { ASTFactory, type TypedIdentifier } from './astNodes'
+import { ASTFactory, type TypedIdentifier, type SourceLocation } from './astNodes'
+
+/** Extract a SourceLocation from an Ohm CST node's source interval. */
+function locFrom(ohmNode: any): SourceLocation | undefined {
+    try {
+        const src = ohmNode?.source
+        if (!src) return undefined
+        const start = src.getLineAndColumn()
+        const end = src.collapsedRight().getLineAndColumn()
+        return {
+            startLine:   start.lineNum,
+            startColumn: start.colNum,
+            endLine:     end.lineNum,
+            endColumn:   end.colNum,
+        }
+    } catch {
+        return undefined
+    }
+}
 
 /**
  * Create semantic actions for transforming parse trees to AST
@@ -84,18 +102,15 @@ export default function addToAstSemantics(siliconGrammar: ohm.Grammar): ohm.Sema
         Definition(kw, typedId, generics, params, binding) {
             const keyword = kw.toAst()
             const name = typedId.toAst()
-            // generics is an iter for `GenericParams?`; descend into the single
-            // child if present so the AST node is a GenericParams object (not
-            // an array of one).
             const genericParams = generics.children.length > 0
                 ? generics.children[0].toAst()
                 : undefined
-            // params is now a `Params` node (paren or bare alternative).  Its
-            // toAst handlers return a flat ParamLiteral[] regardless of which
-            // alternative matched, so downstream code is shape-agnostic.
             const paramList = params.toAst() as any[]
             const bindingAst = binding.children.length > 0 ? binding.children[0].toAst() : undefined
-            return ASTFactory.definition(keyword, name, paramList, genericParams, bindingAst)
+            const node = ASTFactory.definition(keyword, name, paramList, genericParams, bindingAst)
+            // Stamp just the identifier's span (typedId.children[0] = identifier, children[1] = type?).
+            node.sourceLocation = locFrom(typedId.children[0])
+            return node
         },
 
         // Phase 5 parens-optional-grouping: both alternatives flatten to the
@@ -221,21 +236,19 @@ export default function addToAstSemantics(siliconGrammar: ohm.Grammar): ohm.Sema
 
         namespace(first, sepAndText, rest) {
             const parts: string[] = [first.sourceString]
-            // sepAndText is the (("::" | ".") identifier)* part
-            // With _iter, it becomes an array of matched strings like ["::bar::baz"]
-            // We need to extract identifiers from this string
             const sepAndTextStr = Array.isArray(sepAndText)
                 ? sepAndText.join('')
                 : (sepAndText?.sourceString || '')
 
-            // Extract identifiers from the separator+identifier pattern
-            // Pattern: :: identifier or . identifier
             const identifierMatches = sepAndTextStr.matchAll(/(::|\.)([a-zA-Z_][a-zA-Z0-9_]*)/g)
             for (const match of identifierMatches) {
                 parts.push(match[2])
             }
 
-            return ASTFactory.namespace(parts)
+            const node = ASTFactory.namespace(parts)
+            // Stamp span so SemanticModel can resolve references by position.
+            node.sourceLocation = locFrom(this)
+            return node
         },
 
         Literal(lit) {

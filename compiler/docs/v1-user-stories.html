@@ -1252,32 +1252,43 @@
   code actions) and labelled accordingly in their summaries.
 </div>
 
-<details class="caas">
-  <summary><span class="id">CaaS-4</span> Workspace abstraction — multi-document project state <span class="est">M, ~4h</span> <em style="color: var(--accent3); font-size: 0.78em;">[1.0]</em></summary>
+<details class="caas complete">
+  <summary><span class="id">CaaS-4</span> Workspace abstraction — multi-document project state <span class="done">✅</span> <span class="est">M, ~4h</span> <em style="color: var(--accent3); font-size: 0.78em;">[1.0]</em></summary>
   <p class="goal">A Workspace holds a set of Documents (files).  Each Document has a content version, a parsed SyntaxTree, and a derived SemanticModel.  Operations on the Workspace: open/close/edit/save documents; query across all documents.</p>
   <div class="accept"><strong>Acceptance:</strong>
     <ul>
-      <li>API: <code>workspace.openDocument(uri, content)</code>, <code>workspace.editDocument(uri, edits)</code>, <code>workspace.closeDocument(uri)</code>.</li>
-      <li>Change events fire when documents are modified; consumers can subscribe.</li>
-      <li>Cross-document references (a function in file A used in file B) resolve correctly.</li>
+      <li>API: <code>workspace.openDocument(uri, content)</code>, <code>workspace.editDocument(uri, edits)</code>, <code>workspace.closeDocument(uri)</code>. ✅</li>
+      <li>Change events fire when documents are modified; consumers can subscribe. ✅ (<code>onDidChange</code> with unsubscribe)</li>
+      <li>Cross-document references (a function in file A used in file B) resolve correctly. <em>Deferred to CaaS-5.</em></li>
     </ul>
   </div>
+  <p>Implemented in <code>src/caas/workspace.ts</code>. 24 tests. <code>Document</code> carries <code>tree</code>, <code>elabTree</code>, <code>model</code>, <code>version</code>, <code>diagnostics</code>. Registry built from first opened document; injectable via constructor. Cross-document symbol resolution deferred to CaaS-5.</p>
   <div class="deps"><strong>Depends on:</strong> CaaS-3</div>
 </details>
 
-<details class="caas">
-  <summary><span class="id">CaaS-5</span> Symbol table API — declarations, references, navigation <span class="est">M, ~4h</span> <em style="color: var(--accent3); font-size: 0.78em;">[1.0]</em></summary>
+<details class="caas complete">
+  <summary><span class="id">CaaS-5</span> Symbol table API — declarations, references, navigation <span class="done">✅</span> <span class="est">M, ~4h</span> <em style="color: var(--accent3); font-size: 0.78em;">[1.0]</em></summary>
   <p class="goal">Public Symbol type with: name, kind (function/type/variable/strata), declaration location, list of reference locations, containing scope.  Powers go-to-definition, find-references, rename.  Required for the LSP go-to-def and hover (v1.1's Phase 9b).</p>
+  <div class="accept"><strong>Acceptance:</strong>
+    <ul>
+      <li><code>Symbol.definitionSpan</code> — source span of definition name, extracted from Ohm position info. ✅</li>
+      <li><code>SemanticModel.referenceSpans(symbol)</code> — all call-site spans for a symbol. ✅</li>
+      <li><code>SemanticModel.symbolAtPosition(line, col)</code> — find symbol at cursor (1-based). ✅</li>
+      <li><code>Workspace.findDefinition(uri, line, col)</code> and <code>findReferences(uri, line, col)</code>. ✅</li>
+      <li>Containing scope: deferred (flat symbol table; block-local scope tracking is a follow-up).</li>
+    </ul>
+  </div>
+  <p>Location tracking: <code>toAst.ts</code> now stamps <code>sourceLocation</code> on <code>Definition</code> (name identifier span) and <code>namespace</code> nodes via Ohm <code>getLineAndColumn()</code>. Typechecker records reference spans in <code>symbolToSpans</code> map. 19 new navigation tests.</p>
   <div class="deps"><strong>Depends on:</strong> CaaS-4</div>
 </details>
 
-<details class="caas">
-  <summary><span class="id">CaaS-7</span> Incremental parser — re-parse only changed documents <span class="est">L, ~8h</span> <em style="color: var(--accent4); font-size: 0.78em;">[post-1.0 acceptable]</em></summary>
+<details class="caas partial">
+  <summary><span class="id">CaaS-7</span> Incremental parser — re-parse only changed documents <span class="partial">⚡ floor done</span> <span class="est">L, ~8h</span> <em style="color: var(--accent4); font-size: 0.78em;">[post-1.0 acceptable]</em></summary>
   <p class="goal">When a document is edited, re-parse only that document.  Downstream artifacts (SemanticModel, diagnostics) invalidate per-document.  No full-project reparse.  Pure perf optimisation — 1.0 ships without it (full reparse on change) and the LSP is still usable for moderately sized projects.</p>
   <div class="accept"><strong>Acceptance:</strong>
     <ul>
-      <li>Editing one document leaves other documents' SyntaxTrees unchanged.</li>
-      <li>Sub-document incremental parsing (only re-parse the changed subtree) is a stretch goal; full-document re-parse is the floor.</li>
+      <li>Editing one document leaves other documents' SyntaxTrees unchanged. ✅ (Workspace stores per-document state; editDocument only touches the target doc)</li>
+      <li>Sub-document incremental parsing (only re-parse the changed subtree) is a stretch goal; full-document re-parse is the floor. ✅ floor: <code>SyntaxTree.withText()</code> re-parses the whole document; sub-document still post-1.0.</li>
     </ul>
   </div>
   <div class="deps"><strong>Depends on:</strong> CaaS-2, CaaS-4</div>
@@ -1289,9 +1300,10 @@
   <div class="deps"><strong>Depends on:</strong> CaaS-7</div>
 </details>
 
-<details class="caas">
-  <summary><span class="id">CaaS-9</span> CLI rewrite — sgl as a library consumer <span class="est">M, ~4h</span> <em style="color: var(--accent3); font-size: 0.78em;">[1.0]</em></summary>
+<details class="caas" open>
+  <summary><span class="id">CaaS-9</span> CLI rewrite — sgl as a library consumer <span class="est">M, ~4h</span> <em style="color: var(--accent3); font-size: 0.78em;">[1.0]</em> ✅</summary>
   <p class="goal">Rewrite <code>sgl build</code> / <code>run</code> / <code>check</code> to use only the public CaaS API.  Proves the API is sufficient for a real consumer.  Any internal-only access needed → either expose it or change the implementation.</p>
+  <p><strong>Shipped:</strong> All four compile helpers (<code>compileFile</code>, <code>compileToQbeIr</code>, <code>cmdCheck</code>, <code>cmdFmt</code>) rewritten to use <code>parse</code> / <code>buildRegistry</code> / <code>elaborate</code> / <code>typecheck</code> / <code>lower</code> from <code>src/caas/index</code>. Internal-only surface (binary emit, QBE lowering, formatter AST walk) kept as internal imports. 1395 tests pass.</p>
   <div class="deps"><strong>Depends on:</strong> CaaS-3, CaaS-6, 6b-1</div>
 </details>
 
@@ -1307,9 +1319,10 @@
   <div class="deps"><strong>Depends on:</strong> CaaS-6</div>
 </details>
 
-<details class="caas">
-  <summary><span class="id">CaaS-12</span> Formatter as a CaaS consumer (sgl fmt rewrite) <span class="est">M, ~4h</span> <em style="color: var(--accent3); font-size: 0.78em;">[1.0]</em></summary>
+<details class="caas" open>
+  <summary><span class="id">CaaS-12</span> Formatter as a CaaS consumer (sgl fmt rewrite) <span class="est">M, ~4h</span> <em style="color: var(--accent3); font-size: 0.78em;">[1.0]</em> ✅</summary>
   <p class="goal">Re-implement <code>sgl fmt</code> (originally story 6b-10) on top of the SyntaxTree API.  No re-parsing in the formatter — it reads the tree.  Proves the API supports format-style tooling.</p>
+  <p><strong>Shipped as part of CaaS-9:</strong> <code>cmdFmt</code> now calls <code>parse(source, { file: entryAbs })</code> from the CaaS API and passes <code>tree.program</code> directly to <code>formatProgram</code>. Internal <code>addToAstSemantics</code> / <code>siliconGrammar</code> imports removed from <code>sigil_cli.ts</code>.</p>
   <div class="deps"><strong>Depends on:</strong> CaaS-2, 6b-10 superseded</div>
 </details>
 
@@ -1645,19 +1658,19 @@
     <td><em>actual ~1 d</em> (est: 6 d)</td>
     <td>6b-1/2/3/4/8/10 all shipped.  6b-6/11/12/13 moved to Phase 10 (post-1.0 package toolchain).</td>
   </tr>
-  <tr>
+  <tr style="background: rgba(62, 207, 142, 0.08);">
     <td>9 — Native backend (QBE)</td>
-    <td style="color: var(--muted);">⬜ NOT STARTED</td>
-    <td>0 / 14</td>
-    <td>~10 d (est: 14 d)</td>
-    <td>QBE IR emitter + as/ld + 9-9 (wasmtime-as-library, the production comptime engine).  Backend work is well-bounded but real.</td>
+    <td style="color: var(--accent3); font-weight: 700;">✅ SHIPPED</td>
+    <td>14 / 14</td>
+    <td><em>actual ~2 d</em> (est: 10 d)</td>
+    <td>QBE direct lowering (8-1..8-6), QBE backend module + <code>sgl build --native</code> (8-7), as/ld via cc (8-8), self-host (<code>sigilc</code> compiles example suite, 8-13), byte-equal WAT + QBE determinism (8-14).</td>
   </tr>
   <tr>
     <td>10 — CaaS Consumer APIs</td>
-    <td style="color: var(--muted);">⬜ NOT STARTED</td>
-    <td>0 / 12</td>
+    <td style="color: var(--accent4);">⚡ IN PROGRESS</td>
+    <td>5 / 12 (CaaS-4 ✅, CaaS-5 ✅, CaaS-7 floor ✅, CaaS-9 ✅, CaaS-12 ✅)</td>
     <td>~7 d (1.0) + ~3 d (post-1.0)<br/><em style="color: var(--muted); font-size: 0.85em;">(est: 14 d)</em></td>
-    <td>Consumer APIs: Workspace, Symbol, incremental, code actions.  CaaS-7 / 8 / 11 post-1.0.  Also includes 6b-6/11/12/13 sgl package toolchain (post-1.0 acceptable).</td>
+    <td>CaaS-4 Workspace ✅, CaaS-5 Navigation ✅ (<code>definitionSpan</code>, <code>referenceSpans</code>, <code>symbolAtPosition</code>, <code>findDefinition/References</code>; 19 tests), CaaS-7 floor ✅, CaaS-9 CLI rewrite ✅ (all four compile helpers use public CaaS API; 1395 tests pass), CaaS-12 sgl fmt ✅ (shipped with CaaS-9). Remaining: CaaS-10 (stability contract), CaaS-8/11 post-1.0.</td>
   </tr>
   <tr>
     <td>11 — Silicon interpreter</td>
