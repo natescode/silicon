@@ -62,7 +62,7 @@ Build / run flags:
   --wat           Emit .wat text instead of .wasm binary
   --native        Compile via QBE to native assembly (requires qbe; see sgl setup)
   --target=<t>    Compilation target: host (default) | wasix
-  --release       Optimise (future: passed through to qbe when --native)
+  --release       Compile via the QBE native backend (alias for --native)
 
 Format flags (sgl fmt only):
   --check         Exit 1 if formatted output differs from the input file
@@ -561,7 +561,7 @@ for (let i = 0; i < rest.length; i++) {
     } else if (arg === '--pretty') {
         pretty = true
     } else if (arg === '--release') {
-        // Reserved for Phase 8 native backend; silently accepted for forward-compat
+        native = true  // release mode uses the QBE native backend
     } else if (arg === '--check') {
         fmtCheck = true
     } else if (arg === '--stdout') {

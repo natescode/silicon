@@ -1331,10 +1331,10 @@
 
 <p style="color: var(--muted); font-size: 0.88rem; margin-bottom: 8px;">These four stories were deferred from Phase 8 (sgl CLI).  Package registry and lockfile work is post-1.0 acceptable; 6b-6 is blocked on Phase 9 (native QBE backend).</p>
 
-<details class="toolchain">
-  <summary><span class="id">6b-6</span> sgl run --release — compile + execute <span class="est">M, ~3h</span></summary>
+<details class="toolchain" open>
+  <summary><span class="id">6b-6</span> sgl run --release — compile + execute <span class="est">M, ~3h</span> ✅</summary>
   <div class="deps"><strong>Depends on:</strong> 6b-4, Phase 9 (native QBE backend) substantially complete</div>
-  <p><em>Blocked on Phase 9 (native QBE backend).</em>  Note: <code>sgl run</code> (without <code>--release</code>) already ships as a Phase 8 bonus — it compiles to wasix WAT and executes via <code>wasmtime</code>, bridging the gap until the native backend lands.  The <code>--release</code> flag is accepted and silently ignored for forward-compat.</p>
+  <p><strong>Shipped:</strong> <code>--release</code> now sets <code>native = true</code> in the arg parser, routing <code>sgl run --release</code> and <code>sgl build --release</code> through the QBE native pipeline (<code>cmdRunNative</code> / <code>cmdBuildNative</code>). Help text updated: <em>"Compile via the QBE native backend (alias for --native)"</em>. Phase 9 (QBE) is complete, so the blocker is resolved.</p>
 </details>
 
 <details class="toolchain">
