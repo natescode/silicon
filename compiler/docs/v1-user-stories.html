@@ -834,12 +834,6 @@
   <p class="goal"><code>string_as_slice s:String</code> in <code>src/stdlib/slice.si</code> returns a <code>Slice[u8]</code> view over a Silicon string's UTF-8 payload — ptr advances past the 4-byte LE length header, len reads the header.  The slice is a borrow: its lifetime is bounded by whatever owns the underlying string.  Tested over ASCII (<code>'abc'</code> → 97, 98, 99), boundary (<code>''</code> → len 0), and multi-byte UTF-8 (<code>'☃'</code> → 3 bytes 0xE2 0x98 0x83).  Latent direct-binary-emitter bug fixed alongside: <code>decodeWatString</code>'s <code>\0</code> shortcut branch incorrectly intercepted the first character of <code>\00</code>-<code>\0F</code> hex escapes, emitting <code>\03</code> as <code>[0, '3']</code> instead of <code>[0x03]</code>.  This silently corrupted every string literal's length header in modules compiled through the direct binary emitter (e.g. via <code>compileToWasm</code>) — no test path read the header, so the corruption was invisible until string_as_slice tried to.  Fix removes the bogus shortcut.  4 new e2e tests in <code>src/stdlib/slice.test.ts</code>.</p>
 </details>
 
-<details class="lang">
-  <summary><span class="id">5c-4</span> Migrate compiler's (ptr, len) pairs to Slice[u8] <span class="est">L, ~6h</span></summary>
-  <div class="deps"><strong>Depends on:</strong> 5c-3 (Slice[u8] substrate); also depends on the <code>boot/</code> Silicon compiler being open for revision.</div>
-  <p style="color: var(--muted); font-style: italic;"><strong>Deferred to the boot/ port sprint.</strong>  The compiler-wide (ptr, len) pairs live in <code>boot/</code> — the self-hosted parser, lexer, and string interner that read source as raw byte ranges.  Migrating them to <code>Slice[u8]</code> is mechanical once boot/ opens up.  <code>CLAUDE.md</code> prohibits boot/ modifications in the current work bucket, so this story lands alongside or shortly after story 3-26.  The src/-side substrate (5c-1 / 5c-2 / 5c-3) is complete and runtime-verified.</p>
-</details>
-
 <h3>5d — First-class functions</h3>
 
 <details class="lang complete">
@@ -1023,6 +1017,12 @@
   </ol>
   <p class="goal">Also retire the legacy <code>@stratum_operator</code> / <code>@stratum_keyword</code> Elaboration productions from <code>boot/parser/parse.si</code> in the same pass, but <strong>only after</strong> every boot/ built-in stratum has been migrated to the unified <code>@stratum := { ... }</code> form (most are; a few in <code>boot/strata/builtin/</code> may still use the legacy shape).  The byte-equal self-host gate (<code>./build.sh check</code>) is the binding constraint: <code>stage1.wasm</code> must continue to compile its own source to a byte-identical seed.  Recommend implementing as several small commits, each preserving byte-equal, rather than one big bang.</p>
   <p style="color: var(--muted); font-size: 0.85rem;">This story is intentionally scoped wider than 3-25 because <code>boot/parser/parse.si</code> is hand-written (no Ohm — every production is a recursive-descent function); each grammar change touches the parser by hand.  Pair with <code>boot/tests/</code> additions that mirror <code>src/grammar/parens-grouping.test.ts</code> and <code>src/grammar/grammar-revision.test.ts</code>.</p>
+</details>
+
+<details class="lang">
+  <summary><span class="id">5c-4</span> Migrate compiler's (ptr, len) pairs to Slice[u8] <span class="est">L, ~6h</span></summary>
+  <div class="deps"><strong>Depends on:</strong> 5c-3 (Slice[u8] substrate); 3-26 (boot/ grammar revisions open for modification)</div>
+  <p class="goal">Replace every raw <code>(ptr, len)</code> pair in the self-hosted boot/ compiler — parser, lexer, string interner, byte-range tracking — with <code>Slice[u8]</code>.  Mechanical once boot/ is open: find all <code>ptr</code>/<code>len</code> field pairs and migrate to <code>slice_from</code> / <code>slice_ptr</code> / <code>slice_len</code> accessors.  The src/-side substrate (5c-1/2/3) is complete and runtime-verified; this is the boot/ application pass.  The byte-equal self-host gate constrains each commit.</p>
 </details>
 
 <h3>7b — <code>@comptime</code> (user-level)</h3>
