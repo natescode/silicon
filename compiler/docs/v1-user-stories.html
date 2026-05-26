@@ -1163,86 +1163,86 @@
   substantially complete.
 </div>
 
-<details class="runtime done">
-  <summary><span class="id">8-1</span> QBE IR emitter scaffolding + module skeleton <span class="est">M, ~4h</span></summary>
+<details class="runtime complete">
+  <summary><span class="id">8-1</span> QBE IR emitter scaffolding + module skeleton <span class="done">✅</span> <span class="est">M, ~4h</span></summary>
   <p class="done-note">✓ Direct typed-AST → QBE text (no WASM IR intermediate). Types.ts: SiliconType→QbeType, lookupOpToQbe. Lower.ts: @fn/@extern/@var skeletons. 45 tests.</p>
 </details>
 
-<details class="runtime done">
-  <summary><span class="id">8-2</span> Emit Const / BinOp / LocalGet / LocalSet to QBE text IR <span class="est">M, ~4h</span></summary>
+<details class="runtime complete">
+  <summary><span class="id">8-2</span> Emit Const / BinOp / LocalGet / LocalSet to QBE text IR <span class="done">✅</span> <span class="est">M, ~4h</span></summary>
   <div class="deps"><strong>Depends on:</strong> 8-1</div>
   <p class="done-note">✓ IntLiteral/FloatLiteral/BooleanLiteral, BinaryOp via lookupOpToQbe, Namespace local reads, Block trailing.</p>
 </details>
 
-<details class="runtime done">
-  <summary><span class="id">8-3</span> Emit Call / Return <span class="est">M, ~3h</span></summary>
+<details class="runtime complete">
+  <summary><span class="id">8-3</span> Emit Call / Return <span class="done">✅</span> <span class="est">M, ~3h</span></summary>
   <div class="deps"><strong>Depends on:</strong> 8-2</div>
   <p class="done-note">✓ User function calls, @extern calls, @return builtin, void vs returning dispatch, typed args.</p>
 </details>
 
-<details class="runtime done">
-  <summary><span class="id">8-4</span> Emit If / Loop / Break / Continue as basic blocks + jumps <span class="est">L, ~6h</span></summary>
+<details class="runtime complete">
+  <summary><span class="id">8-4</span> Emit If / Loop / Break / Continue as basic blocks + jumps <span class="done">✅</span> <span class="est">L, ~6h</span></summary>
   <div class="deps"><strong>Depends on:</strong> 8-3</div>
   <p class="done-note">✓ @if → jnz + phi, @loop → head/exit blocks, @break/@continue → jmp, @local declarations, blockStart terminator check.</p>
 </details>
 
-<details class="runtime done">
-  <summary><span class="id">8-5</span> Emit Global / Import / Export <span class="est">M, ~3h</span></summary>
+<details class="runtime complete">
+  <summary><span class="id">8-5</span> Emit Global / Import / Export <span class="done">✅</span> <span class="est">M, ~3h</span></summary>
   <div class="deps"><strong>Depends on:</strong> 8-3</div>
   <p class="done-note">✓ @var data declarations with actual init values, loadw/storew in function bodies, Float/Int64 alignment.</p>
 </details>
 
-<details class="runtime done">
-  <summary><span class="id">8-6</span> Emit Function decl + body + signature <span class="est">M, ~4h</span></summary>
+<details class="runtime complete">
+  <summary><span class="id">8-6</span> Emit Function decl + body + signature <span class="done">✅</span> <span class="est">M, ~4h</span></summary>
   <div class="deps"><strong>Depends on:</strong> 8-4</div>
   <p class="done-note">✓ @defer LIFO cleanup at all ret sites (early @return + trailing). 74 total tests. End-to-end: safe_div, clamp, quad.</p>
 </details>
 
-<details class="runtime done">
-  <summary><span class="id">8-7</span> Bundle QBE binary inside sgl <span class="est">M, ~3h</span></summary>
+<details class="runtime complete">
+  <summary><span class="id">8-7</span> Bundle QBE binary inside sgl <span class="done">✅</span> <span class="est">M, ~3h</span></summary>
   <p class="done-note">✓ backend.ts: findQbe/requireQbe/invokeQbe/hostQbeArch/downloadAndBuildQbe. sgl build --native → .s; sgl setup downloads+builds qbe into ~/.sgl/bin/. 15 unit tests.</p>
 </details>
 
-<details class="runtime done">
-  <summary><span class="id">8-8</span> Invoke as/ld pipeline; produce executable <span class="est">M, ~4h</span></summary>
+<details class="runtime complete">
+  <summary><span class="id">8-8</span> Invoke as/ld pipeline; produce executable <span class="done">✅</span> <span class="est">M, ~4h</span></summary>
   <div class="deps"><strong>Depends on:</strong> 8-6, 8-7</div>
   <p class="done-note">✓ linker.ts: findCc/link/hasQbeMain/injectMainWrapper/defaultExePath. sgl build --native → executable (qbe+cc pipeline, .s removed). sgl run --native → temp compile+exec. 19 unit + 2 integration tests.</p>
 </details>
 
-<details class="runtime done">
-  <summary><span class="id">8-9</span> Linux x86-64 platform support + CI <span class="est">M, ~4h</span> ✓</summary>
+<details class="runtime complete">
+  <summary><span class="id">8-9</span> Linux x86-64 platform support + CI <span class="done">✅</span> <span class="est">M, ~4h</span></summary>
   <div class="deps"><strong>Depends on:</strong> 8-8</div>
-  <p class="goal">Done: <code>.github/workflows/native.yml</code> — ubuntu-latest job that installs qbe+gcc via apt, runs the full <code>test:qbe</code> suite (126 tests including integration + e2e that previously skipped), and smoke-tests <code>sgl build --native</code> and <code>sgl run --native</code> end-to-end.  <code>src/codegen/qbe/native.e2e.test.ts</code> — 15 platform e2e tests: arithmetic exit codes (const/add/sub/mul/zero), control flow (@if true/false/compare), function calls (helper/arg/recursive fib), locals (@local read/mutate), platform checks (hostQbeArch, ELF magic).  Package script <code>test:qbe</code> added.</p>
+  <p class="done-note">✓<code>.github/workflows/native.yml</code> — ubuntu-latest job that installs qbe+gcc via apt, runs the full <code>test:qbe</code> suite (126 tests including integration + e2e that previously skipped), and smoke-tests <code>sgl build --native</code> and <code>sgl run --native</code> end-to-end.  <code>src/codegen/qbe/native.e2e.test.ts</code> — 15 platform e2e tests: arithmetic exit codes (const/add/sub/mul/zero), control flow (@if true/false/compare), function calls (helper/arg/recursive fib), locals (@local read/mutate), platform checks (hostQbeArch, ELF magic).  Package script <code>test:qbe</code> added.</p>
 </details>
 
-<details class="runtime done">
-  <summary><span class="id">8-10</span> Linux ARM64 platform support + CI <span class="est">M, ~4h</span> ✓</summary>
+<details class="runtime complete">
+  <summary><span class="id">8-10</span> Linux ARM64 platform support + CI <span class="done">✅</span> <span class="est">M, ~4h</span></summary>
   <div class="deps"><strong>Depends on:</strong> 8-9</div>
-  <p class="goal">Done: <code>.github/workflows/native-arm64.yml</code> — <code>ubuntu-24.04-arm</code> job, same pipeline as 8-9 (apt install qbe gcc, test:qbe, sgl run/build --native smoke tests).  <code>native.e2e.test.ts</code> updated with ARM64 <code>hostQbeArch</code> check ('arm64').</p>
+  <p class="done-note">✓<code>.github/workflows/native-arm64.yml</code> — <code>ubuntu-24.04-arm</code> job, same pipeline as 8-9 (apt install qbe gcc, test:qbe, sgl run/build --native smoke tests).  <code>native.e2e.test.ts</code> updated with ARM64 <code>hostQbeArch</code> check ('arm64').</p>
 </details>
 
-<details class="runtime done">
-  <summary><span class="id">8-11</span> macOS ARM64 (Apple Silicon) platform support + CI <span class="est">M, ~4h</span> ✓</summary>
+<details class="runtime complete">
+  <summary><span class="id">8-11</span> macOS ARM64 (Apple Silicon) platform support + CI <span class="done">✅</span> <span class="est">M, ~4h</span></summary>
   <div class="deps"><strong>Depends on:</strong> 8-9</div>
-  <p class="goal">Done: <code>.github/workflows/native-macos-arm64.yml</code> — <code>macos-14</code> runner (Apple Silicon), <code>brew install qbe</code>, Xcode clang as cc, full test:qbe suite.  e2e test updated: macOS ARM64 hostQbeArch check ('arm64') + Mach-O magic bytes check (0xCF 0xFA 0xED 0xFE).</p>
+  <p class="done-note">✓<code>.github/workflows/native-macos-arm64.yml</code> — <code>macos-14</code> runner (Apple Silicon), <code>brew install qbe</code>, Xcode clang as cc, full test:qbe suite.  e2e test updated: macOS ARM64 hostQbeArch check ('arm64') + Mach-O magic bytes check (0xCF 0xFA 0xED 0xFE).</p>
 </details>
 
-<details class="runtime done">
-  <summary><span class="id">8-12</span> macOS x86-64 platform support + CI <span class="est">M, ~3h</span> ✓</summary>
+<details class="runtime complete">
+  <summary><span class="id">8-12</span> macOS x86-64 platform support + CI <span class="done">✅</span> <span class="est">M, ~3h</span></summary>
   <div class="deps"><strong>Depends on:</strong> 8-11</div>
-  <p class="goal">Done: <code>.github/workflows/native-macos-x64.yml</code> — <code>macos-13</code> runner (Intel), <code>brew install qbe</code>, Xcode clang as cc, full test:qbe suite.  e2e test updated: macOS x86-64 hostQbeArch check ('amd64_sysv'); Mach-O magic check from 8-11 covers both macOS arches.</p>
+  <p class="done-note">✓<code>.github/workflows/native-macos-x64.yml</code> — <code>macos-13</code> runner (Intel), <code>brew install qbe</code>, Xcode clang as cc, full test:qbe suite.  e2e test updated: macOS x86-64 hostQbeArch check ('amd64_sysv'); Mach-O magic check from 8-11 covers both macOS arches.</p>
 </details>
 
-<details class="runtime done">
-  <summary><span class="id">8-13</span> Self-host: native sigilc compiles itself <span class="est">L, ~8h</span> ✓</summary>
+<details class="runtime complete">
+  <summary><span class="id">8-13</span> Self-host: native sigilc compiles itself <span class="done">✅</span> <span class="est">L, ~8h</span></summary>
   <div class="deps"><strong>Depends on:</strong> 8-12</div>
-  <p class="goal">Done: <code>src/e2e/selfhost.test.ts</code> — 34 examples from the full example suite compiled via QBE on all tier-1 platforms (arithmetic, comparisons, bitwise, functions, control flow, loops, variables, stratum dispatch). Exit code 0 verified for each.  <code>.github/workflows/selfhost.yml</code> — 4-way matrix (linux-x64, linux-arm64, macos-arm64, macos-x64); builds standalone <code>dist/sigilc</code> binary via <code>bun build --compile</code>, runs the example suite, smoke-tests <code>sigilc run/build --native</code> with the compiled binary, uploads per-platform artifacts.  <code>scripts/build-sigilc.sh</code> + <code>build:sigilc</code> / <code>test:selfhost</code> package scripts added.</p>
+  <p class="done-note">✓<code>src/e2e/selfhost.test.ts</code> — 34 examples from the full example suite compiled via QBE on all tier-1 platforms (arithmetic, comparisons, bitwise, functions, control flow, loops, variables, stratum dispatch). Exit code 0 verified for each.  <code>.github/workflows/selfhost.yml</code> — 4-way matrix (linux-x64, linux-arm64, macos-arm64, macos-x64); builds standalone <code>dist/sigilc</code> binary via <code>bun build --compile</code>, runs the example suite, smoke-tests <code>sigilc run/build --native</code> with the compiled binary, uploads per-platform artifacts.  <code>scripts/build-sigilc.sh</code> + <code>build:sigilc</code> / <code>test:selfhost</code> package scripts added.</p>
 </details>
 
-<details class="runtime done">
-  <summary><span class="id">8-14</span> Byte-equal WAT output verification across backends <span class="est">M, ~3h</span> ✓</summary>
+<details class="runtime complete">
+  <summary><span class="id">8-14</span> Byte-equal WAT output verification across backends <span class="done">✅</span> <span class="est">M, ~3h</span></summary>
   <div class="deps"><strong>Depends on:</strong> 8-13</div>
-  <p class="goal">Done: <code>src/e2e/backends.test.ts</code> — 77 tests across six suites: (1) WAT determinism — 28 programs compiled twice, byte-equal asserted; (2) QBE IR determinism — same 28 programs, byte-equal asserted; (3) cross-backend type consistency — Int/Float/Int64/Bool params+returns verified against WAT i32/f32/i64 and QBE w/s/l encodings; (4) siliconTypeToQbe table locked against WAT-type round-trips; (5) WAT structural regression snapshots — function, global, @if, @loop shapes; (6) QBE IR structural regression snapshots — same shapes. No qbe/cc binary required.  <code>.github/workflows/backends.yml</code> — 4-way platform matrix; runs test:backends on all tier-1 platforms to catch locale/ordering non-determinism.</p>
+  <p class="done-note">✓<code>src/e2e/backends.test.ts</code> — 77 tests across six suites: (1) WAT determinism — 28 programs compiled twice, byte-equal asserted; (2) QBE IR determinism — same 28 programs, byte-equal asserted; (3) cross-backend type consistency — Int/Float/Int64/Bool params+returns verified against WAT i32/f32/i64 and QBE w/s/l encodings; (4) siliconTypeToQbe table locked against WAT-type round-trips; (5) WAT structural regression snapshots — function, global, @if, @loop shapes; (6) QBE IR structural regression snapshots — same shapes. No qbe/cc binary required.  <code>.github/workflows/backends.yml</code> — 4-way platform matrix; runs test:backends on all tier-1 platforms to catch locale/ordering non-determinism.</p>
 </details>
 
 <!-- ================================================================== -->
