@@ -1144,6 +1144,25 @@
 <!-- ================================================================== -->
 <h2 id="phase-9">Phase 9 — Native backend (QBE)</h2>
 
+<div class="phase-intro">
+  <strong>Status (2026-05-25): 14 of 14 stories shipped ✅</strong>
+  Direct typed-AST → QBE IR lowering (no WASM IR intermediate); full
+  expression, control-flow, function, and global emission (8-1..8-6).
+  <code>sgl build --native</code> + <code>sgl run --native</code> via
+  <code>findQbe</code> / <code>invokeQbe</code> / <code>link</code>
+  pipeline (8-7, 8-8). CI on all four Tier 1 platforms — Linux x86-64,
+  Linux ARM64, macOS ARM64, macOS x86-64 (8-9..8-12).
+  Self-host gate: native <code>sigilc</code> binary compiles the full
+  example suite on every platform (8-13). Byte-equal WAT + QBE IR
+  determinism verified across backends (8-14). <code>--release</code>
+  flag wired to the QBE pipeline (Phase 10 6b-6).
+  <br/><br/>
+  <strong>Note:</strong> story 3-22 (production comptime engine — link
+  wasmtime as a C library, replacing the AST-interpreter skeleton) is
+  tracked separately in Phase 7 as it depends on the boot/ port being
+  substantially complete.
+</div>
+
 <details class="runtime done">
   <summary><span class="id">8-1</span> QBE IR emitter scaffolding + module skeleton <span class="est">M, ~4h</span></summary>
   <p class="done-note">✓ Direct typed-AST → QBE text (no WASM IR intermediate). Types.ts: SiliconType→QbeType, lookupOpToQbe. Lower.ts: @fn/@extern/@var skeletons. 45 tests.</p>
