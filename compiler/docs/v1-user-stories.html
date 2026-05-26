@@ -1561,19 +1561,22 @@
   <summary><span class="id">10c-6</span> Embed wasmtime + stage1.wasm in sgl binary <span class="est">L, ~6h</span></summary>
 </details>
 
-<details class="distro">
-  <summary><span class="id">10c-7</span> Getting-started tutorial — install to running program in 15 min <span class="est">M, ~4h</span></summary>
-  <div class="deps"><strong>Depends on:</strong> 10c-2, 10c-7</div>
+<details class="distro" open>
+  <summary><span class="id">10c-7</span> Getting-started tutorial — install to running program in 15 min <span class="est">M, ~4h</span> ✅</summary>
+  <div class="deps"><strong>Depends on:</strong> 10c-2, 10c-5</div>
+  <p><strong>Shipped:</strong> <code>docs/getting-started.md</code> — 15-minute walkthrough; install (curl|sh, Homebrew, Windows WSL), <code>sgl init</code> + <code>sgl run</code>, type-check, build .wasm, native compile with <code>--native</code>/<code>--release</code>, write a function, language feature quick-reference table, next-steps links.</p>
 </details>
 
-<details class="distro">
-  <summary><span class="id">10c-8</span> CI: build all Tier 1 binaries on every release tag <span class="est">M, ~4h</span></summary>
+<details class="distro" open>
+  <summary><span class="id">10c-8</span> CI: build all Tier 1 binaries on every release tag <span class="est">M, ~4h</span> ✅</summary>
   <div class="deps"><strong>Depends on:</strong> 8-9 through 8-12</div>
+  <p><strong>Shipped as part of 10c-1:</strong> <code>.github/workflows/release.yml</code> builds all four Tier 1 binaries on every <code>v*.*.*</code> tag and publishes them to the GitHub Release.</p>
 </details>
 
 <details class="distro">
   <summary><span class="id">10c-9</span> Acceptance gate: <code>brew install sigil &amp;&amp; sgl init &amp;&amp; sgl run</code> on a fresh machine <span class="est">S, ~2h</span></summary>
-  <div class="deps"><strong>Depends on:</strong> 10c-2, 10c-7</div>
+  <div class="deps"><strong>Depends on:</strong> 10c-2, 10c-7 — requires a published release tag to test</div>
+  <p><em>Pending:</em> Requires tagging a release and verifying the Homebrew tap + install.sh on a clean CI runner.  Deferred until the 1.0.0 tag is cut.</p>
 </details>
 
 <!-- ================================================================== -->
@@ -1677,12 +1680,12 @@
     <td><em>actual ~2 d</em> (est: 10 d)</td>
     <td>QBE direct lowering (8-1..8-6), QBE backend module + <code>sgl build --native</code> (8-7), as/ld via cc (8-8), self-host (<code>sigilc</code> compiles example suite, 8-13), byte-equal WAT + QBE determinism (8-14).</td>
   </tr>
-  <tr>
-    <td>10 — CaaS Consumer APIs</td>
-    <td style="color: var(--accent4);">⚡ IN PROGRESS</td>
-    <td>12 / 12 CaaS done + 10a/10b docs ✅; 6b-6 + 10c distribution remain</td>
-    <td>~7 d (1.0) + ~3 d (post-1.0)<br/><em style="color: var(--muted); font-size: 0.85em;">(est: 14 d)</em></td>
-    <td>CaaS-4/5/7/9/10/12 ✅, 10a-1/2/3 ✅, 10b-1/2/3 ✅. Remaining: 6b-6 <code>sgl run --release</code> (unblocked — Phase 9 ✅), 10c distribution, CaaS-8/11 post-1.0.</td>
+  <tr style="background: rgba(62, 207, 142, 0.08);">
+    <td>10 — CaaS Consumer APIs + Distribution</td>
+    <td style="color: var(--accent3); font-weight: 700;">✅ 1.0 DONE</td>
+    <td>All 1.0 stories complete</td>
+    <td><em>actual ~2 d</em> (est: 14 d)</td>
+    <td>CaaS-4/5/7/9/10/12 ✅, 10a-1/2/3 EBNF ✅, 10b-1/2/3 stability policy ✅, 6b-6 --release ✅, 10c-1/2/3/4/5/7/8 distribution ✅. Post-1.0 deferred: 10c-6 (embed wasmtime), 10c-9 (acceptance gate — needs live tag), 6b-11/12/13 (package registry), CaaS-8/11.</td>
   </tr>
   <tr>
     <td>11 — Silicon interpreter</td>
