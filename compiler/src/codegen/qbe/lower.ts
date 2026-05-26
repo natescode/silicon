@@ -536,17 +536,21 @@ function lowerBinaryOp(node: any, fn: QbeFnCtx): string {
 // ---------------------------------------------------------------------------
 
 function lowerFunctionCall(node: any, fn: QbeFnCtx): string {
-    // Callee is a Namespace node { path: ['name'] } or a plain string.
+    // Callee is a Namespace node { path: ['WASM', 'i32_store'] } or a plain string.
+    // Join all path segments so WASM::i32_store → 'WASM__i32_store', not just 'WASM'.
     const nameNode = node.name ?? node.callee
     const callee: string =
         Array.isArray(nameNode?.path)
-            ? qbeName((nameNode.path as string[])[0] ?? '')
+            ? qbeName((nameNode.path as string[]).join('::'))
             : qbeName(typeof nameNode === 'string' ? nameNode : (nameNode?.name ?? ''))
 
     const args: any[] = node.args ?? node.arguments ?? []
 
     // Builtin keywords that map to QBE control instructions.
     if (node.isBuiltin) return lowerBuiltinCall(callee, args, fn)
+
+    // WASM:: namespace intrinsics — map to QBE memory/arithmetic instructions.
+    if (callee.startsWith('WASM__')) return lowerWasmIntrinsic(callee, args, fn)
 
     return lowerCall(callee, args, fn, node)
 }
@@ -630,6 +634,135 @@ function lowerBuiltinCall(callee: string, args: any[], fn: QbeFnCtx): string {
 
         default:
             return ''
+    }
+}
+
+// ---------------------------------------------------------------------------
+// WASM:: intrinsic → QBE instruction mapping
+//
+// Silicon's boot/ layer uses `&WASM::i32_store`, `&WASM::i32_load`, etc. as
+// direct wrappers around WASM instructions.  When targeting native via QBE we
+// replace each with the equivalent QBE memory/arithmetic/cast instruction.
+//
+// Argument convention matches the Silicon stratum definitions:
+//   store ops:  (addr, val)  → QBE `store<t> val, addr`
+//   load ops:   (addr)       → QBE `%t =<t> load<t> addr`
+//   binary ops: (a, b)       → QBE `%t =<t> <instr> a, b`
+//   cast ops:   (a)          → QBE `%t =<t> <instr> a`
+// ---------------------------------------------------------------------------
+
+function lowerWasmIntrinsic(callee: string, args: any[], fn: QbeFnCtx): string {
+    const a = args.map(x => lowerExpr(x, fn))
+
+    switch (callee) {
+
+        // -- Memory: stores --------------------------------------------------
+        case 'WASM__i32_store':   { emit(fn, `storew ${a[1]}, ${a[0]}`); return '' }
+        case 'WASM__i32_store8':  { emit(fn, `storeb ${a[1]}, ${a[0]}`); return '' }
+        case 'WASM__i64_store':   { emit(fn, `storel ${a[1]}, ${a[0]}`); return '' }
+        case 'WASM__f32_store':   { emit(fn, `stores ${a[1]}, ${a[0]}`); return '' }
+
+        // -- Memory: loads ---------------------------------------------------
+        case 'WASM__i32_load':    { const t = freshTemp(fn); emit(fn, `${t} =w loadw ${a[0]}`);  return t }
+        case 'WASM__i32_load8_u': { const t = freshTemp(fn); emit(fn, `${t} =w loadub ${a[0]}`); return t }
+        case 'WASM__i32_load8_s': { const t = freshTemp(fn); emit(fn, `${t} =w loadsb ${a[0]}`); return t }
+        case 'WASM__i32_load16_u':{ const t = freshTemp(fn); emit(fn, `${t} =w loaduh ${a[0]}`); return t }
+        case 'WASM__i32_load16_s':{ const t = freshTemp(fn); emit(fn, `${t} =w loadsh ${a[0]}`); return t }
+        case 'WASM__i64_load':    { const t = freshTemp(fn); emit(fn, `${t} =l loadl ${a[0]}`);  return t }
+        case 'WASM__f32_load':    { const t = freshTemp(fn); emit(fn, `${t} =s loads ${a[0]}`);  return t }
+
+        // -- i32 arithmetic --------------------------------------------------
+        case 'WASM__i32_add':   { const t = freshTemp(fn); emit(fn, `${t} =w add ${a[0]}, ${a[1]}`); return t }
+        case 'WASM__i32_sub':   { const t = freshTemp(fn); emit(fn, `${t} =w sub ${a[0]}, ${a[1]}`); return t }
+        case 'WASM__i32_mul':   { const t = freshTemp(fn); emit(fn, `${t} =w mul ${a[0]}, ${a[1]}`); return t }
+        case 'WASM__i32_div_s': { const t = freshTemp(fn); emit(fn, `${t} =w div ${a[0]}, ${a[1]}`); return t }
+        case 'WASM__i32_rem_s': { const t = freshTemp(fn); emit(fn, `${t} =w rem ${a[0]}, ${a[1]}`); return t }
+        case 'WASM__i32_and':   { const t = freshTemp(fn); emit(fn, `${t} =w and ${a[0]}, ${a[1]}`); return t }
+        case 'WASM__i32_or':    { const t = freshTemp(fn); emit(fn, `${t} =w or  ${a[0]}, ${a[1]}`); return t }
+        case 'WASM__i32_xor':   { const t = freshTemp(fn); emit(fn, `${t} =w xor ${a[0]}, ${a[1]}`); return t }
+        case 'WASM__i32_shl':   { const t = freshTemp(fn); emit(fn, `${t} =w shl ${a[0]}, ${a[1]}`); return t }
+        case 'WASM__i32_shr_s': { const t = freshTemp(fn); emit(fn, `${t} =w sar ${a[0]}, ${a[1]}`); return t }
+        case 'WASM__i32_shr_u': { const t = freshTemp(fn); emit(fn, `${t} =w shr ${a[0]}, ${a[1]}`); return t }
+        case 'WASM__i32_eqz':   { const t = freshTemp(fn); emit(fn, `${t} =w ceqw ${a[0]}, 0`);     return t }
+
+        // -- i64 arithmetic --------------------------------------------------
+        case 'WASM__i64_add':   { const t = freshTemp(fn); emit(fn, `${t} =l add ${a[0]}, ${a[1]}`); return t }
+        case 'WASM__i64_sub':   { const t = freshTemp(fn); emit(fn, `${t} =l sub ${a[0]}, ${a[1]}`); return t }
+        case 'WASM__i64_mul':   { const t = freshTemp(fn); emit(fn, `${t} =l mul ${a[0]}, ${a[1]}`); return t }
+        case 'WASM__i64_div_s': { const t = freshTemp(fn); emit(fn, `${t} =l div ${a[0]}, ${a[1]}`); return t }
+        case 'WASM__i64_rem_s': { const t = freshTemp(fn); emit(fn, `${t} =l rem ${a[0]}, ${a[1]}`); return t }
+        case 'WASM__i64_and':   { const t = freshTemp(fn); emit(fn, `${t} =l and ${a[0]}, ${a[1]}`); return t }
+        case 'WASM__i64_or':    { const t = freshTemp(fn); emit(fn, `${t} =l or  ${a[0]}, ${a[1]}`); return t }
+        case 'WASM__i64_xor':   { const t = freshTemp(fn); emit(fn, `${t} =l xor ${a[0]}, ${a[1]}`); return t }
+        case 'WASM__i64_shl':   { const t = freshTemp(fn); emit(fn, `${t} =l shl ${a[0]}, ${a[1]}`); return t }
+        case 'WASM__i64_shr_s': { const t = freshTemp(fn); emit(fn, `${t} =l sar ${a[0]}, ${a[1]}`); return t }
+
+        // -- f32 arithmetic --------------------------------------------------
+        case 'WASM__f32_add':   { const t = freshTemp(fn); emit(fn, `${t} =s add ${a[0]}, ${a[1]}`); return t }
+        case 'WASM__f32_sub':   { const t = freshTemp(fn); emit(fn, `${t} =s sub ${a[0]}, ${a[1]}`); return t }
+        case 'WASM__f32_mul':   { const t = freshTemp(fn); emit(fn, `${t} =s mul ${a[0]}, ${a[1]}`); return t }
+        case 'WASM__f32_div':   { const t = freshTemp(fn); emit(fn, `${t} =s div ${a[0]}, ${a[1]}`); return t }
+        case 'WASM__f32_neg':   { const t = freshTemp(fn); emit(fn, `${t} =s neg ${a[0]}`);          return t }
+        case 'WASM__f32_sqrt': {
+            // QBE has no sqrt instruction — call the C runtime sqrtf.
+            const t = freshTemp(fn)
+            emit(fn, `${t} =s call $sqrtf(s ${a[0]})`)
+            return t
+        }
+
+        // -- i32 comparisons -------------------------------------------------
+        case 'WASM__i32_eq':    { const t = freshTemp(fn); emit(fn, `${t} =w ceqw  ${a[0]}, ${a[1]}`); return t }
+        case 'WASM__i32_ne':    { const t = freshTemp(fn); emit(fn, `${t} =w cnew  ${a[0]}, ${a[1]}`); return t }
+        case 'WASM__i32_lt_s':  { const t = freshTemp(fn); emit(fn, `${t} =w csltw ${a[0]}, ${a[1]}`); return t }
+        case 'WASM__i32_le_s':  { const t = freshTemp(fn); emit(fn, `${t} =w cslew ${a[0]}, ${a[1]}`); return t }
+        case 'WASM__i32_gt_s':  { const t = freshTemp(fn); emit(fn, `${t} =w csgtw ${a[0]}, ${a[1]}`); return t }
+        case 'WASM__i32_ge_s':  { const t = freshTemp(fn); emit(fn, `${t} =w csgew ${a[0]}, ${a[1]}`); return t }
+        case 'WASM__i32_lt_u':  { const t = freshTemp(fn); emit(fn, `${t} =w cultw ${a[0]}, ${a[1]}`); return t }
+        case 'WASM__i32_le_u':  { const t = freshTemp(fn); emit(fn, `${t} =w culew ${a[0]}, ${a[1]}`); return t }
+        case 'WASM__i32_gt_u':  { const t = freshTemp(fn); emit(fn, `${t} =w cugtw ${a[0]}, ${a[1]}`); return t }
+        case 'WASM__i32_ge_u':  { const t = freshTemp(fn); emit(fn, `${t} =w cugew ${a[0]}, ${a[1]}`); return t }
+
+        // -- i64 comparisons -------------------------------------------------
+        case 'WASM__i64_eq':    { const t = freshTemp(fn); emit(fn, `${t} =w ceql  ${a[0]}, ${a[1]}`); return t }
+        case 'WASM__i64_ne':    { const t = freshTemp(fn); emit(fn, `${t} =w cnel  ${a[0]}, ${a[1]}`); return t }
+        case 'WASM__i64_lt_s':  { const t = freshTemp(fn); emit(fn, `${t} =w csltl ${a[0]}, ${a[1]}`); return t }
+        case 'WASM__i64_le_s':  { const t = freshTemp(fn); emit(fn, `${t} =w cslel ${a[0]}, ${a[1]}`); return t }
+        case 'WASM__i64_gt_s':  { const t = freshTemp(fn); emit(fn, `${t} =w csgtl ${a[0]}, ${a[1]}`); return t }
+        case 'WASM__i64_ge_s':  { const t = freshTemp(fn); emit(fn, `${t} =w csgel ${a[0]}, ${a[1]}`); return t }
+        case 'WASM__i64_lt_u':  { const t = freshTemp(fn); emit(fn, `${t} =w cultl ${a[0]}, ${a[1]}`); return t }
+
+        // -- f32 comparisons -------------------------------------------------
+        case 'WASM__f32_eq':    { const t = freshTemp(fn); emit(fn, `${t} =w ceqs ${a[0]}, ${a[1]}`); return t }
+        case 'WASM__f32_ne':    { const t = freshTemp(fn); emit(fn, `${t} =w cnes ${a[0]}, ${a[1]}`); return t }
+        case 'WASM__f32_lt':    { const t = freshTemp(fn); emit(fn, `${t} =w clts ${a[0]}, ${a[1]}`); return t }
+        case 'WASM__f32_le':    { const t = freshTemp(fn); emit(fn, `${t} =w cles ${a[0]}, ${a[1]}`); return t }
+        case 'WASM__f32_gt':    { const t = freshTemp(fn); emit(fn, `${t} =w cgts ${a[0]}, ${a[1]}`); return t }
+        case 'WASM__f32_ge':    { const t = freshTemp(fn); emit(fn, `${t} =w cges ${a[0]}, ${a[1]}`); return t }
+
+        // -- Casts -----------------------------------------------------------
+        case 'WASM__i32_wrap_i64':       { const t = freshTemp(fn); emit(fn, `${t} =w copy ${a[0]}`);   return t }
+        case 'WASM__i64_extend_i32_s':   { const t = freshTemp(fn); emit(fn, `${t} =l extsw ${a[0]}`); return t }
+        case 'WASM__i64_extend_i32_u':   { const t = freshTemp(fn); emit(fn, `${t} =l extuw ${a[0]}`); return t }
+        case 'WASM__f32_convert_i32_s':  { const t = freshTemp(fn); emit(fn, `${t} =s swtof ${a[0]}`); return t }
+        case 'WASM__f32_convert_i32_u':  { const t = freshTemp(fn); emit(fn, `${t} =s uwtof ${a[0]}`); return t }
+        case 'WASM__f32_convert_i64_s':  { const t = freshTemp(fn); emit(fn, `${t} =s sltof ${a[0]}`); return t }
+        case 'WASM__i32_trunc_f32_s':    { const t = freshTemp(fn); emit(fn, `${t} =w stosi ${a[0]}`); return t }
+        case 'WASM__i32_trunc_f32_u':    { const t = freshTemp(fn); emit(fn, `${t} =w stoui ${a[0]}`); return t }
+        case 'WASM__i64_trunc_f32_s':    { const t = freshTemp(fn); emit(fn, `${t} =l dtosi ${a[0]}`); return t }
+        case 'WASM__f32_demote_f64':     { const t = freshTemp(fn); emit(fn, `${t} =s truncd ${a[0]}`); return t }
+        case 'WASM__f64_promote_f32':    { const t = freshTemp(fn); emit(fn, `${t} =d exts  ${a[0]}`); return t }
+
+        // -- Special ---------------------------------------------------------
+        case 'WASM__i32_clz': {
+            // QBE has no clz — forward to libc __builtin_clz equivalent
+            const t = freshTemp(fn)
+            emit(fn, `${t} =w call $__builtin_clz(w ${a[0]})`)
+            return t
+        }
+
+        default:
+            emit(fn, `# TODO: WASM intrinsic '${callee}' not mapped to QBE`)
+            return '0'
     }
 }
 
