@@ -1527,9 +1527,10 @@
 
 <h3>10c — Distribution</h3>
 
-<details class="distro">
-  <summary><span class="id">10c-1</span> GitHub Releases — binary tarballs for Tier 1 platforms <span class="est">M, ~4h</span></summary>
+<details class="distro" open>
+  <summary><span class="id">10c-1</span> GitHub Releases — binary tarballs for Tier 1 platforms <span class="est">M, ~4h</span> ✅</summary>
   <div class="deps"><strong>Depends on:</strong> 8-12</div>
+  <p><strong>Shipped:</strong> <code>.github/workflows/release.yml</code> — triggers on <code>v*.*.*</code> tags; builds <code>sgl</code> via <code>bun build --compile</code> on linux-x86_64, linux-aarch64, macos-aarch64, macos-x86_64; packages tarballs with SHA-256 checksums; publishes a GitHub Release with install instructions and a platform table.  Pre-release tags (containing <code>-</code>) publish as pre-release automatically.</p>
 </details>
 
 <details class="distro">
@@ -1547,9 +1548,10 @@
   <div class="deps"><strong>Depends on:</strong> 10c-1</div>
 </details>
 
-<details class="distro">
-  <summary><span class="id">10c-5</span> curl | sh installer script <span class="est">M, ~3h</span></summary>
+<details class="distro" open>
+  <summary><span class="id">10c-5</span> curl | sh installer script <span class="est">M, ~3h</span> ✅</summary>
   <div class="deps"><strong>Depends on:</strong> 10c-1</div>
+  <p><strong>Shipped:</strong> <code>scripts/install.sh</code> — POSIX sh; detects OS/arch (Linux x86_64/aarch64, macOS aarch64/x86_64); resolves latest version via GitHub API or respects <code>SGL_VERSION</code>; downloads tarball + SHA-256; verifies checksum; installs to <code>~/.sgl/bin</code> (overridable via <code>SGL_INSTALL_DIR</code>); adds to PATH in <code>.bashrc</code>/<code>.zshrc</code>/<code>.profile</code> (skip with <code>SGL_NO_MODIFY_PATH</code>).</p>
 </details>
 
 <details class="distro">
