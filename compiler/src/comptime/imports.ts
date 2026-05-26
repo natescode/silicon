@@ -1,6 +1,18 @@
 /**
  * Compiler-as-imports surface for compile-then-run strata handlers.
  *
+ * !! CANONICAL SOURCE: wit/comptime.wit !!
+ *
+ * This file is the TypeScript implementation of the `sigil:comptime`
+ * world declared in `wit/comptime.wit`.  When the surface changes:
+ *   1. Edit `wit/comptime.wit` FIRST.
+ *   2. Mirror the change in this file.
+ *   3. Mirror in any Silicon `@extern` declarations downstream handlers use.
+ *   4. `npx changeset add` if the change is observable to handler authors.
+ *
+ * Story W-1 will replace step 2 with `wit-bindgen --ts`; until then the
+ * propagation is manual but auditable against the single .wit file.
+ *
  * Each function here is a JS implementation of a WASM-callable host import.
  * Strata handler bodies, once lowered to WASM, call these via WebAssembly
  * import declarations:

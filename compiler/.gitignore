@@ -5,8 +5,15 @@ bin/
 # JavaScript not allowed
 *.js
 
-# Typescript 
+# Typescript
 *.d.ts
+
+# api-extractor: the rolled-up surface contracts live under etc/ and
+# ARE committed. dist/types/ is the intermediate per-file emit and is not.
+!etc/sigil.d.ts
+!etc/sigil.public.d.ts
+etc/temp/
+dist/types/
 
 # Ohm
 *-bundle.js

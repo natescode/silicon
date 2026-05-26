@@ -3,7 +3,14 @@
   "version": "0.1",
   "module": "index.ts",
   "type": "module",
+  "types": "etc/sigil.d.ts",
   "scripts": {
+    "types:emit": "tsc -p tsconfig.types.json || true",
+    "api:extract": "npm run types:emit && api-extractor run --local",
+    "api:check": "npm run types:emit && api-extractor run",
+    "changeset": "changeset",
+    "version": "changeset version",
+    "release": "npm run api:extract && changeset publish",
     "test": "bun test",
     "test:properties": "bun test --timeout 60000 tests/properties",
     "test:fuzz": "bun test --timeout 120000 tests/fuzz",
@@ -23,6 +30,8 @@
     "loc": "bunx cloc . --exclude-dir node_modules,dist,build --exclude-ext json,lock,md,yml"
   },
   "devDependencies": {
+    "@changesets/cli": "^2.31.0",
+    "@microsoft/api-extractor": "^7.58.7",
     "@ohm-js/cli": "^2.0.0",
     "@types/bun": "latest",
     "@types/node": "^20.14.2",
