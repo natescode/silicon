@@ -1533,19 +1533,22 @@
   <p><strong>Shipped:</strong> <code>.github/workflows/release.yml</code> — triggers on <code>v*.*.*</code> tags; builds <code>sgl</code> via <code>bun build --compile</code> on linux-x86_64, linux-aarch64, macos-aarch64, macos-x86_64; packages tarballs with SHA-256 checksums; publishes a GitHub Release with install instructions and a platform table.  Pre-release tags (containing <code>-</code>) publish as pre-release automatically.</p>
 </details>
 
-<details class="distro">
-  <summary><span class="id">10c-2</span> Homebrew formula + tap <span class="est">M, ~3h</span></summary>
+<details class="distro" open>
+  <summary><span class="id">10c-2</span> Homebrew formula + tap <span class="est">M, ~3h</span> ✅</summary>
   <div class="deps"><strong>Depends on:</strong> 10c-1</div>
+  <p><strong>Shipped:</strong> <code>packaging/homebrew/sgl.rb</code> — multi-platform Homebrew formula with <code>on_macos/on_linux × on_arm/on_intel</code> blocks; <code>packaging/homebrew/README.md</code> explains the tap publishing workflow (<code>brew tap natescode/sigil &amp;&amp; brew install sgl</code>) and the checksum update process for new releases.</p>
 </details>
 
-<details class="distro">
-  <summary><span class="id">10c-3</span> apt/deb package <span class="est">M, ~4h</span></summary>
+<details class="distro" open>
+  <summary><span class="id">10c-3</span> apt/deb package <span class="est">M, ~4h</span> ✅</summary>
   <div class="deps"><strong>Depends on:</strong> 10c-1</div>
+  <p><strong>Shipped:</strong> <code>packaging/debian/build-deb.sh</code> — POSIX sh script; takes version, platform (linux-x86_64 / linux-aarch64), and tarball path; builds a standard Debian .deb via <code>dpkg-deb</code>; correct architecture mapping (amd64/arm64); minimal control file with package metadata.</p>
 </details>
 
-<details class="distro">
-  <summary><span class="id">10c-4</span> winget manifest (Windows via WSL) <span class="est">M, ~3h</span></summary>
+<details class="distro" open>
+  <summary><span class="id">10c-4</span> winget manifest (Windows via WSL) <span class="est">M, ~3h</span> ✅</summary>
   <div class="deps"><strong>Depends on:</strong> 10c-1</div>
+  <p><strong>Shipped:</strong> <code>packaging/winget/natescode.sgl.yaml</code> — winget manifest (ManifestVersion 1.6.0); Windows support is via WSL2; installer type <code>wsl</code> pointing to the curl|sh script; ready to submit to <code>microsoft/winget-pkgs</code> once SHA256 is filled in from the release.</p>
 </details>
 
 <details class="distro" open>
