@@ -90,22 +90,64 @@ The smallest scope that lets a real user say "this works":
 | Sum with payloads      | `[tag:i32, field0:i32, …]` pad-to-max | Tagged struct: `(struct (field i32) (field i32) (field i32) …)` — pad-to-max fields, mirror of today's linear layout |
 | `Vec[T]` (T value)     | header `[len, cap, data_ptr]` + linear-memory buffer | header `(struct (field i32) (field (ref $array_T)))` + `(array (mut T))` buffer; value-typed T only (Int, Float, Bool, Int64, UInt8–UInt64) |
 
-What's **rejected at typecheck** under `--target=wasm-gc` (with a
-structured "this primitive is `--target=wasm-mvp` only" diagnostic):
+**Portability split: lifecycle primitives are target-agnostic;
+introspection and physical-byte primitives stay mvp-only.**  The
+v1.0 rejection list has two distinct shapes, with two distinct
+diagnostics:
 
-- `&alloc`, `&realloc`, `&mem_copy`, `&heap_get`, `&heap_set`,
-  `&heap_used`, `&arena_used`, `&str_ptr` — linear-memory primitives
-  have no managed-mode equivalent.
-- `&@with_arena`, `&@move_to_parent_arena` — scope-bounded
-  reclamation isn't a managed-mode pattern. The GC handles it.
-- `Rc` stdlib — replace with native managed refs (a `ref $T` is
-  implicitly shared, cycle-safe, and zero-overhead).
-- `Vec[T]` for ref-typed `T` (`Vec[String]`, `Vec[@struct Foo]`) —
-  deferred to v1.1. Variance and cross-type-ref handling need
-  design work; v1.0 ships value-typed Vec only (story 9d-8) to keep
-  the typechecker bridge minimal.
-- `HashMap[K, V]` — deferred to v1.1 GC stdlib. Needs ref-typed Vec
-  as a prerequisite for its bucket array.
+| Layer | Examples | Under wasm-mvp | Under wasm-gc |
+|-------|----------|----------------|---------------|
+| **Lifecycle** (portable) | `&@with_arena { body }`, `&@move_to_parent_arena v`, `&rc_new x`, `&rc_clone r`, `&rc_drop r`, `&rc_get r` | Real bump-allocator / refcount semantics (Phase 9c) | Compile-time elision — `&@with_arena { body }` → `{ body }`, `&rc_new x` → `x`, etc.  GC owns lifecycle. |
+| **Introspection** (mvp-only) | `&rc_count r`, `&rc_is_unique r`, `&heap_used`, `&arena_used`, `&heap_get`, `&heap_set` | Real reads | Rejected at typecheck → **E0012** "introspection primitive has no honest wasm-gc semantics; conservative no-op values would silently change program behavior." |
+| **Physical bytes** (mvp-only) | `&alloc`, `&realloc`, `&mem_copy`, `&str_ptr` | Real pointer math | Rejected at typecheck → **E0013** "raw-memory primitive; managed refs aren't addressable.  Compile with `--target=wasm-mvp` or use the managed stdlib equivalent." |
+| **Container types** (v1.1 surface) | `Vec[T]` for ref-typed `T`, `HashMap[K, V]` | Real (Phase 9c stdlib) | Deferred to v1.1 GC stdlib (needs ref-typed Vec for HashMap's bucket array) |
+
+**Why the lifecycle layer is portable:** each lifecycle primitive
+has an honest no-op interpretation under wasm-gc.  The GC keeps
+references alive as long as they're reachable, so `&rc_new`,
+`&rc_clone`, and `&rc_drop` collapse to identity / no-op without
+changing observable behavior.  `&@with_arena { body }` becomes
+`{ body }` because the GC reclaims unreachable bytes when it sweeps,
+making the arena's save/restore envelope unnecessary.
+
+**Why the introspection layer isn't:** `&rc_count r` returning a
+conservative `1` under wasm-gc would *silently* change branch
+behavior in programs like
+`&@if (&rc_count r) > 5, { panic }, { ok }`.  Returning a lie is
+worse than refusing to compile — the bug doesn't surface until
+runtime, possibly in production.  E0012 makes the target dependency
+explicit.
+
+**Why the physical-byte layer isn't:** managed refs (`ref $T`)
+aren't addressable.  There's no honest answer for `&str_ptr s`
+under wasm-gc — refs are pointers in the abstract sense but the
+engine forbids pointer math on them.  E0013 makes the cliff visible
+at compile time.
+
+**Mechanism — compile-time only, no interpreter:**
+
+- **Lifecycle strata** (`@with_arena`, `@move_to_parent_arena`):
+  `lowerWithArena` in `src/ir/lower.ts` already takes the lower
+  context; it inspects `ctx.target` and lowers the body directly
+  (no save/restore envelope, no `arena_promote` call) when target
+  is wasm-gc.  Zero runtime code.
+- **Rc stdlib swap**: `src/stdlib/gc/rc.si` shadows
+  `src/stdlib/rc.si` with identity implementations
+  (`@fn rc_new value := value;` etc.).  The module loader picks
+  based on `options.target`.  The compiler optimizer collapses
+  identity calls at lowering — same machinery used today to inline
+  `&str_ptr s` (which is identity under wasm-mvp).
+- **Introspection / physical-byte rejection** is a typechecker pass
+  that runs only when `target === 'wasm-gc'`; identical mechanism
+  to the existing target-specific dispatch.
+
+Programs that use *only* the lifecycle layer + high-level types
+(`String`, `Array[T value]`, `Vec[T value]`, `@struct`, sum types,
+`Option`, `Result`) compile under either target.  Programs that
+reach for introspection or raw pointers (WASI bridges, FFI, manual
+layout control) pick a target deliberately.  This matches Zig's
+portability story for the safe subset — and unlike Zig, you can
+ALSO opt into GC when you want it.
 
 **Sum-type representation: tagged struct, not subtype hierarchy.**
 v1.0 lowers `@type Foo := $A x:Int | $B y:Int` to a single struct
@@ -125,11 +167,6 @@ registry — same pad-to-max byte calc, emitted as a struct instead
 of bytes. Subtype-hierarchy representation (variant-as-subclass,
 `ref.test`-driven match) is a v1.1 optimization (story 9.1-d-1
 in `v1.1-user-stories.html`); transparent source-level rewrite.
-
-Programs that use *only* high-level types (`String`, `Array`,
-`Vec[T value]`, `@struct`, sum types, `Option`, `Result`) compile
-under either target. Programs using raw memory primitives stay on
-`--target=wasm-mvp`.
 
 **3. v1.1+ runway: representation upgrades, stdlib parity, defaults.**
 
@@ -222,6 +259,14 @@ under either target. Programs using raw memory primitives stay on
 - **Positive — type-system clarity.** "This program uses raw memory"
   and "this program uses managed refs" become inspectable
   properties, not buried implementation details.
+- **Positive — portability for the safe subset.**  The two-layer
+  split means lifecycle primitives (arenas, Rc) compile on both
+  targets via compile-time elision (no interpreter, no runtime cost).
+  Stdlib, tutorials, and most application code is target-agnostic
+  out of the box.  Only programs reaching for introspection
+  (refcount inspection) or raw pointers (WASI bridges, FFI) pick a
+  target deliberately.  Matches Zig's portability story for the
+  safe subset — with GC opt-in as a bonus.
 - **Negative — two stdlib paths.** Mitigation: keep the *surface
   API* identical between `src/stdlib/*.si` and `src/stdlib/gc/*.si`
   (`&str_concat`, `&vec_push`, `&Some`, etc.). Layout differs;
@@ -259,12 +304,23 @@ under either target. Programs using raw memory primitives stay on
     representation lands in v1.1.)
   - **M-4:** `--target=wasm-gc` CLI flag wired through
     `sigil_cli.ts` → `LowerOptions.target` → emitter dispatch.
-  - **M-5:** Typecheck rejection of mvp-only primitives under
-    wasm-gc (`&alloc`, `&@with_arena`, `Rc`, `&heap_*`, etc.) with
-    structured diagnostics.
-  - **M-6:** `src/stdlib/gc/` — managed-mode `String`, `Array[T]`,
-    `Option`, `Result`. `@struct` and sum types are compiler-level
-    so they're covered by M-2 + M-3.
+  - **M-5a:** Typecheck **E0012** — introspection primitives
+    (`&rc_count`, `&rc_is_unique`, `&heap_used`, `&arena_used`,
+    `&heap_get`, `&heap_set`) rejected under wasm-gc with a
+    "no honest wasm-gc semantics" diagnostic.
+  - **M-5b:** Typecheck **E0013** — physical-byte primitives
+    (`&alloc`, `&realloc`, `&mem_copy`, `&str_ptr`) rejected under
+    wasm-gc with a "managed refs aren't addressable" diagnostic.
+  - **M-5c:** Lifecycle compile-time elision — `lowerWithArena` /
+    `lowerMoveToParentArena` check `ctx.target` and lower the body
+    directly under wasm-gc (no save/restore envelope, no
+    `arena_promote`).  No runtime code emitted.
+  - **M-6:** `src/stdlib/gc/` — managed-mode `string.si`,
+    `array.si`, `option.si`, `result.si`, plus `rc.si` containing
+    *identity implementations* (`@fn rc_new value := value;` etc.)
+    so existing Rc-using code compiles unchanged on the gc target.
+    Module loader picks based on `options.target`.  `@struct` and
+    sum types are compiler-level so they're covered by M-2 + M-3.
   - **M-7:** Sum-type lowering — tagged struct representation
     reusing Phase 9c-3a's `sumLayouts` registry.
   - **M-8:** `Vec[T]` for value-typed `T` (Int, Float, Bool, Int64,
@@ -274,7 +330,9 @@ under either target. Programs using raw memory primitives stay on
   - **M-9:** Cross-target test suite — same program compiled under
     both targets must produce equivalent results across the
     primitive types, `String`, `Array[T value]`, `Vec[T value]`,
-    `@struct`, and tagged-sum types.
+    `@struct`, tagged-sum types, **and the lifecycle layer**
+    (arenas, Rc) which compiles on both targets with target-specific
+    semantics.
   - **M-10 (v1.1):** Subtype sum representation (transparent
     optimization).
   - **M-11 (v1.1):** Ref-typed `Vec[T]` (Vec[String],
@@ -302,5 +360,6 @@ universal refs).
 
 Remaining milestones (M-2 through M-9 for v1.0 scope; M-10 through
 M-16 for v1.1+) are tracked as Phase 9d stories in
-`docs/v1-user-stories.html#phase-9d`. Estimated v1.0 cost: ~11
-working days (one day already spent on M-1).
+`docs/v1-user-stories.html#phase-9d`. Estimated v1.0 cost: ~11.5
+working days (one day on M-1, half a day each for M-5b and M-5c
+added by the portability split).

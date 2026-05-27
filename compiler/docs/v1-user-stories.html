@@ -1412,11 +1412,13 @@
 <h2 id="phase-9d">Phase 9d — WasmGC target (opt-in <code>--target=wasm-gc</code>)</h2>
 
 <div class="phase-intro">
-  <strong>Status (2026-05-26): 2 of 9 stories shipped ✅</strong> —
+  <strong>Status (2026-05-26): 2 of 11 stories shipped ✅</strong> —
   9d-1 (<code>wit/wasm-gc.wit</code>) and 9d-2 (type-section emitter)
-  landed; ADR 0009 moved to <strong>Accepted</strong>.  See
-  <a href="adr/0009-wasm-gc-target.md">ADR&nbsp;0009</a> for the full
-  design rationale.
+  landed; ADR 0009 moved to <strong>Accepted</strong>, then revised to
+  add the two-layer portability split (lifecycle primitives portable
+  via compile-time elision; introspection + physical-byte primitives
+  mvp-only).  See <a href="adr/0009-wasm-gc-target.md">ADR&nbsp;0009</a>
+  for the full design rationale.
   <br/><br/>
   <strong>What this phase ships.</strong>  A new compile target,
   <code>--target=wasm-gc</code>, that lowers Sigil to WebAssembly's
@@ -1434,10 +1436,20 @@
   <code>(array (mut T))</code>; <code>@struct</code> → <code>struct</code>;
   sum-with-payloads → tagged-struct representation reusing Phase 9c-3a's
   <code>sumLayouts</code> registry; <code>Vec[T]</code> for value-typed
-  T.  Linear-memory primitives (<code>&amp;alloc</code>,
-  <code>&amp;@with_arena</code>, <code>Rc</code>, <code>&amp;heap_*</code>)
-  are rejected at typecheck under wasm-gc with a structured "this is a
-  wasm-mvp-only primitive" diagnostic.
+  T.
+  <br/><br/>
+  <strong>Two-layer portability split.</strong>  <em>Lifecycle</em>
+  primitives (<code>&amp;@with_arena</code>,
+  <code>&amp;@move_to_parent_arena</code>, the Rc family) compile on
+  both targets:  real bump/refcount semantics under wasm-mvp,
+  compile-time no-op elision under wasm-gc (GC owns lifecycle).
+  <em>Introspection</em> primitives (<code>&amp;rc_count</code>,
+  <code>&amp;heap_used</code>, …) raise <strong>E0012</strong> under
+  wasm-gc — they can't be honestly emulated.
+  <em>Physical-byte</em> primitives (<code>&amp;alloc</code>,
+  <code>&amp;str_ptr</code>, …) raise <strong>E0013</strong> — managed
+  refs aren't addressable.  Result: most stdlib + tutorial code is
+  target-agnostic; only raw-memory work picks a target deliberately.
   <br/><br/>
   <strong>Deferred to v1.1.</strong>  Subtype-hierarchy sum
   representation (transparent optimization); ref-typed
@@ -1485,28 +1497,54 @@
 </details>
 
 <details class="runtime">
-  <summary><span class="id">9d-5</span> Reject wasm-mvp-only primitives under wasm-gc <span class="est">S, ~3h</span></summary>
+  <summary><span class="id">9d-5a</span> Typecheck E0012 — reject introspection primitives under wasm-gc <span class="est">S, ~2h</span></summary>
   <div class="deps"><strong>Depends on:</strong> 9d-4</div>
-  <p class="goal">Typechecker pass: when <code>target === 'wasm-gc'</code>, calls to linear-memory primitives raise a structured diagnostic ("<code>&amp;alloc</code> is a wasm-mvp-only primitive; rewrite this allocation as a managed ref or compile with <code>--target=wasm-mvp</code>").  Covers the full list from ADR 0009 §2: <code>&amp;alloc</code>, <code>&amp;realloc</code>, <code>&amp;mem_copy</code>, <code>&amp;heap_get</code>, <code>&amp;heap_set</code>, <code>&amp;heap_used</code>, <code>&amp;arena_used</code>, <code>&amp;str_ptr</code>, <code>&amp;@with_arena</code>, <code>&amp;@move_to_parent_arena</code>, <code>&amp;rc_new</code>/<code>clone</code>/<code>drop</code>/<code>get</code>/<code>count</code>/<code>is_unique</code>.</p>
+  <p class="goal">Typechecker pass that runs only when <code>target === 'wasm-gc'</code>.  Rejects introspection primitives (<code>&amp;rc_count</code>, <code>&amp;rc_is_unique</code>, <code>&amp;heap_used</code>, <code>&amp;arena_used</code>, <code>&amp;heap_get</code>, <code>&amp;heap_set</code>) with a structured "no honest wasm-gc semantics" diagnostic.  These can't be conservatively emulated without silently changing program behavior (e.g., <code>&amp;@if (&amp;rc_count r) &gt; 5, …</code> would never panic under a conservative no-op).</p>
   <div class="accept"><strong>Acceptance:</strong>
     <ul>
-      <li>New error code <strong>E0012</strong> "wasm-mvp-only primitive under wasm-gc target" with the offending name and a one-line suggestion.</li>
-      <li>Test: every primitive in the list above raises E0012 under wasm-gc.</li>
+      <li>New error code <strong>E0012</strong> "introspection primitive has no honest wasm-gc semantics" with the offending name and the hint "compile with <code>--target=wasm-mvp</code> or remove the introspection".</li>
+      <li>Test: each introspection primitive raises E0012 under wasm-gc.</li>
       <li>Same primitives stay valid under wasm-mvp — no regression.</li>
     </ul>
   </div>
 </details>
 
 <details class="runtime">
-  <summary><span class="id">9d-6</span> <code>src/stdlib/gc/</code> managed-mode types <span class="est">L, ~1.5d</span></summary>
+  <summary><span class="id">9d-5b</span> Typecheck E0013 — reject physical-byte primitives under wasm-gc <span class="est">S, ~2h</span></summary>
+  <div class="deps"><strong>Depends on:</strong> 9d-4</div>
+  <p class="goal">Same typechecker pass as 9d-5a, different error code.  Rejects raw-memory primitives (<code>&amp;alloc</code>, <code>&amp;realloc</code>, <code>&amp;mem_copy</code>, <code>&amp;str_ptr</code>) with a "managed refs aren't addressable" diagnostic.  These have no managed-mode equivalent because <code>(ref $T)</code> isn't a number that you can do pointer math on.</p>
+  <div class="accept"><strong>Acceptance:</strong>
+    <ul>
+      <li>New error code <strong>E0013</strong> "raw-memory primitive; managed refs aren't addressable" with the offending name and the hint to use the managed stdlib equivalent or pick <code>--target=wasm-mvp</code>.</li>
+      <li>Test: each physical-byte primitive raises E0013 under wasm-gc.</li>
+    </ul>
+  </div>
+</details>
+
+<details class="runtime">
+  <summary><span class="id">9d-5c</span> Lifecycle compile-time elision under wasm-gc <span class="est">S, ~3h</span></summary>
+  <div class="deps"><strong>Depends on:</strong> 9d-4</div>
+  <p class="goal">Lifecycle primitives (<code>&amp;@with_arena</code>, <code>&amp;@move_to_parent_arena</code>) compile on both targets.  Under wasm-mvp they keep their Phase 9c bump-allocator semantics; under wasm-gc they collapse to no-ops at lowering time:  <code>&amp;@with_arena { body }</code> → <code>{ body }</code>, <code>&amp;@move_to_parent_arena v</code> → <code>v</code>.  No save/restore envelope, no <code>arena_promote</code> call, no runtime code.  Matches ADR 0009's two-layer portability split.</p>
+  <div class="accept"><strong>Acceptance:</strong>
+    <ul>
+      <li><code>lowerWithArena</code> + <code>lowerMoveToParentArena</code> in <code>src/ir/lower.ts</code> inspect <code>ctx.target</code> and short-circuit to the no-op path under wasm-gc.</li>
+      <li>Test: a program using <code>&amp;@with_arena</code> compiles to byte-equal IR under wasm-gc as the same program with the wrapper removed manually.</li>
+      <li>Source-level portability: a small example using arenas runs end-to-end under both <code>--target=wasm-mvp</code> AND <code>--target=wasm-gc</code> (cross-target test suite story 9d-9 owns the harness).</li>
+    </ul>
+  </div>
+</details>
+
+<details class="runtime">
+  <summary><span class="id">9d-6</span> <code>src/stdlib/gc/</code> managed-mode types + Rc identity shim <span class="est">L, ~1.5d</span></summary>
   <div class="deps"><strong>Depends on:</strong> 9d-3</div>
-  <p class="goal">New <code>src/stdlib/gc/</code> directory mirroring the wasm-mvp stdlib's surface API: <code>string.si</code>, <code>array.si</code>, <code>option.si</code>, <code>result.si</code>.  Implementations differ in <em>layout</em>, not in <em>call surface</em>.  A user porting a program from wasm-mvp to wasm-gc changes one CLI flag, not their call sites.</p>
+  <p class="goal">New <code>src/stdlib/gc/</code> directory mirroring the wasm-mvp stdlib's surface API: <code>string.si</code>, <code>array.si</code>, <code>option.si</code>, <code>result.si</code>.  Implementations differ in <em>layout</em>, not in <em>call surface</em>.  Plus <code>rc.si</code> containing <strong>identity implementations</strong> (<code>@fn rc_new value := value;</code>, <code>@fn rc_clone r := r;</code>, <code>@fn rc_drop _r := { };</code>, <code>@fn rc_get r := r;</code>) so existing Rc-using code compiles unchanged on the gc target — the lowering optimizer collapses identity calls to zero runtime cost.  A user porting a program from wasm-mvp to wasm-gc changes one CLI flag, not their call sites.</p>
   <div class="accept"><strong>Acceptance:</strong>
     <ul>
       <li><code>src/stdlib/gc/string.si</code> wraps <code>(array i8)</code>; provides <code>&amp;str_concat</code>, <code>&amp;str_len</code>, indexing.</li>
-      <li><code>src/stdlib/gc/option.si</code> + <code>result.si</code> are mostly identical to their wasm-mvp counterparts since they're built on sum types (M-7 owns the layout).</li>
+      <li><code>src/stdlib/gc/option.si</code> + <code>result.si</code> are mostly identical to their wasm-mvp counterparts since they're built on sum types (9d-7 owns the layout).</li>
+      <li><code>src/stdlib/gc/rc.si</code> exports the same six names as <code>src/stdlib/rc.si</code> — <code>rc_new</code>, <code>rc_clone</code>, <code>rc_drop</code>, <code>rc_get</code> — minus the introspection two (<code>rc_count</code>, <code>rc_is_unique</code> are 9d-5a-rejected).  Identity implementations.</li>
       <li>Module loader picks the right stdlib variant based on <code>options.target</code>.</li>
-      <li>Documentation in <code>docs/memory.md</code> updated with a wasm-gc section.</li>
+      <li>Documentation in <code>docs/memory.md</code> updated with a wasm-gc section + the two-layer portability table from ADR 0009.</li>
     </ul>
   </div>
 </details>
@@ -2016,9 +2054,9 @@
   <tr>
     <td>9d — WasmGC target (opt-in <code>--target=wasm-gc</code>)</td>
     <td style="color: var(--accent4); font-weight: 700;">🟡 STARTED</td>
-    <td>2 / 9</td>
-    <td><em>~1.5 d done</em> · ~10.5 d remain (est: 12 d)</td>
-    <td>ADR 0009 <strong>Accepted</strong> (2026-05-26).  <code>wit/wasm-gc.wit</code> ABI surface shipped (9d-1); type-section emitter with structural-dedup interner shipped (9d-2, 16 tests + WebAssembly.compile round-trip).  Remaining v1.0 scope: GC instruction lowering (9d-3), <code>--target=wasm-gc</code> CLI flag (9d-4), reject mvp-only primitives at typecheck (9d-5), <code>src/stdlib/gc/</code> (9d-6), tagged-struct sums (9d-7), Vec[T] for value-typed T (9d-8), cross-target test suite (9d-9).  Subtype sums, ref-typed Vec, fully generic Vec[T], HashMap, stringref, weak refs, default-on for new projects → v1.1.</td>
+    <td>2 / 11</td>
+    <td><em>~1.5 d done</em> · ~11 d remain (est: 12.5 d)</td>
+    <td>ADR 0009 <strong>Accepted</strong> (2026-05-26).  <code>wit/wasm-gc.wit</code> ABI surface shipped (9d-1); type-section emitter with structural-dedup interner shipped (9d-2, 16 tests + WebAssembly.compile round-trip).  Remaining v1.0 scope: GC instruction lowering (9d-3), <code>--target=wasm-gc</code> CLI flag (9d-4), two-layer portability split — E0012 reject introspection (9d-5a), E0013 reject physical-byte (9d-5b), lifecycle compile-time elision (9d-5c), <code>src/stdlib/gc/</code> + Rc identity shim (9d-6), tagged-struct sums (9d-7), Vec[T] for value-typed T (9d-8), cross-target test suite (9d-9).  Subtype sums, ref-typed Vec, fully generic Vec[T], HashMap, stringref, weak refs, default-on for new projects → v1.1.</td>
   </tr>
   <tr style="background: rgba(62, 207, 142, 0.08);">
     <td>10 — CaaS Consumer APIs + Distribution</td>
@@ -2066,15 +2104,15 @@
   <tr style="background: var(--surface2); border-top: 1px solid var(--border); font-weight: 600;">
     <td>1.0 REMAINING</td>
     <td style="color: var(--accent4);">🟡</td>
-    <td>~47 stories</td>
-    <td><strong style="color: var(--accent);">~36 working days (~1.8 months)</strong></td>
-    <td>Phase 7 boot/ port (21 open, includes 9c-7 deferred-with-boot/) dominates.  Phase 9d WasmGC target (9 stories / ~12 d) + Phase 9.5 abstract IR opcodes (6) + Phase 11 interpreter (16) + Phase 12 (4) follow.</td>
+    <td>~49 stories</td>
+    <td><strong style="color: var(--accent);">~36.5 working days (~1.8 months)</strong></td>
+    <td>Phase 7 boot/ port (21 open, includes 9c-7 deferred-with-boot/) dominates.  Phase 9d WasmGC target (11 stories / ~12.5 d) + Phase 9.5 abstract IR opcodes (6) + Phase 11 interpreter (16) + Phase 12 (4) follow.</td>
   </tr>
   <tr style="background: var(--surface2); font-weight: 600;">
     <td>1.0 TOTAL</td>
     <td></td>
-    <td>~189 stories</td>
-    <td><strong style="color: var(--accent);">~47 working days (~2.3 months)</strong> end-to-end<br/><em style="color: var(--muted); font-size: 0.85em;">(original estimate did not include WasmGC target — Phase 9d adds 9 stories / ~12 d to the 1.0 plan)</em></td>
+    <td>~191 stories</td>
+    <td><strong style="color: var(--accent);">~47.5 working days (~2.4 months)</strong> end-to-end<br/><em style="color: var(--muted); font-size: 0.85em;">(original estimate did not include WasmGC target — Phase 9d adds 11 stories / ~12.5 d to the 1.0 plan, including the two-layer portability split)</em></td>
     <td>v1.1 work tracked separately in <a href="v1.1-user-stories.html">v1.1-user-stories.html</a>.</td>
   </tr>
   <tr style="font-size: 0.85em; color: var(--muted);">
