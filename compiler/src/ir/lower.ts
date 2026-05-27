@@ -377,15 +377,35 @@ export function lowerProgram(
     // Append auto-generated imports from module calls (web::*, Draw::*, …).
     for (const imp of ctx.pendingImports.values()) imports.push(imp)
 
+    // Phase 9d-8: inject hardcoded Vec[Int] gc functions under wasm-gc.
+    // Registers $Array_i32 + $Vec_i32 type entries (must come BEFORE any
+    // user-defined sums in the wasmGcTypes registry — Vec types are
+    // referenced by every program that uses Vec; user sums are only
+    // referenced when the user declares them, so giving Vec types stable
+    // low indices is safe).  See src/codegen/gc-vec.ts.
+    if (target === 'wasm-gc') {
+        const vecFns = require('../codegen/gc-vec').buildGcVecExtension(ctx.wasmGcTypes) as IRFunction[]
+        functions.unshift(...vecFns)
+    }
+
     // Phase 9d-7 fix-4: under wasm-gc, walk every user-emitted function
     // and inject refResult / refParams when the declared Silicon type
-    // is a Sum.  The IR-level value type stays i32 (refs are i32-shaped
-    // on the operand stack and in locals); these annotations only
-    // affect the binary type-section encoding.  Constructors already
-    // had refResult set by typeRecordExpander — this pass picks up the
-    // other functions: anything that *returns* or *takes* a Sum.
+    // is a Sum or Vec.  The IR-level value type stays i32 (refs are
+    // i32-shaped on the operand stack and in locals); these annotations
+    // only affect the binary type-section encoding.  Constructors
+    // already had refResult set by typeRecordExpander — this pass picks
+    // up the other functions: anything that *returns* or *takes* a
+    // Sum / Vec.
+    //
+    // Phase 9d-8: also walk every function body looking for @local
+    // declarations whose annotation resolves to Vec[Int] (or any
+    // ref-typed Sigil type).  Set IRLocal.refType so the wasm-level
+    // local is declared as `(local (ref $Vec_i32))` instead of
+    // `(local i32)` — `local.set` from a ref-returning call now
+    // type-checks at validation.
     if (target === 'wasm-gc') {
         injectRefSlots(functions, functionSigs, ctx.wasmGcTypes)
+        injectLocalRefSlots(program, functions, ctx.wasmGcTypes)
     }
 
     return {
@@ -428,18 +448,16 @@ function injectRefSlots(
         const sig = functionSigs.get(fn.name)
         if (!sig) continue
 
-        // Result: declared as a Sum → encode as ref.
-        if (!fn.refResult && sig.result.kind === 'Sum') {
-            const idx = wasmGcTypes.lookupByName(`$${sig.result.name}`)
+        // Result: declared as a Sum or Vec → encode as ref.
+        if (!fn.refResult) {
+            const idx = siliconTypeToRefIdx(sig.result, wasmGcTypes)
             if (idx !== undefined) {
                 fn.refResult = { localTypeIdx: idx, nullable: false }
             }
         }
-        // Params: each Sum-typed param gets refParams entry.
+        // Params: each Sum-/Vec-typed param gets refParams entry.
         for (let i = 0; i < sig.params.length; i++) {
-            const pType = sig.params[i]
-            if (pType.kind !== 'Sum') continue
-            const idx = wasmGcTypes.lookupByName(`$${pType.name}`)
+            const idx = siliconTypeToRefIdx(sig.params[i], wasmGcTypes)
             if (idx === undefined) continue
             if (!fn.refParams) fn.refParams = new Map()
             if (!fn.refParams.has(i)) {
@@ -447,6 +465,112 @@ function injectRefSlots(
             }
         }
     }
+}
+
+/** Phase 9d-8: walk every user `@fn`'s body looking for `@local`
+ *  declarations whose annotation resolves to a ref-typed Sigil type
+ *  (Vec / Sum).  Set the matching IRLocal.refType so the binary local
+ *  declaration encodes `(ref $T)` instead of `i32` — `local.set` from
+ *  a ref-returning call (vec_new, constructor) now type-checks at
+ *  validation. */
+function injectLocalRefSlots(
+    program: any,
+    functions: IRFunction[],
+    wasmGcTypes: WasmGcTypeRegistry,
+): void {
+    const fnByName = new Map<string, IRFunction>()
+    for (const f of functions) fnByName.set(f.name, f)
+
+    const items: any[] = (program?.elements ?? program?.items ?? []) as any[]
+    for (const item of items) {
+        const def = unwrap(item)
+        if (!def || def.type !== 'Definition') continue
+        if (def.keyword !== '@fn' && def.keyword !== '@let') continue
+        const name = def.name?.name
+        if (!name) continue
+        const watName = watId(name)
+        const fn = fnByName.get(watName) ?? fnByName.get(name)
+        if (!fn) continue
+        walkLocalsForRefs(def.binding?.expression ?? def.binding, fn, wasmGcTypes)
+    }
+}
+
+function walkLocalsForRefs(
+    node: any, fn: IRFunction, wasmGcTypes: WasmGcTypeRegistry,
+): void {
+    if (!node || typeof node !== 'object') return
+    if (node.type === 'Definition' && (node.keyword === '@local' || node.keyword === '@var')) {
+        const localName: string | undefined = node.name?.name
+        const annot = node.name?.typeAnnotation
+        if (localName && annot) {
+            const refIdx = refIdxFromAnnotation(annot, wasmGcTypes)
+            if (refIdx !== undefined) {
+                const watLocalName = watId(localName)
+                for (const l of fn.locals) {
+                    if (l.name === watLocalName || l.name === localName) {
+                        l.refType = { localTypeIdx: refIdx, nullable: false }
+                        break
+                    }
+                }
+            }
+        }
+    }
+    for (const key of Object.keys(node)) {
+        if (key === 'type' || key === 'sourceLocation') continue
+        const val = (node as any)[key]
+        if (Array.isArray(val)) {
+            for (const v of val) walkLocalsForRefs(v, fn, wasmGcTypes)
+        } else if (val && typeof val === 'object') {
+            walkLocalsForRefs(val, fn, wasmGcTypes)
+        }
+    }
+}
+
+/** Resolve a raw AST `TypeAnnotation` to a ref-typeidx.  Hand-rolled
+ *  rather than reusing the typechecker's `resolveTypeAnnotation` to
+ *  avoid pulling typechecker context into the lower path. */
+function refIdxFromAnnotation(
+    annot: any, wasmGcTypes: WasmGcTypeRegistry,
+): number | undefined {
+    if (!annot) return undefined
+    if (annot.typename === 'Vec'
+        && Array.isArray(annot.typeArgs) && annot.typeArgs.length === 1
+        && annot.typeArgs[0].name === 'Int') {
+        return wasmGcTypes.lookupByName('$Vec_i32')
+    }
+    // Bare typename — could be a user-defined sum.  The registry
+    // already has `$<typename>` from typeRecordExpander; lookup by name.
+    if (annot.typename) {
+        return wasmGcTypes.lookupByName('$' + annot.typename)
+    }
+    return undefined
+}
+
+/** Map a SiliconType to its WasmGC localTypeIdx for ref encoding,
+ *  or `undefined` if the type is not a ref under wasm-gc.
+ *
+ *  - `Sum { name }`  → `$<name>` in the registry.
+ *  - `Vec { element }` → `$Vec_<elemTag>` (e.g. `$Vec_i32`).
+ *  - everything else → `undefined` (encoded as the IR-level valtype).
+ *
+ *  v1.0 supports `Vec[Int]` only (the gc-vec extension registers
+ *  `$Vec_i32`); other element types fall through to `undefined`
+ *  and the field/param/local stays valtype-encoded.  v1.1 widens
+ *  to f32/i64/ref-typed-T per ADR 0009 §3.
+ */
+function siliconTypeToRefIdx(
+    t: SiliconType,
+    wasmGcTypes: WasmGcTypeRegistry,
+): number | undefined {
+    if (t.kind === 'Sum') {
+        return wasmGcTypes.lookupByName(`$${t.name}`)
+    }
+    if (t.kind === 'Vec') {
+        if (t.element.kind === 'Int') return wasmGcTypes.lookupByName('$Vec_i32')
+        // f32 / i64 variants are mechanical extensions (v1.1).
+        return undefined
+    }
+    return undefined
 }
 
 // ---------------------------------------------------------------------------

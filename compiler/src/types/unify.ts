@@ -178,6 +178,10 @@ export function unify(a: SiliconType, b: SiliconType, s: Subst = emptySubst()): 
     if (ra.kind === 'Array' && rb.kind === 'Array') {
         return unify(ra.element, rb.element, s)
     }
+    // Phase 9d-8: Vec[T] follows the same structural-equality shape as Array.
+    if (ra.kind === 'Vec' && rb.kind === 'Vec') {
+        return unify(ra.element, rb.element, s)
+    }
     if (ra.kind === 'Function' && rb.kind === 'Function') {
         if (ra.params.length !== rb.params.length) {
             throw new UnifyError(ra, rb, `function arity mismatch: ${ra.params.length} vs ${rb.params.length}`)

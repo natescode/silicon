@@ -481,6 +481,7 @@ export function createCompilerAPI(ctx: CtxShape, fns: LowerFns): CompilerAPI {
             case 'Void':     return 'Void'
             case 'Unknown':  return 'Unknown'
             case 'Array':    return `Array[${formatSiliconType(t.element)}]`
+            case 'Vec':      return `Vec[${formatSiliconType(t.element)}]`
             case 'Function': return `(${t.params.map(formatSiliconType).join(', ')}) -> ${formatSiliconType(t.result)}`
             case 'Variable': return `$${t.name}`
             case 'Distinct': return t.name

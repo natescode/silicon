@@ -1,0 +1,26 @@
+# Phase 9d-8 — Vec[Int] stub for the wasm-gc target.
+#
+# Under `--target=wasm-gc` the @use resolver redirects
+# `@use '…/src/stdlib/vec.si'` to this file.  The file is intentionally
+# EMPTY of @fn declarations — the actual `vec_new`, `vec_push_i32`,
+# `vec_get_i32`, `vec_set_i32`, `vec_len`, `vec_capacity`, and
+# `vec_pop_i32` functions are emitted directly by the compiler from
+# `src/codegen/gc-vec.ts`.  Their signatures are pre-registered in the
+# typechecker (`preRegisterStdFunctions` under target === 'wasm-gc')
+# using the new `Vec[Int]` surface type, so user code calling these
+# functions typechecks even though no `@fn` declaration appears here.
+#
+# Stub layout — only this empty file is needed for the resolver to
+# pick the gc path over `src/stdlib/vec.si`.
+#
+# Scope (per ADR 0009 §3, also documented in src/codegen/gc-vec.ts):
+#   - Only Vec[Int].  Vec[Float] / Vec[Int64] / Vec[String] are v1.1.
+#   - No fully generic `@fn vec_push[T]` — specialised names match
+#     today's mvp surface (`vec_push_i32`, etc.).
+#   - Functions take/return `Vec[Int]` at the Sigil type level; the
+#     compiler lowers Vec[Int] to `(ref $Vec_i32)` at the binary level
+#     via the refResult/refParams/refType machinery from Phase 9d-7
+#     fix-2.
+#
+# See src/codegen/gc-vec.ts for the generated function bodies and
+# src/stdlib/gc/vec.test.ts for the cross-target parity suite.

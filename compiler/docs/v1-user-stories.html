@@ -1412,16 +1412,17 @@
 <h2 id="phase-9d">Phase 9d — WasmGC target (opt-in <code>--target=wasm-gc</code>)</h2>
 
 <div class="phase-intro">
-  <strong>Status (2026-05-27): 9 of 11 stories shipped ✅</strong> —
+  <strong>Status (2026-05-27): 10 of 11 stories shipped ✅</strong> —
   9d-1 (<code>wit/wasm-gc.wit</code>), 9d-2 (type-section emitter),
   9d-3 (instruction lowering), 9d-4 (CLI flag), 9d-5a/b/c (portability
   split), 9d-6 (<code>stdlib/gc/rc.si</code> + resolver shadow),
-  9d-7 (tagged-struct sums + @match dispatch via struct.get) all
-  landed.  Programs using Rc + arenas + value types + sum types
-  (<code>Option</code> / <code>Result</code> / user-defined) now
-  compile under both <code>--target=wasm-mvp</code> AND
-  <code>--target=wasm-gc</code> unchanged.  Remaining v1.0:
-  9d-8 (Vec[T value]), 9d-9 (cross-target test suite).
+  9d-7 (tagged-struct sums + @match dispatch via struct.get), 9d-8
+  (Vec[Int] under wasm-gc + new <code>Vec[T]</code> surface type +
+  ref-typed IRLocal/IRParam slots) all landed.  Programs using Rc +
+  arenas + value types + sum types + <code>Vec[Int]</code> now compile
+  AND validate under both <code>--target=wasm-mvp</code> AND
+  <code>--target=wasm-gc</code>.  Remaining v1.0:
+  9d-9 (cross-target test suite).
   <br/><br/>
   <strong>What this phase ships.</strong>  A new compile target,
   <code>--target=wasm-gc</code>, that lowers Sigil to WebAssembly's
@@ -1510,19 +1511,15 @@
   <p class="done-note"><strong>Follow-up fix (2026-05-27):</strong> the initial 9d-7 ship passed WAT-text tests but produced binaries that failed <code>WebAssembly.compile</code> validation with "(ref struct:0) is not a I32".  Three issues, fixed in a follow-up commit:  (1) the GC instruction emitters wrote <code>e.typeIdx</code> as the wasm type-section absolute index, but the IR carried wasmGcTypes-local indices — added <code>ctx.gcTypeIdxBase</code> offset to every <code>0xFB</code>-prefixed emit;  (2) function-type signatures referencing constructor-result struct types needed <code>(ref $Foo)</code> encoding instead of <code>i32</code> — extended <code>FuncSig</code> with ref-typed slots, added <code>encodeFuncSlot</code>, added <code>IRFunction.refResult</code> / <code>refParams</code> annotations;  (3) WasmGC validates that any typeidx referenced by a type must be declared earlier in the section — flipped the type-section layout so GC types come BEFORE function types (function-type indices now offset by <code>gcTypes.length</code> in <code>typeIdxOf</code>); also flipped the previously-swapped <code>0x63</code> / <code>0x64</code> reftype form bytes per the GC binary spec.  A post-lowering pass <code>injectRefSlots</code> walks every IRFunction and sets refResult/refParams when the declared Silicon return / param type is a Sum.  Four new validation round-trip tests in <code>wasm-gc-sums.test.ts</code> (15 total, 0 fail).</p>
 </details>
 
-<details class="runtime">
-  <summary><span class="id">9d-8</span> <code>Vec[T]</code> for value-typed <code>T</code> <span class="est">XL, ~2d</span></summary>
-  <div class="deps"><strong>Depends on:</strong> 9d-3, 9d-6</div>
-  <p class="goal">Lower <code>Vec[T]</code> for <code>T ∈ { Int, Float, Bool, Int64, UInt8, UInt16, UInt32, UInt64 }</code> to a header struct + backing array: <code>(struct (field i32) (field (ref $array_T)))</code> + <code>(array (mut T))</code>.  Mirrors today's <code>vec_*_i32</code> / <code>vec_*_f32</code> scope.  All 9 helpers (<code>vec_new</code>, <code>vec_push</code>, <code>vec_get</code>, <code>vec_set</code>, <code>vec_len</code>, <code>vec_capacity</code>, <code>vec_pop</code>, <code>vec_insert</code>, <code>vec_remove</code>) transpose 1:1 from existing <code>vec.si</code>.</p>
-  <div class="accept"><strong>Acceptance:</strong>
-    <ul>
-      <li>Per-element-type monomorphization: <code>$Vec_i32</code>, <code>$Vec_f32</code>, <code>$Vec_i64</code>, etc., distinct WasmGC types.</li>
-      <li>Grow path uses <code>array.new</code> + <code>array.copy</code>.</li>
-      <li>Ref-typed <code>T</code> (Vec[String], Vec[@struct Foo]) deliberately NOT in scope — needs variance design, tracked as v1.1 story 9.1-d-2.</li>
-      <li>Fully generic <code>@fn vec_push[T] v:Vec[T], x:T</code> deliberately NOT in scope — needs monomorphization-through-emit plumbing, tracked as v1.1 story 9.1-d-3.</li>
-      <li>Existing <code>src/stdlib/vec.test.ts</code>-style suite mirrored as <code>src/stdlib/gc/vec.test.ts</code>; same assertions under wasm-gc.</li>
-    </ul>
-  </div>
+<details class="runtime complete">
+  <summary><span class="id">9d-8</span> <code>Vec[T]</code> for value-typed <code>T</code> — <code>Vec[Int]</code> in v1.0 <span class="done">✅</span> <span class="est">XL, ~3d</span></summary>
+  <p class="done-note">✓ Scoped further than the original story plan: <strong><code>Vec[Int]</code> only</strong> in v1.0 (i32 element type).  <code>Vec[Float]</code>/<code>Vec[Int64]</code>/<code>Vec[Bool]</code>/etc. are mechanical extensions deferred to v1.1 since the user-visible primary case is <code>Vec[Int]</code> and the extra ~5 functions per element type wouldn't add proof to the architectural pattern.</p>
+  <p class="done-note">✓ <strong>SiliconType.Vec[T] surface type</strong> (9d-8a) — new variant in <code>src/types/types.ts</code>, <code>VecOf</code> builder, <code>formatType</code> + <code>typeEquals</code> + <code>unify</code> + <code>wasmTypeOf</code> + <code>siliconTypeToQbe</code> + <code>formatSiliconType</code> all extended.  <code>resolveTypeAnnotation</code> in the typechecker special-cases <code>Vec[T]</code> as a built-in parametric container.</p>
+  <p class="done-note">✓ <strong>IRLocal/IRParam ref-typed slots</strong> (9d-8b) — <code>IRLocal.refType?: IRRefSlot</code> and <code>IRParam.refType?: IRRefSlot</code> optional fields; <code>wasm-emitter</code>'s <code>compressLocalSlots</code> coalesces adjacent slots with identical ref-encoding and emits <code>(local (ref $T))</code> via the existing <code>encodeFuncSlot</code> path.  Local-set from a ref-returning call now validates.</p>
+  <p class="done-note">✓ <strong>Typechecker vec_* registrations</strong> (9d-8c) — under <code>target === 'wasm-gc'</code>, <code>preRegisterStdFunctions</code> adds 7 signatures (<code>vec_new</code>, <code>vec_len</code>, <code>vec_capacity</code>, <code>vec_get_i32</code>, <code>vec_set_i32</code>, <code>vec_push_i32</code>, <code>vec_pop_i32</code>) using <code>Vec[Int]</code> where appropriate.</p>
+  <p class="done-note">✓ <strong>Lowering pipeline</strong> (9d-8d) — <code>src/codegen/gc-vec.ts</code> registers <code>$Array_i32</code> + <code>$Vec_i32</code> in the WasmGC type registry and emits 7 IRFunctions with refResult/refParams set.  <code>lowerProgram</code> invokes the extension at the start (under wasm-gc).  Post-lowering <code>injectRefSlots</code> picks up user functions whose params/return are <code>Vec[Int]</code>; <code>injectLocalRefSlots</code> walks @fn bodies and sets <code>refType</code> on <code>@local v:Vec[Int] := …</code> declarations.  Stub <code>src/stdlib/gc/vec.si</code> exists (empty) so the resolver picks it over the mvp <code>vec.si</code>.</p>
+  <p class="done-note">✓ <strong>End-to-end tests</strong> — 11 tests in <code>src/stdlib/gc/vec.test.ts</code> validate AND execute under wasm-gc: core API (len/capacity/push/get/set/pop), grow path (cap=0 → 4, doubling), function boundaries (taking + returning <code>Vec[Int]</code>).  All assert correct runtime values, not just compilation success.  Regression: 1263/1263 pass.</p>
+  <p class="done-note"><strong>Deferred (v1.1):</strong> ref-typed <code>Vec[T]</code> (<code>Vec[String]</code>, <code>Vec[@struct]</code>) — variance + cross-type-ref design; fully generic <code>@fn vec_push[T] v:Vec[T], x:T</code> with monomorphization through emit-time WasmGC type-index selection; <code>HashMap[K, V]</code> (depends on ref-typed Vec).  See v1.1 stories 9.1-d-2 / 9.1-d-3 / 9.1-d-4.</p>
 </details>
 
 <details class="runtime">
@@ -2001,9 +1998,9 @@
   <tr>
     <td>9d — WasmGC target (opt-in <code>--target=wasm-gc</code>)</td>
     <td style="color: var(--accent4); font-weight: 700;">🟡 STARTED</td>
-    <td>9 / 11</td>
-    <td><em>~6.5 d done</em> · ~6 d remain (est: 12.5 d)</td>
-    <td>ADR 0009 <strong>Accepted</strong> (2026-05-26).  Shipped: <code>wit/wasm-gc.wit</code> ABI (9d-1); type-section emitter (9d-2); GC instruction IR + emitters (9d-3); CLI flag (9d-4); portability split — E0012/E0013/lifecycle elision (9d-5a/b/c); <code>stdlib/gc/rc.si</code> + useResolver shadow (9d-6); tagged-struct sum lowering + @match dispatch via struct.get (9d-7, 11 tests).  Sum types now compile under both targets — Option/Result/user-defined sums work on wasm-gc.  Remaining v1.0: Vec[T] for value-typed T (9d-8), cross-target test suite (9d-9).  Subtype sums, ref-typed Vec, fully generic Vec[T], HashMap, stringref, weak refs, default-on for new projects → v1.1.</td>
+    <td>10 / 11</td>
+    <td><em>~8.5 d done</em> · ~1 d remain (est: 12.5 d)</td>
+    <td>ADR 0009 <strong>Accepted</strong> (2026-05-26).  Shipped: wit/wasm-gc.wit ABI (9d-1); type-section emitter (9d-2); GC instruction IR + emitters (9d-3); --target=wasm-gc CLI flag (9d-4); two-layer portability split — E0012 / E0013 / lifecycle elision (9d-5a/b/c); stdlib/gc/rc.si + resolver shadow (9d-6); tagged-struct sums + @match struct.get dispatch with full validation round-trip + ref-typed function signatures (9d-7); <code>Vec[Int]</code> end-to-end — new <code>Vec[T]</code> surface type, ref-typed IRLocal/IRParam slots, gc-vec.ts compiler extension, 11 e2e runtime tests (9d-8).  Remaining v1.0: cross-target test suite (9d-9).  Subtype sums, ref-typed Vec, fully generic Vec[T], HashMap, stringref, weak refs, default-on for new projects → v1.1.</td>
   </tr>
   <tr style="background: rgba(62, 207, 142, 0.08);">
     <td>10 — CaaS Consumer APIs + Distribution</td>

@@ -292,8 +292,14 @@ export type IRStmt = IRLocalSet | IRGlobalSet | IRExprStmt
 // Module-level IR nodes
 // ---------------------------------------------------------------------------
 
-export interface IRParam { name: string; wasmType: WasmValType }
-export interface IRLocal { name: string; wasmType: WasmValType }
+/** Phase 9d-8b — function parameter or local-variable slot.  The
+ *  optional `refType` overrides `wasmType` at binary-emit time so the
+ *  slot is encoded as `(ref $T)` / `(ref null $T)` instead of a
+ *  valtype byte.  `wasmType` stays as the IR-level value type (always
+ *  `'i32'` for refs at the operand-stack level), keeping every IR
+ *  consumer that reads `.wasmType` working unchanged. */
+export interface IRParam { name: string; wasmType: WasmValType; refType?: IRRefSlot }
+export interface IRLocal { name: string; wasmType: WasmValType; refType?: IRRefSlot }
 
 /** Phase 9d-7 fix-2 — ref-typed function slot.
  *  Annotation used on IRFunction params + result under `--target=wasm-gc`

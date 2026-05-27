@@ -49,6 +49,13 @@ export type SiliconType =
     | { kind: 'UInt32' }
     | { kind: 'UInt64' }
     | { kind: 'Array'; element: SiliconType }
+    // Phase 9d-8 — growable container (`Vec[Int]`, `Vec[Float]`, …).
+    // Nominally distinct from `Array[T]` (which is fixed-length); maps
+    // to the stdlib `vec_*` API at the runtime level.  Under wasm-mvp
+    // a `Vec[T]` is an i32 (heap pointer to the linear-memory header);
+    // under wasm-gc it lowers to `(ref $Vec_T)` — see
+    // `src/codegen/gc-vec.ts`.
+    | { kind: 'Vec'; element: SiliconType }
     | { kind: 'Function'; params: SiliconType[]; result: SiliconType }
     // A user-defined distinct type. Structurally identical to `underlying` in
     // WASM, but incompatible with it (and with other Distinct types) at the
@@ -127,6 +134,11 @@ export function ArrayOf(element: SiliconType): SiliconType {
     return { kind: 'Array', element }
 }
 
+/** Phase 9d-8 — construct a `Vec[T]` growable container type. */
+export function VecOf(element: SiliconType): SiliconType {
+    return { kind: 'Vec', element }
+}
+
 /**
  * Construct a Function type. Represents a callable with typed parameters and
  * a typed return value. Lowers to i32 (function index) in WASM.
@@ -167,6 +179,7 @@ export function wasmTypeOf(t: SiliconType): WasmType {
         case 'Bool':
         case 'String':   // pointer
         case 'Array':    // pointer
+        case 'Vec':      // Phase 9d-8: pointer (mvp) or ref (wasm-gc — ref-ness encoded by caller)
         case 'Function': // function table index
         case 'UInt8':    // sub-i32 widths share the i32 representation
         case 'UInt16':
@@ -197,6 +210,9 @@ export function wasmTypeOf(t: SiliconType): WasmType {
 export function typeEquals(a: SiliconType, b: SiliconType): boolean {
     if (a.kind !== b.kind) return false
     if (a.kind === 'Array' && b.kind === 'Array') {
+        return typeEquals(a.element, b.element)
+    }
+    if (a.kind === 'Vec' && b.kind === 'Vec') {
         return typeEquals(a.element, b.element)
     }
     if (a.kind === 'Function' && b.kind === 'Function') {
@@ -246,6 +262,7 @@ export function formatType(t: SiliconType): string {
         case 'UInt32': return 'u32'
         case 'UInt64': return 'u64'
         case 'Array': return `Array[${formatType(t.element)}]`
+        case 'Vec':   return `Vec[${formatType(t.element)}]`
         case 'Function': return `Function(${t.params.map(formatType).join(', ')}) -> ${formatType(t.result)}`
         case 'Distinct': return t.name
         case 'Sum': {

@@ -12,7 +12,7 @@ import { WasmBuffer } from './wasm-buffer'
 import type { PreludeSpec } from './prelude-ir'
 import type {
     IRModule, IRFunction, IRGlobal, IRImport, IRExport, IRDataSegment,
-    IRExpr, IRStmt, WasmValType, WasmType, AbstractOp,
+    IRExpr, IRStmt, IRLocal, WasmValType, WasmType, AbstractOp,
     WasmGcType, WasmGcField, WasmGcStorageType,
 } from '../ir/nodes'
 import { ARRAY_LITERAL_CALLEE } from '../ir/nodes'
@@ -490,6 +490,36 @@ function compressLocals(types: WasmValType[]): Array<[number, WasmValType]> {
     return groups
 }
 
+/** Phase 9d-8b — slot-aware local compressor.  Each slot is either a
+ *  value type or a ref (`{ kind: 'ref', localTypeIdx, nullable }`).
+ *  Adjacent slots with identical encoding are coalesced into a single
+ *  `[count, slot]` group, same as the value-only `compressLocals`. */
+function compressLocalSlots(slots: FuncSigSlot[]): Array<[number, FuncSigSlot]> {
+    const groups: Array<[number, FuncSigSlot]> = []
+    const sameSlot = (a: FuncSigSlot, b: FuncSigSlot): boolean => {
+        if (a.kind !== b.kind) return false
+        if (a.kind === 'val' && b.kind === 'val') return a.type === b.type
+        if (a.kind === 'ref' && b.kind === 'ref') {
+            return a.localTypeIdx === b.localTypeIdx && a.nullable === b.nullable
+        }
+        return false
+    }
+    for (const s of slots) {
+        if (groups.length > 0 && sameSlot(groups[groups.length - 1][1], s)) {
+            groups[groups.length - 1][0]++
+        } else {
+            groups.push([1, s])
+        }
+    }
+    return groups
+}
+
+/** Convert an IRLocal to a FuncSigSlot (ref-typed if refType is set). */
+function localToSlot(l: IRLocal): FuncSigSlot {
+    if (l.refType) return { kind: 'ref', ...l.refType }
+    return { kind: 'val', type: l.wasmType }
+}
+
 // ---------------------------------------------------------------------------
 // Function body emission
 // ---------------------------------------------------------------------------
@@ -515,14 +545,18 @@ function emitFunctionBody(
 
     const bodyBuf = new WasmBuffer()
 
-    // Local declarations (only non-param locals, grouped)
-    const declTypes = isUser
-        ? ['i32' as WasmValType, ...f.locals.map(l => l.wasmType)]
-        : f.locals.map(l => l.wasmType)
-    const groups = compressLocals(declTypes)
+    // Local declarations (only non-param locals, grouped).
+    // Phase 9d-8b: slot-aware compression honours `refType` so locals
+    // that hold a managed ref are declared as `(local (ref $T))` at
+    // the binary level instead of `(local i32)`.
+    const valSlot = (t: WasmValType): FuncSigSlot => ({ kind: 'val', type: t })
+    const declSlots: FuncSigSlot[] = isUser
+        ? [valSlot('i32'), ...f.locals.map(localToSlot)]
+        : f.locals.map(localToSlot)
+    const groups = compressLocalSlots(declSlots)
     bodyBuf.u32(groups.length)
-    for (const [count, type] of groups) {
-        bodyBuf.u32(count); bodyBuf.u8(VALTYPE[type])
+    for (const [count, slot] of groups) {
+        bodyBuf.u32(count); encodeFuncSlot(bodyBuf, slot, 0)
     }
 
     // Function body instructions

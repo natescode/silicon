@@ -63,6 +63,7 @@ import {
     TypeUInt64,
     TypeUnknown,
     ArrayOf,
+    VecOf,
     FunctionOf,
     DistinctOf,
     SumOf,
@@ -245,6 +246,20 @@ function resolveTypeAnnotation(ann: any, ctx: Ctx): SiliconType | undefined {
         }
         return FunctionOf(paramTs, retT)
     }
+    // Phase 9d-8 — Vec[T] is a built-in parametric container distinct
+    // from the user-defined Sum typeArgs path below.  Recognised
+    // *before* `resolveType` so we don't have to register Vec as a
+    // type alias.
+    if (ann.typename === 'Vec') {
+        const typeArgs: any[] = ann.typeArgs ?? []
+        if (typeArgs.length !== 1) return undefined
+        const elem = resolveTypeAnnotation(
+            { typename: typeArgs[0].name, typeArgs: typeArgs[0].args },
+            ctx,
+        )
+        if (!elem) return undefined
+        return { kind: 'Vec', element: elem }
+    }
     const base = resolveType(ann.typename, ctx)
     if (!base) return undefined
     const typeArgs: any[] = ann.typeArgs ?? []
@@ -402,6 +417,29 @@ function preRegisterStdFunctions(ctx: Ctx): void {
     for (const { name, params, result } of defs) {
         ctx.functions.set(name, { params, result })
         ctx.symbols.set(name, FunctionOf(params, result))
+    }
+
+    // Phase 9d-8c: under wasm-gc, the Vec[Int] gc functions are
+    // compiler-generated (see src/codegen/gc-vec.ts).  Register their
+    // signatures so user calls (`&vec_new 8`, etc.) typecheck.  Under
+    // wasm-mvp these come from src/stdlib/vec.si's @fn declarations —
+    // skipping registration here avoids shadowing the user's @fn
+    // bodies, which the resolver pulls in via @use.
+    if (ctx.target === 'wasm-gc') {
+        const vecInt = VecOf(TypeInt)
+        const vecDefs: Array<{ name: string; params: SiliconType[]; result: SiliconType }> = [
+            { name: 'vec_new',       params: [TypeInt],                       result: vecInt },
+            { name: 'vec_len',       params: [vecInt],                        result: TypeInt },
+            { name: 'vec_capacity',  params: [vecInt],                        result: TypeInt },
+            { name: 'vec_get_i32',   params: [vecInt, TypeInt],               result: TypeInt },
+            { name: 'vec_set_i32',   params: [vecInt, TypeInt, TypeInt],      result: TypeUnknown },
+            { name: 'vec_push_i32',  params: [vecInt, TypeInt],               result: TypeUnknown },
+            { name: 'vec_pop_i32',   params: [vecInt],                        result: TypeInt },
+        ]
+        for (const { name, params, result } of vecDefs) {
+            ctx.functions.set(name, { params, result })
+            ctx.symbols.set(name, FunctionOf(params, result))
+        }
     }
 }
 
