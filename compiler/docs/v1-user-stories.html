@@ -1412,15 +1412,15 @@
 <h2 id="phase-9d">Phase 9d — WasmGC target (opt-in <code>--target=wasm-gc</code>)</h2>
 
 <div class="phase-intro">
-  <strong>Status (2026-05-27): 7 of 11 stories shipped ✅</strong> —
+  <strong>Status (2026-05-27): 8 of 11 stories shipped ✅</strong> —
   9d-1 (<code>wit/wasm-gc.wit</code>), 9d-2 (type-section emitter),
-  9d-3 (instruction lowering), 9d-4 (CLI flag), 9d-5a (E0012 reject
-  introspection), 9d-5b (E0013 reject physical-byte), 9d-5c (lifecycle
-  elision) all landed.  ADR 0009 <strong>Accepted</strong> with the
-  two-layer portability split.  See
-  <a href="adr/0009-wasm-gc-target.md">ADR&nbsp;0009</a> for the full
-  design rationale.  Remaining v1.0: 9d-6 (stdlib/gc/), 9d-7 (tagged
-  sums), 9d-8 (Vec[T value]), 9d-9 (cross-target test suite).
+  9d-3 (instruction lowering), 9d-4 (CLI flag), 9d-5a/b/c (the
+  two-layer portability split), 9d-6 (<code>stdlib/gc/rc.si</code>
+  identity shim + resolver shadow) all landed.  Programs using Rc +
+  arenas + value types now compile under both <code>--target=wasm-mvp</code>
+  AND <code>--target=wasm-gc</code> unchanged.  Remaining v1.0:
+  9d-7 (tagged sums — unblocks <code>Option</code>/<code>Result</code>),
+  9d-8 (Vec[T value]), 9d-9 (cross-target test suite).
   <br/><br/>
   <strong>What this phase ships.</strong>  A new compile target,
   <code>--target=wasm-gc</code>, that lowers Sigil to WebAssembly's
@@ -1496,19 +1496,10 @@
   <p class="done-note">✓ <code>LowerCtx</code> gains a required <code>target: LowerTarget</code> field, threaded from <code>LowerOptions.target</code> at <code>lowerProgram</code> creation.  <code>lowerWithArena</code> short-circuits when <code>ctx.target === 'wasm-gc'</code>: strips a trailing <code>&amp;@move_to_parent_arena</code> wrapper (if present) and lowers the bare block directly via <code>lowerBlock</code> — no <code>__arena_saved</code> local, no save/restore envelope, no <code>arena_promote</code> call.  <code>lowerMoveToParentArena</code> becomes identity (<code>lowerExpr(arg)</code>) anywhere in source — the v1.0 tail-position rule is moot when there's no save/restore to subvert.  5 tests: typechecks under wasm-gc with no rejection; user-function WAT contains no <code>global.get $heap</code> or <code>arena_promote</code>; mid-block <code>&amp;@move_to_parent_arena</code> compiles fine; same arena-using source compiles under BOTH targets (portability claim verified end-to-end); nested arenas elide cleanly.</p>
 </details>
 
-<details class="runtime">
-  <summary><span class="id">9d-6</span> <code>src/stdlib/gc/</code> managed-mode types + Rc identity shim <span class="est">L, ~1.5d</span></summary>
-  <div class="deps"><strong>Depends on:</strong> 9d-3</div>
-  <p class="goal">New <code>src/stdlib/gc/</code> directory mirroring the wasm-mvp stdlib's surface API: <code>string.si</code>, <code>array.si</code>, <code>option.si</code>, <code>result.si</code>.  Implementations differ in <em>layout</em>, not in <em>call surface</em>.  Plus <code>rc.si</code> containing <strong>identity implementations</strong> (<code>@fn rc_new value := value;</code>, <code>@fn rc_clone r := r;</code>, <code>@fn rc_drop _r := { };</code>, <code>@fn rc_get r := r;</code>) so existing Rc-using code compiles unchanged on the gc target — the lowering optimizer collapses identity calls to zero runtime cost.  A user porting a program from wasm-mvp to wasm-gc changes one CLI flag, not their call sites.</p>
-  <div class="accept"><strong>Acceptance:</strong>
-    <ul>
-      <li><code>src/stdlib/gc/string.si</code> wraps <code>(array i8)</code>; provides <code>&amp;str_concat</code>, <code>&amp;str_len</code>, indexing.</li>
-      <li><code>src/stdlib/gc/option.si</code> + <code>result.si</code> are mostly identical to their wasm-mvp counterparts since they're built on sum types (9d-7 owns the layout).</li>
-      <li><code>src/stdlib/gc/rc.si</code> exports the same six names as <code>src/stdlib/rc.si</code> — <code>rc_new</code>, <code>rc_clone</code>, <code>rc_drop</code>, <code>rc_get</code> — minus the introspection two (<code>rc_count</code>, <code>rc_is_unique</code> are 9d-5a-rejected).  Identity implementations.</li>
-      <li>Module loader picks the right stdlib variant based on <code>options.target</code>.</li>
-      <li>Documentation in <code>docs/memory.md</code> updated with a wasm-gc section + the two-layer portability table from ADR 0009.</li>
-    </ul>
-  </div>
+<details class="runtime complete">
+  <summary><span class="id">9d-6</span> <code>src/stdlib/gc/</code> shadow tree + Rc identity shim <span class="done">✅</span> <span class="est">L, ~1.5d</span> <em style="color: var(--accent4); font-size: 0.85em;">[partial: rc.si only; string/option/result wait on 9d-7]</em></summary>
+  <p class="done-note">✓ <code>src/stdlib/gc/rc.si</code> shipped with identity implementations: <code>rc_new value := value</code>, <code>rc_clone r := r</code>, <code>rc_drop _r := { }</code>, <code>rc_get r := r</code>.  Crucially does NOT export <code>rc_count</code> / <code>rc_is_unique</code> — those are E0012-rejected at typecheck.  <code>src/modules/useResolver.ts</code> gains a <code>target?: LowerTarget</code> option; when <code>'wasm-gc'</code> and an <code>@use '…/stdlib/X.si'</code> path has a sibling <code>…/stdlib/gc/X.si</code>, the gc variant is picked transparently.  Falls through to the mvp file when no shadow exists or target isn't wasm-gc.  Wired through <code>sigil_cli.ts</code> at all four resolveUses call sites (compileFile / compileToQbeIr / cmdCheck / cmdFmt).  11 new tests: 6 in <code>src/modules/useResolver.gc-shadow.test.ts</code> (shadow picked, fallthrough when missing, host bypass, undefined-target = host, non-stdlib paths ignored, nested gc/-paths don't double-rewrite) + 5 in <code>src/stdlib/rc-gc-shadow.test.ts</code> (end-to-end: gc/rc.si resolved under wasm-gc; mvp/rc.si under host; identity shim typechecks; rc_count still raises E0012 via the typechecker pass).  <code>docs/memory.md</code> picks up a "Under <code>--target=wasm-gc</code>" section with the portability table and the two-layer-rejection summary.</p>
+  <p class="done-note"><strong>Deferred to 9d-7/9d-8:</strong> <code>src/stdlib/gc/string.si</code>, <code>option.si</code>, <code>result.si</code>, <code>array.si</code>.  These require sum-type and array-type routing through WasmGC's struct.new / array.new instructions (9d-7 / 9d-8), so shipping shadow files now would just be placeholders that fail with E0013 on the underlying <code>&amp;alloc</code> calls.  The resolver's fallthrough means the original mvp files are picked under wasm-gc — they currently fail at typecheck (E0013), which is the correct cliff until 9d-7/8 routes the types.  User-facing impact: programs using only <code>Rc</code> + arenas + value types work today on both targets; programs using <code>Option</code> / <code>Result</code> / <code>String</code> / <code>Array</code> wait on 9d-7/8.</p>
 </details>
 
 <details class="runtime">
@@ -2016,9 +2007,9 @@
   <tr>
     <td>9d — WasmGC target (opt-in <code>--target=wasm-gc</code>)</td>
     <td style="color: var(--accent4); font-weight: 700;">🟡 STARTED</td>
-    <td>7 / 11</td>
-    <td><em>~4.7 d done</em> · ~7.8 d remain (est: 12.5 d)</td>
-    <td>ADR 0009 <strong>Accepted</strong> (2026-05-26).  Shipped: <code>wit/wasm-gc.wit</code> ABI (9d-1); type-section emitter with structural-dedup (9d-2, 16 tests); instruction-level IR + emitters for struct.* / array.* ops (9d-3, 26 tests, 0xFB-prefixed GC opcodes); <code>--target=wasm-gc</code> CLI flag (9d-4, 5 subprocess tests); two-layer portability split — E0012 reject introspection + E0013 reject physical-byte + lifecycle compile-time elision (9d-5a/b/c, 23 tests in <code>wasm-gc-portability.test.ts</code>).  Remaining v1.0 scope: <code>src/stdlib/gc/</code> + Rc identity shim (9d-6), tagged-struct sums (9d-7), Vec[T] for value-typed T (9d-8), cross-target test suite (9d-9).  Subtype sums, ref-typed Vec, fully generic Vec[T], HashMap, stringref, weak refs, default-on for new projects → v1.1.</td>
+    <td>8 / 11</td>
+    <td><em>~5.5 d done</em> · ~7 d remain (est: 12.5 d)</td>
+    <td>ADR 0009 <strong>Accepted</strong> (2026-05-26).  Shipped: <code>wit/wasm-gc.wit</code> ABI (9d-1); type-section emitter with structural-dedup (9d-2, 16 tests); instruction-level IR + emitters for struct.* / array.* ops (9d-3, 26 tests, 0xFB-prefixed GC opcodes); <code>--target=wasm-gc</code> CLI flag (9d-4, 5 subprocess tests); two-layer portability split — E0012 reject introspection + E0013 reject physical-byte + lifecycle compile-time elision (9d-5a/b/c, 23 tests in <code>wasm-gc-portability.test.ts</code>); <code>src/stdlib/gc/rc.si</code> identity shim + useResolver wasm-gc shadow rewriting (9d-6, 11 tests).  Remaining v1.0 scope: tagged-struct sums (9d-7) — unblocks <code>stdlib/gc/option.si</code> + <code>result.si</code> + <code>string.si</code>; Vec[T] for value-typed T (9d-8); cross-target test suite (9d-9).  Subtype sums, ref-typed Vec, fully generic Vec[T], HashMap, stringref, weak refs, default-on for new projects → v1.1.</td>
   </tr>
   <tr style="background: rgba(62, 207, 142, 0.08);">
     <td>10 — CaaS Consumer APIs + Distribution</td>

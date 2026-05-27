@@ -235,6 +235,49 @@ enclosing arena resets or the v1.1 GC runs. In practice this is
 fine — wrap `Rc`-using work in `&@with_arena` and the leak window
 collapses to one iteration's allocations.
 
+## Under `--target=wasm-gc` — portable lifecycle, no runtime cost
+
+[ADR 0009](adr/0009-wasm-gc-target.md) adds an opt-in WebAssembly GC
+target. The same source that uses arenas and `Rc` under
+`--target=wasm-mvp` (the default) compiles cleanly under
+`--target=wasm-gc`, with every lifecycle primitive collapsing to a
+no-op at lowering time:
+
+| Primitive | Under wasm-mvp | Under wasm-gc |
+|---|---|---|
+| `&@with_arena { body }` | Save/restore `$heap` | `{ body }` (no envelope) |
+| `&@move_to_parent_arena v` | `arena_promote` memcpy | `v` (identity) |
+| `&rc_new value` | Heap-allocate `[1, value]` | `value` (identity) |
+| `&rc_clone r` | Bump refcount | `r` (identity) |
+| `&rc_drop r` | Decrement refcount | `()` (no-op) |
+| `&rc_get r` | Load value at `r+4` | `r` (identity) |
+
+Two mechanisms, both compile-time:
+
+1. **Stratum target-dispatch.** `lowerWithArena` and
+   `lowerMoveToParentArena` inspect `ctx.target`; under wasm-gc they
+   lower the body directly with no envelope.
+2. **Stdlib shadow.** `src/stdlib/gc/rc.si` mirrors `src/stdlib/rc.si`
+   with identity implementations. The `@use` resolver auto-redirects
+   `…/stdlib/X.si` → `…/stdlib/gc/X.si` when target is wasm-gc and
+   the shadow exists. No call-site changes in user code.
+
+What's **rejected** under wasm-gc (introspection has no honest GC
+semantics; raw pointers don't exist):
+
+- **E0012 — introspection.** `&rc_count`, `&rc_is_unique`,
+  `&heap_used`, `&arena_used`, `&heap_get`, `&heap_set`. Conservative
+  no-op values would silently change branch behavior.
+- **E0013 — raw memory.** `&alloc`, `&realloc`, `&mem_copy`,
+  `&str_ptr`. Managed refs (`(ref $T)`) aren't addressable; no
+  pointer math.
+
+Programs that touch any of these primitives pick a target deliberately
+(`sgl build --target=wasm-mvp` for raw-memory work; `--target=wasm-gc`
+for managed-ref work). Programs using only the lifecycle layer +
+high-level types (`String`, `Array[T]`, `@struct`, sum types,
+`Option`, `Result`) compile under either target.
+
 ## Testing heap exhaustion
 
 The `--max-heap=N` flag caps the wasm memory at N 64KB pages. Past the

@@ -189,7 +189,7 @@ async function compileFile(
 ): Promise<{ wat: string; binary: Uint8Array }> {
     const rawSource = await fsp.readFile(filename, 'utf-8')
     const entryAbs  = path.resolve(filename)
-    const { source } = resolveUses(rawSource, entryAbs)
+    const { source } = resolveUses(rawSource, entryAbs, { target: opts.target })
     const extraSources: string[] = await Promise.all(
         opts.strataFiles.map(f => fsp.readFile(f, 'utf-8'))
     )
@@ -322,7 +322,7 @@ async function cmdBuild(positional: string | undefined, opts: CompileOptions): P
 async function compileToQbeIr(entry: string, opts: CompileOptions): Promise<string> {
     const rawSource = await fsp.readFile(entry, 'utf-8')
     const entryAbs  = path.resolve(entry)
-    const { source } = resolveUses(rawSource, entryAbs)
+    const { source } = resolveUses(rawSource, entryAbs, { target: opts.target })
     const extraSources: string[] = await Promise.all(
         opts.strataFiles.map(f => fsp.readFile(f, 'utf-8'))
     )
@@ -469,7 +469,7 @@ async function cmdCheck(positional: string | undefined, opts: CompileOptions): P
     const entry     = resolveEntry(positional, process.cwd())
     const rawSource = await fsp.readFile(entry, 'utf-8')
     const entryAbs  = path.resolve(entry)
-    const { source } = resolveUses(rawSource, entryAbs)
+    const { source } = resolveUses(rawSource, entryAbs, { target: opts.target })
     const extraSources: string[] = await Promise.all(
         opts.strataFiles.map(f => fsp.readFile(f, 'utf-8'))
     )
@@ -523,7 +523,7 @@ async function cmdFmt(
     const entry = resolveEntry(positional, process.cwd())
     const original = await fsp.readFile(entry, 'utf-8')
     const entryAbs = path.resolve(entry)
-    const { source } = resolveUses(original, entryAbs)
+    const { source } = resolveUses(original, entryAbs, { target: opts.target })
 
     const { tree, diagnostics: parseErrs } = parse(source, { file: entryAbs })
     if (parseErrs.length) emitDiagnostics(parseErrs, opts)

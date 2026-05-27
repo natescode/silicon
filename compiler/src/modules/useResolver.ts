@@ -24,6 +24,19 @@ import { dirname, resolve, isAbsolute } from 'path'
  */
 const USE_RE = /^[ \t]*@use[ \t]+'([^'\n\r]+)'[ \t]*;[ \t]*(?:#[^\n\r]*)?$/gm
 
+/** Phase 9d-6 — given a resolved stdlib path like
+ *  `…/src/stdlib/rc.si`, return the wasm-gc shadow candidate
+ *  `…/src/stdlib/gc/rc.si` (whether or not it exists).  Returns
+ *  `null` for paths that don't sit directly under `stdlib/` —
+ *  nested paths (`…/stdlib/gc/X.si` itself, or `…/stdlib/subdir/X.si`)
+ *  pass through unchanged. */
+function wasmGcShadowPath(abs: string): string | null {
+    // Match …/stdlib/<filename>.si (not …/stdlib/gc/… and not deeper).
+    const m = abs.match(/^(.*\/stdlib)\/([^/]+\.si)$/)
+    if (!m) return null
+    return `${m[1]}/gc/${m[2]}`
+}
+
 /** Strip `#` line comments from a source line (but keep them in multi-line
  *  string literals — which Silicon doesn't have, so the simple approach works).
  *  Used only to decide whether a `@use` directive is shadowed by a comment. */
@@ -47,6 +60,14 @@ export interface UseResolverOptions {
     readFile?: (absPath: string) => string | undefined
     /** Override file existence checks. */
     fileExists?: (absPath: string) => boolean
+    /** Phase 9d-6 — compile target.  When `'wasm-gc'`, `@use` paths
+     *  ending in `…/stdlib/<name>.si` are first checked for a sibling
+     *  `…/stdlib/gc/<name>.si`; if it exists, the gc variant is used
+     *  instead.  Lets `src/stdlib/gc/rc.si` (identity-shim Rc) shadow
+     *  `src/stdlib/rc.si` (bump-allocator Rc) without per-call-site
+     *  changes in user code.  Falls through to the original path when
+     *  no shadow exists or target isn't wasm-gc. */
+    target?: import('../ir/lower').LowerTarget
 }
 
 /**
@@ -89,7 +110,12 @@ export function resolveUses(
             const line = source.slice(lineStart, lineEnd < 0 ? source.length : lineEnd)
             if (isCommentedOut(line)) continue
             const raw = match[1]
-            const abs = isAbsolute(raw) ? raw : resolve(baseDir, raw)
+            let abs = isAbsolute(raw) ? raw : resolve(baseDir, raw)
+            // Phase 9d-6 — wasm-gc stdlib shadow.
+            if (options.target === 'wasm-gc') {
+                const shadow = wasmGcShadowPath(abs)
+                if (shadow && fileExists(shadow)) abs = shadow
+            }
             if (!fileExists(abs)) {
                 throw new Error(`@use cannot resolve '${raw}' (looked for ${abs}) from ${absPath}`)
             }
