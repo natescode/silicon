@@ -25,19 +25,21 @@ import { buildStrataRegistry, elaborate } from '../elaborator/index'
 import { typecheck } from '../types/index'
 import { lowerProgram } from '../ir/lower'
 import { emitModule } from '../ir/emit'
+import { compileToWasm } from './index'
 
 function compile(src: string, target: 'host' | 'wasm-gc') {
     const ast = addToAstSemantics(siliconGrammar)(parse(src)).toAst() as any
     const registry = buildStrataRegistry(ast)
     const { program: elab } = elaborate(ast, registry)
     const tc = typecheck(elab, registry, undefined, target)
-    if (tc.errors.length) return { errors: tc.errors, wat: null, module: null }
+    if (tc.errors.length) return { errors: tc.errors, wat: null, module: null, binary: null }
     try {
         const mod = lowerProgram(tc.program, registry, tc.functions, undefined, { target })
         const wat = emitModule(mod, '')
-        return { errors: [], wat, module: mod }
+        const binary = compileToWasm(tc.program, registry, tc.functions, undefined, { target })
+        return { errors: [], wat, module: mod, binary }
     } catch (e) {
-        return { errors: [{ kind: 'LowerError', message: String(e) }], wat: null, module: null }
+        return { errors: [{ kind: 'LowerError', message: String(e) }], wat: null, module: null, binary: null }
     }
 }
 
@@ -235,6 +237,57 @@ describe('Phase 9d-7: same source compiles cleanly under BOTH targets', () => {
         expect(rGc.wat).toContain('(func $unwrap')
         expect(rMvp.wat).toContain('(func $test_some')
         expect(rGc.wat).toContain('(func $test_some')
+    })
+})
+
+// ── 5. WebAssembly.compile validation round-trip ────────────────────────
+//
+// Phase 9d-7 fix: the original tests checked WAT text shape only; the
+// type-section + function-signature encoding (which has its own set of
+// gotchas around ref types and forward references) wasn't exercised.
+// These tests instantiate the binary so the wasm validator catches any
+// mismatch between the IR shape and the binary encoding.
+
+describe('Phase 9d-7: emitted modules validate under WebAssembly.compile', () => {
+
+    test('sum declaration alone (constructors) validates', async () => {
+        const r = compile(`@type Opt := $Some v:Int | $None;`, 'wasm-gc')
+        expect(r.errors).toEqual([])
+        expect(r.binary).not.toBeNull()
+        const mod = await WebAssembly.compile(r.binary!)
+        expect(mod).toBeDefined()
+    })
+
+    test('sum + user function returning the sum validates', async () => {
+        const r = compile(`
+            @type Opt := $Some v:Int | $None;
+            @fn make_some:Opt := &Some 42;
+        `, 'wasm-gc')
+        expect(r.errors).toEqual([])
+        const mod = await WebAssembly.compile(r.binary!)
+        expect(mod).toBeDefined()
+    })
+
+    test('sum + match + caller validates end-to-end', async () => {
+        const r = compile(`
+            @type Opt := $Some v:Int | $None;
+            @fn unwrap o:Opt := &@match o, $Some v => v, $None => 0;
+            @fn test:Int := &unwrap (&Some 42);
+        `, 'wasm-gc')
+        expect(r.errors).toEqual([])
+        const mod = await WebAssembly.compile(r.binary!)
+        expect(mod).toBeDefined()
+    })
+
+    test('wasm-mvp sum module also validates (regression — no surprises in the existing path)', async () => {
+        const r = compile(`
+            @type Opt := $Some v:Int | $None;
+            @fn unwrap o:Opt := &@match o, $Some v => v, $None => 0;
+            @fn test:Int := &unwrap (&Some 42);
+        `, 'host')
+        expect(r.errors).toEqual([])
+        const mod = await WebAssembly.compile(r.binary!)
+        expect(mod).toBeDefined()
     })
 })
 

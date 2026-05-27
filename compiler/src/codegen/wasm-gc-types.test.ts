@@ -290,7 +290,7 @@ describe('WasmGC type-section binary encoding', () => {
         expect(section[arrayFormPos + 2]).toBe(0x01)  // mutable
     })
 
-    test('struct with a (ref $Array_i32) field encodes 0x63 + typeidx', () => {
+    test('struct with a (ref $Array_i32) field encodes 0x64 + typeidx', () => {
         // Simulates a Vec[Int] header: { len:i32, data:(ref $Array_i32) }
         // with the array declared at index N (here N = number of function
         // types + 0, since the array comes first in wasmGcTypes).
@@ -322,11 +322,11 @@ describe('WasmGC type-section binary encoding', () => {
         }
         const bin = emitWasmBinary(buildPrelude(1024, false), mod)
         const section = extractTypeSection(bin)
-        // The non-null ref form byte is 0x63.
+        // The non-null ref form byte is 0x64 (WasmGC binary spec).
         const refFormPos = section.indexOf(REF_NON_NULL_BYTE)
         expect(refFormPos).toBeGreaterThan(0)
-        // After the 0x63 byte, the SLEB128 of 99 is two bytes: 0xE3 0x00.
-        expect(section[refFormPos]).toBe(0x63)
+        // After the 0x64 byte, the SLEB128 of 99 is two bytes: 0xE3 0x00.
+        expect(section[refFormPos]).toBe(0x64)
         expect(section[refFormPos + 1]).toBe(0xE3)
         expect(section[refFormPos + 2]).toBe(0x00)
     })
@@ -395,4 +395,4 @@ describe('WasmGC type-section validation under WebAssembly.compile', () => {
     })
 })
 
-const REF_NON_NULL_BYTE = 0x63
+const REF_NON_NULL_BYTE = 0x64

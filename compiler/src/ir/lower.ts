@@ -377,6 +377,17 @@ export function lowerProgram(
     // Append auto-generated imports from module calls (web::*, Draw::*, …).
     for (const imp of ctx.pendingImports.values()) imports.push(imp)
 
+    // Phase 9d-7 fix-4: under wasm-gc, walk every user-emitted function
+    // and inject refResult / refParams when the declared Silicon type
+    // is a Sum.  The IR-level value type stays i32 (refs are i32-shaped
+    // on the operand stack and in locals); these annotations only
+    // affect the binary type-section encoding.  Constructors already
+    // had refResult set by typeRecordExpander — this pass picks up the
+    // other functions: anything that *returns* or *takes* a Sum.
+    if (target === 'wasm-gc') {
+        injectRefSlots(functions, functionSigs, ctx.wasmGcTypes)
+    }
+
     return {
         kind: 'Module',
         imports,
@@ -399,6 +410,42 @@ export function lowerProgram(
         wasmGcTypes: ctx.wasmGcTypes.size() > 0
             ? ctx.wasmGcTypes.snapshot()
             : undefined,
+    }
+}
+
+/** Phase 9d-7 fix-4: when target === 'wasm-gc', walk every IRFunction
+ *  whose declared Silicon return type or parameter type is a Sum, and
+ *  set refResult / refParams so the binary type-section entry encodes
+ *  `(ref $Foo)` instead of `i32`.  Constructors already had this set
+ *  by typeRecordExpander; this fills in everything else (user
+ *  functions that return or take a sum). */
+function injectRefSlots(
+    functions: IRFunction[],
+    functionSigs: Map<string, FunctionSig>,
+    wasmGcTypes: WasmGcTypeRegistry,
+): void {
+    for (const fn of functions) {
+        const sig = functionSigs.get(fn.name)
+        if (!sig) continue
+
+        // Result: declared as a Sum → encode as ref.
+        if (!fn.refResult && sig.result.kind === 'Sum') {
+            const idx = wasmGcTypes.lookupByName(`$${sig.result.name}`)
+            if (idx !== undefined) {
+                fn.refResult = { localTypeIdx: idx, nullable: false }
+            }
+        }
+        // Params: each Sum-typed param gets refParams entry.
+        for (let i = 0; i < sig.params.length; i++) {
+            const pType = sig.params[i]
+            if (pType.kind !== 'Sum') continue
+            const idx = wasmGcTypes.lookupByName(`$${pType.name}`)
+            if (idx === undefined) continue
+            if (!fn.refParams) fn.refParams = new Map()
+            if (!fn.refParams.has(i)) {
+                fn.refParams.set(i, { localTypeIdx: idx, nullable: false })
+            }
+        }
     }
 }
 

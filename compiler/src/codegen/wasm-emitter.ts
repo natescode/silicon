@@ -49,8 +49,11 @@ function valTypeCode(t: WasmType): number {
 //   0x5E  array type form
 //   0x78  packed i8 (struct/array only — not a stack value type)
 //   0x77  packed i16
-//   0x63  (ref $T)      — non-null typed ref, followed by SLEB-i33 typeidx
-//   0x64  (ref null $T) — nullable typed ref, same encoding
+//   0x64  (ref $T)      — non-null typed ref, followed by SLEB-i33 typeidx
+//   0x63  (ref null $T) — nullable typed ref, same encoding
+//
+// (Per WasmGC binary spec §reftype.  My initial Phase 9d-2 draft had
+// these swapped, surfaced by the validation round-trip in 9d-7 fix.)
 //   0x00  field mutability: immutable
 //   0x01  field mutability: mutable
 //
@@ -61,8 +64,8 @@ const STRUCT_TYPE_FORM = 0x5F
 const ARRAY_TYPE_FORM  = 0x5E
 const PACKED_I8        = 0x78
 const PACKED_I16       = 0x77
-const REF_NON_NULL     = 0x63
-const REF_NULLABLE     = 0x64
+const REF_NON_NULL     = 0x64
+const REF_NULLABLE     = 0x63
 
 function encodeStorageType(buf: WasmBuffer, st: WasmGcStorageType): void {
     if (st.kind === 'val') {
@@ -145,18 +148,45 @@ const OPCODES: Record<string, number[]> = {
 // Type-section signature deduplication
 // ---------------------------------------------------------------------------
 
-interface FuncSig { params: WasmValType[]; result: WasmType }
+// Phase 9d-7 fix-2: a function-signature slot is either a value type
+// or a WasmGC ref.  Ref slots carry `localTypeIdx` (position in
+// `wasmGcTypes`; emitter adds `gcTypeIdxBase` for the absolute index)
+// and a nullability bit (form byte 0x63 vs 0x64).
+type FuncSigSlot =
+    | { kind: 'val';  type: WasmType }
+    | { kind: 'ref';  localTypeIdx: number; nullable: boolean }
+
+interface FuncSig { params: FuncSigSlot[]; result: FuncSigSlot }
+
+function slotKey(s: FuncSigSlot): string {
+    if (s.kind === 'val') return s.type
+    return `r${s.nullable ? '?' : ''}${s.localTypeIdx}`
+}
 
 function sigKey(s: FuncSig): string {
-    return `${s.params.join(',')}→${s.result}`
+    return `${s.params.map(slotKey).join(',')}→${slotKey(s.result)}`
+}
+
+function valSlot(t: WasmType): FuncSigSlot {
+    return { kind: 'val', type: t }
 }
 
 function importSig(imp: IRImport): FuncSig {
-    return { params: imp.params, result: imp.result ?? 'void' }
+    return {
+        params: imp.params.map(p => valSlot(p)),
+        result: valSlot(imp.result ?? 'void'),
+    }
 }
 
 function funcSig(f: IRFunction): FuncSig {
-    return { params: f.params.map(p => p.wasmType), result: f.returnType }
+    const params: FuncSigSlot[] = f.params.map((p, i) => {
+        const ref = f.refParams?.get(i)
+        return ref ? { kind: 'ref' as const, ...ref } : valSlot(p.wasmType)
+    })
+    const result: FuncSigSlot = f.refResult
+        ? { kind: 'ref', ...f.refResult }
+        : valSlot(f.returnType)
+    return { params, result }
 }
 
 // ---------------------------------------------------------------------------
@@ -169,6 +199,12 @@ interface EmitCtx {
     globalIdxOf: (name: string) => number
     /** Depth stack for structured control flow: 0=block, 1=loop, 2=if */
     depthStack: number[]
+    /** Phase 9d-7 fix: WasmGC type-section entries follow function
+     *  types.  IR nodes carry wasmGcTypes-local indices (0, 1, …);
+     *  the wasm binary expects absolute indices.  Adding this base
+     *  converts local → absolute when emitting type-immediates on
+     *  struct.new / struct.get / array.new / etc. */
+    gcTypeIdxBase: number
 }
 
 function findDepthTo(stack: number[], kind: number): number {
@@ -288,9 +324,11 @@ function emitExpr(e: IRExpr, buf: WasmBuffer, ctx: EmitCtx, isUser: boolean,
         // ── Phase 9d-3 — WasmGC instructions ──────────────────────────────
         // All GC opcodes share the 0xFB prefix.  Operand order on the
         // stack matches the WAT operand order (last arg pushed last).
+        // typeIdx fields are wasmGcTypes-local; the emitter adds
+        // ctx.gcTypeIdxBase to compute the wasm type-section absolute index.
         case 'StructNew': {
             for (const a of e.args) emitExpr(a, buf, ctx, isUser, localIdxOf)
-            buf.u8(0xFB); buf.u8(0x00); buf.u32(e.typeIdx)
+            buf.u8(0xFB); buf.u8(0x00); buf.u32(ctx.gcTypeIdxBase + e.typeIdx)
             return
         }
         case 'StructGet': {
@@ -299,24 +337,24 @@ function emitExpr(e: IRExpr, buf: WasmBuffer, ctx: EmitCtx, isUser: boolean,
             if (e.signed === 's')      buf.u8(0x03)
             else if (e.signed === 'u') buf.u8(0x04)
             else                       buf.u8(0x02)
-            buf.u32(e.typeIdx); buf.u32(e.fieldIdx)
+            buf.u32(ctx.gcTypeIdxBase + e.typeIdx); buf.u32(e.fieldIdx)
             return
         }
         case 'StructSet': {
             emitExpr(e.target, buf, ctx, isUser, localIdxOf)
             emitExpr(e.value,  buf, ctx, isUser, localIdxOf)
-            buf.u8(0xFB); buf.u8(0x05); buf.u32(e.typeIdx); buf.u32(e.fieldIdx)
+            buf.u8(0xFB); buf.u8(0x05); buf.u32(ctx.gcTypeIdxBase + e.typeIdx); buf.u32(e.fieldIdx)
             return
         }
         case 'ArrayNew': {
             emitExpr(e.init, buf, ctx, isUser, localIdxOf)
             emitExpr(e.size, buf, ctx, isUser, localIdxOf)
-            buf.u8(0xFB); buf.u8(0x06); buf.u32(e.typeIdx)
+            buf.u8(0xFB); buf.u8(0x06); buf.u32(ctx.gcTypeIdxBase + e.typeIdx)
             return
         }
         case 'ArrayNewDefault': {
             emitExpr(e.size, buf, ctx, isUser, localIdxOf)
-            buf.u8(0xFB); buf.u8(0x07); buf.u32(e.typeIdx)
+            buf.u8(0xFB); buf.u8(0x07); buf.u32(ctx.gcTypeIdxBase + e.typeIdx)
             return
         }
         case 'ArrayGet': {
@@ -326,14 +364,14 @@ function emitExpr(e: IRExpr, buf: WasmBuffer, ctx: EmitCtx, isUser: boolean,
             if (e.signed === 's')      buf.u8(0x0C)
             else if (e.signed === 'u') buf.u8(0x0D)
             else                       buf.u8(0x0B)
-            buf.u32(e.typeIdx)
+            buf.u32(ctx.gcTypeIdxBase + e.typeIdx)
             return
         }
         case 'ArraySet': {
             emitExpr(e.target, buf, ctx, isUser, localIdxOf)
             emitExpr(e.idx,    buf, ctx, isUser, localIdxOf)
             emitExpr(e.value,  buf, ctx, isUser, localIdxOf)
-            buf.u8(0xFB); buf.u8(0x0E); buf.u32(e.typeIdx)
+            buf.u8(0xFB); buf.u8(0x0E); buf.u32(ctx.gcTypeIdxBase + e.typeIdx)
             return
         }
         case 'ArrayLen': {
@@ -349,7 +387,8 @@ function emitExpr(e: IRExpr, buf: WasmBuffer, ctx: EmitCtx, isUser: boolean,
             emitExpr(e.count,  buf, ctx, isUser, localIdxOf)
             // array.copy takes BOTH dst and src type indices as immediates.
             buf.u8(0xFB); buf.u8(0x11)
-            buf.u32(e.dstTypeIdx); buf.u32(e.srcTypeIdx)
+            buf.u32(ctx.gcTypeIdxBase + e.dstTypeIdx)
+            buf.u32(ctx.gcTypeIdxBase + e.srcTypeIdx)
             return
         }
     }
@@ -505,27 +544,47 @@ function emitFunctionBody(
 // ---------------------------------------------------------------------------
 
 function buildTypeSection(sigs: FuncSig[], gcTypes: WasmGcType[] = []): WasmBuffer {
-    // Function types come first (preserves existing type-index assignment
-    // for imports + function declarations); GC types follow.  GC type
-    // indices = sigs.length + position-in-gcTypes.
+    // Phase 9d-7 fix-3: GC types come FIRST, function types SECOND.
     //
-    // When `gcTypes` is empty (the wasm-mvp path), the encoded section is
-    // byte-identical to the pre-9d-2 emitter — guards every existing
-    // codegen / determinism test.
+    // WasmGC validates that any typeidx referenced by a type must be
+    // declared earlier in the section (or inside a shared `rec` group).
+    // Constructor function signatures reference struct typeids in their
+    // ref result, so the struct must appear before the constructor's
+    // function-type entry.  Putting GC types first solves this without
+    // requiring `rec` group emission.
+    //
+    // Index layout post-fix:
+    //   GC types   occupy [0, gcTypes.length)            → emitter passes typeIdx as-is
+    //   Func types occupy [gcTypes.length, total)         → emitter callers add gcTypes.length
+    //
+    // When `gcTypes` is empty (the wasm-mvp path), this matches the
+    // pre-9d-2 layout byte-for-byte (function types at indices 0..N-1).
     const body = new WasmBuffer()
     body.u32(sigs.length + gcTypes.length)
+    for (const gc of gcTypes) encodeGcType(body, gc)
     for (const sig of sigs) {
         body.u8(0x60)
         body.u32(sig.params.length)
-        for (const p of sig.params) body.u8(VALTYPE[p])
-        if (sig.result === 'void') {
+        for (const p of sig.params) encodeFuncSlot(body, p, 0)
+        if (sig.result.kind === 'val' && sig.result.type === 'void') {
             body.u32(0)
         } else {
-            body.u32(1); body.u8(VALTYPE[sig.result as WasmValType])
+            body.u32(1); encodeFuncSlot(body, sig.result, 0)
         }
     }
-    for (const gc of gcTypes) encodeGcType(body, gc)
     return body
+}
+
+/** Phase 9d-7 fix-2: emit a function-signature slot.  Value-typed
+ *  slots use the VALTYPE byte; ref-typed slots use the 0x63 / 0x64
+ *  form bytes followed by the SLEB-i33 absolute typeidx. */
+function encodeFuncSlot(buf: WasmBuffer, slot: FuncSigSlot, gcBase: number): void {
+    if (slot.kind === 'val') {
+        buf.u8(VALTYPE[slot.type as WasmValType])
+        return
+    }
+    buf.u8(slot.nullable ? REF_NULLABLE : REF_NON_NULL)
+    buf.i32(gcBase + slot.localTypeIdx)
 }
 
 function buildImportSection(imports: IRImport[], typeIdxOf: (sig: FuncSig) => number): WasmBuffer {
@@ -718,12 +777,20 @@ export function emitWasmBinary(prelude: PreludeSpec, userMod: IRModule): Uint8Ar
         globalNameToIdx.set(allGlobals[i].name, i)
     }
 
+    // Phase 9d-7 fix-3: GC types come first in the type section so
+    // function-type entries can reference struct/array typeids in their
+    // ref result/params (WasmGC requires forward references inside
+    // `rec` groups, which we don't emit).  Net effect:
+    //   typeIdxOf(sig)         = funcLocalIdx + gcTypes.length
+    //   StructNew/etc. typeIdx = e.typeIdx (no offset; gc types are at [0..gcCount))
+    const gcCount = userMod.wasmGcTypes?.length ?? 0
+
     // ── 5. Build emit context ─────────────────────────────────────────────
     const ctx: EmitCtx = {
         typeIdxOf: (sig) => {
             const idx = typeMap.get(sigKey(sig))
             if (idx === undefined) throw new Error(`Missing type: ${sigKey(sig)}`)
-            return idx
+            return idx + gcCount
         },
         funcIdxOf: (name) => {
             const idx = funcNameToIdx.get(name)
@@ -736,6 +803,9 @@ export function emitWasmBinary(prelude: PreludeSpec, userMod: IRModule): Uint8Ar
             return idx
         },
         depthStack: [],
+        // GC types at indices [0, gcCount); their wasmGcTypes-local index
+        // IS the absolute type-section index.  No offset needed.
+        gcTypeIdxBase: 0,
     }
 
     // ── 6. Assemble sections ──────────────────────────────────────────────

@@ -295,6 +295,20 @@ export type IRStmt = IRLocalSet | IRGlobalSet | IRExprStmt
 export interface IRParam { name: string; wasmType: WasmValType }
 export interface IRLocal { name: string; wasmType: WasmValType }
 
+/** Phase 9d-7 fix-2 — ref-typed function slot.
+ *  Annotation used on IRFunction params + result under `--target=wasm-gc`
+ *  to encode `(ref $T)` / `(ref null $T)` in the function-type signature
+ *  instead of `i32`.  The IR-level representation of refs stays `i32`
+ *  (refs are i32-shaped on the operand stack and in local slots); the
+ *  binary type-section encoder uses these annotations to emit the
+ *  ref form bytes (0x63 / 0x64 + sleb typeidx).  `localTypeIdx` is
+ *  position in `wasmGcTypes`; the emitter adds the function-types-count
+ *  offset to get the absolute type-section index. */
+export interface IRRefSlot {
+    localTypeIdx: number
+    nullable: boolean
+}
+
 export interface IRFunction {
     kind: 'Function'
     name: string
@@ -304,6 +318,15 @@ export interface IRFunction {
     locals: IRLocal[]
     /** The function body, if any. Absent for @extern. */
     body?: IRExpr
+    /** Phase 9d-7 fix-2: when set, encode the function's result as
+     *  `(ref $T)` (or `(ref null $T)` if nullable) in the function-type
+     *  signature, overriding `returnType` for binary emit.  `returnType`
+     *  stays as the IR-level value type (i32 for refs). */
+    refResult?: IRRefSlot
+    /** Phase 9d-7 fix-2: when set, encode the listed params as `(ref $T)`
+     *  instead of their declared `wasmType`.  Keyed by param index.
+     *  Sparse — params not in the map use their valtype. */
+    refParams?: Map<number, IRRefSlot>
 }
 
 export interface IRGlobal {

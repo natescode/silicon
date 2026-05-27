@@ -187,7 +187,14 @@ const typeRecordExpander: IRDefExpander = {
                     typeName: sumTypeWat,
                     args,
                 }
-                out.push(api.ir.makeFunction(ctorName, params, 'i32', [], body))
+                // Phase 9d-7 fix-3: the wasm-level result is `(ref $Foo)`,
+                // not `i32`.  Setting `refResult` makes the function-type
+                // entry emit the ref form (0x63 + sleb typeidx) instead of
+                // valtype.  Without this the wasm validator rejects with
+                // "(ref $Foo) is not a I32" on the constructor's tail.
+                const fn = api.ir.makeFunction(ctorName, params, 'i32', [], body)
+                fn.refResult = { localTypeIdx: sumTypeIdx, nullable: false }
+                out.push(fn)
                 continue
             }
 
