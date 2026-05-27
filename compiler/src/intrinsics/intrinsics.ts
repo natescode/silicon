@@ -185,3 +185,16 @@ export function resolveIntrinsicWasmInstr(name: string): string | undefined {
     if (name.startsWith('IR::'))   return wasmIntrinsics[name.slice(4)]?.wasmInstr
     return undefined
 }
+
+/**
+ * Resolve an intrinsic name (`WASM::foo` or `IR::foo`) to its AbstractOp key.
+ * Returns the registry key (e.g. `'i32_add'`) for binary ops that map to
+ * IRBinOp.  Returns undefined for memory/control/unary ops that map to IRCall.
+ */
+export function resolveIntrinsicAbstractOp(name: string): string | undefined {
+    const key = name.startsWith('WASM::') ? name.slice(6)
+              : name.startsWith('IR::')   ? name.slice(4)
+              : undefined
+    if (!key || !wasmIntrinsics[key]) return undefined
+    return key
+}

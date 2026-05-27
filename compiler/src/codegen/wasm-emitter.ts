@@ -12,9 +12,15 @@ import { WasmBuffer } from './wasm-buffer'
 import type { PreludeSpec } from './prelude-ir'
 import type {
     IRModule, IRFunction, IRGlobal, IRImport, IRExport, IRDataSegment,
-    IRExpr, IRStmt, WasmValType, WasmType,
+    IRExpr, IRStmt, WasmValType, WasmType, AbstractOp,
 } from '../ir/nodes'
 import { ARRAY_LITERAL_CALLEE } from '../ir/nodes'
+import { wasmIntrinsics } from '../intrinsics/intrinsics'
+
+/** Map an AbstractOp to its WAT instruction string for OPCODES lookup. */
+function abstractOpToWatKey(op: AbstractOp): string {
+    return wasmIntrinsics[op]?.wasmInstr ?? op.replace('_', '.')
+}
 
 // ---------------------------------------------------------------------------
 // Value-type encoding
@@ -138,8 +144,9 @@ function emitExpr(e: IRExpr, buf: WasmBuffer, ctx: EmitCtx, isUser: boolean,
         case 'BinOp': {
             emitExpr(e.left, buf, ctx, isUser, localIdxOf)
             emitExpr(e.right, buf, ctx, isUser, localIdxOf)
-            const ops = OPCODES[e.instr]
-            if (!ops) throw new Error(`Unknown binop: ${e.instr}`)
+            const watKey = abstractOpToWatKey(e.op)
+            const ops = OPCODES[watKey]
+            if (!ops) throw new Error(`Unknown binop: ${e.op}`)
             for (const b of ops) buf.u8(b)
             return
         }
@@ -405,11 +412,17 @@ function buildFunctionSection(
     return body
 }
 
-function buildMemorySection(pages: number): WasmBuffer {
+function buildMemorySection(pages: number, maxPages?: number): WasmBuffer {
     const body = new WasmBuffer()
-    body.u32(1)       // count = 1
-    body.u8(0x00)     // flags: no max
-    body.u32(pages)   // min pages
+    body.u32(1)                                 // count = 1
+    if (maxPages !== undefined) {
+        body.u8(0x01)                           // flags: has max
+        body.u32(pages)                         // min pages
+        body.u32(maxPages)                      // max pages
+    } else {
+        body.u8(0x00)                           // flags: no max
+        body.u32(pages)                         // min pages
+    }
     return body
 }
 
@@ -606,7 +619,7 @@ export function emitWasmBinary(prelude: PreludeSpec, userMod: IRModule): Uint8Ar
     out.section(3, buildFunctionSection(allFunctions, ctx.typeIdxOf))
 
     // Section 5: Memory
-    out.section(5, buildMemorySection(prelude.memoryPages))
+    out.section(5, buildMemorySection(prelude.memoryPages, prelude.memoryMaxPages))
 
     // Section 6: Global
     if (allGlobals.length > 0) {

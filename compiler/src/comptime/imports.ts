@@ -336,10 +336,14 @@ export function createComptimeImports(env: ComptimeEnv): WebAssembly.Imports {
         const right = env.irHandles.get(rightH) as IRExpr | undefined
         if (!left || !right) return 0
         const wt = strings.get(wasmTypeStr) || 'i32'
+        // Normalize WAT dot notation ('i32.add') to AbstractOp underscore form ('i32_add').
+        // Strata bodies pass WAT-style strings; the IR layer stores AbstractOp.
+        const raw = strings.get(instrStr) ?? ''
+        const op = raw.replace('.', '_') as IRBinOp['op']
         return env.irHandles.fresh({
             kind: 'BinOp',
             wasmType: wt as IRBinOp['wasmType'],
-            instr: strings.get(instrStr),
+            op,
             left,
             right,
         })

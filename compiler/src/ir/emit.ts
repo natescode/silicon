@@ -8,9 +8,15 @@
 
 import type {
     IRModule, IRFunction, IRGlobal, IRImport, IRDataSegment, IRExport,
-    IRExpr, IRStmt, IRBlock, IRConst, WasmType, WasmValType,
+    IRExpr, IRStmt, IRBlock, IRConst, WasmType, WasmValType, AbstractOp,
 } from './nodes'
 import { ARRAY_LITERAL_CALLEE } from './nodes'
+import { wasmIntrinsics } from '../intrinsics/intrinsics'
+
+/** Map an AbstractOp to its WAT instruction string via the intrinsics registry. */
+function abstractOpToWat(op: AbstractOp): string {
+    return wasmIntrinsics[op]?.wasmInstr ?? op.replace('_', '.')
+}
 
 // ---------------------------------------------------------------------------
 // Public API
@@ -117,7 +123,7 @@ export function emitExpr(e: IRExpr): string {
             return `(global.get $${e.name})`
 
         case 'BinOp':
-            return `(${e.instr} ${emitExpr(e.left)} ${emitExpr(e.right)})`
+            return `(${abstractOpToWat(e.op)} ${emitExpr(e.left)} ${emitExpr(e.right)})`
 
         case 'Call':
             return emitCall(e)

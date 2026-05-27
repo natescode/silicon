@@ -41,7 +41,7 @@ function formatLoc(node: any): string {
     return ''
 }
 import type {
-    WasmValType, WasmType,
+    WasmValType, WasmType, AbstractOp,
     IRExpr, IRStmt,
     IRConst, IRLocalGet, IRGlobalGet, IRBinOp, IRCall,
     IRBlock, IRIf, IRLoop, IRBreak, IRContinue, IRReturn,
@@ -161,7 +161,7 @@ export interface IRBuilders {
     makeLocalSet(name: string, value: IRExpr): IRLocalSet
     makeGlobalGet(name: string, wasmType: WasmValType): IRGlobalGet
     makeGlobalSet(name: string, value: IRExpr): IRGlobalSet
-    makeBinOp(instr: string, left: IRExpr, right: IRExpr, wasmType: WasmValType): IRBinOp
+    makeBinOp(op: AbstractOp, left: IRExpr, right: IRExpr, wasmType: WasmValType): IRBinOp
     makeCall(callee: string, args: IRExpr[], wasmType: WasmType, callKind?: 'user' | 'instr'): IRCall
     makeBlock(stmts: IRStmt[], trailing?: IRExpr, wasmType?: WasmType): IRBlock
     makeIf(cond: IRExpr, then: IRExpr, else_?: IRExpr, wasmType?: WasmType): IRIf
@@ -396,7 +396,7 @@ export function createCompilerAPI(ctx: CtxShape, fns: LowerFns): CompilerAPI {
         makeLocalSet:    (name, value)                         => ({ kind: 'LocalSet', name, value }),
         makeGlobalGet:   (name, wasmType)                      => ({ kind: 'GlobalGet', wasmType, name }),
         makeGlobalSet:   (name, value)                         => ({ kind: 'GlobalSet', name, value }),
-        makeBinOp:       (instr, left, right, wasmType)        => ({ kind: 'BinOp', wasmType, instr, left, right }),
+        makeBinOp:       (op, left, right, wasmType)           => ({ kind: 'BinOp', wasmType, op, left, right }),
         makeCall:        (callee, args, wasmType, callKind = 'user') => ({ kind: 'Call', wasmType, callee, callKind, args }),
         makeBlock:       (stmts, trailing, wasmType)           => ({
             kind: 'Block',
@@ -889,7 +889,7 @@ export function createCompilerAPI(ctx: CtxShape, fns: LowerFns): CompilerAPI {
                         callKind: 'instr',
                         args: [discExpr],
                     } as any
-                    const cond = ir.makeBinOp('i32.eq', loadTag, ir.makeConst(tag, 'i32'), 'i32')
+                    const cond = ir.makeBinOp('i32_eq', loadTag, ir.makeConst(tag, 'i32'), 'i32')
 
                     // Build field-binding stmts: @local f := i32.load offset=(idx+1)*4 (disc)
                     const fields = (variant.fields || []) as any[]
@@ -903,7 +903,7 @@ export function createCompilerAPI(ctx: CtxShape, fns: LowerFns): CompilerAPI {
                             callee: 'i32.load',
                             callKind: 'instr',
                             args: [
-                                ir.makeBinOp('i32.add', discExpr, ir.makeConst(offset, 'i32'), 'i32'),
+                                ir.makeBinOp('i32_add', discExpr, ir.makeConst(offset, 'i32'), 'i32'),
                             ],
                         } as any
                         // Register field as a function-scoped local (hoisted).
@@ -922,8 +922,8 @@ export function createCompilerAPI(ctx: CtxShape, fns: LowerFns): CompilerAPI {
                 // Non-variant pattern: original equality-arm logic.
                 const pat = fns.lowerExpr(rawArgs[i], ctx)
                 const res = fns.lowerExpr(rawArgs[i + 1], ctx)
-                const eqInstr = fns.exprWasmType(discExpr) === 'f32' ? 'f32.eq' : 'i32.eq'
-                const cond = ir.makeBinOp(eqInstr, discExpr, pat, 'i32')
+                const eqOp: AbstractOp = fns.exprWasmType(discExpr) === 'f32' ? 'f32_eq' : 'i32_eq'
+                const cond = ir.makeBinOp(eqOp, discExpr, pat, 'i32')
                 return ir.makeIf(cond, res, buildNested(i + 2), wt)
             }
             return buildNested(1)

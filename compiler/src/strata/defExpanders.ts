@@ -163,7 +163,7 @@ const typeRecordExpander: IRDefExpander = {
                     args: [
                         off === 0
                             ? api.ir.makeLocalGet('__rec', 'i32')
-                            : api.ir.makeBinOp('i32.add',
+                            : api.ir.makeBinOp('i32_add',
                                 api.ir.makeLocalGet('__rec', 'i32'),
                                 api.ir.makeConst(off, 'i32'),
                                 'i32'),
@@ -255,7 +255,7 @@ const structExpander: IRDefExpander = {
             const instr = wt === 'f32' ? 'f32.store' : wt === 'i64' ? 'i64.store' : 'i32.store'
             const ptrExpr: IRExpr = off === 0
                 ? api.ir.makeLocalGet('__rec', 'i32')
-                : api.ir.makeBinOp('i32.add',
+                : api.ir.makeBinOp('i32_add',
                     api.ir.makeLocalGet('__rec', 'i32'),
                     api.ir.makeConst(off, 'i32'),
                     'i32')

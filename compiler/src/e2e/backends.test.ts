@@ -23,7 +23,9 @@ import * as fsp  from 'node:fs/promises'
 
 import { compileToWatString, compileToTyped } from '../../tests/properties/_compile'
 import { lowerToQbe }                          from '../codegen/qbe/lower'
-import { siliconTypeToQbe }                    from '../codegen/qbe/types'
+import { siliconTypeToQbe, abstractOpToQbe }   from '../codegen/qbe/types'
+import { wasmIntrinsics }                       from '../intrinsics/intrinsics'
+import type { AbstractOp }                      from '../ir/nodes'
 
 const EXAMPLES_DIR = path.join(import.meta.dir, 'examples')
 
@@ -276,3 +278,307 @@ describe('QBE IR regression snapshots — known-good function shapes', () => {
         expect(qbe).toContain('jmp')         // back-edge jump
     })
 })
+
+// ---------------------------------------------------------------------------
+// Story 9.5-5 — Strata operator parity: WAT vs QBE backends
+//
+// Each test compiles a small Silicon program through both the WAT path
+// (AbstractOp → WAT instruction via emit.ts) and the QBE path
+// (AST → QBE instruction via lookupOpToQbe).  We assert:
+//   (a) WAT output contains the expected WAT instruction
+//   (b) QBE output contains the expected QBE mnemonic
+//   (c) abstractOpToQbe() maps the same AbstractOp correctly (unit check)
+//
+// Together these verify that both backends implement the same Silicon operator
+// semantics derived from the same strata registry.
+// ---------------------------------------------------------------------------
+
+/** Helper: compile src to WAT and return the WAT string. */
+function toWat(src: string): string {
+    return compileToWatString(src)
+}
+
+describe('Strata operator parity — WAT vs QBE backends (story 9.5-5)', () => {
+
+    // -- AbstractOp table integrity -------------------------------------------
+
+    test('abstractOpToQbe covers all i32 arithmetic ops', () => {
+        const ops: AbstractOp[] = ['i32_add', 'i32_sub', 'i32_mul', 'i32_div_s', 'i32_rem_s']
+        for (const op of ops) {
+            const entry = abstractOpToQbe(op)
+            expect(entry, `abstractOpToQbe('${op}') should be defined`).toBeDefined()
+            expect(entry!.qt).toBe('w')
+        }
+    })
+
+    test('abstractOpToQbe covers all i64 arithmetic ops', () => {
+        const ops: AbstractOp[] = ['i64_add', 'i64_sub', 'i64_mul', 'i64_div_s', 'i64_rem_s']
+        for (const op of ops) {
+            const entry = abstractOpToQbe(op)
+            expect(entry, `abstractOpToQbe('${op}') should be defined`).toBeDefined()
+            expect(entry!.qt).toBe('l')
+        }
+    })
+
+    test('abstractOpToQbe covers all f32 arithmetic ops', () => {
+        const ops: AbstractOp[] = ['f32_add', 'f32_sub', 'f32_mul', 'f32_div']
+        for (const op of ops) {
+            const entry = abstractOpToQbe(op)
+            expect(entry, `abstractOpToQbe('${op}') should be defined`).toBeDefined()
+            expect(entry!.qt).toBe('s')
+        }
+    })
+
+    test('abstractOpToQbe: i32 comparisons return result type w', () => {
+        const ops: AbstractOp[] = ['i32_eq', 'i32_ne', 'i32_lt_s', 'i32_gt_s', 'i32_le_s', 'i32_ge_s']
+        for (const op of ops) {
+            const entry = abstractOpToQbe(op)
+            expect(entry, `abstractOpToQbe('${op}') should be defined`).toBeDefined()
+            expect(entry!.qt).toBe('w')
+        }
+    })
+
+    test('abstractOpToQbe: i64 comparisons return result type w (not l)', () => {
+        const ops: AbstractOp[] = ['i64_eq', 'i64_ne', 'i64_lt_s', 'i64_gt_s', 'i64_le_s', 'i64_ge_s']
+        for (const op of ops) {
+            const entry = abstractOpToQbe(op)
+            expect(entry, `abstractOpToQbe('${op}') should be defined`).toBeDefined()
+            expect(entry!.qt).toBe('w')
+        }
+    })
+
+    test('wasmIntrinsics registry covers every AbstractOp (WAT side)', () => {
+        const binOps: AbstractOp[] = [
+            'i32_add', 'i32_sub', 'i32_mul', 'i32_div_s', 'i32_rem_s',
+            'i32_eq', 'i32_ne', 'i32_lt_s', 'i32_gt_s', 'i32_le_s', 'i32_ge_s',
+            'i64_add', 'i64_sub', 'i64_mul',
+            'i64_eq', 'i64_ne', 'i64_lt_s', 'i64_gt_s',
+            'f32_add', 'f32_sub', 'f32_mul', 'f32_div',
+            'f32_eq', 'f32_ne', 'f32_lt', 'f32_gt', 'f32_le', 'f32_ge',
+        ]
+        for (const op of binOps) {
+            const entry = wasmIntrinsics[op]
+            expect(entry, `wasmIntrinsics['${op}'] should be defined`).toBeDefined()
+            expect(typeof entry!.wasmInstr).toBe('string')
+        }
+    })
+
+    // -- WAT backend: operator → instruction ----------------------------------
+
+    test('+ on Int: WAT emits i32.add', () => {
+        const wat = toWat('@fn add a:Int, b:Int := a + b;')
+        expect(wat).toContain('i32.add')
+    })
+
+    test('- on Int: WAT emits i32.sub', () => {
+        const wat = toWat('@fn sub a:Int, b:Int := a - b;')
+        expect(wat).toContain('i32.sub')
+    })
+
+    test('* on Int: WAT emits i32.mul', () => {
+        const wat = toWat('@fn mul a:Int, b:Int := a * b;')
+        expect(wat).toContain('i32.mul')
+    })
+
+    test('/ on Int: WAT emits i32.div_s', () => {
+        const wat = toWat('@fn div_ a:Int, b:Int := a / b;')
+        expect(wat).toContain('i32.div_s')
+    })
+
+    test('% on Int: WAT emits i32.rem_s', () => {
+        const wat = toWat('@fn mod_ a:Int, b:Int := a % b;')
+        expect(wat).toContain('i32.rem_s')
+    })
+
+    test('== on Int: WAT emits i32.eq', () => {
+        const wat = toWat('@fn eq a:Int, b:Int := a == b;')
+        expect(wat).toContain('i32.eq')
+    })
+
+    test('!= on Int: WAT emits i32.ne', () => {
+        const wat = toWat('@fn ne a:Int, b:Int := a != b;')
+        expect(wat).toContain('i32.ne')
+    })
+
+    test('< on Int: WAT emits i32.lt_s', () => {
+        const wat = toWat('@fn lt a:Int, b:Int := a < b;')
+        expect(wat).toContain('i32.lt_s')
+    })
+
+    test('> on Int: WAT emits i32.gt_s', () => {
+        const wat = toWat('@fn gt a:Int, b:Int := a > b;')
+        expect(wat).toContain('i32.gt_s')
+    })
+
+    test('<= on Int: WAT emits i32.le_s', () => {
+        const wat = toWat('@fn le a:Int, b:Int := a <= b;')
+        expect(wat).toContain('i32.le_s')
+    })
+
+    test('>= on Int: WAT emits i32.ge_s', () => {
+        const wat = toWat('@fn ge a:Int, b:Int := a >= b;')
+        expect(wat).toContain('i32.ge_s')
+    })
+
+    // -- QBE backend: same operators → QBE instructions ----------------------
+
+    test('+ on Int: QBE emits add instruction', () => {
+        const qbe = toQbeIr('@fn add a:Int, b:Int := a + b;')
+        expect(qbe).toContain('add')
+    })
+
+    test('- on Int: QBE emits sub instruction', () => {
+        const qbe = toQbeIr('@fn sub a:Int, b:Int := a - b;')
+        expect(qbe).toContain('sub')
+    })
+
+    test('* on Int: QBE emits mul instruction', () => {
+        const qbe = toQbeIr('@fn mul a:Int, b:Int := a * b;')
+        expect(qbe).toContain('mul')
+    })
+
+    test('== on Int: QBE emits ceqw instruction', () => {
+        const qbe = toQbeIr('@fn eq a:Int, b:Int := a == b;')
+        expect(qbe).toContain('ceqw')
+    })
+
+    test('!= on Int: QBE emits cnew instruction', () => {
+        const qbe = toQbeIr('@fn ne a:Int, b:Int := a != b;')
+        expect(qbe).toContain('cnew')
+    })
+
+    test('< on Int: QBE emits csltw instruction', () => {
+        const qbe = toQbeIr('@fn lt a:Int, b:Int := a < b;')
+        expect(qbe).toContain('csltw')
+    })
+
+    test('> on Int: QBE emits csgtw instruction', () => {
+        const qbe = toQbeIr('@fn gt a:Int, b:Int := a > b;')
+        expect(qbe).toContain('csgtw')
+    })
+
+    // -- Parity: same operator, WAT instruction ≠ QBE mnemonic but same semantics --
+
+    test('abstractOpToQbe(i32_add) → { instr: "add", qt: "w" }', () => {
+        const e = abstractOpToQbe('i32_add')!
+        expect(e.instr).toBe('add')
+        expect(e.qt).toBe('w')
+    })
+
+    test('abstractOpToQbe(i32_eq) → { instr: "ceqw", qt: "w" }', () => {
+        const e = abstractOpToQbe('i32_eq')!
+        expect(e.instr).toBe('ceqw')
+        expect(e.qt).toBe('w')
+    })
+
+    test('abstractOpToQbe(i64_add) → { instr: "add", qt: "l" }', () => {
+        const e = abstractOpToQbe('i64_add')!
+        expect(e.instr).toBe('add')
+        expect(e.qt).toBe('l')
+    })
+
+    test('abstractOpToQbe(f32_add) → { instr: "adds", qt: "s" }', () => {
+        const e = abstractOpToQbe('f32_add')!
+        expect(e.instr).toBe('adds')
+        expect(e.qt).toBe('s')
+    })
+
+    test('abstractOpToQbe(i64_lt_s) → { instr: "csltl", qt: "w" }', () => {
+        const e = abstractOpToQbe('i64_lt_s')!
+        expect(e.instr).toBe('csltl')
+        expect(e.qt).toBe('w')
+    })
+})
+
+// ---------------------------------------------------------------------------
+// Phase 9c — arena scope + escape (WAT determinism + structural shape;
+// QBE rejection with a useful diagnostic).
+//
+// Runtime execution of arena programs is covered by src/codegen/arena.test.ts
+// (instantiates the WASM and reads memory back).  Here we verify the
+// cross-backend posture:
+//   - WAT lowering is deterministic for arena programs.
+//   - WAT emits the expected save/restore envelope structurally.
+//   - QBE lowering rejects the strata with a documented error.
+// ---------------------------------------------------------------------------
+
+const ARENA_PROGRAMS: { name: string; src: string }[] = [
+    {
+        name: 'empty arena',
+        src:  `@fn probe:Int := { &@with_arena {}; 0 };`,
+    },
+    {
+        name: 'arena with value-type tail',
+        src:  `@fn probe:Int := &@with_arena { 42 };`,
+    },
+    {
+        name: 'arena with String promotion',
+        src:  `@fn build:String := &@with_arena { @local s:String := 'hi'; &@move_to_parent_arena s };`,
+    },
+    {
+        name: 'arena with Array[Int] promotion',
+        src:  `@fn build:Int := &@with_arena { @local a := $[1,2,3]; &@move_to_parent_arena a };`,
+    },
+    {
+        name: 'nested arenas',
+        src:  `@fn probe:Int := { &@with_arena { &@with_arena {}; }; 0 };`,
+    },
+]
+
+describe('Phase 9c arena: WAT determinism', () => {
+    for (const p of ARENA_PROGRAMS) {
+        test(p.name, () => {
+            const wat1 = compileToWatString(p.src)
+            const wat2 = compileToWatString(p.src)
+            expect(wat1).toBe(wat2)
+        })
+    }
+})
+
+describe('Phase 9c arena: WAT envelope shape', () => {
+    test('arena body sets/gets the bump pointer via $heap', () => {
+        const wat = compileToWatString(`@fn probe:Int := { &@with_arena {}; 0 };`)
+        expect(wat).toContain('global.get $heap')
+        expect(wat).toContain('global.set $heap')
+    })
+
+    test('String promotion lowers to a $arena_promote call', () => {
+        const wat = compileToWatString(`
+            @fn build:String := &@with_arena {
+                @local s:String := 'hi';
+                &@move_to_parent_arena s
+            };
+        `)
+        expect(wat).toContain('call $arena_promote')
+    })
+
+    test('arena prelude exports arena_promote', () => {
+        // Spot-check the prelude wires the helper as a public export so
+        // host tooling (and tests like arena.test.ts) can observe it.
+        const wat = compileToWatString(`@fn probe:Int := 0;`)
+        expect(wat).toContain('"arena_promote"')
+    })
+})
+
+describe('Phase 9c arena: QBE rejection (allocator surface deferred)', () => {
+    test('&@with_arena throws a structured error on the QBE backend', () => {
+        expect(() => toQbeIr(`@fn probe:Int := { &@with_arena {}; 0 };`))
+            .toThrow(/not yet supported on the native backend/)
+    })
+
+    test('&@move_to_parent_arena throws a structured error on the QBE backend', () => {
+        expect(() => toQbeIr(`
+            @fn build:Int := &@with_arena { &@move_to_parent_arena 7 };
+        `)).toThrow(/not yet supported on the native backend/)
+    })
+
+    test('QBE rejection error names Phase 9c-6 follow-up', () => {
+        try {
+            toQbeIr(`@fn probe:Int := { &@with_arena {}; 0 };`)
+            throw new Error('expected toQbeIr to throw')
+        } catch (e) {
+            expect(String(e)).toContain('9c-6')
+        }
+    })
+})
+

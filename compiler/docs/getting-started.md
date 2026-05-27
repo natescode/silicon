@@ -163,10 +163,41 @@ sgl run
 
 ---
 
+## Long-running programs (servers, REPLs, watchers)
+
+The default bump allocator never frees — fine for `sgl run main.si` and
+exit, but a one-way ratchet for anything in a loop. Wrap per-iteration
+work in `&@with_arena { … }` so per-request allocations are freed when
+the iteration ends; use `&@move_to_parent_arena value` in tail position
+when the iteration produces a value the parent scope keeps:
+
+```silicon
+@fn handle_loop:Int := {
+    @var i:Int := 0;
+    &@loop i < 1000000, {
+        @local response:String := &@with_arena {
+            @local body:String := &build_response i;
+            &@move_to_parent_arena body
+        };
+        &send response;
+        i = i + 1;
+    };
+    0
+};
+```
+
+See [`docs/memory.md`](memory.md) for the full picture: rules, type
+restrictions, the `--max-heap=N` flag for heap-exhaustion testing, and
+the v1.1 roadmap.
+
+---
+
 ## Next steps
 
 - **Language reference:** the EBNF grammar is in `docs/grammar.ebnf`; built-in
   keywords and operators are defined as strata in `boot/strata/builtin/`.
+- **Memory model:** `docs/memory.md` — arenas, parent-arena escape, the
+  v1.1 GC outlook.
 - **Stdlib:** `src/stdlib/io.si` — `print`, `eprint`, `exit`; more modules are in `src/stdlib/`.
 - **Compiler API:** `docs/compiler-as-a-service.md` — use Silicon as a library
   for IDE integrations, linters, and other tooling.

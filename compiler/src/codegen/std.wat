@@ -69,8 +69,13 @@
       (i32.const 1)))
 
   ;; memory.grow returns -1 on failure, else the previous page count.
+  ;; Phase 9c-4 (ADR 0008): on failure we trap cleanly (unreachable)
+  ;; instead of returning -1.  Returning a sentinel address caused
+  ;; downstream loads to corrupt silently; the trap surfaces the
+  ;; failure with a documented wasmtime message.  Use the --max-heap
+  ;; CLI flag to exercise this path in tests.
   (if (i32.eq (memory.grow (local.get $need_pages)) (i32.const -1))
-    (then (return (i32.const -1))))
+    (then (unreachable)))
 
   (local.set $addr (global.get $heap))
   (global.set $heap (local.get $new_heap))
@@ -181,6 +186,25 @@
       (call $mem_copy (local.get $new_ptr) (local.get $old_ptr) (local.get $copy_n))))
   (local.get $new_ptr))
 (export "realloc" (func $realloc))
+
+;; ------------------------------------------------------------------
+;; $arena_promote — escape a flat heap value from a `&with_arena {…}`
+;; block back to the saved (parent) boundary.  See ADR 0008 + Phase 9c
+;; in docs/v1-user-stories.html.
+;;
+;; Preconditions (enforced by the lowerer, not at runtime):
+;;   - $saved is the value of $heap at entry to the enclosing arena.
+;;   - $ptr was allocated inside that arena (saved ≤ ptr < heap).
+;;   - $size is the value's contiguous heap footprint (flat layout).
+;;
+;; Semantics:  byte-copies [ptr..ptr+size] → [saved..saved+size], then
+;; resets heap to saved+size.  Returns saved (the new pointer).
+;; ------------------------------------------------------------------
+(func $arena_promote (param $saved i32) (param $ptr i32) (param $size i32) (result i32)
+  (call $mem_copy (local.get $saved) (local.get $ptr) (local.get $size))
+  (global.set $heap (i32.add (local.get $saved) (local.get $size)))
+  (local.get $saved))
+(export "arena_promote" (func $arena_promote))
 
 ;; ------------------------------------------------------------------
 ;; $str_ptr / $str_len — String → Int bridges.

@@ -118,54 +118,54 @@ describe('IR lowering: constants', () => {
 // ---------------------------------------------------------------------------
 
 describe('IR lowering: binary operators (type-driven, not sniffed)', () => {
-    test('Int + Int → IRBinOp wasmType:i32, instr:i32.add', () => {
+    test('Int + Int → IRBinOp wasmType:i32, op:i32_add', () => {
         const node = binOp(intLit(1), '+', intLit(2), TypeInt)
         const ir = lowerExprDirect(node) as IRBinOp
         expect(ir.kind).toBe('BinOp')
         expect(ir.wasmType).toBe('i32')
-        expect(ir.instr).toBe('i32.add')
+        expect((ir as any).op).toBe('i32_add')
     })
 
-    test('Float + Float → IRBinOp wasmType:f32, instr:f32.add (no sniffing!)', () => {
+    test('Float + Float → IRBinOp wasmType:f32, op:f32_add (no sniffing!)', () => {
         const node = binOp(floatLit(1.0), '+', floatLit(2.0), TypeFloat)
         const ir = lowerExprDirect(node) as IRBinOp
         expect(ir.kind).toBe('BinOp')
         expect(ir.wasmType).toBe('f32')
         // This is the key test: f32.add is chosen from inferredType, not from
         // inspecting whether the compiled WAT contains "f32.const".
-        expect(ir.instr).toBe('f32.add')
+        expect((ir as any).op).toBe('f32_add')
     })
 
-    test('Int * Int → IRBinOp instr:i32.mul', () => {
+    test('Int * Int → IRBinOp op:i32_mul', () => {
         const node = binOp(intLit(3), '*', intLit(4), TypeInt)
         const ir = lowerExprDirect(node) as IRBinOp
-        expect(ir.instr).toBe('i32.mul')
+        expect((ir as any).op).toBe('i32_mul')
     })
 
-    test('Float * Float → IRBinOp instr:f32.mul', () => {
+    test('Float * Float → IRBinOp op:f32_mul', () => {
         const node = binOp(floatLit(1.5), '*', floatLit(2.0), TypeFloat)
         const ir = lowerExprDirect(node) as IRBinOp
-        expect(ir.instr).toBe('f32.mul')
+        expect((ir as any).op).toBe('f32_mul')
     })
 
-    test('Int < Int → IRBinOp wasmType:i32, instr:i32.lt_s (comparison returns Bool→i32)', () => {
+    test('Int < Int → IRBinOp wasmType:i32, op:i32_lt_s (comparison returns Bool→i32)', () => {
         const node = binOp(intLit(1), '<', intLit(2), TypeBool)
         const ir = lowerExprDirect(node) as IRBinOp
         expect(ir.kind).toBe('BinOp')
         expect(ir.wasmType).toBe('i32')
-        expect(ir.instr).toBe('i32.lt_s')
+        expect((ir as any).op).toBe('i32_lt_s')
     })
 
-    test('Float < Float → IRBinOp instr:f32.lt', () => {
+    test('Float < Float → IRBinOp op:f32_lt', () => {
         const node = binOp(floatLit(1.0), '<', floatLit(2.0), TypeBool)
         const ir = lowerExprDirect(node) as IRBinOp
-        expect(ir.instr).toBe('f32.lt')
+        expect((ir as any).op).toBe('f32_lt')
     })
 
-    test('Int == Int → IRBinOp instr:i32.eq', () => {
+    test('Int == Int → IRBinOp op:i32_eq', () => {
         const node = binOp(intLit(1), '==', intLit(1), TypeBool)
         const ir = lowerExprDirect(node) as IRBinOp
-        expect(ir.instr).toBe('i32.eq')
+        expect((ir as any).op).toBe('i32_eq')
     })
 
     test('|| → IRIf (short-circuit)', () => {
@@ -181,7 +181,7 @@ describe('IR lowering: binary operators (type-driven, not sniffed)', () => {
         // | is always i32 in WASM
         const node = binOp(intLit(3), '|', intLit(1), TypeInt)
         const ir = lowerExprDirect(node) as IRBinOp
-        expect(ir.instr).toBe('i32.or')
+        expect((ir as any).op).toBe('i32_or')
     })
 })
 
@@ -208,7 +208,7 @@ describe('IR emission: constants', () => {
 describe('IR emission: binary ops (type-driven)', () => {
     test('i32.add emission', () => {
         const ir: IRExpr = {
-            kind: 'BinOp', wasmType: 'i32', instr: 'i32.add',
+            kind: 'BinOp', wasmType: 'i32', op: 'i32_add',
             left: { kind: 'Const', wasmType: 'i32', value: 1 },
             right: { kind: 'Const', wasmType: 'i32', value: 2 },
         }
@@ -221,7 +221,7 @@ describe('IR emission: binary ops (type-driven)', () => {
 
     test('f32.add emission — correct instruction, no i32.add', () => {
         const ir: IRExpr = {
-            kind: 'BinOp', wasmType: 'f32', instr: 'f32.add',
+            kind: 'BinOp', wasmType: 'f32', op: 'f32_add',
             left: { kind: 'Const', wasmType: 'f32', value: 1.0 },
             right: { kind: 'Const', wasmType: 'f32', value: 2.0 },
         }
@@ -234,7 +234,7 @@ describe('IR emission: binary ops (type-driven)', () => {
 
     test('f32.lt emission with i32 result', () => {
         const ir: IRExpr = {
-            kind: 'BinOp', wasmType: 'i32', instr: 'f32.lt',
+            kind: 'BinOp', wasmType: 'i32', op: 'f32_lt',
             left: { kind: 'Const', wasmType: 'f32', value: 1.0 },
             right: { kind: 'Const', wasmType: 'f32', value: 2.0 },
         }

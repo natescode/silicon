@@ -596,6 +596,24 @@ function lowerBuiltinCall(callee: string, args: any[], fn: QbeFnCtx): string {
         case '@true':  return '1'
         case '@false': return '0'
 
+        // -- Phase 9c — explicit arenas not yet supported on QBE ─────────────
+        // The WASM backend's bump allocator lives in the prelude IR; QBE
+        // doesn't yet have an allocator surface (`heap`, `mem_copy`,
+        // `arena_promote`, …).  Wiring those up requires either a libc
+        // bridge (malloc/free) or a fresh bump allocator emitted as QBE
+        // data + functions — outside Phase 9c's scope.  Reject with a
+        // structured error pointing to the follow-up story so users see
+        // why their program can't `--native` compile yet.
+        case '@with_arena':
+        case '@move_to_parent_arena':
+            throw new Error(
+                `[QBE lower] '${callee}' is not yet supported on the native backend. ` +
+                `Phase 9c shipped &@with_arena / &@move_to_parent_arena for the WASM ` +
+                `backend only; QBE allocator wiring is a follow-up story (tracked under ` +
+                `Phase 9c-6 in docs/v1-user-stories.html).  Build with the default ` +
+                `(WASM) backend, or omit the arena strata for --native builds.`,
+            )
+
         // -- Type casts -------------------------------------------------------
         case '@toFloat': {
             // Int → Float  (signed word → single-precision float)

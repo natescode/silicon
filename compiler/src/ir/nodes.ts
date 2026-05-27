@@ -16,6 +16,39 @@
 export type WasmValType = 'i32' | 'i64' | 'f32'
 export type WasmType = WasmValType | 'void'
 
+/**
+ * Backend-agnostic binary operation opcode.  Names match the keys in
+ * `wasmIntrinsics` (underscore convention: `i32_add`, `i64_lt_s`, …).
+ * The WAT emitter converts these to WAT instruction strings via the
+ * intrinsics registry; the QBE emitter maps them to QBE mnemonics.
+ * IRCall.callee remains a WAT string for memory/control/unary ops.
+ */
+export type AbstractOp =
+    // i32 arithmetic
+    | 'i32_add' | 'i32_sub' | 'i32_mul'
+    | 'i32_div_s' | 'i32_div_u' | 'i32_rem_s' | 'i32_rem_u'
+    // i32 bitwise
+    | 'i32_and' | 'i32_or' | 'i32_xor'
+    | 'i32_shl' | 'i32_shr_s' | 'i32_shr_u' | 'i32_rotl' | 'i32_rotr'
+    // i32 comparisons (result type i32: 0 or 1)
+    | 'i32_eq' | 'i32_ne'
+    | 'i32_lt_s' | 'i32_gt_s' | 'i32_le_s' | 'i32_ge_s'
+    | 'i32_lt_u' | 'i32_gt_u' | 'i32_le_u' | 'i32_ge_u'
+    // i64 arithmetic
+    | 'i64_add' | 'i64_sub' | 'i64_mul'
+    | 'i64_div_s' | 'i64_div_u' | 'i64_rem_s' | 'i64_rem_u'
+    // i64 bitwise
+    | 'i64_and' | 'i64_or' | 'i64_xor'
+    | 'i64_shl' | 'i64_shr_s' | 'i64_shr_u'
+    // i64 comparisons (result type i32: 0 or 1)
+    | 'i64_eq' | 'i64_ne'
+    | 'i64_lt_s' | 'i64_gt_s' | 'i64_le_s' | 'i64_ge_s'
+    | 'i64_lt_u' | 'i64_gt_u' | 'i64_le_u' | 'i64_ge_u'
+    // f32 arithmetic
+    | 'f32_add' | 'f32_sub' | 'f32_mul' | 'f32_div'
+    // f32 comparisons (result type i32: 0 or 1)
+    | 'f32_eq' | 'f32_ne' | 'f32_lt' | 'f32_gt' | 'f32_le' | 'f32_ge'
+
 // ---------------------------------------------------------------------------
 // Expression IR nodes
 // ---------------------------------------------------------------------------
@@ -42,14 +75,16 @@ export interface IRGlobalGet {
 }
 
 /**
- * Binary operation. `instr` is the exact WAT instruction string (e.g. 'f32.add').
+ * Binary operation.  `op` is a backend-agnostic `AbstractOp` opcode — NOT a
+ * WAT instruction string.  The WAT emitter maps it to the WAT instruction via
+ * the intrinsics registry; the QBE emitter maps it to a QBE mnemonic.
  * The wasmType is the RESULT type — for comparison ops this is 'i32' even when
  * operands are 'f32'.
  */
 export interface IRBinOp {
     kind: 'BinOp'
     wasmType: WasmValType
-    instr: string
+    op: AbstractOp
     left: IRExpr
     right: IRExpr
 }

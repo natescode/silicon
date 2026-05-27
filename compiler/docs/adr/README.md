@@ -39,3 +39,4 @@ dependency bumps.
 | [0005](0005-no-js-collections-in-public-types.md) | No `Map` / `WeakMap` in public CaaS surface | Proposed |
 | [0006](0006-wasm-emitter-mixed-mode.md) | Direct WASM emitter: complete or formally retire for 1.0? | Proposed |
 | [0007](0007-diagnostic-renderer-lockdown.md) | Lock the diagnostic pretty-renderer surface for 1.0 | Proposed |
+| [0008](0008-memory-management-arenas.md) | Memory management: explicit arenas for 1.0, AllocatorABI for 1.1 | Accepted |

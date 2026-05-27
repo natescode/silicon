@@ -117,6 +117,13 @@ function setHeapBase(stdWat: string, base: number): string {
     )
 }
 
+/** Phase 9c-4: rewrite std.wat's `(memory 1)` to `(memory 1 N)` so the
+ *  wasm memory is capped at N 64KB pages.  Used by the `--max-heap=N`
+ *  CLI flag to exercise heap-exhaustion paths deterministically. */
+function setMemoryMaxPages(stdWat: string, maxPages: number): string {
+    return stdWat.replace(/\(memory 1\)/, `(memory 1 ${maxPages})`)
+}
+
 export function compileToWat(
     program: Program,
     registry: ElaboratorRegistry,
@@ -129,6 +136,7 @@ export function compileToWat(
     let std = loadStdWat()
     if (options.target === 'wasix') std = stripHostPrintImports(std)
     std = setHeapBase(std, computeHeapBase(irModule))
+    if (options.maxHeapPages !== undefined) std = setMemoryMaxPages(std, options.maxHeapPages)
     return emitModule(irModule, std)
 }
 
@@ -156,6 +164,6 @@ export function compileToWasm(
         return watToWasmSync(wat)
     }
     const heapBase = computeHeapBase(irModule)
-    const prelude = buildPrelude(heapBase, options.target !== 'wasix')
+    const prelude = buildPrelude(heapBase, options.target !== 'wasix', options.maxHeapPages)
     return emitWasmBinary(prelude, irModule)
 }

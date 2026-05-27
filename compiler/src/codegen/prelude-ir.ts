@@ -8,7 +8,7 @@
 
 import type {
     IRModule, IRFunction, IRGlobal, IRImport, IRExport,
-    IRExpr, IRStmt, IRParam, IRLocal, WasmValType,
+    IRExpr, IRStmt, IRParam, IRLocal, WasmValType, AbstractOp,
 } from '../ir/nodes'
 
 // ---------------------------------------------------------------------------
@@ -34,8 +34,8 @@ function ls(name: string, value: IRExpr): IRStmt {
 function gs(name: string, value: IRExpr): IRStmt {
     return { kind: 'GlobalSet', name, value }
 }
-function binop(instr: string, left: IRExpr, right: IRExpr, resultType: WasmValType = i32): IRExpr {
-    return { kind: 'BinOp', wasmType: resultType, instr, left, right }
+function binop(op: AbstractOp, left: IRExpr, right: IRExpr, resultType: WasmValType = i32): IRExpr {
+    return { kind: 'BinOp', wasmType: resultType, op, left, right }
 }
 function instr0(callee: string, type: VoidableType): IRExpr {
     return { kind: 'Call', wasmType: type, callee, callKind: 'instr', args: [] }
@@ -96,6 +96,14 @@ function fn(
 function buildAlloc(): IRFunction {
     // (param $size i32) (result i32)
     // (local $addr i32) (local $new_heap i32) (local $cur_bytes i32) (local $need_pages i32)
+    //
+    // Phase 9c-4: on memory.grow failure we now `unreachable` (clean
+    // WASM trap) instead of returning -1.  Returning a sentinel
+    // pointer corrupted downstream loads silently; the trap surfaces
+    // the failure at the call site with a documented wasmtime message
+    // ("wasm trap: unreachable instruction executed").  The --max-heap
+    // CLI flag (handled at memory-section emit time) lets callers cap
+    // the wasm memory and exercise this path deterministically.
     const size = lg('size')
     const addr = lg('addr')
     const newHeap = lg('new_heap')
@@ -103,14 +111,16 @@ function buildAlloc(): IRFunction {
     const needPages = lg('need_pages')
     const heap = () => gg('heap')
 
+    const unreachable: IRExpr = { kind: 'Unreachable' }
+
     const body = block([
         // new_heap = heap + size
-        ls('new_heap', binop('i32.add', heap(), size)),
+        ls('new_heap', binop('i32_add', heap(), size)),
         // cur_bytes = memory.size << 16
-        ls('cur_bytes', binop('i32.shl', instr0('memory.size', i32), c(16))),
+        ls('cur_bytes', binop('i32_shl', instr0('memory.size', i32), c(16))),
         // if (new_heap <= cur_bytes) fast path
         stmtExpr(iif(
-            binop('i32.le_s', newHeap, curBytes),
+            binop('i32_le_s', newHeap, curBytes),
             vblock(
                 ls('addr', heap()),
                 gs('heap', newHeap),
@@ -118,14 +128,14 @@ function buildAlloc(): IRFunction {
             ),
         )),
         // need_pages = (new_heap - cur_bytes) >> 16 + 1
-        ls('need_pages', binop('i32.add',
-            binop('i32.shr_u', binop('i32.sub', newHeap, curBytes), c(16)),
+        ls('need_pages', binop('i32_add',
+            binop('i32_shr_u', binop('i32_sub', newHeap, curBytes), c(16)),
             c(1),
         )),
-        // if (memory.grow(need_pages) == -1) return -1
+        // if (memory.grow(need_pages) == -1) → clean trap.
         stmtExpr(iif(
-            binop('i32.eq', instr1('memory.grow', i32, needPages), c(-1)),
-            ret(c(-1)),
+            binop('i32_eq', instr1('memory.grow', i32, needPages), c(-1)),
+            unreachable,
         )),
         // bump and return
         ls('addr', heap()),
@@ -142,7 +152,7 @@ function buildAllocArray(): IRFunction {
     // (local $base i32)
     const body = block([
         ls('base', ucall('alloc', i32,
-            binop('i32.add', c(4), binop('i32.mul', lg('count'), lg('elem_bytes'))))),
+            binop('i32_add', c(4), binop('i32_mul', lg('count'), lg('elem_bytes'))))),
         stmtExpr(instr2('i32.store', void_, lg('base'), lg('count'))),
     ], lg('base'))
     return fn('alloc_array', [['count', i32], ['elem_bytes', i32]], i32, [['base', i32]], body)
@@ -152,7 +162,7 @@ function buildAllocString(): IRFunction {
     // (param $byte_len i32) (result i32)
     // (local $base i32)
     const body = block([
-        ls('base', ucall('alloc', i32, binop('i32.add', c(4), lg('byte_len')))),
+        ls('base', ucall('alloc', i32, binop('i32_add', c(4), lg('byte_len')))),
         stmtExpr(instr2('i32.store', void_, lg('base'), lg('byte_len'))),
     ], lg('base'))
     return fn('alloc_string', [['byte_len', i32]], i32, [['base', i32]], body)
@@ -161,7 +171,7 @@ function buildAllocString(): IRFunction {
 function buildScratchAlloc(): IRFunction {
     // (param $n i32) (result i32)
     const body = ucall('alloc', i32,
-        binop('i32.and', binop('i32.add', lg('n'), c(3)), c(-4)))
+        binop('i32_and', binop('i32_add', lg('n'), c(3)), c(-4)))
     return fn('scratch_alloc', [['n', i32]], i32, [], body)
 }
 
@@ -177,13 +187,13 @@ function buildMemCopy(): IRFunction {
     const body = vblock(
         ls('i', c(0)),
         stmtExpr(loop(LOOP_ID,
-            binop('i32.lt_s', lg('i'), lg('n_bytes')),
+            binop('i32_lt_s', lg('i'), lg('n_bytes')),
             vblock(
                 stmtExpr(instr2('i32.store8', void_,
-                    binop('i32.add', lg('dst'), lg('i')),
+                    binop('i32_add', lg('dst'), lg('i')),
                     instr1('i32.load8_u', i32,
-                        binop('i32.add', lg('src'), lg('i'))))),
-                ls('i', binop('i32.add', lg('i'), c(1))),
+                        binop('i32_add', lg('src'), lg('i'))))),
+                ls('i', binop('i32_add', lg('i'), c(1))),
             ),
         )),
     )
@@ -221,13 +231,13 @@ function buildRealloc(): IRFunction {
         // else don't emit a result-typed-if.
         ls('copy_n', lg('new_size')),
         stmtExpr(iif(
-            binop('i32.lt_s', lg('old_size'), lg('new_size')),
+            binop('i32_lt_s', lg('old_size'), lg('new_size')),
             vblock(ls('copy_n', lg('old_size'))),
         )),
         // mem_copy(new_ptr, old_ptr, copy_n) — but only if old_ptr is
         // non-zero (sentinel for "no previous block").
         stmtExpr(iif(
-            binop('i32.ne', lg('old_ptr'), c(0)),
+            binop('i32_ne', lg('old_ptr'), c(0)),
             vblock(stmtExpr(ucall('mem_copy', void_, newPtr, lg('old_ptr'), copyN))),
         )),
     ], newPtr)
@@ -235,6 +245,42 @@ function buildRealloc(): IRFunction {
         [['old_ptr', i32], ['old_size', i32], ['new_size', i32]],
         i32,
         [['new_ptr', i32], ['copy_n', i32]],
+        body)
+}
+
+// ── Phase 9c — explicit-arena escape ─────────────────────────────────
+//
+// `arena_promote(saved, ptr, size)` copies a contiguous heap block from
+// inside the current arena (at `ptr`, `size` bytes) to the arena's saved
+// boundary (`saved`), then advances the heap pointer to `saved + size`.
+// Returns the new pointer.  Used by `&move_to_parent_arena` at the tail
+// position of `&with_arena { ... }` blocks.
+//
+// Preconditions enforced by the lowerer (not at runtime):
+//   - `saved` is the value `heap` held at entry to the enclosing arena.
+//   - `ptr` was allocated inside that arena (i.e. saved ≤ ptr < heap).
+//   - The block is a flat, contiguous heap layout (String, value-array,
+//     sum-with-flat-payloads).  Nested heap references are a v1.1
+//     extension (trace-and-copy).
+//
+// Two-step memmove (i.e. memcpy when regions don't overlap):  this
+// reuses `mem_copy`'s byte-wise loop.  `mem_copy` walks forward, so when
+// `saved < ptr` (the common case — the arena's content lives above its
+// boundary) overlap is benign: each destination byte is written before
+// the corresponding source byte is read.  When `saved == ptr` the loop
+// is a no-op on already-coincident bytes.  The `saved > ptr` case
+// cannot arise from a well-formed arena.
+function buildArenaPromote(): IRFunction {
+    const body = block([
+        // mem_copy(saved, ptr, size)
+        stmtExpr(ucall('mem_copy', void_, lg('saved'), lg('ptr'), lg('size'))),
+        // heap = saved + size
+        gs('heap', binop('i32_add', lg('saved'), lg('size'))),
+    ], lg('saved'))
+    return fn('arena_promote',
+        [['saved', i32], ['ptr', i32], ['size', i32]],
+        i32,
+        [],
         body)
 }
 
@@ -260,22 +306,22 @@ function buildArrLen(): IRFunction {
 
 function buildArrLoadI32(): IRFunction {
     // ptr + 4 + index * 4
-    const addr = binop('i32.add', lg('ptr'),
-        binop('i32.add', c(4), binop('i32.mul', lg('index'), c(4))))
+    const addr = binop('i32_add', lg('ptr'),
+        binop('i32_add', c(4), binop('i32_mul', lg('index'), c(4))))
     return fn('arr_load_i32', [['ptr', i32], ['index', i32]], i32, [],
         instr1('i32.load', i32, addr))
 }
 
 function buildArrStoreI32(): IRFunction {
-    const addr = binop('i32.add', lg('ptr'),
-        binop('i32.add', c(4), binop('i32.mul', lg('index'), c(4))))
+    const addr = binop('i32_add', lg('ptr'),
+        binop('i32_add', c(4), binop('i32_mul', lg('index'), c(4))))
     const body = vblock(stmtExpr(instr2('i32.store', void_, addr, lg('value'))))
     return fn('arr_store_i32', [['ptr', i32], ['index', i32], ['value', i32]], void_, [], body)
 }
 
 function buildArrLoadF32(): IRFunction {
-    const addr = binop('i32.add', lg('ptr'),
-        binop('i32.add', c(4), binop('i32.mul', lg('index'), c(4))))
+    const addr = binop('i32_add', lg('ptr'),
+        binop('i32_add', c(4), binop('i32_mul', lg('index'), c(4))))
     return fn('arr_load_f32', [['ptr', i32], ['index', i32]], f32,
         [], instr1('f32.load', f32, addr))
 }
@@ -308,12 +354,12 @@ function buildPrintString(): IRFunction {
         ls('len', instr1('i32.load', i32, lg('ptr'))),
         ls('i', c(0)),
         stmtExpr(loop(LOOP_ID,
-            binop('i32.lt_s', lg('i'), lg('len')),
+            binop('i32_lt_s', lg('i'), lg('len')),
             vblock(
                 stmtExpr(ucall('print', void_,
                     instr1('i32.load8_u', i32,
-                        binop('i32.add', lg('ptr'), binop('i32.add', c(4), lg('i')))))),
-                ls('i', binop('i32.add', lg('i'), c(1))),
+                        binop('i32_add', lg('ptr'), binop('i32_add', c(4), lg('i')))))),
+                ls('i', binop('i32_add', lg('i'), c(1))),
             ),
         )),
     )
@@ -327,33 +373,33 @@ function buildStrConcat(): IRFunction {
     const body = block([
         ls('len_a', instr1('i32.load', i32, lg('a'))),
         ls('len_b', instr1('i32.load', i32, lg('b'))),
-        ls('total', binop('i32.add', lg('len_a'), lg('len_b'))),
-        ls('dst', ucall('alloc', i32, binop('i32.add', c(4), lg('total')))),
+        ls('total', binop('i32_add', lg('len_a'), lg('len_b'))),
+        ls('dst', ucall('alloc', i32, binop('i32_add', c(4), lg('total')))),
         stmtExpr(instr2('i32.store', void_, lg('dst'), lg('total'))),
         // copy $a bytes
         ls('i', c(0)),
         stmtExpr(loop(LOOP_A,
-            binop('i32.lt_s', lg('i'), lg('len_a')),
+            binop('i32_lt_s', lg('i'), lg('len_a')),
             vblock(
                 stmtExpr(instr2('i32.store8', void_,
-                    binop('i32.add', binop('i32.add', lg('dst'), c(4)), lg('i')),
+                    binop('i32_add', binop('i32_add', lg('dst'), c(4)), lg('i')),
                     instr1('i32.load8_u', i32,
-                        binop('i32.add', binop('i32.add', lg('a'), c(4)), lg('i'))))),
-                ls('i', binop('i32.add', lg('i'), c(1))),
+                        binop('i32_add', binop('i32_add', lg('a'), c(4)), lg('i'))))),
+                ls('i', binop('i32_add', lg('i'), c(1))),
             ),
         )),
         // copy $b bytes
         ls('i', c(0)),
         stmtExpr(loop(LOOP_B,
-            binop('i32.lt_s', lg('i'), lg('len_b')),
+            binop('i32_lt_s', lg('i'), lg('len_b')),
             vblock(
                 stmtExpr(instr2('i32.store8', void_,
-                    binop('i32.add',
-                        binop('i32.add', lg('dst'), binop('i32.add', c(4), lg('len_a'))),
+                    binop('i32_add',
+                        binop('i32_add', lg('dst'), binop('i32_add', c(4), lg('len_a'))),
                         lg('i')),
                     instr1('i32.load8_u', i32,
-                        binop('i32.add', binop('i32.add', lg('b'), c(4)), lg('i'))))),
-                ls('i', binop('i32.add', lg('i'), c(1))),
+                        binop('i32_add', binop('i32_add', lg('b'), c(4)), lg('i'))))),
+                ls('i', binop('i32_add', lg('i'), c(1))),
             ),
         )),
     ], lg('dst'))
@@ -373,9 +419,14 @@ export interface PreludeSpec {
     funcExports: IRExport[]
     /** Memory section is always included. */
     memoryPages: number
+    /** Phase 9c-4: optional max-pages cap.  When set, the wasm memory
+     *  is emitted with `flags=1` (min+max).  The bump allocator traps
+     *  via `unreachable` if `memory.grow` exceeds this cap.  Powers
+     *  the `--max-heap=N` CLI flag for testing exhaustion paths. */
+    memoryMaxPages?: number
 }
 
-export function buildPrelude(heapBase: number, includeHostIO: boolean): PreludeSpec {
+export function buildPrelude(heapBase: number, includeHostIO: boolean, maxPages?: number): PreludeSpec {
     const imports: IRImport[] = []
     if (includeHostIO) {
         imports.push({ kind: 'Import', env: 'env', field: 'print', name: 'print', params: [i32], result: undefined })
@@ -397,6 +448,7 @@ export function buildPrelude(heapBase: number, includeHostIO: boolean): PreludeS
         buildScratchAlloc(),
         buildMemCopy(),
         buildRealloc(),
+        buildArenaPromote(),
         buildStrPtr(),
         buildStrLen(),
         buildHeapGet(),
@@ -421,7 +473,8 @@ export function buildPrelude(heapBase: number, includeHostIO: boolean): PreludeS
         { kind: 'Export', alias: 'scratch_alloc', internalName: 'scratch_alloc', what: 'func' },
         { kind: 'Export', alias: 'mem_copy',      internalName: 'mem_copy',      what: 'func' },
         { kind: 'Export', alias: 'realloc',       internalName: 'realloc',       what: 'func' },
+        { kind: 'Export', alias: 'arena_promote', internalName: 'arena_promote', what: 'func' },
     ]
 
-    return { imports, globals, functions, funcExports, memoryPages: 1 }
+    return { imports, globals, functions, funcExports, memoryPages: 1, memoryMaxPages: maxPages }
 }

@@ -12,5 +12,6 @@
 export {
     getWasmIntrinsic,
     resolveIntrinsicWasmInstr,
+    resolveIntrinsicAbstractOp,
     type WasmIntrinsic,
 } from './intrinsics'

@@ -8,19 +8,19 @@
  * Key improvement over the Ohm codegen:
  *   Float arithmetic is resolved here using `inferredType`, not by inspecting
  *   whether the compiled WAT substring contains "f32.const". For example,
- *   `a + b` where both are Float produces `IRBinOp { instr: 'f32.add' }`,
+ *   `a + b` where both are Float produces `IRBinOp { op: 'f32_add' }`,
  *   decided by the actual SiliconType, not string patterns.
  */
 
 import { wasmTypeOf } from '../types/types'
 import { type SiliconType } from '../types/types'
 import { type ElaboratorRegistry, lookupTypedOperator, lookupKeyword, lookupTypedKeyword, lookupDefKindEntry, fireModuleFinalizeHandlers, fireHandlers } from '../elaborator/registry'
-import { resolveIntrinsicWasmInstr } from '../intrinsics'
+import { resolveIntrinsicWasmInstr, resolveIntrinsicAbstractOp } from '../intrinsics'
 import type { FunctionSig } from '../types/typechecker'
 import type { ModuleRegistry } from '../modules/registry'
 import type { SemanticModel } from '../ast/semanticModel'
 import type {
-    WasmValType, WasmType,
+    WasmValType, WasmType, AbstractOp,
     IRModule, IRFunction, IRGlobal, IRImport, IRDataSegment, IRExport,
     IRExpr, IRStmt, IRParam, IRLocal,
     IRLocalGet, IRGlobalGet, IRCall,
@@ -185,6 +185,11 @@ export type LowerTarget = 'host' | 'wasix'
 export interface LowerOptions {
     /** Target runtime — controls emit-time conventions (e.g. _start export). */
     target?: LowerTarget
+    /** Phase 9c-4: cap wasm memory at this many 64KB pages.  Forwarded
+     *  to the prelude memory section.  Powers the `--max-heap=N` CLI
+     *  flag for exercising heap-exhaustion paths in tests.  Undefined
+     *  → unbounded (existing default). */
+    maxHeapPages?: number
 }
 
 export function lowerProgram(
@@ -700,7 +705,7 @@ function lowerStructFieldChain(
         if (!field) return null
 
         const addr: IRExpr = field.offset === 0 ? ptr : {
-            kind: 'BinOp', wasmType: 'i32', instr: 'i32.add',
+            kind: 'BinOp', wasmType: 'i32', op: 'i32_add',
             left: ptr, right: { kind: 'Const', wasmType: 'i32', value: field.offset },
         }
         const loadInstr = field.wasmType === 'f32' ? 'f32.load'
@@ -803,7 +808,7 @@ function lowerStructFieldStore(
         if (!field) return null
 
         const addr: IRExpr = field.offset === 0 ? ptr : {
-            kind: 'BinOp', wasmType: 'i32', instr: 'i32.add',
+            kind: 'BinOp', wasmType: 'i32', op: 'i32_add',
             left: ptr, right: { kind: 'Const', wasmType: 'i32', value: field.offset },
         }
 
@@ -946,10 +951,10 @@ function lowerBinaryOp(n: any, ctx: LowerCtx): IRExpr {
         }
     }
 
-    const wasmInstr = resolveIntrinsicWasmInstr(intrinsic)
-    if (!wasmInstr) throw new IRLowerError(`No WasmIntrinsic for '${intrinsic}'`)
+    const abstractOp = resolveIntrinsicAbstractOp(intrinsic) as AbstractOp | undefined
+    if (!abstractOp) throw new IRLowerError(`No WasmIntrinsic for '${intrinsic}'`)
 
-    const primary: IRExpr = { kind: 'BinOp', wasmType: resultWt, instr: wasmInstr, left, right }
+    const primary: IRExpr = { kind: 'BinOp', wasmType: resultWt, op: abstractOp, left, right }
 
     // Multi-step strata: first step is the BinOp; subsequent steps chain on the stack.
     const template = stratum.data?.bodyTemplate ?? []
@@ -1072,6 +1077,16 @@ function lowerBuiltinCall(name: string, rawArgs: any[], ctx: LowerCtx, inferredT
     // and module-level access to the lowering ctx.
     if (name === '@try') {
         return lowerTry(rawArgs, ctx)
+    }
+    // Phase 9c (ADR 0008) — explicit-arena scope + tail-position escape.
+    // Hardcoded for the same reasons as @try: fresh-local allocation,
+    // multi-statement Block synthesis, and AST tail-walking that the
+    // strata-body interpreter doesn't have a clean API for today.
+    if (name === '@with_arena') {
+        return lowerWithArena(rawArgs, ctx)
+    }
+    if (name === '@move_to_parent_arena') {
+        return lowerMoveToParentArena(rawArgs, ctx)
     }
     // Typed dispatch: try the first arg's type kind, fall back to the untyped entry.
     const firstArgKind: string = (inferredTypeOf(rawArgs[0], ctx) ?? (rawArgs[0] as any)?.inferredType)?.kind ?? 'Int'
@@ -1229,12 +1244,12 @@ function lowerTry(rawArgs: any[], ctx: LowerCtx): IRExpr {
     } as any)
     const i32Const = (value: number): IRExpr => ({ kind: 'Const', wasmType: 'i32', value })
     const i32Add = (left: IRExpr, right: IRExpr): IRExpr => ({
-        kind: 'BinOp', wasmType: 'i32', instr: 'i32.add', left, right,
+        kind: 'BinOp', wasmType: 'i32', op: 'i32_add', left, right,
     })
 
     const tag = i32Load(tmpGet())
     const isOk: IRExpr = {
-        kind: 'BinOp', wasmType: 'i32', instr: 'i32.eq',
+        kind: 'BinOp', wasmType: 'i32', op: 'i32_eq',
         left: tag, right: i32Const(0),
     }
     const okValue = i32Load(i32Add(tmpGet(), i32Const(4)))
@@ -1258,6 +1273,291 @@ function lowerTry(rawArgs: any[], ctx: LowerCtx): IRExpr {
         stmts: [{ kind: 'LocalSet', name: tmpName, value: resultExpr }],
         trailing: ifExpr,
     }
+}
+
+// ── Phase 9c (ADR 0008) — explicit-arena memory management ────────────
+//
+// `&@with_arena { body }` saves the heap pointer at entry and resets
+// it at exit.  `&@move_to_parent_arena value` (tail position only)
+// memcpys a flat heap value to the saved boundary so the block result
+// survives the reset.  v1.0 supports value types and `String`; arrays
+// and sum-with-payloads are recognised but their byte-size computation
+// is gated to Phase 9c follow-up stories.  Nested heap types are
+// rejected with a lower-time diagnostic.
+//
+// Lowering shape (heap-typed tail with promotion):
+//
+//   {
+//     __arena_saved := heap_get
+//     <body stmts>
+//     __arena_ptr   := <lowered promoted expr>
+//     trailing: arena_promote(__arena_saved, __arena_ptr, sizeof(T))
+//   }
+//
+// Lowering shape (value-typed tail, with or without &move_to_parent_arena):
+//
+//   {
+//     __arena_saved := heap_get
+//     <body stmts>
+//     __arena_result := <lowered trailing>
+//     heap_set(__arena_saved)
+//     trailing: __arena_result
+//   }
+//
+// Lowering shape (void body):
+//
+//   {
+//     __arena_saved := heap_get
+//     <body stmts>
+//     heap_set(__arena_saved)
+//   }
+
+function isMoveToParentArenaCall(node: any): boolean {
+    if (!node || node.type !== 'FunctionCall') return false
+    return callName(node) === '@move_to_parent_arena'
+}
+
+/** Is this type stored entirely as a value (no pointer dereference)? */
+function isValueType(t: SiliconType | undefined): boolean {
+    if (!t) return false
+    switch (t.kind) {
+        case 'Int': case 'Int64': case 'Float': case 'Bool':
+        case 'UInt8': case 'UInt16': case 'UInt32': case 'UInt64':
+        case 'Void':
+            return true
+        // Distinct over a value type is also a value type.
+        case 'Distinct':
+            return isValueType(t.underlying)
+        // Payload-free Sum (variants are i32 globals) is a value type;
+        // payload-bearing Sum is heap.  Without per-variant inspection
+        // here we conservatively treat all Sum as heap (it falls through
+        // to the not-yet-supported branch in sizeExprForFlatHeap).
+        default:
+            return false
+    }
+}
+
+/** Compute the byte size of a flat heap value as an IRExpr.  Returns
+ *  `null` for types whose size computation isn't supported in v1.0
+ *  (caller turns that into a structured lower-time error).
+ *
+ *  Supported in v1.0:
+ *    - String              → 4 + i32.load(ptr)
+ *    - Array[T] (T value)  → 4 + i32.load(ptr) * sizeof(T)
+ *    - Distinct over flat  → recurse on underlying
+ *
+ *  Deferred (Phase 9c follow-up; explicit error):
+ *    - Sum-with-payloads   (needs variantSchemes plumbed into LowerCtx)
+ *    - Array of heap T     (nested heap; v1.1 trace-and-copy)
+ */
+function sizeExprForFlatHeap(
+    type: SiliconType | undefined,
+    ptrGet: () => IRExpr,
+): IRExpr | null {
+    if (!type) return null
+
+    if (type.kind === 'Distinct') {
+        return sizeExprForFlatHeap(type.underlying, ptrGet)
+    }
+
+    if (type.kind === 'String') {
+        // [byte_len:i32 LE][utf8 bytes…] — total size = 4 + byte_len.
+        const lenLoad: IRExpr = {
+            kind: 'Call', wasmType: 'i32', callee: 'i32.load', callKind: 'instr',
+            args: [ptrGet()],
+        } as IRExpr
+        return {
+            kind: 'BinOp', wasmType: 'i32', op: 'i32_add',
+            left: { kind: 'Const', wasmType: 'i32', value: 4 },
+            right: lenLoad,
+        }
+    }
+
+    if (type.kind === 'Array') {
+        // [count:i32][elem_0][elem_1]… — total size = 4 + count * elemBytes.
+        // Reject Array-of-heap as nested (caller emits the diagnostic).
+        const elemBytes = valueTypeByteSize(type.element)
+        if (elemBytes === null) return null
+        const countLoad: IRExpr = {
+            kind: 'Call', wasmType: 'i32', callee: 'i32.load', callKind: 'instr',
+            args: [ptrGet()],
+        } as IRExpr
+        return {
+            kind: 'BinOp', wasmType: 'i32', op: 'i32_add',
+            left: { kind: 'Const', wasmType: 'i32', value: 4 },
+            right: {
+                kind: 'BinOp', wasmType: 'i32', op: 'i32_mul',
+                left: countLoad,
+                right: { kind: 'Const', wasmType: 'i32', value: elemBytes },
+            },
+        }
+    }
+
+    // Sum-with-payloads is layered as `[tag:i32, field0:i32, …, field<max-1>:i32]`
+    // (`src/strata/defExpanders.ts:135` — recordBytes = 4 + 4*maxFields).
+    // Reading `maxFields` requires the typechecker's variantSchemes
+    // map which the LowerCtx doesn't currently carry.  Plumbing that
+    // through is a contained follow-up; for now the lowerer rejects
+    // explicitly so users see a structured error instead of silent
+    // dangling pointers.
+    return null
+}
+
+/** Byte size of a *value-typed* SiliconType, or null for heap types
+ *  (= "nested heap, refuse to promote"). */
+function valueTypeByteSize(t: SiliconType): number | null {
+    switch (t.kind) {
+        case 'Int':
+        case 'Float':
+        case 'Bool':
+        case 'UInt8':
+        case 'UInt16':
+        case 'UInt32':
+            return 4
+        case 'Int64':
+        case 'UInt64':
+            return 8
+        case 'Distinct':
+            return valueTypeByteSize(t.underlying)
+        // String, Array, Sum, Function, Variable, Unknown, Void → not value.
+        default:
+            return null
+    }
+}
+
+function lowerWithArena(rawArgs: any[], ctx: LowerCtx): IRExpr {
+    if (rawArgs.length !== 1) {
+        throw new IRLowerError(
+            `@with_arena expects exactly 1 argument (a block { … }), got ${rawArgs.length}`,
+        )
+    }
+    const bodyNode = unwrap(rawArgs[0])
+    if (!bodyNode || bodyNode.type !== 'Block') {
+        throw new IRLowerError(
+            `@with_arena: argument must be a block { … }, got ${bodyNode?.type ?? typeof bodyNode}`,
+        )
+    }
+
+    const savedName = `__arena_saved_${ctx.freshIdCounter.n++}`
+    ctx.pendingLocals.push({ name: savedName, wasmType: 'i32' })
+    ctx.locals.set(savedName, 'i32')
+
+    const heapGet = (): IRExpr => ({ kind: 'GlobalGet', wasmType: 'i32', name: 'heap' })
+    const heapSetStmt = (v: IRExpr): IRStmt => ({ kind: 'GlobalSet', name: 'heap', value: v })
+    const savedSetStmt = (v: IRExpr): IRStmt => ({ kind: 'LocalSet', name: savedName, value: v })
+    const savedGet = (): IRExpr => ({ kind: 'LocalGet', wasmType: 'i32', name: savedName })
+
+    const stmts: IRStmt[] = [savedSetStmt(heapGet())]
+    for (const item of bodyNode.items || []) {
+        const unwrapped = unwrap(item)
+        if (!unwrapped) continue
+        const stmt = lowerAsStmt(unwrapped, ctx)
+        if (stmt) stmts.push(stmt)
+    }
+
+    const trailing = bodyNode.trailing
+    const tailIsPromote = isMoveToParentArenaCall(trailing)
+
+    // ── Tail-position &@move_to_parent_arena ────────────────────────────
+    if (tailIsPromote) {
+        const promotedExprNode = unwrap(trailing.args?.[0])
+        if (!promotedExprNode) {
+            throw new IRLowerError('@move_to_parent_arena requires a single value argument')
+        }
+        const promotedType = inferredTypeOf(promotedExprNode, ctx)
+        const promotedIR = lowerExpr(promotedExprNode, ctx)
+
+        // Value types: identity — the bytes-to-copy is 0, and the "pointer"
+        // returned is just the value itself.  Skip arena_promote and emit
+        // the standard reset envelope to avoid trying to memcpy from a
+        // value-bit-pattern address.
+        if (isValueType(promotedType)) {
+            const wt = (promotedIR as any).wasmType ?? 'i32'
+            const resName = `__arena_result_${ctx.freshIdCounter.n++}`
+            ctx.pendingLocals.push({ name: resName, wasmType: wt })
+            ctx.locals.set(resName, wt)
+            stmts.push({ kind: 'LocalSet', name: resName, value: promotedIR })
+            stmts.push(heapSetStmt(savedGet()))
+            return {
+                kind: 'Block', wasmType: wt, stmts,
+                trailing: { kind: 'LocalGet', wasmType: wt, name: resName },
+            }
+        }
+
+        // Heap type: stash the inside-arena pointer in a local, compute
+        // the byte size, then arena_promote — that helper owns the
+        // memcpy + heap reset in one call.
+        const ptrName = `__arena_ptr_${ctx.freshIdCounter.n++}`
+        ctx.pendingLocals.push({ name: ptrName, wasmType: 'i32' })
+        ctx.locals.set(ptrName, 'i32')
+        stmts.push({ kind: 'LocalSet', name: ptrName, value: promotedIR })
+        const ptrGet = (): IRExpr => ({ kind: 'LocalGet', wasmType: 'i32', name: ptrName })
+
+        const sizeExpr = sizeExprForFlatHeap(promotedType, ptrGet)
+        if (!sizeExpr) {
+            const tname = promotedType ? promotedType.kind : '<unknown>'
+            throw new IRLowerError(
+                `@move_to_parent_arena: byte-size computation for type '${tname}' is not implemented yet. ` +
+                `v1.0 supports value types and String; arrays / sum-with-payloads / nested heap are Phase 9c follow-up stories.`,
+            )
+        }
+
+        const promoteCall: IRExpr = {
+            kind: 'Call', wasmType: 'i32', callee: 'arena_promote', callKind: 'user',
+            args: [savedGet(), ptrGet(), sizeExpr],
+        }
+        return { kind: 'Block', wasmType: 'i32', stmts, trailing: promoteCall }
+    }
+
+    // ── No tail promotion ──────────────────────────────────────────────
+    if (!trailing) {
+        stmts.push(heapSetStmt(savedGet()))
+        return { kind: 'Block', wasmType: 'void', stmts, trailing: undefined }
+    }
+
+    const trailingIR = lowerExpr(trailing, ctx)
+    const trailingType = inferredTypeOf(trailing, ctx)
+    const trailingWasmType: WasmType = (trailingIR as any).wasmType ?? 'i32'
+
+    // Heap-typed return without &@move_to_parent_arena → the pointer would
+    // dangle once heap resets.  Surface the fix explicitly.
+    if (trailingType && !isValueType(trailingType)) {
+        throw new IRLowerError(
+            `@with_arena: body returns heap type '${trailingType.kind}' — wrap the result in &@move_to_parent_arena to escape it to the parent arena, ` +
+            `or restructure so the block returns a value type (ADR 0008, Phase 9c).`,
+        )
+    }
+
+    // Void-typed trailing (e.g. body ends with a side-effecting call) —
+    // treat it as the no-trailing case: run the expression for its
+    // effects, reset, evaluate to void.
+    if (trailingWasmType === 'void') {
+        stmts.push({ kind: 'ExprStmt', expr: trailingIR })
+        stmts.push(heapSetStmt(savedGet()))
+        return { kind: 'Block', wasmType: 'void', stmts, trailing: undefined }
+    }
+
+    const valType: WasmValType = trailingWasmType
+    const resName = `__arena_result_${ctx.freshIdCounter.n++}`
+    ctx.pendingLocals.push({ name: resName, wasmType: valType })
+    ctx.locals.set(resName, valType)
+    stmts.push({ kind: 'LocalSet', name: resName, value: trailingIR })
+    stmts.push(heapSetStmt(savedGet()))
+    return {
+        kind: 'Block', wasmType: valType, stmts,
+        trailing: { kind: 'LocalGet', wasmType: valType, name: resName },
+    }
+}
+
+function lowerMoveToParentArena(rawArgs: any[], _ctx: LowerCtx): IRExpr {
+    // Reached only when `&@move_to_parent_arena value` appears *outside*
+    // the tail of a `&@with_arena { … }` block — the tail-position case
+    // is short-circuited by lowerWithArena before this dispatch runs.
+    throw new IRLowerError(
+        `@move_to_parent_arena may only appear in the tail position of a &@with_arena { … } block ` +
+        `(ADR 0008, Phase 9c; v1.1 will lift this restriction via pointer-fixup).` +
+        (rawArgs.length === 0 ? ' (no arguments given)' : ''),
+    )
 }
 
 function lowerBlock(n: any, ctx: LowerCtx): IRBlock {

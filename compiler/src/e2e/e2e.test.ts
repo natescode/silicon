@@ -1773,8 +1773,10 @@ test("Round 43: @match trailing default emits no i32.eq for the default arm", ()
     // Only one i32.eq: the Red arm. Default has no comparison.
     const eqMatches = userWat(result.wat ?? "").match(/i32\.eq/g) ?? []
     expect(eqMatches.length).toBe(1)
-    // Default replaces unreachable — no (unreachable) in output.
-    expect(result.wat).not.toContain("unreachable")
+    // Default replaces unreachable — no (unreachable) in *user* output.
+    // (The prelude's $alloc now uses `unreachable` for heap-exhaustion
+    // traps under Phase 9c-4, so we scope this assertion to userWat.)
+    expect(userWat(result.wat ?? "")).not.toContain("unreachable")
 })
 
 test("Round 43: @match two explicit arms + trailing default", () => {
@@ -1786,7 +1788,8 @@ test("Round 43: @match two explicit arms + trailing default", () => {
     const result = compileSource(src)
 
     expect(result.success).toBe(true)
-    expect(result.wat).not.toContain("unreachable")
+    // See note above re: prelude unreachable.
+    expect(userWat(result.wat ?? "")).not.toContain("unreachable")
     // Two explicit comparisons, none for the default.
     const eqMatches = userWat(result.wat ?? "").match(/i32\.eq/g) ?? []
     expect(eqMatches.length).toBe(2)

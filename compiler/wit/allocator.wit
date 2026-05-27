@@ -1,0 +1,183 @@
+// ─────────────────────────────────────────────────────────────────────────────
+// Sigil allocator interface — single source of truth.
+//
+// This WIT file describes the contract every Sigil allocator conforms to.
+// Three downstream artifacts must match this surface:
+//
+//   1. src/codegen/prelude-ir.ts        — TypeScript IR builders for the
+//                                          v1.0 bump allocator (first
+//                                          conformer; see "Conformers" below).
+//   2. src/codegen/std.wat              — text-format mirror of the same
+//                                          allocator surface, consumed by
+//                                          the WAT emitter.
+//   3. boot/codegen/std.si              — Silicon-side allocator surface
+//                                          used by the self-hosted compiler
+//                                          (boot/ port tracked as Phase 9c-7
+//                                          in docs/v1-user-stories.html).
+//
+// Each conformer exports the same set of i32 wasm functions whose names
+// match the interface entries below, so compiled Silicon programs link
+// against any conformer without rewriting call sites.
+//
+// History
+// -------
+// Before this file existed the bump allocator's contract was implicit in
+// the prelude IR + std.wat duo, with no way to swap in an alternative
+// allocator without breaking every compiled program. The .wit pins the
+// surface so v1.1's GC stratum (ADR 0008 M-6) can drop in as a different
+// conformer — same exported names, different semantics. Same shape +
+// ratchet as wit/comptime.wit, see ADR 0003.
+//
+// ABI conventions
+// ---------------
+// All entries use the all-i32-in / i32-out (or void) ABI that the rest of
+// the compiled wasm surface uses today. Pointers are i32 byte offsets
+// into linear memory 0.
+//
+//   • `ptr` is an i32 offset into the wasm `memory 0`. Returned by `alloc`,
+//     `realloc`, and `promote`.
+//
+//   • `size` is the requested allocation in bytes (i32).
+//
+//   • `scope-handle` is an i32 token that identifies a scope opened by
+//     `enter-scope`. The bump allocator uses the saved heap pointer
+//     directly as the handle; a future GC implementation may return an
+//     index into a side table. Either way the handle is opaque to the
+//     compiled program and round-trips unchanged through `exit-scope` /
+//     `promote`.
+//
+// Failure modes
+// -------------
+// Out-of-memory is signalled by a clean WASM trap (`unreachable`), not by
+// returning a sentinel. The host runtime is responsible for surfacing a
+// diagnostic; story 9c-4 adds the `--max-heap=N` CLI flag for testing
+// exhaustion paths and a structured stderr line on failure.
+//
+// Resources vs newtypes
+// ---------------------
+// Same reasoning as wit/comptime.wit: we use `type X = u32` (named i32 in
+// WASM) rather than WIT `resource` because (a) it preserves the existing
+// all-i32 ABI byte-for-byte, and (b) resources require canonical-ABI
+// lowering the bun host doesn't implement yet.
+//
+// Conformers
+// ----------
+// • src/codegen/prelude-ir.ts (v1.0) — bump allocator. `enter-scope`
+//   returns the current heap pointer; `exit-scope` rewrites the heap
+//   pointer back to the saved value; `promote` memcpys bytes from inside
+//   the closing scope to the saved boundary, then advances the heap by
+//   the promoted size. `free-all` resets the heap pointer to the static
+//   data segment boundary (the lowest legal heap address).
+//
+// • src/codegen/qbe/* (v1.0) — same prelude lowered through QBE. Linkage
+//   identical; the allocator is one piece of code shared across backends.
+//
+// • Planned: mark-sweep GC stratum (v1.1, ADR 0008 M-6). Promotes
+//   `&move_to_parent_arena` from flat-types-only to trace-and-copy via
+//   the same interface.
+//
+// See ADR 0008 (Memory management: explicit arenas for 1.0, AllocatorABI
+// for 1.1) for the rationale and v1.1 roadmap.
+// ─────────────────────────────────────────────────────────────────────────────
+
+package sigil:allocator@0.1.0;
+
+// ─── Primitive types ─────────────────────────────────────────────────────────
+// All identifier types are i32 at the WASM level; the named aliases here
+// document intent for humans and future wit-bindgen tooling.
+
+interface types {
+    /// Byte offset into wasm `memory 0`. `0` is a valid heap address
+    /// only when the heap base is 0 (it isn't today — heap base starts
+    /// at 1024 in src/codegen/std.wat). Use `0` as a "no previous block"
+    /// sentinel in `realloc`.
+    type ptr = u32;
+
+    /// Byte count for allocation / copy operations.
+    type size = u32;
+
+    /// Opaque token returned by `enter-scope` and consumed by
+    /// `exit-scope` / `promote`. Treat as a value type; do not dereference.
+    type scope-handle = u32;
+}
+
+// ─── Core allocation surface ─────────────────────────────────────────────────
+// Every conformer exports these three. The bump allocator implements them
+// in src/codegen/prelude-ir.ts; std.wat carries the same shape for the
+// text emitter.
+
+interface core {
+    use types.{ptr, size};
+
+    /// Allocate `size` bytes from the active scope. Returns a pointer
+    /// aligned to at least 4 bytes (current bump allocator does not
+    /// enforce alignment beyond what the caller's `size` implies; finer
+    /// alignment is a v1.1+ improvement).
+    /// Traps with `unreachable` if memory cannot be grown.
+    alloc: func(size: size) -> ptr;
+
+    /// Reallocate the block at `old-ptr` to `new-size` bytes, preserving
+    /// the first min(old-size, new-size) bytes. `old-ptr = 0` is the
+    /// "fresh alloc" path — equivalent to `alloc(new-size)`. The
+    /// bump-allocator implementation leaks the old block (no free list);
+    /// the v1.1 GC implementation will collect it.
+    realloc: func(old-ptr: ptr, old-size: size, new-size: size) -> ptr;
+
+    /// Byte-wise copy of `n-bytes` from `src` to `dst`. Public surface
+    /// because growable containers (`Vec.insert`, `HashMap.rehash`) call
+    /// it directly. Behaviour for overlapping regions is forward-walk:
+    /// safe when `dst < src` or `dst == src`; undefined when `dst > src`.
+    mem-copy: func(dst: ptr, src: ptr, n-bytes: size);
+}
+
+// ─── Scoped (`&with_arena`) surface ──────────────────────────────────────────
+// These power the `&@with_arena { … }` stratum.  Lowered programs call
+// `enter-scope` at the block entry, `exit-scope` at the block exit, and
+// optionally `promote` in tail position to escape a flat heap value to
+// the enclosing scope.  See ADR 0008 + docs/v1-user-stories.html#phase-9c.
+
+interface scope {
+    use types.{ptr, size, scope-handle};
+
+    /// Open a new scope inside the active allocator.  Bump-allocator
+    /// implementation: returns the current heap pointer (the saved
+    /// boundary).  GC implementation: registers a frame in the marker
+    /// stack and returns its index.
+    enter-scope: func() -> scope-handle;
+
+    /// Close the scope identified by `handle`.  Every allocation made
+    /// between the matching `enter-scope` and this call is freed.
+    /// Bump-allocator implementation: rewrites the heap pointer to
+    /// `handle`.  Mirrors the `defer arena.deinit()` pattern in Zig.
+    exit-scope: func(handle: scope-handle);
+
+    /// Escape a contiguous heap block from a scope about to close into
+    /// its parent scope.  Memcpys `size` bytes from `ptr` to the saved
+    /// boundary held by `handle`, then advances the parent's heap by
+    /// that amount.  Returns the new pointer (= handle, in the bump-
+    /// allocator implementation).
+    ///
+    /// v1.0 callers (`&@move_to_parent_arena value`) restrict `ptr` to
+    /// flat heap layouts: String, value-arrays, sum-with-flat-payloads.
+    /// Nested heap (e.g. Vec[String]) is a v1.1 trace-and-copy extension
+    /// that loops over the value graph; the entry point is unchanged.
+    promote: func(handle: scope-handle, ptr: ptr, size: size) -> ptr;
+}
+
+// ─── Lifetime sledgehammer ───────────────────────────────────────────────────
+
+interface bulk {
+    /// Free every allocation in every open scope.  Used by long-running
+    /// hosts that periodically dump state (REPLs, comptime engines
+    /// between firings).  Bump-allocator implementation: rewrites the
+    /// heap pointer to the static data segment boundary.  GC: full
+    /// sweep ignoring liveness.  Use with care — invalidates every
+    /// outstanding pointer.
+    free-all: func();
+}
+
+world allocator {
+    export core;
+    export scope;
+    export bulk;
+}

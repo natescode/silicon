@@ -63,6 +63,8 @@ Build / run flags:
   --native        Compile via QBE to native assembly (requires qbe; see sgl setup)
   --target=<t>    Compilation target: host (default) | wasix
   --release       Compile via the QBE native backend (alias for --native)
+  --max-heap=<N>  Cap wasm memory at N 64KB pages (heap-exhaustion testing;
+                  past the cap the bump allocator traps cleanly).  Default: unbounded.
 
 Format flags (sgl fmt only):
   --check         Exit 1 if formatted output differs from the input file
@@ -118,6 +120,20 @@ function readSglToml(dir: string): SglToml | null {
 }
 
 // ---------------------------------------------------------------------------
+// Phase 9c-4 — parse the --max-heap=N value (positive integer page count).
+// One wasm page = 64KB, so --max-heap=16 caps the heap at 1MB.
+// ---------------------------------------------------------------------------
+
+function parseMaxHeap(raw: string): number {
+    const n = Number(raw)
+    if (!Number.isFinite(n) || !Number.isInteger(n) || n <= 0) {
+        console.error(`sgl: --max-heap requires a positive integer page count (got '${raw}'); one wasm page = 64KB`)
+        process.exit(1)
+    }
+    return n
+}
+
+// ---------------------------------------------------------------------------
 // Resolve the entry-point file from args + sgl.toml
 // ---------------------------------------------------------------------------
 
@@ -143,6 +159,10 @@ interface CompileOptions {
     pretty: boolean
     wat: boolean
     native: boolean
+    /** Phase 9c-4: cap wasm memory at N 64KB pages.  Sets the memory
+     *  section's max-pages so `memory.grow` past the cap traps via the
+     *  bump allocator's `unreachable`.  Default: unbounded. */
+    maxHeapPages?: number
 }
 
 function emitDiagnostics(diags: readonly Diagnostic[], opts: CompileOptions): never {
@@ -176,12 +196,12 @@ async function compileFile(
     if (typeErrs.length) emitDiagnostics(typeErrs, opts)
 
     const { wat, diagnostics: lowerErrs } =
-        lower(checked, reg, model, { target: opts.target, moduleRegistry: moduleReg, _functions })
+        lower(checked, reg, model, { target: opts.target, moduleRegistry: moduleReg, _functions, maxHeapPages: opts.maxHeapPages })
     if (lowerErrs.length) emitDiagnostics(lowerErrs, opts)
 
     // Binary emit is not yet in the CaaS API — use the internal path.
     const binary = compileToWasm(
-        checked.program, reg, _functions, moduleReg, { target: opts.target },
+        checked.program, reg, _functions, moduleReg, { target: opts.target, maxHeapPages: opts.maxHeapPages },
     )
     return { wat, binary }
 }
@@ -545,6 +565,7 @@ let target: LowerTarget = 'host'
 let pretty = false
 let fmtCheck = false
 let fmtStdout = false
+let maxHeapPages: number | undefined = undefined
 
 for (let i = 0; i < rest.length; i++) {
     const arg = rest[i]
@@ -572,6 +593,12 @@ for (let i = 0; i < rest.length; i++) {
         target = parseTarget(next)
     } else if (arg.startsWith('--target=')) {
         target = parseTarget(arg.slice('--target='.length))
+    } else if (arg === '--max-heap') {
+        const next = rest[++i]
+        if (!next) { console.error('--max-heap requires a page count'); process.exit(1) }
+        maxHeapPages = parseMaxHeap(next)
+    } else if (arg.startsWith('--max-heap=')) {
+        maxHeapPages = parseMaxHeap(arg.slice('--max-heap='.length))
     } else if (!arg.startsWith('--')) {
         positional = arg
     } else {
@@ -580,7 +607,7 @@ for (let i = 0; i < rest.length; i++) {
     }
 }
 
-const opts: CompileOptions = { strataFiles, target, pretty, wat: emitWat, native }
+const opts: CompileOptions = { strataFiles, target, pretty, wat: emitWat, native, maxHeapPages }
 
 try {
     switch (subcommand) {

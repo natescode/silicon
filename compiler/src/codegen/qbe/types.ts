@@ -12,6 +12,7 @@
  */
 
 import type { SiliconType } from '../../types/types'
+import type { AbstractOp } from '../../ir/nodes'
 
 export type QbeType = 'w' | 'l' | 's'
 export type QbeReturnType = QbeType | 'void'
@@ -162,4 +163,64 @@ export function lookupOpToQbe(op: string, typeKind: string): QbeOpEntry | undefi
         case 'Int64': case 'UInt64':          return INT64_OPS[op]
         default:                              return INT_OPS[op]
     }
+}
+
+// ---------------------------------------------------------------------------
+// AbstractOp → QBE instruction mapping  (Story 9.5-3)
+//
+// Maps the backend-agnostic AbstractOp (from IRBinOp.op) to the QBE
+// instruction mnemonic and result type.  This replaces the WAT_TO_QBE_INSTR
+// indirection: callers no longer need to convert WAT strings first.
+// ---------------------------------------------------------------------------
+
+interface AbstractQbeEntry { instr: string; qt: QbeType }
+
+const ABSTRACT_OP_TO_QBE: Partial<Record<AbstractOp, AbstractQbeEntry>> = {
+    // i32 arithmetic
+    i32_add:   { instr: 'add',   qt: 'w' }, i32_sub:   { instr: 'sub',   qt: 'w' },
+    i32_mul:   { instr: 'mul',   qt: 'w' }, i32_div_s: { instr: 'div',   qt: 'w' },
+    i32_div_u: { instr: 'udiv',  qt: 'w' }, i32_rem_s: { instr: 'rem',   qt: 'w' },
+    i32_rem_u: { instr: 'urem',  qt: 'w' },
+    // i32 bitwise
+    i32_and:   { instr: 'and',   qt: 'w' }, i32_or:    { instr: 'or',    qt: 'w' },
+    i32_xor:   { instr: 'xor',   qt: 'w' }, i32_shl:   { instr: 'shl',   qt: 'w' },
+    i32_shr_s: { instr: 'sar',   qt: 'w' }, i32_shr_u: { instr: 'shr',   qt: 'w' },
+    i32_rotl:  { instr: 'rol',   qt: 'w' }, i32_rotr:  { instr: 'ror',   qt: 'w' },
+    // i32 comparisons
+    i32_eq:    { instr: 'ceqw',  qt: 'w' }, i32_ne:    { instr: 'cnew',  qt: 'w' },
+    i32_lt_s:  { instr: 'csltw', qt: 'w' }, i32_gt_s:  { instr: 'csgtw', qt: 'w' },
+    i32_le_s:  { instr: 'cslew', qt: 'w' }, i32_ge_s:  { instr: 'csgew', qt: 'w' },
+    i32_lt_u:  { instr: 'cultw', qt: 'w' }, i32_gt_u:  { instr: 'cugtw', qt: 'w' },
+    i32_le_u:  { instr: 'culew', qt: 'w' }, i32_ge_u:  { instr: 'cugew', qt: 'w' },
+    // i64 arithmetic
+    i64_add:   { instr: 'add',   qt: 'l' }, i64_sub:   { instr: 'sub',   qt: 'l' },
+    i64_mul:   { instr: 'mul',   qt: 'l' }, i64_div_s: { instr: 'div',   qt: 'l' },
+    i64_div_u: { instr: 'udiv',  qt: 'l' }, i64_rem_s: { instr: 'rem',   qt: 'l' },
+    i64_rem_u: { instr: 'urem',  qt: 'l' },
+    // i64 bitwise
+    i64_and:   { instr: 'and',   qt: 'l' }, i64_or:    { instr: 'or',    qt: 'l' },
+    i64_xor:   { instr: 'xor',   qt: 'l' }, i64_shl:   { instr: 'shl',   qt: 'l' },
+    i64_shr_s: { instr: 'sar',   qt: 'l' }, i64_shr_u: { instr: 'shr',   qt: 'l' },
+    // i64 comparisons (result is w, not l)
+    i64_eq:    { instr: 'ceql',  qt: 'w' }, i64_ne:    { instr: 'cnel',  qt: 'w' },
+    i64_lt_s:  { instr: 'csltl', qt: 'w' }, i64_gt_s:  { instr: 'csgtl', qt: 'w' },
+    i64_le_s:  { instr: 'cslel', qt: 'w' }, i64_ge_s:  { instr: 'csgel', qt: 'w' },
+    i64_lt_u:  { instr: 'cultl', qt: 'w' }, i64_gt_u:  { instr: 'cugtl', qt: 'w' },
+    i64_le_u:  { instr: 'culel', qt: 'w' }, i64_ge_u:  { instr: 'cugel', qt: 'w' },
+    // f32 arithmetic
+    f32_add:   { instr: 'adds',  qt: 's' }, f32_sub:   { instr: 'subs',  qt: 's' },
+    f32_mul:   { instr: 'muls',  qt: 's' }, f32_div:   { instr: 'divs',  qt: 's' },
+    // f32 comparisons (result is w)
+    f32_eq:    { instr: 'ceqs',  qt: 'w' }, f32_ne:    { instr: 'cnes',  qt: 'w' },
+    f32_lt:    { instr: 'clts',  qt: 'w' }, f32_gt:    { instr: 'cgts',  qt: 'w' },
+    f32_le:    { instr: 'cles',  qt: 'w' }, f32_ge:    { instr: 'cges',  qt: 'w' },
+}
+
+/**
+ * Map an AbstractOp (from IRBinOp.op) to its QBE instruction + result type.
+ * Returns undefined for ops with no QBE equivalent (should not occur for
+ * well-typed programs).
+ */
+export function abstractOpToQbe(op: AbstractOp): AbstractQbeEntry | undefined {
+    return ABSTRACT_OP_TO_QBE[op]
 }

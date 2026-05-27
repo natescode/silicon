@@ -59,3 +59,22 @@
 @stratum Try := {
     &Compiler::register::expression_keyword '@try';
 };
+
+# Phase 9c (ADR 0008) — explicit-arena memory management.
+# `&@with_arena { body }` saves the bump heap pointer at entry, runs
+# the body, and resets the heap pointer at exit — every byte allocated
+# inside is freed at once.  `&@move_to_parent_arena value` (tail position
+# only) memcpys the value's bytes from inside the arena to the saved
+# boundary before the unwind so the block evaluates to a pointer that
+# survives the reset.  Both keywords are hardcoded in
+# `lower.ts:lowerWithArena` / `lowerMoveToParentArena` because the
+# lowering needs to allocate fresh locals, inspect the body's tail
+# expression at AST time, and consult the typechecker for value size.
+# See docs/v1-user-stories.html#phase-9c.
+@stratum WithArena := {
+    &Compiler::register::expression_keyword '@with_arena';
+};
+
+@stratum MoveToParentArena := {
+    &Compiler::register::expression_keyword '@move_to_parent_arena';
+};

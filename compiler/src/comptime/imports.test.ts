@@ -115,7 +115,7 @@ describe('imports — ir_makeBinOp', () => {
         const handle = fns.ir_makeBinOp(instrId, leftH, rightH, wtId)
         const ir = env.irHandles.get(handle) as IRBinOp
         expect(ir.kind).toBe('BinOp')
-        expect(ir.instr).toBe('i32.add')
+        expect((ir as any).op).toBe('i32_add')
         expect((ir.left  as IRConst).value).toBe(1)
         expect((ir.right as IRConst).value).toBe(2)
         expect(ir.wasmType).toBe('i32')
@@ -1094,7 +1094,7 @@ describe('imports — end-to-end: build an "x + 42" expression', () => {
         expect(resultHandle).toBeGreaterThan(0)
         const ir = env.irHandles.get(resultHandle) as IRBinOp
         expect(ir.kind).toBe('BinOp')
-        expect(ir.instr).toBe('i32.add')
+        expect((ir as any).op).toBe('i32_add')
         expect((ir.left  as IRLocalGet).name).toBe('x')
         expect((ir.right as IRConst).value).toBe(42)
     })
