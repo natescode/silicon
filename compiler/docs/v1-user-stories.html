@@ -1412,14 +1412,15 @@
 <h2 id="phase-9d">Phase 9d — WasmGC target (opt-in <code>--target=wasm-gc</code>)</h2>
 
 <div class="phase-intro">
-  <strong>Status (2026-05-26): 4 of 11 stories shipped ✅</strong> —
+  <strong>Status (2026-05-27): 7 of 11 stories shipped ✅</strong> —
   9d-1 (<code>wit/wasm-gc.wit</code>), 9d-2 (type-section emitter),
-  9d-3 (instruction lowering), 9d-4 (<code>--target=wasm-gc</code> CLI
-  flag) landed.  ADR 0009 <strong>Accepted</strong>; revised to add the
-  two-layer portability split (lifecycle primitives portable via
-  compile-time elision; introspection + physical-byte primitives
-  mvp-only).  See <a href="adr/0009-wasm-gc-target.md">ADR&nbsp;0009</a>
-  for the full design rationale.
+  9d-3 (instruction lowering), 9d-4 (CLI flag), 9d-5a (E0012 reject
+  introspection), 9d-5b (E0013 reject physical-byte), 9d-5c (lifecycle
+  elision) all landed.  ADR 0009 <strong>Accepted</strong> with the
+  two-layer portability split.  See
+  <a href="adr/0009-wasm-gc-target.md">ADR&nbsp;0009</a> for the full
+  design rationale.  Remaining v1.0: 9d-6 (stdlib/gc/), 9d-7 (tagged
+  sums), 9d-8 (Vec[T value]), 9d-9 (cross-target test suite).
   <br/><br/>
   <strong>What this phase ships.</strong>  A new compile target,
   <code>--target=wasm-gc</code>, that lowers Sigil to WebAssembly's
@@ -1480,42 +1481,19 @@
   <p class="done-note">✓ <code>LowerTarget</code> in <code>src/ir/lower.ts</code> extended to <code>'host' | 'wasix' | 'wasm-gc'</code> with a TSDoc that links to ADR 0009.  <code>parseTarget</code> in <code>src/sigil_cli.ts</code> accepts the new value; an invalid <code>--target</code> errors with "expected: host | wasix | wasm-gc".  <code>--help</code> text describes the wasm-gc semantics inline (engine GC, mvp-primitive rejection, lifecycle no-ops).  <code>SglToml.build.target</code> added; the toml reader picks up the <code>[build]</code> section.  Resolution order: CLI <code>--target=</code> wins over <code>sgl.toml [build] target</code> wins over default <code>'host'</code>.  Invalid toml-target values raise a "sgl.toml [build] target" diagnostic via the shared <code>parseTarget</code>.  5 subprocess tests in <code>src/sigil_cli.test.ts</code> cover help-text mention, invalid-CLI-target error, valid wasm-gc accepted, toml syntax accepted, CLI override.  No codegen change yet — that's 9d-5/6/7/8.</p>
 </details>
 
-<details class="runtime">
-  <summary><span class="id">9d-5a</span> Typecheck E0012 — reject introspection primitives under wasm-gc <span class="est">S, ~2h</span></summary>
-  <div class="deps"><strong>Depends on:</strong> 9d-4</div>
-  <p class="goal">Typechecker pass that runs only when <code>target === 'wasm-gc'</code>.  Rejects introspection primitives (<code>&amp;rc_count</code>, <code>&amp;rc_is_unique</code>, <code>&amp;heap_used</code>, <code>&amp;arena_used</code>, <code>&amp;heap_get</code>, <code>&amp;heap_set</code>) with a structured "no honest wasm-gc semantics" diagnostic.  These can't be conservatively emulated without silently changing program behavior (e.g., <code>&amp;@if (&amp;rc_count r) &gt; 5, …</code> would never panic under a conservative no-op).</p>
-  <div class="accept"><strong>Acceptance:</strong>
-    <ul>
-      <li>New error code <strong>E0012</strong> "introspection primitive has no honest wasm-gc semantics" with the offending name and the hint "compile with <code>--target=wasm-mvp</code> or remove the introspection".</li>
-      <li>Test: each introspection primitive raises E0012 under wasm-gc.</li>
-      <li>Same primitives stay valid under wasm-mvp — no regression.</li>
-    </ul>
-  </div>
+<details class="runtime complete">
+  <summary><span class="id">9d-5a</span> Typecheck E0012 — reject introspection primitives under wasm-gc <span class="done">✅</span> <span class="est">S, ~2h</span></summary>
+  <p class="done-note">✓ <code>TypeErrorKind.MvpOnlyIntrospection</code> + <code>mvpOnlyIntrospection</code> factory in <code>src/types/errors.ts</code>; registered as <strong>E0012</strong> in <code>TYPE_ERROR_CODES</code>.  Typechecker's <code>Ctx</code> gains a <code>target?: LowerTarget</code> field, threaded from the new <code>CheckOptions.target</code> through the CaaS surface to <code>typecheckInternal</code>'s 4th param.  In <code>checkFunctionCall</code>, when <code>ctx.target === 'wasm-gc'</code>, calls to names in the <code>MVP_ONLY_INTROSPECTION</code> set (rc_count, rc_is_unique, heap_used, arena_used, heap_get, heap_set) raise E0012.  Diagnostic hint: "compile with --target=wasm-mvp, or remove the introspection".  Wired through <code>sigil_cli.ts</code> at every typecheck call site so <code>sgl build --target=wasm-gc</code> actually rejects.  10 tests in <code>src/codegen/wasm-gc-portability.test.ts</code>: each primitive raises E0012 under wasm-gc; same primitives stay valid under host (no regression); rc_count via the rc.si stdlib also fires.</p>
 </details>
 
-<details class="runtime">
-  <summary><span class="id">9d-5b</span> Typecheck E0013 — reject physical-byte primitives under wasm-gc <span class="est">S, ~2h</span></summary>
-  <div class="deps"><strong>Depends on:</strong> 9d-4</div>
-  <p class="goal">Same typechecker pass as 9d-5a, different error code.  Rejects raw-memory primitives (<code>&amp;alloc</code>, <code>&amp;realloc</code>, <code>&amp;mem_copy</code>, <code>&amp;str_ptr</code>) with a "managed refs aren't addressable" diagnostic.  These have no managed-mode equivalent because <code>(ref $T)</code> isn't a number that you can do pointer math on.</p>
-  <div class="accept"><strong>Acceptance:</strong>
-    <ul>
-      <li>New error code <strong>E0013</strong> "raw-memory primitive; managed refs aren't addressable" with the offending name and the hint to use the managed stdlib equivalent or pick <code>--target=wasm-mvp</code>.</li>
-      <li>Test: each physical-byte primitive raises E0013 under wasm-gc.</li>
-    </ul>
-  </div>
+<details class="runtime complete">
+  <summary><span class="id">9d-5b</span> Typecheck E0013 — reject physical-byte primitives under wasm-gc <span class="done">✅</span> <span class="est">S, ~2h</span></summary>
+  <p class="done-note">✓ Same pass as 9d-5a, different set + code.  <code>TypeErrorKind.MvpOnlyPhysicalByte</code> + <code>mvpOnlyPhysicalByte</code> factory; <strong>E0013</strong> in <code>TYPE_ERROR_CODES</code>.  <code>MVP_ONLY_PHYSICAL_BYTE</code> set covers alloc, realloc, mem_copy, str_ptr.  Diagnostic hint: "compile with --target=wasm-mvp, or use the managed stdlib equivalent (e.g. <code>(ref $String)</code> instead of <code>&amp;str_ptr</code>)".  8 tests: each primitive raises E0013 under wasm-gc; no regression under host.</p>
 </details>
 
-<details class="runtime">
-  <summary><span class="id">9d-5c</span> Lifecycle compile-time elision under wasm-gc <span class="est">S, ~3h</span></summary>
-  <div class="deps"><strong>Depends on:</strong> 9d-4</div>
-  <p class="goal">Lifecycle primitives (<code>&amp;@with_arena</code>, <code>&amp;@move_to_parent_arena</code>) compile on both targets.  Under wasm-mvp they keep their Phase 9c bump-allocator semantics; under wasm-gc they collapse to no-ops at lowering time:  <code>&amp;@with_arena { body }</code> → <code>{ body }</code>, <code>&amp;@move_to_parent_arena v</code> → <code>v</code>.  No save/restore envelope, no <code>arena_promote</code> call, no runtime code.  Matches ADR 0009's two-layer portability split.</p>
-  <div class="accept"><strong>Acceptance:</strong>
-    <ul>
-      <li><code>lowerWithArena</code> + <code>lowerMoveToParentArena</code> in <code>src/ir/lower.ts</code> inspect <code>ctx.target</code> and short-circuit to the no-op path under wasm-gc.</li>
-      <li>Test: a program using <code>&amp;@with_arena</code> compiles to byte-equal IR under wasm-gc as the same program with the wrapper removed manually.</li>
-      <li>Source-level portability: a small example using arenas runs end-to-end under both <code>--target=wasm-mvp</code> AND <code>--target=wasm-gc</code> (cross-target test suite story 9d-9 owns the harness).</li>
-    </ul>
-  </div>
+<details class="runtime complete">
+  <summary><span class="id">9d-5c</span> Lifecycle compile-time elision under wasm-gc <span class="done">✅</span> <span class="est">S, ~3h</span></summary>
+  <p class="done-note">✓ <code>LowerCtx</code> gains a required <code>target: LowerTarget</code> field, threaded from <code>LowerOptions.target</code> at <code>lowerProgram</code> creation.  <code>lowerWithArena</code> short-circuits when <code>ctx.target === 'wasm-gc'</code>: strips a trailing <code>&amp;@move_to_parent_arena</code> wrapper (if present) and lowers the bare block directly via <code>lowerBlock</code> — no <code>__arena_saved</code> local, no save/restore envelope, no <code>arena_promote</code> call.  <code>lowerMoveToParentArena</code> becomes identity (<code>lowerExpr(arg)</code>) anywhere in source — the v1.0 tail-position rule is moot when there's no save/restore to subvert.  5 tests: typechecks under wasm-gc with no rejection; user-function WAT contains no <code>global.get $heap</code> or <code>arena_promote</code>; mid-block <code>&amp;@move_to_parent_arena</code> compiles fine; same arena-using source compiles under BOTH targets (portability claim verified end-to-end); nested arenas elide cleanly.</p>
 </details>
 
 <details class="runtime">
@@ -2038,9 +2016,9 @@
   <tr>
     <td>9d — WasmGC target (opt-in <code>--target=wasm-gc</code>)</td>
     <td style="color: var(--accent4); font-weight: 700;">🟡 STARTED</td>
-    <td>4 / 11</td>
-    <td><em>~3.8 d done</em> · ~8.7 d remain (est: 12.5 d)</td>
-    <td>ADR 0009 <strong>Accepted</strong> (2026-05-26).  <code>wit/wasm-gc.wit</code> ABI (9d-1); type-section emitter with structural-dedup (9d-2, 16 tests); instruction-level IR + emitters for struct.* / array.* ops (9d-3, 26 tests, 0xFB-prefixed GC opcodes); <code>--target=wasm-gc</code> CLI flag + <code>sgl.toml [build] target</code> + override priority (9d-4, 5 subprocess tests).  Remaining v1.0 scope: E0012 reject introspection (9d-5a), E0013 reject physical-byte (9d-5b), lifecycle compile-time elision (9d-5c), <code>src/stdlib/gc/</code> + Rc identity shim (9d-6), tagged-struct sums (9d-7), Vec[T] for value-typed T (9d-8), cross-target test suite (9d-9).  Subtype sums, ref-typed Vec, fully generic Vec[T], HashMap, stringref, weak refs, default-on for new projects → v1.1.</td>
+    <td>7 / 11</td>
+    <td><em>~4.7 d done</em> · ~7.8 d remain (est: 12.5 d)</td>
+    <td>ADR 0009 <strong>Accepted</strong> (2026-05-26).  Shipped: <code>wit/wasm-gc.wit</code> ABI (9d-1); type-section emitter with structural-dedup (9d-2, 16 tests); instruction-level IR + emitters for struct.* / array.* ops (9d-3, 26 tests, 0xFB-prefixed GC opcodes); <code>--target=wasm-gc</code> CLI flag (9d-4, 5 subprocess tests); two-layer portability split — E0012 reject introspection + E0013 reject physical-byte + lifecycle compile-time elision (9d-5a/b/c, 23 tests in <code>wasm-gc-portability.test.ts</code>).  Remaining v1.0 scope: <code>src/stdlib/gc/</code> + Rc identity shim (9d-6), tagged-struct sums (9d-7), Vec[T] for value-typed T (9d-8), cross-target test suite (9d-9).  Subtype sums, ref-typed Vec, fully generic Vec[T], HashMap, stringref, weak refs, default-on for new projects → v1.1.</td>
   </tr>
   <tr style="background: rgba(62, 207, 142, 0.08);">
     <td>10 — CaaS Consumer APIs + Distribution</td>

@@ -84,7 +84,29 @@ import {
     immutableAssignment,
     arityMismatch,
     missingReturn,
+    mvpOnlyIntrospection,
+    mvpOnlyPhysicalByte,
 } from './errors'
+
+// ─── Phase 9d-5 — wasm-mvp-only primitive sets ────────────────────────────
+//
+// ADR 0009's two-layer portability split.  Lifecycle primitives
+// (&@with_arena, &@move_to_parent_arena, &rc_new, &rc_clone,
+// &rc_drop, &rc_get) compile under both targets via compile-time
+// elision and are deliberately NOT in either set.
+
+/** E0012 — values can't be honestly emulated under wasm-gc. */
+const MVP_ONLY_INTROSPECTION: ReadonlySet<string> = new Set([
+    'rc_count', 'rc_is_unique',
+    'heap_used', 'arena_used',
+    'heap_get', 'heap_set',
+])
+
+/** E0013 — managed refs aren't addressable, no pointer math. */
+const MVP_ONLY_PHYSICAL_BYTE: ReadonlySet<string> = new Set([
+    'alloc', 'realloc', 'mem_copy',
+    'str_ptr',
+])
 import { closest } from '../errors/diagnostic'
 import { getWasmIntrinsic } from '../intrinsics'
 import { type ElaboratorRegistry, lookupOperator, lookupTypedOperator, lookupKeyword, lookupTypedKeyword } from '../elaborator/registry'
@@ -141,6 +163,10 @@ interface Ctx {
     definitionNodes: Map<string, object>         // name → Definition AST node
     // CaaS-5: source spans for each reference site (for referenceSpans / symbolAtPosition).
     symbolToSpans: Map<string, SourceSpan[]>
+    // Phase 9d-5: compile target.  When `'wasm-gc'`, mvp-only primitive
+    // calls raise E0012 / E0013 per ADR 0009's two-layer portability
+    // split.  Undefined / 'host' / 'wasix' = no rejection (existing behavior).
+    target?: import('../ir/lower').LowerTarget
 }
 
 export interface FunctionSig {
@@ -275,7 +301,12 @@ export interface TypeCheckResult {
  *     const { program: typed, errors } = typecheck(elaborated)
  *     if (errors.length) { ... }
  */
-export default function typecheck(program: Program, registry?: ElaboratorRegistry, moduleRegistry?: ModuleRegistry): TypeCheckResult {
+export default function typecheck(
+    program: Program,
+    registry?: ElaboratorRegistry,
+    moduleRegistry?: ModuleRegistry,
+    target?: import('../ir/lower').LowerTarget,
+): TypeCheckResult {
     const typeMap = new WeakMap<object, SiliconType>()
     const nodeToSymbolName = new WeakMap<object, string>()
     const symbolToNodes = new Map<string, object[]>()
@@ -297,6 +328,7 @@ export default function typecheck(program: Program, registry?: ElaboratorRegistr
         symbolToNodes,
         symbolToSpans,
         definitionNodes,
+        target,
     }
     // Pre-registration pass: seed module function signatures first so that
     // user-defined functions whose bodies call module functions can resolve
@@ -1149,6 +1181,20 @@ function checkFunctionCall(call: any, ctx: Ctx): SiliconType {
     // symbolAtPosition / referenceSpans can navigate to it.
     if (name && call.name && typeof call.name === 'object') {
         recordSymbolRef(call.name, name, ctx)
+    }
+
+    // Phase 9d-5a / 9d-5b — wasm-mvp-only primitive rejection.
+    // Two-layer portability split (ADR 0009):
+    //   E0012 introspection — values have no honest wasm-gc semantics,
+    //   conservative no-ops would silently change branch behavior.
+    //   E0013 physical-byte — managed refs aren't addressable, no
+    //   stable integer address for raw pointer math.
+    if (ctx.target === 'wasm-gc' && name) {
+        if (MVP_ONLY_INTROSPECTION.has(name)) {
+            ctx.errors.push(mvpOnlyIntrospection(name, call.sourceLocation))
+        } else if (MVP_ONLY_PHYSICAL_BYTE.has(name)) {
+            ctx.errors.push(mvpOnlyPhysicalByte(name, call.sourceLocation))
+        }
     }
 
     // WASM intrinsics have known signatures derivable from their names.

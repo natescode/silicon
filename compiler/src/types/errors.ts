@@ -29,6 +29,8 @@ export type TypeErrorKind =
     | 'ImmutableAssignment'   // Assignment to an immutable binding (@let, @fn, @extern)
     | 'MissingReturn'         // Non-void function body does not produce a value
     | 'ArityMismatch'         // Wrong number of arguments at a call site
+    | 'MvpOnlyIntrospection'  // Phase 9d-5a (E0012) — &rc_count, &heap_used, …
+    | 'MvpOnlyPhysicalByte'   // Phase 9d-5b (E0013) — &alloc, &str_ptr, …
 
 export interface TypeError {
     kind: TypeErrorKind
@@ -165,6 +167,44 @@ export function missingReturn(
         kind: 'MissingReturn',
         message: `'${name}' is declared to return ${formatType(declared)} but body may not produce a value`,
         sourceLocation,
+    }
+}
+
+/**
+ * Phase 9d-5a (E0012) — call to an introspection primitive
+ * (`&rc_count`, `&rc_is_unique`, `&heap_used`, `&arena_used`,
+ * `&heap_get`, `&heap_set`) under `--target=wasm-gc`.  These
+ * primitives have no honest wasm-gc semantics — conservative no-op
+ * values would silently change branch behavior (e.g.,
+ * `&@if (&rc_count r) > 5, { panic }`).  See ADR 0009 §2.
+ */
+export function mvpOnlyIntrospection(
+    name: string,
+    sourceLocation?: SourceLocation,
+): TypeError {
+    return {
+        kind: 'MvpOnlyIntrospection',
+        message: `'${name}' is a wasm-mvp-only introspection primitive; it has no honest wasm-gc semantics`,
+        sourceLocation,
+        hint: `compile with --target=wasm-mvp, or remove the introspection (managed refs are implicitly shared so refcount inspection is moot under GC)`,
+    }
+}
+
+/**
+ * Phase 9d-5b (E0013) — call to a physical-byte primitive
+ * (`&alloc`, `&realloc`, `&mem_copy`, `&str_ptr`) under
+ * `--target=wasm-gc`.  Managed references aren't addressable —
+ * `(ref $T)` has no stable integer address.  See ADR 0009 §2.
+ */
+export function mvpOnlyPhysicalByte(
+    name: string,
+    sourceLocation?: SourceLocation,
+): TypeError {
+    return {
+        kind: 'MvpOnlyPhysicalByte',
+        message: `'${name}' is a wasm-mvp-only raw-memory primitive; managed refs aren't addressable under wasm-gc`,
+        sourceLocation,
+        hint: `compile with --target=wasm-mvp, or use the managed stdlib equivalent (e.g. (ref $String) instead of &str_ptr)`,
     }
 }
 

@@ -143,6 +143,14 @@ export interface CheckOptions {
      * pre-registered so call sites type-check correctly.
      */
     moduleRegistry?: ModuleRegistry
+
+    /**
+     * Phase 9d-5 — compile target.  When `'wasm-gc'`, the typechecker
+     * rejects mvp-only primitive calls (E0012 introspection,
+     * E0013 physical-byte) per ADR 0009's two-layer portability split.
+     * Defaults to `'host'` (no rejection — programs compile as today).
+     */
+    target?: import('../ir/lower').LowerTarget
 }
 
 export interface LowerOptions2 extends LowerOptions {
@@ -251,7 +259,7 @@ export function typecheck(
     registry: ElaboratorRegistry,
     options: CheckOptions = {},
 ): CheckResult {
-    const result = typecheckInternal(tree.program, registry, options.moduleRegistry)
+    const result = typecheckInternal(tree.program, registry, options.moduleRegistry, options.target)
     const typedTree = new SyntaxTree(result.program, tree.source, tree.file)
     const diagnostics: Diagnostic[] = result.errors.map(e => toDiagnostic(e))
     return { tree: typedTree, model: result.semanticModel, diagnostics, _functions: result.functions }
@@ -276,7 +284,7 @@ export function lower(
     try {
         // Use pre-computed functions when available (avoids a second typecheck pass).
         const functions = options._functions
-            ?? typecheckInternal(tree.program, registry, options.moduleRegistry).functions
+            ?? typecheckInternal(tree.program, registry, options.moduleRegistry, options.target).functions
         const wat = compileToWat(
             tree.program,
             registry,

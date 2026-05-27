@@ -77,6 +77,11 @@ interface LowerCtx {
     semanticModel?: SemanticModel
     /** Maps local/global variable names to their Silicon struct type name when they hold a struct pointer. */
     structLocals: Map<string, string>
+    /** Phase 9d-5c: compile target — `'wasm-gc'` enables lifecycle
+     *  compile-time elision (`&@with_arena` / `&@move_to_parent_arena`
+     *  collapse to no-ops because the engine GC owns reclamation).
+     *  Defaults to 'host' (Phase 9c bump-allocator semantics). */
+    target: LowerTarget
 }
 
 interface StringAlloc {
@@ -230,6 +235,7 @@ export function lowerProgram(
         semanticModel,
         structLocals: new Map(),
         funcrefTable: { entries: [], signatures: [] },
+        target,
     }
     // Pass the live ctx (not a snapshot) so $compiler is current when
     // recursively invoked methods (api.lowerExpr → lowerBinaryOp → on::lower
@@ -1467,6 +1473,20 @@ function lowerWithArena(rawArgs: any[], ctx: LowerCtx): IRExpr {
         )
     }
 
+    // ── Phase 9d-5c — wasm-gc compile-time elision ───────────────────────
+    //
+    // Under wasm-gc the engine GC owns reclamation; the save/restore
+    // envelope is unnecessary and `&@move_to_parent_arena` is identity
+    // (GC keeps the value alive as long as it's reachable from the
+    // parent scope).  Lower the body directly, drop the
+    // `&@move_to_parent_arena` wrapper at the tail if present.
+    if (ctx.target === 'wasm-gc') {
+        const stripped = isMoveToParentArenaCall(bodyNode.trailing)
+            ? { ...bodyNode, trailing: unwrap(bodyNode.trailing.args?.[0]) }
+            : bodyNode
+        return lowerBlock(stripped, ctx)
+    }
+
     const savedName = `__arena_saved_${ctx.freshIdCounter.n++}`
     ctx.pendingLocals.push({ name: savedName, wasmType: 'i32' })
     ctx.locals.set(savedName, 'i32')
@@ -1578,7 +1598,19 @@ function lowerWithArena(rawArgs: any[], ctx: LowerCtx): IRExpr {
     }
 }
 
-function lowerMoveToParentArena(rawArgs: any[], _ctx: LowerCtx): IRExpr {
+function lowerMoveToParentArena(rawArgs: any[], ctx: LowerCtx): IRExpr {
+    // Phase 9d-5c — wasm-gc compile-time elision.
+    // Under wasm-gc the engine GC keeps reachable values alive automatically,
+    // so `&@move_to_parent_arena v` is identity.  Allowed anywhere (not just
+    // tail position) because there's no save/restore envelope to subvert.
+    if (ctx.target === 'wasm-gc') {
+        if (rawArgs.length !== 1) {
+            throw new IRLowerError(
+                `@move_to_parent_arena expects exactly 1 argument, got ${rawArgs.length}`,
+            )
+        }
+        return lowerExpr(unwrap(rawArgs[0]), ctx)
+    }
     // Reached only when `&@move_to_parent_arena value` appears *outside*
     // the tail of a `&@with_arena { … }` block — the tail-position case
     // is short-circuited by lowerWithArena before this dispatch runs.

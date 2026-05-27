@@ -58,15 +58,19 @@ export interface Diagnostic {
 
 /** Map from TypeErrorKind to the stable code that should be reported. */
 export const TYPE_ERROR_CODES: Record<TypeErrorKind, string> = {
-    UnknownType:         'E0001',  // type annotation referenced an unrecognised name
-    Mismatch:            'E0002',  // expected type X, got type Y
-    InvalidOperator:     'E0003',  // operator not defined for these operand types
-    UnboundIdentifier:   'E0004',  // reference to an unknown identifier
-    HeterogeneousArray:  'E0005',  // array literal elements do not share a type
-    Annotation:          'E0006',  // initializer doesn't match declared annotation
-    ImmutableAssignment: 'E0007',  // assignment to an immutable binding
-    MissingReturn:       'E0008',  // non-void function body may not produce a value
-    ArityMismatch:       'E0009',  // wrong number of arguments at call site
+    UnknownType:           'E0001',  // type annotation referenced an unrecognised name
+    Mismatch:              'E0002',  // expected type X, got type Y
+    InvalidOperator:       'E0003',  // operator not defined for these operand types
+    UnboundIdentifier:     'E0004',  // reference to an unknown identifier
+    HeterogeneousArray:    'E0005',  // array literal elements do not share a type
+    Annotation:            'E0006',  // initializer doesn't match declared annotation
+    ImmutableAssignment:   'E0007',  // assignment to an immutable binding
+    MissingReturn:         'E0008',  // non-void function body may not produce a value
+    ArityMismatch:         'E0009',  // wrong number of arguments at call site
+    // E0010 = lower-time `@move_to_parent_arena` outside tail position (Phase 9c).
+    // E0011 = lower-time nested-heap promotion rejected (Phase 9c).
+    MvpOnlyIntrospection:  'E0012',  // wasm-mvp-only introspection primitive under wasm-gc (Phase 9d-5a)
+    MvpOnlyPhysicalByte:   'E0013',  // wasm-mvp-only raw-memory primitive under wasm-gc (Phase 9d-5b)
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

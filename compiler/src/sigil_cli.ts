@@ -204,7 +204,7 @@ async function compileFile(
     if (elabErrs.length) emitDiagnostics(elabErrs, opts)
 
     const { tree: checked, model, _functions, diagnostics: typeErrs } =
-        typecheck(elab, reg, { moduleRegistry: moduleReg })
+        typecheck(elab, reg, { moduleRegistry: moduleReg, target: opts.target })
     if (typeErrs.length) emitDiagnostics(typeErrs, opts)
 
     const { wat, diagnostics: lowerErrs } =
@@ -337,7 +337,7 @@ async function compileToQbeIr(entry: string, opts: CompileOptions): Promise<stri
     if (elabErrs.length) emitDiagnostics(elabErrs, opts)
 
     const { tree: checked, _functions, diagnostics: typeErrs } =
-        typecheck(elab, reg, { moduleRegistry: moduleReg })
+        typecheck(elab, reg, { moduleRegistry: moduleReg, target: opts.target })
     if (typeErrs.length) emitDiagnostics(typeErrs, opts)
 
     // QBE lowering is not yet in the CaaS API — use the internal path.
@@ -483,7 +483,7 @@ async function cmdCheck(positional: string | undefined, opts: CompileOptions): P
     const { tree: elab, registry: reg, diagnostics: elabErrs } = elaborate(tree, registry)
     if (elabErrs.length) emitDiagnostics(elabErrs, opts)
 
-    const { diagnostics: typeErrs } = typecheck(elab, reg, { moduleRegistry: moduleReg })
+    const { diagnostics: typeErrs } = typecheck(elab, reg, { moduleRegistry: moduleReg, target: opts.target })
     if (typeErrs.length) emitDiagnostics(typeErrs, opts)
 
     console.log(`${entry}: OK`)
