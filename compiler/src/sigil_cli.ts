@@ -61,7 +61,12 @@ Global flags:
 Build / run flags:
   --wat           Emit .wat text instead of .wasm binary
   --native        Compile via QBE to native assembly (requires qbe; see sgl setup)
-  --target=<t>    Compilation target: host (default) | wasix
+  --target=<t>    Compilation target: host (default) | wasix | wasm-gc
+                  host / wasix use the linear-memory bump allocator.
+                  wasm-gc opts into managed references via the engine GC
+                  (ADR 0009).  Mvp-only primitives (&alloc, &@with_arena,
+                  raw &heap_*, Rc introspection) are rejected at typecheck;
+                  lifecycle primitives (@with_arena, Rc) compile to no-ops.
   --release       Compile via the QBE native backend (alias for --native)
   --max-heap=<N>  Cap wasm memory at N 64KB pages (heap-exhaustion testing;
                   past the cap the bump allocator traps cleanly).  Default: unbounded.
@@ -93,6 +98,11 @@ interface SglToml {
         version?: string
         entry?: string
     }
+    /** Phase 9d-4 — `[build]` section.  CLI flags win over toml. */
+    build: {
+        /** `target = "wasm-gc"` opts into ADR 0009's GC target by default. */
+        target?: string
+    }
     dependencies: Record<string, string>
 }
 
@@ -100,7 +110,7 @@ function readSglToml(dir: string): SglToml | null {
     const tomlPath = path.join(dir, 'sgl.toml')
     if (!fs.existsSync(tomlPath)) return null
     const text = fs.readFileSync(tomlPath, 'utf-8')
-    const result: SglToml = { package: {}, dependencies: {} }
+    const result: SglToml = { package: {}, build: {}, dependencies: {} }
     let section = ''
     for (const rawLine of text.split('\n')) {
         const line = rawLine.trim()
@@ -112,6 +122,8 @@ function readSglToml(dir: string): SglToml | null {
         const [, key, val] = kvMatch
         if (section === 'package') {
             (result.package as any)[key] = val
+        } else if (section === 'build') {
+            (result.build as any)[key] = val
         } else if (section === 'dependencies') {
             result.dependencies[key] = val
         }
@@ -540,9 +552,9 @@ async function cmdFmt(
 // Arg parsing
 // ---------------------------------------------------------------------------
 
-function parseTarget(value: string): LowerTarget {
-    if (value === 'host' || value === 'wasix') return value
-    console.error(`sgl: unknown --target value '${value}' (expected: host | wasix)`)
+function parseTarget(value: string, source: '--target' | 'sgl.toml [build] target' = '--target'): LowerTarget {
+    if (value === 'host' || value === 'wasix' || value === 'wasm-gc') return value
+    console.error(`sgl: unknown ${source} value '${value}' (expected: host | wasix | wasm-gc)`)
     process.exit(1)
 }
 
@@ -561,7 +573,13 @@ const strataFiles: string[] = []
 let positional: string | undefined
 let emitWat = false
 let native  = false
-let target: LowerTarget = 'host'
+// Phase 9d-4: `target` defaults to whatever sgl.toml's `[build] target`
+// declares (if present); CLI `--target=…` overrides toml.  Read toml
+// upfront so the resolved default is in place before arg parsing.
+const tomlForTarget = readSglToml(process.cwd())
+let target: LowerTarget = tomlForTarget?.build.target
+    ? parseTarget(tomlForTarget.build.target, 'sgl.toml [build] target')
+    : 'host'
 let pretty = false
 let fmtCheck = false
 let fmtStdout = false

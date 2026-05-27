@@ -180,7 +180,17 @@ export class IRLowerError extends Error {
 /** Compilation target. Stage 0's default is the host-embed runner used by
  *  the existing test suite; 'wasix' adds the `_start` export Wasmer-WASIX
  *  invokes by name (bootstrap-plan Phase -1.E). */
-export type LowerTarget = 'host' | 'wasix'
+/**
+ * Compile target — picks the memory model + stdlib path.
+ *
+ * - `host` / `wasix`: linear-memory bump allocator (Phase 9c).  Default.
+ * - `wasm-gc`: managed-reference types via the engine GC (Phase 9d,
+ *   opt-in per ADR 0009).  Lowering routes `@struct` / sum / Vec
+ *   through `IRStructNew` / `IRArrayNew` etc.; the wasm-mvp-only
+ *   primitives are rejected at typecheck (E0012 introspection,
+ *   E0013 physical-byte); lifecycle primitives compile to no-ops.
+ */
+export type LowerTarget = 'host' | 'wasix' | 'wasm-gc'
 
 export interface LowerOptions {
     /** Target runtime — controls emit-time conventions (e.g. _start export). */

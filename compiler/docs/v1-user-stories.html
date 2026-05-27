@@ -1412,14 +1412,14 @@
 <h2 id="phase-9d">Phase 9d — WasmGC target (opt-in <code>--target=wasm-gc</code>)</h2>
 
 <div class="phase-intro">
-  <strong>Status (2026-05-26): 3 of 11 stories shipped ✅</strong> —
+  <strong>Status (2026-05-26): 4 of 11 stories shipped ✅</strong> —
   9d-1 (<code>wit/wasm-gc.wit</code>), 9d-2 (type-section emitter),
-  9d-3 (instruction lowering) landed.  ADR 0009 <strong>Accepted</strong>;
-  revised to add the two-layer portability split (lifecycle primitives
-  portable via compile-time elision; introspection + physical-byte
-  primitives mvp-only).  See
-  <a href="adr/0009-wasm-gc-target.md">ADR&nbsp;0009</a> for the full
-  design rationale.
+  9d-3 (instruction lowering), 9d-4 (<code>--target=wasm-gc</code> CLI
+  flag) landed.  ADR 0009 <strong>Accepted</strong>; revised to add the
+  two-layer portability split (lifecycle primitives portable via
+  compile-time elision; introspection + physical-byte primitives
+  mvp-only).  See <a href="adr/0009-wasm-gc-target.md">ADR&nbsp;0009</a>
+  for the full design rationale.
   <br/><br/>
   <strong>What this phase ships.</strong>  A new compile target,
   <code>--target=wasm-gc</code>, that lowers Sigil to WebAssembly's
@@ -1475,17 +1475,9 @@
   <p class="done-note">✓ Nine new IR nodes added to <code>src/ir/nodes.ts</code> covering the v1.0 GC opcode subset: <code>IRStructNew</code>, <code>IRStructGet</code> (with optional <code>signed: 's' | 'u'</code> for packed fields), <code>IRStructSet</code>, <code>IRArrayNew</code>, <code>IRArrayNewDefault</code>, <code>IRArrayGet</code> (same packed-signedness slot), <code>IRArraySet</code>, <code>IRArrayLen</code>, <code>IRArrayCopy</code>.  Each carries both <code>typeIdx</code> (for binary emit) and <code>typeName</code> (for WAT emit) — same pattern as <code>IRCallIndirect.sigKey</code>.  Set/copy nodes have <code>wasmType: 'void'</code>; refs are represented as <code>'i32'</code> at the IR level.  WAT emit in <code>src/ir/emit.ts</code> produces canonical text form; binary emit in <code>src/codegen/wasm-emitter.ts</code> produces the <code>0xFB</code>-prefixed GC opcodes (0x00 struct.new, 0x02/03/04 struct.get/get_s/get_u, 0x05 struct.set, 0x06 array.new, 0x07 array.new_default, 0x0B/0C/0D array.get/get_s/get_u, 0x0E array.set, 0x0F array.len, 0x11 array.copy).  <code>exprWasmType</code> in <code>lower.ts</code> + <code>isVoidIR</code> in <code>emit.ts</code> updated for the new union members.  26 tests in <code>src/codegen/wasm-gc-ops.test.ts</code> verify text + binary emit + exprWasmType for every instruction.  Regression: 1127/1127 pass.  Out of scope (per <code>wit/wasm-gc.wit</code>): <code>ref.test</code> / <code>ref.cast</code> (v1.1 subtype-sum optimization), <code>array.new_fixed</code> / <code>new_data</code> / <code>new_elem</code> / <code>init_*</code> / <code>fill</code> (v1.1 if needed).  Full <code>@struct</code> / Sum / Vec routing through these nodes is Phase 9d-7 (sums) and 9d-8 (Vec).</p>
 </details>
 
-<details class="runtime">
-  <summary><span class="id">9d-4</span> <code>--target=wasm-gc</code> CLI flag <span class="est">S, ~3h</span></summary>
-  <div class="deps"><strong>Depends on:</strong> 9d-3</div>
-  <p class="goal">Wire the new target value through <code>src/sigil_cli.ts</code> → <code>CompileOptions.target</code> → <code>LowerOptions.target</code> → emitter dispatch.  Help text updated; <code>parseTarget</code> accepts <code>wasm-gc</code> alongside <code>host</code> and <code>wasian</code>.  <code>sgl build --target=wasm-gc</code> picks the new path.</p>
-  <div class="accept"><strong>Acceptance:</strong>
-    <ul>
-      <li><code>sgl --help</code> lists <code>wasm-gc</code> as a target value.</li>
-      <li>Invalid target value errors with a structured "valid targets: host | wasix | wasm-gc" message.</li>
-      <li><code>sgl.toml</code> can set <code>[build] target = "wasm-gc"</code>; CLI flag wins over toml.</li>
-    </ul>
-  </div>
+<details class="runtime complete">
+  <summary><span class="id">9d-4</span> <code>--target=wasm-gc</code> CLI flag <span class="done">✅</span> <span class="est">S, ~3h</span></summary>
+  <p class="done-note">✓ <code>LowerTarget</code> in <code>src/ir/lower.ts</code> extended to <code>'host' | 'wasix' | 'wasm-gc'</code> with a TSDoc that links to ADR 0009.  <code>parseTarget</code> in <code>src/sigil_cli.ts</code> accepts the new value; an invalid <code>--target</code> errors with "expected: host | wasix | wasm-gc".  <code>--help</code> text describes the wasm-gc semantics inline (engine GC, mvp-primitive rejection, lifecycle no-ops).  <code>SglToml.build.target</code> added; the toml reader picks up the <code>[build]</code> section.  Resolution order: CLI <code>--target=</code> wins over <code>sgl.toml [build] target</code> wins over default <code>'host'</code>.  Invalid toml-target values raise a "sgl.toml [build] target" diagnostic via the shared <code>parseTarget</code>.  5 subprocess tests in <code>src/sigil_cli.test.ts</code> cover help-text mention, invalid-CLI-target error, valid wasm-gc accepted, toml syntax accepted, CLI override.  No codegen change yet — that's 9d-5/6/7/8.</p>
 </details>
 
 <details class="runtime">
@@ -2046,9 +2038,9 @@
   <tr>
     <td>9d — WasmGC target (opt-in <code>--target=wasm-gc</code>)</td>
     <td style="color: var(--accent4); font-weight: 700;">🟡 STARTED</td>
-    <td>3 / 11</td>
-    <td><em>~3.5 d done</em> · ~9 d remain (est: 12.5 d)</td>
-    <td>ADR 0009 <strong>Accepted</strong> (2026-05-26).  <code>wit/wasm-gc.wit</code> ABI surface (9d-1), type-section emitter with structural-dedup interner (9d-2, 16 tests + WebAssembly.compile round-trip), and instruction-level IR + WAT/binary emitters for struct.* and array.* ops (9d-3, 26 tests, all 0xFB-prefixed GC opcodes) shipped.  Remaining v1.0 scope: <code>--target=wasm-gc</code> CLI flag (9d-4), E0012 reject introspection (9d-5a), E0013 reject physical-byte (9d-5b), lifecycle compile-time elision (9d-5c), <code>src/stdlib/gc/</code> + Rc identity shim (9d-6), tagged-struct sums (9d-7), Vec[T] for value-typed T (9d-8), cross-target test suite (9d-9).  Subtype sums, ref-typed Vec, fully generic Vec[T], HashMap, stringref, weak refs, default-on for new projects → v1.1.</td>
+    <td>4 / 11</td>
+    <td><em>~3.8 d done</em> · ~8.7 d remain (est: 12.5 d)</td>
+    <td>ADR 0009 <strong>Accepted</strong> (2026-05-26).  <code>wit/wasm-gc.wit</code> ABI (9d-1); type-section emitter with structural-dedup (9d-2, 16 tests); instruction-level IR + emitters for struct.* / array.* ops (9d-3, 26 tests, 0xFB-prefixed GC opcodes); <code>--target=wasm-gc</code> CLI flag + <code>sgl.toml [build] target</code> + override priority (9d-4, 5 subprocess tests).  Remaining v1.0 scope: E0012 reject introspection (9d-5a), E0013 reject physical-byte (9d-5b), lifecycle compile-time elision (9d-5c), <code>src/stdlib/gc/</code> + Rc identity shim (9d-6), tagged-struct sums (9d-7), Vec[T] for value-typed T (9d-8), cross-target test suite (9d-9).  Subtype sums, ref-typed Vec, fully generic Vec[T], HashMap, stringref, weak refs, default-on for new projects → v1.1.</td>
   </tr>
   <tr style="background: rgba(62, 207, 142, 0.08);">
     <td>10 — CaaS Consumer APIs + Distribution</td>
