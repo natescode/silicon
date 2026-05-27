@@ -40,4 +40,4 @@ dependency bumps.
 | [0006](0006-wasm-emitter-mixed-mode.md) | Direct WASM emitter: complete or formally retire for 1.0? | Proposed |
 | [0007](0007-diagnostic-renderer-lockdown.md) | Lock the diagnostic pretty-renderer surface for 1.0 | Proposed |
 | [0008](0008-memory-management-arenas.md) | Memory management: explicit arenas for 1.0, AllocatorABI for 1.1 | Accepted |
-| [0009](0009-wasm-gc-target.md) | WasmGC target: opt-in `--target=wasm-gc` for v1.0 | Proposed |
+| [0009](0009-wasm-gc-target.md) | WasmGC target: opt-in `--target=wasm-gc` for v1.0 | Accepted |

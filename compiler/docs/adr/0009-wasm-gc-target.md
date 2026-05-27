@@ -1,8 +1,8 @@
 # ADR 0009 — WasmGC target: opt-in `--target=wasm-gc` for v1.0
 
-- **Status:** Proposed
+- **Status:** Accepted (2026-05-26 — `wit/wasm-gc.wit` landed, M-1 gate met)
 - **Date:** 2026-05-26
-- **Related:** ADR 0004 (Backend interface) · ADR 0008 (Memory management: arenas + AllocatorABI) · `wit/allocator.wit` · `src/codegen/wasm-emitter.ts`
+- **Related:** `wit/wasm-gc.wit` (the bytecode-emit contract) · ADR 0004 (Backend interface) · ADR 0008 (Memory management: arenas + AllocatorABI) · `wit/allocator.wit` · `src/codegen/wasm-emitter.ts`
 
 ## Context
 
@@ -289,10 +289,18 @@ under either target. Programs using raw memory primitives stay on
 
 ## Implementation pointer
 
-Pending. **Move to Accepted only after M-1 (`wit/wasm-gc.wit`) lands.**
-Same gate pattern as ADR 0003 and ADR 0008 — until the ABI is
-published, the claim that "wasm-mvp programs port to wasm-gc by
-changing a flag" is writing a check we can't yet cash.
+**Accepted 2026-05-26.** M-1 met: `wit/wasm-gc.wit` published as the
+canonical bytecode-emit contract for the wasm-gc target. Documents
+the v1.0 instruction subset (`struct.new`, `struct.get`, `struct.set`,
+`array.new`, `array.new_default`, `array.get_s`, `array.get_u`,
+`array.set`, `array.len`, `array.copy`) plus Sigil-surface layout
+conventions for `String`, `Array[T]`, `@struct`, sum-with-payloads
+(tagged-struct representation), and `Vec[T]` (value-typed `T`).
+Explicit exclusions documented inline for v1.1 follow-ups
+(`ref.test`/`ref.cast` for subtype sums, stringref, weak refs,
+universal refs).
 
-Estimated end-to-end cost for v1.0 scope (M-1 through M-9):
-~12 working days. Tracked as Phase 9d in `docs/v1-user-stories.html`.
+Remaining milestones (M-2 through M-9 for v1.0 scope; M-10 through
+M-16 for v1.1+) are tracked as Phase 9d stories in
+`docs/v1-user-stories.html#phase-9d`. Estimated v1.0 cost: ~11
+working days (one day already spent on M-1).

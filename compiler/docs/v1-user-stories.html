@@ -1412,8 +1412,9 @@
 <h2 id="phase-9d">Phase 9d — WasmGC target (opt-in <code>--target=wasm-gc</code>)</h2>
 
 <div class="phase-intro">
-  <strong>Status:</strong> stories drafted (2026-05-26); blocked on
-  9d-1 (the ABI gate).  See
+  <strong>Status (2026-05-26): 1 of 9 stories shipped ✅</strong> —
+  9d-1 (<code>wit/wasm-gc.wit</code>) landed; ADR 0009 moved to
+  <strong>Accepted</strong>.  See
   <a href="adr/0009-wasm-gc-target.md">ADR&nbsp;0009</a> for the full
   design rationale.
   <br/><br/>
@@ -1446,18 +1447,9 @@
   <code>sgl init</code> projects to wasm-gc.
 </div>
 
-<details class="runtime">
-  <summary><span class="id">9d-1</span> Publish <code>wit/wasm-gc.wit</code> ABI surface <span class="est">S, ~3h</span></summary>
-  <div class="deps"><strong>Depends on:</strong> ADR 0009 (Proposed)</div>
-  <p class="goal">Define the managed-ref ABI every gc-target stdlib type conforms to.  Documents the operations the codegen emits — <code>struct.new $T fields…</code>, <code>struct.get $T i ref</code>, <code>array.new $A init size</code>, <code>array.get_s $A ref idx</code>, <code>array.len ref</code>.  Mirrors <code>wit/allocator.wit</code>'s shape and intent.  This is the gate for ADR 0009 moving to <strong>Accepted</strong>.</p>
-  <div class="accept"><strong>Acceptance:</strong>
-    <ul>
-      <li><code>wit/wasm-gc.wit</code> exists; lints clean under the same WIT tooling already used for <code>wit/comptime.wit</code> + <code>wit/allocator.wit</code>.</li>
-      <li>Documents the v1.0 instruction subset: <code>struct.new</code>, <code>struct.get</code>, <code>struct.set</code>, <code>array.new</code>, <code>array.new_default</code>, <code>array.get_s</code>, <code>array.set</code>, <code>array.len</code>, <code>array.copy</code>.</li>
-      <li>Explicitly excludes <code>ref.test</code> / <code>ref.cast</code> (v1.1 subtype-sum optimization only).</li>
-      <li>ADR 0009 status updated to <strong>Accepted</strong> in the same PR; ADR ↔ wit cross-link in both directions.</li>
-    </ul>
-  </div>
+<details class="runtime complete">
+  <summary><span class="id">9d-1</span> Publish <code>wit/wasm-gc.wit</code> ABI surface <span class="done">✅</span> <span class="est">S, ~3h</span></summary>
+  <p class="done-note">✓ <code>wit/wasm-gc.wit</code> published (<code>package sigil:wasm-gc@0.1.0</code>).  Five interfaces: <code>types</code> (type-id / ref aliases), <code>struct-ops</code> (struct.new / .get / .set), <code>array-ops</code> (array.new / .new_default / .get_s / .get_u / .set / .len / .copy), <code>layouts</code> (Sigil-surface → WasmGC type mappings for String / Array[T] / @struct / tagged-sum / payload-free sum / Vec[T value]), <code>excluded-v1-0</code> (ref.test/ref.cast/stringref/weak-refs/universal-refs — all v1.1).  Mirrors <code>wit/allocator.wit</code>'s shape and ABI-conventions style.  ADR 0009 moved to <strong>Accepted</strong> in <code>docs/adr/README.md</code>; ADR ↔ wit cross-links in place.</p>
 </details>
 
 <details class="runtime">
@@ -2032,10 +2024,10 @@
   </tr>
   <tr>
     <td>9d — WasmGC target (opt-in <code>--target=wasm-gc</code>)</td>
-    <td style="color: var(--muted);">⬜ DRAFTED</td>
-    <td>0 / 9</td>
-    <td>~12 d (est)</td>
-    <td>ADR 0009 (Proposed).  v1.0 scope: <code>wit/wasm-gc.wit</code> ABI (9d-1), type-section emitter (9d-2), GC instruction lowering (9d-3), <code>--target=wasm-gc</code> CLI flag (9d-4), reject mvp-only primitives at typecheck (9d-5), <code>src/stdlib/gc/</code> (9d-6), tagged-struct sums (9d-7), Vec[T] for value-typed T (9d-8), cross-target test suite (9d-9).  Subtype sums, ref-typed Vec, fully generic Vec[T], HashMap, stringref, weak refs, default-on for new projects → v1.1.</td>
+    <td style="color: var(--accent4); font-weight: 700;">🟡 STARTED</td>
+    <td>1 / 9</td>
+    <td><em>~3h done</em> · ~11 d remain (est: 12 d)</td>
+    <td>ADR 0009 <strong>Accepted</strong> (2026-05-26).  <code>wit/wasm-gc.wit</code> ABI surface shipped (9d-1).  Remaining v1.0 scope: type-section emitter (9d-2), GC instruction lowering (9d-3), <code>--target=wasm-gc</code> CLI flag (9d-4), reject mvp-only primitives at typecheck (9d-5), <code>src/stdlib/gc/</code> (9d-6), tagged-struct sums (9d-7), Vec[T] for value-typed T (9d-8), cross-target test suite (9d-9).  Subtype sums, ref-typed Vec, fully generic Vec[T], HashMap, stringref, weak refs, default-on for new projects → v1.1.</td>
   </tr>
   <tr style="background: rgba(62, 207, 142, 0.08);">
     <td>10 — CaaS Consumer APIs + Distribution</td>
