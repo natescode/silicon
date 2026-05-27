@@ -254,6 +254,87 @@ export interface IRModule {
     /** Funcref + call_indirect machinery.  Undefined for non-funcref
      *  programs (keeps the byte-equal codegen test passing). */
     funcrefTable?: FuncrefTable
+    /** Phase 9d-2 — WasmGC struct/array type declarations emitted in
+     *  the type section after the function types.  Populated by
+     *  Phase 9d-3's collection pass when `--target=wasm-gc`; undefined
+     *  or empty for `--target=wasm-mvp` (keeps byte-equal codegen). */
+    wasmGcTypes?: WasmGcType[]
+}
+
+// ─── Phase 9d-2 — WasmGC type-section registry ─────────────────────────────
+//
+// Mirrors the bytecode-emit contract in `wit/wasm-gc.wit`.  v1.0 emits
+// `(struct (field …))` and `(array (mut …))` directly — no `sub` /
+// `sub final` wrappers, no `rec` groups.  Subtype hierarchy is a v1.1
+// optimization (story 9.1-d-1 in v1.1-user-stories.html).
+
+/** Packed and value storage types valid as struct fields or array
+ *  elements in the WasmGC type section.  Packed types (`i8`, `i16`)
+ *  are only legal inside struct/array declarations — never as wasm
+ *  value types on the operand stack. */
+export type WasmGcStorageType =
+    | { kind: 'val';    type: WasmValType }       // i32 | i64 | f32
+    | { kind: 'packed'; type: 'i8' | 'i16' }      // struct/array only
+    | { kind: 'ref';    typeIdx: number; nullable: boolean }  // (ref $T) / (ref null $T)
+
+/** A struct or array field declaration: storage type + mutability bit. */
+export interface WasmGcField {
+    storage: WasmGcStorageType
+    mutable: boolean
+}
+
+/** WasmGC type declaration.  `name` is a Sigil-side debug label
+ *  (e.g. `$Point`, `$Array_i32`); the binary emit assigns its type
+ *  index by position in `IRModule.wasmGcTypes`. */
+export interface WasmGcType {
+    name: string
+    spec:
+        | { kind: 'struct'; fields: WasmGcField[] }
+        | { kind: 'array';  element: WasmGcField }
+}
+
+/** Structural key for a WasmGcType — two declarations with identical
+ *  spec produce the same key and dedup to the same type-section entry
+ *  even if they have different Sigil-side names. */
+export function wasmGcTypeKey(t: WasmGcType): string {
+    if (t.spec.kind === 'struct') {
+        return 's:' + t.spec.fields.map(wasmGcFieldKey).join(',')
+    }
+    return 'a:' + wasmGcFieldKey(t.spec.element)
+}
+
+function wasmGcFieldKey(f: WasmGcField): string {
+    const mut = f.mutable ? 'm' : 'i'
+    const s = f.storage
+    switch (s.kind) {
+        case 'val':    return `${mut}${s.type}`
+        case 'packed': return `${mut}${s.type}`
+        case 'ref':    return `${mut}r${s.nullable ? '?' : ''}${s.typeIdx}`
+    }
+}
+
+/** Stateful interner that builds up an `IRModule.wasmGcTypes` array
+ *  while collecting types from the typed AST.  Returns the type index
+ *  of `spec` — either freshly added (with the supplied `name`) or
+ *  re-used from a previous structurally-identical entry. */
+export class WasmGcTypeRegistry {
+    private readonly types: WasmGcType[] = []
+    private readonly byKey: Map<string, number> = new Map()
+
+    intern(t: WasmGcType): number {
+        const key = wasmGcTypeKey(t)
+        const existing = this.byKey.get(key)
+        if (existing !== undefined) return existing
+        const idx = this.types.length
+        this.types.push(t)
+        this.byKey.set(key, idx)
+        return idx
+    }
+
+    /** Position-stable snapshot of every interned type. */
+    snapshot(): WasmGcType[] { return [...this.types] }
+
+    size(): number { return this.types.length }
 }
 
 /** Sentinel callee name for array-literal IR nodes, shared between lower.ts and emit.ts. */

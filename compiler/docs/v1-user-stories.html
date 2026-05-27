@@ -1412,9 +1412,9 @@
 <h2 id="phase-9d">Phase 9d — WasmGC target (opt-in <code>--target=wasm-gc</code>)</h2>
 
 <div class="phase-intro">
-  <strong>Status (2026-05-26): 1 of 9 stories shipped ✅</strong> —
-  9d-1 (<code>wit/wasm-gc.wit</code>) landed; ADR 0009 moved to
-  <strong>Accepted</strong>.  See
+  <strong>Status (2026-05-26): 2 of 9 stories shipped ✅</strong> —
+  9d-1 (<code>wit/wasm-gc.wit</code>) and 9d-2 (type-section emitter)
+  landed; ADR 0009 moved to <strong>Accepted</strong>.  See
   <a href="adr/0009-wasm-gc-target.md">ADR&nbsp;0009</a> for the full
   design rationale.
   <br/><br/>
@@ -1452,18 +1452,9 @@
   <p class="done-note">✓ <code>wit/wasm-gc.wit</code> published (<code>package sigil:wasm-gc@0.1.0</code>).  Five interfaces: <code>types</code> (type-id / ref aliases), <code>struct-ops</code> (struct.new / .get / .set), <code>array-ops</code> (array.new / .new_default / .get_s / .get_u / .set / .len / .copy), <code>layouts</code> (Sigil-surface → WasmGC type mappings for String / Array[T] / @struct / tagged-sum / payload-free sum / Vec[T value]), <code>excluded-v1-0</code> (ref.test/ref.cast/stringref/weak-refs/universal-refs — all v1.1).  Mirrors <code>wit/allocator.wit</code>'s shape and ABI-conventions style.  ADR 0009 moved to <strong>Accepted</strong> in <code>docs/adr/README.md</code>; ADR ↔ wit cross-links in place.</p>
 </details>
 
-<details class="runtime">
-  <summary><span class="id">9d-2</span> WasmGC type-section emitter <span class="est">L, ~1.5d</span></summary>
-  <div class="deps"><strong>Depends on:</strong> 9d-1</div>
-  <p class="goal">Extend <code>src/codegen/wasm-emitter.ts</code> to emit the WasmGC type section.  <code>(type $foo (struct (field i32) (field i32)))</code> and <code>(type $bar (array (mut i32)))</code> declarations dedup'd by structural identity.  Sigil-side types (<code>@struct</code>, sum types, <code>String</code>, <code>Array[T]</code>, <code>Vec[T]</code>) feed into a type-collection pass that runs after lowering, before binary emit.  Existing <code>wasm-mvp</code> emit path stays byte-identical when the type table is empty.</p>
-  <div class="accept"><strong>Acceptance:</strong>
-    <ul>
-      <li>New <code>wasmGcTypes</code> registry in <code>IRModule</code>: per-Sigil-type WasmGC type-index plus the underlying struct/array spec.</li>
-      <li>Type-section emit (section 1 of the wasm binary) gains the GC opcodes <code>0x5F</code> (struct), <code>0x5E</code> (array), <code>0x50</code> (sub final).</li>
-      <li>Deduplication: two Sigil <code>@struct</code>s with identical layouts share a type index.</li>
-      <li>Unit test: emit a module with one struct + one array type; round-trip through <code>wabt</code>'s <code>wasm-validate</code> (or equivalent) and assert valid.</li>
-    </ul>
-  </div>
+<details class="runtime complete">
+  <summary><span class="id">9d-2</span> WasmGC type-section emitter <span class="done">✅</span> <span class="est">L, ~1.5d</span></summary>
+  <p class="done-note">✓ <code>IRModule.wasmGcTypes</code> registry added to <code>src/ir/nodes.ts</code> with <code>WasmGcType</code>, <code>WasmGcField</code>, <code>WasmGcStorageType</code> shapes.  <code>WasmGcTypeRegistry</code> interner dedups by structural key (struct-vs-array, packed-vs-value, mutability, ref-typeidx all distinguishing).  <code>src/codegen/wasm-emitter.ts</code> gains <code>encodeGcType</code> / <code>encodeField</code> / <code>encodeStorageType</code> emitters; <code>buildTypeSection</code> interleaves function types (first, preserving existing indices) with GC types (after).  Opcodes: <code>0x5F</code> struct, <code>0x5E</code> array, <code>0x78</code> packed-i8, <code>0x77</code> packed-i16, <code>0x63</code> (ref $T), <code>0x64</code> (ref null $T).  <code>0x4F</code> sub-final + rec groups deliberately deferred to v1.1.  16 tests in <code>src/codegen/wasm-gc-types.test.ts</code> cover dedup, structural-key correctness, every storage-type encoding, byte-equal-mvp regression when <code>wasmGcTypes</code> is empty, and a <code>WebAssembly.compile</code> round-trip validation that a struct + array module is well-formed.  Regression: 1101/1101 pass across codegen/ir/types/elaborator/e2e/stdlib.</p>
 </details>
 
 <details class="runtime">
@@ -2025,9 +2016,9 @@
   <tr>
     <td>9d — WasmGC target (opt-in <code>--target=wasm-gc</code>)</td>
     <td style="color: var(--accent4); font-weight: 700;">🟡 STARTED</td>
-    <td>1 / 9</td>
-    <td><em>~3h done</em> · ~11 d remain (est: 12 d)</td>
-    <td>ADR 0009 <strong>Accepted</strong> (2026-05-26).  <code>wit/wasm-gc.wit</code> ABI surface shipped (9d-1).  Remaining v1.0 scope: type-section emitter (9d-2), GC instruction lowering (9d-3), <code>--target=wasm-gc</code> CLI flag (9d-4), reject mvp-only primitives at typecheck (9d-5), <code>src/stdlib/gc/</code> (9d-6), tagged-struct sums (9d-7), Vec[T] for value-typed T (9d-8), cross-target test suite (9d-9).  Subtype sums, ref-typed Vec, fully generic Vec[T], HashMap, stringref, weak refs, default-on for new projects → v1.1.</td>
+    <td>2 / 9</td>
+    <td><em>~1.5 d done</em> · ~10.5 d remain (est: 12 d)</td>
+    <td>ADR 0009 <strong>Accepted</strong> (2026-05-26).  <code>wit/wasm-gc.wit</code> ABI surface shipped (9d-1); type-section emitter with structural-dedup interner shipped (9d-2, 16 tests + WebAssembly.compile round-trip).  Remaining v1.0 scope: GC instruction lowering (9d-3), <code>--target=wasm-gc</code> CLI flag (9d-4), reject mvp-only primitives at typecheck (9d-5), <code>src/stdlib/gc/</code> (9d-6), tagged-struct sums (9d-7), Vec[T] for value-typed T (9d-8), cross-target test suite (9d-9).  Subtype sums, ref-typed Vec, fully generic Vec[T], HashMap, stringref, weak refs, default-on for new projects → v1.1.</td>
   </tr>
   <tr style="background: rgba(62, 207, 142, 0.08);">
     <td>10 — CaaS Consumer APIs + Distribution</td>

@@ -13,6 +13,7 @@ import type { PreludeSpec } from './prelude-ir'
 import type {
     IRModule, IRFunction, IRGlobal, IRImport, IRExport, IRDataSegment,
     IRExpr, IRStmt, WasmValType, WasmType, AbstractOp,
+    WasmGcType, WasmGcField, WasmGcStorageType,
 } from '../ir/nodes'
 import { ARRAY_LITERAL_CALLEE } from '../ir/nodes'
 import { wasmIntrinsics } from '../intrinsics/intrinsics'
@@ -32,6 +33,66 @@ const BLOCKTYPE_VOID = 0x40
 function valTypeCode(t: WasmType): number {
     if (t === 'void') return BLOCKTYPE_VOID
     return VALTYPE[t]
+}
+
+// ---------------------------------------------------------------------------
+// Phase 9d-2 — WasmGC type-section encoding
+// ---------------------------------------------------------------------------
+//
+// Mirrors `wit/wasm-gc.wit` (Phase 9d-1).  v1.0 emits `(struct …)` and
+// `(array (mut …))` directly — no `sub` / `sub final` wrappers, no `rec`
+// groups.  Subtype hierarchy is a v1.1 transparent optimization.
+//
+// Binary opcodes (per the WasmGC proposal, finalized in WebAssembly
+// 3.0):
+//   0x5F  struct type form
+//   0x5E  array type form
+//   0x78  packed i8 (struct/array only — not a stack value type)
+//   0x77  packed i16
+//   0x63  (ref $T)      — non-null typed ref, followed by SLEB-i33 typeidx
+//   0x64  (ref null $T) — nullable typed ref, same encoding
+//   0x00  field mutability: immutable
+//   0x01  field mutability: mutable
+//
+// `0x5F` collides with `f32.le` in the instruction space but they live
+// in disjoint sections, so no real conflict.
+
+const STRUCT_TYPE_FORM = 0x5F
+const ARRAY_TYPE_FORM  = 0x5E
+const PACKED_I8        = 0x78
+const PACKED_I16       = 0x77
+const REF_NON_NULL     = 0x63
+const REF_NULLABLE     = 0x64
+
+function encodeStorageType(buf: WasmBuffer, st: WasmGcStorageType): void {
+    if (st.kind === 'val') {
+        buf.u8(VALTYPE[st.type])
+        return
+    }
+    if (st.kind === 'packed') {
+        buf.u8(st.type === 'i8' ? PACKED_I8 : PACKED_I16)
+        return
+    }
+    // ref kind: emit form byte then SLEB-i33 typeidx.
+    buf.u8(st.nullable ? REF_NULLABLE : REF_NON_NULL)
+    buf.i32(st.typeIdx)
+}
+
+function encodeField(buf: WasmBuffer, f: WasmGcField): void {
+    encodeStorageType(buf, f.storage)
+    buf.u8(f.mutable ? 0x01 : 0x00)
+}
+
+function encodeGcType(buf: WasmBuffer, t: WasmGcType): void {
+    if (t.spec.kind === 'struct') {
+        buf.u8(STRUCT_TYPE_FORM)
+        buf.u32(t.spec.fields.length)
+        for (const f of t.spec.fields) encodeField(buf, f)
+        return
+    }
+    // array
+    buf.u8(ARRAY_TYPE_FORM)
+    encodeField(buf, t.spec.element)
 }
 
 // ---------------------------------------------------------------------------
@@ -375,9 +436,16 @@ function emitFunctionBody(
 // Section builders
 // ---------------------------------------------------------------------------
 
-function buildTypeSection(sigs: FuncSig[]): WasmBuffer {
+function buildTypeSection(sigs: FuncSig[], gcTypes: WasmGcType[] = []): WasmBuffer {
+    // Function types come first (preserves existing type-index assignment
+    // for imports + function declarations); GC types follow.  GC type
+    // indices = sigs.length + position-in-gcTypes.
+    //
+    // When `gcTypes` is empty (the wasm-mvp path), the encoded section is
+    // byte-identical to the pre-9d-2 emitter — guards every existing
+    // codegen / determinism test.
     const body = new WasmBuffer()
-    body.u32(sigs.length)
+    body.u32(sigs.length + gcTypes.length)
     for (const sig of sigs) {
         body.u8(0x60)
         body.u32(sig.params.length)
@@ -388,6 +456,7 @@ function buildTypeSection(sigs: FuncSig[]): WasmBuffer {
             body.u32(1); body.u8(VALTYPE[sig.result as WasmValType])
         }
     }
+    for (const gc of gcTypes) encodeGcType(body, gc)
     return body
 }
 
@@ -607,8 +676,8 @@ export function emitWasmBinary(prelude: PreludeSpec, userMod: IRModule): Uint8Ar
     // Magic + version
     out.raw([0x00, 0x61, 0x73, 0x6D, 0x01, 0x00, 0x00, 0x00])
 
-    // Section 1: Type
-    out.section(1, buildTypeSection(typeSigs))
+    // Section 1: Type (function types + Phase 9d-2 WasmGC type declarations)
+    out.section(1, buildTypeSection(typeSigs, userMod.wasmGcTypes ?? []))
 
     // Section 2: Import (only if there are imports)
     if (allImports.length > 0) {
