@@ -163,7 +163,7 @@
     <li><a href="#phase-8">Phase 8 — <code>sgl</code> CLI ✅</a></li>
     <li><a href="#phase-9">Phase 9 — Native backend (QBE) ✅</a></li>
     <li><a href="#phase-9-5">Phase 9.5 — Abstract IR opcodes (backend-agnostic Strata)</a></li>
-    <li><a href="#phase-9c">Phase 9c — Memory management (explicit arenas + parent-arena escape) ✅ (6/7 done; 9c-7 deferred with boot/ port)</a></li>
+    <li><a href="#phase-9c">Phase 9c — Memory management (explicit arenas + parent-arena escape + Rc) ✅ (9/10 done; 9c-7 deferred with boot/ port)</a></li>
     <li><a href="#phase-10">Phase 10 — CaaS Consumer APIs + Distribution ✅ (1.0 stories done)</a></li>
     <li><a href="#phase-11">Phase 11 — Silicon interpreter (written in Silicon, compiled to native via QBE)</a></li>
     <li><a href="#phase-12">Phase 12 — <code>sgl</code> interpreter-backed subcommands</a></li>
@@ -1306,9 +1306,15 @@
 
 <div class="phase-intro">
   <strong style="color: var(--accent3);">Phase 9c SHIPPED in src/ ✅ (2026-05-26).</strong>
-  6 of 7 stories complete; 9c-7 (boot/ port) deferred behind Phase 7's
+  9 of 10 stories complete; 9c-7 (boot/ port) deferred behind Phase 7's
   boot/ port progress.  <a href="adr/0008-memory-management-arenas.md">ADR&nbsp;0008</a>
-  moved to <strong>Accepted</strong>.
+  moved to <strong>Accepted</strong>.  Two follow-up tracks ride on top
+  of the core arena work: 9c-3a (Sum-payload promotion + 9c-8
+  introspection helpers) closes Phase 9c's known gaps, and 9c-9 ships
+  the <code>Rc</code> smart pointer stdlib as a composition-driven
+  demonstration of stratum power (Rc-as-stdlib + <code>@defer</code> +
+  <code>&amp;@with_arena</code> = Rust's <code>Rc</code> / <code>Box</code>
+  / <code>Drop</code> without compiler changes).
   <br/><br/>
   Today's bump allocator (<code>src/codegen/std.wat</code> +
   <code>src/codegen/prelude-ir.ts</code>) is a one-way ratchet: every
@@ -1352,7 +1358,12 @@
 
 <details class="runtime complete">
   <summary><span class="id">9c-3</span> <code>&amp;move_to_parent_arena value</code> — tail-position escape for flat heap types <span class="done">✅</span> <span class="est">L, ~8h</span></summary>
-  <p class="done-note">✓ Runtime helper <code>$arena_promote(saved, ptr, size) → ptr</code> in <code>src/codegen/prelude-ir.ts:buildArenaPromote</code> and parallel <code>src/codegen/std.wat</code> entry; exported.  <code>@move_to_parent_arena</code> registered + tail-position-detected by <code>lowerWithArena</code>; mid-block / outside-arena use throws the structured "may only appear in the tail position of a <code>&amp;@with_arena { … }</code> block" error.  Type-driven size: <code>String</code> emits <code>4 + i32.load(ptr)</code>; value types short-circuit to the standard reset envelope (zero copy).  Array, Sum-with-payloads — shipped as part of the 9c-3 follow-up below.  Eleven e2e tests in <code>src/codegen/arena.test.ts</code> cover both error paths and 50-iteration String-promotion (heap growth bounded by promoted bytes, not scratch).</p>
+  <p class="done-note">✓ Runtime helper <code>$arena_promote(saved, ptr, size) → ptr</code> in <code>src/codegen/prelude-ir.ts:buildArenaPromote</code> and parallel <code>src/codegen/std.wat</code> entry; exported.  <code>@move_to_parent_arena</code> registered + tail-position-detected by <code>lowerWithArena</code>; mid-block / outside-arena use throws the structured "may only appear in the tail position of a <code>&amp;@with_arena { … }</code> block" error.  Type-driven size: <code>String</code> emits <code>4 + i32.load(ptr)</code>; value types short-circuit to the standard reset envelope (zero copy).  Array, Sum-with-payloads — shipped in 9c-3a below.  Eleven e2e tests in <code>src/codegen/arena.test.ts</code> cover both error paths and 50-iteration String-promotion (heap growth bounded by promoted bytes, not scratch).</p>
+</details>
+
+<details class="runtime complete">
+  <summary><span class="id">9c-3a</span> Sum-with-payload byte-size for arena promotion <span class="done">✅</span> <span class="est">S, ~3h</span></summary>
+  <p class="done-note">✓ <code>sizeExprForFlatHeap</code> in <code>src/ir/lower.ts</code> now handles <code>SiliconType.kind === 'Sum'</code> via a new <code>SumLayout</code> registry on <code>ElaboratorRegistry</code>.  Populated by <code>preRegisterRecordSumType</code> in <code>src/types/typechecker.ts</code> when it processes <code>@type Foo := $A x:T | $B y:U;</code> — same source of truth as the constructor lowering in <code>defExpanders.ts</code>.  Layout: <code>4 + 4 × maxFields</code> (pad-to-max, constant per type).  Variants with any heap-typed field (e.g. <code>$Some s:String</code>) are rejected as nested heap with the existing structured error — closes the v1.0 limitation noted in 9c-3.  Three new tests in <code>arena.test.ts</code>: <code>$Pair</code> promotion, <code>$Circle | $Rectangle</code> pad-to-max sizing, <code>$Named s:String</code> rejection.</p>
 </details>
 
 <details class="runtime complete">
@@ -1370,6 +1381,16 @@
   <summary><span class="id">9c-6</span> Cross-backend posture — WAT determinism + QBE rejection <span class="done">✅</span> <span class="est">M, ~4h</span></summary>
   <p class="done-note">✓ <em>Scope correction:</em> the original story assumed QBE shared the WASM prelude IR (via Phase 9.5's abstract opcodes), so the arena helpers would "just work" on both backends.  That premise is wrong — <code>src/codegen/qbe/lower.ts</code> walks the typed AST directly without going through <code>IRModule</code>, and QBE has no allocator surface (<code>heap</code>, <code>mem_copy</code>, <code>arena_promote</code>) at all today.  Wiring those up in QBE means choosing between a libc bridge (malloc/free) or emitting a fresh QBE bump allocator as data + functions — substantial work that belongs alongside the QBE runtime story, not Phase 9c.</p>
   <p class="done-note">✓ The shipped cross-backend posture for Phase 9c:  (1) WAT determinism — five arena programs (empty arena, value-tail, String promotion, Array[Int] promotion, nested arenas) compile to byte-equal WAT twice;  (2) WAT envelope shape — assertions that the lowering emits <code>global.get $heap</code> / <code>global.set $heap</code> / <code>call $arena_promote</code> in the expected positions;  (3) QBE rejection — <code>@with_arena</code> and <code>@move_to_parent_arena</code> throw a structured error from <code>qbe/lower.ts:lowerBuiltinCall</code> pointing at this story for the follow-up.  Eleven new tests in <code>src/e2e/backends.test.ts</code> (119 total, 0 fail).  A real "arena semantics on QBE" follow-up is filed implicitly by the QBE rejection error message; it's outside 9c.</p>
+</details>
+
+<details class="runtime complete">
+  <summary><span class="id">9c-8</span> <code>&amp;heap_used</code> / <code>&amp;arena_used</code> introspection helpers <span class="done">✅</span> <span class="est">S, ~1h</span></summary>
+  <p class="done-note">✓ Two pure-read helpers added to the prelude:  <code>&amp;heap_used()</code> returns bytes bump-allocated since program start (= <code>heap - heap_base</code>, where <code>heap_base</code> is a new immutable i32 global initialised alongside <code>heap</code>);  <code>&amp;arena_used(saved)</code> returns bytes since a caller-supplied entry pointer.  Both shipped in <code>src/codegen/prelude-ir.ts</code> (binary) and <code>src/codegen/std.wat</code> (text), with <code>setHeapBase</code> in <code>codegen/index.ts</code> updated to rewrite both globals.  Registered in the typechecker's stdlib bridge so user code calls them as plain <code>&amp;heap_used</code> / <code>&amp;arena_used saved</code>.  Four new tests in <code>arena.test.ts</code> covering: zero at program start, exact-byte growth after <code>&amp;str_concat</code>, reset-to-zero across <code>&amp;@with_arena</code>, and arena-local bump tracking.  Drop-in for leak assertions, dashboards, and CI memory budgets.</p>
+</details>
+
+<details class="runtime complete">
+  <summary><span class="id">9c-9</span> <code>Rc</code> smart pointer stdlib — single-threaded refcount <span class="done">✅</span> <span class="est">M, ~4h</span></summary>
+  <p class="done-note">✓ New stdlib module <code>src/stdlib/rc.si</code> with six helpers: <code>&amp;rc_new value → Int</code>, <code>&amp;rc_clone r</code>, <code>&amp;rc_drop r</code>, <code>&amp;rc_get r</code>, <code>&amp;rc_count r</code>, <code>&amp;rc_is_unique r</code>.  Layout: <code>[refcount:i32, value:i32]</code> = 8 bytes, allocated through the prelude bump allocator; wraps any 32-bit value (Int, Bool, String/Array/Sum pointers).  Refcount-zero "drop" is logical only — physical free is the enclosing allocator's job (an <code>&amp;@with_arena</code> exit or the future v1.1 GC pass).  <strong>The stratum-power demonstration is composition:</strong> Rc-as-stdlib + existing <code>@defer</code> + existing <code>&amp;@with_arena</code> together cover Rust's <code>Rc</code> / <code>Box</code> / <code>Drop</code> story without the compiler learning any of them.  12 runtime tests in <code>src/stdlib/rc.test.ts</code> cover the lifecycle, multi-owner clone+drop dance, <code>@defer</code> integration (single + LIFO), <code>&amp;@with_arena</code> bulk-free, <code>&amp;@move_to_parent_arena</code> across arena boundaries (Rc's 8-byte block is itself a flat heap layout), and String-pointer payload integrity.</p>
 </details>
 
 <details class="runtime deferred">
@@ -1839,11 +1860,11 @@
     <td><code>AbstractOp</code> enum replaces WAT instruction strings in <code>IRBinOp</code> (9.5-1).  WAT emitter maps enum → WAT (9.5-2).  QBE lower maps enum → QBE IL replacing string-sniffing (9.5-3).  <code>&amp;Compiler::ir::*</code> dispatch updated (9.5-4).  Cross-backend Strata parity tests (9.5-5).  boot/ port + QBE self-host gate (9.5-6).</td>
   </tr>
   <tr style="background: rgba(62, 207, 142, 0.08);">
-    <td>9c — Memory management (explicit arenas)</td>
+    <td>9c — Memory management (explicit arenas + Rc)</td>
     <td style="color: var(--accent3); font-weight: 700;">✅ SHIPPED in src/</td>
-    <td>6 / 7</td>
-    <td><em>actual ~1 d</em> (est: 4 d)</td>
-    <td>2026-05-26.  ADR 0008 → Accepted.  <code>wit/allocator.wit</code> published (9c-1); <code>&amp;@with_arena</code> + <code>&amp;@move_to_parent_arena</code> strata wired through <code>src/ir/lower.ts</code> (9c-2/3); <code>$arena_promote</code> runtime helper + size paths for String / Array[T<sub>value</sub>] / Distinct (9c-3); <code>memory.grow</code> traps cleanly via <code>unreachable</code> + <code>--max-heap=N</code> CLI flag (9c-4); <code>docs/memory.md</code> + getting-started arena pattern (9c-5); cross-backend posture — WAT determinism + QBE rejection (9c-6).  25 new tests (14 arena.test.ts + 11 backends.test.ts), 1147/1147 pass.  9c-7 boot/ port deferred behind Phase 7.</td>
+    <td>9 / 10</td>
+    <td><em>actual ~1.5 d</em> (est: 5 d)</td>
+    <td>2026-05-26.  ADR 0008 → Accepted.  Core arena work: <code>wit/allocator.wit</code> (9c-1), <code>&amp;@with_arena</code> + <code>&amp;@move_to_parent_arena</code> strata (9c-2/3), <code>$arena_promote</code> helper with size paths for String / Array[T<sub>value</sub>] / Sum-with-flat-payloads / Distinct (9c-3/3a), <code>memory.grow</code> clean trap + <code>--max-heap=N</code> CLI flag (9c-4), docs (9c-5), cross-backend posture (9c-6).  Follow-up wins: <code>&amp;heap_used</code> / <code>&amp;arena_used</code> introspection (9c-8); <code>Rc</code> smart pointer stdlib showing stratum composition power (9c-9 — Rc + <code>@defer</code> + <code>&amp;@with_arena</code> covers Rust's Rc/Box/Drop without compiler changes).  40 new tests (arena.test.ts 20, backends.test.ts 11, rc.test.ts 12 — minus 3 reused), 1214/1214 pass.  9c-7 boot/ port deferred behind Phase 7.</td>
   </tr>
   <tr style="background: rgba(62, 207, 142, 0.08);">
     <td>10 — CaaS Consumer APIs + Distribution</td>
@@ -1884,9 +1905,9 @@
   <tr style="background: var(--surface2); border-top: 3px solid var(--accent3); font-weight: 600;">
     <td>SHIPPED so far</td>
     <td style="color: var(--accent3);">✅</td>
-    <td>~142 stories</td>
-    <td><em>~16 d actual</em> (est: ~94 d)</td>
-    <td>Phases 1–6 fully shipped; Phase 7 (11/32); Phases 8, 9, 9c (6/7), 10 fully or substantially shipped; Phase 13 (13/15).  ~6× faster than originally estimated.</td>
+    <td>~145 stories</td>
+    <td><em>~16.5 d actual</em> (est: ~95 d)</td>
+    <td>Phases 1–6 fully shipped; Phase 7 (11/32); Phases 8, 9, 9c (9/10), 10 fully or substantially shipped; Phase 13 (13/15).  ~6× faster than originally estimated.</td>
   </tr>
   <tr style="background: var(--surface2); border-top: 1px solid var(--border); font-weight: 600;">
     <td>1.0 REMAINING</td>

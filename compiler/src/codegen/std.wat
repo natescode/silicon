@@ -33,6 +33,10 @@
 (memory 1)
 (export "memory" (memory 0))
 (global $heap (mut i32) (i32.const 1024))
+;; Phase 9c-8: immutable lower bound of the bump-allocator region.
+;; $heap_used computes `heap - heap_base` so this stays in sync with
+;; the mutable $heap initialiser via codegen/index.ts:setHeapBase.
+(global $heap_base i32 (i32.const 1024))
 
 ;; ------------------------------------------------------------------
 ;; $alloc — bump-allocate `$size` bytes from the heap, growing memory
@@ -233,6 +237,23 @@
 
 (func $heap_set (param $h i32)
   (global.set $heap (local.get $h)))
+
+;; ------------------------------------------------------------------
+;; Phase 9c-8 — memory introspection.
+;;   $heap_used()        → bytes bump-allocated since program start
+;;                         (= heap - heap_base; resets when something
+;;                         lowers $heap, e.g. an &@with_arena exit).
+;;   $arena_used(saved)  → bytes allocated since `saved` was captured.
+;;                         Pair with &heap_get at arena entry to size
+;;                         the current arena without a per-arena handle.
+;; Both are pure reads — no side effects, suitable for use in tests,
+;; diagnostics, and dashboards.
+;; ------------------------------------------------------------------
+(func $heap_used (result i32)
+  (i32.sub (global.get $heap) (global.get $heap_base)))
+
+(func $arena_used (param $saved i32) (result i32)
+  (i32.sub (global.get $heap) (local.get $saved)))
 
 ;; ------------------------------------------------------------------
 ;; $arr_len — read the length stored in a prefixed array/string.

@@ -169,6 +169,72 @@ hidden in a return edge.
 
 ---
 
+## Memory introspection
+
+Two pure-read helpers let tests, dashboards, and CI memory budgets
+observe the bump pointer:
+
+- `&heap_used()` — bytes bump-allocated since program start
+  (`heap - heap_base`). Resets when something lowers `heap` — most
+  commonly an `&@with_arena` exit.
+- `&arena_used(saved)` — bytes since a caller-supplied entry pointer.
+  Pair with `&heap_get` to size the current arena without per-arena
+  handles:
+
+```silicon
+&@with_arena {
+    @local saved:Int := &heap_get;
+    # ... do work ...
+    @local cost:Int := &arena_used saved;
+    &@if cost > 1000000, { &log_warn cost }, {};
+};
+```
+
+Both are read-only — they don't allocate, don't fault, and don't
+perturb the bump pointer. Safe to call from any context, including
+inside the panic/trap paths of your own diagnostics.
+
+## Reference counting with `Rc`
+
+When arenas aren't the right tool — when a value's lifetime isn't
+nested in a scope — Sigil ships a single-threaded `Rc` smart pointer
+as plain stdlib (`src/stdlib/rc.si`). Layout: `[refcount:i32,
+value:i32]`. Works for any 32-bit value: Int, Bool, String/Array/Sum
+pointers.
+
+```silicon
+@use '/path/to/sigil/src/stdlib/rc.si';
+
+@fn share:Int := {
+    @local r := &rc_new 42;
+    &@defer &rc_drop r;          # auto-decrement on every return path
+    @local r2 := &rc_clone r;     # bumps count to 2
+    &@defer &rc_drop r2;          # LIFO: drops in reverse declaration order
+    (&rc_get r) + (&rc_get r2)
+};
+```
+
+**Stratum composition is the value proposition.** `Rc` is just six
+`@fn`s — no compiler changes, no new keyword. It composes with two
+existing strata to cover the full lifecycle:
+
+- `@defer` for scope-bound cleanup — `&@defer &rc_drop r` registers
+  the drop at any return-path exit.
+- `&@with_arena` for bulk free — `Rc` allocations inside an arena are
+  physically reclaimed at arena exit regardless of refcount.
+
+Together they cover Rust's `Rc` / `Box` / `Drop` story without
+teaching the compiler any of them. That's the v1.0 stratum power
+demo: ergonomic memory management as a library, not a language
+extension.
+
+**Caveat — physical free.** `&rc_drop` decrements the count but
+doesn't reclaim memory (the v1.0 bump allocator has no free list).
+The slot is logically dead at refcount 0; the bytes leak until the
+enclosing arena resets or the v1.1 GC runs. In practice this is
+fine — wrap `Rc`-using work in `&@with_arena` and the leak window
+collapses to one iteration's allocations.
+
 ## Testing heap exhaustion
 
 The `--max-heap=N` flag caps the wasm memory at N 64KB pages. Past the
@@ -217,4 +283,5 @@ detailed milestones (M-6 through M-8 in ADR 0008's follow-up section).
   per-story acceptance bars.
 - Source: `src/strata/control.si` (stratum declarations),
   `src/ir/lower.ts:lowerWithArena` (lowering),
-  `src/codegen/prelude-ir.ts:buildArenaPromote` (runtime helper).
+  `src/codegen/prelude-ir.ts:buildArenaPromote` (runtime helper),
+  `src/stdlib/rc.si` (Rc smart pointer).

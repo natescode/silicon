@@ -244,6 +244,68 @@ describe('Phase 9c: &@with_arena + &@move_to_parent_arena', () => {
         expect(r.exports.probe()).toBe(0)
     })
 
+    test('&@move_to_parent_arena promotes a flat-payload Sum type', async () => {
+        // @type Pair := $Pair x:Int, y:Int — pad-to-max layout is
+        // [tag:i32, field0:i32, field1:i32] = 12 bytes.
+        const r = await compileAndRun(`
+            @type Pair := $Pair x:Int, y:Int;
+            @fn build:Pair := &@with_arena {
+                @local scratch:String := 'noise';
+                @local p := &Pair 11, 22;
+                &@move_to_parent_arena p
+            };
+            @export build;
+            @fn heap_now:Int := &heap_get;
+            @export heap_now;
+        `)
+        if (!r.ok) throw new Error(r.error)
+        const ptr: number = r.exports.build()
+        const view = new DataView(r.memory.buffer)
+        expect(view.getInt32(ptr, true)).toBe(0)        // tag for $Pair
+        expect(view.getInt32(ptr + 4, true)).toBe(11)   // x
+        expect(view.getInt32(ptr + 8, true)).toBe(22)   // y
+        const heapAfter: number = r.exports.heap_now()
+        expect(heapAfter - ptr).toBe(12)                // 4 + 2*4 pad-to-max
+    })
+
+    test('Sum-with-payloads pad-to-max sizing across variants', async () => {
+        // @type Shape := $Circle r:Int | $Rectangle w:Int, h:Int — maxFields=2.
+        // Even though $Circle only has one field, every value of Shape
+        // occupies 12 bytes (4 + 2*4 pad-to-max).
+        const r = await compileAndRun(`
+            @type Shape := $Circle r:Int | $Rectangle w:Int, h:Int;
+            @fn build:Shape := &@with_arena {
+                @local c := &Circle 7;
+                &@move_to_parent_arena c
+            };
+            @export build;
+            @fn heap_now:Int := &heap_get;
+            @export heap_now;
+        `)
+        if (!r.ok) throw new Error(r.error)
+        const ptr: number = r.exports.build()
+        const view = new DataView(r.memory.buffer)
+        expect(view.getInt32(ptr, true)).toBe(0)        // tag for $Circle (first variant)
+        expect(view.getInt32(ptr + 4, true)).toBe(7)    // r
+        const heapAfter: number = r.exports.heap_now()
+        expect(heapAfter - ptr).toBe(12)                // pad-to-max width
+    })
+
+    test('Sum with String-typed payload is rejected as nested heap', async () => {
+        const r = await compileAndRun(`
+            @type Tagged := $Named s:String;
+            @fn build:Tagged := &@with_arena {
+                @local t := &Named 'hello';
+                &@move_to_parent_arena t
+            };
+            @export build;
+        `)
+        expect(r.ok).toBe(false)
+        if (!r.ok) {
+            expect(r.error).toContain('not implemented')
+        }
+    })
+
     test('&@move_to_parent_arena promotes an Array[Int]', async () => {
         // [count=3][1][2][3] = 4 + 3*4 = 16 bytes laid out contiguously.
         // Promotion memcpys those 16 bytes to the saved boundary.
@@ -301,6 +363,66 @@ describe('Phase 9c: &@with_arena + &@move_to_parent_arena', () => {
             expect(String(e)).toMatch(/unreachable|RuntimeError/i)
         }
         expect(trapped).toBe(true)
+    })
+
+    // ── Phase 9c-8: memory introspection helpers ────────────────────────
+    //
+    // &heap_used returns bytes bump-allocated since program start; &arena_used
+    // returns bytes since a caller-supplied saved pointer.  These exist
+    // for tests + dashboards; they do not change heap state themselves.
+
+    test('&heap_used is 0 immediately at program start', async () => {
+        const r = await compileAndRun(`
+            @fn probe:Int := &heap_used;
+            @export probe;
+        `)
+        if (!r.ok) throw new Error(r.error)
+        expect(r.exports.probe()).toBe(0)
+    })
+
+    test('&heap_used grows by exactly the runtime String allocation cost', async () => {
+        // String literals are static data — they don't bump the heap.
+        // `&str_concat` forces a runtime allocation: 'ab' + 'cd' →
+        // [len=4][a][b][c][d] = 4 + 4 = 8 bytes consumed.
+        const r = await compileAndRun(`
+            @fn probe:Int := {
+                @local _s:String := &str_concat 'ab', 'cd';
+                &heap_used
+            };
+            @export probe;
+        `)
+        if (!r.ok) throw new Error(r.error)
+        expect(r.exports.probe()).toBe(8)
+    })
+
+    test('&heap_used resets back when &@with_arena unwinds', async () => {
+        const r = await compileAndRun(`
+            @fn probe:Int := {
+                @local before:Int := &heap_used;
+                &@with_arena {
+                    @local _s:String := 'scratch';
+                };
+                @local after:Int := &heap_used;
+                after - before
+            };
+            @export probe;
+        `)
+        if (!r.ok) throw new Error(r.error)
+        expect(r.exports.probe()).toBe(0)
+    })
+
+    test('&arena_used tracks the current arena bump distance', async () => {
+        const r = await compileAndRun(`
+            @fn probe:Int := &@with_arena {
+                @local saved:Int := &heap_get;
+                @local _s:String := &str_concat 'hel', 'lo';
+                &arena_used saved
+            };
+            @export probe;
+        `)
+        if (!r.ok) throw new Error(r.error)
+        // `&str_concat` allocates a new String: 4 + 5 = 9 bytes since `saved`.
+        expect(r.exports.probe()).toBe(9)
     })
 
     test('promoted String persists across many arena iterations', async () => {

@@ -109,12 +109,20 @@ function computeHeapBase(irModule: IRModule): number {
     return Math.ceil(minHeap / ALIGN) * ALIGN
 }
 
-/** Rewrite std.wat's `(global $heap …)` initialiser to `base`. */
+/** Rewrite std.wat's `(global $heap …)` initialiser to `base`.
+ *  Phase 9c-8: also rewrites the immutable `$heap_base` companion so
+ *  `$heap_used` (= heap - heap_base) reports the right delta when the
+ *  heap base shifts to make room for data segments. */
 function setHeapBase(stdWat: string, base: number): string {
-    return stdWat.replace(
-        /\(global \$heap \(mut i32\) \(i32\.const \d+\)\)/,
-        `(global $heap (mut i32) (i32.const ${base}))`,
-    )
+    return stdWat
+        .replace(
+            /\(global \$heap \(mut i32\) \(i32\.const \d+\)\)/,
+            `(global $heap (mut i32) (i32.const ${base}))`,
+        )
+        .replace(
+            /\(global \$heap_base i32 \(i32\.const \d+\)\)/,
+            `(global $heap_base i32 (i32.const ${base}))`,
+        )
 }
 
 /** Phase 9c-4: rewrite std.wat's `(memory 1)` to `(memory 1 N)` so the

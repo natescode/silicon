@@ -300,6 +300,31 @@ function buildHeapSet(): IRFunction {
     return fn('heap_set', [['h', i32]], void_, [], vblock(gs('heap', lg('h'))))
 }
 
+// Phase 9c-8 — memory introspection helpers.
+//
+// `heap_used()` returns how many bytes have been bump-allocated since
+// the program started — the heap's high-water mark minus the static
+// data segment boundary.  Used by tests + dashboards + leak checks.
+//
+//   &heap_used == 0   immediately after program start
+//   &heap_used        grows monotonically until something resets `heap`
+//                     (an `&@with_arena` exit, an explicit `&heap_set`)
+//
+// `arena_used(saved)` is the per-arena view: bytes allocated since a
+// caller-supplied entry pointer.  Pass `&heap_get` at arena entry to
+// compute "current arena's bump distance" later.  Cheap and explicit;
+// avoids us having to plumb a global "active arena" pointer or named
+// arena handles for v1.0.
+function buildHeapUsed(): IRFunction {
+    return fn('heap_used', [], i32, [],
+        binop('i32_sub', gg('heap'), gg('heap_base')))
+}
+
+function buildArenaUsed(): IRFunction {
+    return fn('arena_used', [['saved', i32]], i32, [],
+        binop('i32_sub', gg('heap'), lg('saved')))
+}
+
 function buildArrLen(): IRFunction {
     return fn('arr_len', [['ptr', i32]], i32, [], instr1('i32.load', i32, lg('ptr')))
 }
@@ -433,13 +458,25 @@ export function buildPrelude(heapBase: number, includeHostIO: boolean, maxPages?
         imports.push({ kind: 'Import', env: 'env', field: 'read',  name: 'read',  params: [],   result: i32 })
     }
 
-    const globals: IRGlobal[] = [{
-        kind: 'Global',
-        name: 'heap',
-        wasmType: i32,
-        mutable: true,
-        init: c(heapBase),
-    }]
+    const globals: IRGlobal[] = [
+        {
+            kind: 'Global',
+            name: 'heap',
+            wasmType: i32,
+            mutable: true,
+            init: c(heapBase),
+        },
+        // Phase 9c-8: immutable `heap_base` so `$heap_used` can compute
+        // `heap - heap_base` without baking the per-program base into
+        // the helper's IR.
+        {
+            kind: 'Global',
+            name: 'heap_base',
+            wasmType: i32,
+            mutable: false,
+            init: c(heapBase),
+        },
+    ]
 
     const functions: IRFunction[] = [
         buildAlloc(),
@@ -453,6 +490,8 @@ export function buildPrelude(heapBase: number, includeHostIO: boolean, maxPages?
         buildStrLen(),
         buildHeapGet(),
         buildHeapSet(),
+        buildHeapUsed(),
+        buildArenaUsed(),
         buildArrLen(),
         buildArrLoadI32(),
         buildArrStoreI32(),

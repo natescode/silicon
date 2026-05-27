@@ -39,6 +39,18 @@ export interface StructLayout {
     size: number
 }
 
+/** Phase 9c-3a — `@type Foo := $A x:T | $B y:U;` layout descriptor.
+ *  `maxFields` is the largest field count across all variants (pad-to-max).
+ *  Each variant entry carries its declared field types in source order;
+ *  the lowerer consults them to decide whether a value of `Foo` can be
+ *  promoted by `&@move_to_parent_arena` (flat-payload) or has to be
+ *  rejected as nested heap (`$Some s:String`). */
+export interface SumLayout {
+    name: string
+    maxFields: number
+    variants: { name: string; fieldTypes: import('../types/types').SiliconType[] }[]
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Strata 2.0 — Phase handler types
 // ─────────────────────────────────────────────────────────────────────────────
@@ -133,6 +145,21 @@ export interface ElaboratorRegistry {
     // ── @struct layout registry ────────────────────────────────────────────────
     structTypes: Map<string, StructLayout>
 
+    // ── Phase 9c-3a — @type sum layout registry ────────────────────────────────
+    //
+    // Populated by the typechecker's `preRegisterRecordSumType` for every
+    // `@type Foo := $A x:T | $B y:U;` declaration.  The lowerer reads it
+    // when sizing values for `&@move_to_parent_arena` so flat-payload sums
+    // can be promoted out of an `&@with_arena` block; nested-heap variants
+    // (e.g. `$Some s:String`) are rejected with a structured error.
+    //
+    // Layout follows the constructor emit in `src/strata/defExpanders.ts`
+    // (pad-to-max): `[tag:i32, field0:i32, …, field<maxFields-1>:i32]`.
+    // Total size = 4 + 4 × maxFields.  Each variant's declared field types
+    // (per-source-order index) carry through so the lower-time
+    // "any field heap?" check is precise rather than conservative.
+    sumLayouts: Map<string, SumLayout>
+
     // ── Dissolution Phase A: named-handler bodies ─────────────────────────────
     /** `@fn` body blocks keyed by function name.  Populated by a pre-pass
      *  over program elements so that strata handlers referencing `@fn` by
@@ -189,6 +216,7 @@ export function createElaboratorRegistry(): ElaboratorRegistry {
         strataHandlerFnNames: new Set(),
         compiledHandlers: new Map(),
         structTypes: new Map(),
+        sumLayouts: new Map(),
     }
 }
 

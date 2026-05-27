@@ -361,6 +361,11 @@ function preRegisterStdFunctions(ctx: Ctx): void {
         // Arena bump-pointer helpers — boot/std/arena.si wraps these.
         { name: 'heap_get',       params: [],                            result: TypeInt },
         { name: 'heap_set',       params: [TypeInt],                     result: TypeUnknown },
+        // Phase 9c-8: memory introspection.
+        // &heap_used  → bytes bump-allocated since program start (= heap - heap_base).
+        // &arena_used → bytes since `saved` was captured (pair with &heap_get).
+        { name: 'heap_used',      params: [],                            result: TypeInt },
+        { name: 'arena_used',     params: [TypeInt],                     result: TypeInt },
     ]
     for (const { name, params, result } of defs) {
         ctx.functions.set(name, { params, result })
@@ -618,6 +623,10 @@ function preRegisterRecordSumType(def: any, ctx: Ctx): void {
         ? SumOf(name, variantNames, tvars.map(t => ({ kind: 'Variable', name: t } as SiliconType)))
         : aliasType
 
+    // Phase 9c-3a: track per-variant field types so the lowerer can size
+    // `&@move_to_parent_arena` promotions of sum values.
+    const layoutVariants: { name: string; fieldTypes: SiliconType[] }[] = []
+
     for (const v of variants) {
         const paramTypes = v.fields.map(f =>
             resolveType(f.typeName, ctx) ?? TypeUnknown)
@@ -645,6 +654,22 @@ function preRegisterRecordSumType(def: any, ctx: Ctx): void {
         ctx.variantSchemes.set(`${name}::${v.name}`, {
             tvars,
             fields: v.fields.map((f, i) => ({ name: f.name, type: paramTypes[i] })),
+        })
+
+        layoutVariants.push({ name: v.name, fieldTypes: paramTypes })
+    }
+
+    // Phase 9c-3a: publish the pad-to-max layout to the registry so
+    // `src/ir/lower.ts:sizeExprForFlatHeap` can size sum values during
+    // arena promotion.  Matches the constructor emit in
+    // `src/strata/defExpanders.ts:typeRecordExpander` (4 + 4 × maxFields).
+    if (ctx.registry) {
+        const maxFields = layoutVariants.reduce(
+            (m, v) => Math.max(m, v.fieldTypes.length), 0)
+        ctx.registry.sumLayouts.set(name, {
+            name,
+            maxFields,
+            variants: layoutVariants,
         })
     }
 

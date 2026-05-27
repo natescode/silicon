@@ -1342,22 +1342,26 @@ function isValueType(t: SiliconType | undefined): boolean {
  *  (caller turns that into a structured lower-time error).
  *
  *  Supported in v1.0:
- *    - String              → 4 + i32.load(ptr)
- *    - Array[T] (T value)  → 4 + i32.load(ptr) * sizeof(T)
- *    - Distinct over flat  → recurse on underlying
+ *    - String                 → 4 + i32.load(ptr)
+ *    - Array[T] (T value)     → 4 + i32.load(ptr) * sizeof(T)
+ *    - Sum with flat payloads → 4 + 4 * maxFields (constant per type;
+ *                                pad-to-max layout from defExpanders.ts)
+ *    - Distinct over flat     → recurse on underlying
  *
- *  Deferred (Phase 9c follow-up; explicit error):
- *    - Sum-with-payloads   (needs variantSchemes plumbed into LowerCtx)
- *    - Array of heap T     (nested heap; v1.1 trace-and-copy)
+ *  Rejected (caller emits structured error):
+ *    - Array of heap T  (nested heap; v1.1 trace-and-copy)
+ *    - Sum whose any variant has a heap-typed field (nested heap)
+ *    - Function, Variable, Unknown, Void
  */
 function sizeExprForFlatHeap(
     type: SiliconType | undefined,
     ptrGet: () => IRExpr,
+    ctx: LowerCtx,
 ): IRExpr | null {
     if (!type) return null
 
     if (type.kind === 'Distinct') {
-        return sizeExprForFlatHeap(type.underlying, ptrGet)
+        return sizeExprForFlatHeap(type.underlying, ptrGet, ctx)
     }
 
     if (type.kind === 'String') {
@@ -1393,13 +1397,28 @@ function sizeExprForFlatHeap(
         }
     }
 
-    // Sum-with-payloads is layered as `[tag:i32, field0:i32, …, field<max-1>:i32]`
-    // (`src/strata/defExpanders.ts:135` — recordBytes = 4 + 4*maxFields).
-    // Reading `maxFields` requires the typechecker's variantSchemes
-    // map which the LowerCtx doesn't currently carry.  Plumbing that
-    // through is a contained follow-up; for now the lowerer rejects
-    // explicitly so users see a structured error instead of silent
-    // dangling pointers.
+    if (type.kind === 'Sum') {
+        // Layout in `src/strata/defExpanders.ts:typeRecordExpander`:
+        //   [tag:i32, field0:i32, …, field<maxFields-1>:i32]   (4 + 4*maxFields bytes)
+        // The size is *constant* per sum type because pad-to-max means
+        // every variant uses the same record width.  No runtime load
+        // needed; emit an i32.const.
+        const layout = ctx.registry.sumLayouts.get(type.name)
+        if (!layout) return null   // sum declared but layout not registered → reject
+
+        // Reject if any variant has a heap-typed field — that's nested
+        // heap, deferred to v1.1.  Conservative across all variants
+        // because the runtime tag isn't known here; even if the live
+        // value's variant happens to be all-value, a future Sum
+        // construction with a heap variant would dangle on promotion.
+        for (const v of layout.variants) {
+            for (const ft of v.fieldTypes) {
+                if (valueTypeByteSize(ft) === null) return null
+            }
+        }
+        return { kind: 'Const', wasmType: 'i32', value: 4 + 4 * layout.maxFields }
+    }
+
     return null
 }
 
@@ -1493,7 +1512,7 @@ function lowerWithArena(rawArgs: any[], ctx: LowerCtx): IRExpr {
         stmts.push({ kind: 'LocalSet', name: ptrName, value: promotedIR })
         const ptrGet = (): IRExpr => ({ kind: 'LocalGet', wasmType: 'i32', name: ptrName })
 
-        const sizeExpr = sizeExprForFlatHeap(promotedType, ptrGet)
+        const sizeExpr = sizeExprForFlatHeap(promotedType, ptrGet, ctx)
         if (!sizeExpr) {
             const tname = promotedType ? promotedType.kind : '<unknown>'
             throw new IRLowerError(
