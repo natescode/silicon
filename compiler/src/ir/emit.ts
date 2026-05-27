@@ -160,6 +160,34 @@ export function emitExpr(e: IRExpr): string {
 
         case 'Unreachable':
             return 'unreachable'
+
+        // ── Phase 9d-3 — WasmGC instructions ──────────────────────────────
+        case 'StructNew': {
+            const args = e.args.map(emitExpr).join(' ')
+            return args
+                ? `(struct.new ${e.typeName} ${args})`
+                : `(struct.new ${e.typeName})`
+        }
+        case 'StructGet': {
+            const op = e.signed ? `struct.get_${e.signed}` : 'struct.get'
+            return `(${op} ${e.typeName} ${e.fieldIdx} ${emitExpr(e.target)})`
+        }
+        case 'StructSet':
+            return `(struct.set ${e.typeName} ${e.fieldIdx} ${emitExpr(e.target)} ${emitExpr(e.value)})`
+        case 'ArrayNew':
+            return `(array.new ${e.typeName} ${emitExpr(e.init)} ${emitExpr(e.size)})`
+        case 'ArrayNewDefault':
+            return `(array.new_default ${e.typeName} ${emitExpr(e.size)})`
+        case 'ArrayGet': {
+            const op = e.signed ? `array.get_${e.signed}` : 'array.get'
+            return `(${op} ${e.typeName} ${emitExpr(e.target)} ${emitExpr(e.idx)})`
+        }
+        case 'ArraySet':
+            return `(array.set ${e.typeName} ${emitExpr(e.target)} ${emitExpr(e.idx)} ${emitExpr(e.value)})`
+        case 'ArrayLen':
+            return `(array.len ${emitExpr(e.target)})`
+        case 'ArrayCopy':
+            return `(array.copy ${e.dstTypeName} ${e.srcTypeName} ${emitExpr(e.dstRef)} ${emitExpr(e.dstIdx)} ${emitExpr(e.srcRef)} ${emitExpr(e.srcIdx)} ${emitExpr(e.count)})`
     }
 }
 
@@ -251,6 +279,11 @@ function isVoidIR(e: IRExpr): boolean {
         case 'Const':
         case 'LocalGet':
         case 'GlobalGet':
+        // Phase 9d-3 — set/copy nodes carry wasmType: 'void' literally;
+        // new/get/len nodes carry 'i32'.  The shared check works for all.
+        case 'StructNew': case 'StructGet': case 'StructSet':
+        case 'ArrayNew': case 'ArrayNewDefault': case 'ArrayGet':
+        case 'ArraySet': case 'ArrayLen': case 'ArrayCopy':
             return (e as any).wasmType === 'void'
     }
 }

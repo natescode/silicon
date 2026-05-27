@@ -284,6 +284,74 @@ function emitExpr(e: IRExpr, buf: WasmBuffer, ctx: EmitCtx, isUser: boolean,
             buf.u8(0x0F); return
         case 'Nop': return
         case 'Unreachable': buf.u8(0x00); return
+
+        // ── Phase 9d-3 — WasmGC instructions ──────────────────────────────
+        // All GC opcodes share the 0xFB prefix.  Operand order on the
+        // stack matches the WAT operand order (last arg pushed last).
+        case 'StructNew': {
+            for (const a of e.args) emitExpr(a, buf, ctx, isUser, localIdxOf)
+            buf.u8(0xFB); buf.u8(0x00); buf.u32(e.typeIdx)
+            return
+        }
+        case 'StructGet': {
+            emitExpr(e.target, buf, ctx, isUser, localIdxOf)
+            buf.u8(0xFB)
+            if (e.signed === 's')      buf.u8(0x03)
+            else if (e.signed === 'u') buf.u8(0x04)
+            else                       buf.u8(0x02)
+            buf.u32(e.typeIdx); buf.u32(e.fieldIdx)
+            return
+        }
+        case 'StructSet': {
+            emitExpr(e.target, buf, ctx, isUser, localIdxOf)
+            emitExpr(e.value,  buf, ctx, isUser, localIdxOf)
+            buf.u8(0xFB); buf.u8(0x05); buf.u32(e.typeIdx); buf.u32(e.fieldIdx)
+            return
+        }
+        case 'ArrayNew': {
+            emitExpr(e.init, buf, ctx, isUser, localIdxOf)
+            emitExpr(e.size, buf, ctx, isUser, localIdxOf)
+            buf.u8(0xFB); buf.u8(0x06); buf.u32(e.typeIdx)
+            return
+        }
+        case 'ArrayNewDefault': {
+            emitExpr(e.size, buf, ctx, isUser, localIdxOf)
+            buf.u8(0xFB); buf.u8(0x07); buf.u32(e.typeIdx)
+            return
+        }
+        case 'ArrayGet': {
+            emitExpr(e.target, buf, ctx, isUser, localIdxOf)
+            emitExpr(e.idx,    buf, ctx, isUser, localIdxOf)
+            buf.u8(0xFB)
+            if (e.signed === 's')      buf.u8(0x0C)
+            else if (e.signed === 'u') buf.u8(0x0D)
+            else                       buf.u8(0x0B)
+            buf.u32(e.typeIdx)
+            return
+        }
+        case 'ArraySet': {
+            emitExpr(e.target, buf, ctx, isUser, localIdxOf)
+            emitExpr(e.idx,    buf, ctx, isUser, localIdxOf)
+            emitExpr(e.value,  buf, ctx, isUser, localIdxOf)
+            buf.u8(0xFB); buf.u8(0x0E); buf.u32(e.typeIdx)
+            return
+        }
+        case 'ArrayLen': {
+            emitExpr(e.target, buf, ctx, isUser, localIdxOf)
+            buf.u8(0xFB); buf.u8(0x0F)
+            return
+        }
+        case 'ArrayCopy': {
+            emitExpr(e.dstRef, buf, ctx, isUser, localIdxOf)
+            emitExpr(e.dstIdx, buf, ctx, isUser, localIdxOf)
+            emitExpr(e.srcRef, buf, ctx, isUser, localIdxOf)
+            emitExpr(e.srcIdx, buf, ctx, isUser, localIdxOf)
+            emitExpr(e.count,  buf, ctx, isUser, localIdxOf)
+            // array.copy takes BOTH dst and src type indices as immediates.
+            buf.u8(0xFB); buf.u8(0x11)
+            buf.u32(e.dstTypeIdx); buf.u32(e.srcTypeIdx)
+            return
+        }
     }
 }
 

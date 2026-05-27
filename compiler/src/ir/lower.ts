@@ -1770,6 +1770,16 @@ export function exprWasmType(e: IRExpr): WasmType {
         case 'Return':      return 'void'
         case 'Nop':         return 'void'
         case 'Unreachable': return 'void'
+        // Phase 9d-3 — WasmGC instructions.
+        case 'StructNew':        return e.wasmType
+        case 'StructGet':        return e.wasmType
+        case 'StructSet':        return 'void'
+        case 'ArrayNew':         return e.wasmType
+        case 'ArrayNewDefault':  return e.wasmType
+        case 'ArrayGet':         return e.wasmType
+        case 'ArraySet':         return 'void'
+        case 'ArrayLen':         return e.wasmType
+        case 'ArrayCopy':        return 'void'
     }
 }
 

@@ -162,9 +162,120 @@ export interface IRCallIndirect {
     tableIndex: IRExpr
 }
 
+// ─── Phase 9d-3 — WasmGC instruction IR nodes ────────────────────────────
+//
+// One node per instruction in the v1.0 GC opcode subset (per
+// wit/wasm-gc.wit's struct-ops and array-ops interfaces).  Refs are
+// represented as `wasmType: 'i32'` at the IR level — the WasmGC
+// emitter knows they're managed refs; downstream IR passes treat them
+// as opaque pointer-like values.
+//
+// `typeIdx` is the WasmGC type-section index used for binary emit;
+// `typeName` (e.g. `"$Point"`, `"$Array_i32"`) is used for WAT text
+// emit.  Set both at construction — same pattern as `IRCallIndirect`'s
+// `sigKey`.
+//
+// struct.set / array.set / array.copy have `wasmType: 'void'` (they
+// produce no stack value).  Used at expression position via `ExprStmt`
+// the same way `i32.store` (an IRCall with wasmType: 'void') is today.
+//
+// Out of scope for v1.0 (per wit/wasm-gc.wit's excluded-v1-0): ref.test,
+// ref.cast, array.new_fixed, array.new_data, array.new_elem,
+// array.init_data, array.init_elem, array.fill.
+
+export interface IRStructNew {
+    kind: 'StructNew'
+    wasmType: WasmValType   // i32 (ref-as-pointer at IR level)
+    typeIdx: number
+    typeName: string
+    args: IRExpr[]          // field values in source order
+}
+
+export interface IRStructGet {
+    kind: 'StructGet'
+    wasmType: WasmValType
+    typeIdx: number
+    typeName: string
+    fieldIdx: number
+    /** Required for packed (i8/i16) fields; undefined for non-packed. */
+    signed?: 's' | 'u'
+    target: IRExpr          // the struct ref
+}
+
+export interface IRStructSet {
+    kind: 'StructSet'
+    wasmType: 'void'
+    typeIdx: number
+    typeName: string
+    fieldIdx: number
+    target: IRExpr
+    value: IRExpr
+}
+
+export interface IRArrayNew {
+    kind: 'ArrayNew'
+    wasmType: WasmValType
+    typeIdx: number
+    typeName: string
+    init: IRExpr            // initial element value
+    size: IRExpr            // length
+}
+
+export interface IRArrayNewDefault {
+    kind: 'ArrayNewDefault'
+    wasmType: WasmValType
+    typeIdx: number
+    typeName: string
+    size: IRExpr
+}
+
+export interface IRArrayGet {
+    kind: 'ArrayGet'
+    wasmType: WasmValType
+    typeIdx: number
+    typeName: string
+    /** Required for packed (i8/i16) element types; undefined for non-packed. */
+    signed?: 's' | 'u'
+    target: IRExpr
+    idx: IRExpr
+}
+
+export interface IRArraySet {
+    kind: 'ArraySet'
+    wasmType: 'void'
+    typeIdx: number
+    typeName: string
+    target: IRExpr
+    idx: IRExpr
+    value: IRExpr
+}
+
+export interface IRArrayLen {
+    kind: 'ArrayLen'
+    wasmType: WasmValType   // always 'i32' — array.len returns i32
+    target: IRExpr
+}
+
+export interface IRArrayCopy {
+    kind: 'ArrayCopy'
+    wasmType: 'void'
+    dstTypeIdx: number
+    dstTypeName: string
+    srcTypeIdx: number
+    srcTypeName: string
+    dstRef: IRExpr
+    dstIdx: IRExpr
+    srcRef: IRExpr
+    srcIdx: IRExpr
+    count: IRExpr
+}
+
 export type IRExpr =
     | IRConst | IRLocalGet | IRGlobalGet | IRBinOp | IRCall | IRCallIndirect
     | IRBlock | IRIf | IRLoop | IRBreak | IRContinue | IRReturn | IRNop | IRUnreachable
+    // Phase 9d-3 — WasmGC instructions.
+    | IRStructNew | IRStructGet | IRStructSet
+    | IRArrayNew | IRArrayNewDefault | IRArrayGet | IRArraySet | IRArrayLen | IRArrayCopy
 
 // ---------------------------------------------------------------------------
 // Statement IR nodes (produce no stack value)

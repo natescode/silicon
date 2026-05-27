@@ -1412,13 +1412,14 @@
 <h2 id="phase-9d">Phase 9d — WasmGC target (opt-in <code>--target=wasm-gc</code>)</h2>
 
 <div class="phase-intro">
-  <strong>Status (2026-05-26): 2 of 11 stories shipped ✅</strong> —
-  9d-1 (<code>wit/wasm-gc.wit</code>) and 9d-2 (type-section emitter)
-  landed; ADR 0009 moved to <strong>Accepted</strong>, then revised to
-  add the two-layer portability split (lifecycle primitives portable
-  via compile-time elision; introspection + physical-byte primitives
-  mvp-only).  See <a href="adr/0009-wasm-gc-target.md">ADR&nbsp;0009</a>
-  for the full design rationale.
+  <strong>Status (2026-05-26): 3 of 11 stories shipped ✅</strong> —
+  9d-1 (<code>wit/wasm-gc.wit</code>), 9d-2 (type-section emitter),
+  9d-3 (instruction lowering) landed.  ADR 0009 <strong>Accepted</strong>;
+  revised to add the two-layer portability split (lifecycle primitives
+  portable via compile-time elision; introspection + physical-byte
+  primitives mvp-only).  See
+  <a href="adr/0009-wasm-gc-target.md">ADR&nbsp;0009</a> for the full
+  design rationale.
   <br/><br/>
   <strong>What this phase ships.</strong>  A new compile target,
   <code>--target=wasm-gc</code>, that lowers Sigil to WebAssembly's
@@ -1469,18 +1470,9 @@
   <p class="done-note">✓ <code>IRModule.wasmGcTypes</code> registry added to <code>src/ir/nodes.ts</code> with <code>WasmGcType</code>, <code>WasmGcField</code>, <code>WasmGcStorageType</code> shapes.  <code>WasmGcTypeRegistry</code> interner dedups by structural key (struct-vs-array, packed-vs-value, mutability, ref-typeidx all distinguishing).  <code>src/codegen/wasm-emitter.ts</code> gains <code>encodeGcType</code> / <code>encodeField</code> / <code>encodeStorageType</code> emitters; <code>buildTypeSection</code> interleaves function types (first, preserving existing indices) with GC types (after).  Opcodes: <code>0x5F</code> struct, <code>0x5E</code> array, <code>0x78</code> packed-i8, <code>0x77</code> packed-i16, <code>0x63</code> (ref $T), <code>0x64</code> (ref null $T).  <code>0x4F</code> sub-final + rec groups deliberately deferred to v1.1.  16 tests in <code>src/codegen/wasm-gc-types.test.ts</code> cover dedup, structural-key correctness, every storage-type encoding, byte-equal-mvp regression when <code>wasmGcTypes</code> is empty, and a <code>WebAssembly.compile</code> round-trip validation that a struct + array module is well-formed.  Regression: 1101/1101 pass across codegen/ir/types/elaborator/e2e/stdlib.</p>
 </details>
 
-<details class="runtime">
-  <summary><span class="id">9d-3</span> Instruction-level GC lowering <span class="est">L, ~2d</span></summary>
-  <div class="deps"><strong>Depends on:</strong> 9d-2</div>
-  <p class="goal">Add IR → wasm-gc bytecode mapping for the core instructions: <code>struct.new</code>, <code>struct.get</code>, <code>struct.set</code>, <code>array.new</code>, <code>array.new_default</code>, <code>array.get_s</code>, <code>array.set</code>, <code>array.len</code>, <code>array.copy</code>.  New IR nodes <code>IRStructNew</code>, <code>IRStructGet</code>, <code>IRStructSet</code>, <code>IRArrayNew</code>, <code>IRArrayGet</code>, <code>IRArraySet</code>, <code>IRArrayLen</code> (or extend <code>IRCall</code> with a new callKind="gc").  Lowering paths in <code>src/ir/lower.ts</code> route to these when <code>target === 'wasm-gc'</code>.</p>
-  <div class="accept"><strong>Acceptance:</strong>
-    <ul>
-      <li>WAT emit gives the canonical text form (<code>(struct.new $t …)</code>).</li>
-      <li>Binary emit gives the correct GC opcodes (<code>0xFB 0x00</code> for struct.new, etc.).</li>
-      <li><code>ref.cast</code> / <code>ref.test</code> deliberately NOT in scope (Phase 9d-7 uses tagged sums, not subtypes).</li>
-      <li>Snapshot test: a single <code>@struct Point := { x:Int, y:Int }</code> lowers to <code>(struct.new $Point …)</code> under wasm-gc and to the bump-allocator record under wasm-mvp.</li>
-    </ul>
-  </div>
+<details class="runtime complete">
+  <summary><span class="id">9d-3</span> Instruction-level GC lowering <span class="done">✅</span> <span class="est">L, ~2d</span></summary>
+  <p class="done-note">✓ Nine new IR nodes added to <code>src/ir/nodes.ts</code> covering the v1.0 GC opcode subset: <code>IRStructNew</code>, <code>IRStructGet</code> (with optional <code>signed: 's' | 'u'</code> for packed fields), <code>IRStructSet</code>, <code>IRArrayNew</code>, <code>IRArrayNewDefault</code>, <code>IRArrayGet</code> (same packed-signedness slot), <code>IRArraySet</code>, <code>IRArrayLen</code>, <code>IRArrayCopy</code>.  Each carries both <code>typeIdx</code> (for binary emit) and <code>typeName</code> (for WAT emit) — same pattern as <code>IRCallIndirect.sigKey</code>.  Set/copy nodes have <code>wasmType: 'void'</code>; refs are represented as <code>'i32'</code> at the IR level.  WAT emit in <code>src/ir/emit.ts</code> produces canonical text form; binary emit in <code>src/codegen/wasm-emitter.ts</code> produces the <code>0xFB</code>-prefixed GC opcodes (0x00 struct.new, 0x02/03/04 struct.get/get_s/get_u, 0x05 struct.set, 0x06 array.new, 0x07 array.new_default, 0x0B/0C/0D array.get/get_s/get_u, 0x0E array.set, 0x0F array.len, 0x11 array.copy).  <code>exprWasmType</code> in <code>lower.ts</code> + <code>isVoidIR</code> in <code>emit.ts</code> updated for the new union members.  26 tests in <code>src/codegen/wasm-gc-ops.test.ts</code> verify text + binary emit + exprWasmType for every instruction.  Regression: 1127/1127 pass.  Out of scope (per <code>wit/wasm-gc.wit</code>): <code>ref.test</code> / <code>ref.cast</code> (v1.1 subtype-sum optimization), <code>array.new_fixed</code> / <code>new_data</code> / <code>new_elem</code> / <code>init_*</code> / <code>fill</code> (v1.1 if needed).  Full <code>@struct</code> / Sum / Vec routing through these nodes is Phase 9d-7 (sums) and 9d-8 (Vec).</p>
 </details>
 
 <details class="runtime">
@@ -2054,9 +2046,9 @@
   <tr>
     <td>9d — WasmGC target (opt-in <code>--target=wasm-gc</code>)</td>
     <td style="color: var(--accent4); font-weight: 700;">🟡 STARTED</td>
-    <td>2 / 11</td>
-    <td><em>~1.5 d done</em> · ~11 d remain (est: 12.5 d)</td>
-    <td>ADR 0009 <strong>Accepted</strong> (2026-05-26).  <code>wit/wasm-gc.wit</code> ABI surface shipped (9d-1); type-section emitter with structural-dedup interner shipped (9d-2, 16 tests + WebAssembly.compile round-trip).  Remaining v1.0 scope: GC instruction lowering (9d-3), <code>--target=wasm-gc</code> CLI flag (9d-4), two-layer portability split — E0012 reject introspection (9d-5a), E0013 reject physical-byte (9d-5b), lifecycle compile-time elision (9d-5c), <code>src/stdlib/gc/</code> + Rc identity shim (9d-6), tagged-struct sums (9d-7), Vec[T] for value-typed T (9d-8), cross-target test suite (9d-9).  Subtype sums, ref-typed Vec, fully generic Vec[T], HashMap, stringref, weak refs, default-on for new projects → v1.1.</td>
+    <td>3 / 11</td>
+    <td><em>~3.5 d done</em> · ~9 d remain (est: 12.5 d)</td>
+    <td>ADR 0009 <strong>Accepted</strong> (2026-05-26).  <code>wit/wasm-gc.wit</code> ABI surface (9d-1), type-section emitter with structural-dedup interner (9d-2, 16 tests + WebAssembly.compile round-trip), and instruction-level IR + WAT/binary emitters for struct.* and array.* ops (9d-3, 26 tests, all 0xFB-prefixed GC opcodes) shipped.  Remaining v1.0 scope: <code>--target=wasm-gc</code> CLI flag (9d-4), E0012 reject introspection (9d-5a), E0013 reject physical-byte (9d-5b), lifecycle compile-time elision (9d-5c), <code>src/stdlib/gc/</code> + Rc identity shim (9d-6), tagged-struct sums (9d-7), Vec[T] for value-typed T (9d-8), cross-target test suite (9d-9).  Subtype sums, ref-typed Vec, fully generic Vec[T], HashMap, stringref, weak refs, default-on for new projects → v1.1.</td>
   </tr>
   <tr style="background: rgba(62, 207, 142, 0.08);">
     <td>10 — CaaS Consumer APIs + Distribution</td>
