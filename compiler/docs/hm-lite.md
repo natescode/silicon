@@ -297,7 +297,9 @@ re-implement inference.
 ## See also
 
 - `docs/strata-2.0-spec.html` — the Strata 2.0 spec.  HM-lite is the type-
-  system layer that lets generic strata (`@generic`, `@type[T]`) typecheck.
+  system layer that lets `@fn[T]` / `@type[T]` typecheck.  (The
+  strata-authored `@generic` demo is a separate v1.1 capability — see
+  `docs/adr/0001-generic-monomorphization-scope.md`.)
 - `docs/comptime-via-compilation.md` — the dissolution plan for the strata
   body interpreter.  HM-lite is orthogonal: it's how user code typechecks,
   not how strata bodies execute.

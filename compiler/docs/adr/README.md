@@ -32,7 +32,7 @@ dependency bumps.
 
 | # | Title | Status |
 |---|-------|--------|
-| [0001](0001-generic-monomorphization-scope.md) | `@generic` monomorphization: ship in 1.0 or defer to 1.1? | Proposed |
+| [0001](0001-generic-monomorphization-scope.md) | `@fn[T]` ships; `@generic` stratum demo deferred to v1.1 | Accepted |
 | [0002](0002-legacy-block-translator.md) | `legacyBlockTranslator.ts`: keep permanently or rip out? | Proposed |
 | [0003](0003-comptime-engine-path.md) | Comptime engine: runtime-agnostic, vendor wasm3 for 1.0 | Proposed |
 | [0004](0004-backend-interface.md) | Uniform `Backend<T>` interface for codegen targets | Proposed |

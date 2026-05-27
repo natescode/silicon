@@ -19,3 +19,17 @@
         $Some v => v,
         $None   => dflt
 };
+
+# True if the option carries a value.
+@fn option_is_some[T] opt:Option[T] := {
+    &@match opt,
+        $Some _v => @true,
+        $None    => @false
+};
+
+# True if the option is empty.
+@fn option_is_none[T] opt:Option[T] := {
+    &@match opt,
+        $Some _v => @false,
+        $None    => @true
+};

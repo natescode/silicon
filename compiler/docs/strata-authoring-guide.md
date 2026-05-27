@@ -191,7 +191,13 @@ Most production strata don't actually need the missing pieces:
   primitive (`Compiler::ast::children`), not a user-side `@loop`.
 - **Generic monomorphisation strata** capture the template in `on::decl`,
   clone + substitute in `on::module_finalize` per requested instance.  No
-  recursion — substitution is a host primitive.
+  recursion — substitution is a host primitive.  Note: user-written
+  generic functions are *already shipped* via the built-in `@fn[T]`
+  surface (see `docs/hm-lite.md`).  The strata-authored `@generic`
+  pattern is an *advanced Strata 2.0 capability proof* — it shows the
+  Strata system is powerful enough to implement monomorphization from
+  scratch.  End-to-end shipping of the `@generic` keyword is a v1.1
+  follow-up; see `docs/adr/0001-generic-monomorphization-scope.md` story G-1.
 
 The pattern: **anything that needs iteration runs as a host primitive,
 not as Silicon control flow in the handler body**.  The handler body

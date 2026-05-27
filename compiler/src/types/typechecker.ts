@@ -92,7 +92,7 @@ import { intrinsicSignature, type TypeSig } from './intrinsicSig'
 import {
     unify, applySubst, emptySubst, makeFreshGen, UnifyError,
 } from './unify'
-import type { Subst } from './unify'
+import type { Subst, FreshGen } from './unify'
 import { normalizeMatchArgs } from '../ast/matchArms'
 
 /**
@@ -116,6 +116,11 @@ interface Ctx {
     // Names here resolve to `{ kind: 'Variable', name }` instead of being
     // reported as unknown types.  Child scopes (per-definition) extend this.
     typeVars: Set<string>
+    // Single fresh-variable generator shared across the whole typecheck pass.
+    // Each polymorphic call site instantiates its scheme through THIS gen so
+    // nested calls don't collide on names (e.g. outer `unwrap_or` and nested
+    // `&None` would both produce `?T1` from their own counters otherwise).
+    fresh: FreshGen
     // Variant schemes — for each variant of a parameterised sum type,
     // remember the declared field types and the type variables they were
     // declared with.  Used at pattern-bind time so `$Some v` against
@@ -283,6 +288,7 @@ export default function typecheck(program: Program, registry?: ElaboratorRegistr
         immutable: new Set(),
         typeAliases: new Map(),
         typeVars: new Set(),
+        fresh: makeFreshGen(),
         variantSchemes: new Map(),
         structFields: new Map(),
         registry,
@@ -1460,10 +1466,11 @@ function checkPolymorphicCall(
     }
 
     // Polymorphic — instantiate the scheme with fresh `?Ti`s shared across
-    // params and result, then unify pointwise.
-    const fresh = makeFreshGen()
+    // params and result, then unify pointwise.  Uses ctx.fresh so nested
+    // calls (e.g. `&unwrap_or x, (&None)`) don't recycle the same `?T1`
+    // name for two different schemes and accidentally unify them.
     const instMap = new Map<string, SiliconType>()
-    for (const tv of tvarNames) instMap.set(tv, fresh.next(tv))
+    for (const tv of tvarNames) instMap.set(tv, ctx.fresh.next(tv))
     const instParams = sig.params.map(p => applySubst(p, instMap))
     const instResult = applySubst(sig.result, instMap)
 

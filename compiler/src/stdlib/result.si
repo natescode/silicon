@@ -28,3 +28,10 @@
         $Ok _v  => @true,
         $Err _e => @false
 };
+
+# True if the result is an Err.
+@fn result_is_err[T, E] r:Result[T, E] := {
+    &@match r,
+        $Ok _v  => @false,
+        $Err _e => @true
+};
