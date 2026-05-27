@@ -26,7 +26,7 @@ import type {
     IRLocalGet, IRGlobalGet, IRCall,
     IRBlock, IRIf, IRLoop, IRBreak, IRContinue, IRNop, IRUnreachable, IRExprStmt,
 } from './nodes'
-import { ARRAY_LITERAL_CALLEE } from './nodes'
+import { ARRAY_LITERAL_CALLEE, WasmGcTypeRegistry } from './nodes'
 import { type CompilerAPI, type LowerFns, createCompilerAPI } from '../compiler-api'
 
 // ---------------------------------------------------------------------------
@@ -82,6 +82,12 @@ interface LowerCtx {
      *  collapse to no-ops because the engine GC owns reclamation).
      *  Defaults to 'host' (Phase 9c bump-allocator semantics). */
     target: LowerTarget
+    /** Phase 9d-7: registry of WasmGC struct/array type declarations
+     *  populated as the program is lowered.  Drained into
+     *  `IRModule.wasmGcTypes` at the end of `lowerProgram`.  Only
+     *  written under `target === 'wasm-gc'`; safe to leave empty
+     *  under mvp (preserves byte-equal codegen). */
+    wasmGcTypes: WasmGcTypeRegistry
 }
 
 interface StringAlloc {
@@ -236,6 +242,7 @@ export function lowerProgram(
         structLocals: new Map(),
         funcrefTable: { entries: [], signatures: [] },
         target,
+        wasmGcTypes: new WasmGcTypeRegistry(),
     }
     // Pass the live ctx (not a snapshot) so $compiler is current when
     // recursively invoked methods (api.lowerExpr → lowerBinaryOp → on::lower
@@ -386,6 +393,11 @@ export function lowerProgram(
         funcrefTable: ctx.funcrefTable
             && (ctx.funcrefTable.entries.length > 0 || ctx.funcrefTable.signatures.length > 0)
             ? ctx.funcrefTable
+            : undefined,
+        // Phase 9d-7: drain the WasmGC type registry into the module.
+        // Empty when target !== 'wasm-gc' — preserves byte-equal mvp codegen.
+        wasmGcTypes: ctx.wasmGcTypes.size() > 0
+            ? ctx.wasmGcTypes.snapshot()
             : undefined,
     }
 }

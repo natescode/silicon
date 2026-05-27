@@ -133,7 +133,31 @@ const typeRecordExpander: IRDefExpander = {
         const variants = extractVariants(def)
         if (variants.length === 0) return []
         const maxFields = variants.reduce((m, v) => Math.max(m, v.fields.length), 0)
-        const recordBytes = 4 + 4 * maxFields  // tag + max fields
+        const recordBytes = 4 + 4 * maxFields  // tag + max fields (mvp path)
+        const isWasmGc = api.ctx.target === 'wasm-gc'
+
+        // Phase 9d-7: under wasm-gc, register the sum type as a single
+        // WasmGC struct: (struct (field (mut i32)) (field (mut i32)) … )
+        // — tag at field 0, pad-to-max payload at fields 1..maxFields.
+        // Same shape as the mvp pad-to-max record, just emitted as a
+        // managed struct instead of bytes.
+        let sumTypeIdx = -1
+        const sumTypeWat = `$${typeName}`
+        if (isWasmGc) {
+            // Nominal intern — Sigil sums are nominal types, so two sums
+            // with identical pad-to-max layouts must remain distinct
+            // WasmGC type-section entries.  See nodes.ts:internNominal.
+            sumTypeIdx = api.ctx.wasmGcTypes.internNominal({
+                name: sumTypeWat,
+                spec: {
+                    kind: 'struct',
+                    fields: Array.from({ length: 1 + maxFields }, () => ({
+                        storage: { kind: 'val' as const, type: 'i32' as const },
+                        mutable: true,
+                    })),
+                },
+            })
+        }
 
         const out: (IRGlobal | IRFunction)[] = []
 
@@ -144,9 +168,30 @@ const typeRecordExpander: IRDefExpander = {
             api.ctx.varNames.add(tagGlobalName)
             out.push(api.ir.makeGlobal(tagGlobalName, 'i32', false, api.ir.makeConst(v.tag, 'i32')))
 
-            // 2. Constructor function — &Circle r → allocates 12 bytes, writes [tag, r, 0]
             const ctorName = api.watId(v.name)
             const params = v.fields.map(f => ({ name: f.name, wasmType: 'i32' as const }))
+
+            if (isWasmGc) {
+                // 2-gc. Constructor — `struct.new $Foo (i32.const tag) v0 v1 …`
+                // Tag first, then user-supplied fields in source order,
+                // then zero-fill the pad-to-max trailing slots.
+                const args: IRExpr[] = [api.ir.makeConst(v.tag, 'i32')]
+                for (const f of v.fields) args.push(api.ir.makeLocalGet(f.name, 'i32'))
+                for (let i = v.fields.length; i < maxFields; i++) {
+                    args.push(api.ir.makeConst(0, 'i32'))
+                }
+                const body: IRExpr = {
+                    kind: 'StructNew',
+                    wasmType: 'i32',
+                    typeIdx: sumTypeIdx,
+                    typeName: sumTypeWat,
+                    args,
+                }
+                out.push(api.ir.makeFunction(ctorName, params, 'i32', [], body))
+                continue
+            }
+
+            // 2-mvp. Constructor function — &Circle r → allocates 12 bytes, writes [tag, r, 0]
             const localPtr = api.ir.makeLocal('__rec', 'i32')
 
             const stmts: IRStmt[] = []

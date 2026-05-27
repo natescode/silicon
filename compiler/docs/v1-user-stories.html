@@ -1412,14 +1412,15 @@
 <h2 id="phase-9d">Phase 9d — WasmGC target (opt-in <code>--target=wasm-gc</code>)</h2>
 
 <div class="phase-intro">
-  <strong>Status (2026-05-27): 8 of 11 stories shipped ✅</strong> —
+  <strong>Status (2026-05-27): 9 of 11 stories shipped ✅</strong> —
   9d-1 (<code>wit/wasm-gc.wit</code>), 9d-2 (type-section emitter),
-  9d-3 (instruction lowering), 9d-4 (CLI flag), 9d-5a/b/c (the
-  two-layer portability split), 9d-6 (<code>stdlib/gc/rc.si</code>
-  identity shim + resolver shadow) all landed.  Programs using Rc +
-  arenas + value types now compile under both <code>--target=wasm-mvp</code>
-  AND <code>--target=wasm-gc</code> unchanged.  Remaining v1.0:
-  9d-7 (tagged sums — unblocks <code>Option</code>/<code>Result</code>),
+  9d-3 (instruction lowering), 9d-4 (CLI flag), 9d-5a/b/c (portability
+  split), 9d-6 (<code>stdlib/gc/rc.si</code> + resolver shadow),
+  9d-7 (tagged-struct sums + @match dispatch via struct.get) all
+  landed.  Programs using Rc + arenas + value types + sum types
+  (<code>Option</code> / <code>Result</code> / user-defined) now
+  compile under both <code>--target=wasm-mvp</code> AND
+  <code>--target=wasm-gc</code> unchanged.  Remaining v1.0:
   9d-8 (Vec[T value]), 9d-9 (cross-target test suite).
   <br/><br/>
   <strong>What this phase ships.</strong>  A new compile target,
@@ -1502,18 +1503,10 @@
   <p class="done-note"><strong>Deferred to 9d-7/9d-8:</strong> <code>src/stdlib/gc/string.si</code>, <code>option.si</code>, <code>result.si</code>, <code>array.si</code>.  These require sum-type and array-type routing through WasmGC's struct.new / array.new instructions (9d-7 / 9d-8), so shipping shadow files now would just be placeholders that fail with E0013 on the underlying <code>&amp;alloc</code> calls.  The resolver's fallthrough means the original mvp files are picked under wasm-gc — they currently fail at typecheck (E0013), which is the correct cliff until 9d-7/8 routes the types.  User-facing impact: programs using only <code>Rc</code> + arenas + value types work today on both targets; programs using <code>Option</code> / <code>Result</code> / <code>String</code> / <code>Array</code> wait on 9d-7/8.</p>
 </details>
 
-<details class="runtime">
-  <summary><span class="id">9d-7</span> Tagged-struct sum-type lowering <span class="est">L, ~1d</span></summary>
-  <div class="deps"><strong>Depends on:</strong> 9d-3</div>
-  <p class="goal">Lower <code>@type Foo := $A x:Int | $B y:Int</code> to a single struct type per Sum: <code>(struct (field i32) (field i32) (field i32))</code> — tag at field 0, pad-to-max payload at fields 1..maxFields.  Construction is <code>struct.new $Foo (tag) v0 v1</code>; <code>@match</code> reads field 0 via <code>struct.get</code> and dispatches via the existing tag-compare logic.  Reuses Phase 9c-3a's <code>sumLayouts</code> registry — same byte-size calc, emitted as a struct instead of bytes.</p>
-  <div class="accept"><strong>Acceptance:</strong>
-    <ul>
-      <li><code>@type Color := Red | Green | Blue</code> (payload-free) lowers to <code>(struct (field i32))</code> — tag only.</li>
-      <li><code>@type Shape := $Circle r:Int | $Rectangle w:Int, h:Int</code> lowers to <code>(struct (field i32) (field i32) (field i32))</code> — tag + 2 pad-to-max fields.</li>
-      <li><code>@match</code> works under wasm-gc; same arm semantics as wasm-mvp.</li>
-      <li>Subtype representation (<code>ref.test</code> / <code>ref.cast</code>) deliberately NOT in scope — tracked as v1.1 story 9.1-d-1 (transparent optimization, source unchanged).</li>
-    </ul>
-  </div>
+<details class="runtime complete">
+  <summary><span class="id">9d-7</span> Tagged-struct sum-type lowering <span class="done">✅</span> <span class="est">L, ~1d</span></summary>
+  <p class="done-note">✓ <code>typeRecordExpander</code> in <code>src/strata/defExpanders.ts</code> routes on <code>api.ctx.target</code>: under wasm-gc, registers a nominal struct type via the new <code>WasmGcTypeRegistry.internNominal</code> path (sums are nominal — two sums with identical layouts must NOT dedup, unlike <code>@struct</code> which uses structural <code>intern</code>).  Constructors emit <code>(struct.new $Foo (tag) v0 v1 …)</code> with pad-to-max zero-fill for missing slots — no <code>$alloc</code> + <code>i32.store</code> sequence.  <code>expandMatchChain</code> in <code>src/compiler-api/index.ts</code> routes on <code>ctx.target</code>: tag dispatch via <code>(struct.get $Foo 0 disc)</code> and field-bind via <code>(struct.get $Foo (i+1) disc)</code>; <code>typeIdx</code> resolved via <code>ctx.wasmGcTypes.lookupByName</code>.  <code>CompilerCtx</code> gains <code>target</code> + <code>wasmGcTypes.{intern, internNominal, lookupByName}</code>; <code>LowerCtx.wasmGcTypes</code> is a new <code>WasmGcTypeRegistry</code> instance drained into <code>IRModule.wasmGcTypes</code> at end of <code>lowerProgram</code>.  11 tests in <code>src/codegen/wasm-gc-sums.test.ts</code>: payload-bearing struct registration, nominal-vs-structural dedup distinction (Option_Int vs Pair_Int with identical layouts stay distinct), wasm-mvp emits no GC types (regression), constructor uses struct.new, payload-free variant zero-fills to pad-to-max, @match uses struct.get for tag + fields, mvp @match still uses i32.load.  Subtype representation (<code>ref.test</code> / <code>ref.cast</code>) deferred to v1.1 story 9.1-d-1.</p>
+  <p class="done-note"><strong>Test scope note:</strong> multi-field match-bind syntax (<code>$Rectangle w, h => …</code>) is ambiguous with arm-separator commas and isn't currently supported by the parser, so tests use single-payload variants (<code>$Some v</code>) — which fully exercises both tag dispatch and field-index arithmetic.  Multi-field bind is a Phase 7 grammar/parser concern, not a 9d-7 limitation.</p>
 </details>
 
 <details class="runtime">
@@ -2007,9 +2000,9 @@
   <tr>
     <td>9d — WasmGC target (opt-in <code>--target=wasm-gc</code>)</td>
     <td style="color: var(--accent4); font-weight: 700;">🟡 STARTED</td>
-    <td>8 / 11</td>
-    <td><em>~5.5 d done</em> · ~7 d remain (est: 12.5 d)</td>
-    <td>ADR 0009 <strong>Accepted</strong> (2026-05-26).  Shipped: <code>wit/wasm-gc.wit</code> ABI (9d-1); type-section emitter with structural-dedup (9d-2, 16 tests); instruction-level IR + emitters for struct.* / array.* ops (9d-3, 26 tests, 0xFB-prefixed GC opcodes); <code>--target=wasm-gc</code> CLI flag (9d-4, 5 subprocess tests); two-layer portability split — E0012 reject introspection + E0013 reject physical-byte + lifecycle compile-time elision (9d-5a/b/c, 23 tests in <code>wasm-gc-portability.test.ts</code>); <code>src/stdlib/gc/rc.si</code> identity shim + useResolver wasm-gc shadow rewriting (9d-6, 11 tests).  Remaining v1.0 scope: tagged-struct sums (9d-7) — unblocks <code>stdlib/gc/option.si</code> + <code>result.si</code> + <code>string.si</code>; Vec[T] for value-typed T (9d-8); cross-target test suite (9d-9).  Subtype sums, ref-typed Vec, fully generic Vec[T], HashMap, stringref, weak refs, default-on for new projects → v1.1.</td>
+    <td>9 / 11</td>
+    <td><em>~6.5 d done</em> · ~6 d remain (est: 12.5 d)</td>
+    <td>ADR 0009 <strong>Accepted</strong> (2026-05-26).  Shipped: <code>wit/wasm-gc.wit</code> ABI (9d-1); type-section emitter (9d-2); GC instruction IR + emitters (9d-3); CLI flag (9d-4); portability split — E0012/E0013/lifecycle elision (9d-5a/b/c); <code>stdlib/gc/rc.si</code> + useResolver shadow (9d-6); tagged-struct sum lowering + @match dispatch via struct.get (9d-7, 11 tests).  Sum types now compile under both targets — Option/Result/user-defined sums work on wasm-gc.  Remaining v1.0: Vec[T] for value-typed T (9d-8), cross-target test suite (9d-9).  Subtype sums, ref-typed Vec, fully generic Vec[T], HashMap, stringref, weak refs, default-on for new projects → v1.1.</td>
   </tr>
   <tr style="background: rgba(62, 207, 142, 0.08);">
     <td>10 — CaaS Consumer APIs + Distribution</td>

@@ -73,6 +73,11 @@ interface CtxShape {
     currentStratum?: string
     /** Mutable ref — preferred over currentStratum; set by the lowerer before each handler call. */
     currentStratumRef?: { name: string }
+    /** Phase 9d-5/7 — compile target + WasmGC type registry.  Both
+     *  optional so callers in test-only code (which build a CtxShape
+     *  by hand) don't have to construct them. */
+    target?: import('../ir/lower').LowerTarget
+    wasmGcTypes?: import('../ir/nodes').WasmGcTypeRegistry
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -148,6 +153,22 @@ export interface CompilerCtx {
         set(name: string, layout: StructLayout): void
         get(name: string): StructLayout | undefined
         has(name: string): boolean
+    }
+    /** Phase 9d-5/7: compile target.  Strata/expanders that route on
+     *  target (e.g. typeRecordExpander emits struct.new under wasm-gc,
+     *  alloc+stores under wasm-mvp) read this. */
+    readonly target: import('../ir/lower').LowerTarget
+    /** Phase 9d-7: registry for interning WasmGC struct/array type
+     *  declarations.  Only written when target === 'wasm-gc'.
+     *  Snapshotted into IRModule.wasmGcTypes at end of lowerProgram. */
+    wasmGcTypes: {
+        /** Structural dedup — right for @struct types. */
+        intern(t: import('../ir/nodes').WasmGcType): number
+        /** Nominal intern — right for @type sums (no structural dedup;
+         *  two sums with identical layouts must remain distinct types). */
+        internNominal(t: import('../ir/nodes').WasmGcType): number
+        /** Look up a previously-registered nominal type by name. */
+        lookupByName(name: string): number | undefined
     }
 }
 
@@ -387,6 +408,13 @@ export function createCompilerAPI(ctx: CtxShape, fns: LowerFns): CompilerAPI {
             set: (name, layout) => ctx.registry?.structTypes?.set(name, layout),
             get: (name)         => ctx.registry?.structTypes?.get(name),
             has: (name)         => ctx.registry?.structTypes?.has(name) ?? false,
+        },
+        // Phase 9d-5/7 — target dispatch + WasmGC type interner.
+        target: ctx.target ?? 'host',
+        wasmGcTypes: {
+            intern:        (t)    => ctx.wasmGcTypes?.intern(t) ?? 0,
+            internNominal: (t)    => ctx.wasmGcTypes?.internNominal(t) ?? 0,
+            lookupByName:  (name) => ctx.wasmGcTypes?.lookupByName(name),
         },
     }
 
@@ -879,33 +907,69 @@ export function createCompilerAPI(ctx: CtxShape, fns: LowerFns): CompilerAPI {
                 const variant = unwrapVariant(patNode)
 
                 if (variant && isSumDisc) {
-                    // Variant pattern: cond = (i32.eq (i32.load disc) (i32.const tag))
+                    // Variant pattern: cond = (i32.eq <tag-load> tag)
                     // arm = (block [bind fields ...] (arm body))
+                    //
+                    // Phase 9d-7: under wasm-gc, tag and field reads use
+                    // `struct.get $Foo idx ref` instead of `i32.load (ptr + offset)`.
+                    // Same observable semantics; different bytecode shape.
                     const tag = variantTag(variant.name)
-                    const loadTag: IRExpr = {
-                        kind: 'Call',
-                        wasmType: 'i32',
-                        callee: 'i32.load',
-                        callKind: 'instr',
-                        args: [discExpr],
-                    } as any
-                    const cond = ir.makeBinOp('i32_eq', loadTag, ir.makeConst(tag, 'i32'), 'i32')
+                    const isWasmGc = ctx.target === 'wasm-gc'
+                    const sumWatName = `$${discType.name}`
+                    // typeIdx must match the entry the @type expander registered
+                    // (defExpanders.ts:typeRecordExpander).  Order is guaranteed:
+                    // @type declarations are processed before any function bodies
+                    // that match against them, so by the time we get here the
+                    // nominal entry exists.  Fall back to 0 if not — the emitter
+                    // will still produce valid WAT (typeName drives the text form),
+                    // and any program reaching this fallback already failed at
+                    // typecheck for using an unregistered sum.
+                    const sumTypeIdx = isWasmGc
+                        ? (ctx.wasmGcTypes?.lookupByName(sumWatName) ?? 0)
+                        : 0
 
-                    // Build field-binding stmts: @local f := i32.load offset=(idx+1)*4 (disc)
-                    const fields = (variant.fields || []) as any[]
-                    const stmts: IRStmt[] = []
-                    for (let fi = 0; fi < fields.length; fi++) {
-                        const fname: string = fields[fi].name
-                        const offset = (fi + 1) * 4
-                        const loadField: IRExpr = {
+                    const loadTag: IRExpr = isWasmGc
+                        ? {
+                            kind: 'StructGet',
+                            wasmType: 'i32',
+                            typeIdx: sumTypeIdx,
+                            typeName: sumWatName,
+                            fieldIdx: 0,
+                            target: discExpr,
+                        }
+                        : {
                             kind: 'Call',
                             wasmType: 'i32',
                             callee: 'i32.load',
                             callKind: 'instr',
-                            args: [
-                                ir.makeBinOp('i32_add', discExpr, ir.makeConst(offset, 'i32'), 'i32'),
-                            ],
+                            args: [discExpr],
                         } as any
+                    const cond = ir.makeBinOp('i32_eq', loadTag, ir.makeConst(tag, 'i32'), 'i32')
+
+                    // Build field-binding stmts.  mvp: @local f := i32.load (disc + offset).
+                    // gc:  @local f := struct.get $Foo (fi+1) disc.
+                    const fields = (variant.fields || []) as any[]
+                    const stmts: IRStmt[] = []
+                    for (let fi = 0; fi < fields.length; fi++) {
+                        const fname: string = fields[fi].name
+                        const loadField: IRExpr = isWasmGc
+                            ? {
+                                kind: 'StructGet',
+                                wasmType: 'i32',
+                                typeIdx: sumTypeIdx,
+                                typeName: sumWatName,
+                                fieldIdx: fi + 1,   // tag occupies index 0
+                                target: discExpr,
+                            }
+                            : {
+                                kind: 'Call',
+                                wasmType: 'i32',
+                                callee: 'i32.load',
+                                callKind: 'instr',
+                                args: [
+                                    ir.makeBinOp('i32_add', discExpr, ir.makeConst((fi + 1) * 4, 'i32'), 'i32'),
+                                ],
+                            } as any
                         // Register field as a function-scoped local (hoisted).
                         ctx.pendingLocals.push({ name: fname, wasmType: 'i32' })
                         ctx.locals.set(fname, 'i32')

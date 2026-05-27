@@ -425,12 +425,26 @@ function wasmGcFieldKey(f: WasmGcField): string {
 }
 
 /** Stateful interner that builds up an `IRModule.wasmGcTypes` array
- *  while collecting types from the typed AST.  Returns the type index
- *  of `spec` — either freshly added (with the supplied `name`) or
- *  re-used from a previous structurally-identical entry. */
+ *  while collecting types from the typed AST.  Two lookup modes:
+ *
+ *  - `intern(t)` — structural dedup.  Two specs with the same field
+ *    layout share a type index, even if they have different names.
+ *    Right for `@struct`s (a Point with x:Int, y:Int and a Coord with
+ *    x:Int, y:Int are the same WasmGC type at the binary level).
+ *  - `internNominal(t)` — name-keyed.  Two specs with the same name
+ *    return the same index even if registered twice; two specs with
+ *    different names get fresh indices even if structurally identical.
+ *    Right for `@type Foo := …` sum types (Phase 9d-7) which Silicon
+ *    treats as nominal — `Option[Int]` and `Result[Int, E]` must NOT
+ *    share a type index even if pad-to-max layouts coincide.
+ *  - `lookupByName(name)` — name-keyed read for downstream passes
+ *    (e.g. match-lowering needs the typeIdx of a sum at the time it
+ *    emits struct.get).  Returns undefined if no nominal entry under
+ *    that name. */
 export class WasmGcTypeRegistry {
     private readonly types: WasmGcType[] = []
-    private readonly byKey: Map<string, number> = new Map()
+    private readonly byKey:  Map<string, number> = new Map()
+    private readonly byName: Map<string, number> = new Map()
 
     intern(t: WasmGcType): number {
         const key = wasmGcTypeKey(t)
@@ -440,6 +454,22 @@ export class WasmGcTypeRegistry {
         this.types.push(t)
         this.byKey.set(key, idx)
         return idx
+    }
+
+    /** Nominal intern — name-keyed, skips structural dedup. */
+    internNominal(t: WasmGcType): number {
+        const cached = this.byName.get(t.name)
+        if (cached !== undefined) return cached
+        const idx = this.types.length
+        this.types.push(t)
+        this.byName.set(t.name, idx)
+        // Don't add to byKey — keeps structural intern for @struct decoupled.
+        return idx
+    }
+
+    /** Look up a previously-registered nominal type by name. */
+    lookupByName(name: string): number | undefined {
+        return this.byName.get(name)
     }
 
     /** Position-stable snapshot of every interned type. */
