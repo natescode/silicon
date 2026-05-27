@@ -164,6 +164,7 @@
     <li><a href="#phase-9">Phase 9 — Native backend (QBE) ✅</a></li>
     <li><a href="#phase-9-5">Phase 9.5 — Abstract IR opcodes (backend-agnostic Strata)</a></li>
     <li><a href="#phase-9c">Phase 9c — Memory management (explicit arenas + parent-arena escape + Rc) ✅ (9/10 done; 9c-7 deferred with boot/ port)</a></li>
+    <li><a href="#phase-9d">Phase 9d — WasmGC target (opt-in <code>--target=wasm-gc</code>)</a></li>
     <li><a href="#phase-10">Phase 10 — CaaS Consumer APIs + Distribution ✅ (1.0 stories done)</a></li>
     <li><a href="#phase-11">Phase 11 — Silicon interpreter (written in Silicon, compiled to native via QBE)</a></li>
     <li><a href="#phase-12">Phase 12 — <code>sgl</code> interpreter-backed subcommands</a></li>
@@ -1408,6 +1409,169 @@
 </details>
 
 <!-- ================================================================== -->
+<h2 id="phase-9d">Phase 9d — WasmGC target (opt-in <code>--target=wasm-gc</code>)</h2>
+
+<div class="phase-intro">
+  <strong>Status:</strong> stories drafted (2026-05-26); blocked on
+  9d-1 (the ABI gate).  See
+  <a href="adr/0009-wasm-gc-target.md">ADR&nbsp;0009</a> for the full
+  design rationale.
+  <br/><br/>
+  <strong>What this phase ships.</strong>  A new compile target,
+  <code>--target=wasm-gc</code>, that lowers Sigil to WebAssembly's
+  managed-reference types (<code>struct</code> /
+  <code>array</code> / <code>ref T</code>) instead of the
+  bump-allocator linear-memory model Phase 9c built.  Whole-program
+  opt-in: same source code; different lowering for memory-managed
+  types.  <code>wasm-mvp</code> (Phase 9c) remains the default and
+  keeps working forever — wasm-gc is for users who want cycle-safe
+  shared ownership without rolling <code>Rc</code> by hand, or who
+  target engines (browsers, modern wasmtime) where GC is on by default.
+  <br/><br/>
+  <strong>v1.0 scope.</strong>  Primitives unchanged; <code>String</code>
+  → <code>(array i8)</code>; <code>Array[T]</code> (value T) →
+  <code>(array (mut T))</code>; <code>@struct</code> → <code>struct</code>;
+  sum-with-payloads → tagged-struct representation reusing Phase 9c-3a's
+  <code>sumLayouts</code> registry; <code>Vec[T]</code> for value-typed
+  T.  Linear-memory primitives (<code>&amp;alloc</code>,
+  <code>&amp;@with_arena</code>, <code>Rc</code>, <code>&amp;heap_*</code>)
+  are rejected at typecheck under wasm-gc with a structured "this is a
+  wasm-mvp-only primitive" diagnostic.
+  <br/><br/>
+  <strong>Deferred to v1.1.</strong>  Subtype-hierarchy sum
+  representation (transparent optimization); ref-typed
+  <code>Vec[T]</code> (Vec[String], Vec[@struct]); fully generic
+  <code>Vec[T]</code> with monomorphization; <code>HashMap[K, V]</code>;
+  stringref adoption; weak refs + finalizers; defaulting new
+  <code>sgl init</code> projects to wasm-gc.
+</div>
+
+<details class="runtime">
+  <summary><span class="id">9d-1</span> Publish <code>wit/wasm-gc.wit</code> ABI surface <span class="est">S, ~3h</span></summary>
+  <div class="deps"><strong>Depends on:</strong> ADR 0009 (Proposed)</div>
+  <p class="goal">Define the managed-ref ABI every gc-target stdlib type conforms to.  Documents the operations the codegen emits — <code>struct.new $T fields…</code>, <code>struct.get $T i ref</code>, <code>array.new $A init size</code>, <code>array.get_s $A ref idx</code>, <code>array.len ref</code>.  Mirrors <code>wit/allocator.wit</code>'s shape and intent.  This is the gate for ADR 0009 moving to <strong>Accepted</strong>.</p>
+  <div class="accept"><strong>Acceptance:</strong>
+    <ul>
+      <li><code>wit/wasm-gc.wit</code> exists; lints clean under the same WIT tooling already used for <code>wit/comptime.wit</code> + <code>wit/allocator.wit</code>.</li>
+      <li>Documents the v1.0 instruction subset: <code>struct.new</code>, <code>struct.get</code>, <code>struct.set</code>, <code>array.new</code>, <code>array.new_default</code>, <code>array.get_s</code>, <code>array.set</code>, <code>array.len</code>, <code>array.copy</code>.</li>
+      <li>Explicitly excludes <code>ref.test</code> / <code>ref.cast</code> (v1.1 subtype-sum optimization only).</li>
+      <li>ADR 0009 status updated to <strong>Accepted</strong> in the same PR; ADR ↔ wit cross-link in both directions.</li>
+    </ul>
+  </div>
+</details>
+
+<details class="runtime">
+  <summary><span class="id">9d-2</span> WasmGC type-section emitter <span class="est">L, ~1.5d</span></summary>
+  <div class="deps"><strong>Depends on:</strong> 9d-1</div>
+  <p class="goal">Extend <code>src/codegen/wasm-emitter.ts</code> to emit the WasmGC type section.  <code>(type $foo (struct (field i32) (field i32)))</code> and <code>(type $bar (array (mut i32)))</code> declarations dedup'd by structural identity.  Sigil-side types (<code>@struct</code>, sum types, <code>String</code>, <code>Array[T]</code>, <code>Vec[T]</code>) feed into a type-collection pass that runs after lowering, before binary emit.  Existing <code>wasm-mvp</code> emit path stays byte-identical when the type table is empty.</p>
+  <div class="accept"><strong>Acceptance:</strong>
+    <ul>
+      <li>New <code>wasmGcTypes</code> registry in <code>IRModule</code>: per-Sigil-type WasmGC type-index plus the underlying struct/array spec.</li>
+      <li>Type-section emit (section 1 of the wasm binary) gains the GC opcodes <code>0x5F</code> (struct), <code>0x5E</code> (array), <code>0x50</code> (sub final).</li>
+      <li>Deduplication: two Sigil <code>@struct</code>s with identical layouts share a type index.</li>
+      <li>Unit test: emit a module with one struct + one array type; round-trip through <code>wabt</code>'s <code>wasm-validate</code> (or equivalent) and assert valid.</li>
+    </ul>
+  </div>
+</details>
+
+<details class="runtime">
+  <summary><span class="id">9d-3</span> Instruction-level GC lowering <span class="est">L, ~2d</span></summary>
+  <div class="deps"><strong>Depends on:</strong> 9d-2</div>
+  <p class="goal">Add IR → wasm-gc bytecode mapping for the core instructions: <code>struct.new</code>, <code>struct.get</code>, <code>struct.set</code>, <code>array.new</code>, <code>array.new_default</code>, <code>array.get_s</code>, <code>array.set</code>, <code>array.len</code>, <code>array.copy</code>.  New IR nodes <code>IRStructNew</code>, <code>IRStructGet</code>, <code>IRStructSet</code>, <code>IRArrayNew</code>, <code>IRArrayGet</code>, <code>IRArraySet</code>, <code>IRArrayLen</code> (or extend <code>IRCall</code> with a new callKind="gc").  Lowering paths in <code>src/ir/lower.ts</code> route to these when <code>target === 'wasm-gc'</code>.</p>
+  <div class="accept"><strong>Acceptance:</strong>
+    <ul>
+      <li>WAT emit gives the canonical text form (<code>(struct.new $t …)</code>).</li>
+      <li>Binary emit gives the correct GC opcodes (<code>0xFB 0x00</code> for struct.new, etc.).</li>
+      <li><code>ref.cast</code> / <code>ref.test</code> deliberately NOT in scope (Phase 9d-7 uses tagged sums, not subtypes).</li>
+      <li>Snapshot test: a single <code>@struct Point := { x:Int, y:Int }</code> lowers to <code>(struct.new $Point …)</code> under wasm-gc and to the bump-allocator record under wasm-mvp.</li>
+    </ul>
+  </div>
+</details>
+
+<details class="runtime">
+  <summary><span class="id">9d-4</span> <code>--target=wasm-gc</code> CLI flag <span class="est">S, ~3h</span></summary>
+  <div class="deps"><strong>Depends on:</strong> 9d-3</div>
+  <p class="goal">Wire the new target value through <code>src/sigil_cli.ts</code> → <code>CompileOptions.target</code> → <code>LowerOptions.target</code> → emitter dispatch.  Help text updated; <code>parseTarget</code> accepts <code>wasm-gc</code> alongside <code>host</code> and <code>wasian</code>.  <code>sgl build --target=wasm-gc</code> picks the new path.</p>
+  <div class="accept"><strong>Acceptance:</strong>
+    <ul>
+      <li><code>sgl --help</code> lists <code>wasm-gc</code> as a target value.</li>
+      <li>Invalid target value errors with a structured "valid targets: host | wasix | wasm-gc" message.</li>
+      <li><code>sgl.toml</code> can set <code>[build] target = "wasm-gc"</code>; CLI flag wins over toml.</li>
+    </ul>
+  </div>
+</details>
+
+<details class="runtime">
+  <summary><span class="id">9d-5</span> Reject wasm-mvp-only primitives under wasm-gc <span class="est">S, ~3h</span></summary>
+  <div class="deps"><strong>Depends on:</strong> 9d-4</div>
+  <p class="goal">Typechecker pass: when <code>target === 'wasm-gc'</code>, calls to linear-memory primitives raise a structured diagnostic ("<code>&amp;alloc</code> is a wasm-mvp-only primitive; rewrite this allocation as a managed ref or compile with <code>--target=wasm-mvp</code>").  Covers the full list from ADR 0009 §2: <code>&amp;alloc</code>, <code>&amp;realloc</code>, <code>&amp;mem_copy</code>, <code>&amp;heap_get</code>, <code>&amp;heap_set</code>, <code>&amp;heap_used</code>, <code>&amp;arena_used</code>, <code>&amp;str_ptr</code>, <code>&amp;@with_arena</code>, <code>&amp;@move_to_parent_arena</code>, <code>&amp;rc_new</code>/<code>clone</code>/<code>drop</code>/<code>get</code>/<code>count</code>/<code>is_unique</code>.</p>
+  <div class="accept"><strong>Acceptance:</strong>
+    <ul>
+      <li>New error code <strong>E0012</strong> "wasm-mvp-only primitive under wasm-gc target" with the offending name and a one-line suggestion.</li>
+      <li>Test: every primitive in the list above raises E0012 under wasm-gc.</li>
+      <li>Same primitives stay valid under wasm-mvp — no regression.</li>
+    </ul>
+  </div>
+</details>
+
+<details class="runtime">
+  <summary><span class="id">9d-6</span> <code>src/stdlib/gc/</code> managed-mode types <span class="est">L, ~1.5d</span></summary>
+  <div class="deps"><strong>Depends on:</strong> 9d-3</div>
+  <p class="goal">New <code>src/stdlib/gc/</code> directory mirroring the wasm-mvp stdlib's surface API: <code>string.si</code>, <code>array.si</code>, <code>option.si</code>, <code>result.si</code>.  Implementations differ in <em>layout</em>, not in <em>call surface</em>.  A user porting a program from wasm-mvp to wasm-gc changes one CLI flag, not their call sites.</p>
+  <div class="accept"><strong>Acceptance:</strong>
+    <ul>
+      <li><code>src/stdlib/gc/string.si</code> wraps <code>(array i8)</code>; provides <code>&amp;str_concat</code>, <code>&amp;str_len</code>, indexing.</li>
+      <li><code>src/stdlib/gc/option.si</code> + <code>result.si</code> are mostly identical to their wasm-mvp counterparts since they're built on sum types (M-7 owns the layout).</li>
+      <li>Module loader picks the right stdlib variant based on <code>options.target</code>.</li>
+      <li>Documentation in <code>docs/memory.md</code> updated with a wasm-gc section.</li>
+    </ul>
+  </div>
+</details>
+
+<details class="runtime">
+  <summary><span class="id">9d-7</span> Tagged-struct sum-type lowering <span class="est">L, ~1d</span></summary>
+  <div class="deps"><strong>Depends on:</strong> 9d-3</div>
+  <p class="goal">Lower <code>@type Foo := $A x:Int | $B y:Int</code> to a single struct type per Sum: <code>(struct (field i32) (field i32) (field i32))</code> — tag at field 0, pad-to-max payload at fields 1..maxFields.  Construction is <code>struct.new $Foo (tag) v0 v1</code>; <code>@match</code> reads field 0 via <code>struct.get</code> and dispatches via the existing tag-compare logic.  Reuses Phase 9c-3a's <code>sumLayouts</code> registry — same byte-size calc, emitted as a struct instead of bytes.</p>
+  <div class="accept"><strong>Acceptance:</strong>
+    <ul>
+      <li><code>@type Color := Red | Green | Blue</code> (payload-free) lowers to <code>(struct (field i32))</code> — tag only.</li>
+      <li><code>@type Shape := $Circle r:Int | $Rectangle w:Int, h:Int</code> lowers to <code>(struct (field i32) (field i32) (field i32))</code> — tag + 2 pad-to-max fields.</li>
+      <li><code>@match</code> works under wasm-gc; same arm semantics as wasm-mvp.</li>
+      <li>Subtype representation (<code>ref.test</code> / <code>ref.cast</code>) deliberately NOT in scope — tracked as v1.1 story 9.1-d-1 (transparent optimization, source unchanged).</li>
+    </ul>
+  </div>
+</details>
+
+<details class="runtime">
+  <summary><span class="id">9d-8</span> <code>Vec[T]</code> for value-typed <code>T</code> <span class="est">XL, ~2d</span></summary>
+  <div class="deps"><strong>Depends on:</strong> 9d-3, 9d-6</div>
+  <p class="goal">Lower <code>Vec[T]</code> for <code>T ∈ { Int, Float, Bool, Int64, UInt8, UInt16, UInt32, UInt64 }</code> to a header struct + backing array: <code>(struct (field i32) (field (ref $array_T)))</code> + <code>(array (mut T))</code>.  Mirrors today's <code>vec_*_i32</code> / <code>vec_*_f32</code> scope.  All 9 helpers (<code>vec_new</code>, <code>vec_push</code>, <code>vec_get</code>, <code>vec_set</code>, <code>vec_len</code>, <code>vec_capacity</code>, <code>vec_pop</code>, <code>vec_insert</code>, <code>vec_remove</code>) transpose 1:1 from existing <code>vec.si</code>.</p>
+  <div class="accept"><strong>Acceptance:</strong>
+    <ul>
+      <li>Per-element-type monomorphization: <code>$Vec_i32</code>, <code>$Vec_f32</code>, <code>$Vec_i64</code>, etc., distinct WasmGC types.</li>
+      <li>Grow path uses <code>array.new</code> + <code>array.copy</code>.</li>
+      <li>Ref-typed <code>T</code> (Vec[String], Vec[@struct Foo]) deliberately NOT in scope — needs variance design, tracked as v1.1 story 9.1-d-2.</li>
+      <li>Fully generic <code>@fn vec_push[T] v:Vec[T], x:T</code> deliberately NOT in scope — needs monomorphization-through-emit plumbing, tracked as v1.1 story 9.1-d-3.</li>
+      <li>Existing <code>src/stdlib/vec.test.ts</code>-style suite mirrored as <code>src/stdlib/gc/vec.test.ts</code>; same assertions under wasm-gc.</li>
+    </ul>
+  </div>
+</details>
+
+<details class="runtime">
+  <summary><span class="id">9d-9</span> Cross-target test suite <span class="est">L, ~1d</span></summary>
+  <div class="deps"><strong>Depends on:</strong> 9d-7, 9d-8</div>
+  <p class="goal">A test pass that compiles the same Silicon source under both <code>--target=wasm-mvp</code> and <code>--target=wasm-gc</code> and asserts equivalent runtime behaviour.  Catches lowering divergence early; sets the contract that source-level porting is a flag change, not a rewrite.</p>
+  <div class="accept"><strong>Acceptance:</strong>
+    <ul>
+      <li>New <code>src/e2e/cross-target.test.ts</code> with ~15 programs covering: primitives, String, Array[T value], @struct, payload-free Sum, payload-bearing Sum, Vec[Int], Vec[Float], Option, Result.</li>
+      <li>Each program runs under both targets via <code>WebAssembly.instantiate</code> (V8 / Bun ship GC support); stdout equivalence asserted.</li>
+      <li>Programs using raw memory primitives are wasm-mvp-only — verified by the negative cases in 9d-5.</li>
+      <li>CI matrix: tier-1 platforms run both targets.</li>
+    </ul>
+  </div>
+</details>
+
+<!-- ================================================================== -->
 <h2 id="phase-10">Phase 10 — CaaS Consumer APIs</h2>
 
 <div class="phase-intro">
@@ -1866,6 +2030,13 @@
     <td><em>actual ~1.5 d</em> (est: 5 d)</td>
     <td>2026-05-26.  ADR 0008 → Accepted.  Core arena work: <code>wit/allocator.wit</code> (9c-1), <code>&amp;@with_arena</code> + <code>&amp;@move_to_parent_arena</code> strata (9c-2/3), <code>$arena_promote</code> helper with size paths for String / Array[T<sub>value</sub>] / Sum-with-flat-payloads / Distinct (9c-3/3a), <code>memory.grow</code> clean trap + <code>--max-heap=N</code> CLI flag (9c-4), docs (9c-5), cross-backend posture (9c-6).  Follow-up wins: <code>&amp;heap_used</code> / <code>&amp;arena_used</code> introspection (9c-8); <code>Rc</code> smart pointer stdlib showing stratum composition power (9c-9 — Rc + <code>@defer</code> + <code>&amp;@with_arena</code> covers Rust's Rc/Box/Drop without compiler changes).  40 new tests (arena.test.ts 20, backends.test.ts 11, rc.test.ts 12 — minus 3 reused), 1214/1214 pass.  9c-7 boot/ port deferred behind Phase 7.</td>
   </tr>
+  <tr>
+    <td>9d — WasmGC target (opt-in <code>--target=wasm-gc</code>)</td>
+    <td style="color: var(--muted);">⬜ DRAFTED</td>
+    <td>0 / 9</td>
+    <td>~12 d (est)</td>
+    <td>ADR 0009 (Proposed).  v1.0 scope: <code>wit/wasm-gc.wit</code> ABI (9d-1), type-section emitter (9d-2), GC instruction lowering (9d-3), <code>--target=wasm-gc</code> CLI flag (9d-4), reject mvp-only primitives at typecheck (9d-5), <code>src/stdlib/gc/</code> (9d-6), tagged-struct sums (9d-7), Vec[T] for value-typed T (9d-8), cross-target test suite (9d-9).  Subtype sums, ref-typed Vec, fully generic Vec[T], HashMap, stringref, weak refs, default-on for new projects → v1.1.</td>
+  </tr>
   <tr style="background: rgba(62, 207, 142, 0.08);">
     <td>10 — CaaS Consumer APIs + Distribution</td>
     <td style="color: var(--accent3); font-weight: 700;">✅ 1.0 DONE</td>
@@ -1912,16 +2083,16 @@
   <tr style="background: var(--surface2); border-top: 1px solid var(--border); font-weight: 600;">
     <td>1.0 REMAINING</td>
     <td style="color: var(--accent4);">🟡</td>
-    <td>~38 stories</td>
-    <td><strong style="color: var(--accent);">~24 working days (~1.2 months)</strong></td>
-    <td>Phase 7 boot/ port (21 open, includes 9c-7 deferred-with-boot/) dominates.  Phase 9.5 abstract IR opcodes (6) + Phase 11 interpreter (16) + Phase 12 (4) follow.</td>
+    <td>~47 stories</td>
+    <td><strong style="color: var(--accent);">~36 working days (~1.8 months)</strong></td>
+    <td>Phase 7 boot/ port (21 open, includes 9c-7 deferred-with-boot/) dominates.  Phase 9d WasmGC target (9 stories / ~12 d) + Phase 9.5 abstract IR opcodes (6) + Phase 11 interpreter (16) + Phase 12 (4) follow.</td>
   </tr>
   <tr style="background: var(--surface2); font-weight: 600;">
     <td>1.0 TOTAL</td>
     <td></td>
-    <td>~180 stories</td>
-    <td><strong style="color: var(--accent);">~35 working days (~1.7 months)</strong> end-to-end<br/><em style="color: var(--muted); font-size: 0.85em;">(original estimate: 146 d / ~6.7 months — Phase 9c added 4 d to estimate, 1 d to actual)</em></td>
-    <td>~76% faster than original estimate.  v1.1 work tracked separately in <a href="v1.1-user-stories.html">v1.1-user-stories.html</a>.</td>
+    <td>~189 stories</td>
+    <td><strong style="color: var(--accent);">~47 working days (~2.3 months)</strong> end-to-end<br/><em style="color: var(--muted); font-size: 0.85em;">(original estimate did not include WasmGC target — Phase 9d adds 9 stories / ~12 d to the 1.0 plan)</em></td>
+    <td>v1.1 work tracked separately in <a href="v1.1-user-stories.html">v1.1-user-stories.html</a>.</td>
   </tr>
   <tr style="font-size: 0.85em; color: var(--muted);">
     <td>+ post-1.0 stretch (in v1)</td>
