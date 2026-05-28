@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 /**
  * Silicon Grammar Loader
  *
@@ -12,7 +13,10 @@
 
 import * as ohm from 'ohm-js'
 
-const grammarSource = Bun.file('./src/grammar/silicon-official.ohm')
+// Resolve the .ohm path relative to this module rather than process.cwd
+// so `sgl` works when invoked from any directory (the CLI runs from the
+// user's project, not the compiler repo).
+const grammarSource = Bun.file(`${import.meta.dir}/silicon-official.ohm`)
 const siliconGrammar = ohm.grammar(await grammarSource.text())
 
 export default siliconGrammar

@@ -1,4 +1,5 @@
 #! /usr/bin/env bun
+// SPDX-License-Identifier: MIT
 /**
  * sgl — The Silicon compiler CLI
  *
@@ -50,7 +51,8 @@ Commands:
   setup           Download and install the QBE native backend toolchain
   test  [file]    Run @@test-annotated functions (requires Phase 7)
   eval            Interactive REPL (requires Phase 7)
-  add   <pkg>     Add a package dependency (requires package registry)
+  add   <pkg>     Add a dependency (1.0: --path <local> only; registry pending)
+  resolve         Generate sgl.lock from sgl.toml (stub at 1.0)
   fmt   [file]    Format Silicon source files (normalises whitespace + style)
   help            Show this help
 
@@ -428,9 +430,10 @@ async function cmdRun(positional: string | undefined, opts: CompileOptions): Pro
         process.exit(result.status ?? 0)
     } catch (e: any) {
         if (e.code === 'ENOENT') {
-            console.error('sgl run: wasmtime not found.')
-            console.error('  Install wasmtime: https://wasmtime.dev/')
-            console.error('  Or compile with `sgl build` and run the binary manually.')
+            console.error('sgl run: wasmtime not found on PATH or in ~/.wasmtime/bin.')
+            console.error('  Install:  curl https://wasmtime.dev/install.sh -sSf | bash')
+            console.error('  Or:       brew install wasmtime')
+            console.error('  Or skip wasmtime entirely with `sgl run --release` (native via QBE).')
             process.exit(1)
         }
         throw e
@@ -504,14 +507,163 @@ function cmdEval(_args: string[]): void {
     process.exit(1)
 }
 
+/**
+ * Story 6b-11 — `sgl add <name> --path <local>` records a local-path
+ * dependency in sgl.toml.  Git / registry sources are tracked under
+ * 6b-12 + 6b-13 and surface here once landed.
+ *
+ * At 1.0, registry packages return a not-yet-available error and direct
+ * the user to the local-path form.
+ */
 function cmdAdd(args: string[]): void {
-    if (!args[0]) {
+    // Split args from flags.  `--path <dir>` is the only flag accepted at 1.0.
+    const positional: string[] = []
+    let localPath: string | undefined
+    for (let i = 0; i < args.length; i++) {
+        const a = args[i]
+        if (a === '--path') {
+            localPath = args[++i]
+            if (!localPath) {
+                console.error('sgl add: --path requires a directory argument')
+                process.exit(1)
+            }
+        } else if (a.startsWith('--path=')) {
+            localPath = a.slice('--path='.length)
+        } else {
+            positional.push(a)
+        }
+    }
+
+    const name = positional[0]
+    if (!name) {
         console.error('sgl add: package name required')
+        console.error('  Usage:  sgl add <name> --path <local-dir>')
         process.exit(1)
     }
-    console.error(`sgl add: package registry not yet available`)
-    console.error(`  '${args[0]}' was not added.`)
-    process.exit(1)
+
+    if (!localPath) {
+        console.error(`sgl add: registry-backed packages are not yet available (story 6b-12).`)
+        console.error(`  At 1.0, add dependencies by path:`)
+        console.error(`    sgl add ${name} --path ../path/to/${name}`)
+        process.exit(1)
+    }
+
+    const cwd = process.cwd()
+    const tomlPath = path.join(cwd, 'sgl.toml')
+    if (!fs.existsSync(tomlPath)) {
+        console.error('sgl add: no sgl.toml found in current directory')
+        console.error("  Run 'sgl init <name>' first, or cd into an existing project.")
+        process.exit(1)
+    }
+
+    // Resolve the path to a project-rooted form for stability across machines.
+    const absLocal = path.isAbsolute(localPath) ? localPath : path.resolve(cwd, localPath)
+    if (!fs.existsSync(absLocal)) {
+        console.error(`sgl add: --path '${localPath}' does not exist (resolved to ${absLocal})`)
+        process.exit(1)
+    }
+    const relativeLocal = path.relative(cwd, absLocal) || '.'
+
+    // Append (or update) the [dependencies] entry.  We rewrite the file
+    // line by line so existing formatting / comments survive.
+    const text = fs.readFileSync(tomlPath, 'utf-8')
+    const lines = text.split('\n')
+    let inDeps = false
+    let depSectionStart = -1
+    let existingLineIdx = -1
+    for (let i = 0; i < lines.length; i++) {
+        const trimmed = lines[i].trim()
+        const secMatch = trimmed.match(/^\[([a-zA-Z0-9_.-]+)\]$/)
+        if (secMatch) {
+            if (secMatch[1] === 'dependencies') {
+                inDeps = true
+                depSectionStart = i
+            } else if (inDeps) {
+                inDeps = false  // section ended
+            }
+            continue
+        }
+        if (inDeps) {
+            const kvMatch = trimmed.match(/^([a-zA-Z0-9_-]+)\s*=\s*"[^"]*"$/)
+            if (kvMatch && kvMatch[1] === name) existingLineIdx = i
+        }
+    }
+
+    const newLine = `${name} = "path:${relativeLocal}"`
+    if (existingLineIdx >= 0) {
+        lines[existingLineIdx] = newLine
+        console.log(`updated ${name} → path:${relativeLocal}`)
+    } else if (depSectionStart >= 0) {
+        // Insert at the end of the dependencies section.  Walk to the next
+        // section header or EOF and insert right before it.
+        let insertAt = lines.length
+        for (let i = depSectionStart + 1; i < lines.length; i++) {
+            if (lines[i].trim().match(/^\[/)) { insertAt = i; break }
+        }
+        // Trim trailing blank lines within the section to keep formatting tight.
+        while (insertAt > depSectionStart + 1 && lines[insertAt - 1].trim() === '') insertAt--
+        lines.splice(insertAt, 0, newLine)
+        console.log(`added ${name} → path:${relativeLocal}`)
+    } else {
+        // No [dependencies] section — append one at EOF.
+        if (lines[lines.length - 1] !== '') lines.push('')
+        lines.push('[dependencies]', newLine)
+        console.log(`added ${name} → path:${relativeLocal} (new [dependencies] section)`)
+    }
+
+    fs.writeFileSync(tomlPath, lines.join('\n'), 'utf-8')
+}
+
+/**
+ * Story 6b-13 — `sgl resolve` stub.  Generates a v1 sgl.lock from the
+ * current sgl.toml.  At 1.0 this writes the lockfile header + the root
+ * package + any path: dependencies; git / registry sources are a v1.x
+ * resolver concern.  Format documented in docs/lockfile-format.md.
+ */
+function cmdResolve(_args: string[]): void {
+    const cwd = process.cwd()
+    const toml = readSglToml(cwd)
+    if (!toml) {
+        console.error('sgl resolve: no sgl.toml found in current directory')
+        process.exit(1)
+    }
+
+    const name = toml.package.name ?? path.basename(cwd)
+    const version = toml.package.version ?? '0.0.0'
+    const depNames = Object.keys(toml.dependencies).sort()
+
+    const lines: string[] = []
+    lines.push('# sgl.lock — generated by `sgl resolve`.  DO NOT edit by hand.')
+    lines.push('# Edit sgl.toml instead and re-run `sgl resolve`.')
+    lines.push('')
+    lines.push('version = 1')
+    lines.push('')
+
+    // Root package.
+    lines.push('[[package]]')
+    lines.push(`name = "${name}"`)
+    lines.push(`version = "${version}"`)
+    if (depNames.length > 0) {
+        const list = depNames.map(d => `"${d}"`).join(', ')
+        lines.push(`dependencies = [${list}]`)
+    }
+
+    // Path dependencies — at 1.0 we record source verbatim and don't
+    // recursively walk pointee sgl.toml files.  v1.x resolver fills in
+    // version + nested deps + sha256 for git/registry sources.
+    for (const dep of depNames) {
+        const source = toml.dependencies[dep]
+        lines.push('')
+        lines.push('[[package]]')
+        lines.push(`name = "${dep}"`)
+        lines.push('version = "0.0.0"  # v1.x resolver fills in from pointee sgl.toml')
+        lines.push(`source = "${source}"`)
+    }
+    lines.push('')
+
+    const lockPath = path.join(cwd, 'sgl.lock')
+    fs.writeFileSync(lockPath, lines.join('\n'), 'utf-8')
+    console.log(`wrote ${lockPath} (${depNames.length} dependency${depNames.length === 1 ? '' : 'ies'})`)
 }
 
 async function cmdFmt(
@@ -617,6 +769,10 @@ for (let i = 0; i < rest.length; i++) {
         maxHeapPages = parseMaxHeap(next)
     } else if (arg.startsWith('--max-heap=')) {
         maxHeapPages = parseMaxHeap(arg.slice('--max-heap='.length))
+    } else if (arg === '--path' || arg.startsWith('--path=')) {
+        // sgl add --path <local> — consumed by cmdAdd, not the global parser.
+        // Just skip the value token if --path <val> form was used.
+        if (arg === '--path') i++
     } else if (!arg.startsWith('--')) {
         positional = arg
     } else {
@@ -651,7 +807,12 @@ try {
             cmdEval(rest)
             break
         case 'add':
-            cmdAdd(rest.filter(a => !a.startsWith('-')))
+            // `sgl add` needs to see its own flags (e.g. --path); the main
+            // parser only consumes flags it recognises, so pass through `rest`.
+            cmdAdd(rest)
+            break
+        case 'resolve':
+            cmdResolve(rest)
             break
         case 'fmt':
             await cmdFmt(positional, fmtCheck, fmtStdout, opts)
