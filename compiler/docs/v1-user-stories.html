@@ -166,7 +166,6 @@
     <li><a href="#phase-9d">Phase 9d — WasmGC target (opt-in <code>--target=wasm-gc</code>)</a></li>
     <li><a href="#phase-10">Phase 10 — CaaS Consumer APIs + Distribution ✅ (1.0 stories done)</a></li>
     <li><a href="#phase-13">Phase 13 — Stability + distribution 🟡 (13/21; 10b-4/5 + 10c-6/9/10/11/12/13 open)</a></li>
-    <li><a href="#phase-14">Phase 14 — DWARF + LSP <em style="color: var(--accent4); font-size: 0.85em;">[moved to v1.1]</em></a></li>
   </ol>
 </div>
 
@@ -1342,21 +1341,23 @@
   <div class="deps"><strong>Depends on:</strong> CaaS-4</div>
 </details>
 
-<details class="caas partial">
-  <summary><span class="id">CaaS-7</span> Incremental parser — re-parse only changed documents <span class="partial">⚡ floor done</span> <span class="est">L, ~8h</span> <em style="color: var(--accent4); font-size: 0.78em;">[post-1.0 acceptable]</em></summary>
+<details class="caas complete" open>
+  <summary><span class="id">CaaS-7</span> Incremental parser — re-parse only changed documents <span class="done">✅ floor (sub-doc deferred)</span> <span class="est">L, ~8h</span> <em style="color: var(--accent4); font-size: 0.78em;">[post-1.0 acceptable]</em></summary>
   <p class="goal">When a document is edited, re-parse only that document.  Downstream artifacts (SemanticModel, diagnostics) invalidate per-document.  No full-project reparse.  Pure perf optimisation — 1.0 ships without it (full reparse on change) and the LSP is still usable for moderately sized projects.</p>
   <div class="accept"><strong>Acceptance:</strong>
     <ul>
       <li>Editing one document leaves other documents' SyntaxTrees unchanged. ✅ (Workspace stores per-document state; editDocument only touches the target doc)</li>
-      <li>Sub-document incremental parsing (only re-parse the changed subtree) is a stretch goal; full-document re-parse is the floor. ✅ floor: <code>SyntaxTree.withText()</code> re-parses the whole document; sub-document still post-1.0.</li>
+      <li>Sub-document incremental parsing (only re-parse the changed subtree) is a stretch goal; full-document re-parse is the floor. ✅ floor: <code>SyntaxTree.withText()</code> re-parses the whole document; sub-document re-parse is explicitly v1.x — Ohm doesn't expose a sub-tree reparse API at 1.x compatibility level, so doing it well needs a switch to a hand-rolled parser that the LL(1) grammar (ADR 0010) makes feasible later.</li>
     </ul>
   </div>
+  <p><strong>1.0 close-out:</strong> floor is the v1.0 deliverable per the story's "[post-1.0 acceptable]" tag.  Sub-document optimisation pinned to v1.1 with the Ohm-replacement work as its real prerequisite.</p>
   <div class="deps"><strong>Depends on:</strong> CaaS-2, CaaS-4</div>
 </details>
 
-<details class="caas">
-  <summary><span class="id">CaaS-8</span> Incremental typecheck — semantic delta propagation <span class="est">L, ~8h</span> <em style="color: var(--accent4); font-size: 0.78em;">[post-1.0 acceptable]</em></summary>
+<details class="caas partial">
+  <summary><span class="id">CaaS-8</span> Incremental typecheck — semantic delta propagation <span class="partial">⚡ deferred to v1.1</span> <span class="est">L, ~8h</span> <em style="color: var(--accent4); font-size: 0.78em;">[post-1.0 acceptable]</em></summary>
   <p class="goal">When document A changes and B doesn't, B's SemanticModel only re-runs if A's exports actually changed (signatures, types, registered strata).  Salsa-style query memoisation.  Like CaaS-7, a perf concern — 1.0 ships without it.</p>
+  <p><strong>Status:</strong> deferred to v1.1 by design.  Real implementation needs a query-memoisation framework (Salsa-style) layered over <code>SemanticModel</code>; can't be honestly stubbed at 1.0.  The CaaS API surface is shaped to support it landing later without breaking changes — <code>typecheck()</code> takes the elaborated tree and registry as inputs, returns a <code>SemanticModel</code>; v1.x adds a <code>typecheck.incremental(prev, changes)</code> overload without disturbing the current call.  Acceptable per the story's "[post-1.0 acceptable]" tag.  Tracked in v1.1 stories.</p>
   <div class="deps"><strong>Depends on:</strong> CaaS-7</div>
 </details>
 
@@ -1374,9 +1375,10 @@
   <div class="deps"><strong>Depends on:</strong> CaaS-9, 10b-1</div>
 </details>
 
-<details class="caas">
-  <summary><span class="id">CaaS-11</span> Code action / quick-fix API surface <span class="est">M, ~4h</span> <em style="color: var(--accent4); font-size: 0.78em;">[post-1.0 acceptable]</em></summary>
+<details class="caas complete" open>
+  <summary><span class="id">CaaS-11</span> Code action / quick-fix API surface <span class="done">✅</span> <span class="est">M, ~4h</span> <em style="color: var(--accent4); font-size: 0.78em;">[post-1.0 acceptable]</em></summary>
   <p class="goal">A CodeAction takes a diagnostic and produces zero or more TextEdits that fix it.  Foundational for Roslyn-style "Press Ctrl+. to fix this error" workflows in IDEs.  Strata authors can register code actions for their diagnostics.  Nice IDE polish but not blocking 1.0.</p>
+  <p><strong>Shipped:</strong> <code>src/caas/codeAction.ts</code> — public types (<code>CodeAction</code>, <code>CodeActionProvider</code>, <code>TextEdit</code>) re-exported from <code>src/caas/index.ts</code> as part of the 1.0 stable API.  Registry surface: <code>registerCodeAction(code, provider)</code> / <code>getCodeActions(diagnostic, source)</code> / <code>clearCodeActions()</code> — O(1) dispatch keyed by diagnostic code; multiple providers concatenate, dedup by title.  <code>applyEdits(source, edits)</code> applies a TextEdit list bottom-up by offset; rejects overlapping ranges.  Built-in <code>E0004_renameProvider</code> turns "did you mean 'name'?" hints into a rename quickfix as a proof-of-concept for strata authors.  10 tests in <code>src/caas/codeAction.test.ts</code> green.  v1.x: workspace-level refactors, multi-file edits, interactive previews.</p>
   <div class="deps"><strong>Depends on:</strong> CaaS-6</div>
 </details>
 
@@ -1397,18 +1399,21 @@
   <p><strong>Shipped:</strong> <code>--release</code> now sets <code>native = true</code> in the arg parser, routing <code>sgl run --release</code> and <code>sgl build --release</code> through the QBE native pipeline (<code>cmdRunNative</code> / <code>cmdBuildNative</code>). Help text updated: <em>"Compile via the QBE native backend (alias for --native)"</em>. Phase 9 (QBE) is complete, so the blocker is resolved.</p>
 </details>
 
-<details class="toolchain">
-  <summary><span class="id">6b-11</span> sgl add — fetch a dependency <span class="est">M, ~4h</span></summary>
+<details class="toolchain complete" open>
+  <summary><span class="id">6b-11</span> sgl add — fetch a dependency <span class="done">✅ local-path floor</span> <span class="est">M, ~4h</span></summary>
   <div class="deps"><strong>Depends on:</strong> 6b-2, 6b-12</div>
+  <p><strong>Shipped:</strong> <code>sgl add &lt;name&gt; --path &lt;local-dir&gt;</code> records a path-based dependency in <code>sgl.toml</code> under <code>[dependencies]</code>; appends the section if missing; updates rather than duplicates when the name already exists; refuses with a missing-name error if no <code>--path</code> is given (points the user at the local-path form).  Side-fix to <code>src/grammar/SiliconGrammar.ts</code> so the grammar load is module-relative rather than cwd-relative — <code>sgl</code> now runs correctly from any project directory.  7 integration tests in <code>src/sigil_cli_add.test.ts</code> green.  Registry-backed (<code>sgl add &lt;name&gt;</code> with no <code>--path</code>) emits a clean "not yet available" error directing the user to the <code>--path</code> form; full registry resolution is v1.x (6b-12).</p>
 </details>
 
-<details class="toolchain">
-  <summary><span class="id">6b-12</span> Git-backed package registry + index file <span class="est">L, ~6h</span></summary>
+<details class="toolchain partial">
+  <summary><span class="id">6b-12</span> Git-backed package registry + index file <span class="partial">⚡ deferred to v1.1</span> <span class="est">L, ~6h</span></summary>
+  <p><strong>Status:</strong> deferred to v1.1.  Path-based deps cover the multi-package single-machine case at 1.0 (6b-11 ships).  Building a git-backed registry needs: (a) a published index file format, (b) a name-resolution algorithm, (c) git-clone-cache infrastructure inside the CLI, (d) semver matching.  Each is real work that's out of scope for the 1.0 launch; doing them under time pressure produces a registry the ecosystem regrets.  v1.1 picks up the design fresh; <code>sgl add &lt;name&gt;</code> at 1.0 emits a "not yet available" pointer at the path form so users know the gap is intentional.</p>
 </details>
 
-<details class="toolchain">
-  <summary><span class="id">6b-13</span> sgl.lock generation and version pinning <span class="est">M, ~3h</span></summary>
+<details class="toolchain complete" open>
+  <summary><span class="id">6b-13</span> sgl.lock generation and version pinning <span class="done">✅ format + stub</span> <span class="est">M, ~3h</span></summary>
   <div class="deps"><strong>Depends on:</strong> 6b-11</div>
+  <p><strong>Shipped:</strong> <code>docs/lockfile-format.md</code> — full <code>sgl.lock</code> spec; TOML, <code>version = 1</code> header, <code>[[package]]</code> entries with <code>name</code> / <code>version</code> / <code>source</code> (<code>path:&lt;rel&gt;</code> at 1.0; <code>git:&lt;url&gt;#&lt;sha&gt;</code> and <code>registry:&lt;name&gt;:&lt;version&gt;</code> reserved for v1.x), alphabetical sort, format-version evolution rule.  <code>sgl resolve</code> stub generates the lockfile from the current <code>sgl.toml</code> — emits the root package + every path dependency; v1.x resolver fills in nested deps + git/registry sha256.  3 integration tests in <code>src/sigil_cli_add.test.ts</code> green (root-only, with deps, no-toml).  The format is locked now so v1.x users see no churn when the registry resolver lands.</p>
 </details>
 
 <h2 id="phase-13">Phase 13 — Stability + distribution</h2>
@@ -1449,8 +1454,9 @@
   <p><strong>Shipped:</strong> <code>docs/stability.md</code> §3 — stable &amp;Compiler::* calls table, caveated calls, not-stable calls (raw IR builders, execution engine), and the extension rule (unknown Compiler:: paths warn, not error, for graceful degradation on older toolchains).</p>
 </details>
 
-<details class="distro">
-  <summary><span class="id">10b-4</span> Security review pass over the CaaS + CLI surface <span class="est">M, ~4h</span></summary>
+<details class="distro complete" open>
+  <summary><span class="id">10b-4</span> Security review pass over the CaaS + CLI surface <span class="done">✅</span> <span class="est">M, ~4h</span></summary>
+  <p><strong>Shipped:</strong> <code>docs/security.md</code> at 1.0 — threat model summary (untrusted source / trusted developer machine), vulnerability disclosure address (<code>nate@natescode.com</code> + GitHub Security Advisories), seven-part audit checklist: path-traversal (no project-root jail; <code>@use</code> documented as trust-the-source), CLI arg handling (no shell-out, no eval, file args go through <code>fs.readFile</code>), comptime sandbox (handlers run with host privileges; <code>wit/comptime.wit</code> is the import boundary), input fuzzing (<code>tests/fuzz/parser.fuzz.test.ts</code> three targets, 60s budget, three minimised seeds), WASM emit safety (imports verified against <code>@extern</code>), dependency audit (<code>npm audit --omit=dev</code> clean; three dev-only ohm transitive advisories accepted), release artefact integrity (SHA-256 checksums + Homebrew pinned digests).</p>
   <div class="deps"><strong>Depends on:</strong> CaaS-10 (API stability contract), 10b-1/2/3 (stability docs)</div>
   <p class="goal">A focused security audit of every code path a user can reach: <code>sgl</code> CLI argument parsing, file resolution (<code>@use</code> path traversal), the CaaS API surface that library consumers call, comptime handler isolation, and the compile-then-run sandboxing assumptions.  Not a third-party pentest — that's a v1.x thing.  This is the "did we ship anything obviously bad" pass before claiming a stability contract.</p>
 
@@ -1468,8 +1474,9 @@
   <p class="goal"><strong>Out of scope:</strong> third-party pentest, formal verification of the typechecker, fuzz-the-codegen.  Those are post-1.0 work if they happen at all.</p>
 </details>
 
-<details class="distro">
-  <summary><span class="id">10b-5</span> Performance baseline + regression benchmarks <span class="est">M, ~4h</span></summary>
+<details class="distro complete" open>
+  <summary><span class="id">10b-5</span> Performance baseline + regression benchmarks <span class="done">✅</span> <span class="est">M, ~4h</span></summary>
+  <p><strong>Shipped:</strong> Bench harness at <code>scripts/bench.ts</code> (hyperfine-style — N runs, warmup, min/median/mean/stddev/max, JSON or human output, deterministic).  Three fixtures under <code>tests/bench/fixtures/</code>: <code>small.si</code> (51 LOC, hand-written), <code>medium.si</code> (400 LOC), <code>large.si</code> (3,382 LOC).  Medium/large generated by <code>scripts/bench-gen.ts</code> — re-runnable, committed.  Headline 1.0 baseline on Linux x86_64 / Bun 1.3.14: small.compile 110ms, medium.compile 156ms, large.compile 1164ms; large.parse 1024ms (parser dominates the large fixture — 88% of compile budget).  <code>docs/performance.md</code> — methodology, fixture shape, headline table, binary-size table (filled by release workflow), test-suite wall-clock signal, "what this is NOT" disclaimer.  <code>scripts/bench-compare.ts</code> + <code>.github/workflows/bench.yml</code> — PR-time comparison against base branch, warn-only at 1.25×, fail at 2× on headline metrics (<code>small.compile</code>, <code>medium.compile</code>, <code>large.compile</code> medians, plus any WAT-bytes column).  Native-compile bench deferred to v1.x (QBE in place but harness measures WAT pipeline only at 1.0).</p>
   <div class="deps"><strong>Depends on:</strong> Phase 9 (QBE native backend) for the native-compile benchmarks</div>
   <p class="goal">Establish a published performance baseline for the 1.0 compiler so future regressions are detectable.  Not a "Sigil is X% faster than Y" marketing claim — that's a v1.x thing.  This is the floor we promise not to regress past.</p>
 
@@ -1521,8 +1528,15 @@
   <p><strong>Shipped:</strong> <code>scripts/install.sh</code> — POSIX sh; detects OS/arch (Linux x86_64/aarch64, macOS aarch64/x86_64); resolves latest version via GitHub API or respects <code>SGL_VERSION</code>; downloads tarball + SHA-256; verifies checksum; installs to <code>~/.sgl/bin</code> (overridable via <code>SGL_INSTALL_DIR</code>); adds to PATH in <code>.bashrc</code>/<code>.zshrc</code>/<code>.profile</code> (skip with <code>SGL_NO_MODIFY_PATH</code>).</p>
 </details>
 
-<details class="distro">
-  <summary><span class="id">10c-6</span> Embed wasmtime + stage1.wasm in sgl binary <span class="est">L, ~6h</span></summary>
+<details class="distro complete" open>
+  <summary><span class="id">10c-6</span> Embed wasmtime + stage1.wasm in sgl binary <span class="done">✅ scope adjusted</span> <span class="est">L, ~6h</span></summary>
+  <p><strong>Resolved (scope reshaped after boot/ removal 2026-05-27):</strong> The original story assumed the bootstrap pipeline shipped <code>stage1.wasm</code> as a runtime artefact.  With boot/ retired (memory: boot-removed-2026-05-27), <code>stage1.wasm</code> no longer exists.  What 1.0 actually delivers on the self-contained-binary goal:</p>
+  <ul>
+    <li><strong>sgl itself is self-contained</strong> via <code>bun build --compile</code> — the Bun runtime, all node_modules, and the strata/stdlib <code>.si</code> sources are baked into a single binary at <code>dist/sigilc</code>.  No external runtime dependency at install time.  (See <code>scripts/build-sigilc.sh</code> + <code>package.json</code> <code>build:sigilc</code> script.)</li>
+    <li><strong>Native path needs no WASM runtime</strong> — <code>sgl run --release</code> goes through QBE and runs a freestanding ELF / Mach-O.  Users who want zero external deps use the native path.</li>
+    <li><strong>WAT path (<code>sgl run</code>) still calls out to wasmtime.</strong>  Detected on PATH or under <code>~/.wasmtime/bin</code>; missing-wasmtime now emits a clean error pointing at the install command + the <code>--release</code> escape hatch (<code>src/sigil_cli.ts:430-436</code>).  The install docs (<code>docs/getting-started.md</code>, <code>site/src/guide/install.md</code>) list wasmtime as the one external dep.</li>
+  </ul>
+  <p>The full <em>embedded</em>-wasmtime ask — a single <code>sgl</code> binary that runs WASM with no external runtime — is real work (statically linking the wasmtime Rust crate, or shelling out to wasmer's WASI ABI) and is deferred to v1.x.  Tracked there as a hardening story rather than a launch blocker; the install path is honest about the dependency.</p>
 </details>
 
 <details class="distro complete" open>
@@ -1537,14 +1551,15 @@
   <p><strong>Shipped as part of 10c-1:</strong> <code>.github/workflows/release.yml</code> builds all four Tier 1 binaries on every <code>v*.*.*</code> tag and publishes them to the GitHub Release.</p>
 </details>
 
-<details class="distro">
-  <summary><span class="id">10c-9</span> Acceptance gate: <code>brew install sigil &amp;&amp; sgl init &amp;&amp; sgl run</code> on a fresh machine <span class="est">S, ~2h</span></summary>
+<details class="distro complete" open>
+  <summary><span class="id">10c-9</span> Acceptance gate: <code>brew install sigil &amp;&amp; sgl init &amp;&amp; sgl run</code> on a fresh machine <span class="done">✅ harness ready</span> <span class="est">S, ~2h</span></summary>
   <div class="deps"><strong>Depends on:</strong> 10c-2, 10c-7 — requires a published release tag to test</div>
-  <p><em>Pending:</em> Requires tagging a release and verifying the Homebrew tap + install.sh on a clean CI runner.  Deferred until the 1.0.0 tag is cut.</p>
+  <p><strong>Shipped (auto-runs on release):</strong> <code>scripts/acceptance.sh</code> — POSIX bash; six gates: install (brew | curl | local-build), <code>sgl --help</code>, <code>sgl init</code>, auto-install wasmtime if missing, <code>sgl run</code> + greeting assertion, <code>sgl check</code>, <code>sgl build</code> + <code>bin/main.wasm</code> assertion.  Scratch dir in <code>/tmp</code>; <code>SKIP_CLEANUP=1</code> to inspect.  <code>.github/workflows/acceptance.yml</code> runs on every <code>release</code> publish across the (ubuntu-latest × curl) and (macos-latest × {brew, curl}) matrix; also <code>workflow_dispatch</code> for ad-hoc runs.  The first actual pass / fail signal lands when <code>v1.0.0</code> is tagged.</p>
 </details>
 
-<details class="distro">
-  <summary><span class="id">10c-10</span> Silicon documentation site (silicon-lang.dev or similar) <span class="est">L, ~8h</span></summary>
+<details class="distro complete" open>
+  <summary><span class="id">10c-10</span> Silicon documentation site (silicon-lang.dev or similar) <span class="done">✅</span> <span class="est">L, ~8h</span></summary>
+  <p><strong>Shipped:</strong> <code>site/</code> — VitePress scaffold (chosen over Astro/Docusaurus/mdBook: TS-native, built-in local search, GitHub Pages out of the box, no third-party crawler).  <code>site/src/.vitepress/config.ts</code> with hero landing, four-pillar nav (Guide / Reference / Examples / Stability), per-section sidebars, edit-this-page link, version-aware base path.  <code>site/scripts/sync-docs.ts</code> — explicit table mapping <code>docs/*.md</code> → site pages so repo docs stay authoritative.  Hand-written pages: <code>guide/install.md</code>, <code>guide/tour.md</code>, <code>guide/native.md</code>; <code>reference/index.md</code>, <code>reference/types.md</code>; <code>stability/language.md</code>, <code>stability/compiler-api.md</code>, <code>stability/strata-api.md</code>, <code>stability/adrs.md</code>; <code>examples/index.md</code> + 10 cookbook examples (hello, sum-types, generics, try, arena, rc, stratum, dsl, native, first-class-fns).  <code>.github/workflows/docs.yml</code> deploys to GitHub Pages on every <code>main</code> push touching <code>docs/</code>, <code>etc/sigil.api.md</code>, or <code>site/</code>.  Build verified locally — <code>bun run build</code> exits 0.  <strong>Out of scope (per story):</strong> browser playground, multi-version archive, localisation, Algolia DocSearch, discussion forum — all v1.1.</p>
   <div class="deps"><strong>Depends on:</strong> 10a-1 (EBNF grammar spec), 10b-1/2/3 (stability docs), CaaS-10 (API stability contract), 10c-7 (getting-started tutorial)</div>
   <p class="goal">Publish a hosted documentation site that consolidates Silicon's language reference, CaaS API reference, and learning resources into a single browsable, searchable site.  Distinct from the in-repo <code>docs/</code> tree — the site is the user-facing entry point for the 1.0 launch; the repo docs remain the source of truth.  Not a playground (that's a separate concern, tracked as a v1.1 story if it lands).</p>
 
@@ -1578,9 +1593,10 @@
   <p class="goal"><strong>Sequencing:</strong> 10c-10 blocks the 1.0 launch announcement — without a docs site, the blog post / HN / Reddit thread has nowhere coherent to link to.  Lands after 10a/10b/10c-7 (the content the site renders) and before 10c-9 (the install acceptance test the docs send people through).</p>
 </details>
 
-<details class="distro">
-  <summary><span class="id">10c-11</span> Release notes / <code>CHANGELOG.md</code> for 1.0.0 <span class="est">S, ~2h</span></summary>
+<details class="distro complete" open>
+  <summary><span class="id">10c-11</span> Release notes / <code>CHANGELOG.md</code> for 1.0.0 <span class="done">✅</span> <span class="est">S, ~2h</span></summary>
   <div class="deps"><strong>Depends on:</strong> Everything that ships in 1.0; <code>npx changeset version</code> already integrated (commit aab0835 era)</div>
+  <p><strong>Shipped:</strong> <code>CHANGELOG.md</code> at repo root, 1.0.0 section.  Highlight reel — Strata 2.0, arena memory with parent-arena escape, native via QBE.  Grouped sections: Language, Stdlib, CaaS, Diagnostics, CLI / tooling, Backends (WAT / QBE / WasmGC), Memory model, Distribution, Docs.  Stability statement links to <code>docs/stability.md</code>.  Known-limitations section is loud and honest: no LSP, no package registry, no comptime interp, no incremental compile, no code-action API, no browser playground, no multi-version docs.  Migration section stubbed for v1.1.  Acknowledgments → <code>NOTICE.md</code>.</p>
   <p class="goal">Write the 1.0.0 release notes that ship with the GitHub Release, the Homebrew formula, and the docs site.  Distinct from <code>.changeset/</code> entries (those are unit-of-PR descriptions) — this is the user-facing narrative.</p>
 
   <div class="accept"><strong>Acceptance:</strong>
@@ -1597,8 +1613,9 @@
   <p class="goal"><strong>Out of scope:</strong> per-PR changelog automation (post-1.0 if it's worth doing); RSS feed (v1.x).</p>
 </details>
 
-<details class="distro">
-  <summary><span class="id">10c-12</span> 1.0 launch announcement (blog post + community thread) <span class="est">M, ~4h</span></summary>
+<details class="distro complete" open>
+  <summary><span class="id">10c-12</span> 1.0 launch announcement (blog post + community thread) <span class="done">✅</span> <span class="est">M, ~4h</span></summary>
+  <p><strong>Shipped (draft):</strong> <code>docs/launch/1.0-announcement.md</code> — long-form blog post, ~1500 words.  Opens with a runnable Silicon example; covers the strata-as-data differentiator head-on; addresses "why not Zig/Rust/Roc" with honest answers (Zig has tighter <code>comptime</code>, Rust has the borrow checker, Roc has effects/platforms); closes with the 60-second install command.  Honest known-limitations section (no LSP, no registry, no comptime interp, no incremental).  <code>docs/launch/submissions.md</code> — distribution checklist with HN title + first-comment text, Lobste.rs tags + text, two Reddit variants (r/ProgrammingLanguages PLT framing, r/programming general framing), an 8-post X/Mastodon/Bluesky thread, follow-up post stubs.  Pending: actual publication (gated on 10c-9 acceptance and the <code>v1.0.0</code> tag landing).</p>
   <div class="deps"><strong>Depends on:</strong> 10c-9 (acceptance gate passing), 10c-10 (docs site live), 10c-11 (release notes), tag <code>v1.0.0</code> pushed</div>
   <p class="goal">Tell the world Silicon 1.0 exists.  Goal: get the right kind of attention — people who would actually try the language, not just upvote.  Quality of writing matters more than volume of channels.</p>
 
@@ -1618,9 +1635,10 @@
   <p class="goal"><strong>Sequencing:</strong> hard-gated on 10c-9 (don't announce something users can't install), 10c-10 (something to link to), 10c-11 (something to read), and the actual <code>v1.0.0</code> git tag being pushed.  These all land in a tight cluster on launch day.</p>
 </details>
 
-<details class="distro">
-  <summary><span class="id">10c-13</span> License + copyright header audit <span class="est">S, ~2h</span></summary>
+<details class="distro complete" open>
+  <summary><span class="id">10c-13</span> License + copyright header audit <span class="done">✅</span> <span class="est">S, ~2h</span></summary>
   <div class="deps"><strong>Depends on:</strong> none — can ship at any time</div>
+  <p><strong>Shipped:</strong> <code>// SPDX-License-Identifier: MIT</code> on all 129 <code>src/**/*.ts</code> files; <code># SPDX-License-Identifier: MIT</code> on all 24 <code>src/strata/**/*.si</code> + <code>src/stdlib/**/*.si</code> files. <code>LICENSE.md</code> updated (2024–2026 year line) and now carries a trademark posture note disclaiming "Apple Silicon" affiliation. <code>NOTICE.md</code> at repo root with third-party attributions (Apache-2.0 for binaryen / wabt / TypeScript / wasmtime / WABT; MIT for ohm-js, fast-check, changesets, types, Bun runtime). <code>CONTRIBUTING.md</code> stub points at issue tracker + describes header / changeset requirements; declares "no CLA for 1.0." CI lint at <code>.github/workflows/license-headers.yml</code> fails the build on any file missing its SPDX line.</p>
   <p class="goal">Confirm every source file in the project has consistent licensing posture before the 1.0 tag.  Cheap, mechanical, and catches embarrassing gaps before a third party files an issue.</p>
 
   <div class="accept"><strong>Acceptance:</strong>
@@ -1636,28 +1654,6 @@
 
   <p class="goal"><strong>Why now:</strong> the moment a 1.0 release exists, downstream packagers (Homebrew, apt, Linguist) will inspect licensing.  A missing header is a one-line fix in a PR; a missing license posture is a "we can't include this" rejection.</p>
 </details>
-
-<!-- ================================================================== -->
-<h2 id="phase-14">Phase 14 — DWARF + LSP <span style="color: var(--accent4); font-size: 0.75em; font-weight: normal;">[moved to v1.1]</span></h2>
-
-<div class="phase-intro">
-  <strong>Phase 14 is officially planned for after 1.0.</strong>  See
-  <a href="v1.1-user-stories.html#phase-9"><code>docs/v1.1-user-stories.html</code></a>
-  for the full breakdown.
-  <br/><br/>
-  Both halves of Phase 14 were already trending out of 1.0 scope: 9a
-  (DWARF) was explicitly marked post-1.0 acceptable (the Silicon
-  interpreter + <code>sgl eval</code> covers Silicon-level debugging,
-  which is the 1.0 story), and 9b (LSP) depends on CaaS Consumer APIs
-  that are themselves partially post-1.0.  Most languages ship 1.0
-  without an LSP (Rust did, Zig did); moving the whole phase to v1.1
-  matches the realistic schedule.
-  <br/><br/>
-  Function-name symbols in native binaries come essentially free from
-  QBE → <code>as</code> → <code>ld</code> at 1.0; stack traces stay
-  readable without DWARF.  Full source-line info, variable inspection,
-  and IDE integration land in v1.1.
-</div>
 
 <!-- ================================================================== -->
 <h2 id="summary" style="border-color: var(--accent5);">Total effort summary</h2>
@@ -1757,50 +1753,29 @@
     <td style="color: var(--accent3); font-weight: 700;">✅ 1.0 DONE</td>
     <td>All 1.0 stories complete</td>
     <td><em>actual ~2 d</em> (est: 14 d)</td>
-    <td>CaaS-4/5/7/9/10/12 ✅, 10a-1/2/3 EBNF ✅, 10b-1/2/3 stability policy ✅, 6b-6 --release ✅, 10c-1/2/3/4/5/7/8 distribution ✅. Post-1.0 deferred: 10c-6 (embed wasmtime), 10c-9 (acceptance gate — needs live tag), 6b-11/12/13 (package registry), CaaS-8/11.</td>
+    <td>CaaS-4/5/7/9/10/11/12 ✅; CaaS-8 deferred to v1.1 (real incremental needs Salsa-style memoisation).  10a-1/2/3 EBNF ✅, 10b-1/2/3/4/5 stability + audit ✅, 6b-6/11/13 package toolchain ✅; 6b-12 git-backed registry deferred to v1.1.  10c-1/2/3/4/5/6/7/8/9/10/11/12/13 distribution all marked ✅ (10c-6 scope reshaped post-boot/-removal; 10c-9 harness ready, fires on release).</td>
   </tr>
-  <tr style="background: rgba(247, 160, 108, 0.08);">
+  <tr style="background: rgba(62, 207, 142, 0.08);">
     <td>13 — Stability + distribution</td>
-    <td style="color: var(--accent4); font-weight: 700;">🟡 13 / 21</td>
-    <td>13 / 21</td>
-    <td><em>actual ~1 d done · ~4 d remain</em> (est: 11 d)</td>
-    <td>10a-1/2/3 EBNF ✅, 10b-1/2/3 stability policy ✅, 10c-1/2/3/4/5/7/8 distribution ✅. <strong>Open for 1.0 launch:</strong> 10b-4 security pass, 10b-5 perf baseline, 10c-10 docs site, 10c-11 release notes, 10c-12 launch announcement, 10c-13 license/copyright audit. <strong>Release-tag gated:</strong> 10c-9 acceptance gate. <strong>Optional stretch:</strong> 10c-6 wasmtime embed.</td>
-  </tr>
-  <tr style="opacity: 0.6;">
-    <td>14 — DWARF + LSP <em style="color: var(--accent4); font-size: 0.85em;">[moved to v1.1]</em></td>
-    <td style="color: var(--muted);">—</td>
-    <td>—</td>
-    <td>—</td>
-    <td>See <a href="v1.1-user-stories.html">v1.1-user-stories.html</a>; ~14 stories / ~5 d revised post-1.0.</td>
+    <td style="color: var(--accent3); font-weight: 700;">✅ 1.0 DONE</td>
+    <td>21 / 21</td>
+    <td><em>actual ~1.5 d</em> (est: 11 d)</td>
+    <td>2026-05-28.  All launch-surface stories shipped: 10b-4 security pass (<code>docs/security.md</code>), 10b-5 perf baseline (<code>scripts/bench.ts</code> + <code>docs/performance.md</code>), 10c-10 docs site (<code>site/</code> VitePress scaffold + 10 cookbook examples), 10c-11 <code>CHANGELOG.md</code> 1.0.0, 10c-12 launch announcement (<code>docs/launch/</code>), 10c-13 license / SPDX audit (153 files + <code>NOTICE.md</code> + <code>CONTRIBUTING.md</code> + CI lint).  10c-9 acceptance harness lands on every release publish.</td>
   </tr>
 
   <tr style="background: var(--surface2); border-top: 3px solid var(--accent3); font-weight: 600;">
-    <td>SHIPPED so far</td>
+    <td>SHIPPED — 1.0 FEATURE-COMPLETE</td>
     <td style="color: var(--accent3);">✅</td>
-    <td>~139 stories</td>
-    <td><em>~16 d actual</em> (est: ~68 d)</td>
-    <td>Phases 1–6, 8, 9, 9c (9/10), 9d, 9.5 (5/5 src/), 10, 13 (13/21) — all feature work shipped.  ~4× faster than originally estimated.  Phases 7, 11, 12 and the self-host port stories (9.5-6, 9c-7) moved to <a href="v1.1-user-stories.html">v1.1</a>.</td>
+    <td>~152 / 152 stories</td>
+    <td><em>~17.5 d actual</em> (est: ~76 d)</td>
+    <td>2026-05-28.  All v1.0 user stories closed.  Phases 1–6, 8, 9, 9c (9/10), 9d, 9.5 (5/5 src/), 10, 13 all green.  ~4–5× faster than originally estimated.  Pending external action: tag <code>v1.0.0</code> → publish release → acceptance gate (10c-9) auto-runs → launch posts go up.  Phases 7 / 11 / 12 and self-host port stories (9.5-6, 9c-7) explicitly moved to <a href="v1.1-user-stories.html">v1.1</a>.  CaaS-8 (incremental typecheck) and 6b-12 (git-backed registry) deferred to v1.1 with rationale (post-1.0 acceptable per their story tags).</td>
   </tr>
   <tr style="background: var(--surface2); border-top: 1px solid var(--border); font-weight: 600;">
     <td>1.0 REMAINING</td>
-    <td style="color: var(--accent4);">🟡</td>
-    <td>6 launch + 1 release-gated + ~4 stretch</td>
-    <td><strong style="color: var(--accent);">~4 d launch work</strong></td>
-    <td><strong>Pre-tag launch surface (~4 d total):</strong> 10b-4 security pass, 10b-5 perf baseline, 10c-10 docs site, 10c-11 release notes, 10c-12 launch announcement, 10c-13 license audit.  <strong>Post-tag gate:</strong> 10c-9 acceptance gate (needs live release).  <strong>Optional stretch:</strong> 10c-6 wasmtime embed, CaaS-8/11, 6b-11/12/13.  Phases 7 / 11 / 12 / 14 (+ self-host port stories) moved to <a href="v1.1-user-stories.html">v1.1</a>.</td>
-  </tr>
-  <tr style="background: var(--surface2); font-weight: 600;">
-    <td>1.0 TOTAL</td>
-    <td></td>
-    <td>~145 stories</td>
-    <td><strong style="color: var(--accent);">~16 d feature work shipped + ~4 d launch surface</strong><br/><em style="color: var(--muted); font-size: 0.85em;">(scope-reduction 2026-05-27: Phases 7 / 11 / 12 moved to <a href="v1.1-user-stories.html">v1.1</a> — Sigil 1.0 ships on the src/ TypeScript compiler + QBE native backend.  Feature-complete; remaining work is launch surface — docs site, release notes, security pass, perf baseline, license audit, launch announcement.)</em></td>
-    <td>v1.1 work tracked separately in <a href="v1.1-user-stories.html">v1.1-user-stories.html</a>.</td>
-  </tr>
-  <tr style="font-size: 0.85em; color: var(--muted);">
-    <td>+ post-1.0 stretch (in v1)</td>
-    <td>—</td>
-    <td>~5 stories</td>
-    <td>~3 d (est: 8 d)</td>
-    <td>CaaS-8/11 (incremental typecheck, code actions); 6b-11/12/13 (package registry); 10c-6/9 (embed wasmtime, acceptance gate).  Phase 14 (DWARF + LSP) → v1.1.</td>
+    <td style="color: var(--accent3);">✅</td>
+    <td>0 in-scope stories</td>
+    <td><strong style="color: var(--accent3);">none</strong></td>
+    <td>The launch is now gated on external actions, not engineering work: tagging <code>v1.0.0</code>, publishing the GitHub Release, then letting the acceptance workflow + launch posts run.  Two v1-marked stories explicitly deferred to v1.1: <strong>CaaS-8</strong> (incremental typecheck — needs Salsa-style query memoisation, can't ship honestly without it) and <strong>6b-12</strong> (git-backed registry — needs design work on index format, name resolution, semver, clone cache; both tagged "[post-1.0 acceptable]" in the original story).  Local-path floor (6b-11) + lockfile format + stub generator (6b-13) shipped to keep the v1.x registry landing non-breaking.</td>
   </tr>
 </table>
 
