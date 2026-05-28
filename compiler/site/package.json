@@ -1,0 +1,16 @@
+{
+  "name": "silicon-docs",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Silicon language documentation site (story 10c-10). VitePress static site that consolidates the in-repo docs/ into a user-facing reference.",
+  "type": "module",
+  "scripts": {
+    "dev": "vitepress dev src",
+    "build": "vitepress build src",
+    "preview": "vitepress preview src",
+    "sync": "bun run scripts/sync-docs.ts"
+  },
+  "devDependencies": {
+    "vitepress": "^1.6.4"
+  }
+}

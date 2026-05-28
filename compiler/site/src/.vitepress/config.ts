@@ -1,0 +1,147 @@
+// SPDX-License-Identifier: MIT
+// Silicon docs site (story 10c-10).  VitePress config.
+//
+// Why VitePress: TypeScript-native, ships with Pagefind-compatible
+// search, supports the URL versioning we'll need for v1.x docs (the
+// /v1.0/ vs /latest/ pattern), deploys to GitHub Pages out of the box.
+
+import { defineConfig } from 'vitepress'
+
+export default defineConfig({
+    title: 'Silicon',
+    description: 'A WebAssembly-targeting systems language where features are data.',
+    base: process.env.SILICON_DOCS_BASE ?? '/sigil/',
+    lang: 'en-US',
+    cleanUrls: true,
+    lastUpdated: true,
+    // Synced docs (from repo docs/) carry relative links that point at
+    // sibling repo files (ADRs, .wit, user-stories HTML) which don't
+    // exist on the site.  We warn during sync and ignore at build.
+    // External links and intra-site links still work.
+    ignoreDeadLinks: true,
+
+    head: [
+        ['link', { rel: 'icon', href: '/favicon.svg', type: 'image/svg+xml' }],
+        ['meta', { name: 'theme-color', content: '#6c8ef7' }],
+    ],
+
+    themeConfig: {
+        logo: '/logo.svg',
+        siteTitle: 'Silicon',
+
+        nav: [
+            { text: 'Get started', link: '/guide/getting-started' },
+            { text: 'Reference', link: '/reference/' },
+            { text: 'Examples', link: '/examples/' },
+            { text: 'Stability', link: '/stability/' },
+            {
+                text: 'v1.0',
+                items: [
+                    { text: 'Changelog', link: 'https://github.com/NatesCode/sigil/blob/main/CHANGELOG.md' },
+                    { text: 'Security', link: '/stability/security' },
+                    { text: 'Performance', link: '/stability/performance' },
+                ],
+            },
+            { text: 'GitHub', link: 'https://github.com/NatesCode/sigil' },
+        ],
+
+        sidebar: {
+            '/guide/': [
+                {
+                    text: 'Guide',
+                    items: [
+                        { text: 'Getting started', link: '/guide/getting-started' },
+                        { text: 'Install', link: '/guide/install' },
+                        { text: 'Language tour', link: '/guide/tour' },
+                        { text: 'Writing a stratum', link: '/guide/strata' },
+                        { text: 'Memory + arenas', link: '/guide/memory' },
+                        { text: 'Native compilation', link: '/guide/native' },
+                    ],
+                },
+            ],
+            '/reference/': [
+                {
+                    text: 'Language',
+                    items: [
+                        { text: 'Overview', link: '/reference/' },
+                        { text: 'Grammar (EBNF)', link: '/reference/grammar' },
+                        { text: 'Types', link: '/reference/types' },
+                        { text: 'Type inference (HM-lite)', link: '/reference/hm-lite' },
+                        { text: 'Diagnostics', link: '/reference/diagnostics' },
+                    ],
+                },
+                {
+                    text: 'Strata',
+                    items: [
+                        { text: 'Strata system', link: '/reference/strata' },
+                        { text: 'Strata authoring', link: '/reference/strata-authoring' },
+                        { text: 'Compiler API', link: '/reference/compiler-api' },
+                    ],
+                },
+                {
+                    text: 'CaaS',
+                    items: [
+                        { text: 'Compiler-as-a-Service', link: '/reference/caas' },
+                        { text: 'API surface', link: '/reference/api' },
+                        { text: 'API boundaries', link: '/reference/api-boundaries' },
+                    ],
+                },
+            ],
+            '/examples/': [
+                {
+                    text: 'Cookbook',
+                    items: [
+                        { text: 'Index', link: '/examples/' },
+                        { text: 'Hello world', link: '/examples/hello' },
+                        { text: 'Sum types + @match', link: '/examples/sum-types' },
+                        { text: 'Generics', link: '/examples/generics' },
+                        { text: 'Error handling with @try', link: '/examples/try' },
+                        { text: 'Arena allocation', link: '/examples/arena' },
+                        { text: 'Rc smart pointer', link: '/examples/rc' },
+                        { text: 'Writing a stratum', link: '/examples/stratum' },
+                        { text: 'Strata as design solvent', link: '/examples/dsl' },
+                        { text: 'QBE native compile', link: '/examples/native' },
+                        { text: 'First-class functions', link: '/examples/first-class-fns' },
+                    ],
+                },
+            ],
+            '/stability/': [
+                {
+                    text: 'Stability',
+                    items: [
+                        { text: 'Overview', link: '/stability/' },
+                        { text: 'Language', link: '/stability/language' },
+                        { text: 'CompilerAPI', link: '/stability/compiler-api' },
+                        { text: 'Strata API', link: '/stability/strata-api' },
+                        { text: 'ADRs', link: '/stability/adrs' },
+                        { text: 'Security', link: '/stability/security' },
+                        { text: 'Performance', link: '/stability/performance' },
+                    ],
+                },
+            ],
+        },
+
+        socialLinks: [
+            { icon: 'github', link: 'https://github.com/NatesCode/sigil' },
+        ],
+
+        editLink: {
+            pattern: 'https://github.com/NatesCode/sigil/edit/main/site/src/:path',
+            text: 'Edit this page on GitHub',
+        },
+
+        search: {
+            // Pagefind would need a build hook; we use the built-in
+            // local search at 1.0 since the corpus is small.
+            provider: 'local',
+            options: {
+                detailedView: true,
+            },
+        },
+
+        footer: {
+            message: 'MIT-licensed. © 2024–2026 NatesCode LLC, Nathan Hedglin.',
+            copyright: '<a href="https://github.com/NatesCode/sigil/issues/new">Report an issue</a>',
+        },
+    },
+})
