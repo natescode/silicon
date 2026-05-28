@@ -62,9 +62,17 @@ The 1.0 stability promise begins on the first `1.0.0` tag.  Pre-1.0 tags
 ### Removed / never shipped
 
 - Postfix operators (e.g. Rust-style `expr?`) — Silicon operators are binary
-  infix or prefix-keyword.  Will not be added.
+  infix or prefix-keyword.  Will not be added.  See ADR 0010 — LL(1) target.
 - Integer literal suffixes (`42i64`) — use `&@toInt64 42` instead.
 - Implicit numeric coercion — always explicit.
+
+### Grammar shape invariant
+
+Silicon's grammar targets **LL(1)** — top-down, leftmost derivation, single
+token of lookahead.  This is a binding design constraint, not aspirational:
+new grammar changes must preserve the property, and `docs/grammar.ebnf` §LL(1)
+is the canonical reference for the parser-shaped (left-factored) form.  See
+[ADR 0010](adr/0010-grammar-targets-ll1.md) for the rationale.
 
 ---
 
