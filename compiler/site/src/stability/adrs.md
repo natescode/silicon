@@ -20,6 +20,7 @@ with options, recommendation, and resolution status.
 | 0008 | Memory management — explicit arenas | Accepted |
 | 0009 | WasmGC target (two-layer portability split) | Accepted |
 | 0010 | Silicon grammar targets LL(1) | Accepted |
+| 0011 | Borrow checker design: arenas + rcaps + actor isolation | Proposed |
 
 Read individual ADRs in the repo at
 [`docs/adr/`](https://github.com/NatesCode/sigil/tree/main/docs/adr).

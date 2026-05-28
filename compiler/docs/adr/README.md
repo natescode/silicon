@@ -42,3 +42,4 @@ dependency bumps.
 | [0008](0008-memory-management-arenas.md) | Memory management: explicit arenas for 1.0, AllocatorABI for 1.1 | Accepted |
 | [0009](0009-wasm-gc-target.md) | WasmGC target: opt-in `--target=wasm-gc` for v1.0 | Accepted |
 | [0010](0010-grammar-targets-ll1.md) | Silicon's grammar targets LL(1) | Accepted |
+| [0011](0011-borrow-checker-and-rcaps.md) | Borrow checker design: arenas + rcaps + actor isolation | Proposed |
