@@ -45,12 +45,12 @@ cat > "${STAGING}/DEBIAN/control" <<CONTROL
 Package: sgl
 Version: ${DEB_VERSION}
 Architecture: ${DEB_ARCH}
-Maintainer: Nate Codes <nate@natescode.com>
+Maintainer: Nate Hedglin <nate@natescode.com>
 Description: The Silicon compiler
  sgl is the Silicon compiler — a WebAssembly-targeting language with a
  Roslyn-style library API. Compile Silicon source to WebAssembly (.wasm)
  or native executables via the QBE backend.
-Homepage: https://github.com/natescode/sigil
+Homepage: https://si14.dev
 CONTROL
 
 # Build
