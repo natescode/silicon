@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 /**
  * Phase 5 Workstream B Step 1 — `@fnref` + `@call_indirect` end-to-end.
  *

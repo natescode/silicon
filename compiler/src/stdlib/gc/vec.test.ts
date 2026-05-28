@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 /**
  * Phase 9d-8 — Vec[Int] under --target=wasm-gc end-to-end test suite.
  *

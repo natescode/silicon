@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 /**
  * IR Kind Registry
  *

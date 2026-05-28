@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 /**
  * Integration tests: Silicon source → type-checked AST.
  *

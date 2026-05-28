@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 /**
  * @fn[T] generic functions — end-to-end and edge cases.
  *

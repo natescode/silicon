@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 /**
  * Compiler-as-imports surface for compile-then-run strata handlers.
  *

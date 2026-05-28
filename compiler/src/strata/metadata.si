@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: MIT
 # D-D-1: @platform and @export both migrated to the new @stratum + @fn-handler
 # form.  Handler @fn bodies compile to WASM via the Phase C engine; they read
 # AST fields via compiler_ast_str_field, intern string literals via

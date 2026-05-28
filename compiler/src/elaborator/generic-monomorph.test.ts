@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 /**
  * @generic — real per-call-site monomorphization, end-to-end.
  *

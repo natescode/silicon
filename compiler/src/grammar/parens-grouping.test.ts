@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 /**
  * Parens as optional grouping for param lists — see
  * `docs/parens-optional-grouping.md`.

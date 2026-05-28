@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 /**
  * Phase 5b — unsigned integer types (u8/u16/u32/u64).
  *

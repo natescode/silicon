@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 /**
  * Unit tests for the `@use 'path.si';` resolver — Phase −1.C of bootstrap plan.
  *

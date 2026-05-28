@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 /**
  * Handle table for the comptime-via-compilation host.
  *

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 /**
  * T0 (builtin) strata loader smoke tests for the unified
  * `@stratum := { ... }` form.  Originally written as Phase-D dissolution

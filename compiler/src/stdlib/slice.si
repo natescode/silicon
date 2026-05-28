@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: MIT
 # Phase 5c-1 — stdlib Slice[T] non-owning view.
 #
 # A Slice[T] is a (pointer, length) pair — a view into someone else's

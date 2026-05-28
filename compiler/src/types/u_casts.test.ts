@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 /**
  * Phase 5b-4 — @toU32 / @toU64 cast keywords.
  *

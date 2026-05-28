@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: MIT
 # D-D-2: @if migrated to the new @stratum + @fn-handler form.
 # `register::expression_keyword` registers @if as an expression keyword
 # (no def-kind) — `&@if cond, then, else_` works at expression position.

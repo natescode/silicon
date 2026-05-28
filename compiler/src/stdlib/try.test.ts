@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 /**
  * Phase 5a-3 — `@try` unwrap shorthand for Result.
  *

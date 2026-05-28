@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 /**
  * Phase 5d-3 — function-type as a first-class SiliconType (surface side).
  *

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 /**
  * Phase 9d-8 — Vec[T] for value-typed T under --target=wasm-gc.
  *

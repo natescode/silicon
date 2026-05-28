@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 /**
  * Strata 2.0 Tests
  *

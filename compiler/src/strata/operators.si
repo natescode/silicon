@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: MIT
 # D-D-7a/b: Int (i32) arithmetic + comparison operators migrated to the new
 # @stratum form.  Each Int operator's primary stratum is now a handler that
 # builds an IRBinOp with the right WAT instruction.  Float and Int64

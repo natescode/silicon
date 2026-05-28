@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 /**
  * Unit tests for the structured-diagnostic surface — WS 4 of Stage 0 Cleanup.
  */

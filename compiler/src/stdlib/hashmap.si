@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: MIT
 # Phase 5a-6 — stdlib HashMap[i32, i32] open-addressing hash table.
 #
 # Phase 5 ships HashMap specialised for i32 keys → i32 values.  Same

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 import type { IRExpr, IRGlobal, IRFunction, IRImport, IRExport } from './nodes'
 import type { CompilerAPI } from '../compiler-api'
 

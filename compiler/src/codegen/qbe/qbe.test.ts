@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 /**
  * QBE direct lowering tests
  *

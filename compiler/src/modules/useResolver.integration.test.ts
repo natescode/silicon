@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 /**
  * Integration test: @use followed by a full compile pipeline.
  * Asserts the two-file fixture from bootstrap-plan Phase −1.C gate:

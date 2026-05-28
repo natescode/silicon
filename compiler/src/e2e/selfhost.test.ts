@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 /**
  * Self-host gate (story 8-13)
  *

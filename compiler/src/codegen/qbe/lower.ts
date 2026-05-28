@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 /**
  * Silicon typed AST → QBE IR text  (direct lowering, no WASM IR intermediate)
  *

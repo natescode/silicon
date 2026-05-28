@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: MIT
 # Phase 9d-8 — Vec[Int] stub for the wasm-gc target.
 #
 # Under `--target=wasm-gc` the @use resolver redirects

@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: MIT
 # D-D-8: @break / @continue / @return migrated to the new @stratum form.
 # Handler bodies read the current loop-id via compiler_ctx_loopStack_peek
 # and the @return value via compiler_arg + compiler_lowerExprIfDefined.

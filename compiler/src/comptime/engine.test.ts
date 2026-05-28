@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 /**
  * Phase C end-to-end: compile a strata handler @fn to WASM and invoke it
  * via WebAssembly.instantiate.  Proves the dissolution architecture

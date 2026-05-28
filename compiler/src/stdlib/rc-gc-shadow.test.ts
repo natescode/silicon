@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 /**
  * Phase 9d-6 — end-to-end test that src/stdlib/gc/rc.si shadows
  * src/stdlib/rc.si under --target=wasm-gc.  Verifies:

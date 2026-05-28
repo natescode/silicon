@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: MIT
 # Phase 9d-6 — Rc identity shim for the wasm-gc target.
 #
 # This file shadows `src/stdlib/rc.si` when the user compiles with

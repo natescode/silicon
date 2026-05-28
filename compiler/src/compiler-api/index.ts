@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 /**
  * Compiler API — the $compiler surface exposed to Silicon strata.
  *

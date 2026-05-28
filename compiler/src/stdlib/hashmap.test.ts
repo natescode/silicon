@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 /**
  * Phase 5a-6 — stdlib HashMap[i32, i32] runtime tests.
  *

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 export type PlatformName = 'web' | 'node' | 'wasi'
 
 export interface PlatformConfig {

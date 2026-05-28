@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 /**
  * Phase 9d-2 — WasmGC type-section emitter.
  *

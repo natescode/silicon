@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 /**
  * Direct IR → WASM binary emitter.
  *

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 /**
  * QBE type system and Silicon → QBE type mapping.
  *

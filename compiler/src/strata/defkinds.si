@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: MIT
 # D-D-11b: @let and @fn migrated to the new @stratum form.  Both share
 # the same handler (LetOrFn_lower) — @fn is a syntactic alias for @let
 # that conventionally marks function-style definitions.

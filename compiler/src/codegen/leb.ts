@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 /**
  * LEB128 encoding helpers for the WASM binary emitter.
  *

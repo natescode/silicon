@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 /**
  * Workspace — multi-document project state (CaaS-4).
  *

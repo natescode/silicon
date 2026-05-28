@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: MIT
 # D-D-6: ++ (string concat) migrated to new @stratum form.
 # Builds an IRCall to $str_concat with [left, right] args.
 @stratum Concat := {

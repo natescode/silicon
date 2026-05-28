@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 /**
  * Byte-equal WAT output verification across backends (story 8-14)
  *

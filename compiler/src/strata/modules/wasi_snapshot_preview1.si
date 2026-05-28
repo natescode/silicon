@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: MIT
 # WASI Preview 1 — the runtime surface used by the Sigil bootstrap.
 #
 # Each declaration becomes an `(import "wasi_snapshot_preview1" "<name>" ...)`

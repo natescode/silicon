@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 /**
  * HM-lite end-to-end tests.
  *

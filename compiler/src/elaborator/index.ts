@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 import elaborate, { type ElaborateResult, type ElaborationError } from "./elaborator";
 export { elaborate, type ElaborateResult, type ElaborationError };
 export { buildStrataRegistry } from "./strataLoader";

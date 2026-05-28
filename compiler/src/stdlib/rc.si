@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: MIT
 # Phase 9c Tier B — single-threaded reference-counting smart pointer.
 #
 # `Rc` wraps any 32-bit value (Int, Bool, String, Array, Sum-typed

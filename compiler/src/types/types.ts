@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 /**
  * Silicon Type System — Core Type Definitions
  *

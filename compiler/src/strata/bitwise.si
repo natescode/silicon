@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: MIT
 # D-D-4: bitwise operators migrated to the new @stratum form.
 # Each handler reads node.left / node.right (the BinaryOp operands), lowers
 # them to IR, and builds an IRBinOp with the right WAT instruction.

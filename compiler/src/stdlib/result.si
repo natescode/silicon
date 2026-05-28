@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: MIT
 # Phase 5a-2 — stdlib Result[T, E] type and helpers.
 #
 # Result models a computation that may succeed with a T or fail with an E.

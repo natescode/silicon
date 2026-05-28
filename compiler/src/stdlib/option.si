@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: MIT
 # Phase 5a-1 — stdlib Option[T] type and helpers.
 #
 # Option models a value that may be absent.  Implemented as a parametric

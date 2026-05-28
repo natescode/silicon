@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 /**
  * Workstream A — Step 1: realloc + mem_copy allocator primitives.
  *

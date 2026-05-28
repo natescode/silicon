@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 /**
  * D-D-1 (partial): verifies @platform is registered + works after the
  * legacy → new-form migration in src/strata/metadata.si.

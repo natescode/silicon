@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 /**
  * CaaS Phase 0.5 — SemanticModel tests (CaaS-2, CaaS-3, CaaS-6).
  *

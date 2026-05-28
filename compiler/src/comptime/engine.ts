@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 /**
  * Comptime engine — compile strata handler @fns to WASM and run them.
  *

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 /**
  * Phase 9c (ADR 0008) — explicit-arena memory management.
  *

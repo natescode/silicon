@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 import { test, expect } from "bun:test"
 import { uleb128, sleb128i32, sleb128i64, uleb128Size } from "./leb"
 import { WasmBuffer } from "./wasm-buffer"

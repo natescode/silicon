@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: MIT
 # Silicon standard I/O — portable WASI wrappers.
 #
 # Uses wasi_snapshot_preview1::fd_write / fd_read / proc_exit via the

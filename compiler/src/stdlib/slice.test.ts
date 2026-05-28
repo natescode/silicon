@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 /**
  * Phase 5c-1 — stdlib Slice[T] runtime tests.
  *

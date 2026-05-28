@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: MIT
 # D-D-9: @loop migrated to the new @stratum form.
 # The handler allocates a fresh loop id, pushes it on the stack so nested
 # @break/@continue resolve to this loop, then lowers cond + body and

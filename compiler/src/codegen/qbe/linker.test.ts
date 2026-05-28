@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 /**
  * Linker module tests (story 8-8)
  *

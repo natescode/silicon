@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: MIT
 @extern console_log     v:Int;
 @extern console_log_f   v:Float;
 @extern console_log_str ptr:String;

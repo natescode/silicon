@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 /**
  * SemanticModel — queryable semantic information over a typechecked tree.
  *

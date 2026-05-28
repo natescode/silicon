@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 export { lowerToQbe } from './lower'
 export { siliconTypeToQbe, siliconTypeToQbeReturn, watInstrToQbeInstr, lookupOpToQbe, abstractOpToQbe } from './types'
 export type { QbeType, QbeReturnType } from './types'

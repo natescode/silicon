@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 /**
  * WasmBuffer — accumulates bytes for WASM binary section construction.
  *

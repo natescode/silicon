@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 /**
  * CaaS public API contract tests.
  *

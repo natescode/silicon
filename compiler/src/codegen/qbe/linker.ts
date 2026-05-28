@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 /**
  * Native linker integration for sgl (story 8-8)
  *

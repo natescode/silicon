@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 /**
  * Hindley-Milner-lite unification core for Silicon.
  *

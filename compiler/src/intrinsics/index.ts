@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 /**
  * Intrinsics Module - Main Entry Point
  *

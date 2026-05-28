@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 /**
  * Legacy-block AST translator (D-E-3 PR 1, Stage 1)
  *

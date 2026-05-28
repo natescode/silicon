@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 /**
  * @generic — end-to-end Strata 2.0 test
  *

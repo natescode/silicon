@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: MIT
 # D-D-5: cast keywords migrated to the new @stratum form.
 # Each handler builds an IRCall with callKind='instr' to the right
 # WASM cast instruction.  ToIntFromInt64 (the typed Int64 overload)

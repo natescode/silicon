@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 /**
  * Phase 5a-4 — stdlib Vec[T] runtime tests.
  *

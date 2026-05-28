@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 /**
  * Phase 5a-5 + 5d-4 — Vec.map proof.
  *

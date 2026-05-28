@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 import type { WasmValType } from '../ir/nodes'
 
 export interface FnSig {

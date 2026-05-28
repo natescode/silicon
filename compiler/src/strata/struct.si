@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: MIT
 # Phase 1a — @struct stratum (product types)
 #
 # Registers the @struct keyword.  The lowering handler delegates to the

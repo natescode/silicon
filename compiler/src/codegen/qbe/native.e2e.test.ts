@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 /**
  * Native backend end-to-end tests (story 8-9)
  *

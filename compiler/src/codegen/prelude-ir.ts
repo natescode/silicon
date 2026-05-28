@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 /**
  * Prelude IR — std.wat content as proper IRModule nodes.
  *

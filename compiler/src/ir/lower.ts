@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 /**
  * IR Lowering: Typed AST → IRModule
  *

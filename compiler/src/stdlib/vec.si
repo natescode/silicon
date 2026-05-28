@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: MIT
 # Phase 5a-4 — stdlib Vec[T] growable array.
 #
 # Phase 5 ships Vec specialised for i32-sized elements (Int, Bool,

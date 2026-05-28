@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: MIT
 # Compiler comptime imports.
 #
 # This module surface mirrors `src/comptime/imports.ts` — host-side

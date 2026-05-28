@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 import { describe, test, expect } from 'bun:test'
 import { Workspace } from './workspace'
 import { buildRegistry, parse } from './index'

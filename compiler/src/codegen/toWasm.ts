@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 /**
  * WAT → WASM binary conversion using the wabt npm package.
  *

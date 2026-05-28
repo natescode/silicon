@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 /**
  * Phase 9d-6 — `@use` resolver picks `…/stdlib/gc/X.si` over
  * `…/stdlib/X.si` when `options.target === 'wasm-gc'`.

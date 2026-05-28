@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 /**
  * Phase 9d-5 (a + b + c) — the two-layer portability split from ADR 0009.
  *

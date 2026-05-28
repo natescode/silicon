@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 /**
  * Structured diagnostics — WS 4 of Stage 0 Cleanup Plan.
  *

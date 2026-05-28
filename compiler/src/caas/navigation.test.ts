@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 /**
  * CaaS-5 navigation tests — symbol location, go-to-definition, find-references.
  *

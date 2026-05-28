@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 /**
  * Silicon source formatter — produces canonical Silicon from the AST.
  *

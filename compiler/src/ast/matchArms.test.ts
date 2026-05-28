@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 /**
  * Tests for the @match arm-expression form normalisation.
  *

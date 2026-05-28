@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 /**
  * Phase 9d-7 — tagged-struct sum-type lowering under wasm-gc.
  *

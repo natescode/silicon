@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 /**
  * Silicon IR (Intermediate Representation)
  *

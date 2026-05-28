@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: MIT
 # D-D-10: @match migrated to the new @stratum form.
 # Handler delegates to compiler_expandMatchChain (host-side helper that
 # implements the variant-tag dispatch, arm bindings, and alternation logic).

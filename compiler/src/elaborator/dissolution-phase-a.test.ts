@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 /**
  * Dissolution Phase A — strata bodies as first-class @fn definitions.
  *

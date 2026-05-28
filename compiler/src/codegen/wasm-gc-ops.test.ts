@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 /**
  * Phase 9d-3 — WasmGC instruction-level IR + emitters.
  *

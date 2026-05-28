@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 export { lowerProgram, IRLowerError } from './lower'
 export { emitModule, emitExpr, emitStmt } from './emit'
 export { irKinds, getIRKind, isIRKind } from './irKinds'
