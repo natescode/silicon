@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 /**
  * Phase 9d-4 — CLI integration tests for `--target=wasm-gc`.
  *

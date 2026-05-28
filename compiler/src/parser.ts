@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 import siliconGrammar from "./grammar/SiliconGrammar"
 
 export default function parse(sourceCode: string) {
