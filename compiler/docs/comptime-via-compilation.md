@@ -418,8 +418,8 @@ Components:
   - **Stage 0 (src/, TypeScript host):** use Bun's native
     `WebAssembly.instantiate` (already proven viable — see
     `src/codegen/toWasm.ts`).
-  - **Stage 1 (boot/, self-hosted):** embed a minimal WASM interpreter
-    inside `stage1.wasm`. See §6.
+  - **Stage 1 (future self-hosted compiler):** embed a minimal WASM
+    interpreter inside the self-hosted compiler binary. See §6.
 
 - **C. Compiler-as-imports surface.** Every existing CompilerAPI method
   (`ast::capture_template`, `module::push_definition`, `state`, …) becomes
@@ -651,8 +651,7 @@ between phases.
 
 ### Phase D — Migrate built-in strata
 
-- `src/strata/*.si` and `boot/strata/builtin/*.si` are rewritten in the
-  Phase-A form (no inline-interpreter blocks).
+- `src/strata/*.si` is rewritten in the Phase-A form (no inline-interpreter blocks).
 - The interpreter's call sites in `strataBody.ts` shrink to nothing.
 - The hardcoded `@if`/`@nil`/operator switch in `strataBody.ts` becomes
   dead code.

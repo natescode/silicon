@@ -52,8 +52,7 @@ The 1.0 stability promise begins on the first `1.0.0` tag.  Pre-1.0 tags
 ### Not stable (internal)
 
 - The Ohm grammar file `src/grammar/silicon-official.ohm` — used by the `src/`
-  TypeScript compiler; the `boot/` hand-written parser is the authoritative
-  reference.
+  TypeScript compiler.
 - AST node shapes (`Program`, `Definition`, `FunctionCall`, etc.) — internal
   to the compiler; accessed only through the CaaS API.
 - IR node shapes (`IRExpr`, `IRBlock`, etc.) — internal.

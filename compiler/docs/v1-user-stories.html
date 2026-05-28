@@ -109,6 +109,15 @@
 <div class="page">
 
 <h1>Sigil 1.0 — User Stories</h1>
+
+<div class="card warn" style="background: var(--surface2); border-left: 4px solid var(--accent4); padding: 12px; margin: 12px 0;">
+  <strong>Status note (post-boot/ removal):</strong> This document was authored when
+  the Silicon-in-Silicon bootstrap lived under <code>boot/</code>. That tree has been
+  removed and the self-hosted compiler is slated for a future rewrite from scratch.
+  References to <code>boot/*</code> paths in the stories below describe the
+  historical bootstrap layout — they need re-scoping when the rewrite begins. The
+  TypeScript compiler in <code>src/</code> is the current production compiler.
+</div>
 <p class="subtitle">
   Session-sized work units to ship 1.0.  Stories are grouped by phase (matching
   <a href="sigil-1.0-roadmap.md" style="color: var(--accent);">sigil-1.0-roadmap.md</a>)

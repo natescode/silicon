@@ -5,7 +5,7 @@
 for locals, no rank-N, no polymorphic recursion.  The smallest piece of HM
 that still feels like HM, scoped to grow into full Roc-style later.
 
-**Status:** Shipped in `src/` as of 2026-05-22.  Not yet ported to `boot/`.
+**Status:** Shipped in `src/` as of 2026-05-22.
 
 **Implementation files:**
 - `src/types/unify.ts` — pure primitives (unify, applySubst, occursIn,

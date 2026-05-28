@@ -308,8 +308,6 @@ export function parseTypeName(name: string, aliases?: Map<string, SiliconType>):
         case 'u64': case 'UInt64': return TypeUInt64
         // Functions declared `:Void` have no return type; we model that as
         // TypeUnknown so callers don't try to read a value off the call.
-        // The bootstrap recognises :Void natively (see boot/ir/lower.si
-        // syntactic void inference); this case keeps Stage 0 in sync.
         case 'Void': return TypeUnknown
         // Low-level escape hatch — WASM types written directly.
         case 'i32': return TypeInt

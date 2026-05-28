@@ -165,6 +165,15 @@
     <strong>Scope:</strong> v1 alpha covers everything an editor needs to feel like it understands Silicon.  Strata-aware semantics and project-config parsing are explicit later goals captured here so the architecture leaves room for them, but neither ships in v1.
   </div>
 
+  <div class="card info" style="border-left: 4px solid var(--accent4);">
+    <strong>Status note (post-boot/ removal):</strong> This document was authored
+    when the Silicon-in-Silicon bootstrap lived under <code>boot/</code>. That tree
+    has been removed and the self-hosted compiler is slated for a future rewrite.
+    References to <code>boot/*</code> paths describe the historical layout — they
+    need re-scoping when the rewrite begins. The TypeScript compiler in
+    <code>src/</code> is the current production compiler.
+  </div>
+
   <h2>1. What ships in v1 alpha</h2>
 
   <p>Four capabilities, in priority order:</p>

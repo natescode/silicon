@@ -46,7 +46,7 @@ Anything that satisfies that profile is fair game.
 1. **Architectural principle: WASM-runtime agnostic.** `wit/comptime.wit`
    is the contract; the runtime that executes compiled handlers against
    it is a swappable implementation detail. No Sigil source file outside
-   of `src/comptime/runtime/` (TS) or `boot/comptime/runtime/` (Silicon)
+   of `src/comptime/runtime/` (TS) or the future self-hosted equivalent
    may name the runtime.
 
 2. **v1.0 instantiation: vendor wasm3.** ~100KB single-file C interpreter
@@ -65,7 +65,7 @@ The TypeScript implementation in `src/comptime/imports.ts` is **bootstrap-only**
 
 | Milestone | TS path status |
 |-----------|----------------|
-| Today | Production for bun-hosted compilation; required by Phase 7 boot/ port work |
+| Today | Production for bun-hosted compilation; required by future self-hosted port work |
 | v1.0 ship (stretch) | Deleted alongside the rest of `src/` if the bootstrap is complete |
 | v1.0 ship (likely) | Frozen — accepts no new functionality, only critical fixes; lives until bootstrap completes |
 | Post-1.0 | Deleted; native binary + wasm3 is the only compile path |
@@ -81,7 +81,7 @@ assume the TS path is permanent.
 
 - Pro: bootstrap stays working under bun
 - Con: libwasmtime is multi-MB; pulls cranelift JIT we don't use; brings WASI
-  we don't use; couples boot/ to wasmtime's C ABI versioning forever
+  we don't use; couples the self-hosted compiler to wasmtime's C ABI versioning forever
 - Con: 1.0 → 1.1 swap to a Silicon interp would be a hard break
 
 ### Option B — Pure JS shim everywhere
@@ -139,7 +139,8 @@ assume the TS path is permanent.
     the merge. Until this lands, `wit/comptime.wit` is documentation, not
     a contract.
   - **C-2 (= rescoped story 8-9):** vendor wasm3 under `vendor/wasm3/`;
-    thin Silicon `@extern` shim in `boot/comptime/runtime/wasm3.si`.
+    thin Silicon `@extern` shim in the self-hosted compiler's
+    `comptime/runtime/wasm3.si` (path TBD when the rewrite lands).
     Story 8-9's original scope ("link wasmtime as a C library") is rejected
     by this ADR and replaced by C-2. v1-user-stories.html needs updating.
   - **C-3:** golden-output dual-runtime test harness (TS shim vs wasm3)

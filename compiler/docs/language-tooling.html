@@ -116,6 +116,14 @@
   ordered by effort-to-reach ratio.  Date: 2026-05-24.
 </p>
 
+<div class="card info" style="border-left: 4px solid var(--accent4); padding: 12px; margin: 12px 0;">
+  <strong>Status note (post-boot/ removal):</strong> This document was authored
+  when the Silicon-in-Silicon bootstrap lived under <code>boot/</code>. That tree
+  has been removed and the self-hosted compiler is slated for a future rewrite.
+  References to <code>boot/*</code> paths describe the historical layout. The
+  TypeScript compiler in <code>src/</code> is the current production compiler.
+</div>
+
 <div class="legend" style="border-color: var(--accent2);">
   <strong>Strategy.</strong>  Two grammars do most of the heavy lifting:
   a <strong>TextMate grammar</strong> (Phase 2) fans out to VS Code,

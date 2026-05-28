@@ -85,4 +85,3 @@ The typechecker registers each `@struct` as a `DistinctOf(name, TypeInt)` type a
 
 - No nested structs (struct fields of struct type) — field lowering assumes all fields are scalar wasm types.
 - No struct-typed function return values in the typechecker (return type is `DistinctOf('Point', TypeInt)` which is `i32` at the WASM level — this is correct).
-- No `boot/` port yet — the bootstrap compiler does not yet implement `@struct` (gated on Phase 3).

@@ -1,8 +1,15 @@
 # Phase 2 — Silicon-side Typechecker Port
 
-> Briefing document for porting `src/types/*` to `boot/types/*.si`. Read this
-> first before starting work; it captures everything a fresh session needs to
-> hit the ground running without re-reading the TS source.
+> **Historical:** This briefing planned a port to the original Silicon-in-Silicon
+> bootstrap under `boot/`. That tree has since been removed; a future self-hosted
+> compiler will be rewritten from scratch. The shape of the TypeScript
+> typechecker described below remains accurate; the references to `boot/*.si`
+> paths describe what the *future* self-hosted layout might mirror, not files
+> that currently exist.
+
+> Briefing document for porting `src/types/*` to a self-hosted Silicon
+> typechecker. Captures the design that lived in `src/types/` so a future
+> port can hit the ground running without re-reading the TS source.
 
 ## Why this matters
 

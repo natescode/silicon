@@ -77,7 +77,7 @@ Cost: ~3 hours including fixture authoring.
 
 ### Option C — Ship two renderers (`--diagnostic-style=ascii|fancy`)
 
-- Reject. Doubles the surface to maintain in boot/ for ~0 user value.
+- Reject. Doubles the renderer surface for ~0 user value.
 
 ### Option D — Leave it throwaway; lock in v1.1
 
@@ -86,7 +86,7 @@ Cost: ~3 hours including fixture authoring.
 
 ## Consequences
 
-- **Positive (A):** renderer ships once, ports to boot/ once
+- **Positive (A):** renderer ships once; the future self-hosted compiler ports it once
 - **Positive (A):** `tests/fixtures/diagnostics/` becomes the regression
   net — any unintended renderer change shows up as a fixture diff in CI
 - **Negative (A):** small risk of "we should have picked fancy" later, but

@@ -14,9 +14,8 @@ Silicon currently has exactly one loop form:
 ```
 
 A while-loop.  `cond` is re-evaluated at the top of each iteration;
-the body runs while `cond` is truthy.  WAT emission (Stage 0
-`src/ir/emit.ts::emitLoop`, mirrored in the bootstrap's
-`boot/emit/wat.si`):
+the body runs while `cond` is truthy.  WAT emission
+(`src/ir/emit.ts::emitLoop`):
 
 ```wat
 (block $brk_N
@@ -163,7 +162,7 @@ This needs tuple-returning calls or an out-pointer convention.
 WASM has multi-value results now but Silicon doesn't expose them;
 the WASI extern convention (`out_ptr` parameters the host/callee
 writes through) is the bridge that already exists in the
-language (`boot/std/io.si` uses it for `fd_read`).
+language (`src/stdlib/io.si` uses it for `fd_read`).
 
 Critically, this protocol can be added *later*.  Ship (a) for
 `Array`, `String`, and `Range` first.  Add (b) only once someone
@@ -172,9 +171,8 @@ bootstrap doesn't need iterators at all today.
 
 ## On `&@loop 1, body` continuing to mean "loop forever"
 
-Don't break this.  Every long-lived loop in `boot/parser/lex.si`,
-`boot/elab/body.si`, and `boot/strata/loader.si` uses the
-`&@loop 1, { ... &@break ... }` pattern.  Changing `1`'s meaning
+Don't break this.  Long-lived loops in the compiler use the
+`&@loop 1, { ... &@break ... }` pattern; changing `1`'s meaning
 to "single-shot iterator" would silently miscompile them.
 
 The cleaner alternative: introduce the **1-argument form**
@@ -191,7 +189,7 @@ deserve a keyword.
 
 1. **`&@loop body`** — 1-arg infinite form.  A desugar stratum, ~5
    lines.  Eliminates the `&@loop 1, { ... }` boilerplate across
-   `boot/`.
+   the compiler.
 2. **C-style 4-arg form** — `&@loop init; cond; step, body`.
    Another desugar stratum.  Now the most common counter loop is
    `&@loop i := 0; i < n; i = i + 1, { body }` without

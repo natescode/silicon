@@ -1,5 +1,10 @@
 # WASM Binary Emitter Plan
 
+> **Status:** Deferred per [ADR 0006](adr/0006-wasm-emitter-mixed-mode.md) —
+> v1.0 routes all WASM emission through WAT → binaryen. The slices below
+> describe the original plan; paths reference the historical `boot/` layout
+> and need re-targeting at `src/codegen/` if/when the work resumes.
+
 **Goal:** Sigil emits a `.wasm` binary directly from IR by default. A new
 `--wat` flag selects the existing text emitter as opt-in. Both backends
 consume the same `vec<IR_*>` produced by `lower_program`; nothing
@@ -19,7 +24,7 @@ Source → Parser → AST → Strata → Elaborator → [Typecheck] → IR Lower
                                                                 │
                                             ┌───────────────────┴───────────────────┐
                                             ▼                                       ▼
-                                  boot/emit/wasm.si  (default)            boot/emit/wat.si  (--wat)
+                                  (future) emit/wasm.si  (default)            (future) emit/wat.si  (--wat)
                                             │                                       │
                                             ▼                                       ▼
                                         stdout (binary)                       stdout (text)
@@ -89,9 +94,9 @@ backends a single source of truth.
 
 ### Slice 2 — CLI plumbing
 
-- `boot/cli.si`: add `CLI_EMIT_WAT:Int` (default 0). `--wat` sets it.
+- CLI: add `CLI_EMIT_WAT:Int` (default 0). `--wat` sets it.
   Update `--help`. Reject `--emit=wat` style (separate concern).
-- `boot/stage1.si`: dispatch on `cli_emit_wat` between
+- Driver: dispatch on `cli_emit_wat` between
   `emit_program_wasm fns` (default) and `emit_program fns` (existing).
 - `build.sh` / `build.ps1`: stage1 now writes `.wasm` to stdout. The
   pipeline drops the `wat2wasm` step on the **default** path. For
@@ -105,7 +110,7 @@ backends a single source of truth.
 
 ### Slice 3 — LEB128 + binary write helpers
 
-New `boot/emit/leb.si`:
+New `emit/leb.si` (in the future self-hosted compiler):
 
 - `leb_u32 v:Int` → writes ULEB128 to `EW_OUT`
 - `leb_i32 v:Int` → writes SLEB128
@@ -114,13 +119,13 @@ New `boot/emit/leb.si`:
 - `write_u8 b:Int`, `write_u32_le v:Int` (only for magic/version)
 - All emit to fd 1 via `write_byte`.
 
-New `boot/emit/buf.si`: a length-prefixed write buffer in linear memory
+New `emit/buf.si` (in the future self-hosted compiler): a length-prefixed write buffer in linear memory
 so each section can be written into a scratch arena, then its length
 LEB-prefixed and flushed to stdout. Sections nest (e.g. code section
 contains per-function size-prefixed bodies), so this needs a small stack
 of buffer offsets.
 
-### Slice 4 — `boot/emit/wasm.si`
+### Slice 4 — `(future) emit/wasm.si`
 
 `emit_program_wasm functions:Int := { ... }` mirrors `emit_program`:
 

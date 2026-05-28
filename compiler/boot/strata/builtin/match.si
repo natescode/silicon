@@ -1,4 +1,0 @@
-@stratum_keyword Match ('@match', Node) = {
-  &IR::control_match;
-  &Compiler::expandMatchChain Node, inferredType;
-};

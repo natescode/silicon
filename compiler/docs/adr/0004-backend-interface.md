@@ -13,12 +13,12 @@ Today three codegen targets each ship their own entry point:
 - `lowerToQbe(p, …): string`
 
 Signatures drift. `src/sigil_cli.ts` switches on `--emit=` and calls each
-directly. The boot/ port will inherit this shape unless we finalize a single
-`Backend<T>` contract in `src/` first.
+directly. A future self-hosted compiler will inherit this shape unless we
+finalize a single `Backend<T>` contract in `src/` first.
 
 This isn't a runtime bug — it's a porting hazard. Authoring a fresh codegen
 in Silicon is much harder than refactoring three TS functions into one
-contract. The boot/ port goes ~3× faster if there's a single shape to mirror.
+contract. The self-host port goes ~3× faster if there's a single shape to mirror.
 
 ## Decision
 
@@ -48,19 +48,20 @@ export interface Backend<T> {
 Cost: ~4 hours. ~30 lines TS for the interface; thin adapters around the
 existing functions; CLI rewrite.
 
-- Pro: boot/ port has a single contract to mirror
+- Pro: future self-host port has a single contract to mirror
 - Pro: any future backend (LLVM, Cranelift) plugs in without surgery on the CLI
 - Pro: testing each backend uses the same harness shape
 - Con: small adapter overhead per backend
 
 ### Option B — Leave the ad-hoc entry points, port them as-is
 
-Cost: ~0 now; ~2 days extra in boot/ to author three independent codegen
-entry points in Silicon (likely with eventual drift).
+Cost: ~0 now; ~2 days extra in the future self-hosted compiler to author
+three independent codegen entry points in Silicon (likely with eventual
+drift).
 
 - Pro: no work today
 - Con: locks the ad-hoc shape into the self-hosted compiler
-- Con: boot/ design churn likely as we try to factor common pieces later
+- Con: design churn likely as we try to factor common pieces later
 
 ### Option C — Only ship one backend in 1.0 (WAT) and add the others in 1.1
 
@@ -72,7 +73,7 @@ Cost: ~0 now. Removes the abstraction need.
 
 ## Consequences
 
-- **Positive (A):** single Silicon contract to mirror in boot/
+- **Positive (A):** single Silicon contract for the future self-hosted compiler to mirror
 - **Negative (A):** small refactor risk around CLI argument handling and
   error reporting (diagnostics must flow through the interface uniformly)
 - **Follow-up work:**

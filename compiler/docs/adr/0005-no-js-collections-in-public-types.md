@@ -14,11 +14,11 @@ Three places in today's public surface leak JS-specific collection types:
 | `src/caas/workspace.ts` | `Workspace.documents(): ReadonlyMap<string, Document>` |
 | `src/ast/semanticModel.ts` | `WeakMap<object, SiliconType>` for type annotations |
 
-Silicon has no `Map` and no `WeakMap`. boot/ has a HashMap stdlib type
-(shipped per v1-user-story 5a-6), but `WeakMap` semantics — reference-keyed,
+Silicon has no `Map` and no `WeakMap`. The stdlib ships a HashMap type
+(per v1-user-story 5a-6), but `WeakMap` semantics — reference-keyed,
 GC-aware — aren't expressible in Silicon at all.
 
-If 1.0 ships these signatures, the boot/ compiler must either:
+If 1.0 ships these signatures, the eventual self-hosted compiler must either:
 
 - (a) expose JS-Map-shaped data through a HashMap-backed wrapper, breaking the
   stability contract subtly (iteration order, presence semantics differ);
@@ -50,14 +50,14 @@ Cost: ~6 hours per the audit. 3 type definitions and ~10 call sites. The
 api-extractor report (`etc/sigil.api.md`) will diff cleanly so reviewers
 see exactly what changed.
 
-- Pro: surface stays Silicon-portable, stability contract intact across the v1.0 → boot/ jump
+- Pro: surface stays Silicon-portable, stability contract intact across the v1.0 → self-host jump
 - Pro: opaque accessors are friendlier than raw Maps even for TS consumers
 - Con: small breaking change to anyone holding a `Map.entries()` iterator today
 
-### Option B — Keep the Maps; document the boot/ accommodation in v1.1
+### Option B — Keep the Maps; document the self-host accommodation in v1.1
 
 Cost: ~0 now; ~2 days of debt in v1.1 when we have to break it. Plus the
-ergonomic harm of having boot/ expose HashMap-shaped values via a JS-Map shim.
+ergonomic harm of having the self-hosted compiler expose HashMap-shaped values via a JS-Map shim.
 
 - Pro: no work today
 - Con: shipped 1.0 stability contract is misleading
@@ -75,7 +75,7 @@ discipline around release tags.
 ## Consequences
 
 - **Positive (A):** `etc/sigil.public.d.ts` becomes a faithful contract for
-  boot/. Future API checks (`npm run api:check`) will catch regressions.
+  the future self-hosted compiler. Future API checks (`npm run api:check`) will catch regressions.
 - **Negative (A):** ~10 call sites and 3 types to update; tiny breaking change
 - **Follow-up work:** also finalize the Symbol/Reference schema with optional
   `containingScope?: Scope` and `crossDocumentReferences?: Reference[]`

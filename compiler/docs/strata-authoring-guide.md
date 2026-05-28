@@ -140,10 +140,11 @@ wherever a comptime-foldable expression appears.
 ## The comptime engine in Sigil 1.0
 
 **TL;DR**: the 1.0 comptime engine is the **AST interpreter** in
-`boot/elab/body_rich.si`.  Handler bodies are not compiled to wasm and run
-inside an embedded runtime — they're walked node-by-node by Silicon code.
-The full WASM-in-WASM dissolution arrives in 1.x via Phase 8 + 8-9 once
-native compilation lets us link wasmtime as a C library.
+`src/elaborator/`.  Handler bodies are not compiled to wasm and run
+inside an embedded runtime — they're walked node-by-node by the
+TypeScript host. The full WASM-in-WASM dissolution arrives in 1.x via
+Phase 8 + 8-9 once native compilation lets us link wasmtime as a
+C library.
 
 This shapes what's allowed inside a handler body.
 
@@ -316,36 +317,10 @@ model — wires up in a later compiler slice).
 
 ## Testing a stratum
 
-The pattern, mirroring `boot/tests/strata2_test.si`:
-
-```silicon
-@use '../std/io.si';
-@use '../parser/lex.si';
-@use '../parser/parse.si';
-@use '../strata/registry.si';
-@use '../strata/loader.si';
-@use '../elab/body_rich.si';
-
-@fn _start:Void := {
-    @local src := '@stratum MyTest := { &Compiler::register::keyword \'@my\'; };';
-    @local len := &WASM::i32_load (&str_ptr src);
-    @local bytes := (&str_ptr src) + 4;
-
-    @local toks := &lex bytes, len;
-    @local prog := &parse bytes, len, toks;
-    &registry_init;
-    &load_strata prog;
-
-    @local ok := ((&registry_kw_count) == 1);
-    &@if ok,
-      { &write_str 1, 'my-test OK' },
-      { &write_str 1, 'my-test FAIL' };
-    &write_byte 1, 10;
-    &wasi_snapshot_preview1::proc_exit 0;
-};
-```
-
-Then `./test.sh boot/tests/my_test.si`.
+The pattern: drive the compiler in a test alongside the rest of the
+TypeScript suite (`bun test src/elaborator/strata2.test.ts` is the
+worked example) — load the stratum into a `Program`, run elaboration,
+and assert on the resulting AST or diagnostics.
 
 ---
 
@@ -353,9 +328,8 @@ Then `./test.sh boot/tests/my_test.si`.
 
 Strata are tagged with one of three tiers at load time:
 
-- **T0** — built-in. Comes from `boot/strata/builtin/*.si` via the embedded
-  bundle. Always loads first; cannot be cyclic (T-6 detects cycles and emits
-  `S0001`).
+- **T0** — built-in. Comes from `src/strata/*.si`. Always loads first;
+  cannot be cyclic (T-6 detects cycles and emits `S0001`).
 - **T1** — inline in the user program currently being compiled.
 - **T2** — pulled in via `@use`'d dependencies.
 
@@ -426,12 +400,10 @@ break.
 
 ## Pointers
 
-- **Worked example**: `boot/tests/strata2_test.si` exercises every API in this
-  guide; the test source is the most up-to-date demonstration of correct call
-  shapes.
+- **Worked example**: `src/elaborator/strata2.test.ts` exercises every API in
+  this guide; the test source is the most up-to-date demonstration of correct
+  call shapes.
 - **Specification**: `docs/strata-2.0-spec.html` is the formal contract; this
   guide is the friendlier introduction.
 - **Dissolution plan**: `docs/comptime-via-compilation.md` is where
   `on::comptime` is going long-term.
-- **v1 roadmap**: `docs/v1-user-stories.html` Phase 3 carries the
-  story-by-story status of the boot/ port.

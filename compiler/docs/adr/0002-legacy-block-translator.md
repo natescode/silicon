@@ -21,7 +21,7 @@ Two choices for the port:
 1. Port the translator to Silicon. Commits us to maintaining two surface
    forms forever in the self-hosted compiler.
 2. Rewrite every in-tree stratum to `&compiler::*` form. Delete the
-   translator. Single surface in boot/.
+   translator. Single surface for the self-hosted compiler.
 
 ## Decision
 
@@ -35,13 +35,11 @@ acceptance gate.
 ### Option A — Rewrite-and-delete *(recommended)*
 
 Cost: ~4–6 hours of mechanical rewrites across `src/strata/modules/*.si`
-and `boot/strata/builtin/*.si`. The 17 skipped tests become the acceptance
-gate.
+and `src/strata/*.si`. The 17 skipped tests become the acceptance gate.
 
-- Pro: single canonical form in boot/
+- Pro: single canonical form for the self-hosted compiler to mirror
 - Pro: deletes ~600 LOC of translator + tests
 - Pro: forces the migration we'd have to do eventually anyway
-- Con: byte-equal self-host gate on stage1.wasm makes this a multi-commit sequence
 - Con: external strata authors using the legacy form get a hard break (no
   external strata exist today, so this is theoretical)
 
@@ -51,7 +49,7 @@ Cost: ~1 day to port 400 LOC of translator logic to Silicon. Then forever:
 two surface forms in the self-hosted compiler.
 
 - Pro: no migration churn in `.si` files
-- Con: every boot/ contributor for the rest of time has to know about both forms
+- Con: every future self-hosted contributor has to know about both forms
 - Con: ports a transitional helper as a permanent feature
 
 ### Option C — Keep the translator, document as deprecated, remove in v1.1

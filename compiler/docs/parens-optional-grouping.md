@@ -155,13 +155,13 @@ Existing bare forms continue to work unchanged.
 
 ## Migration
 
-**Zero forced rewrites.** Every existing `.si` file in `src/` and
-`boot/` continues to parse and produce the same AST. The paren form is
-purely additive — users opt into parens where they want them.
+**Zero forced rewrites.** Every existing `.si` file in `src/` continues
+to parse and produce the same AST. The paren form is purely additive —
+users opt into parens where they want them.
 
 This is a deliberate non-goal: making parens mandatory everywhere would
-be more "regular" in one sense but creates a large mechanical migration
-across both compilers. The optional-grouping design is regular in a
+be more "regular" in one sense but creates a large mechanical migration.
+The optional-grouping design is regular in a
 different sense: parens are a *universal* grouping operator — the same
 operator that already groups expressions for precedence — applied
 consistently to any list-shaped construct that wants explicit delimiters.
@@ -204,11 +204,9 @@ parser layer.
 
 ## Out of Scope
 
-- **Parens in `boot/`.** The `boot/` Silicon parser has its own
-  hand-written grammar (`boot/parser/parse.si`) and CLAUDE.md forbids
-  modifying it. The `src/` TypeScript reference compiler can ship this
-  refinement standalone; porting to `boot/` follows whenever the rest of
-  the Phase 3 boot/ work is scheduled.
+- **Parens in the future self-hosted compiler.** The Silicon-in-Silicon
+  bootstrap will inherit this grammar when it is rewritten; until then
+  the `src/` TypeScript compiler ships the refinement standalone.
 - **Required parens (the "perfect regularity" variant).** Discussed and
   intentionally deferred — the migration cost is high and the optional
   form is already regular in a different sense (parens are the universal

@@ -1,5 +1,13 @@
 # Sigil 1.0 Roadmap
 
+> **Status:** This roadmap was authored when the Silicon-in-Silicon bootstrap
+> lived under `boot/`. That tree has since been removed and the self-hosted
+> compiler is slated for a future rewrite from scratch. Phases that refer to
+> a "port to `boot/`" should be read as describing the future self-hosted
+> compiler — the work needs to be re-scoped once the bootstrap rewrite
+> begins. The TypeScript compiler in `src/` is the current production
+> compiler.
+
 ## What 1.0 means
 
 Sigil 1.0 is the release at which Silicon is demonstrably capable of writing
@@ -64,9 +72,10 @@ Phase 5 is built on structs. The compiler's own registry types (`StrataNode`,
 `DefKindEntry`) need structs to be expressed cleanly. Phase 1 cannot be
 declared complete until structs exist.
 
-**Done when.** `@struct` is defined as a stratum in `boot/strata/builtin/`.
-The compiler's internal aggregate types are rewritten to use it. Field access
-compiles correctly and the typechecker resolves field types.
+**Done when.** `@struct` is defined as a stratum in `src/strata/` (and in
+the future self-hosted compiler when it lands). The compiler's internal
+aggregate types are rewritten to use it. Field access compiles correctly
+and the typechecker resolves field types.
 
 ### 1b — Typechecker always-on
 
@@ -74,7 +83,7 @@ compiles correctly and the typechecker resolves field types.
 type checking is the default. A language where you have to opt into type safety
 is not a 1.0 position.
 
-**What this requires.** An audit of the typechecker (`boot/types/check.si`)
+**What this requires.** An audit of the typechecker (`src/types/typechecker.ts`)
 against the full Silicon surface: do all syntactic forms that a user can write
 produce correct inferred types? Common gaps to check: struct field access (new
 in 1a), generic instantiation, annotation-carrying definitions, and strata
@@ -83,8 +92,9 @@ cannot handle yet must either be covered or be an explicit compile error rather
 than a silent pass-through.
 
 **Done when.** `--typecheck` is removed as an explicit flag and type checking
-runs on every compilation. The compiler's own source (`boot/**/*.si`) compiles
-clean under the always-on checker.
+runs on every compilation. The compiler's Silicon sources (built-in strata
+and stdlib under `src/strata/` and `src/stdlib/`) compile clean under the
+always-on checker.
 
 ---
 
@@ -128,35 +138,36 @@ language reference.
 
 ---
 
-## Phase 3 — Strata 2.0 in `boot/`
+## Phase 3 — Strata 2.0 in the self-hosted compiler
 
 **What.** Port the Strata 2.0 implementation from `src/` (TypeScript) to
-`boot/` (Silicon). The TypeScript implementation is the complete reference:
-56 tests in `src/elaborator/strata2.test.ts` specify every behaviour.
+the future self-hosted compiler. The TypeScript implementation is the
+complete reference: 56 tests in `src/elaborator/strata2.test.ts` specify
+every behaviour.
 
 **Why now.** Every subsequent phase depends on Strata 2.0 being available in
 the self-hosted compiler. `@defer`, generics, and `@comptime` are all strata —
-they cannot be built until the machinery that runs strata is in `boot/`.
+they cannot be built until the machinery that runs strata is self-hosted.
 
-**Key additions to `boot/`.**
+**Key additions** (in the future self-hosted compiler's compiler_api / strata
+loader / elaborator):
 
-- `currentStratumRef` mutable ref in `boot/compiler_api/ctx.si` — allows
-  `state('stratum')` to route to the correct per-stratum state bucket during
-  handler execution. A plain string field does not work because closures
-  capture the reference at creation time, not the value.
-- `.__stratumName` tagging on compiled handlers in `boot/strata/loader.si` —
-  set before each handler is invoked, cleared after.
-- `state('stratum')` and `state('instance')` routing in
-  `boot/compiler_api/ctx.si` using `registry.stratumState`.
-- `module::push_definition` and `module::push_global` accumulator in
-  `boot/elab/body_rich.si`, drained at end of `lowerProgram`.
+- `currentStratumRef` mutable ref — allows `state('stratum')` to route to the
+  correct per-stratum state bucket during handler execution. A plain string
+  field does not work because closures capture the reference at creation
+  time, not the value.
+- `.__stratumName` tagging on compiled handlers in the strata loader — set
+  before each handler is invoked, cleared after.
+- `state('stratum')` and `state('instance')` routing using `registry.stratumState`.
+- `module::push_definition` and `module::push_global` accumulator in the
+  elaborator, drained at end of `lowerProgram`.
 - `ast.capture_template`, `ast.clone`, `ast.substitute`, `ast.patch_types`
-  in `boot/compiler_api/ctx.si`.
+  in compiler_api.
 - `type.variable`, `type.substitute`, `type.equals`, `type.format` in
-  `boot/compiler_api/ctx.si`.
+  compiler_api.
 - `diag::error` and `diag::warn` accumulator (T-5 model) — never throws,
   appends to `registry.diagnostics`.
-- T-6 cycle detection on T0 strata DAG in `boot/strata/loader.si`.
+- T-6 cycle detection on the T0 strata DAG in the strata loader.
 
 **Also: Strata authoring guide.** The first user-facing documentation for
 writing strata ships alongside Phase 3. It covers: the `@stratum` unified form,
@@ -165,7 +176,7 @@ stratum, and the stability contract for the `CompilerAPI` surface. This is the
 document that makes a third-party strata ecosystem possible.
 
 **Done when.** The 56 behaviours specified in `src/elaborator/strata2.test.ts`
-can be expressed as `boot/tests/strata2_test.si` test cases and all pass under
+can be expressed as self-hosted Silicon test cases and all pass under
 `wasmtime`. The strata authoring guide is published.
 
 ---
@@ -241,7 +252,7 @@ comparisons). They map to `i32` and `i64` at the WASM level — no new WASM
 value types needed. The type system distinguishes them; the codegen uses the
 `_u` variants of WASM instructions where applicable.
 
-**Done when.** WASI bindings in `boot/strata/builtin/modules/wasi_snapshot_preview1.si`
+**Done when.** WASI bindings in `src/strata/modules/wasi_snapshot_preview1.si`
 use `u32` and `u64` correctly. Existing code that casts `Int` for WASI fields
 is rewritten to typed unsigned values.
 
@@ -320,13 +331,13 @@ strictly more general capability.
   type erasure.
 - Compile-time verified invariants: `@comptime { @assert size_of Point == 8; }`.
 
-**Implementation path.** The Strata body interpreter (`boot/elab/body_rich.si`)
+**Implementation path.** The Strata body interpreter (`src/elaborator/`)
 already evaluates Silicon expressions against a `CompilerAPI`. The change is:
 expose the same evaluator when the parser encounters `@comptime { ... }` in
 user code. The evaluator needs no changes — only the dispatch path that decides
 when to invoke it.
 
-**Done when.** The compiler's opcode table in `boot/emit/wat.si` is generated
+**Done when.** The compiler's opcode table (in the WAT emitter) is generated
 by a `@comptime` block rather than hard-coded data. At least one
 `@comptime { @assert ... }` invariant check exists in the compiler source.
 
@@ -451,7 +462,7 @@ capture). Function calls push a new frame; returns unwind it. The interpreter
 needs no garbage collector — Silicon's arena allocator already handles memory.
 
 **Strata bodies run in the interpreter.** The Strata body evaluator
-(`boot/elab/body_rich.si`) is already an interpreter for a subset of Silicon.
+(`src/elaborator/`) is already an interpreter for a subset of Silicon.
 Phase 7 generalises that evaluator to cover the full Silicon surface. The
 `CompilerAPI` callbacks (`&Compiler::*`) remain the boundary between interpreted
 user code and compiler internals.
@@ -471,8 +482,8 @@ QBE backend is done, the interpreter itself runs natively.
 - `sgl run src/main.si` executes a Silicon program that prints to stdout.
 - `sgl test` finds and runs `@@test` functions and reports pass/fail.
 - `sgl eval` accepts Silicon expressions interactively.
-- The Sigil compiler's test suite (`boot/tests/*_test.si`) passes when driven
-  through `sgl run` rather than the WASM pipeline.
+- The Sigil compiler's test suite passes when driven through `sgl run`
+  rather than the WASM pipeline.
 - A Silicon-native debugger step (print a `Result[Int, String]` value as a
   Silicon tagged union, not as raw integers) works from `sgl eval`.
 

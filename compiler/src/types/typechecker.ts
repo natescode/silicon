@@ -399,13 +399,13 @@ function preRegisterStdFunctions(ctx: Ctx): void {
         { name: 'arr_load_i32',   params: [TypeInt, TypeInt],            result: TypeInt },
         { name: 'arr_load_f32',   params: [TypeInt, TypeInt],            result: TypeFloat },
         { name: 'arr_store_i32',  params: [TypeInt, TypeInt, TypeInt],   result: TypeUnknown },
-        // String views — boot/std uses these to thread String literals through
+        // String views — stdlib uses these to thread String literals through
         // the byte-level WASI surface.  Both are identity at runtime; the
         // typechecker uses them to bridge String ↔ Int safely.
         { name: 'scratch_alloc',  params: [TypeInt],                     result: TypeInt },
         { name: 'str_ptr',        params: [TypeString],                  result: TypeInt },
         { name: 'str_len',        params: [TypeString],                  result: TypeInt },
-        // Arena bump-pointer helpers — boot/std/arena.si wraps these.
+        // Arena bump-pointer helpers — src/stdlib wraps these.
         { name: 'heap_get',       params: [],                            result: TypeInt },
         { name: 'heap_set',       params: [TypeInt],                     result: TypeUnknown },
         // Phase 9c-8: memory introspection.

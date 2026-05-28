@@ -658,8 +658,8 @@ function lowerBuiltinCall(callee: string, args: any[], fn: QbeFnCtx): string {
 // ---------------------------------------------------------------------------
 // WASM:: intrinsic → QBE instruction mapping
 //
-// Silicon's boot/ layer uses `&WASM::i32_store`, `&WASM::i32_load`, etc. as
-// direct wrappers around WASM instructions.  When targeting native via QBE we
+// Silicon code uses `&WASM::i32_store`, `&WASM::i32_load`, etc. as direct
+// wrappers around WASM instructions.  When targeting native via QBE we
 // replace each with the equivalent QBE memory/arithmetic/cast instruction.
 //
 // Argument convention matches the Silicon stratum definitions:

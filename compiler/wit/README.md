@@ -2,14 +2,15 @@
 
 This directory holds the WebAssembly Interface Type (WIT) definitions that
 describe stable cross-language boundaries in the Sigil compiler. Each `.wit`
-file is **the single source of truth** for one boundary; the implementations
-in `src/` (TypeScript) and `boot/` (Silicon) must conform to it.
+file is **the single source of truth** for one boundary; the TypeScript
+implementations in `src/` and the Silicon `@extern` declarations in
+`src/strata/` must conform to it.
 
 ## Files
 
 | File | Boundary | Consumers |
 |------|----------|-----------|
-| `comptime.wit` | Compile-then-run Strata handler imports | `src/comptime/imports.ts` (TS host), `boot/strata/<author>/extern.si` (Silicon `@extern`s) |
+| `comptime.wit` | Compile-then-run Strata handler imports | `src/comptime/imports.ts` (TS host), `src/strata/<author>/extern.si` (Silicon `@extern`s) |
 
 ## Why WIT?
 

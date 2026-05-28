@@ -195,7 +195,7 @@ the v1.1 roadmap.
 ## Next steps
 
 - **Language reference:** the EBNF grammar is in `docs/grammar.ebnf`; built-in
-  keywords and operators are defined as strata in `boot/strata/builtin/`.
+  keywords and operators are defined as strata in `src/strata/`.
 - **Memory model:** `docs/memory.md` — arenas, parent-arena escape, the
   v1.1 GC outlook.
 - **Stdlib:** `src/stdlib/io.si` — `print`, `eprint`, `exit`; more modules are in `src/stdlib/`.
