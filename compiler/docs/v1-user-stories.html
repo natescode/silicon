@@ -177,7 +177,7 @@
     <li><a href="#phase-10">Phase 10 — CaaS Consumer APIs + Distribution ✅ (1.0 stories done)</a></li>
     <li><a href="#phase-11">Phase 11 — Silicon interpreter (written in Silicon, compiled to native via QBE) <em style="color: var(--accent4); font-size: 0.85em;">[moved to v1.1]</em></a></li>
     <li><a href="#phase-12">Phase 12 — <code>sgl</code> interpreter-backed subcommands <em style="color: var(--accent4); font-size: 0.85em;">[moved to v1.1]</em></a></li>
-    <li><a href="#phase-13">Phase 13 — Stability + distribution 🟡 (13/16; 10c-6 + 10c-9 + 10c-10 open)</a></li>
+    <li><a href="#phase-13">Phase 13 — Stability + distribution 🟡 (13/21; 10b-4/5 + 10c-6/9/10/11/12/13 open)</a></li>
     <li><a href="#phase-14">Phase 14 — DWARF + LSP <em style="color: var(--accent4); font-size: 0.85em;">[moved to v1.1]</em></a></li>
   </ol>
 </div>
@@ -1843,6 +1843,46 @@
   <p><strong>Shipped:</strong> <code>docs/stability.md</code> §3 — stable &amp;Compiler::* calls table, caveated calls, not-stable calls (raw IR builders, execution engine), and the extension rule (unknown Compiler:: paths warn, not error, for graceful degradation on older toolchains).</p>
 </details>
 
+<details class="distro">
+  <summary><span class="id">10b-4</span> Security review pass over the CaaS + CLI surface <span class="est">M, ~4h</span></summary>
+  <div class="deps"><strong>Depends on:</strong> CaaS-10 (API stability contract), 10b-1/2/3 (stability docs)</div>
+  <p class="goal">A focused security audit of every code path a user can reach: <code>sgl</code> CLI argument parsing, file resolution (<code>@use</code> path traversal), the CaaS API surface that library consumers call, comptime handler isolation, and the compile-then-run sandboxing assumptions.  Not a third-party pentest — that's a v1.x thing.  This is the "did we ship anything obviously bad" pass before claiming a stability contract.</p>
+
+  <div class="accept"><strong>Acceptance:</strong>
+    <ul>
+      <li><strong>Path traversal audit</strong> — <code>@use "..../etc/passwd"</code> can't escape the project root; <code>sgl</code> CLI file args are normalised and validated.  Document the explicit allow/deny model.</li>
+      <li><strong>Comptime sandbox audit</strong> — handler bodies run with the host's privileges (we never claimed otherwise).  Document this explicitly.  Verify no path-based escape (handlers writing arbitrary files via <code>module::push_definition</code> output).</li>
+      <li><strong>Input fuzzing</strong> — drive the parser through a fast-check fuzz corpus (already exists in <code>tests/fuzz/</code>); confirm no crashes on adversarial Silicon source.  Document the corpus size + iteration count.</li>
+      <li><strong>WASM emit safety</strong> — emitted modules import only what they declared; no implicit host imports (memory, externrefs).  Verify with a manual diff of the import section against the declared <code>@extern</code> list for ~5 representative programs.</li>
+      <li><strong>Dependency audit</strong> — <code>bun audit</code> clean for production deps (Ohm, binaryen, wabt).  Note any dev-only advisories as accepted.</li>
+      <li><strong>docs/security.md</strong> — threat model summary, vulnerability disclosure address, security@ email or GitHub Security Advisories link.</li>
+    </ul>
+  </div>
+
+  <p class="goal"><strong>Out of scope:</strong> third-party pentest, formal verification of the typechecker, fuzz-the-codegen.  Those are post-1.0 work if they happen at all.</p>
+</details>
+
+<details class="distro">
+  <summary><span class="id">10b-5</span> Performance baseline + regression benchmarks <span class="est">M, ~4h</span></summary>
+  <div class="deps"><strong>Depends on:</strong> Phase 9 (QBE native backend) for the native-compile benchmarks</div>
+  <p class="goal">Establish a published performance baseline for the 1.0 compiler so future regressions are detectable.  Not a "Sigil is X% faster than Y" marketing claim — that's a v1.x thing.  This is the floor we promise not to regress past.</p>
+
+  <div class="accept"><strong>Acceptance:</strong>
+    <ul>
+      <li><strong>Bench harness</strong> — <code>scripts/bench.ts</code> or <code>tests/bench/</code> directory; hyperfine-style "run N times, report median + stddev"; deterministic across runs.</li>
+      <li><strong>Cold compile time</strong> — wall-clock to compile a small (~50 LOC), medium (~500 LOC), and large (~5000 LOC) Silicon program to WAT.  Three sizes; published numbers.</li>
+      <li><strong>Native compile time</strong> — same three sizes, end-to-end through QBE → native binary.</li>
+      <li><strong>Test-suite runtime</strong> — <code>bun test</code> wall-clock; the suite is the canonical regression test, its own runtime is a perf signal.</li>
+      <li><strong>Binary size</strong> — <code>sgl</code> compiled native binary size on each Tier 1 platform.  Documented so users know what they're installing.</li>
+      <li><strong>Emitted WASM size</strong> — for the three reference programs above, the emitted .wasm size.  Document.</li>
+      <li><strong>docs/performance.md</strong> — published numbers, methodology, hardware (CI runner specs), and a "how to check for regressions" recipe.</li>
+      <li><strong>CI signal</strong> — bench job on every PR (warn-only); fail the build only on >2× regressions on the headline metrics.  Don't tune for noise.</li>
+    </ul>
+  </div>
+
+  <p class="goal"><strong>What this is NOT:</strong> a benchmark contest against Zig / Rust / Go.  Those are different languages with different design points; comparison is misleading.  The promise is "1.0 is at most this slow; future versions don't get worse."</p>
+</details>
+
 <h3>10c — Distribution</h3>
 
 <details class="distro" open>
@@ -1930,6 +1970,65 @@
   <p class="goal"><strong>Why "not just a playground":</strong> a playground is a tech demo — it shows the compiler works in a browser.  A docs site is a reference and a learning surface — it's what a developer reads when they decide whether to invest a weekend in Silicon.  The 1.0 launch needs the docs site; the playground is icing.</p>
 
   <p class="goal"><strong>Sequencing:</strong> 10c-10 blocks the 1.0 launch announcement — without a docs site, the blog post / HN / Reddit thread has nowhere coherent to link to.  Lands after 10a/10b/10c-7 (the content the site renders) and before 10c-9 (the install acceptance test the docs send people through).</p>
+</details>
+
+<details class="distro">
+  <summary><span class="id">10c-11</span> Release notes / <code>CHANGELOG.md</code> for 1.0.0 <span class="est">S, ~2h</span></summary>
+  <div class="deps"><strong>Depends on:</strong> Everything that ships in 1.0; <code>npx changeset version</code> already integrated (commit aab0835 era)</div>
+  <p class="goal">Write the 1.0.0 release notes that ship with the GitHub Release, the Homebrew formula, and the docs site.  Distinct from <code>.changeset/</code> entries (those are unit-of-PR descriptions) — this is the user-facing narrative.</p>
+
+  <div class="accept"><strong>Acceptance:</strong>
+    <ul>
+      <li><strong><code>CHANGELOG.md</code> 1.0.0 section</strong> — generated from <code>.changeset/</code> entries via <code>npx changeset version</code>, then hand-curated for readability.  Grouped by category: Language, Stdlib, Compiler API, CLI, Native backend, WasmGC target, Tooling, Docs.</li>
+      <li><strong>Highlight reel</strong> — top three things in 1.0 (e.g. "Strata 2.0 — language features as Silicon source," "Arena-based memory management with parent-arena escape," "Native compilation via QBE — no runtime dependency").  These also drive the launch announcement (10c-12).</li>
+      <li><strong>Known limitations</strong> section — honest list of what 1.0 doesn't do: no LSP yet (v1.1), no package registry yet (v1.1), no Silicon-native interpreter yet (v1.1), no incremental compilation (v1.1).  Better to be loud about this than have someone discover it angry.</li>
+      <li><strong>Stability statement</strong> — link to <code>docs/stability.md</code>; one paragraph summary in the release notes.</li>
+      <li><strong>Migration note</strong> — N/A for 1.0 since there are no pre-1.0 users.  Stub the section so v1.1 has a place to write.</li>
+      <li><strong>Contributor acknowledgments</strong> — credits in the GitHub Release body.</li>
+    </ul>
+  </div>
+
+  <p class="goal"><strong>Out of scope:</strong> per-PR changelog automation (post-1.0 if it's worth doing); RSS feed (v1.x).</p>
+</details>
+
+<details class="distro">
+  <summary><span class="id">10c-12</span> 1.0 launch announcement (blog post + community thread) <span class="est">M, ~4h</span></summary>
+  <div class="deps"><strong>Depends on:</strong> 10c-9 (acceptance gate passing), 10c-10 (docs site live), 10c-11 (release notes), tag <code>v1.0.0</code> pushed</div>
+  <p class="goal">Tell the world Silicon 1.0 exists.  Goal: get the right kind of attention — people who would actually try the language, not just upvote.  Quality of writing matters more than volume of channels.</p>
+
+  <div class="accept"><strong>Acceptance:</strong>
+    <ul>
+      <li><strong>Long-form blog post</strong> — published on the docs site (or natescode.com / personal blog).  ~1500–2500 words.  Opens with a runnable example; covers the differentiator (Strata 2.0 — language features as Silicon source); addresses "why not just use Zig/Rust/Roc?" head-on; closes with "here's how to try it in 60 seconds."  No fluff, no roadmap-as-marketing.</li>
+      <li><strong>Hacker News submission</strong> — submitted at a non-peak hour from a personal account.  Title is descriptive ("Silicon 1.0 — a WebAssembly-targeting systems language where features are data"), not clickbait.  Author engages in the comments thread, doesn't argue with bad-faith readers.</li>
+      <li><strong>r/programming or r/ProgrammingLanguages thread</strong> — same content adapted for Reddit norms (more casual, link to the blog post).</li>
+      <li><strong>Lobste.rs submission</strong> — appropriate tag (<code>compilers</code>, <code>plt</code>, <code>release</code>).</li>
+      <li><strong>X / Mastodon / Bluesky thread</strong> — short version; 5–8 posts walking through the headline example.  Optional but cheap.</li>
+      <li><strong>"This Week in Silicon" or similar follow-up post</strong> — drafted but not necessarily published; sets up the cadence for v1.1 momentum.</li>
+    </ul>
+  </div>
+
+  <p class="goal"><strong>What this is NOT:</strong> a paid launch.  No sponsored posts, no influencer outreach.  Silicon's audience is engineers who read primary sources — the writing is the marketing.</p>
+
+  <p class="goal"><strong>Sequencing:</strong> hard-gated on 10c-9 (don't announce something users can't install), 10c-10 (something to link to), 10c-11 (something to read), and the actual <code>v1.0.0</code> git tag being pushed.  These all land in a tight cluster on launch day.</p>
+</details>
+
+<details class="distro">
+  <summary><span class="id">10c-13</span> License + copyright header audit <span class="est">S, ~2h</span></summary>
+  <div class="deps"><strong>Depends on:</strong> none — can ship at any time</div>
+  <p class="goal">Confirm every source file in the project has consistent licensing posture before the 1.0 tag.  Cheap, mechanical, and catches embarrassing gaps before a third party files an issue.</p>
+
+  <div class="accept"><strong>Acceptance:</strong>
+    <ul>
+      <li><strong><code>LICENSE.md</code> at repo root</strong> — already exists (MIT, confirmed); verify the year + author line are current.</li>
+      <li><strong><code>SPDX-License-Identifier: MIT</code> header</strong> on every TypeScript source file (<code>src/**/*.ts</code>) and every Silicon source file (<code>src/strata/**/*.si</code>, <code>src/stdlib/**/*.si</code>).  Use a one-line comment so it doesn't bloat files.  Verify with a CI lint.</li>
+      <li><strong>Third-party licenses</strong> — <code>node_modules</code> dependencies (binaryen, wabt, Ohm, ohm-js): collect their licenses into <code>NOTICE.md</code> or equivalent at repo root.  Apache 2.0 and MIT deps need attribution; verify each is correctly noted.</li>
+      <li><strong>Distributed binary attribution</strong> — the <code>sgl</code> binary statically links Bun's runtime; check Bun's redistribution requirements and add attribution in the install path if required.</li>
+      <li><strong>Trademark posture</strong> — "Silicon" as a language name is genuinely contested (Apple's Silicon Macs).  Document the position: it's a language name, not a chip name, not asserting any conflicting trademark.  Add a one-line disclaimer to <code>LICENSE.md</code> or the docs site footer.</li>
+      <li><strong>contributor handling</strong> — no CLA for 1.0 (project is single-author).  Stub a <code>CONTRIBUTING.md</code> if one doesn't exist that points at the issue tracker.</li>
+    </ul>
+  </div>
+
+  <p class="goal"><strong>Why now:</strong> the moment a 1.0 release exists, downstream packagers (Homebrew, apt, Linguist) will inspect licensing.  A missing header is a one-line fix in a PR; a missing license posture is a "we can't include this" rejection.</p>
 </details>
 
 <!-- ================================================================== -->
@@ -2077,10 +2176,10 @@
   </tr>
   <tr style="background: rgba(247, 160, 108, 0.08);">
     <td>13 — Stability + distribution</td>
-    <td style="color: var(--accent4); font-weight: 700;">🟡 13 / 16</td>
-    <td>13 / 16</td>
-    <td><em>actual ~1 d done · ~1.5 d remain</em> (est: 7 d)</td>
-    <td>10a-1/2/3 EBNF ✅, 10b-1/2/3 stability policy ✅, 10c-1/2/3/4/5/7/8 distribution ✅. <strong>Open for 1.0:</strong> 10c-10 (docs site, ~1d) blocks the launch announcement. <strong>Deferred:</strong> 10c-6 (embed wasmtime — post-1.0 optional), 10c-9 (acceptance gate — needs live tag).</td>
+    <td style="color: var(--accent4); font-weight: 700;">🟡 13 / 21</td>
+    <td>13 / 21</td>
+    <td><em>actual ~1 d done · ~4 d remain</em> (est: 11 d)</td>
+    <td>10a-1/2/3 EBNF ✅, 10b-1/2/3 stability policy ✅, 10c-1/2/3/4/5/7/8 distribution ✅. <strong>Open for 1.0 launch:</strong> 10b-4 security pass, 10b-5 perf baseline, 10c-10 docs site, 10c-11 release notes, 10c-12 launch announcement, 10c-13 license/copyright audit. <strong>Release-tag gated:</strong> 10c-9 acceptance gate. <strong>Optional stretch:</strong> 10c-6 wasmtime embed.</td>
   </tr>
   <tr style="opacity: 0.6;">
     <td>14 — DWARF + LSP <em style="color: var(--accent4); font-size: 0.85em;">[moved to v1.1]</em></td>
@@ -2095,20 +2194,20 @@
     <td style="color: var(--accent3);">✅</td>
     <td>~139 stories</td>
     <td><em>~16 d actual</em> (est: ~68 d)</td>
-    <td>Phases 1–6, 8, 9, 9c (9/10), 9d, 9.5 (5/5 src/), 10, 13 (13/16) — all fully or substantially shipped.  ~4× faster than originally estimated.  Phase 7 unchecked 2026-05-27 (boot/ removed) and moved to v1.1.</td>
+    <td>Phases 1–6, 8, 9, 9c (9/10), 9d, 9.5 (5/5 src/), 10, 13 (13/21) — all feature work shipped.  ~4× faster than originally estimated.  Phase 7 unchecked 2026-05-27 (boot/ removed) and moved to v1.1.</td>
   </tr>
   <tr style="background: var(--surface2); border-top: 1px solid var(--border); font-weight: 600;">
     <td>1.0 REMAINING</td>
     <td style="color: var(--accent4);">🟡</td>
-    <td>1 required + ~7 stretch</td>
-    <td><strong style="color: var(--accent);">~1 d required + ~5 d stretch</strong></td>
-    <td><strong>Blocks 1.0 launch:</strong> 10c-10 (docs site).  <strong>Recommended pre-tag:</strong> release notes, perf baseline, security pass.  <strong>Post-tag gate:</strong> 10c-9 (acceptance gate — needs live release).  <strong>Optional stretch:</strong> 10c-6 wasmtime embed, CaaS-8/11, 6b-11/12/13.  Phases 7 / 11 / 12 / 14 + boot/ port stories moved to v1.1.</td>
+    <td>6 launch + 1 release-gated + ~4 stretch</td>
+    <td><strong style="color: var(--accent);">~4 d launch work</strong></td>
+    <td><strong>Pre-tag launch surface (~4 d total):</strong> 10b-4 security pass, 10b-5 perf baseline, 10c-10 docs site, 10c-11 release notes, 10c-12 launch announcement, 10c-13 license audit.  <strong>Post-tag gate:</strong> 10c-9 acceptance gate (needs live release).  <strong>Optional stretch:</strong> 10c-6 wasmtime embed, CaaS-8/11, 6b-11/12/13.  Phases 7 / 11 / 12 / 14 + boot/ port stories moved to v1.1.</td>
   </tr>
   <tr style="background: var(--surface2); font-weight: 600;">
     <td>1.0 TOTAL</td>
     <td></td>
-    <td>~140 stories</td>
-    <td><strong style="color: var(--accent);">~16 d shipped + ~1–6 d remaining</strong><br/><em style="color: var(--muted); font-size: 0.85em;">(scope-reduction 2026-05-27: Phases 7 / 11 / 12 moved to v1.1 alongside boot/ removal — Sigil 1.0 ships on the src/ TypeScript compiler + QBE native backend. ~98% feature-complete; remaining is launch surface — docs site, release notes, acceptance gate.)</em></td>
+    <td>~145 stories</td>
+    <td><strong style="color: var(--accent);">~16 d feature work shipped + ~4 d launch surface</strong><br/><em style="color: var(--muted); font-size: 0.85em;">(scope-reduction 2026-05-27: Phases 7 / 11 / 12 moved to v1.1 alongside boot/ removal — Sigil 1.0 ships on the src/ TypeScript compiler + QBE native backend.  Feature-complete; remaining work is launch surface — docs site, release notes, security pass, perf baseline, license audit, launch announcement.)</em></td>
     <td>v1.1 work tracked separately in <a href="v1.1-user-stories.html">v1.1-user-stories.html</a>.</td>
   </tr>
   <tr style="font-size: 0.85em; color: var(--muted);">
