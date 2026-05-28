@@ -2,7 +2,7 @@
 
 - **Status:** Proposed
 - **Date:** 2026-05-26
-- **Related:** `docs/v1-bootstrap-requirements.html` §4c · `docs/diagnostics.md` · `src/errors/diagnostic.ts`
+- **Related:** `docs/archive/v1-bootstrap-requirements.html` §4c · `docs/diagnostics.md` · `src/errors/diagnostic.ts`
 
 ## Context
 

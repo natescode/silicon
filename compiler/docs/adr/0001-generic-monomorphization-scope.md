@@ -2,7 +2,7 @@
 
 - **Status:** Accepted *(revised: original recommendation reversed after investigation showed @fn[T] already ships)*
 - **Date:** 2026-05-26 · revised after audit + bug fix
-- **Related:** `docs/v1-bootstrap-requirements.html` §2a · `docs/strata-authoring-guide.md` · `docs/hm-lite.md` · `src/types/hm-lite.test.ts` · `src/types/generic-functions.test.ts` · `src/types/typechecker.ts:checkPolymorphicCall`
+- **Related:** `docs/archive/v1-bootstrap-requirements.html` §2a · `docs/strata-authoring-guide.md` · `docs/hm-lite.md` · `src/types/hm-lite.test.ts` · `src/types/generic-functions.test.ts` · `src/types/typechecker.ts:checkPolymorphicCall`
 
 ## Context
 
@@ -15,7 +15,7 @@ The original framing of this ADR conflated two separate features:
    could register via Strata that captures a template, infers, mangles, and
    pushes synthesised `@fn`s — pure Strata 2.0, no compiler special case.
 
-The audit at `v1-bootstrap-requirements.html` §2a flagged "4/4 + 5/6
+The audit at `docs/archive/v1-bootstrap-requirements.html` §2a flagged "4/4 + 5/6
 skipped tests" in `src/elaborator/generic-monomorph.test.ts` and
 `src/elaborator/generic-e2e.test.ts`. Those tests are about feature (2) —
 the strata-authored monomorphization demo. Feature (1) is shipped and

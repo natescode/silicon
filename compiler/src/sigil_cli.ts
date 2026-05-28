@@ -498,7 +498,7 @@ async function cmdCheck(positional: string | undefined, opts: CompileOptions): P
 
 function cmdTest(_args: string[]): void {
     console.error('sgl test: not yet implemented (requires Phase 7 interpreter)')
-    console.error('  Track progress: docs/sigil-1.0-roadmap.md §Phase 7')
+    console.error('  Track progress: docs/v1.1-user-stories.html §Phase 7')
     process.exit(1)
 }
 

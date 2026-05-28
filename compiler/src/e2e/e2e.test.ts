@@ -1896,7 +1896,7 @@ test("Round 46: unknown module throws a meaningful error", () => {
 
 // ============================================================================
 // Phase A — Silicon-Core i64: Int64 type + @toInt64 / @toInt overload
-//   Plan: docs/silicon-core-i64-plan.html
+//   Plan: docs/archive/silicon-core-i64-plan.html
 // ============================================================================
 
 test("Phase A i64: Int64 extern declaration emits (param i64) and (result i64)", () => {

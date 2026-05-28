@@ -1,6 +1,6 @@
 # `@use` Source Includes
 
-Phase −1.C of `docs/bootstrap-plan.html`. Lets a Silicon source file pull
+Phase −1.C of `docs/archive/bootstrap-plan.html`. Lets a Silicon source file pull
 in other Silicon files at compile time.
 
 ## Syntax

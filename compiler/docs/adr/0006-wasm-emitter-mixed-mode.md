@@ -2,7 +2,7 @@
 
 - **Status:** Proposed
 - **Date:** 2026-05-26
-- **Related:** `docs/v1-bootstrap-requirements.html` §3c · `docs/wasm-binary-emitter-plan.md` · `src/codegen/wasm-emitter.ts`
+- **Related:** `docs/archive/v1-bootstrap-requirements.html` §3c · `docs/archive/wasm-binary-emitter-plan.md` · `src/codegen/wasm-emitter.ts`
 
 ## Context
 
@@ -26,7 +26,7 @@ through WAT → binaryen for the v1.0 lifecycle. Reopen the direct path in v1.1
 once the funcref work is fully scoped (~1 day per the audit, but the value
 is dubious if binaryen is already available).**
 
-`docs/wasm-binary-emitter-plan.md` updates to say "deferred to v1.1, see ADR 0006."
+`docs/archive/wasm-binary-emitter-plan.md` updates to say "deferred to v1.1, see ADR 0006."
 
 ## Options considered
 
@@ -35,7 +35,7 @@ is dubious if binaryen is already available).**
 Cost: ~1 day. Delete `src/codegen/wasm-emitter.ts` *or* keep behind a
 feature flag (`--emit=wasm-direct`) marked experimental. Update the
 `Backend<T>` (ADR 0004) impl set to two: WAT and QBE. Update
-`docs/wasm-binary-emitter-plan.md`.
+`docs/archive/wasm-binary-emitter-plan.md`.
 
 - Pro: predictable single path. The future self-hosted compiler doesn't need a direct emitter
 - Pro: binaryen is well-tested and small
@@ -70,4 +70,4 @@ Silicon (additional ~3 days?).
 ## Implementation pointer
 
 Pending — link the PR that removes `wasm-direct` from the default Backend
-set and updates `docs/wasm-binary-emitter-plan.md`.
+set and updates `docs/archive/wasm-binary-emitter-plan.md`.

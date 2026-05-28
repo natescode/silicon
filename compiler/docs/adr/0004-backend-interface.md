@@ -2,7 +2,7 @@
 
 - **Status:** Proposed
 - **Date:** 2026-05-26
-- **Related:** `docs/v1-bootstrap-requirements.html` §3a · `src/codegen/` · `src/sigil_cli.ts`
+- **Related:** `docs/archive/v1-bootstrap-requirements.html` §3a · `src/codegen/` · `src/sigil_cli.ts`
 
 ## Context
 

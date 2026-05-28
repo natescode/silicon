@@ -2,7 +2,7 @@
 
 - **Status:** Proposed *(awaiting verification-gate work — see Implementation pointer)*
 - **Date:** 2026-05-26 · revised after review
-- **Related:** `docs/v1-bootstrap-requirements.html` §2c · `wit/comptime.wit` · `src/comptime/imports.ts` · `src/comptime/engine.ts` · v1-user-stories 3-22, 8-9
+- **Related:** `docs/archive/v1-bootstrap-requirements.html` §2c · `wit/comptime.wit` · `src/comptime/imports.ts` · `src/comptime/engine.ts` · v1-user-stories 3-22, 8-9
 
 ## Context
 

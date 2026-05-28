@@ -3,7 +3,7 @@ title: "Strata system"
 ---
 # Strata
 
-Strata are Silicon's open extension system. Built-in operators, control-flow keywords, sum-type lowering, etc. are all implemented as strata files (`src/strata/*.si`); user code will eventually be able to ship its own strata as the language's mod surface (post-bootstrap; see `bootstrap-plan.html` §7 — "Strata as Mods").
+Strata are Silicon's open extension system. Built-in operators, control-flow keywords, sum-type lowering, etc. are all implemented as strata files (`src/strata/*.si`); user code will eventually be able to ship its own strata as the language's mod surface (post-bootstrap; see `docs/archive/bootstrap-plan.html` §7 — "Strata as Mods").
 
 ## How Strata Work Today
 
@@ -28,7 +28,7 @@ The Silicon spec defines nine StrataTypes. Today's Stage 0 status:
 | Metadata    | Annotation kinds (`@export`, `@platform`, future `@inline`)           | `@export` and `@platform` (`metadata.si`) |
 | DSL         | Delegates a syntactic region to a sub-parser                          | None — bootstrap-plan reserves `parse_dsl_region` hook |
 
-Authoritative API reference: `docs/compiler-api.md`. Bootstrap roadmap (which StrataTypes Stage 1 will need, in what order): `docs/bootstrap-plan.html`.
+Authoritative API reference: `docs/compiler-api.md`. Bootstrap roadmap (which StrataTypes Stage 1 will need, in what order): `docs/archive/bootstrap-plan.html`.
 
 ## Example: An Operator Stratum
 

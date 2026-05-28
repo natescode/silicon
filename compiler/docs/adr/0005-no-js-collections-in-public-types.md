@@ -2,7 +2,7 @@
 
 - **Status:** Proposed
 - **Date:** 2026-05-26
-- **Related:** `docs/v1-bootstrap-requirements.html` §3b · `docs/stability.md` §2 · `etc/sigil.api.md` · `src/modules/registry.ts` · `src/caas/workspace.ts` · `src/ast/semanticModel.ts`
+- **Related:** `docs/archive/v1-bootstrap-requirements.html` §3b · `docs/stability.md` §2 · `etc/sigil.api.md` · `src/modules/registry.ts` · `src/caas/workspace.ts` · `src/ast/semanticModel.ts`
 
 ## Context
 

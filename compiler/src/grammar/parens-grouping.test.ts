@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 /**
  * Parens as optional grouping for param lists — see
- * `docs/parens-optional-grouping.md`.
+ * `docs/archive/parens-optional-grouping.md`.
  *
  * Proves both function-definition param lists and `$fn` type annotations
  * accept an optional paren-wrapped form that produces an AST identical

@@ -1,6 +1,6 @@
 # `@extern` Out-Pointer Calling Convention
 
-A documentation-only addition for Phase −1.F of `docs/bootstrap-plan.html`.
+A documentation-only addition for Phase −1.F of `docs/archive/bootstrap-plan.html`.
 This is the convention the bootstrap compiler will use to talk to WASI / WASIX
 syscalls that return more than a single i32.
 

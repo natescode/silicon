@@ -2,7 +2,7 @@
 
 - **Status:** Proposed
 - **Date:** 2026-05-26
-- **Related:** `docs/v1-bootstrap-requirements.html` §2b · `src/elaborator/legacyBlockTranslator.ts` · `src/elaborator/strata2.test.ts`
+- **Related:** `docs/archive/v1-bootstrap-requirements.html` §2b · `src/elaborator/legacyBlockTranslator.ts` · `src/elaborator/strata2.test.ts`
 
 ## Context
 

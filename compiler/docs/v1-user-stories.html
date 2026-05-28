@@ -111,7 +111,7 @@
 <h1>Sigil 1.0 — User Stories</h1>
 <p class="subtitle">
   Session-sized work units to ship 1.0.  Stories are grouped by phase (matching
-  <a href="sigil-1.0-roadmap.md" style="color: var(--accent);">sigil-1.0-roadmap.md</a>)
+  <a href="archive/sigil-1.0-roadmap.md" style="color: var(--accent);">sigil-1.0-roadmap.md</a>)
   with the in-progress dissolution work as Phase 1 and a cross-cutting
   Compiler-as-a-Service section as Phase 10.  Click any story to expand its
   goal, acceptance criteria, and subtasks.  Date: 2026-05-23.
@@ -843,7 +843,7 @@
   <summary><span class="id">5d-3</span> Function-type as a first-class SiliconType <span class="done">✅</span> <span class="est">M, ~3h</span></summary>
   <div class="deps"><strong>Depends on:</strong> 5d-2</div>
   <p class="goal"><strong>Type-system side</strong> already existed pre-Phase-5: <code>SiliconType</code> has a <code>Function</code> kind with typed <code>params</code> and <code>result</code> arrays, HM-lite uses it for signature tracking, <code>wasmTypeOf</code> routes <code>Function</code> → <code>i32</code> (function-table index).  <strong>Surface annotation syntax</strong> landed with the Phase 5 grammar revision via the <code>$fn</code> sigil-type production: <code>:$fn _:R _:T1, _:T2</code> mirrors the function-definition shape exactly (return-type slot + comma-separated param list, regular and consistent with Silicon's design principles).  <code>resolveTypeAnnotation</code> in <code>src/types/typechecker.ts</code> recognises the <code>$fn</code> typename and recursively builds a <code>FunctionOf(params, result)</code> type from <code>fnReturn</code> + <code>fnParams</code>.  4 new tests in <code>src/types/fntype.test.ts</code> cover nullary / unary / n-ary callback annotations and nominal distinctness.</p>
-  <p style="color: var(--accent3); font-size: 0.85rem;"><strong>Multi-callback disambiguation resolved.</strong>  Initially shipped with a known limitation (PEG greedy-match on the inner comma).  The follow-up "parens as optional grouping" revision (<a href="parens-optional-grouping.md">docs/parens-optional-grouping.md</a>) added optional paren-wrapped forms for both function-definition param lists and <code>$fn</code> type annotations: <code>@fn dispatch a:$fn _:Int (_:Int), b:$fn _:Bool (_:Float) := 0;</code> now parses correctly with two outer params, each a one-arg callback.  Parens are a pure grouping operator — present them where you need disambiguation, omit them otherwise.</p>
+  <p style="color: var(--accent3); font-size: 0.85rem;"><strong>Multi-callback disambiguation resolved.</strong>  Initially shipped with a known limitation (PEG greedy-match on the inner comma).  The follow-up "parens as optional grouping" revision (<a href="parens-optional-grouping.md">docs/archive/parens-optional-grouping.md</a>) added optional paren-wrapped forms for both function-definition param lists and <code>$fn</code> type annotations: <code>@fn dispatch a:$fn _:Int (_:Int), b:$fn _:Bool (_:Float) := 0;</code> now parses correctly with two outer params, each a one-arg callback.  Parens are a pure grouping operator — present them where you need disambiguation, omit them otherwise.</p>
 </details>
 
 <details class="lang complete">
