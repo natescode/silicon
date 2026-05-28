@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 /**
  * Silicon Compiler-as-a-Service (CaaS) — public API.
  *
@@ -43,6 +44,10 @@ export type { Diagnostic, SourceSpan, Phase } from '../errors/diagnostic'
 export type { SemanticModel, Symbol as CaaSSymbol, SymbolKind, SourceRange } from '../ast/semanticModel'
 export type { SiliconType } from '../types/types'
 export type { ElaboratorRegistry }
+
+// CaaS-11 — CodeAction surface.  Re-exported as part of the 1.0 stable API.
+export type { CodeAction, CodeActionProvider, TextEdit } from './codeAction'
+export { registerCodeAction, getCodeActions, clearCodeActions, applyEdits } from './codeAction'
 
 // ---------------------------------------------------------------------------
 // SyntaxTree — thin wrapper around Program that carries the source text.
