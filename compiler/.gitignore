@@ -202,3 +202,13 @@ wasm-bin/*
 # bin/ holds tools fetched by scripts/install-wat2wasm.sh (downloaded
 # wat2wasm binary, etc.).  Not checked in — users run the installer.
 bin/
+
+# Ad-hoc local scratch outputs at the repo root — produced by manual
+# invocations of `sgl build` / `sgl run` against a one-off source.
+# Never part of the repo's reproducible build.
+/ast.json
+/main.wasm
+/main.wat
+
+# Claude Code session state — local-only.
+.claude/scheduled_tasks.lock
