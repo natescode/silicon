@@ -177,7 +177,7 @@
     <li><a href="#phase-10">Phase 10 — CaaS Consumer APIs + Distribution ✅ (1.0 stories done)</a></li>
     <li><a href="#phase-11">Phase 11 — Silicon interpreter (written in Silicon, compiled to native via QBE) <em style="color: var(--accent4); font-size: 0.85em;">[moved to v1.1]</em></a></li>
     <li><a href="#phase-12">Phase 12 — <code>sgl</code> interpreter-backed subcommands <em style="color: var(--accent4); font-size: 0.85em;">[moved to v1.1]</em></a></li>
-    <li><a href="#phase-13">Phase 13 — Stability + distribution ✅ (13/15; 10c-6 + 10c-9 deferred)</a></li>
+    <li><a href="#phase-13">Phase 13 — Stability + distribution 🟡 (13/16; 10c-6 + 10c-9 + 10c-10 open)</a></li>
     <li><a href="#phase-14">Phase 14 — DWARF + LSP <em style="color: var(--accent4); font-size: 0.85em;">[moved to v1.1]</em></a></li>
   </ol>
 </div>
@@ -1897,6 +1897,41 @@
   <p><em>Pending:</em> Requires tagging a release and verifying the Homebrew tap + install.sh on a clean CI runner.  Deferred until the 1.0.0 tag is cut.</p>
 </details>
 
+<details class="distro">
+  <summary><span class="id">10c-10</span> Silicon documentation site (silicon-lang.dev or similar) <span class="est">L, ~8h</span></summary>
+  <div class="deps"><strong>Depends on:</strong> 10a-1 (EBNF grammar spec), 10b-1/2/3 (stability docs), CaaS-10 (API stability contract), 10c-7 (getting-started tutorial)</div>
+  <p class="goal">Publish a hosted documentation site that consolidates Silicon's language reference, CaaS API reference, and learning resources into a single browsable, searchable site.  Distinct from the in-repo <code>docs/</code> tree — the site is the user-facing entry point for the 1.0 launch; the repo docs remain the source of truth.  Not a playground (that's a separate concern, tracked as a v1.1 story if it lands).</p>
+
+  <div class="accept"><strong>Acceptance:</strong>
+    <ul>
+      <li><strong>Hosted at a stable URL</strong> (preferred: <code>silicon-lang.dev</code> or <code>sigil-lang.dev</code>; fallback: <code>natescode.github.io/sigil</code>).  TLS via Let's Encrypt or GitHub Pages.</li>
+      <li><strong>Static-site generator</strong> — pick one and document why (Astro / VitePress / Docusaurus / mdBook).  No bespoke server.  Build artefact deploys from CI on every <code>main</code> push.</li>
+      <li><strong>Landing page</strong> — one-paragraph pitch, install command, a five-line Silicon example, links into the four pillars below.  Reads in under 30 seconds.</li>
+      <li><strong>Language reference</strong> — generated from <code>docs/grammar.ebnf</code> + hand-written prose covering: syntax, types (<code>Int</code>/<code>Int64</code>/<code>UInt*</code>/<code>Float</code>/<code>Bool</code>/<code>Str</code>), sum types + <code>@match</code>, <code>@struct</code>, generics + HM-lite, <code>@defer</code>, <code>@try</code>, arenas + <code>@with_arena</code>, <code>Rc</code>, the strata system.</li>
+      <li><strong>CaaS API reference</strong> — auto-generated from <code>etc/sigil.api.md</code> (api-extractor output).  Every <code>@public</code> export documented with signature + example.</li>
+      <li><strong>Getting started</strong> — mirror or import <code>docs/getting-started.md</code>; updated for the site context (links to language reference, examples, API reference).</li>
+      <li><strong>Examples / cookbook</strong> — at least 10 short, runnable Silicon programs, each with prose explaining what it shows: hello world, sum types, generics, @match, error handling with @try, arena-scoped allocation, Rc smart pointer, writing a stratum, the strata as a design solvent (small DSL example), QBE native compile.</li>
+      <li><strong>Search</strong> — client-side (Pagefind or DocSearch) or static (Lunr).  Indexed over all prose and example titles.</li>
+      <li><strong>Versioning hook</strong> — the URL structure supports <code>/v1.0/</code> vs <code>/latest/</code> even if only one version is published at launch.  Don't bake "this is the only version" assumptions into the IA.</li>
+      <li><strong>Stability page</strong> — render <code>docs/stability.md</code> + the ADRs as a browsable section so users can answer "is X stable?" without reading source.</li>
+      <li><strong>Repo + issues links</strong> — every page has "Edit this page on GitHub" + "Report an issue."</li>
+    </ul>
+  </div>
+
+  <p class="goal"><strong>Out of scope (defer to v1.1):</strong></p>
+  <ul style="font-size: 0.9rem; color: var(--muted);">
+    <li>Interactive playground (compile + run Silicon in the browser).  Needs the compiler to ship as a wasm artefact loadable in a browser context; nontrivial.</li>
+    <li>Multi-version archived docs.  At 1.0 there's one version.</li>
+    <li>Localisation.  English only.</li>
+    <li>Algolia DocSearch crawl.  Apply post-launch when there's traffic worth crawling.</li>
+    <li>Comments / discussion forum.  GitHub Discussions is the v1.0 venue.</li>
+  </ul>
+
+  <p class="goal"><strong>Why "not just a playground":</strong> a playground is a tech demo — it shows the compiler works in a browser.  A docs site is a reference and a learning surface — it's what a developer reads when they decide whether to invest a weekend in Silicon.  The 1.0 launch needs the docs site; the playground is icing.</p>
+
+  <p class="goal"><strong>Sequencing:</strong> 10c-10 blocks the 1.0 launch announcement — without a docs site, the blog post / HN / Reddit thread has nowhere coherent to link to.  Lands after 10a/10b/10c-7 (the content the site renders) and before 10c-9 (the install acceptance test the docs send people through).</p>
+</details>
+
 <!-- ================================================================== -->
 <h2 id="phase-14">Phase 14 — DWARF + LSP <span style="color: var(--accent4); font-size: 0.75em; font-weight: normal;">[moved to v1.1]</span></h2>
 
@@ -2040,12 +2075,12 @@
     <td>—</td>
     <td>Depends on Phase 11 interpreter; rides with Phase 11 → v1.1.</td>
   </tr>
-  <tr style="background: rgba(62, 207, 142, 0.08);">
+  <tr style="background: rgba(247, 160, 108, 0.08);">
     <td>13 — Stability + distribution</td>
-    <td style="color: var(--accent3); font-weight: 700;">✅ MOSTLY DONE</td>
-    <td>13 / 15</td>
-    <td><em>actual ~1 d</em> (est: 6 d)</td>
-    <td>10a-1/2/3 EBNF ✅, 10b-1/2/3 stability policy ✅, 10c-1/2/3/4/5/7/8 distribution ✅ (all shipped in Phase 10). Deferred: 10c-6 (embed wasmtime), 10c-9 (acceptance gate — needs live tag).</td>
+    <td style="color: var(--accent4); font-weight: 700;">🟡 13 / 16</td>
+    <td>13 / 16</td>
+    <td><em>actual ~1 d done · ~1.5 d remain</em> (est: 7 d)</td>
+    <td>10a-1/2/3 EBNF ✅, 10b-1/2/3 stability policy ✅, 10c-1/2/3/4/5/7/8 distribution ✅. <strong>Open for 1.0:</strong> 10c-10 (docs site, ~1d) blocks the launch announcement. <strong>Deferred:</strong> 10c-6 (embed wasmtime — post-1.0 optional), 10c-9 (acceptance gate — needs live tag).</td>
   </tr>
   <tr style="opacity: 0.6;">
     <td>14 — DWARF + LSP <em style="color: var(--accent4); font-size: 0.85em;">[moved to v1.1]</em></td>
@@ -2060,20 +2095,20 @@
     <td style="color: var(--accent3);">✅</td>
     <td>~139 stories</td>
     <td><em>~16 d actual</em> (est: ~68 d)</td>
-    <td>Phases 1–6, 8, 9, 9c (9/10), 9d, 9.5 (5/5 src/), 10, 13 (13/15) — all fully or substantially shipped.  ~4× faster than originally estimated.  Phase 7 unchecked 2026-05-27 (boot/ removed) and moved to v1.1.</td>
+    <td>Phases 1–6, 8, 9, 9c (9/10), 9d, 9.5 (5/5 src/), 10, 13 (13/16) — all fully or substantially shipped.  ~4× faster than originally estimated.  Phase 7 unchecked 2026-05-27 (boot/ removed) and moved to v1.1.</td>
   </tr>
   <tr style="background: var(--surface2); border-top: 1px solid var(--border); font-weight: 600;">
     <td>1.0 REMAINING</td>
-    <td style="color: var(--accent3);">≈ 0</td>
-    <td>0 required + ~5 stretch</td>
-    <td><strong style="color: var(--accent3);">v1.0 is feature-complete</strong></td>
-    <td>Post-1.0 stretch (CaaS-8/11, 6b-11/12/13, 10c-6/9) — all optional, tracked in the row below.  Phases 7 / 11 / 12 / 14 + boot/ port stories (9.5-6, 9c-7) moved to v1.1.</td>
+    <td style="color: var(--accent4);">🟡</td>
+    <td>1 required + ~7 stretch</td>
+    <td><strong style="color: var(--accent);">~1 d required + ~5 d stretch</strong></td>
+    <td><strong>Blocks 1.0 launch:</strong> 10c-10 (docs site).  <strong>Recommended pre-tag:</strong> release notes, perf baseline, security pass.  <strong>Post-tag gate:</strong> 10c-9 (acceptance gate — needs live release).  <strong>Optional stretch:</strong> 10c-6 wasmtime embed, CaaS-8/11, 6b-11/12/13.  Phases 7 / 11 / 12 / 14 + boot/ port stories moved to v1.1.</td>
   </tr>
   <tr style="background: var(--surface2); font-weight: 600;">
     <td>1.0 TOTAL</td>
     <td></td>
-    <td>~139 stories</td>
-    <td><strong style="color: var(--accent);">~16 working days actual</strong><br/><em style="color: var(--muted); font-size: 0.85em;">(scope-reduction 2026-05-27: Phases 7 / 11 / 12 moved to v1.1 alongside boot/ removal — Sigil 1.0 now ships on the src/ TypeScript compiler + QBE native backend)</em></td>
+    <td>~140 stories</td>
+    <td><strong style="color: var(--accent);">~16 d shipped + ~1–6 d remaining</strong><br/><em style="color: var(--muted); font-size: 0.85em;">(scope-reduction 2026-05-27: Phases 7 / 11 / 12 moved to v1.1 alongside boot/ removal — Sigil 1.0 ships on the src/ TypeScript compiler + QBE native backend. ~98% feature-complete; remaining is launch surface — docs site, release notes, acceptance gate.)</em></td>
     <td>v1.1 work tracked separately in <a href="v1.1-user-stories.html">v1.1-user-stories.html</a>.</td>
   </tr>
   <tr style="font-size: 0.85em; color: var(--muted);">
