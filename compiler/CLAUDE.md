@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **Sigil** is a compiler for the **Silicon programming language**, targeting WebAssembly (WAT/WASM) and — via QBE — native binaries. The compiler is written in TypeScript and runs under Bun. Built-in language constructs (operators, control flow, definition kinds) are expressed as Silicon strata under `src/strata/`; the standard library is Silicon source under `src/stdlib/`.
 
-**Status:** The TypeScript compiler in `src/` is the current production compiler. A Silicon-in-Silicon bootstrap previously lived under `boot/`; it has been removed and is slated for a future rewrite. The historical bootstrap plans remain in `docs/` for reference (`docs/bootstrap-plan.html`, `docs/sigil-wasm-bootstrap-plan.html`, `docs/silicon-only-bootstrap-plan.html`, `docs/v1-bootstrap-requirements.html`, `docs/test-bootstrapped-compiler.html`) but no longer describe the working pipeline.
+**Status:** The TypeScript compiler in `src/` is the current production compiler. A Silicon-in-Silicon bootstrap previously lived under `boot/`; it has been removed and is slated for a future rewrite. Historical bootstrap plans and superseded design docs are preserved under [`docs/archive/`](docs/archive/) — see that directory's `README.md` for the index. They are kept for traceability but do not describe the current pipeline. The live documentation tree is indexed at [`docs/README.md`](docs/README.md).
 
 ## Commands
 
