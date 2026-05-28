@@ -76,11 +76,14 @@ Silicon {
   type =
     | ":" sigilFnType                       -- fn
     | ":" identifier typeArgs?              -- simple
-  sigilFnType =
-    | "$" identifier space+ typedIdentifier space+ "(" space* ")"            -- parenEmpty
-    | "$" identifier space+ typedIdentifier space+ "(" sigilFnParams ")"     -- parenParams
-    | "$" identifier space+ typedIdentifier space+ sigilFnParams             -- bareParams
-    | "$" identifier space+ typedIdentifier                                   -- nullary
+  sigilFnType = "$" identifier space+ typedIdentifier sigilFnTail?
+  sigilFnTail = space+ sigilFnTailBody
+  sigilFnTailBody =
+    | sigilFnParenForm                                                        -- paren
+    | sigilFnParams                                                           -- bare
+  sigilFnParenForm =
+    | "(" space* ")"                                                          -- empty
+    | "(" sigilFnParams ")"                                                   -- params
   sigilFnParams = typedIdentifier (space* "," space* typedIdentifier)*
   typeArgs = "[" space* typeArg (space* "," space* typeArg)* space* "]"
   typeArg = identifier typeArgs?

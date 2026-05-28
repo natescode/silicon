@@ -364,37 +364,34 @@ export default function addToAstSemantics(siliconGrammar: ohm.Grammar): ohm.Sema
         // Phase 5 — sigil function-type `$fn _:R _:T1, _:T2`.  The structure
         // mirrors a function definition exactly: a return-type slot
         // (typedIdentifier) plus an optional comma-separated param list.
-        // Four alternatives: paren-empty, paren-with-params, bare-with-params,
-        // and nullary.  All produce the same TypeAnnotation shape so
+        // Left-factored shape (LL(1)-friendly): a common prefix
+        // ("$" name retSlot) followed by an optional tail that branches
+        // into paren-form (empty or with params) or bare params.  All
+        // four surface forms produce the same TypeAnnotation shape so
         // downstream code is form-agnostic.
-        sigilFnType_parenParams(_dollar, ident, _ws1, retSlot, _ws2, _lp, params, _rp) {
+        sigilFnType(_dollar, ident, _ws1, retSlot, tailOpt) {
             const fnReturn = retSlot.toAst() as TypedIdentifier
-            const fnParams = params.toAst() as TypedIdentifier[]
+            const fnParams = tailOpt.children.length > 0
+                ? tailOpt.children[0].toAst() as TypedIdentifier[]
+                : []
             const ann = ASTFactory.fnTypeAnnotation(fnReturn, fnParams)
             ann.typename = `$${ident.sourceString}`
             return ann
         },
-
-        sigilFnType_parenEmpty(_dollar, ident, _ws1, retSlot, _ws2, _lp, _ws3, _rp) {
-            const fnReturn = retSlot.toAst() as TypedIdentifier
-            const ann = ASTFactory.fnTypeAnnotation(fnReturn, [])
-            ann.typename = `$${ident.sourceString}`
-            return ann
+        sigilFnTail(_ws, body) {
+            return body.toAst()
         },
-
-        sigilFnType_bareParams(_dollar, ident, _ws1, retSlot, _ws2, params) {
-            const fnReturn = retSlot.toAst() as TypedIdentifier
-            const fnParams = params.toAst() as TypedIdentifier[]
-            const ann = ASTFactory.fnTypeAnnotation(fnReturn, fnParams)
-            ann.typename = `$${ident.sourceString}`
-            return ann
+        sigilFnTailBody_paren(parenForm) {
+            return parenForm.toAst()
         },
-
-        sigilFnType_nullary(_dollar, ident, _ws1, retSlot) {
-            const fnReturn = retSlot.toAst() as TypedIdentifier
-            const ann = ASTFactory.fnTypeAnnotation(fnReturn, [])
-            ann.typename = `$${ident.sourceString}`
-            return ann
+        sigilFnTailBody_bare(params) {
+            return params.toAst()
+        },
+        sigilFnParenForm_empty(_lp, _ws, _rp) {
+            return [] as TypedIdentifier[]
+        },
+        sigilFnParenForm_params(_lp, params, _rp) {
+            return params.toAst()
         },
 
         sigilFnParams(first, _ws1, _commas, _ws2, rest) {

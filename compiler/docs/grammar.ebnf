@@ -9,10 +9,12 @@
     " … "   terminal string
     (* … *) comment
 
-  This grammar is derived from src/grammar/silicon-official.ohm (the Ohm.js
-  source of truth used by the src/ TypeScript compiler) and from the
-  hand-written boot/ parser in boot/parser/parse.si.  The Ohm file is the
-  reference implementation; this EBNF is the human-readable specification.
+  This grammar is derived from src/grammar/silicon-official.ohm — the Ohm.js
+  source of truth used by the TypeScript compiler in src/.  The Ohm file is
+  the reference implementation; this EBNF is the human-readable specification.
+
+  See §LL(1) below for the parser-shaped (left-factored) presentation of the
+  two productions that look non-LL(1) in their natural form.
 
   See docs/stability.md for the stability contract on this grammar.
   See docs/strata.md for how strata extend the keyword/operator surface
@@ -167,11 +169,15 @@ TypeArg     = identifier [ TypeArgs ] ;
     $fn _:Unit ()             — explicit empty-paren nullary
 *)
 
-SigilFnType = "$" identifier TypedIdentifier                              (* nullary *)
-            | "$" identifier TypedIdentifier "(" ")"                      (* paren empty *)
-            | "$" identifier TypedIdentifier "(" SigilFnParams ")"        (* paren params *)
-            | "$" identifier TypedIdentifier SigilFnParams                (* bare params *)
+SigilFnType = "$" identifier TypedIdentifier [ SigilFnTail ] ;
+
+SigilFnTail = SigilFnParenForm                           (* paren — empty or params *)
+            | SigilFnParams                              (* bare params *)
             ;
+
+SigilFnParenForm = "(" ")"                               (* paren empty *)
+                 | "(" SigilFnParams ")"                 (* paren with params *)
+                 ;
 
 SigilFnParams = TypedIdentifier { "," TypedIdentifier } ;
 
@@ -196,7 +202,7 @@ whitespace    = " " | "\t" | "\x0B" | "\x0C" | " " | "﻿"
               | (* Unicode space separators U+2000–U+200B, U+3000 *)
               ;
 
-line-end      = "\n" | "\r" | " " | " " ;
+line-end      = "\n" | "\r" | "" | "" ;
 
 line-comment  = "#" { (* any char except line-end *) } line-end ;
 
@@ -208,6 +214,107 @@ doc-comment   = "##" { (* any char except line-end *) } line-end ;
     next definition.  Both are consumed as whitespace during parsing.
   - String literals use "'" (single quote).  There are no escape sequences
     in 1.0 — use raw bytes or unicode code points via WASM intrinsics.
+*)
+
+(* ── LL(1) form ──────────────────────────────────────────────────────────── *)
+
+(*
+  Silicon's grammar targets LL(1): top-down, leftmost derivation, single
+  token of lookahead.  Two productions above are written in their natural
+  human-readable form rather than the left-factored form a strict LL(1)
+  parser consumes.  Both productions encode the same language under either
+  presentation — left-factoring is a parser-side concern, not a surface
+  change.
+
+  This section gives the left-factored equivalents for reference.  A future
+  hand-written LL(1) parser (Silicon-side, when the bootstrap is rewritten)
+  should follow these shapes.
+
+  ──────────────────────────────────────────────────────────────────────
+  1. Item — assignment vs. expression-as-statement
+
+  Natural form (above):
+      Item       = Statement | Expression ;
+      Statement  = Assignment | Definition ;
+      Assignment = Namespace "=" Expression ;
+
+  Both Assignment and Expression-via-Namespace start with `identifier`,
+  so the parser cannot decide which production to enter from a single
+  token of lookahead at the start of Item.
+
+  Left-factored (LL(1)):
+      Item            = Definition
+                      | Namespace ItemTail
+                      | NonNamespaceExpr
+                      ;
+      ItemTail        = "=" Expression                       (* assignment *)
+                      | { BinOp ExprEnd }                    (* expression continuation *)
+                      ;
+      NonNamespaceExpr = Literal { BinOp ExprEnd }
+                      | FunctionCall { BinOp ExprEnd }
+                      | VariantDecl { BinOp ExprEnd }
+                      | Block { BinOp ExprEnd }
+                      | "(" Expression ")" { BinOp ExprEnd }
+                      ;
+
+  After parsing the Namespace, ONE token of lookahead decides ItemTail:
+  "=" -> assignment; anything else -> expression continuation.
+
+  ──────────────────────────────────────────────────────────────────────
+  2. Block — trailing expression vs. another statement
+
+  Natural form (above):
+      Block = "{" { Item ";" } [ Expression ] "}" ;
+
+  After parsing what looks like an Item, the parser cannot tell whether
+  it was a statement (followed by ";") or the trailing expression
+  (followed by "}") until it has consumed the whole thing.
+
+  Left-factored (LL(1)):
+      Block     = "{" BlockBody "}" ;
+      BlockBody =                                            (* empty block *)
+                | Item BlockTail
+                ;
+      BlockTail = ";" BlockBody                              (* was a statement; loop *)
+                |                                            (* was the trailing expr *)
+                ;
+
+  After parsing one Item, ONE token of lookahead decides BlockTail:
+  ";" -> statement, continue; "}" -> trailing expression, done.
+
+  ──────────────────────────────────────────────────────────────────────
+  Tokenization assumptions
+
+  The LL(1) classification assumes a tokenizer that treats the following
+  as single multi-character tokens (not as character sequences requiring
+  multi-char lookahead in the parser):
+
+      "$["  "${"  "$("    (* array / object / tuple literal openers *)
+      "::"               (* namespace separator *)
+      ":="               (* definition binding *)
+      "##"               (* doc comment *)
+      "@true"  "@false"  (* boolean literals — distinct from @kw *)
+
+  Under these tokenization rules:
+    - VariantDecl ("$" identifier ...) vs. literal openers ($[ / ${ / $()
+      is LL(1): they are distinct tokens at the lexer level.
+    - Boolean literals (@true / @false) vs. Definition keywords (@kw)
+      is LL(1): the reserved boolean tokens never appear where a defKw
+      is expected.
+
+  The current Ohm grammar in src/grammar/silicon-official.ohm relies on
+  Ohm's ordered-alternative (PEG) semantics to disambiguate these spots,
+  which is equivalent in practice but stricter LL(1) than what a hand-
+  written recursive-descent parser needs.
+
+  ──────────────────────────────────────────────────────────────────────
+  What this is NOT
+
+  This appendix does NOT change the language — every program that parses
+  under the natural form parses identically under the left-factored form.
+  It only documents the parser shape a strict LL(1) implementation must
+  follow.  No surface-level "purity for purity's sake" changes (e.g.
+  requiring `@let x := ...` instead of `x = ...`) are implied.
 *)
 
 (* ── Strata boundary ─────────────────────────────────────────────────────── *)
