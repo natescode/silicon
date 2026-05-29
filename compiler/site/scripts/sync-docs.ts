@@ -30,6 +30,7 @@ const SYNCS: Sync[] = [
     { from: 'docs/getting-started.md',         to: 'guide/getting-started.md', frontmatter: { title: 'Getting started' } },
     { from: 'docs/memory.md',                  to: 'guide/memory.md',          frontmatter: { title: 'Memory + arenas' } },
     { from: 'docs/strata-authoring-guide.md',  to: 'guide/strata.md',          frontmatter: { title: 'Writing a stratum' } },
+    { from: 'docs/targets.md',                 to: 'guide/platforms.md',       frontmatter: { title: 'Platforms' } },
 
     // Reference
     { from: 'docs/grammar.ebnf',               to: 'reference/grammar.md',     frontmatter: { title: 'Grammar (EBNF)' } },

@@ -56,6 +56,7 @@ export default defineConfig({
                         { text: 'Writing a stratum', link: '/guide/strata' },
                         { text: 'Memory + arenas', link: '/guide/memory' },
                         { text: 'Native compilation', link: '/guide/native' },
+                        { text: 'Platforms', link: '/guide/platforms' },
                     ],
                 },
             ],
