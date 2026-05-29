@@ -39,7 +39,7 @@ core::never
 core::int
 core::uint
 core::float
-core::char
+core::string
 core::tuple
 core::record
 core::function
@@ -70,7 +70,6 @@ U64
 F32
 F64
 
-Char
 Ordering
 ```
 
@@ -135,6 +134,7 @@ U64
 F32
 F64
 String
+Rune
 Array
 Slice
 Option
@@ -246,62 +246,63 @@ Strings, arrays, and slices form the practical foundation of most Silicon progra
 core::string
 core::array
 core::slice
-core::char
 core::bytes
 std::text
 ```
 
 ## String
 
-Silicon has previously leaned toward UTF-16 strings for JavaScript interoperability. The public API should expose Unicode-aware behavior without forcing users to think about the backing representation constantly.
+Silicon strings are UTF-8. There is no `Char` type — "character" is too ambiguous to define safely across Unicode. Instead, strings expose four explicit length concepts and a `Rune` type for grapheme clusters.
+
+### String length — four explicit measurements
 
 ```silicon
-String
-Char
-Utf8
-Utf16
-Bytes
+String::bytes string      # UTF-8 byte count — O(1), stored in the length header
+String::codepoints string # Unicode scalar values — O(n) scan of UTF-8
+String::runes string      # Grapheme clusters (UAX #29) — O(n), user-perceived "characters"
+String::width string      # Estimated terminal display columns — O(n) with East Asian Width table
 ```
 
-Core string operations:
+`String::bytes` is the cheapest and is stored in the length header on the WASM target.
+`String::runes` is the right default for user-facing "how many characters" questions.
+`String::width` is the right choice for terminal layout and padding.
+
+**Design rationale:** Every language with a single `length` has either made it wrong (bytes, lying about Unicode), confusing (code units, breaks on emoji), or expensive (grapheme clusters, not free). Silicon exposes all four explicitly so callers choose the right one for the job.
+
+### Rune
+
+`Rune` is a grapheme cluster — the smallest unit a user perceives as a single character. It is not a Unicode scalar value (codepoint) or a byte.
+
+```silicon
+Rune                        # opaque type; a grapheme cluster
+Rune::bytes rune   :Int    # byte length of this cluster
+Rune::width rune   :Int    # estimated display columns (0, 1, or 2)
+```
+
+Go uses `rune` to mean Unicode scalar value; Silicon uses it to mean grapheme cluster, which is closer to what users mean by "character."
+
+### Core string operations
 
 ```silicon
 String::empty
-String::length string
 String::isEmpty string
 String::concat left right
-String::slice string start end
+String::slice string start end         # byte-indexed; use rune iteration for user-facing slicing
 String::contains string pattern
 String::startsWith string prefix
 String::endsWith string suffix
 String::indexOf string pattern
 String::trim string
-String::toUtf8 string
-String::fromUtf8 bytes
-String::toUtf16 string
-String::fromUtf16 units
+String::toBytes string  :Bytes
+String::fromBytes bytes :Result<String, EncodingError>
 ```
 
-Important distinction:
-
-```text
-String::length       should have clearly documented units.
-String::charLength   Unicode scalar count, if supported.
-String::byteLength   UTF-8 byte count, if needed.
-String::unitLength   UTF-16 code unit count, if using UTF-16 internally.
-```
-
-For v1, Silicon should choose one default meaning for `String::length` and expose the others explicitly.
-
-Recommended:
+### Rune iteration
 
 ```silicon
-String::length string       ## user-facing character/scalar count, if feasible
-String::unitLength string   ## UTF-16 code units
-String::byteLength string   ## UTF-8 byte length after encoding
+String::runes string   :Array<Rune>   # collect all grapheme clusters
+String::eachRune string fn            # iterate without allocation
 ```
-
-If character counting is too expensive or complex for v1, make `String::length` mean UTF-16 code units and document it clearly.
 
 ## Array
 
@@ -1403,7 +1404,7 @@ Silicon can FFI into C, Rust, JS, or WASI, but its standard library should defin
 
 These should be decided before the stdlib becomes stable.
 
-1. What exactly does `String::length` mean: UTF-16 code units, Unicode scalar values, grapheme clusters, or something else?
+1. ~~What exactly does `String::length` mean?~~ **Resolved:** There is no single `String::length`. Silicon exposes four explicit measurements: `bytes` (O(1), stored), `codepoints` (Unicode scalar values), `runes` (grapheme clusters, UAX #29 — the user-perceived "character" count), and `width` (estimated terminal columns). There is no `Char` type.
 2. Are arrays immutable by default with separate mutable variants?
 3. How does `@mut` appear in stdlib function definitions?
 4. Does allocation use a module-level default allocator, explicit allocator parameters, or capability injection?
