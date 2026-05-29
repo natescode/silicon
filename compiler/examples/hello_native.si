@@ -1,0 +1,31 @@
+# examples/hello_native.si — "Hello, world!" for the QBE native backend.
+#
+# The native backend lowers integers, arithmetic, control flow, and @extern
+# calls (resolved against libc by `cc` at link time) — but it does NOT yet
+# lower String literals.  So rather than print a Silicon String, we emit the
+# bytes of "Hello, world!\n" one at a time through libc's putchar(int).
+#
+#   Build:  sgl build --native examples/hello_native.si   # -> examples/hello_native
+#   Run:    ./examples/hello_native
+#
+# The program's final top-level expression becomes the process exit code,
+# so this exits 0 on success.
+
+@extern putchar:Int c:Int;
+
+&putchar 72;   # H
+&putchar 101;  # e
+&putchar 108;  # l
+&putchar 108;  # l
+&putchar 111;  # o
+&putchar 44;   # ,
+&putchar 32;   # ( )
+&putchar 119;  # w
+&putchar 111;  # o
+&putchar 114;  # r
+&putchar 108;  # l
+&putchar 100;  # d
+&putchar 33;   # !
+&putchar 10;   # \n
+
+0;

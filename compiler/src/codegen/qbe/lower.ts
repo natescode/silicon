@@ -209,11 +209,31 @@ export function lowerToQbe(
         }
     }
 
-    // Pass 2: emit each top-level definition.
+    // Pass 2: emit each top-level definition; collect non-definition statements.
+    const topLevelStmts: any[] = []
     for (const el of (program as any).elements as any[]) {
         const node = unwrap(el)
         if (!node) continue
-        lowerTopLevel(node, mod)
+        if (node.type === 'Definition') {
+            lowerTopLevel(node, mod)
+        } else {
+            topLevelStmts.push(node)
+        }
+    }
+
+    // Top-level expression statements → $__sgl_entry so injectMainWrapper can
+    // produce a C-compatible main() that calls it.
+    if (topLevelStmts.length > 0) {
+        const fn = freshFn(mod, 'void')
+        startBlock(fn, '@start')
+        for (const stmt of topLevelStmts) {
+            lowerExpr(stmt, fn)
+        }
+        if (!isTerminated(fn)) {
+            emitDeferred(fn)
+            emit(fn, 'ret')
+        }
+        mod.funcs.push(['function $__sgl_entry() {', ...fn.lines, '}'].join('\n'))
     }
 
     return emitQbeModule(mod)
@@ -289,7 +309,9 @@ function lowerFunctionDef(node: any, mod: QbeModCtx): void {
     // Build the function header line.
     const paramStr = params.map(p => `${p.qt} %${p.name}`).join(', ')
     const retPrefix = returnType !== 'void' ? `${returnType} ` : ''
-    const header = `function ${retPrefix}$${name}(${paramStr}) {`
+    // `main` must be exported so the C runtime (_start in crt1.o) can find it.
+    const exportPrefix = name === 'main' ? 'export ' : ''
+    const header = `${exportPrefix}function ${retPrefix}$${name}(${paramStr}) {`
 
     // Emit the entry block — startBlock records the blockStart index.
     startBlock(fn, '@start')

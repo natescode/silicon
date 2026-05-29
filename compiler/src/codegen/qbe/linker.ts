@@ -24,6 +24,7 @@ export const CC_INSTALL_HINT = `\
 No C compiler found on PATH.
 
 Install options:
+  Fedora/RHEL:            sudo dnf install gcc
   Linux (Debian/Ubuntu):  sudo apt install gcc
   Linux (Arch):           sudo pacman -S gcc
   macOS:                  xcode-select --install   (installs clang)
@@ -104,7 +105,7 @@ export function link(
  * Check whether the QBE IR text already defines a `$main` function.
  */
 export function hasQbeMain(qbeIr: string): boolean {
-    return /\$main\s*\(/.test(qbeIr)
+    return /function\s+\S*\s*\$main\s*\(/.test(qbeIr)
 }
 
 /**
@@ -124,7 +125,7 @@ export function injectMainWrapper(qbeIr: string): string {
         ? [
             '',
             '# sgl-injected main wrapper',
-            'function w $main() {',
+            'export function w $main() {',
             '@start',
             '\tcall $__sgl_entry()',
             '\tret 0',
@@ -133,7 +134,7 @@ export function injectMainWrapper(qbeIr: string): string {
         : [
             '',
             '# sgl-injected main wrapper',
-            'function w $main() {',
+            'export function w $main() {',
             '@start',
             '\tret 0',
             '}',
@@ -146,8 +147,10 @@ export function injectMainWrapper(qbeIr: string): string {
 // Native executable output path helpers
 // ---------------------------------------------------------------------------
 
-/** Default output executable name for a Silicon source file. */
+/** Default output executable path for a Silicon source file (beside the source). */
 export function defaultExePath(siPath: string): string {
-    const { name } = require('node:path').parse(siPath)
-    return os.platform() === 'win32' ? name + '.exe' : name
+    const nodePath = require('node:path')
+    const { dir, name } = nodePath.parse(nodePath.resolve(siPath))
+    const exe = os.platform() === 'win32' ? name + '.exe' : name
+    return nodePath.join(dir, exe)
 }

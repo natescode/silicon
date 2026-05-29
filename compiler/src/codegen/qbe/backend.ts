@@ -30,6 +30,7 @@ export const QBE_INSTALL_HINT = `\
 qbe not found on PATH.
 
 Install options:
+  Fedora/RHEL:            sudo dnf install qbe
   Linux (Debian/Ubuntu):  sudo apt install qbe
   Linux (Arch):           sudo pacman -S qbe
   macOS (Homebrew):       brew install qbe
@@ -49,8 +50,8 @@ After installing, re-run your sgl command.`
 function probeCandidate(bin: string): boolean {
     try {
         const r = spawnSync(bin, ['--version'], { stdio: 'pipe', timeout: 3000 })
-        // qbe --version exits 0; some older builds exit non-zero but still write output
-        return r.error === undefined && (r.stdout?.length > 0 || r.status === 0)
+        // qbe --version exits 0 on some builds; others exit non-zero and write to stderr
+        return r.error === undefined && (r.stdout?.length > 0 || r.stderr?.length > 0 || r.status === 0)
     } catch {
         return false
     }
@@ -134,17 +135,33 @@ export function hostQbeArch(): string | undefined {
 // sgl setup — download and compile qbe from source
 // ---------------------------------------------------------------------------
 
+function requireTool(name: string): void {
+    const r = spawnSync(name, ['--version'], { stdio: 'pipe' })
+    if (r.error) {
+        throw new Error(
+            `${name} is required to build QBE but was not found on PATH.\n` +
+            `Install it with:\n` +
+            `  Fedora/RHEL:        sudo dnf install ${name === 'make' ? 'make gcc' : name}\n` +
+            `  Debian/Ubuntu:      sudo apt install ${name === 'make' ? 'build-essential' : name}\n` +
+            `  Arch:               sudo pacman -S ${name === 'make' ? 'base-devel' : name}\n` +
+            `  macOS:              xcode-select --install`
+        )
+    }
+}
+
 /**
- * Download the QBE source tarball and compile it into SGL_BIN_DIR.
+ * Download the QBE source tarball via Bun's built-in fetch() and compile it
+ * into SGL_BIN_DIR.  No external HTTP client (curl/wget) is required.
  *
- * Requires:
- *   - curl or wget on PATH
- *   - A C compiler (cc) on PATH
- *   - tar on PATH
+ * Requires tar and make on PATH (pre-flight checked with clear errors).
  *
  * Returns the path to the installed qbe binary.
  */
 export async function downloadAndBuildQbe(log: (msg: string) => void = console.log): Promise<string> {
+    // Pre-flight: verify build tools before touching the network.
+    requireTool('tar')
+    requireTool('make')
+
     await fsp.mkdir(SGL_BIN_DIR, { recursive: true })
 
     const tmpDir = await fsp.mkdtemp(path.join(os.tmpdir(), 'sgl-qbe-'))
@@ -154,19 +171,20 @@ export async function downloadAndBuildQbe(log: (msg: string) => void = console.l
     try {
         log(`Downloading QBE source from ${QBE_SRC_URL} …`)
 
-        // Prefer curl, fall back to wget
-        const curlResult = spawnSync('curl', ['-fsSL', '-o', tarPath, QBE_SRC_URL], { stdio: 'pipe' })
-        if (curlResult.status !== 0) {
-            const wgetResult = spawnSync('wget', ['-q', '-O', tarPath, QBE_SRC_URL], { stdio: 'pipe' })
-            if (wgetResult.status !== 0) throw new Error('Neither curl nor wget is available')
-        }
+        const resp = await fetch(QBE_SRC_URL)
+        if (!resp.ok) throw new Error(`HTTP ${resp.status} fetching ${QBE_SRC_URL}`)
+        const buf = Buffer.from(await resp.arrayBuffer())
+        await fsp.writeFile(tarPath, buf)
 
         log('Extracting …')
-        spawnSync('tar', ['xzf', tarPath, '-C', tmpDir], { stdio: 'inherit' })
+        const tarResult = spawnSync('tar', ['xzf', tarPath, '-C', tmpDir], { stdio: 'pipe' })
+        if (tarResult.status !== 0) {
+            throw new Error(`tar failed: ${tarResult.stderr?.toString().trim()}`)
+        }
 
         // The tarball extracts to qbe-<version>/
         const entries = fs.readdirSync(tmpDir).filter(e => e.startsWith('qbe-'))
-        if (!entries.length) throw new Error('Unexpected tarball layout — no qbe-* directory')
+        if (!entries.length) throw new Error('Unexpected tarball layout — no qbe-* directory found')
         const srcDir = path.join(tmpDir, entries[0])
 
         log(`Building QBE from source in ${srcDir} …`)
@@ -181,7 +199,6 @@ export async function downloadAndBuildQbe(log: (msg: string) => void = console.l
         log(`Installed qbe → ${outBin}`)
         return outBin
     } finally {
-        // Best-effort cleanup of the tmp directory
         fs.rmSync(tmpDir, { recursive: true, force: true })
     }
 }

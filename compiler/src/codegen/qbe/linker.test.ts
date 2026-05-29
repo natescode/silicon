@@ -143,7 +143,7 @@ describe('link — integration', () => {
 
         const { link } = await import('./linker')
         const minimalIr = [
-            'function w $main() {',
+            'export function w $main() {',
             '@start',
             '\tret 42',
             '}',

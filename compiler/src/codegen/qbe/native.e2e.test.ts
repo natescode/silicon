@@ -180,7 +180,7 @@ describe('native — function calls', () => {
         const tmpDir = await fsp.mkdtemp(path.join(os.tmpdir(), 'sgl-e2e-'))
         try {
             const src = [
-                '@fn double x:Int :Int := x * 2;',
+                '@fn double:Int x:Int := x * 2;',
                 '@fn main:Int := (&double 21);',
             ].join('\n')
             const exe = await compileNative(src, tmpDir)
@@ -194,7 +194,7 @@ describe('native — function calls', () => {
         try {
             // fib(7) = 13, fib(8) = 21, fib(9) = 34
             const src = [
-                '@fn fib n:Int :Int := &@if n <= 1, { n }, { (&fib n - 1) + (&fib n - 2) };',
+                '@fn fib:Int n:Int := &@if n <= 1, { n }, { (&fib n - 1) + (&fib n - 2) };',
                 '@fn main:Int := (&fib 9);',
             ].join('\n')
             const exe = await compileNative(src, tmpDir)
