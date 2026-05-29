@@ -494,9 +494,11 @@ function lowerExpr(node: any, fn: QbeFnCtx): string {
             }
             const label = `str${fn.mod.dataLabelN++}`
             fn.mod.stringCache.set(text, label)
-            const len = Buffer.byteLength(text, 'utf8')
-            // Silicon string layout: 4-byte LE length header + UTF-8 bytes + NUL
-            fn.mod.dataDecls.push(`data $${label} = align 4 { w ${len}, b "${text.replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/\n/g, '\\n').replace(/\r/g, '\\r').replace(/\t/g, '\\t')}", b 0 }`)
+            // Native backend: plain C string (NUL-terminated, no length prefix).
+            // The Silicon length-prefix layout is a WASM artifact; in native code
+            // $label points directly at the first byte, compatible with libc functions.
+            const escaped = text.replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/\n/g, '\\n').replace(/\r/g, '\\r').replace(/\t/g, '\\t')
+            fn.mod.dataDecls.push(`data $${label} = align 1 { b "${escaped}", b 0 }`)
             return `$${label}`
         }
 

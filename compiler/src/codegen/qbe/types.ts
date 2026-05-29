@@ -35,9 +35,9 @@ export function siliconTypeToQbe(t: SiliconType | undefined): QbeType {
         case 'Int64':  return 'l'
         case 'Float':  return 's'
         case 'Bool':   return 'w'
-        case 'String': return 'w'   // pointer
-        case 'Array':  return 'w'   // pointer
-        case 'Vec':    return 'w'   // pointer (Phase 9d-8)
+        case 'String': return 'l'   // 64-bit pointer on native target
+        case 'Array':  return 'l'   // 64-bit pointer on native target
+        case 'Vec':    return 'l'   // 64-bit pointer on native target (Phase 9d-8)
         case 'UInt8':  return 'w'
         case 'UInt16': return 'w'
         case 'UInt32': return 'w'

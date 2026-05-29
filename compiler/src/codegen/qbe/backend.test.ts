@@ -136,14 +136,13 @@ describe('invokeQbe', () => {
         expect(() => invokeQbe(qbeBin, 'this is not valid QBE IR')).toThrow()
     })
 
-    test('roundtrip: lowerToQbe → invokeQbe produces assembly', () => {
+    test('roundtrip: lowerToQbe → invokeQbe produces assembly', async () => {
         if (!qbeBin) {
             console.log('  (skipped: qbe not on PATH)')
             return
         }
-        // Import lazily to avoid circular module loading issues
-        const { compileToTyped } = require('../../../tests/properties/_compile')
-        const { lowerToQbe }    = require('./lower')
+        const { compileToTyped } = await import('../../../tests/properties/_compile')
+        const { lowerToQbe }     = await import('./lower')
 
         const { typedAST, registry, functions } = compileToTyped(
             '@fn add:Int x:Int, y:Int := x + y;'

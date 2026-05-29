@@ -40,7 +40,7 @@ describe('siliconTypeToQbe', () => {
     test('UInt8 → w', () => expect(siliconTypeToQbe({ kind: 'UInt8' })).toBe('w'))
     test('UInt64 → l',() => expect(siliconTypeToQbe({ kind: 'UInt64' })).toBe('l'))
     test('undefined → w (safe default)', () => expect(siliconTypeToQbe(undefined)).toBe('w'))
-    test('String → w (pointer)', () => expect(siliconTypeToQbe({ kind: 'String' })).toBe('w'))
+    test('String → l (64-bit pointer on native target)', () => expect(siliconTypeToQbe({ kind: 'String' })).toBe('l'))
 })
 
 describe('siliconTypeToQbeReturn', () => {
