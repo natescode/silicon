@@ -1,13 +1,14 @@
 # examples/hello_native.si — "Hello, world!" for the QBE native backend.
 #
-# String literals compile to plain C strings (NUL-terminated), so libc
-# functions work directly. puts(3) writes the string and a trailing newline.
-#
 #   Build:  sgl build --native examples/hello_native.si
 #   Run:    ./examples/hello_native
 
 @extern puts:Int s:String;
 
-&puts 'Hello, world!';
+@fn print:Int s:String := {
+    &puts s
+};
+
+&print 'Hello, world!';
 
 0;
