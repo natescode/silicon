@@ -66,8 +66,8 @@ describe('watInstrToQbeInstr', () => {
     test('i32.eq → ceqw',    () => expect(watInstrToQbeInstr('i32.eq')).toBe('ceqw'))
     test('i32.lt_s → csltw', () => expect(watInstrToQbeInstr('i32.lt_s')).toBe('csltw'))
     test('i64.eq → ceql',    () => expect(watInstrToQbeInstr('i64.eq')).toBe('ceql'))
-    test('f32.add → adds',   () => expect(watInstrToQbeInstr('f32.add')).toBe('adds'))
-    test('f32.mul → muls',   () => expect(watInstrToQbeInstr('f32.mul')).toBe('muls'))
+    test('f32.add → add',    () => expect(watInstrToQbeInstr('f32.add')).toBe('add'))
+    test('f32.mul → mul',    () => expect(watInstrToQbeInstr('f32.mul')).toBe('mul'))
     test('f32.eq → ceqs',    () => expect(watInstrToQbeInstr('f32.eq')).toBe('ceqs'))
     // unknown returns undefined (not a throw)
     test('unknown → undefined', () => expect(watInstrToQbeInstr('bogus')).toBeUndefined())
@@ -243,9 +243,9 @@ describe('lowerToQbe — binary arithmetic', () => {
         expect(out).toContain('ceqw')
     })
 
-    test('Float addition emits QBE adds instruction', () => {
+    test('Float addition emits QBE add instruction (single via =s sigil)', () => {
         const out = toQbe(`@fn fadd:Float x:Float, y:Float := x + y;`)
-        expect(out).toContain('=s adds %x, %y')
+        expect(out).toContain('=s add %x, %y')
     })
 
     test('nested arithmetic emits multiple instructions', () => {

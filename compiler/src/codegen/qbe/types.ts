@@ -95,9 +95,11 @@ const WAT_TO_QBE_INSTR: Record<string, string> = {
     'i64.lt_s':  'csltl','i64.gt_s':  'csgtl',
     'i64.le_s':  'cslel','i64.ge_s':  'csgel',
 
-    // f32 arithmetic (QBE appends 's' for single-precision)
-    'f32.add':   'adds', 'f32.sub':   'subs',
-    'f32.mul':   'muls', 'f32.div':   'divs',
+    // f32 arithmetic — QBE selects single-precision via the result sigil
+    // (`%t =s add ...`), NOT an 's' suffix on the mnemonic. Only comparisons
+    // and conversions carry the 's'/'d' suffix.
+    'f32.add':   'add',  'f32.sub':   'sub',
+    'f32.mul':   'mul',  'f32.div':   'div',
     // f32 comparisons → result is 'w'
     'f32.eq':    'ceqs', 'f32.ne':    'cnes',
     'f32.lt':    'clts', 'f32.gt':    'cgts',
@@ -152,8 +154,8 @@ const INT64_OPS: Record<string, QbeOpEntry> = {
 }
 
 const FLOAT_OPS: Record<string, QbeOpEntry> = {
-    '+':  { instr: 'adds', qt: 's' }, '-':  { instr: 'subs', qt: 's' },
-    '*':  { instr: 'muls', qt: 's' }, '/':  { instr: 'divs', qt: 's' },
+    '+':  { instr: 'add', qt: 's' }, '-':  { instr: 'sub', qt: 's' },
+    '*':  { instr: 'mul', qt: 's' }, '/':  { instr: 'div', qt: 's' },
     '==': { instr: 'ceqs', qt: 'w' }, '!=': { instr: 'cnes', qt: 'w' },
     '<':  { instr: 'clts', qt: 'w' }, '>':  { instr: 'cgts', qt: 'w' },
     '<=': { instr: 'cles', qt: 'w' }, '>=': { instr: 'cges', qt: 'w' },
@@ -210,8 +212,8 @@ const ABSTRACT_OP_TO_QBE: Partial<Record<AbstractOp, AbstractQbeEntry>> = {
     i64_lt_u:  { instr: 'cultl', qt: 'w' }, i64_gt_u:  { instr: 'cugtl', qt: 'w' },
     i64_le_u:  { instr: 'culel', qt: 'w' }, i64_ge_u:  { instr: 'cugel', qt: 'w' },
     // f32 arithmetic
-    f32_add:   { instr: 'adds',  qt: 's' }, f32_sub:   { instr: 'subs',  qt: 's' },
-    f32_mul:   { instr: 'muls',  qt: 's' }, f32_div:   { instr: 'divs',  qt: 's' },
+    f32_add:   { instr: 'add',   qt: 's' }, f32_sub:   { instr: 'sub',   qt: 's' },
+    f32_mul:   { instr: 'mul',   qt: 's' }, f32_div:   { instr: 'div',   qt: 's' },
     // f32 comparisons (result is w)
     f32_eq:    { instr: 'ceqs',  qt: 'w' }, f32_ne:    { instr: 'cnes',  qt: 'w' },
     f32_lt:    { instr: 'clts',  qt: 'w' }, f32_gt:    { instr: 'cgts',  qt: 'w' },

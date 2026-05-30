@@ -478,9 +478,9 @@ describe('Strata operator parity — WAT vs QBE backends (story 9.5-5)', () => {
         expect(e.qt).toBe('l')
     })
 
-    test('abstractOpToQbe(f32_add) → { instr: "adds", qt: "s" }', () => {
+    test('abstractOpToQbe(f32_add) → { instr: "add", qt: "s" }', () => {
         const e = abstractOpToQbe('f32_add')!
-        expect(e.instr).toBe('adds')
+        expect(e.instr).toBe('add')
         expect(e.qt).toBe('s')
     })
 
