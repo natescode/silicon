@@ -1,0 +1,136 @@
+# examples/cube.si — a rotating, six-colour cube rendered with raylib.
+#
+# Silicon's FFI passes only scalars (Int / Int64 / Float / pointers), so the
+# cube talks to raylib through its primitive-only `rlgl` immediate-mode API and
+# does all the 3-D maths (rotation, perspective projection, back-face culling)
+# itself; raylib just opens the window and rasterises the triangles.
+#
+# Controls:  arrow keys or WASD rotate the cube,  Esc quits.
+#
+# NOTE: raylib's IsKeyDown / WindowShouldClose return a C `bool`, which sets
+# only the low byte of the return register.  They MUST be declared `:Bool`
+# (not `:Int`) so the backend masks the result to a clean 0/1 — declared
+# `:Int`, Silicon reads the garbage upper bits and every key tests as pressed,
+# so the directions cancel and the cube never moves.
+#
+# Build & run (needs raylib + libm; install the QBE backend with `sgl setup`):
+#     bun run sgl build --native examples/cube.si -lraylib -lm
+#     ./examples/cube
+@extern InitWindow width:Int, height:Int, title:String;
+@extern SetTargetFPS fps:Int;
+@extern WindowShouldClose:Bool;
+@extern IsKeyDown:Bool key:Int;
+@extern BeginDrawing;
+@extern EndDrawing;
+@extern CloseWindow;
+@extern GetScreenWidth:Int;
+@extern GetScreenHeight:Int;
+@extern rlDisableBackfaceCulling;
+@extern rlClearColor r:Int, g:Int, b:Int, a:Int;
+@extern rlClearScreenBuffers;
+@extern rlBegin mode:Int;
+@extern rlEnd;
+@extern rlColor4ub r:Int, g:Int, b:Int, a:Int;
+@extern rlVertex2f x:Float, y:Float;
+@extern sinf:Float x:Float;
+@extern cosf:Float x:Float;
+
+@var gAngleX:Float := 0.0;
+@var gAngleY:Float := 0.0;
+@var gSinX:Float := 0.0;
+@var gCosX:Float := 1.0;
+@var gSinY:Float := 0.0;
+@var gCosY:Float := 1.0;
+@var pos:Float := 1.0;
+@var neg:Float := 0.0;
+@var gCx:Float := 450.0;
+@var gCy:Float := 350.0;
+@var gFocal:Float := 320.0;
+
+@fn rx:Float x:Float, y:Float, z:Float := { ((x * gCosY) + (z * gSinY)) };
+@fn ry:Float x:Float, y:Float, z:Float := {
+    @var z1:Float := ((z * gCosY) - (x * gSinY));
+    ((y * gCosX) - (z1 * gSinX))
+};
+@fn rz:Float x:Float, y:Float, z:Float := {
+    @var z1:Float := ((z * gCosY) - (x * gSinY));
+    ((y * gSinX) + (z1 * gCosX))
+};
+@fn sx:Float x:Float, y:Float, z:Float := {
+    @var ox:Float := &rx x, y, z;
+    @var oz:Float := &rz x, y, z;
+    @var scale:Float := (gFocal / (4.0 - oz));
+    (gCx + (ox * scale))
+};
+@fn sy:Float x:Float, y:Float, z:Float := {
+    @var oy:Float := &ry x, y, z;
+    @var oz:Float := &rz x, y, z;
+    @var scale:Float := (gFocal / (4.0 - oz));
+    (gCy - (oy * scale))
+};
+@fn normalZ:Float ax:Float, ay:Float, az:Float, bx:Float, by:Float, bz:Float, cx:Float, cy:Float, cz:Float := {
+    @var rax:Float := &rx ax, ay, az;
+    @var ray:Float := &ry ax, ay, az;
+    @var rbx:Float := &rx bx, by, bz;
+    @var rby:Float := &ry bx, by, bz;
+    @var rcx:Float := &rx cx, cy, cz;
+    @var rcy:Float := &ry cx, cy, cz;
+    @var e1x:Float := (rbx - rax);
+    @var e1y:Float := (rby - ray);
+    @var e2x:Float := (rcx - rax);
+    @var e2y:Float := (rcy - ray);
+    ((e1x * e2y) - (e1y * e2x))
+};
+@fn drawFace ax:Float, ay:Float, az:Float, bx:Float, by:Float, bz:Float, cx:Float, cy:Float, cz:Float, dx:Float, dy:Float, dz:Float, r:Int, g:Int, b:Int := {
+    @var nz:Float := &normalZ ax, ay, az, bx, by, bz, cx, cy, cz;
+    &@if nz > 0.0, {
+        @var ax2:Float := &sx ax, ay, az;  @var ay2:Float := &sy ax, ay, az;
+        @var bx2:Float := &sx bx, by, bz;  @var by2:Float := &sy bx, by, bz;
+        @var cx2:Float := &sx cx, cy, cz;  @var cy2:Float := &sy cx, cy, cz;
+        @var dx2:Float := &sx dx, dy, dz;  @var dy2:Float := &sy dx, dy, dz;
+        &rlBegin 4;
+        &rlColor4ub r, g, b, 255;
+        &rlVertex2f ax2, ay2; &rlVertex2f bx2, by2; &rlVertex2f cx2, cy2;
+        &rlVertex2f ax2, ay2; &rlVertex2f cx2, cy2; &rlVertex2f dx2, dy2;
+        &rlEnd;
+        0
+    };
+    0
+};
+@fn drawCube := {
+    &drawFace neg, neg, pos,  pos, neg, pos,  pos, pos, pos,  neg, pos, pos,  230, 41, 55;
+    &drawFace pos, neg, neg,  neg, neg, neg,  neg, pos, neg,  pos, pos, neg,  0, 228, 48;
+    &drawFace pos, neg, pos,  pos, neg, neg,  pos, pos, neg,  pos, pos, pos,  0, 121, 241;
+    &drawFace neg, neg, neg,  neg, neg, pos,  neg, pos, pos,  neg, pos, neg,  253, 249, 0;
+    &drawFace neg, pos, pos,  pos, pos, pos,  pos, pos, neg,  neg, pos, neg,  255, 161, 0;
+    &drawFace neg, neg, neg,  pos, neg, neg,  pos, neg, pos,  neg, neg, pos,  200, 122, 255;
+    0
+};
+@fn main:Int := {
+    neg = (0.0 - 1.0);
+    &InitWindow 900, 700, 'Silicon + raylib: rotating cube';
+    gCx    = ((&@toFloat (&GetScreenWidth)) / 2.0);
+    gCy    = ((&@toFloat (&GetScreenHeight)) / 2.0);
+    gFocal = ((&@toFloat (&GetScreenHeight)) * 0.45);
+    &SetTargetFPS 60;
+    &rlDisableBackfaceCulling;
+    &@loop (&WindowShouldClose) == 0, {
+        &@if (&IsKeyDown 263) != 0, { gAngleY = (gAngleY - 0.03); };
+        &@if (&IsKeyDown 65)  != 0, { gAngleY = (gAngleY - 0.03); };
+        &@if (&IsKeyDown 262) != 0, { gAngleY = (gAngleY + 0.03); };
+        &@if (&IsKeyDown 68)  != 0, { gAngleY = (gAngleY + 0.03); };
+        &@if (&IsKeyDown 265) != 0, { gAngleX = (gAngleX - 0.03); };
+        &@if (&IsKeyDown 87)  != 0, { gAngleX = (gAngleX - 0.03); };
+        &@if (&IsKeyDown 264) != 0, { gAngleX = (gAngleX + 0.03); };
+        &@if (&IsKeyDown 83)  != 0, { gAngleX = (gAngleX + 0.03); };
+        gCosX = (&cosf gAngleX);  gSinX = (&sinf gAngleX);
+        gCosY = (&cosf gAngleY);  gSinY = (&sinf gAngleY);
+        &BeginDrawing;
+        &rlClearColor 24, 24, 32, 255;
+        &rlClearScreenBuffers;
+        &drawCube;
+        &EndDrawing;
+    };
+    &CloseWindow;
+    0
+};
