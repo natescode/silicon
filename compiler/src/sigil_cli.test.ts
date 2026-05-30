@@ -29,6 +29,15 @@ function runSgl(args: string[], cwd?: string): { stdout: string; stderr: string;
     }
 }
 
+/** True if a tool is resolvable on PATH (no stdin hang, unlike `tool -h`). */
+function onPath(name: string): boolean {
+    return spawnSync('sh', ['-c', `command -v ${name}`], { stdio: 'ignore' }).status === 0
+}
+/** The native backend needs qbe (PATH or ~/.sgl/bin) + a C compiler. */
+const NATIVE_OK =
+    (onPath('qbe') || fs.existsSync(path.join(os.homedir(), '.sgl', 'bin', 'qbe'))) &&
+    (onPath('cc') || onPath('gcc') || onPath('clang'))
+
 describe('Phase 9d-4: --target=wasm-gc CLI flag', () => {
 
     test('help text lists wasm-gc as a target value', () => {
@@ -101,6 +110,82 @@ describe('Phase 9d-4: sgl.toml [build] target', () => {
             // the emitted binary, but the absence of conflicting target
             // errors means the resolution path is working.
             expect(r.stderr).not.toContain('unknown')
+        })
+    })
+})
+
+describe('native linker flags (-l / -L / --link)', () => {
+
+    test('help text documents -l<lib> and --link', () => {
+        const r = runSgl(['help'])
+        expect(r.code).toBe(0)
+        expect(r.stdout).toContain('-l<lib>')
+        expect(r.stdout).toContain('--link')
+    })
+
+    test('--link with no argument errors during parsing', () => {
+        const r = runSgl(['build', '--native', '--link'])
+        expect(r.code).not.toBe(0)
+        expect(r.stderr).toContain('--link requires a linker argument')
+    })
+
+    test('bare -l flags are not treated as the source file or an unknown flag', () => {
+        // -lraylib must be collected as a linker arg, leaving nonexistent.si as
+        // the positional. The build then fails for a *different* reason (missing
+        // file / qbe), never "unknown flag" and never opening '-lraylib'.
+        const r = runSgl(['build', '--native', 'nonexistent.si', '-lraylib'])
+        expect(r.code).not.toBe(0)
+        expect(r.stderr).not.toContain("unknown flag")
+        expect(r.stderr).not.toContain("-lraylib")
+    })
+})
+
+describe('native: --emit-qbe / --save-temps / sgl.toml [native]', () => {
+
+    function withTempDir(fn: (dir: string) => void): void {
+        const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sgl-native-'))
+        try { fn(dir) } finally { fs.rmSync(dir, { recursive: true, force: true }) }
+    }
+
+    test('help documents --emit-qbe, --save-temps and the [native] section', () => {
+        const r = runSgl(['help'])
+        expect(r.code).toBe(0)
+        expect(r.stdout).toContain('--emit-qbe')
+        expect(r.stdout).toContain('--save-temps')
+        expect(r.stdout).toContain('[native]')
+    })
+
+    test('--emit-qbe writes a .qbe file of QBE IR (no qbe binary required)', () => {
+        withTempDir(dir => {
+            fs.writeFileSync(path.join(dir, 'm.si'), '0;\n')
+            const r = runSgl(['build', '--emit-qbe', 'm.si'], dir)
+            expect(r.code).toBe(0)
+            const out = path.join(dir, 'm.qbe')
+            expect(fs.existsSync(out)).toBe(true)
+            expect(fs.readFileSync(out, 'utf-8')).toContain('function')
+        })
+    })
+
+    test.skipIf(!NATIVE_OK)('sgl.toml [native] libs are passed to the linker', () => {
+        withTempDir(dir => {
+            fs.writeFileSync(path.join(dir, 'sgl.toml'),
+                '[package]\nname = "t"\nentry = "m.si"\n\n[native]\nlibs = ["sgl_bogus_xyz"]\n')
+            fs.writeFileSync(path.join(dir, 'm.si'), '0;\n')
+            const r = runSgl(['build', '--native'], dir)
+            // links with -lsgl_bogus_xyz → the linker reports it as missing,
+            // proving the toml lib reached the link step.
+            expect(r.code).not.toBe(0)
+            expect(r.stderr + r.stdout).toContain('sgl_bogus_xyz')
+        })
+    })
+
+    test.skipIf(!NATIVE_OK)('--save-temps keeps the .qbe and .s intermediates', () => {
+        withTempDir(dir => {
+            fs.writeFileSync(path.join(dir, 'm.si'), '0;\n')
+            const r = runSgl(['build', '--native', '--save-temps', 'm.si'], dir)
+            expect(r.code).toBe(0)
+            expect(fs.existsSync(path.join(dir, 'm.qbe'))).toBe(true)
+            expect(fs.existsSync(path.join(dir, 'm.s'))).toBe(true)
         })
     })
 })

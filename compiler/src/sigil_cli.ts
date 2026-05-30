@@ -70,6 +70,11 @@ Build / run flags:
                   raw &heap_*, Rc introspection) are rejected at typecheck;
                   lifecycle primitives (@with_arena, Rc) compile to no-ops.
   --release       Compile via the QBE native backend (alias for --native)
+  -l<lib> -L<dir> Pass cc-style linker flags to the native link step
+                  (e.g. -lraylib -lm).  --native only.
+  --link <arg>    Pass an arbitrary argument to the linker (may repeat).
+  --emit-qbe      Emit QBE IR text (.qbe) and stop; no assemble/link (no qbe needed).
+  --save-temps    Keep the intermediate .qbe and .s from a --native build.
   --max-heap=<N>  Cap wasm memory at N 64KB pages (heap-exhaustion testing;
                   past the cap the bump allocator traps cleanly).  Default: unbounded.
 
@@ -81,13 +86,20 @@ File resolution:
   If no file is given, sgl reads sgl.toml in the current directory and uses
   the entry point declared under [package] entry = "...".
 
+sgl.toml [native] section (default native linker inputs):
+  [native]
+  libs      = ["raylib", "m"]      # → -lraylib -lm
+  link-args = ["-L/opt/lib"]       # raw cc/ld args
+
 Examples:
   sgl init my-app
   sgl build src/main.si
   sgl run   src/main.si
   sgl check src/main.si
-  sgl build --native src/main.si   # QBE native backend → .s assembly
-  sgl setup                         # install qbe into ~/.sgl/bin/
+  sgl build --native src/main.si              # QBE native backend → native exe
+  sgl build --native game.si -lraylib -lm     # link extra libraries
+  sgl build --emit-qbe game.si                # dump QBE IR to game.qbe
+  sgl setup                                    # install qbe into ~/.sgl/bin/
 `
 
 // ---------------------------------------------------------------------------
@@ -105,6 +117,13 @@ interface SglToml {
         /** `target = "wasm-gc"` opts into ADR 0009's GC target by default. */
         target?: string
     }
+    /** `[native]` section — default linker inputs for the QBE native backend.
+     *  `libs = ["raylib", "m"]` → `-lraylib -lm`; `link-args = [...]` is raw.
+     *  CLI `-l`/`-L`/`--link` flags are appended on top of these. */
+    native: {
+        libs?: string[]
+        linkArgs?: string[]
+    }
     dependencies: Record<string, string>
 }
 
@@ -112,13 +131,26 @@ function readSglToml(dir: string): SglToml | null {
     const tomlPath = path.join(dir, 'sgl.toml')
     if (!fs.existsSync(tomlPath)) return null
     const text = fs.readFileSync(tomlPath, 'utf-8')
-    const result: SglToml = { package: {}, build: {}, dependencies: {} }
+    const result: SglToml = { package: {}, build: {}, native: {}, dependencies: {} }
     let section = ''
     for (const rawLine of text.split('\n')) {
         const line = rawLine.trim()
         if (!line || line.startsWith('#')) continue
         const secMatch = line.match(/^\[([a-zA-Z0-9_.-]+)\]$/)
         if (secMatch) { section = secMatch[1]; continue }
+
+        // [native] array values:  libs = ["raylib", "m"]  /  link-args = ["-L/x"]
+        // (single-line arrays only — this is a minimal reader, not full TOML).
+        if (section === 'native') {
+            const arrMatch = line.match(/^([a-zA-Z0-9_-]+)\s*=\s*\[(.*)\]\s*$/)
+            if (arrMatch) {
+                const items = [...arrMatch[2].matchAll(/"([^"]*)"/g)].map(m => m[1])
+                if (arrMatch[1] === 'libs')           result.native.libs = items
+                else if (arrMatch[1] === 'link-args') result.native.linkArgs = items
+                continue
+            }
+        }
+
         const kvMatch = line.match(/^([a-zA-Z0-9_-]+)\s*=\s*"([^"]*)"$/)
         if (!kvMatch) continue
         const [, key, val] = kvMatch
@@ -173,6 +205,14 @@ interface CompileOptions {
     pretty: boolean
     wat: boolean
     native: boolean
+    /** Extra linker arguments for the native backend (`-l`, `-L`, `--link`,
+     *  plus sgl.toml `[native] libs`).  Passed to `cc` as `LinkOptions.extraArgs`.
+     *  Ignored by wasm. */
+    linkArgs?: string[]
+    /** Emit QBE IR text (`.qbe`) and stop — no assemble/link. */
+    emitQbe?: boolean
+    /** Keep intermediate `.qbe` / `.s` files from a `--native` build. */
+    saveTemps?: boolean
     /** Phase 9c-4: cap wasm memory at N 64KB pages.  Sets the memory
      *  section's max-pages so `memory.grow` past the cap traps via the
      *  bump allocator's `unreachable`.  Default: unbounded. */
@@ -296,6 +336,15 @@ async function cmdInit(args: string[]): Promise<void> {
 async function cmdBuild(positional: string | undefined, opts: CompileOptions): Promise<void> {
     const entry = resolveEntry(positional, process.cwd())
 
+    // --emit-qbe: dump the QBE IR text (front-end + lowering only, no qbe binary).
+    if (opts.emitQbe) {
+        const qbeIr = await compileToQbeIr(entry, opts)
+        const outPath = path.basename(entry, '.si') + '.qbe'
+        await fsp.writeFile(outPath, qbeIr)
+        console.log(`Compiled ${entry} → ${outPath}`)
+        return
+    }
+
     // Native backend: Silicon → QBE IR → assembly via qbe
     if (opts.native) {
         await cmdBuildNative(entry, opts)
@@ -363,12 +412,14 @@ async function cmdBuildNative(entry: string, opts: CompileOptions): Promise<void
     const asmPath = stem + '.s'
     const exePath = defaultExePath(entry)
 
+    if (opts.saveTemps) await fsp.writeFile(stem + '.qbe', qbeIr)
     await fsp.writeFile(asmPath, asmOut)
-    link(ccBin, asmPath, exePath)
-    // Remove the intermediate .s unless --save-temps is requested (future flag)
-    try { fs.unlinkSync(asmPath) } catch { /* best-effort */ }
+    link(ccBin, asmPath, exePath, { extraArgs: opts.linkArgs })
+    // Remove the intermediate .s unless --save-temps keeps it for inspection.
+    if (!opts.saveTemps) { try { fs.unlinkSync(asmPath) } catch { /* best-effort */ } }
 
     console.log(`Compiled ${entry} → ${exePath}`)
+    if (opts.saveTemps) console.log(`Kept ${stem}.qbe and ${asmPath}`)
 }
 
 // ---------------------------------------------------------------------------
@@ -456,7 +507,7 @@ async function cmdRunNative(entry: string, opts: CompileOptions): Promise<void> 
     const exePath = path.join(tmpDir, os.platform() === 'win32' ? 'prog.exe' : 'prog')
     try {
         fs.writeFileSync(asmPath, asmOut)
-        link(ccBin, asmPath, exePath)
+        link(ccBin, asmPath, exePath, { extraArgs: opts.linkArgs })
         const result = spawnSync(exePath, [], { stdio: 'inherit' })
         process.exit(result.status ?? 0)
     } finally {
@@ -736,6 +787,9 @@ let pretty = false
 let fmtCheck = false
 let fmtStdout = false
 let maxHeapPages: number | undefined = undefined
+const linkArgs: string[] = []
+let emitQbe = false
+let saveTemps = false
 
 for (let i = 0; i < rest.length; i++) {
     const arg = rest[i]
@@ -769,6 +823,20 @@ for (let i = 0; i < rest.length; i++) {
         maxHeapPages = parseMaxHeap(next)
     } else if (arg.startsWith('--max-heap=')) {
         maxHeapPages = parseMaxHeap(arg.slice('--max-heap='.length))
+    } else if (arg === '--emit-qbe') {
+        emitQbe = true
+    } else if (arg === '--save-temps') {
+        saveTemps = true
+    } else if (arg === '--link') {
+        const next = rest[++i]
+        if (!next) { console.error('--link requires a linker argument'); process.exit(1) }
+        linkArgs.push(next)
+    } else if (arg.startsWith('--link=')) {
+        linkArgs.push(arg.slice('--link='.length))
+    } else if (arg.startsWith('-l') || arg.startsWith('-L')) {
+        // cc-style linker flags (-lraylib, -L/path) pass straight through to
+        // the native link step.  Checked before the positional branch below.
+        linkArgs.push(arg)
     } else if (arg === '--path' || arg.startsWith('--path=')) {
         // sgl add --path <local> — consumed by cmdAdd, not the global parser.
         // Just skip the value token if --path <val> form was used.
@@ -781,7 +849,16 @@ for (let i = 0; i < rest.length; i++) {
     }
 }
 
-const opts: CompileOptions = { strataFiles, target, pretty, wat: emitWat, native, maxHeapPages }
+// sgl.toml [native] libs/link-args become the base linker inputs; CLI -l/-L/--link append.
+const nativeTomlFlags = [
+    ...(tomlForTarget?.native.libs ?? []).map(l => `-l${l}`),
+    ...(tomlForTarget?.native.linkArgs ?? []),
+]
+const opts: CompileOptions = {
+    strataFiles, target, pretty, wat: emitWat, native, maxHeapPages,
+    linkArgs: [...nativeTomlFlags, ...linkArgs],
+    emitQbe, saveTemps,
+}
 
 try {
     switch (subcommand) {
