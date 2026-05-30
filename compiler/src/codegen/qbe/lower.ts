@@ -832,6 +832,18 @@ function lowerCall(callee: string, args: any[], fn: QbeFnCtx, callNode?: any): s
     }
     const tmp = freshTemp(fn)
     emit(fn, `${tmp} =${retType} call $${callee}(${typedArgs})`)
+
+    // C `bool` returns set only the low byte of the return register (`al`); the
+    // upper bits are unspecified.  Silicon would otherwise read the full 32-bit
+    // word as a signed Int — e.g. raylib's `IsKeyDown` leaves garbage above the
+    // bool byte, so every call tested as "truthy".  Mask `Bool` results to the
+    // low byte so the value is an exact 0/1.
+    const resultType: SiliconType | undefined = (sig?.result ?? callSiteType) as any
+    if (resultType?.kind === 'Bool' && retType === 'w') {
+        const masked = freshTemp(fn)
+        emit(fn, `${masked} =w and ${tmp}, 255`)
+        return masked
+    }
     return tmp
 }
 
