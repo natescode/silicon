@@ -29,6 +29,7 @@ If you're new, start with [`getting-started.md`](getting-started.md).
 | [api-boundaries.md](api-boundaries.md) | Per-subsystem import rules; public vs internal |
 | [struct-design.md](struct-design.md) | `@struct` design and layout rules |
 | [extern-out-pointer.md](extern-out-pointer.md) | `@extern` out-pointer ABI |
+| [struct-ffi.md](struct-ffi.md) | Struct-by-value FFI design proposal (not yet implemented) |
 | [use-includes.md](use-includes.md) | `@use 'path.si';` resolution semantics |
 | [comptime-via-compilation.md](comptime-via-compilation.md) | The Zig-style comptime engine design |
 | [lockfile-format.md](lockfile-format.md) | `sgl.lock` format spec (story 6b-13) |
