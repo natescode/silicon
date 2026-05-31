@@ -100,7 +100,7 @@ test("compile array literals are supported", () => {
 })
 
 test("compile @let definition emits func with params", () => {
-    const wat = compile("@let add x:Int, y:Int := x + y;")
+    const wat = compile("\\\\ add (Int, Int)\n@let add x, y := x + y;")
     expect(wat).toContain("(func $add")
     expect(wat).toContain("(param $x i32)")
     expect(wat).toContain("(param $y i32)")
@@ -112,19 +112,19 @@ test("compile unknown definition keyword throws", () => {
 })
 
 test("compile if-else as binding emits (result i32)", () => {
-    const wat = compile("@let pick a:Int, b:Int, c:Int := { &@if c, { a }, { b } };")
+    const wat = compile("\\\\ pick (Int, Int, Int)\n@let pick a, b, c := { &@if c, { a }, { b } };")
     expect(wat).toContain("(if (result i32)")
     expect(wat).toContain("(then")
     expect(wat).toContain("(else")
 })
 
 test("compile if without else does not emit result type", () => {
-    const wat = compile("@let doIf x:Int := { &@if x, { x = x + 1; }; x };")
+    const wat = compile("\\\\ doIf (Int)\n@let doIf x := { &@if x, { x = x + 1; }; x };")
     expect(wat).not.toContain("(if (result")
 })
 
 test("compile @let function without @export is not exported", () => {
-    const wat = compile("@let add x:Int, y:Int := x + y;")
+    const wat = compile("\\\\ add (Int, Int)\n@let add x, y := x + y;")
     expect(wat).toContain("(func $add")
     expect(wat).not.toContain('(export "add"')
 })
@@ -143,7 +143,7 @@ test("compile @var definition emits mutable global", () => {
 })
 
 test("compile assignment to parameter uses local.set", () => {
-    const wat = compile("@let inc x:Int := { x = x + 1; x };")
+    const wat = compile("\\\\ inc (Int)\n@let inc x := { x = x + 1; x };")
     expect(wat).toContain("local.set $x")
     expect(wat).toContain("local.get $x")
 })
@@ -194,7 +194,7 @@ test("compileToWasm returns a valid WASM binary", () => {
 
 test("compileToWasm direct emitter is byte-equal to WAT round-trip", async () => {
     const { watToWasm } = await import("./toWasm")
-    const source = "@let add x:Int, y:Int := x + y;"
+    const source = "\\\\ add (Int, Int)\n@let add x, y := x + y;"
     const viaWat = await watToWasm(compile(source))
     const viaDirect = compileBinary(source)
     expect(viaDirect.byteLength).toBe(viaWat.byteLength)

@@ -146,7 +146,7 @@ test('annotation informs inferred types (i32 alias)', () => {
 // ------------------------------------------------------------------
 
 test('@if with matching branches has no errors', () => {
-    const { errors } = check('@let abs x:Int := { &@if x < 0, { 0 - x }, { x } };')
+    const { errors } = check('\\\\ abs (Int)\n@let abs x := { &@if x < 0, { 0 - x }, { x } };')
     expect(errors).toHaveLength(0)
 })
 
@@ -173,18 +173,18 @@ test('@if without else branch is void (TypeUnknown — no errors)', () => {
 // ------------------------------------------------------------------
 
 test('return type of user function resolves at call site', () => {
-    const { errors } = check('@let add x:Int, y:Int := x + y; &add 1, 2;')
+    const { errors } = check('\\\\ add (Int, Int)\n@let add x, y := x + y; &add 1, 2;')
     expect(errors).toHaveLength(0)
 })
 
 test('wrong arg type at user function call site errors', () => {
-    const { errors } = check('@let double x:Int := x + x; &double 1.5;')
+    const { errors } = check('\\\\ double (Int)\n@let double x := x + x; &double 1.5;')
     expect(errors.length).toBeGreaterThan(0)
     expect(errors[0].kind).toBe('Mismatch')
 })
 
 test('wrong arity at user function call site errors', () => {
-    const { errors } = check('@let add x:Int, y:Int := x + y; &add 1;')
+    const { errors } = check('\\\\ add (Int, Int)\n@let add x, y := x + y; &add 1;')
     expect(errors.length).toBeGreaterThan(0)
     expect(errors[0].kind).toBe('ArityMismatch')
 })
@@ -196,13 +196,13 @@ test('wrong arity at user function call site errors', () => {
 test('forward reference: wrong arg type caught before definition', () => {
     // &add appears before @let add — pre-pass seeds the signature so the
     // call site is type-checked even though the definition comes later.
-    const { errors } = check('&add 1, 2.5; @let add x:Int, y:Int := x + y;')
+    const { errors } = check('\\\\ add (Int, Int)\n@let add x, y := x + y;')
     expect(errors.length).toBeGreaterThan(0)
     expect(errors[0].kind).toBe('Mismatch')
 })
 
 test('forward reference: correct call before definition has no errors', () => {
-    const { errors } = check('&add 1, 2; @let add x:Int, y:Int := x + y;')
+    const { errors } = check('\\\\ add (Int, Int)\n@let add x, y := x + y;')
     expect(errors).toHaveLength(0)
 })
 
@@ -407,29 +407,29 @@ test('@match: result type flows through to caller', () => {
 // ---------------------------------------------------------------------------
 
 test('@local: declaration with matching annotation has no errors', () => {
-    const { errors } = check('@let f x:Int := { @local tmp:Int := x + 1; tmp };')
+    const { errors } = check('\\\\ f (Int)\n@let f x := { @local tmp:Int := x + 1; tmp };')
     expect(errors).toHaveLength(0)
 })
 
 test('@local: wrong annotation type is a type error', () => {
-    const { errors } = check('@let f x:Int := { @local tmp:Float := x + 1; tmp };')
+    const { errors } = check('\\\\ f (Int)\n@let f x := { @local tmp:Float := x + 1; tmp };')
     expect(errors.length).toBeGreaterThan(0)
     expect(errors[0].kind).toBe('Annotation')
 })
 
 test('@local: is mutable — reassignment does not error', () => {
-    const { errors } = check('@let f x:Int := { @local tmp:Int := 0; tmp = x + 1; tmp };')
+    const { errors } = check('\\\\ f (Int)\n@let f x := { @local tmp:Int := 0; tmp = x + 1; tmp };')
     expect(errors).toHaveLength(0)
 })
 
 test('@local: type flows through to caller', () => {
     // tmp is Int, so tmp + 1 should be valid
-    const { errors } = check('@let f x:Int := { @local tmp:Int := x; tmp + 1 };')
+    const { errors } = check('\\\\ f (Int)\n@let f x := { @local tmp:Int := x; tmp + 1 };')
     expect(errors).toHaveLength(0)
 })
 
 test('@local: wrong type in reassignment is a type error', () => {
-    const { errors } = check('@let f x:Int := { @local tmp:Int := 0; tmp = 3.14; tmp };')
+    const { errors } = check('\\\\ f (Int)\n@let f x := { @local tmp:Int := 0; tmp = 3.14; tmp };')
     expect(errors.length).toBeGreaterThan(0)
     expect(errors[0].kind).toBe('Mismatch')
 })

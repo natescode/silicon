@@ -816,7 +816,7 @@ test("E2E: @match emits nested (if ...) chain with i32.eq comparisons", () => {
 // ---------------------------------------------------------------------------
 
 test("E2E: @local emits (local ...) in function preamble", () => {
-    const src = "@let f x:Int := { @local tmp:Int := x + 1; tmp };";
+    const src = "\\\\ f (Int)\n@let f x := { @local tmp:Int := x + 1; tmp };";
     const result = compileSource(src);
 
     expect(result.success).toBe(true);
@@ -825,7 +825,7 @@ test("E2E: @local emits (local ...) in function preamble", () => {
 });
 
 test("E2E: @local binding emits local.set at the binding site", () => {
-    const src = "@let f x:Int := { @local tmp:Int := x + 1; tmp };";
+    const src = "\\\\ f (Int)\n@let f x := { @local tmp:Int := x + 1; tmp };";
     const result = compileSource(src);
 
     expect(result.success).toBe(true);
@@ -833,7 +833,7 @@ test("E2E: @local binding emits local.set at the binding site", () => {
 });
 
 test("E2E: @local reference emits local.get", () => {
-    const src = "@let f x:Int := { @local tmp:Int := x + 1; tmp };";
+    const src = "\\\\ f (Int)\n@let f x := { @local tmp:Int := x + 1; tmp };";
     const result = compileSource(src);
 
     expect(result.success).toBe(true);
@@ -843,7 +843,7 @@ test("E2E: @local reference emits local.get", () => {
 
 test("E2E: @local is reassignable via assignment", () => {
     // After @local tmp := 0; reassign tmp = x; the assignment emits local.set.
-    const src = "@let f x:Int := { @local tmp:Int := 0; tmp = x; tmp };";
+    const src = "\\\\ f (Int)\n@let f x := { @local tmp:Int := 0; tmp = x; tmp };";
     const result = compileSource(src);
 
     expect(result.success).toBe(true);
@@ -853,7 +853,7 @@ test("E2E: @local is reassignable via assignment", () => {
 });
 
 test("E2E: multiple @local variables each get their own WAT local", () => {
-    const src = "@let f x:Int := { @local a:Int := x; @local b:Int := a + 1; b };";
+    const src = "\\\\ f (Int)\n@let f x := { @local a:Int := x; @local b:Int := a + 1; b };";
     const result = compileSource(src);
 
     expect(result.success).toBe(true);
@@ -967,7 +967,7 @@ test("E2E: chained || short-circuits left to right", () => {
 });
 
 test("E2E: || in function body with typed result", () => {
-    const src = "@let check a:Int, b:Int := { a || b };";
+    const src = "\\\\ check (Int, Int)\n@let check a, b := { a || b };";
     const result = compileSource(src);
 
     expect(result.success).toBe(true);
@@ -976,7 +976,7 @@ test("E2E: || in function body with typed result", () => {
 });
 
 test("E2E: @and with both true returns right side", () => {
-    const src = "@let f a:Int, b:Int := { &@and a, b };";
+    const src = "\\\\ f (Int, Int)\n@let f a, b := { &@and a, b };";
     const result = compileSource(src);
 
     expect(result.success).toBe(true);
@@ -990,7 +990,7 @@ test("E2E: @and with both true returns right side", () => {
 // ---------------------------------------------------------------------------
 
 test.skip("Schema: @var with parameters is rejected (D-D-11c regression — new register::keyword always allowsParams=true)", () => {
-    const result = compileSource("@var count x:Int := 0;");
+    const result = compileSource("\\\\ count (Int)\n@var count x := 0;");
     expect(result.success).toBe(false);
     expect(result.error).toContain("'@var' does not accept parameters");
 });
@@ -1002,7 +1002,7 @@ test.skip("Schema: @extern with a binding is rejected (D-D-11c regression — ne
 });
 
 test("Schema: @let with parameters and binding is accepted", () => {
-    const result = compileSource("@let add x:Int, y:Int := { x + y };");
+    const result = compileSource("\\\\ add (Int, Int)\n@let add x, y := { x + y };");
 
     expect(result.success).toBe(true);
     expect(result.wat).toContain("(func $add");
@@ -1027,7 +1027,7 @@ test.skip("Schema: @local with params is rejected (D-D-11a regression — new re
     // sets allowsParams=true.  Need a follow-up
     // `register::leaf_keyword` (or similar) to preserve the legacy
     // schema check for @local / @var / @type_sum.
-    const result = compileSource("@let f x:Int := { @local tmp a:Int := 0; tmp };");
+    const result = compileSource("\\\\ f (Int)\n@let f x := { @local tmp a:Int := 0; tmp };");
     expect(result.success).toBe(false);
     expect(result.error).toContain("'@local' does not accept parameters");
 });
@@ -1067,7 +1067,7 @@ function userWat(wat: string): string {
 }
 
 test("Round 23: float params use f32.add not i32.add", () => {
-    const result = compileSource("@let add a:Float, b:Float := { a + b };");
+    const result = compileSource("\\\\ add (Float, Float)\n@let add a, b := { a + b };");
     expect(result.success).toBe(true);
     const uw = userWat(result.wat!)
     expect(uw).toContain("f32.add");
@@ -1075,7 +1075,7 @@ test("Round 23: float params use f32.add not i32.add", () => {
 });
 
 test("Round 23: int params use i32.add not f32.add", () => {
-    const result = compileSource("@let add a:Int, b:Int := { a + b };");
+    const result = compileSource("\\\\ add (Int, Int)\n@let add a, b := { a + b };");
     expect(result.success).toBe(true);
     const uw = userWat(result.wat!)
     expect(uw).toContain("i32.add");
@@ -1083,7 +1083,7 @@ test("Round 23: int params use i32.add not f32.add", () => {
 });
 
 test("Round 23: float comparison uses f32.gt", () => {
-    const result = compileSource("@let greater a:Float, b:Float := { a > b };");
+    const result = compileSource("\\\\ greater (Float, Float)\n@let greater a, b := { a > b };");
     expect(result.success).toBe(true);
     const uw = userWat(result.wat!)
     expect(uw).toContain("f32.gt");
@@ -1091,7 +1091,7 @@ test("Round 23: float comparison uses f32.gt", () => {
 });
 
 test("Round 23: float comparison uses f32.lt", () => {
-    const result = compileSource("@let lesser a:Float, b:Float := { a < b };");
+    const result = compileSource("\\\\ lesser (Float, Float)\n@let lesser a, b := { a < b };");
     expect(result.success).toBe(true);
     const uw = userWat(result.wat!)
     expect(uw).toContain("f32.lt");
@@ -1100,7 +1100,7 @@ test("Round 23: float comparison uses f32.lt", () => {
 
 test("Round 23: mixed int+float without cast is a type error", () => {
     // With the type checker active, Int + Float is a strict mismatch — no implicit promotion.
-    const result = compileSource("@let mixed a:Int, b:Float := { a + b };");
+    const result = compileSource("\\\\ mixed (Int, Float)\n@let mixed a, b := { a + b };");
     expect(result.success).toBe(false);
     expect(result.error).toMatch(/mismatch|Int|Float/i);
 });
@@ -1114,7 +1114,7 @@ test("Round 23: float global resolves to f32 in expressions", () => {
 
 test("Round 23: float call return type drives arithmetic (f32.add in caller)", () => {
     // &double takes a Float and returns Float; two calls added together should use f32.add
-    const src = "@let double x:Float := { x + x }; @let quad y:Float := { &double y + &double y };";
+    const src = "\\\\ double (Float)\n@let double x := { x + x }; @let quad y:Float := { &double y + &double y };";
     const result = compileSource(src);
     expect(result.success).toBe(true);
     const uw = userWat(result.wat!)
@@ -1122,7 +1122,7 @@ test("Round 23: float call return type drives arithmetic (f32.add in caller)", (
 });
 
 test("Round 23: float subtraction uses f32.sub", () => {
-    const result = compileSource("@let sub a:Float, b:Float := { a - b };");
+    const result = compileSource("\\\\ sub (Float, Float)\n@let sub a, b := { a - b };");
     expect(result.success).toBe(true);
     const uw = userWat(result.wat!)
     expect(uw).toContain("f32.sub");
@@ -1130,7 +1130,7 @@ test("Round 23: float subtraction uses f32.sub", () => {
 });
 
 test("Round 23: float multiplication uses f32.mul", () => {
-    const result = compileSource("@let mul a:Float, b:Float := { a * b };");
+    const result = compileSource("\\\\ mul (Float, Float)\n@let mul a, b := { a * b };");
     expect(result.success).toBe(true);
     const uw = userWat(result.wat!)
     expect(uw).toContain("f32.mul");
@@ -1314,7 +1314,7 @@ test("Round 26: >> emits i32.shr_s", () => {
 });
 
 test("Round 26: | in function body uses i32.or not f32.or", () => {
-    const result = compileSource("@let mask a:Int, b:Int := { a | b };");
+    const result = compileSource("\\\\ mask (Int, Int)\n@let mask a, b := { a | b };");
     expect(result.success).toBe(true);
     const uw = userWat(result.wat!)
     expect(uw).toContain("i32.or");
@@ -1322,28 +1322,28 @@ test("Round 26: | in function body uses i32.or not f32.or", () => {
 });
 
 test("Round 26: ^ in function body uses i32.xor", () => {
-    const result = compileSource("@let toggle a:Int, b:Int := { a ^ b };");
+    const result = compileSource("\\\\ toggle (Int, Int)\n@let toggle a, b := { a ^ b };");
     expect(result.success).toBe(true);
     const uw = userWat(result.wat!)
     expect(uw).toContain("i32.xor");
 });
 
 test("Round 26: << with literal shift amount", () => {
-    const result = compileSource("@let double a:Int := { a << 1 };");
+    const result = compileSource("\\\\ double (Int)\n@let double a := { a << 1 };");
     expect(result.success).toBe(true);
     const uw = userWat(result.wat!)
     expect(uw).toContain("i32.shl");
 });
 
 test("Round 26: >> with literal shift amount", () => {
-    const result = compileSource("@let half a:Int := { a >> 1 };");
+    const result = compileSource("\\\\ half (Int)\n@let half a := { a >> 1 };");
     expect(result.success).toBe(true);
     const uw = userWat(result.wat!)
     expect(uw).toContain("i32.shr_s");
 });
 
 test("Round 26: bitwise ops combined with arithmetic", () => {
-    const result = compileSource("@let f a:Int, b:Int := { (a + b) | (a ^ b) };");
+    const result = compileSource("\\\\ f (Int, Int)\n@let f a, b := { (a + b) | (a ^ b) };");
     expect(result.success).toBe(true);
     const uw = userWat(result.wat!)
     expect(uw).toContain("i32.add");
@@ -1352,7 +1352,7 @@ test("Round 26: bitwise ops combined with arithmetic", () => {
 });
 
 test("Round 26: bitwise | does not promote to f32 (always emits i32.or)", () => {
-    const result = compileSource("@let f a:Int := { a | 255 };");
+    const result = compileSource("\\\\ f (Int)\n@let f a := { a | 255 };");
     expect(result.success).toBe(true);
     const uw = userWat(result.wat!)
     expect(uw).toContain("i32.or");
@@ -1515,7 +1515,7 @@ test("Round 27: @toFloat emits f32.convert_i32_s", () => {
 });
 
 test("Round 27: @toFloat on an Int param emits f32.convert_i32_s", () => {
-    const result = compileSource("@let cast x:Int := { &@toFloat x };");
+    const result = compileSource("\\\\ cast (Int)\n@let cast x := { &@toFloat x };");
     expect(result.success).toBe(true);
     const uw = userWat(result.wat!)
     expect(uw).toContain("f32.convert_i32_s");
@@ -1524,7 +1524,7 @@ test("Round 27: @toFloat on an Int param emits f32.convert_i32_s", () => {
 test("Round 27: @toFloat promotes type — explicit cast then float add", () => {
     // &@toFloat x + y parses as @toFloat(x + y) which is Int+Float → type error.
     // Parentheses are needed: (&@toFloat x) converts to Float, then + y:Float is f32.add.
-    const result = compileSource("@let mixAdd x:Int, y:Float := { (&@toFloat x) + y };");
+    const result = compileSource("\\\\ mixAdd (Int, Float)\n@let mixAdd x, y := { (&@toFloat x) + y };");
     expect(result.success).toBe(true);
     const uw = userWat(result.wat!)
     expect(uw).toContain("f32.convert_i32_s");
@@ -1550,7 +1550,7 @@ test("Round 27: @toInt emits i32.trunc_f32_s", () => {
 });
 
 test("Round 27: @toInt on a Float param emits i32.trunc_f32_s", () => {
-    const result = compileSource("@let cast x:Float := { &@toInt x };");
+    const result = compileSource("\\\\ cast (Float)\n@let cast x := { &@toInt x };");
     expect(result.success).toBe(true);
     const uw = userWat(result.wat!)
     expect(uw).toContain("i32.trunc_f32_s");
@@ -1563,7 +1563,7 @@ test("Round 27: @toInt registered in registry as keyword stratum (D-D-5 migrated
 });
 
 test("Round 27: @toInt result type is i32 — can add with int param", () => {
-    const result = compileSource("@let roundAdd x:Float, y:Int := { (&@toInt x) + y };");
+    const result = compileSource("\\\\ roundAdd (Float, Int)\n@let roundAdd x, y := { (&@toInt x) + y };");
     expect(result.success).toBe(true);
     const uw = userWat(result.wat!)
     expect(uw).toContain("i32.trunc_f32_s");
@@ -1571,7 +1571,7 @@ test("Round 27: @toInt result type is i32 — can add with int param", () => {
 });
 
 test("Round 27: @toFloat and @toInt round-trip in a function", () => {
-    const result = compileSource("@let roundTrip x:Int := { &@toInt &@toFloat x };");
+    const result = compileSource("\\\\ roundTrip (Int)\n@let roundTrip x := { &@toInt &@toFloat x };");
     expect(result.success).toBe(true);
     const uw = userWat(result.wat!)
     expect(uw).toContain("f32.convert_i32_s");
@@ -1583,13 +1583,13 @@ test("Round 27: @toFloat and @toInt round-trip in a function", () => {
 // ============================================================================
 
 test("Round 28: Int + Float without cast is a type error", () => {
-    const result = compileSource("@let f a:Int, b:Float := { a + b };");
+    const result = compileSource("\\\\ f (Int, Float)\n@let f a, b := { a + b };");
     expect(result.success).toBe(false);
     expect(result.error).toMatch(/mismatch|Int|Float/i);
 });
 
 test("Round 28: Float + Float compiles successfully", () => {
-    const result = compileSource("@let f a:Float, b:Float := { a + b };");
+    const result = compileSource("\\\\ f (Float, Float)\n@let f a, b := { a + b };");
     expect(result.success).toBe(true);
     expect(result.wat).toContain("f32.add");
 });
@@ -1607,43 +1607,43 @@ test("Round 28: assignment to immutable @let is a type error", () => {
 });
 
 test("Round 28: wrong arg type in function call is a type error", () => {
-    const result = compileSource("@let double x:Int := { x + x }; @let run := { &double 3.14 };");
+    const result = compileSource("\\\\ double (Int)\n@let double x := { x + x }; @let run := { &double 3.14 };");
     expect(result.success).toBe(false);
     expect(result.error).toMatch(/mismatch|Int|Float/i);
 });
 
 test("Round 28: @toInt on a Float param returns Int — no type error", () => {
-    const result = compileSource("@let f x:Float := { &@toInt x };");
+    const result = compileSource("\\\\ f (Float)\n@let f x := { &@toInt x };");
     expect(result.success).toBe(true);
     expect(result.wat).toContain("i32.trunc_f32_s");
 });
 
 test("Round 28: @toInt on an Int param is a type error", () => {
-    const result = compileSource("@let f x:Int := { &@toInt x };");
+    const result = compileSource("\\\\ f (Int)\n@let f x := { &@toInt x };");
     expect(result.success).toBe(false);
     expect(result.error).toMatch(/mismatch|Float|Int/i);
 });
 
 test("Round 28: @toFloat on an Int param returns Float — no type error", () => {
-    const result = compileSource("@let f x:Int := { &@toFloat x };");
+    const result = compileSource("\\\\ f (Int)\n@let f x := { &@toFloat x };");
     expect(result.success).toBe(true);
     expect(result.wat).toContain("f32.convert_i32_s");
 });
 
 test("Round 28: @toFloat on a Float param is a type error", () => {
-    const result = compileSource("@let f x:Float := { &@toFloat x };");
+    const result = compileSource("\\\\ f (Float)\n@let f x := { &@toFloat x };");
     expect(result.success).toBe(false);
     expect(result.error).toMatch(/mismatch|Float|Int/i);
 });
 
 test("Round 28: well-typed function with @if compiles successfully", () => {
-    const result = compileSource("@let safeDivide x:Int, y:Int := { &@if y == 0, { &@return 0 }; x / y };");
+    const result = compileSource("\\\\ safeDivide (Int, Int)\n@let safeDivide x, y := { &@if y == 0, { &@return 0 }; x / y };");
     expect(result.success).toBe(true);
     expect(result.wat).toContain("i32.div_s");
 });
 
 test("Round 28: heterogeneous comparison types is a type error", () => {
-    const result = compileSource("@let f x:Int, y:Float := { x < y };");
+    const result = compileSource("\\\\ f (Int, Float)\n@let f x, y := { x < y };");
     expect(result.success).toBe(false);
     expect(result.error).toMatch(/mismatch|Int|Float/i);
 });
@@ -1655,7 +1655,7 @@ test("Round 28: heterogeneous comparison types is a type error", () => {
 // ============================================================================
 
 test("Round 34: single-step strata body still works (regression)", () => {
-    const result = compileSource("@let f a:Int, b:Int := { a + b };")
+    const result = compileSource("\\\\ f (Int, Int)\n@let f a, b := { a + b };")
     expect(result.success).toBe(true)
     expect(userWat(result.wat!)).toContain("i32.add")
 })
@@ -1676,7 +1676,8 @@ test("Round 34: '+' dispatches via on::lower handler (D-D-7a migrated)", () => {
 
 test("Round 35: unknown operator without registering strata causes elaboration error", () => {
     // Compiling '***' without loading the strata that defines it should fail.
-    const result = compileSource(`@let f a:Int, b:Int := { a *** b };`)
+    const result = compileSource(`\\\\ f (Int, Int)
+@let f a, b := { a *** b };`)
     expect(result.success).toBe(false)
 })
 
@@ -1685,7 +1686,8 @@ test("Round 35: unknown operator without registering strata causes elaboration e
 // ---------------------------------------------------------------------------
 
 test("Round 36: Float addition uses f32.add, not i32.add", () => {
-    const result = compileSource(`@let add a:Float, b:Float := { a + b };`)
+    const result = compileSource(`\\\\ add (Float, Float)
+@let add a, b := { a + b };`)
     expect(result.success).toBe(true)
     const uw = userWat(result.wat!)
     expect(uw).toContain('f32.add')
@@ -1693,7 +1695,8 @@ test("Round 36: Float addition uses f32.add, not i32.add", () => {
 })
 
 test("Round 36: Int addition uses i32.add, not f32.add (regression)", () => {
-    const result = compileSource(`@let add a:Int, b:Int := { a + b };`)
+    const result = compileSource(`\\\\ add (Int, Int)
+@let add a, b := { a + b };`)
     expect(result.success).toBe(true)
     const uw = userWat(result.wat!)
     expect(uw).toContain('i32.add')
@@ -1701,13 +1704,15 @@ test("Round 36: Int addition uses i32.add, not f32.add (regression)", () => {
 })
 
 test("Round 36: Float comparison uses f32.lt", () => {
-    const result = compileSource(`@let cmp a:Float, b:Float := { a < b };`)
+    const result = compileSource(`\\\\ cmp (Float, Float)
+@let cmp a, b := { a < b };`)
     expect(result.success).toBe(true)
     expect(userWat(result.wat!)).toContain('f32.lt')
 })
 
 test("Round 36: Float division uses f32.div", () => {
-    const result = compileSource(`@let div a:Float, b:Float := { a / b };`)
+    const result = compileSource(`\\\\ div (Float, Float)
+@let div a, b := { a / b };`)
     expect(result.success).toBe(true)
     expect(userWat(result.wat!)).toContain('f32.div')
 })
@@ -1723,7 +1728,8 @@ test("Round 36: Float division uses f32.div", () => {
 test("Round 37: || produces short-circuit WAT driven by WASM::control_or intrinsic", () => {
     // || must be lowered via the strata registry (WASM::control_or → IRIf),
     // not via a hardcoded symbol check. Verify the emitted structure.
-    const result = compileSource(`@let f a:Int, b:Int := { a || b };`)
+    const result = compileSource(`\\\\ f (Int, Int)
+@let f a, b := { a || b };`)
     expect(result.success).toBe(true)
     const uw = userWat(result.wat!)
     // Short-circuit OR emits as (if (result i32) cond (then i32.const 1) (else rhs)).
@@ -1741,7 +1747,9 @@ test("Round 37: @export emits explicit WAT export for a global", () => {
 })
 
 test("Round 37: @export on a function emits explicit WAT export for the function", () => {
-    const result = compileSource(`@let add a:Int, b:Int := { a + b };\n@export add;`)
+    const result = compileSource(`\\\\ add (Int, Int)
+@let add a, b := { a + b };
+@export add;`)
     expect(result.success).toBe(true)
     expect(result.wat).toContain('(export "add" (func $add))')
 })
@@ -1920,7 +1928,7 @@ test("Phase A i64: @toInt64 emits i64.extend_i32_s and the call passes an i64 ar
 })
 
 test("Phase A i64: Int64 parameter on a Silicon function compiles", () => {
-    const result = compileSource("@let identity64 x:Int64 := { x };")
+    const result = compileSource("\\\\ identity64 (Int64)\n@let identity64 x := { x };")
     expect(result.success).toBe(true)
     expect(result.wat).toContain('(param $x i64)')
     expect(result.wat).toContain('(result i64)')
@@ -1928,8 +1936,8 @@ test("Phase A i64: Int64 parameter on a Silicon function compiles", () => {
 
 test("Phase A i64: @toInt overload on Int64 emits i32.wrap_i64", () => {
     const result = compileSource(
-        "@let extend x:Int := { &@toInt64 x };" +
-        "@let narrow x:Int64 := { &@toInt x };"
+        "\\\\ extend (Int)\n@let extend x := { &@toInt64 x };" +
+        "\\\\ narrow (Int64)\n@let narrow x := { &@toInt x };"
     )
     expect(result.success).toBe(true)
     expect(result.wat).toContain('i64.extend_i32_s')
@@ -1938,7 +1946,7 @@ test("Phase A i64: @toInt overload on Int64 emits i32.wrap_i64", () => {
 
 test("Phase A i64: passing an Int where Int64 is expected is a type error", () => {
     const result = compileSource(
-        "@let take64 x:Int64 := { x };" +
+        "\\\\ take64 (Int64)\n@let take64 x := { x };" +
         "@let run := { &take64 5 };"
     )
     expect(result.success).toBe(false)
@@ -1947,7 +1955,7 @@ test("Phase A i64: passing an Int where Int64 is expected is a type error", () =
 
 test("Phase A i64: Int32 is recognised as a type name (alias for Int on wasm32)", () => {
     // Int32 should resolve to the same type as Int on the current target.
-    const result = compileSource("@let id32 x:Int32 := { x };")
+    const result = compileSource("\\\\ id32 (Int32)\n@let id32 x := { x };")
     expect(result.success).toBe(true)
     expect(result.wat).toContain('(param $x i32)')
 })
@@ -1956,7 +1964,7 @@ test("Phase A i64: @toInt64 result type is Int64 — propagates to extern arg po
     // The @toInt64 cast must yield Int64 so the extern call typechecks.
     const result = compileSource(
         "@extern { \\\\ wants64 (Int64) -> Int64 }" +
-        "@let run x:Int := { &wants64 (&@toInt64 x) };"
+        "\\\\ run (Int)\n@let run x := { &wants64 (&@toInt64 x) };"
     )
     expect(result.success).toBe(true)
     expect(result.wat).toContain('i64.extend_i32_s')
@@ -1964,7 +1972,7 @@ test("Phase A i64: @toInt64 result type is Int64 — propagates to extern arg po
 
 test("Phase A i64: i64 escape hatch (lowercase) parses as Int64", () => {
     // The :i64 / :i32 / :f32 surface forms are documented escape hatches.
-    const result = compileSource("@let id x:i64 := { x };")
+    const result = compileSource("\\\\ id (i64)\n@let id x := { x };")
     expect(result.success).toBe(true)
     expect(result.wat).toContain('(param $x i64)')
 })
@@ -1975,7 +1983,7 @@ test("Phase A i64: i64 escape hatch (lowercase) parses as Int64", () => {
 // ============================================================================
 
 test("Phase C i64: Int64 + Int64 emits i64.add", () => {
-    const result = compileSource("@let add64 x:Int64, y:Int64 := { x + y };")
+    const result = compileSource("\\\\ add64 (Int64, Int64)\n@let add64 x, y := { x + y };")
     expect(result.success).toBe(true)
     const uw = userWat(result.wat!)
     expect(uw).toContain('i64.add')
@@ -1983,7 +1991,7 @@ test("Phase C i64: Int64 + Int64 emits i64.add", () => {
 })
 
 test("Phase C i64: Int64 < Int64 emits i64.lt_s and returns Bool", () => {
-    const result = compileSource("@let cmp64 x:Int64, y:Int64 := { x < y };")
+    const result = compileSource("\\\\ cmp64 (Int64, Int64)\n@let cmp64 x, y := { x < y };")
     expect(result.success).toBe(true)
     expect(result.wat).toContain('i64.lt_s')
     // Comparison result is i32 (Bool) — the function's result reflects that.
@@ -1992,7 +2000,7 @@ test("Phase C i64: Int64 < Int64 emits i64.lt_s and returns Bool", () => {
 
 test("Phase C i64: full set of arithmetic ops dispatches to i64 variants", () => {
     const result = compileSource(
-        "@let arith x:Int64, y:Int64 := { ((x + y) - (x * y)) / (x % y) };"
+        "\\\\ arith (Int64, Int64)\n@let arith x, y := { ((x + y) - (x * y)) / (x % y) };"
     )
     expect(result.success).toBe(true)
     expect(result.wat).toContain('i64.add')
@@ -2003,7 +2011,7 @@ test("Phase C i64: full set of arithmetic ops dispatches to i64 variants", () =>
 })
 
 test("Phase C i64: @toInt64 cast + i64 arithmetic compose", () => {
-    const result = compileSource("@let chain x:Int := { (&@toInt64 x) + (&@toInt64 1) };")
+    const result = compileSource("\\\\ chain (Int)\n@let chain x := { (&@toInt64 x) + (&@toInt64 1) };")
     expect(result.success).toBe(true)
     expect(result.wat).toContain('i64.extend_i32_s')
     expect(result.wat).toContain('i64.add')
@@ -2011,11 +2019,11 @@ test("Phase C i64: @toInt64 cast + i64 arithmetic compose", () => {
 
 test("Phase C i64: comparison ops (==, !=, >, <=, >=) all dispatch to i64", () => {
     const result = compileSource(
-        "@let eq x:Int64, y:Int64 := { x == y };" +
-        "@let ne x:Int64, y:Int64 := { x != y };" +
-        "@let gt x:Int64, y:Int64 := { x > y };" +
-        "@let le x:Int64, y:Int64 := { x <= y };" +
-        "@let ge x:Int64, y:Int64 := { x >= y };"
+        "\\\\ eq (Int64, Int64)\n@let eq x, y := { x == y };" +
+        "\\\\ ne (Int64, Int64)\n@let ne x, y := { x != y };" +
+        "\\\\ gt (Int64, Int64)\n@let gt x, y := { x > y };" +
+        "\\\\ le (Int64, Int64)\n@let le x, y := { x <= y };" +
+        "\\\\ ge (Int64, Int64)\n@let ge x, y := { x >= y };"
     )
     expect(result.success).toBe(true)
     expect(result.wat).toContain('i64.eq')
@@ -2026,7 +2034,7 @@ test("Phase C i64: comparison ops (==, !=, >, <=, >=) all dispatch to i64", () =
 })
 
 test("Phase C i64: i32 arithmetic still dispatches to i32 (no regression)", () => {
-    const result = compileSource("@let add x:Int, y:Int := { x + y };")
+    const result = compileSource("\\\\ add (Int, Int)\n@let add x, y := { x + y };")
     expect(result.success).toBe(true)
     const uw = userWat(result.wat!)
     expect(uw).toContain('i32.add')
