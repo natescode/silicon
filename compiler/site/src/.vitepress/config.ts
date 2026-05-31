@@ -5,7 +5,18 @@
 // search, supports the URL versioning we'll need for v1.x docs (the
 // /v1.0/ vs /latest/ pattern), deploys to GitHub Pages out of the box.
 
+import { readFileSync } from 'node:fs'
+import { dirname, resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { defineConfig } from 'vitepress'
+
+const __dirname = dirname(fileURLToPath(import.meta.url))
+const siliconGrammar = JSON.parse(
+    readFileSync(
+        resolve(__dirname, '../../../../silicon-vscode/syntaxes/silicon.tmLanguage.json'),
+        'utf8'
+    )
+)
 
 export default defineConfig({
     title: 'Silicon',
@@ -14,6 +25,10 @@ export default defineConfig({
     lang: 'en-US',
     cleanUrls: true,
     lastUpdated: true,
+
+    markdown: {
+        languages: [{ ...siliconGrammar, name: 'silicon', aliases: ['si'] }],
+    },
     // Synced docs (from repo docs/) carry relative links that point at
     // sibling repo files (ADRs, .wit, user-stories HTML) which don't
     // exist on the site.  We warn during sync and ignore at build.
