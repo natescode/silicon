@@ -7,7 +7,7 @@
  */
 
 import { describe, test, expect } from 'bun:test'
-import { findCc, requireCc, hasQbeMain, injectMainWrapper, defaultExePath, CC_INSTALL_HINT } from './linker'
+import { findCc, requireCc, defaultExePath, CC_INSTALL_HINT } from './linker'
 import { findQbe, invokeQbe, hostQbeArch } from './backend'
 import * as path from 'node:path'
 import * as os   from 'node:os'
@@ -54,54 +54,8 @@ describe('requireCc', () => {
     })
 })
 
-// ---------------------------------------------------------------------------
-// hasQbeMain
-// ---------------------------------------------------------------------------
-
-describe('hasQbeMain', () => {
-    test('returns true when $main is defined', () => {
-        expect(hasQbeMain('function w $main() {\n@start\n\tret 0\n}')).toBe(true)
-    })
-
-    test('returns false when no $main is present', () => {
-        expect(hasQbeMain('function w $add(w %x, w %y) {\n@start\n\tret 0\n}')).toBe(false)
-    })
-
-    test('returns false for empty IR', () => {
-        expect(hasQbeMain('')).toBe(false)
-    })
-})
-
-// ---------------------------------------------------------------------------
-// injectMainWrapper
-// ---------------------------------------------------------------------------
-
-describe('injectMainWrapper', () => {
-    test('is a no-op when $main already exists', () => {
-        const ir = 'function w $main() {\n@start\n\tret 42\n}'
-        expect(injectMainWrapper(ir)).toBe(ir)
-    })
-
-    test('appends a main wrapper when no $main exists', () => {
-        const ir = 'function w $add(w %x, w %y) {\n@start\n\tret 0\n}'
-        const out = injectMainWrapper(ir)
-        expect(out).toContain('$main')
-        expect(out).toContain('ret 0')
-    })
-
-    test('injected main calls $__sgl_entry when present', () => {
-        const ir = 'function $__sgl_entry() {\n@start\n\tret\n}'
-        const out = injectMainWrapper(ir)
-        expect(out).toContain('call $__sgl_entry')
-    })
-
-    test('injected main is minimal when no entry function exists', () => {
-        const ir = 'function w $helper(w %x) {\n@start\n\tret %x\n}'
-        const out = injectMainWrapper(ir)
-        expect(out).toContain('$main')
-        expect(out).not.toContain('$__sgl_entry')
-    })
-})
+// (hasQbeMain / injectMainWrapper are pure compiler transforms — tested in
+//  the compiler package at src/codegen/qbe/wrapper.test.ts.)
 
 // ---------------------------------------------------------------------------
 // defaultExePath
@@ -173,13 +127,11 @@ describe('link — integration', () => {
             return
         }
 
-        const { link, injectMainWrapper } = await import('./linker')
-        const { compileToTyped } = await import('../../../tests/properties/_compile')
-        const { lowerToQbe }     = await import('./lower')
+        const { link } = await import('./linker')
+        const { compileToQbe } = await import('@silicon/compiler/native')
 
         const src = '@fn main:Int := 0 - 1;'   // returns -1 → exit code 255 (wraps on byte)
-        const { typedAST, registry, functions } = compileToTyped(src)
-        const qbeIr  = injectMainWrapper(lowerToQbe(typedAST, registry, functions))
+        const { qbeIr } = compileToQbe(src)
         const asmOut = invokeQbe(qbeBin, qbeIr, hostQbeArch())
 
         const tmpDir  = await fsp.mkdtemp(path.join(os.tmpdir(), 'sgl-roundtrip-'))

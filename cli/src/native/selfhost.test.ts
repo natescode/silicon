@@ -20,10 +20,9 @@ import * as fs   from 'node:fs'
 import * as fsp  from 'node:fs/promises'
 import { spawnSync } from 'node:child_process'
 
-import { findQbe, invokeQbe, hostQbeArch } from '../codegen/qbe/backend'
-import { findCc, link, injectMainWrapper }  from '../codegen/qbe/linker'
-import { lowerToQbe }                       from '../codegen/qbe/lower'
-import { compileToTyped }                   from '../../tests/properties/_compile'
+import { findQbe, invokeQbe, hostQbeArch } from './backend'
+import { findCc, link }                    from './linker'
+import { compileToQbe }                     from '@silicon/compiler/native'
 
 // ---------------------------------------------------------------------------
 // Toolchain guard
@@ -33,7 +32,8 @@ const qbeBin = findQbe()
 const ccBin  = findCc()
 const SKIP   = !qbeBin || !ccBin
 
-const EXAMPLES_DIR = path.join(import.meta.dir, 'examples')
+// Example suite lives in the compiler package; reference it across the workspace.
+const EXAMPLES_DIR = path.join(import.meta.dir, '..', '..', '..', 'compiler', 'src', 'e2e', 'examples')
 
 // ---------------------------------------------------------------------------
 // Programs expected to compile and run cleanly through the QBE backend.
@@ -101,8 +101,8 @@ const COMPILE_OK: string[] = [
 
 async function compileExample(name: string, tmpDir: string): Promise<number> {
     const src = await fsp.readFile(path.join(EXAMPLES_DIR, name), 'utf-8')
-    const { typedAST, registry, functions } = compileToTyped(src)
-    const qbeIr  = injectMainWrapper(lowerToQbe(typedAST, registry, functions))
+    const { qbeIr, diagnostics } = compileToQbe(src)
+    if (diagnostics.length) throw new Error(diagnostics.map(d => d.message).join('\n'))
     const asmOut = invokeQbe(qbeBin!, qbeIr, hostQbeArch())
     const stem   = path.basename(name, '.si')
     const asmPath = path.join(tmpDir, `${stem}.s`)

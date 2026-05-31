@@ -12,7 +12,7 @@ import {
     type ParseOptions, type ElabOptions, type CheckOptions, type Diagnostic,
 } from '../../caas/index'
 import { lowerToQbe } from './lower'
-import { injectMainWrapper } from './linker'
+import { injectMainWrapper } from './wrapper'
 
 export interface QbeResult {
     readonly qbeIr: string

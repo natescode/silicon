@@ -27,12 +27,11 @@ import {
     renderJson, renderPretty, formatProgram,
     type LowerTarget, type Diagnostic,
 } from '@silicon/compiler'
-// Native backend: one-call front-end+QBE IR (compileToQbe) + the cc/qbe drivers.
-import {
-    compileToQbe, defaultExePath,
-    findQbe, invokeQbe, hostQbeArch, downloadAndBuildQbe, QBE_INSTALL_HINT,
-    findCc, link, CC_INSTALL_HINT,
-} from '@silicon/compiler/native'
+// Front-end + QBE IR (pure) comes from the compiler; the toolchain drivers
+// that shell out to qbe / cc are CLI-local host orchestration.
+import { compileToQbe } from '@silicon/compiler/native'
+import { findQbe, invokeQbe, hostQbeArch, downloadAndBuildQbe, QBE_INSTALL_HINT } from './native/backend'
+import { findCc, link, defaultExePath, CC_INSTALL_HINT } from './native/linker'
 
 // ---------------------------------------------------------------------------
 // Help text

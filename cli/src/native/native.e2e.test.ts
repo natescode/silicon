@@ -17,9 +17,8 @@ import * as fsp  from 'node:fs/promises'
 import { spawnSync } from 'node:child_process'
 
 import { findQbe, invokeQbe, hostQbeArch } from './backend'
-import { findCc, link, injectMainWrapper }  from './linker'
-import { lowerToQbe }                       from './lower'
-import { compileToTyped }                   from '../../../tests/properties/_compile'
+import { findCc, link }                    from './linker'
+import { compileToQbe }                     from '@silicon/compiler/native'
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -35,8 +34,8 @@ function skip(msg = '(skipped: qbe or cc not on PATH)') {
 
 /** Compile Silicon source all the way to a native executable in tmpDir. */
 async function compileNative(src: string, tmpDir: string, name = 'prog'): Promise<string> {
-    const { typedAST, registry, functions } = compileToTyped(src)
-    const qbeIr  = injectMainWrapper(lowerToQbe(typedAST, registry, functions))
+    const { qbeIr, diagnostics } = compileToQbe(src)
+    if (diagnostics.length) throw new Error(diagnostics.map(d => d.message).join('\n'))
     const asmOut = invokeQbe(qbeBin!, qbeIr, hostQbeArch())
     const asmPath = path.join(tmpDir, `${name}.s`)
     const exePath = path.join(tmpDir, name)
@@ -279,8 +278,7 @@ describe('native — platform', () => {
 
     test('QBE IR contains expected type for Int return', () => {
         if (SKIP) { skip(); return }
-        const { typedAST, registry, functions } = compileToTyped('@fn main:Int := 42;')
-        const ir = lowerToQbe(typedAST, registry, functions)
+        const { qbeIr: ir } = compileToQbe('@fn main:Int := 42;')
         expect(ir).toContain('function w $main()')
         expect(ir).toContain('ret')
     })

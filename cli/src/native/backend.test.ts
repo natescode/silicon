@@ -141,13 +141,8 @@ describe('invokeQbe', () => {
             console.log('  (skipped: qbe not on PATH)')
             return
         }
-        const { compileToTyped } = await import('../../../tests/properties/_compile')
-        const { lowerToQbe }     = await import('./lower')
-
-        const { typedAST, registry, functions } = compileToTyped(
-            '@fn add:Int x:Int, y:Int := x + y;'
-        )
-        const qbeIr = lowerToQbe(typedAST, registry, functions)
+        const { compileToQbe } = await import('@silicon/compiler/native')
+        const { qbeIr } = compileToQbe('@fn add:Int x:Int, y:Int := x + y;')
         const asm   = invokeQbe(qbeBin, qbeIr, hostQbeArch())
 
         expect(asm).toContain('add')   // the function body has an add instruction
