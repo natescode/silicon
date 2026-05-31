@@ -1,0 +1,1298 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sigil Playground</title>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg:        #0d1117;
+  --surface:   #161b22;
+  --surface2:  #21262d;
+  --border:    #30363d;
+  --text:      #e6edf3;
+  --muted:     #8b949e;
+  --accent:    #a371f7;
+  --accent2:   #7c3aed;
+  --blue:      #58a6ff;
+  --green:     #3fb950;
+  --red:       #f85149;
+  --yellow:    #d29922;
+  --mono:      'JetBrains Mono', 'Fira Code', 'Cascadia Code', ui-monospace, monospace;
+  --error-bg:    #2d1117;
+  --wat-kw:      #ff7b72;
+  --wat-fn:      #58a6ff;
+  --wat-num:     #79c0ff;
+  --wat-comment: #484f58;
+}
+
+html, body { height: 100%; background: var(--bg); color: var(--text); font-family: system-ui, sans-serif; font-size: 14px; }
+
+/* ── Header ────────────────────────────────────────────────────────────── */
+header {
+  display: flex; align-items: center; gap: 12px;
+  padding: 0 16px; height: 48px;
+  background: var(--surface); border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.logo { font-size: 1rem; font-weight: 700; color: var(--accent); letter-spacing: 0.04em; user-select: none; white-space: nowrap; }
+.logo span { color: var(--muted); font-weight: 400; font-size: 0.85rem; margin-left: 6px; }
+
+.header-actions { display: flex; gap: 8px; margin-left: auto; align-items: center; }
+
+#example-select, #theme-select {
+  background: var(--surface2); color: var(--text);
+  border: 1px solid var(--border); border-radius: 6px;
+  padding: 5px 10px; font-size: 0.82rem;
+  cursor: pointer; outline: none;
+}
+#example-select { max-width: 200px; }
+#theme-select   { max-width: 160px; }
+#example-select:hover, #theme-select:hover { border-color: var(--accent); }
+#example-select option, #theme-select option { background: var(--surface2); }
+
+/* ── Platform feature selector ──────────────────────────────────── */
+.platform-selector {
+  display: flex; align-items: center; gap: 6px;
+  padding: 0 10px; border-left: 1px solid var(--border);
+  font-size: 0.78rem;
+}
+.platform-label {
+  color: var(--muted); white-space: nowrap; user-select: none;
+  font-size: 0.75rem;
+}
+.platform-name {
+  color: var(--yellow); font-family: var(--mono); font-weight: 600;
+  font-size: 0.78rem; margin-right: 4px;
+}
+.feature-label {
+  display: flex; align-items: center; gap: 3px;
+  color: var(--muted); cursor: pointer; user-select: none;
+  padding: 3px 7px; border-radius: 4px;
+  border: 1px solid transparent;
+  font-size: 0.75rem; white-space: nowrap;
+  transition: border-color 0.12s, color 0.12s;
+}
+.feature-label:hover { border-color: var(--border); color: var(--text); }
+.feature-label input { display: none; }
+.feature-label.active { border-color: var(--accent); color: var(--accent); }
+
+.run-main-label {
+  display: flex; align-items: center; gap: 5px;
+  font-size: 0.82rem; color: var(--muted); cursor: pointer;
+  white-space: nowrap; user-select: none;
+}
+.run-main-label:hover { color: var(--text); }
+#run-main-checkbox {
+  accent-color: var(--accent); width: 13px; height: 13px; cursor: pointer;
+}
+
+button {
+  cursor: pointer; border: none; border-radius: 6px; font-size: 0.82rem; font-weight: 500;
+  padding: 6px 14px; transition: opacity 0.15s, background 0.15s;
+}
+button:hover { opacity: 0.85; }
+button:active { opacity: 0.7; }
+button:disabled { opacity: 0.4; cursor: not-allowed; }
+
+#btn-compile {
+  background: var(--accent); color: #fff; padding: 7px 18px; font-size: 0.88rem;
+}
+#btn-clear-console {
+  background: var(--surface2); color: var(--muted); border: 1px solid var(--border);
+}
+
+.status-dot {
+  width: 8px; height: 8px; border-radius: 50%; background: var(--border); flex-shrink: 0;
+}
+.status-dot.ok  { background: var(--green); }
+.status-dot.err { background: var(--red); }
+.status-dot.busy { background: var(--yellow); animation: pulse 1s infinite; }
+
+@keyframes pulse { 0%,100% { opacity: 1 } 50% { opacity: 0.3 } }
+
+/* ── Main layout ───────────────────────────────────────────────────────── */
+.layout {
+  display: flex; flex-direction: row;
+  height: calc(100vh - 48px);
+}
+
+/* Main content area (editors + bottom) */
+.main-area {
+  display: flex; flex-direction: column;
+  flex: 1; min-width: 0;
+}
+
+/* Top half: editor panes */
+.editors {
+  display: grid; grid-template-columns: 1fr 1fr;
+  flex: 1 1 0; min-height: 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.pane {
+  display: flex; flex-direction: column; min-height: 0;
+  border-right: 1px solid var(--border);
+}
+.pane:last-child { border-right: none; }
+
+.pane-header {
+  display: flex; align-items: center; gap: 8px;
+  padding: 6px 14px; background: var(--surface);
+  border-bottom: 1px solid var(--border); flex-shrink: 0;
+  font-size: 0.75rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em;
+}
+.pane-header .lang-badge {
+  background: var(--accent2); color: #fff; padding: 1px 7px; border-radius: 3px;
+  font-size: 0.68rem; letter-spacing: 0.08em; text-transform: uppercase;
+}
+
+/* ── CodeMirror editor container ─────────────────────────────────────── */
+#editor {
+  flex: 1; min-height: 0; overflow: hidden;
+  display: flex; flex-direction: column;
+}
+#editor .cm-editor {
+  flex: 1; min-height: 0;
+  font-family: var(--mono); font-size: 0.85rem;
+}
+#editor .cm-scroller {
+  flex: 1 !important; overflow: auto !important; min-height: 0 !important;
+}
+
+#wat-output {
+  flex: 1; overflow: auto; background: var(--bg);
+  font-family: var(--mono); font-size: 0.82rem; line-height: 1.6;
+  padding: 14px 16px; color: var(--muted); white-space: pre;
+}
+#wat-output .kw      { color: var(--wat-kw); }
+#wat-output .fn      { color: var(--wat-fn); }
+#wat-output .num     { color: var(--wat-num); }
+#wat-output .comment { color: var(--wat-comment); }
+
+/* ── Bottom section ─────────────────────────────────────────────────────── */
+.bottom {
+  display: flex; flex-direction: column; flex-shrink: 0;
+  max-height: 45vh; min-height: 160px;
+}
+
+/* Exports panel */
+#exports-panel {
+  background: var(--surface); border-bottom: 1px solid var(--border);
+  padding: 10px 16px; overflow-y: auto; max-height: 180px;
+}
+#exports-panel:empty { display: none; }
+
+.exports-label {
+  font-size: 0.72rem; color: var(--muted); text-transform: uppercase;
+  letter-spacing: 0.06em; margin-bottom: 8px;
+}
+
+.export-row {
+  display: flex; align-items: center; flex-wrap: wrap; gap: 8px;
+  padding: 6px 0; border-bottom: 1px solid var(--border);
+}
+.export-row:last-child { border-bottom: none; }
+
+.fn-sig {
+  font-family: var(--mono); font-size: 0.82rem; color: var(--blue);
+  min-width: 200px;
+}
+
+.param-wrap { display: flex; gap: 6px; flex-wrap: wrap; }
+
+.param-field {
+  display: flex; flex-direction: column; gap: 2px;
+}
+.param-label {
+  font-size: 0.68rem; color: var(--muted); font-family: var(--mono);
+}
+.param-field input {
+  background: var(--bg); color: var(--text); border: 1px solid var(--border);
+  border-radius: 4px; padding: 4px 8px; font-family: var(--mono); font-size: 0.82rem;
+  width: 90px; outline: none;
+}
+.param-field input:focus { border-color: var(--accent); }
+
+.btn-call {
+  background: var(--surface2); color: var(--green);
+  border: 1px solid var(--border); padding: 5px 12px; font-size: 0.8rem;
+}
+.btn-call:hover { background: var(--green); color: #000; border-color: var(--green); }
+
+.call-result {
+  font-family: var(--mono); font-size: 0.82rem; color: var(--green); margin-left: 4px;
+}
+
+/* Error banner */
+#error-banner {
+  background: var(--error-bg); border: 1px solid var(--red); border-radius: 6px;
+  padding: 10px 14px; margin: 8px 16px 0;
+  font-family: var(--mono); font-size: 0.8rem; color: var(--red);
+  white-space: pre-wrap; display: none;
+}
+
+/* Console */
+.console-header {
+  display: flex; align-items: center; gap: 8px;
+  padding: 6px 14px; background: var(--surface);
+  border-top: 1px solid var(--border); border-bottom: 1px solid var(--border);
+  font-size: 0.72rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em;
+}
+
+#console {
+  flex: 1; overflow-y: auto; background: var(--bg);
+  font-family: var(--mono); font-size: 0.82rem; line-height: 1.7;
+  padding: 10px 16px; color: var(--text);
+}
+
+.console-line { display: flex; gap: 8px; }
+.console-line .prefix { color: var(--accent); user-select: none; }
+.console-line .msg    { color: var(--text); }
+.console-line.print .prefix { color: var(--muted); }
+.console-line.print .msg    { color: var(--muted); }
+.console-line.err   .msg    { color: var(--red); }
+.console-line.result .msg   { color: var(--green); }
+
+.console-empty { color: var(--border); font-style: italic; padding: 4px 0; }
+
+/* ── Render panel ──────────────────────────────────────────────────────── */
+.render-panel {
+  display: flex; flex-direction: row;
+  flex-shrink: 0; width: 28px;
+  border-left: 1px solid var(--border);
+  background: var(--surface);
+  overflow: hidden;
+  transition: width 0.2s ease;
+}
+.render-panel.open { width: 360px; }
+
+.panel-toggle {
+  flex-shrink: 0; width: 28px; height: 100%;
+  border: none; border-right: 1px solid var(--border);
+  background: transparent; color: var(--muted);
+  cursor: pointer; font-size: 0.75rem; padding: 0;
+  display: flex; align-items: center; justify-content: center;
+  border-radius: 0;
+}
+.panel-toggle:hover { background: var(--surface2); color: var(--text); opacity: 1; }
+
+.panel-body {
+  flex: 1; display: flex; flex-direction: column; min-width: 0; overflow: hidden;
+}
+
+.panel-header-bar {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 6px 10px; background: var(--surface);
+  border-bottom: 1px solid var(--border); flex-shrink: 0;
+}
+.panel-title {
+  font-size: 0.72rem; color: var(--muted);
+  text-transform: uppercase; letter-spacing: 0.06em;
+}
+.btn-panel-clear {
+  background: var(--surface2); color: var(--muted);
+  border: 1px solid var(--border); padding: 2px 8px; font-size: 0.72rem;
+  border-radius: 4px;
+}
+.btn-panel-clear:hover { color: var(--red); border-color: var(--red); }
+
+.panel-content-area {
+  flex: 1; overflow-y: auto; display: flex; flex-direction: column;
+}
+
+#render-canvas {
+  display: block; flex-shrink: 0;
+  width: 332px; height: 332px;
+  background: #0d1117;
+}
+
+#html-out {
+  flex: 1; overflow-y: auto; min-height: 120px;
+}
+#html-out:empty { display: none; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">⬡ Sigil <span>Playground</span></div>
+  <select id="example-select">
+    <option value="empty">Empty</option>
+    <option value="hello_world">Hello World</option>
+    <option value="hypotenuse">Hypotenuse</option>
+    <option value="fibonacci">Fibonacci</option>
+    <option value="factorial">Factorial</option>
+    <option value="safe_divide">Safe Divide</option>
+    <option value="countdown">Countdown</option>
+    <option value="color_match">Color Match</option>
+    <option value="bitwise">Bitwise Ops</option>
+    <option value="math_sampler">Math Sampler</option>
+    <option value="simple_main">Simple Main</option>
+    <option value="html_todo">HTML TODO</option>
+    <option value="snake">Snake</option>
+  </select>
+  <select id="theme-select">
+    <option value="sigil-dark" selected>Sigil Dark</option>
+    <option value="vscode-dark">VSCode Dark</option>
+    <option value="github-light">GitHub Light</option>
+  </select>
+
+  <div class="platform-selector">
+    <span class="platform-label">Platform:</span>
+    <span class="platform-name">web</span>
+    <label class="feature-label active" id="feature-canvas-label" title="2D canvas drawing APIs">
+      <input type="checkbox" class="feature-cb" value="canvas" checked> canvas
+    </label>
+    <label class="feature-label active" id="feature-game-label" title="requestAnimationFrame game loop — requires exported tick()">
+      <input type="checkbox" class="feature-cb" value="game" checked> game
+    </label>
+    <label class="feature-label active" id="feature-dom-label" title="HTML output APIs (set_html, clear_html)">
+      <input type="checkbox" class="feature-cb" value="dom" checked> dom
+    </label>
+  </div>
+
+  <div class="header-actions">
+    <label class="run-main-label" title="Automatically call exported main() after each compile">
+      <input type="checkbox" id="run-main-checkbox">
+      run main
+    </label>
+    <div class="status-dot" id="status-dot"></div>
+    <button id="btn-clear-console">Clear Console</button>
+    <button id="btn-compile">▶ Compile</button>
+  </div>
+</header>
+
+<div class="layout">
+
+  <div class="main-area">
+    <div class="editors">
+      <div class="pane">
+        <div class="pane-header"><span class="lang-badge">silicon</span> Source</div>
+        <div id="editor"></div>
+      </div>
+      <div class="pane">
+        <div class="pane-header"><span class="lang-badge">wat</span> Output</div>
+        <div id="wat-output"><span style="color:var(--border);font-style:italic">Click ▶ Compile to see output</span></div>
+      </div>
+    </div>
+
+    <div class="bottom">
+      <div id="error-banner"></div>
+      <div id="exports-panel"></div>
+
+      <div class="console-header">
+        Console
+      </div>
+      <div id="console">
+        <div class="console-empty">No output yet. Compile and call an exported function.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Render panel (collapsed by default, opens for canvas/HTML output) -->
+  <div class="render-panel" id="render-panel">
+    <button class="panel-toggle" id="panel-toggle" title="Toggle render panel">▷</button>
+    <div class="panel-body">
+      <div class="panel-header-bar">
+        <span class="panel-title">Render</span>
+        <button class="btn-panel-clear" id="btn-panel-clear">Clear</button>
+      </div>
+      <div class="panel-content-area">
+        <canvas id="render-canvas" width="332" height="332"></canvas>
+        <div id="html-out"></div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script src="/web-env.js"></script>
+<script type="module">
+import {
+    EditorView, keymap, lineNumbers,
+    highlightActiveLine, highlightActiveLineGutter,
+} from 'https://esm.sh/@codemirror/view@6'
+import { EditorState, Compartment } from 'https://esm.sh/@codemirror/state@6'
+import {
+    defaultKeymap, history, historyKeymap, indentWithTab,
+} from 'https://esm.sh/@codemirror/commands@6'
+import {
+    StreamLanguage, syntaxHighlighting, HighlightStyle, bracketMatching,
+} from 'https://esm.sh/@codemirror/language@6'
+import { tags } from 'https://esm.sh/@lezer/highlight@1'
+
+// ── Silicon language (theme-independent tokenizer) ────────────────────────
+
+const silicon = StreamLanguage.define({
+    name: 'silicon',
+    tokenTable: {
+        keyword:  tags.keyword,
+        typeName: tags.typeName,
+        string:   tags.string,
+        number:   tags.number,
+        comment:  tags.lineComment,
+        fn:       tags.function(tags.name),
+        operator: tags.operator,
+    },
+    token(stream) {
+        if (stream.eatSpace()) return null
+
+        // Line comment
+        if (stream.peek() === '#') { stream.skipToEnd(); return 'comment' }
+
+        // String literal: 'single-quoted'
+        if (stream.peek() === "'") {
+            stream.next()
+            while (!stream.eol()) { if (stream.next() === "'") break }
+            return 'string'
+        }
+
+        // @ keywords  (@let, @fn, @export, @local, @extern, @match, ...)
+        if (stream.peek() === '@') {
+            stream.next()
+            stream.match(/^\w+/)
+            return 'keyword'
+        }
+
+        // & function / namespace call  (&web::foo, &bar)
+        if (stream.peek() === '&') {
+            stream.next()
+            stream.match(/^\w+(?:::\w+)*/)
+            return 'fn'
+        }
+
+        // Float before int
+        if (stream.match(/^\d+\.\d*/)) return 'number'
+        if (stream.match(/^\d+/))      return 'number'
+
+        // Type names
+        if (stream.match(/^(?:Int|Float|Bool|String)\b/)) return 'typeName'
+
+        // Identifiers (plain names — inherit default text color)
+        if (stream.match(/^[a-zA-Z_]\w*/)) return null
+
+        // Multi-char operators
+        if (stream.match(/^(?::=|\+\+|->|=>|::)/)) return 'operator'
+
+        // Single-char operators / punctuation
+        if (stream.match(/^[+\-*\/|<>=!,;:.()[\]{}]/)) return 'operator'
+
+        stream.next()
+        return null
+    },
+    languageData: { commentTokens: { line: '#' } },
+})
+
+// ── Themes ────────────────────────────────────────────────────────────────
+
+function makeTheme(e, syntax) {
+    return [
+        EditorView.theme({
+            '&': { backgroundColor: e.bg, color: e.text },
+            '.cm-content': { caretColor: e.cursor, lineHeight: '1.6', padding: '14px 0' },
+            '.cm-line': { paddingLeft: '16px', paddingRight: '16px' },
+            '.cm-gutters': { backgroundColor: e.gutterBg, color: e.gutterText, borderRight: `1px solid ${e.gutterBorder}` },
+            '.cm-lineNumbers .cm-gutterElement': { paddingRight: '12px', paddingLeft: '8px', minWidth: '40px' },
+            '.cm-activeLineGutter': { backgroundColor: e.gutterActiveBg, color: e.gutterActiveText },
+            '.cm-activeLine': { backgroundColor: e.activeLine },
+            '.cm-cursor, .cm-dropCursor': { borderLeftColor: e.cursor },
+            '.cm-selectionBackground': { backgroundColor: e.selection },
+            '&.cm-focused .cm-selectionBackground': { backgroundColor: e.selection },
+            '.cm-matchingBracket': { outline: `1px solid ${e.cursor}`, borderRadius: '2px' },
+            '.cm-nonmatchingBracket': { outline: `1px solid ${e.errorColor}`, borderRadius: '2px' },
+        }),
+        syntaxHighlighting(HighlightStyle.define(syntax)),
+    ]
+}
+
+const THEMES = {
+    'sigil-dark': {
+        label: 'Sigil Dark',
+        cssVars: {
+            '--bg': '#0d1117', '--surface': '#161b22', '--surface2': '#21262d',
+            '--border': '#30363d', '--text': '#e6edf3', '--muted': '#8b949e',
+            '--accent': '#a371f7', '--accent2': '#7c3aed',
+            '--blue': '#58a6ff', '--green': '#3fb950', '--red': '#f85149', '--yellow': '#d29922',
+            '--error-bg': '#2d1117',
+            '--wat-kw': '#ff7b72', '--wat-fn': '#58a6ff', '--wat-num': '#79c0ff', '--wat-comment': '#484f58',
+        },
+        cmExtensions: makeTheme(
+            { bg: '#0d1117', text: '#e6edf3', cursor: '#a371f7', activeLine: 'rgba(255,255,255,0.04)',
+              selection: 'rgba(61,90,126,0.5)', gutterBg: '#161b22', gutterText: '#8b949e',
+              gutterBorder: '#30363d', gutterActiveBg: '#21262d', gutterActiveText: '#e6edf3',
+              errorColor: '#f85149' },
+            [
+                { tag: tags.keyword,             color: '#a371f7' },
+                { tag: tags.lineComment,         color: '#484f58', fontStyle: 'italic' },
+                { tag: tags.string,              color: '#3fb950' },
+                { tag: tags.number,              color: '#79c0ff' },
+                { tag: tags.typeName,            color: '#58a6ff' },
+                { tag: tags.function(tags.name), color: '#d2a8ff' },
+                { tag: tags.operator,            color: '#ff7b72' },
+            ]
+        ),
+    },
+    'vscode-dark': {
+        label: 'VSCode Dark',
+        cssVars: {
+            '--bg': '#1e1e1e', '--surface': '#252526', '--surface2': '#2d2d2d',
+            '--border': '#3c3c3c', '--text': '#d4d4d4', '--muted': '#808080',
+            '--accent': '#569cd6', '--accent2': '#264f78',
+            '--blue': '#569cd6', '--green': '#4ec9b0', '--red': '#f44747', '--yellow': '#dcdcaa',
+            '--error-bg': '#2d1b1b',
+            '--wat-kw': '#569cd6', '--wat-fn': '#dcdcaa', '--wat-num': '#b5cea8', '--wat-comment': '#6a9955',
+        },
+        cmExtensions: makeTheme(
+            { bg: '#1e1e1e', text: '#d4d4d4', cursor: '#aeafad', activeLine: 'rgba(255,255,255,0.04)',
+              selection: 'rgba(38,79,120,0.6)', gutterBg: '#1e1e1e', gutterText: '#858585',
+              gutterBorder: '#3c3c3c', gutterActiveBg: '#2a2d2e', gutterActiveText: '#c6c6c6',
+              errorColor: '#f44747' },
+            [
+                { tag: tags.keyword,             color: '#c586c0' },
+                { tag: tags.lineComment,         color: '#6a9955', fontStyle: 'italic' },
+                { tag: tags.string,              color: '#ce9178' },
+                { tag: tags.number,              color: '#b5cea8' },
+                { tag: tags.typeName,            color: '#4ec9b0' },
+                { tag: tags.function(tags.name), color: '#dcdcaa' },
+                { tag: tags.operator,            color: '#d4d4d4' },
+            ]
+        ),
+    },
+    'github-light': {
+        label: 'GitHub Light',
+        cssVars: {
+            '--bg': '#ffffff', '--surface': '#f6f8fa', '--surface2': '#eaeef2',
+            '--border': '#d0d7de', '--text': '#24292f', '--muted': '#57606a',
+            '--accent': '#8250df', '--accent2': '#6639ba',
+            '--blue': '#0969da', '--green': '#1a7f37', '--red': '#cf222e', '--yellow': '#9a6700',
+            '--error-bg': '#fff2f0',
+            '--wat-kw': '#cf222e', '--wat-fn': '#0969da', '--wat-num': '#0550ae', '--wat-comment': '#6e7781',
+        },
+        cmExtensions: makeTheme(
+            { bg: '#ffffff', text: '#24292f', cursor: '#8250df', activeLine: 'rgba(0,0,0,0.04)',
+              selection: 'rgba(130,80,223,0.15)', gutterBg: '#f6f8fa', gutterText: '#57606a',
+              gutterBorder: '#d0d7de', gutterActiveBg: '#eaeef2', gutterActiveText: '#24292f',
+              errorColor: '#cf222e' },
+            [
+                { tag: tags.keyword,             color: '#cf222e' },
+                { tag: tags.lineComment,         color: '#6e7781', fontStyle: 'italic' },
+                { tag: tags.string,              color: '#0a3069' },
+                { tag: tags.number,              color: '#0550ae' },
+                { tag: tags.typeName,            color: '#953800' },
+                { tag: tags.function(tags.name), color: '#8250df' },
+                { tag: tags.operator,            color: '#24292f' },
+            ]
+        ),
+    },
+}
+
+const themeCompartment = new Compartment()
+
+// ── Editor setup ───────────────────────────────────────────────────────────
+
+const INITIAL_SOURCE = `# Modules are auto-resolved from their namespace prefix.
+# web:: maps to the built-in web environment module.
+
+@fn greet msg:String := {
+    @local result := ('Hello, ' ++ msg);
+    &web::console_log_str result;
+    result
+};
+
+@fn hypotenuse a:Float, b:Float := {
+    &web::math_sqrt ((&web::math_pow a, 2.0) + (&web::math_pow b, 2.0))
+};
+
+@fn roll := {
+    &web::math_random
+};
+
+@export greet;
+@export hypotenuse;
+@export roll;`
+
+const editorView = new EditorView({
+    state: EditorState.create({
+        doc: INITIAL_SOURCE,
+        extensions: [
+            history(),
+            lineNumbers(),
+            highlightActiveLine(),
+            highlightActiveLineGutter(),
+            bracketMatching(),
+            keymap.of([
+                ...defaultKeymap,
+                ...historyKeymap,
+                indentWithTab,
+                { key: 'Ctrl-Enter', mac: 'Cmd-Enter', run: () => { compile(); return true } },
+            ]),
+            silicon,
+            themeCompartment.of(THEMES['sigil-dark'].cmExtensions),
+        ],
+    }),
+    parent: document.getElementById('editor'),
+})
+
+// ── Example programs ──────────────────────────────────────────────────────
+
+const EXAMPLES = {
+    empty: '',
+
+    hello_world:
+`# Concatenate a greeting string and print it to the console.
+# Call greet("World") in the exports panel below.
+
+@fn greet msg:String := {
+    @local result := ('Hello, ' ++ msg);
+    &web::console_log_str result;
+    result
+};
+
+@export greet;`,
+
+    hypotenuse:
+`# Pythagorean theorem using web math APIs.
+# c = sqrt(a² + b²)
+
+@fn hypotenuse a:Float, b:Float := {
+    &web::math_sqrt ((&web::math_pow a, 2.0) + (&web::math_pow b, 2.0))
+};
+
+@fn roll := { &web::math_random };
+
+@export hypotenuse;
+@export roll;`,
+
+    fibonacci:
+`# Recursive Fibonacci sequence.
+# Try: fib(10) = 55, fib(20) = 6765
+
+@fn fib n:Int := {
+    &@if n <= 1, { &@return n };
+    (&fib (n - 1)) + (&fib (n - 2))
+};
+
+@export fib;`,
+
+    factorial:
+`# Recursive factorial.
+# Try: factorial(10) = 3628800
+
+@fn factorial n:Int := {
+    &@if n <= 1, { &@return 1 };
+    n * (&factorial (n - 1))
+};
+
+@export factorial;`,
+
+    safe_divide:
+`# Integer division guarded against divide-by-zero.
+# Returns 0 when y = 0.
+
+@fn safeDivide x:Int, y:Int := {
+    &@if y == 0, { &@return 0 };
+    x / y
+};
+
+@export safeDivide;`,
+
+    countdown:
+`# Count iterations using a mutable loop variable.
+# Returns the final counter value (should equal n).
+
+@fn countTo n:Int := {
+    @var i:Int := 0;
+    &@loop i < n, { i = i + 1; };
+    i
+};
+
+@export countTo;`,
+
+    color_match:
+`# Algebraic sum type with exhaustive pattern matching.
+
+@type_sum Color := Red | Green | Blue;
+
+@fn colorCode c:Color := {
+    &@match c,
+        Color::Red,   { 1 },
+        Color::Green, { 2 },
+        { 3 }
+};
+
+@export colorCode;`,
+
+    bitwise:
+`# Bitwise operations on integers.
+
+@fn mask   a:Int, b:Int := { a | b };
+@fn toggle a:Int, b:Int := { a ^ b };
+@fn doubled a:Int := { a << 1 };
+@fn halved  a:Int := { a >> 1 };
+
+@export mask;
+@export toggle;
+@export doubled;
+@export halved;`,
+
+    math_sampler:
+`# Web math API sampler — trig, log, and random.
+
+@fn roll    := { &web::math_random };
+@fn sinWave x:Float := { &web::math_sin x };
+@fn cosWave x:Float := { &web::math_cos x };
+@fn logNat  x:Float := { &web::math_log x };
+
+@export roll;
+@export sinWave;
+@export cosWave;
+@export logNat;`,
+
+    simple_main:
+`# Entry point example — call helpers from main and print results.
+# Enable "run main" and compile.
+
+@fn add a:Int, b:Int := { a + b };
+
+@fn factorial n:Int := {
+    &@if n <= 1, { &@return 1 };
+    n * (&factorial (n - 1))
+};
+
+@fn main := {
+    @local sum   := (&add 10, 32);
+    @local fac10 := (&factorial 10);
+    &web::console_log sum;
+    &web::console_log fac10
+};
+
+@export main;`,
+
+    html_todo:
+`# TODO list rendered into the HTML panel via web::set_html.
+# Enable "run main" and compile.
+
+@fn done_item label:String := {
+    '<li style="padding:8px 12px;margin:4px 0;border-radius:6px;'
+    ++ 'background:#21262d;color:#3fb950;text-decoration:line-through">'
+    ++ label ++ '</li>'
+};
+
+@fn todo_item label:String := {
+    '<li style="padding:8px 12px;margin:4px 0;border-radius:6px;'
+    ++ 'background:#21262d;color:#e6edf3">'
+    ++ label ++ '</li>'
+};
+
+@fn main := {
+    &web::set_html (
+        '<div style="font:14px system-ui,sans-serif;padding:16px;background:#0d1117;min-height:100%">'
+        ++ '<h2 style="color:#e6edf3;margin:0 0 12px">Sigil Milestones</h2>'
+        ++ '<ul style="list-style:none;padding:0">'
+        ++ (&done_item '@fn keyword')
+        ++ (&done_item 'web:: module system')
+        ++ (&done_item 'Syntax highlighting')
+        ++ (&todo_item 'HTML render panel')
+        ++ (&todo_item 'Snake in Silicon')
+        ++ '</ul></div>'
+    )
+};
+
+@export main;`,
+
+    snake:
+`# Snake — uses the tick + handle_key export convention.
+# Enable "run main" and compile. Use arrow keys to steer.
+
+@let GRID   := 20;
+@let CELL   := 16;
+@let MAXLEN := 400;
+
+@var head_x     := 10;
+@var head_y     := 10;
+@var dir        := 0;
+@var food_x     := 5;
+@var food_y     := 15;
+@var alive      := 1;
+@var length     := 3;
+@var body_x_ptr := 0;
+@var body_y_ptr := 0;
+@var ring_head  := 0;
+@var draw_i     := 0;
+@var draw_bi    := 0;
+
+@fn cell x:Int, y:Int, r:Int, g:Int, b:Int := {
+    &web::canvas_set_fill r, g, b;
+    &web::canvas_fill_rect
+        (&@toFloat (x * CELL)), (&@toFloat (y * CELL)),
+        15.0, 15.0
+};
+
+@fn draw_body := {
+    draw_i = 0;
+    &@loop (draw_i < length), {
+        draw_bi = (ring_head - length + draw_i + MAXLEN) % MAXLEN;
+        &cell (&arr_load_i32 body_x_ptr, draw_bi),
+              (&arr_load_i32 body_y_ptr, draw_bi),
+              63, 185, 80;
+        draw_i = draw_i + 1;
+    }
+};
+
+@fn draw := {
+    &web::canvas_set_fill 13, 17, 23;
+    &web::canvas_fill_rect 0.0, 0.0,
+        (&@toFloat (GRID * CELL)), (&@toFloat (GRID * CELL));
+    &draw_body;
+    &cell food_x, food_y, 248, 81, 73
+};
+
+@fn main := {
+    body_x_ptr = &alloc_array MAXLEN, 4;
+    body_y_ptr = &alloc_array MAXLEN, 4;
+    head_x = 10; head_y = 10;
+    dir = 0; alive = 1; length = 3; ring_head = 3;
+    &arr_store_i32 body_x_ptr, 0, 10;
+    &arr_store_i32 body_x_ptr, 1, 10;
+    &arr_store_i32 body_x_ptr, 2, 10;
+    &arr_store_i32 body_y_ptr, 0, 10;
+    &arr_store_i32 body_y_ptr, 1, 10;
+    &arr_store_i32 body_y_ptr, 2, 10;
+    &draw
+};
+
+@fn tick := {
+    &@if alive == 0, { &@return 0 };
+    &@if dir == 0, { head_x = head_x + 1; };
+    &@if dir == 1, { head_y = head_y + 1; };
+    &@if dir == 2, { head_x = head_x - 1; };
+    &@if dir == 3, { head_y = head_y - 1; };
+    &@if (head_x < 0) || (head_x >= GRID), { alive = 0; };
+    &@if (head_y < 0) || (head_y >= GRID), { alive = 0; };
+    &@if alive == 0, { &@return 0 };
+    &arr_store_i32 body_x_ptr, ring_head, head_x;
+    &arr_store_i32 body_y_ptr, ring_head, head_y;
+    ring_head = (ring_head + 1) % MAXLEN;
+    &@if head_x == food_x, {
+        &@if head_y == food_y, {
+            length = length + 1;
+            food_x = (food_x + 7) % GRID;
+            food_y = (food_y + 13) % GRID;
+        }
+    };
+    &draw;
+    0
+};
+
+@fn handle_key key:Int := {
+    &@if key == 37, { dir = 2; };
+    &@if key == 38, { dir = 3; };
+    &@if key == 39, { dir = 0; };
+    &@if key == 40, { dir = 1; };
+    0
+};
+
+@export main;
+@export tick;
+@export handle_key;`,
+}
+
+const EXAMPLE_FEATURES = {
+    snake:      ['canvas', 'game'],
+    html_todo:  ['dom'],
+    simple_main:[''],
+    // examples that use web:: math/console APIs only — core is always on
+}
+
+document.getElementById('example-select').addEventListener('change', e => {
+    const key = e.target.value
+    const src = EXAMPLES[key] ?? ''
+    editorView.dispatch({
+        changes: { from: 0, to: editorView.state.doc.length, insert: src },
+    })
+    if (key in EXAMPLE_FEATURES) {
+        setFeatures(EXAMPLE_FEATURES[key])
+    } else if (key !== 'empty') {
+        // Default: core only for pure-computation examples; canvas+dom for visual ones
+        const hasCanvas = src.includes('canvas_')
+        const hasDom    = src.includes('set_html')
+        const hasGame   = src.includes('@export tick')
+        const features = []
+        if (hasCanvas) features.push('canvas')
+        if (hasGame)   features.push('game')
+        if (hasDom)    features.push('dom')
+        setFeatures(features)
+    }
+})
+
+// ── Theme switching ───────────────────────────────────────────────────────
+
+function applyTheme(key) {
+    const theme = THEMES[key]
+    if (!theme) return
+    for (const [k, v] of Object.entries(theme.cssVars)) {
+        document.documentElement.style.setProperty(k, v)
+    }
+    editorView.dispatch({ effects: themeCompartment.reconfigure(theme.cmExtensions) })
+}
+
+document.getElementById('theme-select').addEventListener('change', e => {
+    applyTheme(e.target.value)
+})
+
+// ── State ──────────────────────────────────────────────────────────────────
+let wasmInstance = null
+let wasmExports = []
+let printBuffer = []
+let webEnv = null
+let cancelGameLoop = null
+let keydownListener = null
+let renderPanelOpen = false
+let activeFeatures = ['canvas', 'game', 'dom']
+
+// ── DOM refs ──────────────────────────────────────────────────────────────
+const btnCompile      = document.getElementById('btn-compile')
+const btnClearConsole = document.getElementById('btn-clear-console')
+const statusDot       = document.getElementById('status-dot')
+const watOutput       = document.getElementById('wat-output')
+const exportsPanel    = document.getElementById('exports-panel')
+const errorBanner     = document.getElementById('error-banner')
+const consoleEl       = document.getElementById('console')
+const runMainCheckbox = document.getElementById('run-main-checkbox')
+const renderPanel     = document.getElementById('render-panel')
+const panelToggle     = document.getElementById('panel-toggle')
+const btnPanelClear   = document.getElementById('btn-panel-clear')
+
+// ── Platform feature checkboxes ───────────────────────────────────────────
+function getActiveFeatures() {
+    return Array.from(document.querySelectorAll('.feature-cb'))
+        .filter(cb => cb.checked)
+        .map(cb => cb.value)
+}
+
+document.querySelectorAll('.feature-cb').forEach(cb => {
+    const label = cb.closest('.feature-label')
+    cb.addEventListener('change', () => {
+        label.classList.toggle('active', cb.checked)
+        activeFeatures = getActiveFeatures()
+    })
+})
+
+function setFeatures(features) {
+    document.querySelectorAll('.feature-cb').forEach(cb => {
+        const label = cb.closest('.feature-label')
+        const enabled = features.includes(cb.value)
+        cb.checked = enabled
+        label.classList.toggle('active', enabled)
+    })
+    activeFeatures = getActiveFeatures()
+}
+
+// ── Render panel ──────────────────────────────────────────────────────────
+function openRenderPanel() {
+    if (!renderPanelOpen) toggleRenderPanel()
+}
+
+function toggleRenderPanel() {
+    renderPanelOpen = !renderPanelOpen
+    if (renderPanelOpen) {
+        renderPanel.classList.add('open')
+        panelToggle.textContent = '◁'
+    } else {
+        renderPanel.classList.remove('open')
+        panelToggle.textContent = '▷'
+    }
+}
+
+panelToggle.addEventListener('click', toggleRenderPanel)
+
+btnPanelClear.addEventListener('click', () => {
+    const canvas = document.getElementById('render-canvas')
+    if (canvas) {
+        const ctx = canvas.getContext('2d')
+        if (ctx) ctx.clearRect(0, 0, canvas.width, canvas.height)
+    }
+    const htmlOut = document.getElementById('html-out')
+    if (htmlOut) htmlOut.innerHTML = ''
+})
+
+// ── Auto-run checkbox ─────────────────────────────────────────────────────
+runMainCheckbox.checked = localStorage.getItem('run-main') === 'true'
+runMainCheckbox.addEventListener('change', () => {
+    localStorage.setItem('run-main', runMainCheckbox.checked)
+})
+
+// ── Utilities ─────────────────────────────────────────────────────────────
+function setStatus(state) {
+  statusDot.className = 'status-dot' + (state !== 'idle' ? ' ' + state : '')
+}
+
+function showError(msg) {
+  errorBanner.textContent = msg
+  errorBanner.style.display = 'block'
+  setStatus('err')
+}
+function clearError() {
+  errorBanner.style.display = 'none'
+  errorBanner.textContent = ''
+}
+
+function log(msg, type = 'info') {
+  const wasEmpty = consoleEl.querySelector('.console-empty')
+  if (wasEmpty) wasEmpty.remove()
+
+  const line = document.createElement('div')
+  line.className = `console-line ${type}`
+
+  const prefix = document.createElement('span')
+  prefix.className = 'prefix'
+  prefix.textContent = type === 'print' ? '📤' : type === 'err' ? '✖' : type === 'result' ? '=' : '›'
+
+  const msgEl = document.createElement('span')
+  msgEl.className = 'msg'
+  msgEl.textContent = msg
+
+  line.append(prefix, msgEl)
+  consoleEl.appendChild(line)
+  consoleEl.scrollTop = consoleEl.scrollHeight
+}
+
+// ── WAT syntax highlighting (lightweight) ─────────────────────────────────
+function highlightWat(text) {
+  const escaped = text
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+
+  return escaped
+    .replace(/^(;;.*)$/gm, '<span class="comment">$1</span>')
+    .replace(/\b(func|module|import|export|memory|global|param|result|local|mut)\b/g, '<span class="kw">$1</span>')
+    .replace(/\b(i32|f32|i64|f64|void)\b/g, '<span class="num">$1</span>')
+    .replace(/\$[\w.]+/g, '<span class="fn">$&</span>')
+    .replace(/\b(\d+(?:\.\d+)?)\b/g, '<span class="num">$1</span>')
+}
+
+// ── Auto-run main + game loop ──────────────────────────────────────────────
+function autoRunMain(features) {
+    const mainExp = wasmExports.find(e => e.name === 'main' && e.params.length === 0)
+    if (!mainExp) return
+
+    try {
+        wasmInstance.exports.main()
+        if (webEnv) webEnv.flush()
+        log('main() called automatically', 'info')
+    } catch (e) {
+        log('main() threw: ' + e.message, 'err')
+        return
+    }
+
+    const gameEnabled  = features && features.includes('game')
+    const tickExp      = wasmExports.find(e => e.name === 'tick'       && e.params.length === 0)
+    const handleKeyExp = wasmExports.find(e => e.name === 'handle_key' && e.params.length === 1)
+
+    if (gameEnabled && tickExp) {
+        openRenderPanel()
+        cancelGameLoop = startGameLoop(
+            wasmInstance,
+            e => { log('tick() threw: ' + e.message, 'err') },
+            () => { if (webEnv) webEnv.flush() }
+        )
+    }
+
+    if (handleKeyExp) {
+        keydownListener = ev => {
+            try {
+                wasmInstance.exports.handle_key(ev.keyCode)
+                if (webEnv) webEnv.flush()
+            } catch (ex) {
+                log('handle_key() threw: ' + ex.message, 'err')
+            }
+        }
+        document.addEventListener('keydown', keydownListener)
+    }
+}
+
+// ── Compile ────────────────────────────────────────────────────────────────
+btnCompile.addEventListener('click', compile)
+
+async function compile() {
+  // Tear down any running game loop from the previous compile
+  if (cancelGameLoop) { cancelGameLoop(); cancelGameLoop = null }
+  if (keydownListener) { document.removeEventListener('keydown', keydownListener); keydownListener = null }
+
+  clearError()
+  wasmInstance = null
+  exportsPanel.innerHTML = ''
+  btnCompile.disabled = true
+  setStatus('busy')
+  watOutput.innerHTML = '<span style="color:var(--muted);font-style:italic">Compiling…</span>'
+
+  const source = editorView.state.doc.toString()
+  activeFeatures = getActiveFeatures()
+
+  let data
+  try {
+    const res = await fetch('/compile', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ source, platform: 'web', features: activeFeatures }),
+    })
+    data = await res.json()
+  } catch (e) {
+    showError('Network error: ' + e.message)
+    watOutput.innerHTML = ''
+    btnCompile.disabled = false
+    return
+  }
+
+  btnCompile.disabled = false
+
+  if (!data.success) {
+    showError(data.error ?? 'Unknown error')
+    watOutput.innerHTML = ''
+    return
+  }
+
+  const compiledFeatures = data.features ?? activeFeatures
+
+  watOutput.innerHTML = highlightWat(data.wat)
+
+  printBuffer = []
+  webEnv = createWebEnv({
+    onPrint: (msg, type) => {
+      printBuffer.push(msg)
+      log(msg, type ?? 'print')
+    },
+    onRenderNeeded: () => openRenderPanel(),
+  }, compiledFeatures)
+
+  try {
+    const wasmBytes = Uint8Array.from(atob(data.wasm), c => c.charCodeAt(0))
+    const { instance } = await WebAssembly.instantiate(wasmBytes, webEnv.imports)
+    webEnv.bindInstance(instance)
+    wasmInstance = instance
+    wasmExports = data.exports ?? []
+    renderExports(wasmExports, instance)
+    setStatus('ok')
+    log(`Compiled OK — ${wasmExports.length} export(s) ready`, 'info')
+    if (runMainCheckbox.checked) autoRunMain(compiledFeatures)
+  } catch (e) {
+    showError('WASM instantiation failed: ' + e.message)
+    setStatus('err')
+  }
+}
+
+// ── Exports panel ─────────────────────────────────────────────────────────
+function renderExports(exports, instance) {
+  exportsPanel.innerHTML = ''
+  if (exports.length === 0) return
+
+  const label = document.createElement('div')
+  label.className = 'exports-label'
+  label.textContent = 'Exported Functions'
+  exportsPanel.appendChild(label)
+
+  for (const exp of exports) {
+    const row = document.createElement('div')
+    row.className = 'export-row'
+
+    const sig = document.createElement('span')
+    sig.className = 'fn-sig'
+    const paramStr = exp.params.map(p => `${p.name}: ${p.type}`).join(', ')
+    sig.textContent = `${exp.name}(${paramStr}) → ${exp.result}`
+    row.appendChild(sig)
+
+    const paramWrap = document.createElement('div')
+    paramWrap.className = 'param-wrap'
+    const inputs = []
+    for (const param of exp.params) {
+      const field = document.createElement('div')
+      field.className = 'param-field'
+
+      const lbl = document.createElement('span')
+      lbl.className = 'param-label'
+      lbl.textContent = `${param.name}: ${param.type}`
+
+      const inp = document.createElement('input')
+      inp.type = 'text'
+      inp.placeholder = param.type === 'String' ? 'enter a string…'
+                      : param.wasmType === 'f32' ? '0.0' : '0'
+      inp.className = 'param-input'
+      if (param.type === 'String') inp.style.width = '160px'
+      inp.addEventListener('keydown', e => { if (e.key === 'Enter') callBtn.click() })
+
+      field.append(lbl, inp)
+      paramWrap.appendChild(field)
+      inputs.push({ inp, wasmType: param.wasmType, name: param.name, siliconType: param.type })
+    }
+    row.appendChild(paramWrap)
+
+    const resultSpan = document.createElement('span')
+    resultSpan.className = 'call-result'
+
+    const callBtn = document.createElement('button')
+    callBtn.className = 'btn-call'
+    callBtn.textContent = '▶ Call'
+    callBtn.addEventListener('click', () => {
+      if (!wasmInstance) { log('No compiled module — hit Compile first', 'err'); return }
+      callExport(exp, inputs, resultSpan)
+    })
+
+    row.append(callBtn, resultSpan)
+    exportsPanel.appendChild(row)
+  }
+}
+
+function callExport(exp, inputs, resultSpan) {
+  const args = inputs.map(({ inp, wasmType, siliconType, name }) => {
+    const raw = inp.value
+    if (siliconType === 'String') {
+      return webEnv ? webEnv.writeString(raw) : 0
+    }
+    const trimmed = raw.trim()
+    if (trimmed === '') { log(`${name} is empty`, 'err'); return NaN }
+    return wasmType === 'f32' ? parseFloat(trimmed) : parseInt(trimmed, 10)
+  })
+
+  if (args.some(Number.isNaN)) return
+
+  try {
+    const fn = wasmInstance.exports[exp.name]
+    if (typeof fn !== 'function') { log(`${exp.name} is not a function export`, 'err'); return }
+
+    printBuffer = []
+    const raw = fn(...args)
+    if (webEnv) webEnv.flush()
+
+    const argStr = inputs.map(({ inp, siliconType }) =>
+      siliconType === 'String' ? `"${inp.value}"` : inp.value.trim()
+    ).join(', ')
+    const ret = exp.wasmResult === 'void' ? '(void)' : formatResult(raw, exp.wasmResult, exp.result)
+    resultSpan.textContent = '→ ' + ret
+    log(`${exp.name}(${argStr}) = ${ret}`, 'result')
+  } catch (e) {
+    log(`${exp.name} threw: ${e.message}`, 'err')
+    resultSpan.textContent = ''
+  }
+}
+
+function formatResult(value, wasmType, siliconResult) {
+  if (siliconResult === 'String' && webEnv) {
+    return '"' + webEnv.readString(value) + '"'
+  }
+  if (wasmType === 'f32') {
+    return Number(value.toPrecision(6)).toString()
+  }
+  return String(value)
+}
+
+// ── Clear console ──────────────────────────────────────────────────────────
+btnClearConsole.addEventListener('click', () => {
+  consoleEl.innerHTML = '<div class="console-empty">Console cleared.</div>'
+  document.querySelectorAll('.call-result').forEach(el => el.textContent = '')
+})
+</script>
+</body>
+</html>

@@ -1,0 +1,1174 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Platform System Plan — Sigil / Silicon</title>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg:        #0d1117;
+  --surface:   #161b22;
+  --surface2:  #21262d;
+  --border:    #30363d;
+  --text:      #e6edf3;
+  --muted:     #8b949e;
+  --accent:    #a371f7;
+  --accent2:   #7c3aed;
+  --blue:      #58a6ff;
+  --green:     #3fb950;
+  --red:       #f85149;
+  --yellow:    #d29922;
+  --orange:    #f0883e;
+  --mono:      'JetBrains Mono', 'Fira Code', ui-monospace, monospace;
+}
+
+html, body {
+  min-height: 100%;
+  background: var(--bg);
+  color: var(--text);
+  font-family: system-ui, -apple-system, sans-serif;
+  font-size: 15px;
+  line-height: 1.6;
+}
+
+header {
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  padding: 24px 40px;
+}
+.header-logo {
+  font-size: 0.8rem;
+  color: var(--muted);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  margin-bottom: 8px;
+}
+.header-logo a { color: var(--accent); text-decoration: none; }
+.header-logo a:hover { text-decoration: underline; }
+header h1 {
+  font-size: 1.6rem;
+  font-weight: 700;
+  color: var(--text);
+  margin-bottom: 6px;
+}
+header p { color: var(--muted); font-size: 0.95rem; }
+
+main {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 40px 24px 80px;
+}
+
+section { margin-bottom: 56px; }
+
+h2 {
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: var(--accent);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-bottom: 20px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border);
+}
+
+h3 {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--text);
+  margin: 20px 0 8px;
+}
+
+h3:first-child { margin-top: 0; }
+
+p { color: var(--muted); margin-bottom: 12px; }
+p:last-child { margin-bottom: 0; }
+strong { color: var(--text); }
+ul { color: var(--muted); padding-left: 20px; line-height: 2; margin-bottom: 12px; }
+li strong { color: var(--text); }
+
+/* ── Goal box ────────────────────────────────────────────────────── */
+.goal-box {
+  display: flex;
+  align-items: stretch;
+  gap: 0;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+  margin: 16px 0;
+  font-family: var(--mono);
+  font-size: 0.85rem;
+}
+.goal-item {
+  flex: 1;
+  padding: 16px 20px;
+}
+.goal-item.old { background: #1a0d0d; color: var(--red); }
+.goal-item.new { background: #0d1a0d; color: var(--green); }
+.goal-item.arrow { flex: 0 0 auto; color: var(--muted); padding: 16px 10px; display:flex; align-items:center; font-size: 1rem; }
+.goal-label { font-size: 0.68rem; color: var(--muted); text-transform: uppercase;
+              letter-spacing: 0.06em; display: block; margin-bottom: 6px; }
+
+/* ── Step cards ──────────────────────────────────────────────────── */
+.steps { display: flex; flex-direction: column; gap: 16px; }
+.step {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+}
+.step-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 20px;
+  background: var(--surface2);
+  border-bottom: 1px solid var(--border);
+  flex-wrap: wrap;
+}
+.step-num {
+  width: 28px; height: 28px;
+  border-radius: 50%;
+  background: var(--accent2);
+  color: #fff;
+  font-weight: 700;
+  font-size: 0.82rem;
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+}
+.step-title { font-weight: 600; font-size: 0.95rem; color: var(--text); }
+.file-badge {
+  margin-left: auto;
+  font-family: var(--mono);
+  font-size: 0.72rem;
+  background: var(--surface);
+  color: var(--blue);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 2px 8px;
+  white-space: nowrap;
+}
+.file-badge + .file-badge { margin-left: 4px; }
+.step-body { padding: 16px 20px; }
+.step-body p { margin-bottom: 10px; }
+
+/* ── Code blocks ─────────────────────────────────────────────────── */
+pre {
+  font-family: var(--mono);
+  font-size: 0.8rem;
+  line-height: 1.55;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 14px 16px;
+  overflow-x: auto;
+  margin: 10px 0;
+}
+code { font-family: var(--mono); font-size: 0.85em; color: var(--blue); }
+
+.diff-add { color: var(--green); }
+.diff-rem { color: var(--red);   }
+.diff-ctx { color: #484f58;      }
+.kw   { color: #ff7b72; }
+.fn   { color: var(--blue); }
+.str  { color: #a5d6ff; }
+.cmt  { color: #484f58; }
+.num  { color: #79c0ff; }
+.type { color: var(--orange); }
+.ns   { color: var(--accent); }
+.plat { color: var(--yellow); }
+
+/* ── Callout ─────────────────────────────────────────────────────── */
+.callout {
+  border-left: 3px solid var(--yellow);
+  background: #1e1a0e;
+  padding: 12px 16px;
+  border-radius: 0 6px 6px 0;
+  margin: 12px 0;
+  font-size: 0.88rem;
+  color: var(--muted);
+}
+.callout.info   { border-left-color: var(--blue);  background: #0d1420; }
+.callout.good   { border-left-color: var(--green); background: #0d1a0e; }
+.callout.warn   { border-left-color: var(--yellow); background: #1e1a0e; }
+.callout strong { color: var(--yellow); }
+.callout.info  strong { color: var(--blue); }
+.callout.good  strong { color: var(--green); }
+
+/* ── Decision box ────────────────────────────────────────────────── */
+.decision {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+  margin: 16px 0;
+}
+.decision-header {
+  border-bottom: 1px solid var(--border);
+  padding: 10px 16px;
+  font-size: 0.82rem;
+  font-weight: 700;
+  font-family: var(--mono);
+}
+.decision-body { padding: 14px 16px; }
+
+/* ── User story cards ────────────────────────────────────────────── */
+.stories { display: flex; flex-direction: column; gap: 12px; }
+.story {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 14px 18px;
+}
+.story-persona {
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--accent);
+  margin-bottom: 4px;
+}
+.story-text {
+  color: var(--muted);
+  font-size: 0.92rem;
+  line-height: 1.5;
+}
+.story-text strong { color: var(--text); }
+
+/* ── Platform cards (visual catalogue) ──────────────────────────── */
+.platform-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 14px;
+  margin: 14px 0;
+}
+.platform-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+}
+.platform-card-header {
+  padding: 12px 16px;
+  background: var(--surface2);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.platform-icon {
+  width: 32px; height: 32px;
+  border-radius: 6px;
+  font-size: 1.1rem;
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+}
+.platform-card-name { font-weight: 700; font-size: 0.9rem; font-family: var(--mono); color: var(--yellow); }
+.platform-card-status { margin-left: auto; font-size: 0.7rem; font-weight: 700; padding: 2px 7px; border-radius: 3px; }
+.status-builtin { background: #0d3a1a; color: var(--green); }
+.status-planned { background: #1a1a0d; color: var(--yellow); }
+.status-future  { background: #1a0d1a; color: var(--muted); }
+.platform-card-body { padding: 12px 16px; }
+.platform-card-body p { font-size: 0.85rem; margin-bottom: 8px; }
+.feature-list { list-style: none; padding: 0; margin: 0; }
+.feature-list li {
+  font-family: var(--mono);
+  font-size: 0.78rem;
+  color: var(--muted);
+  padding: 2px 0;
+}
+.feature-list li::before { content: '  ·  '; color: var(--border); }
+.feature-list li strong { color: var(--blue); }
+
+/* ── Resolution table ────────────────────────────────────────────── */
+.res-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+  margin: 12px 0;
+}
+.res-table th {
+  text-align: left;
+  padding: 8px 14px;
+  background: var(--surface2);
+  color: var(--muted);
+  font-weight: 600;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  border-bottom: 1px solid var(--border);
+}
+.res-table td {
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border);
+  color: var(--muted);
+  vertical-align: top;
+}
+.res-table td:first-child { font-family: var(--mono); color: var(--accent); font-size: 0.82rem; }
+.res-table tr:last-child td { border-bottom: none; }
+.res-table td strong { color: var(--text); }
+
+/* ── Directory tree ──────────────────────────────────────────────── */
+.tree {
+  font-family: var(--mono);
+  font-size: 0.82rem;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 14px 16px;
+  margin: 10px 0;
+  line-height: 1.9;
+}
+.tree .dir       { color: var(--blue); }
+.tree .file      { color: var(--text); }
+.tree .note      { color: var(--muted); padding-left: 8px; }
+.tree .plat-file { color: var(--yellow); }
+.tree .user-file { color: var(--green); }
+.tree .cfg-file  { color: var(--accent); }
+
+/* ── Summary table ───────────────────────────────────────────────── */
+.summary-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+  margin-top: 16px;
+}
+.summary-table th {
+  text-align: left;
+  padding: 10px 14px;
+  background: var(--surface2);
+  color: var(--muted);
+  font-weight: 600;
+  text-transform: uppercase;
+  font-size: 0.72rem;
+  letter-spacing: 0.05em;
+  border-bottom: 1px solid var(--border);
+}
+.summary-table td {
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border);
+  vertical-align: top;
+  color: var(--muted);
+}
+.summary-table td:first-child { font-family: var(--mono); font-size: 0.8rem; color: var(--blue); }
+.summary-table td strong { color: var(--text); }
+.summary-table tr:last-child td { border-bottom: none; }
+
+.tag {
+  display: inline-block;
+  font-size: 0.68rem;
+  border-radius: 3px;
+  padding: 1px 6px;
+  font-weight: 600;
+  margin-right: 4px;
+  vertical-align: middle;
+}
+.tag.new    { background: #0d3a1a; color: var(--green); }
+.tag.mod    { background: #1a2a0d; color: #b8e680; }
+.tag.rename { background: #1a1a0d; color: var(--yellow); }
+
+.dep-note {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 0.78rem;
+  padding: 6px 20px;
+  border-top: 1px solid var(--border);
+  background: var(--surface2);
+}
+.dep-note::before { content: '↳'; color: var(--yellow); }
+
+/* ── Two-col layout ──────────────────────────────────────────────── */
+.two-col {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin: 12px 0;
+}
+@media (max-width: 700px) { .two-col { grid-template-columns: 1fr; } }
+
+.box {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 14px 16px;
+}
+.box-label {
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+  margin-bottom: 8px;
+}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="header-logo"><a href="/">⬡ Sigil</a> / Design Plan</div>
+  <h1>Silicon Platform System</h1>
+  <p>A first-class way for Silicon programs to declare which runtime they target and which host APIs they need</p>
+</header>
+
+<main>
+
+<!-- ── Overview ──────────────────────────────────────────────────── -->
+<section id="overview">
+  <h2>Overview</h2>
+
+  <p>
+    Right now the web APIs (canvas, console, math, DOM) all live in a single flat file —
+    <code>src/strata/modules/web.si</code>. A program using the web platform implicitly gets
+    all of them. There is no way to declare "I target the web" from the program side, no way
+    to enable only what you need, and no framework for adding a second platform (Node, native WASI, etc.).
+  </p>
+
+  <p>
+    A <strong>Platform</strong> is a named set of host API groups that defines the runtime
+    environment the compiled WASM will run inside. Platforms are selected in
+    <code>project.si</code> — a Silicon source file at the project root that acts as the
+    project manifest. Individual API groups within a platform are called
+    <strong>features</strong> and are opt-in.
+  </p>
+
+  <div class="goal-box">
+    <div class="goal-item old">
+      <span class="goal-label">Today</span>
+      No platform declaration.<br>
+      All web externs implicitly available.<br>
+      No project config file.<br>
+      Adding Node would require a separate pass.
+    </div>
+    <div class="goal-item arrow">→</div>
+    <div class="goal-item new">
+      <span class="goal-label">With Platforms</span>
+      <code>project.si</code> declares platform + features.<br>
+      Compiler loads only the selected APIs.<br>
+      <code>Platforms::web { canvas, game }</code><br>
+      New platforms just add a folder under <code>src/platforms/</code>.
+    </div>
+  </div>
+
+  <div class="callout info">
+    <strong>Relationship to Modules:</strong> Platforms are an evolution of the module system,
+    not a replacement. A platform is a <em>curated, environment-specific collection</em> of
+    extern declarations — conceptually the same as <code>src/strata/modules/web.si</code>
+    but split into features, versioned as a unit, and declared explicitly by the program.
+  </div>
+</section>
+
+<!-- ── User Stories ───────────────────────────────────────────────── -->
+<section id="stories">
+  <h2>User Stories</h2>
+  <div class="stories">
+
+    <div class="story">
+      <div class="story-persona">Game developer</div>
+      <div class="story-text">
+        I want to write a canvas game in Silicon. I need a <strong>game loop</strong> that calls
+        my <code>tick</code> function automatically each frame, and <strong>canvas draw calls</strong>
+        for rendering. I don't want to wire up <code>requestAnimationFrame</code> manually — the
+        platform should handle the loop and I just export <code>tick</code>.
+      </div>
+    </div>
+
+    <div class="story">
+      <div class="story-persona">Web developer</div>
+      <div class="story-text">
+        I want to build a Silicon WASM module that manipulates the DOM and uses
+        <code>console_log</code>. I only need the core web APIs — I don't want a game loop
+        auto-starting. The platform should not pull in canvas or game APIs unless I ask.
+      </div>
+    </div>
+
+    <div class="story">
+      <div class="story-persona">Server developer (future)</div>
+      <div class="story-text">
+        I want to compile Silicon to WASM and run it inside Node.js with access to
+        <code>fs</code> and <code>http</code> APIs. I should be able to declare
+        <strong><code>@platform Platforms::node { fs, http }</code></strong> in <code>project.si</code>
+        and the compiler should pull in the Node extern declarations automatically.
+      </div>
+    </div>
+
+    <div class="story">
+      <div class="story-persona">Compiler contributor</div>
+      <div class="story-text">
+        I want to add a new platform (<code>node</code>) without touching the core compiler.
+        I should be able to drop a <code>src/platforms/node/</code> folder with feature
+        <code>.si</code> files and a metadata file, and the platform system will discover it.
+      </div>
+    </div>
+
+  </div>
+</section>
+
+<!-- ── Platform Catalogue ─────────────────────────────────────────── -->
+<section id="catalogue">
+  <h2>Platform Catalogue</h2>
+  <p>Planned and future platforms. Features marked <strong>core</strong> are always included when the platform is selected.</p>
+
+  <div class="platform-grid">
+
+    <div class="platform-card">
+      <div class="platform-card-header">
+        <div class="platform-icon" style="background:#1a2a0d">🌐</div>
+        <div class="platform-card-name">Platforms::web</div>
+        <div class="platform-card-status status-builtin">built-in</div>
+      </div>
+      <div class="platform-card-body">
+        <p>Browser / Playground runtime. WASM loaded via <code>WebAssembly.instantiate</code>.</p>
+        <ul class="feature-list">
+          <li><strong>core</strong> — console, math, performance, date</li>
+          <li><strong>web::canvas</strong> — 2D canvas draw API</li>
+          <li><strong>web::game</strong> — rAF loop, auto-calls <code>tick</code></li>
+          <li><strong>web::dom</strong> — set_html / clear_html</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="platform-card">
+      <div class="platform-card-header">
+        <div class="platform-icon" style="background:#0d1a2a">⬡</div>
+        <div class="platform-card-name">Platforms::node</div>
+        <div class="platform-card-status status-planned">planned</div>
+      </div>
+      <div class="platform-card-body">
+        <p>Node.js runtime. WASM loaded with <code>@node/wasm</code> or <code>instantiateSync</code>.</p>
+        <ul class="feature-list">
+          <li><strong>core</strong> — console, process.exit</li>
+          <li><strong>node::fs</strong> — read/write file</li>
+          <li><strong>node::http</strong> — HTTP server callbacks</li>
+          <li><strong>node::env</strong> — environment variables</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="platform-card">
+      <div class="platform-card-header">
+        <div class="platform-icon" style="background:#1a0d1a">🔩</div>
+        <div class="platform-card-name">Platforms::wasi</div>
+        <div class="platform-card-status status-future">future</div>
+      </div>
+      <div class="platform-card-body">
+        <p>WASI (WebAssembly System Interface) — runs in wasmtime, wasmer, or wasm-micro-runtime.</p>
+        <ul class="feature-list">
+          <li><strong>core</strong> — fd_write, proc_exit, args_get</li>
+          <li><strong>wasi::fs</strong> — WASI filesystem API</li>
+          <li><strong>wasi::sock</strong> — WASI sockets</li>
+        </ul>
+      </div>
+    </div>
+
+  </div>
+</section>
+
+<!-- ── Silicon Syntax ─────────────────────────────────────────────── -->
+<section id="syntax">
+  <h2>Silicon Syntax — project.si</h2>
+
+  <p>
+    <code>project.si</code> is a Silicon source file placed at the project root. The compiler
+    reads it before everything else. It may contain <strong>only</strong> platform declarations
+    and top-level Silicon definitions that are scoped to project configuration — no imperative
+    code, no function bodies.
+  </p>
+
+  <h3>Canonical form</h3>
+  <pre><span class="cmt">; project.si — Silicon project manifest</span>
+<span class="cmt">; Declares the target platform and which feature groups to enable.</span>
+
+<span class="kw">@platform</span> <span class="plat">Platforms</span>::<span class="ns">web</span>, { <span class="plat">Platforms</span>::<span class="ns">web</span>::<span class="fn">canvas</span>, <span class="plat">Platforms</span>::<span class="ns">web</span>::<span class="fn">game</span> };</pre>
+
+  <h3>Web platform — core only (no features)</h3>
+  <pre><span class="kw">@platform</span> <span class="plat">Platforms</span>::<span class="ns">web</span>;</pre>
+
+  <h3>Web platform with canvas and game loop</h3>
+  <pre><span class="cmt">; Snake, breakout, any rAF-driven game</span>
+<span class="kw">@platform</span> <span class="plat">Platforms</span>::<span class="ns">web</span>, { <span class="plat">Platforms</span>::<span class="ns">web</span>::<span class="fn">canvas</span>, <span class="plat">Platforms</span>::<span class="ns">web</span>::<span class="fn">game</span> };</pre>
+
+  <h3>Node platform (future)</h3>
+  <pre><span class="kw">@platform</span> <span class="plat">Platforms</span>::<span class="ns">node</span>, { <span class="plat">Platforms</span>::<span class="ns">node</span>::<span class="fn">fs</span>, <span class="plat">Platforms</span>::<span class="ns">node</span>::<span class="fn">http</span> };</pre>
+
+  <div class="callout info">
+    <strong>Grammar note:</strong> <code>@platform</code> is a new definition kind (like <code>@fn</code>,
+    <code>@extern</code>, <code>@export</code>). It maps to a new IR kind
+    <code>IR::meta_platform</code> and is handled entirely as a <strong>compiler directive</strong>
+    — it emits no WAT. The feature list <code>{ … }</code> reuses the existing block body
+    syntax. <strong>No grammar changes are needed</strong> — this is registered as a new defkind
+    in <code>defkinds.si</code>, exactly like <code>@export</code> was added.
+  </div>
+
+  <h3>What <code>@platform</code> means to the compiler</h3>
+  <ul>
+    <li>Load the <strong>platform core</strong> file: <code>src/platforms/web/core.si</code></li>
+    <li>For each listed feature, load its <code>.si</code> file: <code>src/platforms/web/canvas.si</code>, <code>src/platforms/web/game.si</code></li>
+    <li>All loaded externs become available in the program's module registry under the <code>web::</code> namespace</li>
+    <li>The <strong>game</strong> feature additionally emits a JS runtime wrapper that calls <code>requestAnimationFrame</code> and invokes the exported <code>tick</code> function</li>
+  </ul>
+
+  <div class="callout warn">
+    <strong>open question — short form:</strong> Should <code>{ canvas, game }</code> be
+    allowed as shorthand instead of the fully-qualified
+    <code>{ Platforms::web::canvas, Platforms::web::game }</code>? The long form is
+    unambiguous but verbose. The short form requires the compiler to infer the platform
+    scope from context. Recommendation: start with the fully-qualified form; add the
+    shorthand later as a convenience desugaring.
+  </div>
+</section>
+
+<!-- ── Architecture ───────────────────────────────────────────────── -->
+<section id="architecture">
+  <h2>Architecture</h2>
+
+  <h3>Relationship to existing module system</h3>
+  <p>
+    The existing module system (from <code>modules-plan.html</code>) loads <code>.si</code>
+    extern declaration files and registers them in a <code>ModuleRegistry</code>.
+    Platforms <em>sit on top of</em> the module system — a platform is a curated set of
+    module files that the platform loader feeds into the same <code>ModuleRegistry</code>.
+    No new registry type is needed: the compiler ends up with one unified
+    <code>ModuleRegistry</code> regardless of whether the externs came from a hand-dropped
+    <code>modules/Draw.si</code> or a platform feature file.
+  </p>
+
+  <h3>Compiler pipeline position</h3>
+  <pre>
+project.si → <span class="diff-add">parsePlatformConfig → PlatformConfig</span>
+                            ↓
+     Source → Parse → AST → buildStrataRegistry
+                            → <span class="diff-add">loadPlatform(config) → ModuleRegistry</span>
+                            → loadUserModules → ModuleRegistry
+                            → elaborate → TypeCheck → Codegen → WAT
+  </pre>
+
+  <p>
+    <code>parsePlatformConfig</code> is a tiny pre-pass: it parses only <code>project.si</code>,
+    looks for <code>@platform</code> directives, and returns a <code>PlatformConfig</code>
+    record. The full compiler pipeline is then set up with the right module files.
+  </p>
+
+  <h3>Platform file layout (compiler side)</h3>
+  <div class="tree">
+    <span class="dir">src/platforms/</span>   <span class="note">← ships with the compiler; not user-visible</span><br>
+    &nbsp;&nbsp;<span class="dir">web/</span><br>
+    &nbsp;&nbsp;&nbsp;&nbsp;<span class="plat-file">core.si</span>     <span class="note">← console, math, performance, date — always loaded with web</span><br>
+    &nbsp;&nbsp;&nbsp;&nbsp;<span class="plat-file">canvas.si</span>   <span class="note">← canvas_fill_rect, canvas_set_fill, etc.</span><br>
+    &nbsp;&nbsp;&nbsp;&nbsp;<span class="plat-file">game.si</span>     <span class="note">← no extra externs; game loop is JS-side only</span><br>
+    &nbsp;&nbsp;&nbsp;&nbsp;<span class="plat-file">dom.si</span>      <span class="note">← set_html, clear_html</span><br>
+    &nbsp;&nbsp;&nbsp;&nbsp;<span class="plat-file">platform.json</span> <span class="note">← metadata: name, version, available features</span><br>
+    &nbsp;&nbsp;<span class="dir">node/</span>           <span class="note">← (planned)</span><br>
+    &nbsp;&nbsp;&nbsp;&nbsp;<span class="plat-file">core.si</span><br>
+    &nbsp;&nbsp;&nbsp;&nbsp;<span class="plat-file">fs.si</span><br>
+    &nbsp;&nbsp;&nbsp;&nbsp;<span class="plat-file">http.si</span><br>
+    &nbsp;&nbsp;&nbsp;&nbsp;<span class="plat-file">platform.json</span><br>
+    <br>
+    <span class="dir">src/strata/modules/</span>   <span class="note">← will be superseded by src/platforms/ but kept for backward compat</span><br>
+    &nbsp;&nbsp;<span class="plat-file">web.si</span>      <span class="note">← current monolithic web externs (flatten into web platform features)</span><br>
+    <br>
+    <span class="dir">project/</span>   <span class="note">← user's project directory</span><br>
+    &nbsp;&nbsp;<span class="cfg-file">project.si</span>  <span class="note">← user's platform declaration — @platform Platforms::web, {...}</span><br>
+    &nbsp;&nbsp;<span class="user-file">main.si</span><br>
+    &nbsp;&nbsp;<span class="dir">modules/</span>    <span class="note">← third-party user modules (unchanged)</span><br>
+  </div>
+
+  <h3>platform.json — platform metadata</h3>
+  <pre>{
+  <span class="str">"name"</span>: <span class="str">"web"</span>,
+  <span class="str">"version"</span>: <span class="str">"1.0.0"</span>,
+  <span class="str">"features"</span>: [
+    { <span class="str">"name"</span>: <span class="str">"canvas"</span>, <span class="str">"file"</span>: <span class="str">"canvas.si"</span>,  <span class="str">"runtime"</span>: <span class="str">"canvas.js"</span> },
+    { <span class="str">"name"</span>: <span class="str">"game"</span>,   <span class="str">"file"</span>: <span class="str">"game.si"</span>,    <span class="str">"runtime"</span>: <span class="str">"game.js"</span>,  <span class="str">"requiresExport"</span>: <span class="str">"tick"</span> },
+    { <span class="str">"name"</span>: <span class="str">"dom"</span>,    <span class="str">"file"</span>: <span class="str">"dom.si"</span> }
+  ],
+  <span class="str">"runtimeHost"</span>: <span class="str">"web-env.js"</span>
+}</pre>
+
+  <p>
+    The <code>requiresExport</code> field lets the compiler validate that a program using
+    the <code>game</code> feature actually exports <code>tick</code>. The <code>runtime</code>
+    field names a JS snippet the playground (or build tool) should inject to support that feature.
+  </p>
+
+  <h3>PlatformConfig type</h3>
+  <pre><span class="kw">interface</span> <span class="type">PlatformConfig</span> {
+  platform: <span class="str">'web'</span> | <span class="str">'node'</span> | <span class="str">'wasi'</span>   <span class="cmt">// from @platform directive</span>
+  features: <span class="type">string</span>[]                     <span class="cmt">// e.g. ['canvas', 'game']</span>
+}</pre>
+
+  <h3>Feature file split (migrating web.si)</h3>
+  <p>
+    The current <code>src/strata/modules/web.si</code> is a monolith. It gets split into
+    feature files that match the platform catalogue:
+  </p>
+
+  <table class="res-table">
+    <thead>
+      <tr><th>Feature</th><th>Current location in web.si</th><th>New file</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>core</td>
+        <td>console_log, math_*, performance_now, date_now</td>
+        <td>src/platforms/web/core.si</td>
+      </tr>
+      <tr>
+        <td>canvas</td>
+        <td>canvas_set_fill, canvas_fill_rect, canvas_width, …</td>
+        <td>src/platforms/web/canvas.si</td>
+      </tr>
+      <tr>
+        <td>dom</td>
+        <td>set_html, clear_html</td>
+        <td>src/platforms/web/dom.si</td>
+      </tr>
+      <tr>
+        <td>game</td>
+        <td>(no externs — loop is JS-side)</td>
+        <td>src/platforms/web/game.si (empty; metadata only)</td>
+      </tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- ── The game sub-platform ─────────────────────────────────────── -->
+<section id="game-platform">
+  <h2>The web::game Feature</h2>
+
+  <p>
+    <code>web::game</code> is the most interesting feature because it has <em>no extern
+    declarations</em> — its effect is entirely on the JS host side. When the game feature
+    is enabled, the JS runtime wraps the WASM module in a
+    <code>requestAnimationFrame</code> loop and calls the WASM export <code>tick</code>
+    every frame.
+  </p>
+
+  <h3>Silicon side — user writes a tick function and exports it</h3>
+  <pre><span class="cmt">; project.si</span>
+<span class="kw">@platform</span> <span class="plat">Platforms</span>::<span class="ns">web</span>, { <span class="plat">Platforms</span>::<span class="ns">web</span>::<span class="fn">canvas</span>, <span class="plat">Platforms</span>::<span class="ns">web</span>::<span class="fn">game</span> };
+
+<span class="cmt">; main.si</span>
+<span class="kw">@fn</span> <span class="fn">tick</span> _ := {
+    <span class="cmt">; called every frame by the JS game loop</span>
+    &amp;<span class="ns">web</span>::<span class="fn">canvas_clear_rect</span> 0.0, 0.0, 400.0, 400.0;
+    <span class="cmt">; ... draw calls ...</span>
+};
+
+<span class="kw">@export</span> tick;</pre>
+
+  <h3>JS host side — game.js runtime snippet</h3>
+  <pre><span class="cmt">// Injected by the build tool / playground when web::game is enabled</span>
+<span class="kw">function</span> <span class="fn">startGameLoop</span>(instance) {
+  <span class="kw">function</span> <span class="fn">loop</span>() {
+    instance.exports.tick();
+    requestAnimationFrame(loop);
+  }
+  requestAnimationFrame(loop);
+}</pre>
+
+  <p>
+    The <code>game.si</code> feature file is empty (no externs needed). Its presence in
+    <code>platform.json</code> tells the build tool to inject <code>game.js</code> and to
+    validate that the program exports <code>tick</code>.
+  </p>
+
+  <div class="callout good">
+    <strong>What changes in the playground:</strong> Currently the playground checks
+    whether the compiled WASM exports <code>tick</code> and starts the rAF loop manually.
+    With the platform system, this heuristic becomes a <em>declared contract</em> — the
+    game loop only starts when <code>web::game</code> is enabled in <code>project.si</code>.
+  </div>
+</section>
+
+<!-- ── No platform file ───────────────────────────────────────────── -->
+<section id="no-project">
+  <h2>Missing project.si — Fallback Behavior</h2>
+
+  <p>
+    Many programs (tests, e2e fixtures, demo files) will not have a <code>project.si</code>.
+    The compiler needs sensible fallback behavior:
+  </p>
+
+  <div class="two-col">
+    <div class="box">
+      <div class="box-label">Option A — implicit web platform (recommended)</div>
+      <p style="font-size:0.88rem">
+        If no <code>project.si</code> is found, assume
+        <code>@platform Platforms::web</code> with <strong>all features</strong> enabled.
+        Matches current behavior — existing programs just work.
+      </p>
+    </div>
+    <div class="box">
+      <div class="box-label">Option B — no platform (strict)</div>
+      <p style="font-size:0.88rem">
+        If no <code>project.si</code> is found, emit a warning and load
+        <strong>no</strong> platform externs. Programs that use <code>web::</code> calls will fail
+        at type-check with "unknown module web". Stricter but breaks all existing programs.
+      </p>
+    </div>
+  </div>
+
+  <p>
+    Recommendation: <strong>Option A</strong> for backward compatibility. Add a CLI flag
+    <code>--no-platform-fallback</code> for strict mode in CI/new projects.
+  </p>
+</section>
+
+<!-- ── Design Questions ───────────────────────────────────────────── -->
+<section id="decisions">
+  <h2>Open Design Questions</h2>
+
+  <div class="decision">
+    <div class="decision-header" style="background:#1a1a0d; color:var(--yellow)">
+      ? Q1 — Should features be declared with full path or short names?
+    </div>
+    <div class="decision-body">
+      <p>
+        Full path: <code>@platform Platforms::web, { Platforms::web::canvas, Platforms::web::game }</code><br>
+        Short form: <code>@platform Platforms::web, { canvas, game }</code>
+      </p>
+      <p>
+        The full path is unambiguous and consistent with how namespace values are referenced
+        everywhere else in Silicon. The short form is more ergonomic. Since features are
+        always scoped to the selected platform, the short form is unambiguous in context.
+        Recommendation: <strong>full path as canonical; short form as compile-time desugaring</strong>.
+      </p>
+    </div>
+  </div>
+
+  <div class="decision" style="margin-top:12px">
+    <div class="decision-header" style="background:#1a1a0d; color:var(--yellow)">
+      ? Q2 — Should Platforms be a Silicon built-in enum type?
+    </div>
+    <div class="decision-body">
+      <p>
+        In other languages, build configuration is usually a separate concern from the language
+        (Cargo.toml, package.json, build.gradle). In Silicon the config <em>is</em> Silicon,
+        which means <code>Platforms</code> would need to be a special compile-time namespace.
+      </p>
+      <p>
+        One option: define <code>Platforms</code> as a <strong>compiler-reserved namespace</strong>
+        (like <code>WASM::</code> and <code>IR::</code>) — not a user-definable type, just a
+        recognised token. The compiler pattern-matches <code>@platform Platforms::X</code> as a
+        directive and never lowers it to WASM.
+      </p>
+      <p>
+        This keeps <code>project.si</code> feeling like Silicon without requiring actual enum
+        type-checking of platform names. A typo like <code>Platforms::webb</code> is caught at
+        platform-loading time with a clear error: <em>"Unknown platform 'webb' — available: web, node"</em>.
+      </p>
+    </div>
+  </div>
+
+  <div class="decision" style="margin-top:12px">
+    <div class="decision-header" style="background:#1a1a0d; color:var(--yellow)">
+      ? Q3 — Where does web-env.js go? One file or per-feature?
+    </div>
+    <div class="decision-body">
+      <p>
+        Currently <code>playground/web-env.js</code> provides all web host bindings
+        (console, canvas, DOM, rAF) in one file. With the platform system, the canvas
+        bindings are only needed when <code>web::canvas</code> is enabled, and the game
+        loop is only needed when <code>web::game</code> is enabled.
+      </p>
+      <p>
+        Options: (a) keep one monolithic <code>web-env.js</code> that provides all bindings
+        unconditionally; (b) split into per-feature snippets that the playground stitches
+        together based on the active platform config. Option (a) is simpler. Option (b) is
+        cleaner long-term and enables tree-shaking the host side. Recommendation: <strong>keep
+        monolithic for now</strong>, design for per-feature later.
+      </p>
+    </div>
+  </div>
+
+  <div class="decision" style="margin-top:12px">
+    <div class="decision-header" style="background:#1a1a0d; color:var(--yellow)">
+      ? Q4 — Does the playground need to read project.si?
+    </div>
+    <div class="decision-body">
+      <p>
+        The playground today runs the compiler on user-typed Silicon source. With platforms,
+        the compiler will look for <code>project.si</code> relative to the source file's
+        directory. In the playground there is no file system — the source lives in a textarea.
+      </p>
+      <p>
+        Options: (a) the playground passes a virtual <code>project.si</code> derived from a
+        "Platform" dropdown in the UI; (b) the playground always runs with the implicit
+        fallback platform (all web features enabled). Option (b) requires zero UI changes.
+        Option (a) lets playground users experiment with platform restrictions. Recommendation:
+        <strong>start with (b); add platform dropdown as a playground enhancement later</strong>.
+      </p>
+    </div>
+  </div>
+</section>
+
+<!-- ── Implementation Steps ───────────────────────────────────────── -->
+<section id="steps">
+  <h2>Implementation Steps</h2>
+  <div class="steps">
+
+    <div class="step">
+      <div class="step-header">
+        <div class="step-num">1</div>
+        <div class="step-title">Split web.si into feature files</div>
+        <div class="file-badge">src/platforms/web/</div>
+      </div>
+      <div class="step-body">
+        <p>
+          Create <code>src/platforms/web/</code> and split the existing
+          <code>src/strata/modules/web.si</code> into four files according to the feature table above.
+          Add <code>platform.json</code> listing the features.
+        </p>
+        <pre><span class="dir">src/platforms/web/</span>
+  <span class="plat-file">core.si</span>       <span class="cmt"># console_log*, math_*, performance_now, date_now</span>
+  <span class="plat-file">canvas.si</span>     <span class="cmt"># canvas_set_fill, canvas_fill_rect, canvas_width, …</span>
+  <span class="plat-file">dom.si</span>        <span class="cmt"># set_html, clear_html</span>
+  <span class="plat-file">game.si</span>       <span class="cmt"># empty — no externs; triggers game loop in JS host</span>
+  <span class="plat-file">platform.json</span> <span class="cmt"># metadata</span></pre>
+        <p>
+          Keep <code>src/strata/modules/web.si</code> intact for backward compatibility.
+          It will be deprecated once <code>project.si</code> support is complete.
+        </p>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-header">
+        <div class="step-num">2</div>
+        <div class="step-title">PlatformConfig type + parsePlatformConfig</div>
+        <div class="file-badge">src/platforms/config.ts</div>
+      </div>
+      <div class="step-body">
+        <p>
+          Write a tiny parser that reads <code>project.si</code>, locates any
+          <code>@platform</code> definitions (matching the existing DefKind pattern), and
+          returns a <code>PlatformConfig</code>. No new grammar needed — <code>@platform</code>
+          is registered as a new defkind and the existing Silicon parser handles it.
+        </p>
+        <pre><span class="kw">export interface</span> <span class="type">PlatformConfig</span> {
+  platform: <span class="str">'web'</span> | <span class="str">'node'</span> | <span class="str">'wasi'</span>
+  features: <span class="type">string</span>[]   <span class="cmt">// e.g. ['canvas', 'game']</span>
+}
+
+<span class="kw">export function</span> <span class="fn">parsePlatformConfig</span>(projectSiPath?: <span class="type">string</span>): <span class="type">PlatformConfig</span>
+<span class="cmt">// Returns { platform: 'web', features: ['canvas', 'game', 'dom'] } if no file</span></pre>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-header">
+        <div class="step-num">3</div>
+        <div class="step-title">Register @platform as a new DefKind</div>
+        <div class="file-badge">src/strata/defkinds.si</div>
+        <div class="file-badge">src/ir/irKinds.ts</div>
+      </div>
+      <div class="step-body">
+        <p>
+          Add <code>@platform</code> to the defkind registry as a new
+          <code>IR::meta_platform</code> kind. This teaches the parser to accept
+          <code>@platform Platforms::web, { … };</code> as valid Silicon syntax without
+          grammar changes.
+        </p>
+        <pre><span class="cmt">; src/strata/defkinds.si — add alongside @extern, @export, etc.</span>
+<span class="kw">@stratum_keyword</span> <span class="str">"@platform"</span>  := { <span class="ns">IR</span>::<span class="fn">meta_platform</span> };</pre>
+        <p>
+          In the IR lowerer, encountering <code>meta_platform</code> is a no-op —
+          the directive was already consumed by <code>parsePlatformConfig</code> in the
+          pre-pass. The lowerer skips it with no error.
+        </p>
+      </div>
+      <div class="dep-note">depends on step 2 (PlatformConfig)</div>
+    </div>
+
+    <div class="step">
+      <div class="step-header">
+        <div class="step-num">4</div>
+        <div class="step-title">Platform loader — loadPlatform</div>
+        <div class="file-badge">src/platforms/loader.ts</div>
+      </div>
+      <div class="step-body">
+        <p>
+          Write <code>loadPlatform(config: PlatformConfig): string[]</code>.
+          It reads <code>platform.json</code> for the selected platform, collects the
+          <code>.si</code> file paths for <code>core</code> plus each enabled feature, reads
+          them, and returns them as Silicon source strings ready to pass as
+          <code>extraSources</code> to <code>buildStrataRegistry</code> (which already feeds
+          them into the module registry pipeline).
+        </p>
+        <pre><span class="kw">export function</span> <span class="fn">loadPlatform</span>(config: <span class="type">PlatformConfig</span>): <span class="type">string</span>[] {
+  <span class="kw">const</span> meta = readPlatformJson(config.platform)    <span class="cmt">// platform.json</span>
+  <span class="kw">const</span> files = [<span class="str">'core'</span>, ...config.features]         <span class="cmt">// core always first</span>
+    .map(f => meta.features.find(x => x.name === f))
+    .filter(Boolean)
+    .map(f => readFileSync(path.join(PLATFORMS_DIR, config.platform, f.file), 'utf-8'))
+  <span class="kw">return</span> files
+}</pre>
+      </div>
+      <div class="dep-note">depends on step 1 (feature files exist) and step 2 (PlatformConfig type)</div>
+    </div>
+
+    <div class="step">
+      <div class="step-header">
+        <div class="step-num">5</div>
+        <div class="step-title">Wire into the compiler entry point</div>
+        <div class="file-badge">src/index.ts</div>
+      </div>
+      <div class="step-body">
+        <p>
+          In the main compiler entry, detect <code>project.si</code>, call
+          <code>parsePlatformConfig</code>, call <code>loadPlatform</code>, and pass the
+          resulting source strings as <code>extraSources</code> into the existing
+          <code>buildStrataRegistry</code> call. Zero other pipeline changes.
+        </p>
+        <pre><span class="diff-add">+ const platformConfig = parsePlatformConfig(projectSiPath)</span>
+<span class="diff-add">+ const platformSources = loadPlatform(platformConfig)</span>
+<span class="diff-ctx">  const registry = buildStrataRegistry(ast, [</span>
+<span class="diff-add">+   ...platformSources,</span>
+<span class="diff-ctx">    ...extraSources,  // user modules</span>
+<span class="diff-ctx">  ])</span></pre>
+      </div>
+      <div class="dep-note">depends on steps 2, 3, 4</div>
+    </div>
+
+    <div class="step">
+      <div class="step-header">
+        <div class="step-num">6</div>
+        <div class="step-title">Add @platform validation in type-checker</div>
+        <div class="file-badge">src/types/typechecker.ts</div>
+      </div>
+      <div class="step-body">
+        <p>
+          When the <code>game</code> feature is enabled (<code>requiresExport: "tick"</code>
+          in platform.json), the type-checker should verify that the program exports a
+          function named <code>tick</code>. This is a new check — if the export is missing,
+          emit a clear error:
+          <em>"Platform feature web::game requires an exported function named 'tick'"</em>.
+        </p>
+      </div>
+      <div class="dep-note">depends on step 4 (platform metadata available at type-check time)</div>
+    </div>
+
+    <div class="step">
+      <div class="step-header">
+        <div class="step-num">7</div>
+        <div class="step-title">Update playground — read platform from project config</div>
+        <div class="file-badge">playground/index.html</div>
+        <div class="file-badge">playground/server.ts</div>
+      </div>
+      <div class="step-body">
+        <p>
+          For now the playground uses the implicit fallback (all web features). No UI
+          changes needed. The server should pass an empty <code>projectSiPath</code> to the
+          compiler so it gets the full-featured web platform by default.
+        </p>
+        <p>
+          As a follow-on, add a <strong>Platform selector</strong> dropdown to the playground
+          header that lets the user toggle features (canvas, game, dom) and re-compiles with
+          a virtual <code>project.si</code>.
+        </p>
+      </div>
+      <div class="dep-note">depends on step 5 (compiler accepts platform config)</div>
+    </div>
+
+  </div>
+</section>
+
+<!-- ── Non-goals ──────────────────────────────────────────────────── -->
+<section id="nongoals">
+  <h2>Non-Goals</h2>
+  <ul>
+    <li>Package management for platforms (download, versioning, lock files)</li>
+    <li>Multiple platforms in one program (a program targets exactly one platform)</li>
+    <li>User-defined platforms (only compiler-shipped platforms for now)</li>
+    <li>Platform-conditional code inside Silicon source (<code>@if platform == web</code>)</li>
+    <li>Node platform implementation (planning only; implementation is a future round)</li>
+    <li>Per-feature tree-shaking of the JS host (web-env.js stays monolithic for now)</li>
+    <li>Playground platform selector UI (deferred to after core implementation)</li>
+  </ul>
+</section>
+
+<!-- ── Summary table ─────────────────────────────────────────────── -->
+<section id="summary">
+  <h2>File Change Summary</h2>
+  <table class="summary-table">
+    <thead>
+      <tr><th>File</th><th>Change</th><th>What changes</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>src/platforms/web/core.si</td>
+        <td><span class="tag new">new</span></td>
+        <td><strong>Web platform core externs</strong> — console, math, performance, date (split from web.si)</td>
+      </tr>
+      <tr>
+        <td>src/platforms/web/canvas.si</td>
+        <td><span class="tag new">new</span></td>
+        <td><strong>Canvas API externs</strong> — fill, stroke, text, clear (split from web.si)</td>
+      </tr>
+      <tr>
+        <td>src/platforms/web/dom.si</td>
+        <td><span class="tag new">new</span></td>
+        <td><strong>DOM API externs</strong> — set_html, clear_html (split from web.si)</td>
+      </tr>
+      <tr>
+        <td>src/platforms/web/game.si</td>
+        <td><span class="tag new">new</span></td>
+        <td><strong>Game feature marker</strong> — empty .si; presence triggers game loop in JS host</td>
+      </tr>
+      <tr>
+        <td>src/platforms/web/platform.json</td>
+        <td><span class="tag new">new</span></td>
+        <td><strong>Platform metadata</strong> — feature list, runtime file names, requiresExport</td>
+      </tr>
+      <tr>
+        <td>src/platforms/config.ts</td>
+        <td><span class="tag new">new</span></td>
+        <td><strong>parsePlatformConfig</strong> — reads project.si, returns PlatformConfig</td>
+      </tr>
+      <tr>
+        <td>src/platforms/loader.ts</td>
+        <td><span class="tag new">new</span></td>
+        <td><strong>loadPlatform</strong> — maps PlatformConfig to .si source strings</td>
+      </tr>
+      <tr>
+        <td>src/strata/defkinds.si</td>
+        <td><span class="tag mod">mod</span></td>
+        <td>Register <code>@platform</code> as new defkind → IR::meta_platform</td>
+      </tr>
+      <tr>
+        <td>src/ir/irKinds.ts</td>
+        <td><span class="tag mod">mod</span></td>
+        <td>Add <code>meta_platform</code> IR kind (no-op in lowerer)</td>
+      </tr>
+      <tr>
+        <td>src/index.ts</td>
+        <td><span class="tag mod">mod</span></td>
+        <td>Call parsePlatformConfig + loadPlatform; prepend platform sources to extraSources</td>
+      </tr>
+      <tr>
+        <td>src/types/typechecker.ts</td>
+        <td><span class="tag mod">mod</span></td>
+        <td>Validate requiresExport constraints from enabled platform features</td>
+      </tr>
+      <tr>
+        <td>src/strata/modules/web.si</td>
+        <td>—</td>
+        <td>Kept as-is for backward compat; deprecated once platform system is live</td>
+      </tr>
+      <tr>
+        <td>playground/index.html</td>
+        <td>—</td>
+        <td>No changes for initial rollout (fallback platform = all web features)</td>
+      </tr>
+    </tbody>
+  </table>
+</section>
+
+</main>
+</body>
+</html>
