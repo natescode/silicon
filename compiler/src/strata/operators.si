@@ -10,7 +10,8 @@
     &Compiler::register::operator '+';
     &Compiler::on::lower '+', Plus_lower;
 };
-@fn Plus_lower node:Int :=
+\\ Plus_lower (Int)
+@fn Plus_lower node :=
     &compiler::ir_makeBinOp
         (&compiler::compiler_str_intern 'i32.add', 0),
         (&compiler::compiler_lowerExpr (&compiler::compiler_ast_node_field node, (&compiler::compiler_str_intern 'left', 0))),
@@ -21,7 +22,8 @@
     &Compiler::register::operator '-';
     &Compiler::on::lower '-', Minus_lower;
 };
-@fn Minus_lower node:Int :=
+\\ Minus_lower (Int)
+@fn Minus_lower node :=
     &compiler::ir_makeBinOp
         (&compiler::compiler_str_intern 'i32.sub', 0),
         (&compiler::compiler_lowerExpr (&compiler::compiler_ast_node_field node, (&compiler::compiler_str_intern 'left', 0))),
@@ -32,7 +34,8 @@
     &Compiler::register::operator '*';
     &Compiler::on::lower '*', Multiply_lower;
 };
-@fn Multiply_lower node:Int :=
+\\ Multiply_lower (Int)
+@fn Multiply_lower node :=
     &compiler::ir_makeBinOp
         (&compiler::compiler_str_intern 'i32.mul', 0),
         (&compiler::compiler_lowerExpr (&compiler::compiler_ast_node_field node, (&compiler::compiler_str_intern 'left', 0))),
@@ -43,7 +46,8 @@
     &Compiler::register::operator '/';
     &Compiler::on::lower '/', Divide_lower;
 };
-@fn Divide_lower node:Int :=
+\\ Divide_lower (Int)
+@fn Divide_lower node :=
     &compiler::ir_makeBinOp
         (&compiler::compiler_str_intern 'i32.div_s', 0),
         (&compiler::compiler_lowerExpr (&compiler::compiler_ast_node_field node, (&compiler::compiler_str_intern 'left', 0))),
@@ -54,7 +58,8 @@
     &Compiler::register::operator '%';
     &Compiler::on::lower '%', Modulo_lower;
 };
-@fn Modulo_lower node:Int :=
+\\ Modulo_lower (Int)
+@fn Modulo_lower node :=
     &compiler::ir_makeBinOp
         (&compiler::compiler_str_intern 'i32.rem_s', 0),
         (&compiler::compiler_lowerExpr (&compiler::compiler_ast_node_field node, (&compiler::compiler_str_intern 'left', 0))),
@@ -65,7 +70,8 @@
     &Compiler::register::operator '==';
     &Compiler::on::lower '==', Equal_lower;
 };
-@fn Equal_lower node:Int :=
+\\ Equal_lower (Int)
+@fn Equal_lower node :=
     &compiler::ir_makeBinOp
         (&compiler::compiler_str_intern 'i32.eq', 0),
         (&compiler::compiler_lowerExpr (&compiler::compiler_ast_node_field node, (&compiler::compiler_str_intern 'left', 0))),
@@ -76,7 +82,8 @@
     &Compiler::register::operator '!=';
     &Compiler::on::lower '!=', NotEqual_lower;
 };
-@fn NotEqual_lower node:Int :=
+\\ NotEqual_lower (Int)
+@fn NotEqual_lower node :=
     &compiler::ir_makeBinOp
         (&compiler::compiler_str_intern 'i32.ne', 0),
         (&compiler::compiler_lowerExpr (&compiler::compiler_ast_node_field node, (&compiler::compiler_str_intern 'left', 0))),
@@ -87,7 +94,8 @@
     &Compiler::register::operator '<';
     &Compiler::on::lower '<', LessThan_lower;
 };
-@fn LessThan_lower node:Int :=
+\\ LessThan_lower (Int)
+@fn LessThan_lower node :=
     &compiler::ir_makeBinOp
         (&compiler::compiler_str_intern 'i32.lt_s', 0),
         (&compiler::compiler_lowerExpr (&compiler::compiler_ast_node_field node, (&compiler::compiler_str_intern 'left', 0))),
@@ -98,7 +106,8 @@
     &Compiler::register::operator '>';
     &Compiler::on::lower '>', GreaterThan_lower;
 };
-@fn GreaterThan_lower node:Int :=
+\\ GreaterThan_lower (Int)
+@fn GreaterThan_lower node :=
     &compiler::ir_makeBinOp
         (&compiler::compiler_str_intern 'i32.gt_s', 0),
         (&compiler::compiler_lowerExpr (&compiler::compiler_ast_node_field node, (&compiler::compiler_str_intern 'left', 0))),
@@ -109,7 +118,8 @@
     &Compiler::register::operator '<=';
     &Compiler::on::lower '<=', LessThanOrEqual_lower;
 };
-@fn LessThanOrEqual_lower node:Int :=
+\\ LessThanOrEqual_lower (Int)
+@fn LessThanOrEqual_lower node :=
     &compiler::ir_makeBinOp
         (&compiler::compiler_str_intern 'i32.le_s', 0),
         (&compiler::compiler_lowerExpr (&compiler::compiler_ast_node_field node, (&compiler::compiler_str_intern 'left', 0))),
@@ -120,7 +130,8 @@
     &Compiler::register::operator '>=';
     &Compiler::on::lower '>=', GreaterThanOrEqual_lower;
 };
-@fn GreaterThanOrEqual_lower node:Int :=
+\\ GreaterThanOrEqual_lower (Int)
+@fn GreaterThanOrEqual_lower node :=
     &compiler::ir_makeBinOp
         (&compiler::compiler_str_intern 'i32.ge_s', 0),
         (&compiler::compiler_lowerExpr (&compiler::compiler_ast_node_field node, (&compiler::compiler_str_intern 'left', 0))),
@@ -137,7 +148,8 @@
     &Compiler::register::typed_operator '+', 'Float';
     &Compiler::on::lower '+:Float', PlusFloat_lower;
 };
-@fn PlusFloat_lower node:Int :=
+\\ PlusFloat_lower (Int)
+@fn PlusFloat_lower node :=
     &compiler::ir_makeBinOp
         (&compiler::compiler_str_intern 'f32.add', 0),
         (&compiler::compiler_lowerExpr (&compiler::compiler_ast_node_field node, (&compiler::compiler_str_intern 'left', 0))),
@@ -148,7 +160,8 @@
     &Compiler::register::typed_operator '-', 'Float';
     &Compiler::on::lower '-:Float', MinusFloat_lower;
 };
-@fn MinusFloat_lower node:Int :=
+\\ MinusFloat_lower (Int)
+@fn MinusFloat_lower node :=
     &compiler::ir_makeBinOp
         (&compiler::compiler_str_intern 'f32.sub', 0),
         (&compiler::compiler_lowerExpr (&compiler::compiler_ast_node_field node, (&compiler::compiler_str_intern 'left', 0))),
@@ -159,7 +172,8 @@
     &Compiler::register::typed_operator '*', 'Float';
     &Compiler::on::lower '*:Float', MultiplyFloat_lower;
 };
-@fn MultiplyFloat_lower node:Int :=
+\\ MultiplyFloat_lower (Int)
+@fn MultiplyFloat_lower node :=
     &compiler::ir_makeBinOp
         (&compiler::compiler_str_intern 'f32.mul', 0),
         (&compiler::compiler_lowerExpr (&compiler::compiler_ast_node_field node, (&compiler::compiler_str_intern 'left', 0))),
@@ -170,7 +184,8 @@
     &Compiler::register::typed_operator '/', 'Float';
     &Compiler::on::lower '/:Float', DivideFloat_lower;
 };
-@fn DivideFloat_lower node:Int :=
+\\ DivideFloat_lower (Int)
+@fn DivideFloat_lower node :=
     &compiler::ir_makeBinOp
         (&compiler::compiler_str_intern 'f32.div', 0),
         (&compiler::compiler_lowerExpr (&compiler::compiler_ast_node_field node, (&compiler::compiler_str_intern 'left', 0))),
@@ -181,7 +196,8 @@
     &Compiler::register::typed_operator '==', 'Float';
     &Compiler::on::lower '==:Float', EqualFloat_lower;
 };
-@fn EqualFloat_lower node:Int :=
+\\ EqualFloat_lower (Int)
+@fn EqualFloat_lower node :=
     &compiler::ir_makeBinOp
         (&compiler::compiler_str_intern 'f32.eq', 0),
         (&compiler::compiler_lowerExpr (&compiler::compiler_ast_node_field node, (&compiler::compiler_str_intern 'left', 0))),
@@ -192,7 +208,8 @@
     &Compiler::register::typed_operator '!=', 'Float';
     &Compiler::on::lower '!=:Float', NotEqualFloat_lower;
 };
-@fn NotEqualFloat_lower node:Int :=
+\\ NotEqualFloat_lower (Int)
+@fn NotEqualFloat_lower node :=
     &compiler::ir_makeBinOp
         (&compiler::compiler_str_intern 'f32.ne', 0),
         (&compiler::compiler_lowerExpr (&compiler::compiler_ast_node_field node, (&compiler::compiler_str_intern 'left', 0))),
@@ -203,7 +220,8 @@
     &Compiler::register::typed_operator '<', 'Float';
     &Compiler::on::lower '<:Float', LessThanFloat_lower;
 };
-@fn LessThanFloat_lower node:Int :=
+\\ LessThanFloat_lower (Int)
+@fn LessThanFloat_lower node :=
     &compiler::ir_makeBinOp
         (&compiler::compiler_str_intern 'f32.lt', 0),
         (&compiler::compiler_lowerExpr (&compiler::compiler_ast_node_field node, (&compiler::compiler_str_intern 'left', 0))),
@@ -214,7 +232,8 @@
     &Compiler::register::typed_operator '>', 'Float';
     &Compiler::on::lower '>:Float', GreaterThanFloat_lower;
 };
-@fn GreaterThanFloat_lower node:Int :=
+\\ GreaterThanFloat_lower (Int)
+@fn GreaterThanFloat_lower node :=
     &compiler::ir_makeBinOp
         (&compiler::compiler_str_intern 'f32.gt', 0),
         (&compiler::compiler_lowerExpr (&compiler::compiler_ast_node_field node, (&compiler::compiler_str_intern 'left', 0))),
@@ -225,7 +244,8 @@
     &Compiler::register::typed_operator '<=', 'Float';
     &Compiler::on::lower '<=:Float', LessThanOrEqualFloat_lower;
 };
-@fn LessThanOrEqualFloat_lower node:Int :=
+\\ LessThanOrEqualFloat_lower (Int)
+@fn LessThanOrEqualFloat_lower node :=
     &compiler::ir_makeBinOp
         (&compiler::compiler_str_intern 'f32.le', 0),
         (&compiler::compiler_lowerExpr (&compiler::compiler_ast_node_field node, (&compiler::compiler_str_intern 'left', 0))),
@@ -236,7 +256,8 @@
     &Compiler::register::typed_operator '>=', 'Float';
     &Compiler::on::lower '>=:Float', GreaterThanOrEqualFloat_lower;
 };
-@fn GreaterThanOrEqualFloat_lower node:Int :=
+\\ GreaterThanOrEqualFloat_lower (Int)
+@fn GreaterThanOrEqualFloat_lower node :=
     &compiler::ir_makeBinOp
         (&compiler::compiler_str_intern 'f32.ge', 0),
         (&compiler::compiler_lowerExpr (&compiler::compiler_ast_node_field node, (&compiler::compiler_str_intern 'left', 0))),
@@ -249,7 +270,8 @@
     &Compiler::register::typed_operator '+', 'Int64';
     &Compiler::on::lower '+:Int64', PlusInt64_lower;
 };
-@fn PlusInt64_lower node:Int :=
+\\ PlusInt64_lower (Int)
+@fn PlusInt64_lower node :=
     &compiler::ir_makeBinOp
         (&compiler::compiler_str_intern 'i64.add', 0),
         (&compiler::compiler_lowerExpr (&compiler::compiler_ast_node_field node, (&compiler::compiler_str_intern 'left', 0))),
@@ -260,7 +282,8 @@
     &Compiler::register::typed_operator '-', 'Int64';
     &Compiler::on::lower '-:Int64', MinusInt64_lower;
 };
-@fn MinusInt64_lower node:Int :=
+\\ MinusInt64_lower (Int)
+@fn MinusInt64_lower node :=
     &compiler::ir_makeBinOp
         (&compiler::compiler_str_intern 'i64.sub', 0),
         (&compiler::compiler_lowerExpr (&compiler::compiler_ast_node_field node, (&compiler::compiler_str_intern 'left', 0))),
@@ -271,7 +294,8 @@
     &Compiler::register::typed_operator '*', 'Int64';
     &Compiler::on::lower '*:Int64', MultiplyInt64_lower;
 };
-@fn MultiplyInt64_lower node:Int :=
+\\ MultiplyInt64_lower (Int)
+@fn MultiplyInt64_lower node :=
     &compiler::ir_makeBinOp
         (&compiler::compiler_str_intern 'i64.mul', 0),
         (&compiler::compiler_lowerExpr (&compiler::compiler_ast_node_field node, (&compiler::compiler_str_intern 'left', 0))),
@@ -282,7 +306,8 @@
     &Compiler::register::typed_operator '/', 'Int64';
     &Compiler::on::lower '/:Int64', DivideInt64_lower;
 };
-@fn DivideInt64_lower node:Int :=
+\\ DivideInt64_lower (Int)
+@fn DivideInt64_lower node :=
     &compiler::ir_makeBinOp
         (&compiler::compiler_str_intern 'i64.div_s', 0),
         (&compiler::compiler_lowerExpr (&compiler::compiler_ast_node_field node, (&compiler::compiler_str_intern 'left', 0))),
@@ -293,7 +318,8 @@
     &Compiler::register::typed_operator '%', 'Int64';
     &Compiler::on::lower '%:Int64', ModuloInt64_lower;
 };
-@fn ModuloInt64_lower node:Int :=
+\\ ModuloInt64_lower (Int)
+@fn ModuloInt64_lower node :=
     &compiler::ir_makeBinOp
         (&compiler::compiler_str_intern 'i64.rem_s', 0),
         (&compiler::compiler_lowerExpr (&compiler::compiler_ast_node_field node, (&compiler::compiler_str_intern 'left', 0))),
@@ -304,7 +330,8 @@
     &Compiler::register::typed_operator '==', 'Int64';
     &Compiler::on::lower '==:Int64', EqualInt64_lower;
 };
-@fn EqualInt64_lower node:Int :=
+\\ EqualInt64_lower (Int)
+@fn EqualInt64_lower node :=
     &compiler::ir_makeBinOp
         (&compiler::compiler_str_intern 'i64.eq', 0),
         (&compiler::compiler_lowerExpr (&compiler::compiler_ast_node_field node, (&compiler::compiler_str_intern 'left', 0))),
@@ -315,7 +342,8 @@
     &Compiler::register::typed_operator '!=', 'Int64';
     &Compiler::on::lower '!=:Int64', NotEqualInt64_lower;
 };
-@fn NotEqualInt64_lower node:Int :=
+\\ NotEqualInt64_lower (Int)
+@fn NotEqualInt64_lower node :=
     &compiler::ir_makeBinOp
         (&compiler::compiler_str_intern 'i64.ne', 0),
         (&compiler::compiler_lowerExpr (&compiler::compiler_ast_node_field node, (&compiler::compiler_str_intern 'left', 0))),
@@ -326,7 +354,8 @@
     &Compiler::register::typed_operator '<', 'Int64';
     &Compiler::on::lower '<:Int64', LessThanInt64_lower;
 };
-@fn LessThanInt64_lower node:Int :=
+\\ LessThanInt64_lower (Int)
+@fn LessThanInt64_lower node :=
     &compiler::ir_makeBinOp
         (&compiler::compiler_str_intern 'i64.lt_s', 0),
         (&compiler::compiler_lowerExpr (&compiler::compiler_ast_node_field node, (&compiler::compiler_str_intern 'left', 0))),
@@ -337,7 +366,8 @@
     &Compiler::register::typed_operator '>', 'Int64';
     &Compiler::on::lower '>:Int64', GreaterThanInt64_lower;
 };
-@fn GreaterThanInt64_lower node:Int :=
+\\ GreaterThanInt64_lower (Int)
+@fn GreaterThanInt64_lower node :=
     &compiler::ir_makeBinOp
         (&compiler::compiler_str_intern 'i64.gt_s', 0),
         (&compiler::compiler_lowerExpr (&compiler::compiler_ast_node_field node, (&compiler::compiler_str_intern 'left', 0))),
@@ -348,7 +378,8 @@
     &Compiler::register::typed_operator '<=', 'Int64';
     &Compiler::on::lower '<=:Int64', LessThanOrEqualInt64_lower;
 };
-@fn LessThanOrEqualInt64_lower node:Int :=
+\\ LessThanOrEqualInt64_lower (Int)
+@fn LessThanOrEqualInt64_lower node :=
     &compiler::ir_makeBinOp
         (&compiler::compiler_str_intern 'i64.le_s', 0),
         (&compiler::compiler_lowerExpr (&compiler::compiler_ast_node_field node, (&compiler::compiler_str_intern 'left', 0))),
@@ -359,7 +390,8 @@
     &Compiler::register::typed_operator '>=', 'Int64';
     &Compiler::on::lower '>=:Int64', GreaterThanOrEqualInt64_lower;
 };
-@fn GreaterThanOrEqualInt64_lower node:Int :=
+\\ GreaterThanOrEqualInt64_lower (Int)
+@fn GreaterThanOrEqualInt64_lower node :=
     &compiler::ir_makeBinOp
         (&compiler::compiler_str_intern 'i64.ge_s', 0),
         (&compiler::compiler_lowerExpr (&compiler::compiler_ast_node_field node, (&compiler::compiler_str_intern 'left', 0))),
@@ -376,7 +408,8 @@
     &Compiler::register::typed_operator '/', 'UInt8';
     &Compiler::on::lower '/:UInt8', DivideU8_lower;
 };
-@fn DivideU8_lower node:Int :=
+\\ DivideU8_lower (Int)
+@fn DivideU8_lower node :=
     &compiler::ir_makeBinOp
         (&compiler::compiler_str_intern 'i32.div_u', 0),
         (&compiler::compiler_lowerExpr (&compiler::compiler_ast_node_field node, (&compiler::compiler_str_intern 'left', 0))),
@@ -387,7 +420,8 @@
     &Compiler::register::typed_operator '%', 'UInt8';
     &Compiler::on::lower '%:UInt8', ModuloU8_lower;
 };
-@fn ModuloU8_lower node:Int :=
+\\ ModuloU8_lower (Int)
+@fn ModuloU8_lower node :=
     &compiler::ir_makeBinOp
         (&compiler::compiler_str_intern 'i32.rem_u', 0),
         (&compiler::compiler_lowerExpr (&compiler::compiler_ast_node_field node, (&compiler::compiler_str_intern 'left', 0))),
@@ -398,7 +432,8 @@
     &Compiler::register::typed_operator '>>', 'UInt8';
     &Compiler::on::lower '>>:UInt8', ShiftRightU8_lower;
 };
-@fn ShiftRightU8_lower node:Int :=
+\\ ShiftRightU8_lower (Int)
+@fn ShiftRightU8_lower node :=
     &compiler::ir_makeBinOp
         (&compiler::compiler_str_intern 'i32.shr_u', 0),
         (&compiler::compiler_lowerExpr (&compiler::compiler_ast_node_field node, (&compiler::compiler_str_intern 'left', 0))),
@@ -409,7 +444,8 @@
     &Compiler::register::typed_operator '<', 'UInt8';
     &Compiler::on::lower '<:UInt8', LessThanU8_lower;
 };
-@fn LessThanU8_lower node:Int :=
+\\ LessThanU8_lower (Int)
+@fn LessThanU8_lower node :=
     &compiler::ir_makeBinOp
         (&compiler::compiler_str_intern 'i32.lt_u', 0),
         (&compiler::compiler_lowerExpr (&compiler::compiler_ast_node_field node, (&compiler::compiler_str_intern 'left', 0))),
@@ -420,7 +456,8 @@
     &Compiler::register::typed_operator '>', 'UInt8';
     &Compiler::on::lower '>:UInt8', GreaterThanU8_lower;
 };
-@fn GreaterThanU8_lower node:Int :=
+\\ GreaterThanU8_lower (Int)
+@fn GreaterThanU8_lower node :=
     &compiler::ir_makeBinOp
         (&compiler::compiler_str_intern 'i32.gt_u', 0),
         (&compiler::compiler_lowerExpr (&compiler::compiler_ast_node_field node, (&compiler::compiler_str_intern 'left', 0))),
@@ -431,7 +468,8 @@
     &Compiler::register::typed_operator '<=', 'UInt8';
     &Compiler::on::lower '<=:UInt8', LessThanOrEqualU8_lower;
 };
-@fn LessThanOrEqualU8_lower node:Int :=
+\\ LessThanOrEqualU8_lower (Int)
+@fn LessThanOrEqualU8_lower node :=
     &compiler::ir_makeBinOp
         (&compiler::compiler_str_intern 'i32.le_u', 0),
         (&compiler::compiler_lowerExpr (&compiler::compiler_ast_node_field node, (&compiler::compiler_str_intern 'left', 0))),
@@ -442,7 +480,8 @@
     &Compiler::register::typed_operator '>=', 'UInt8';
     &Compiler::on::lower '>=:UInt8', GreaterThanOrEqualU8_lower;
 };
-@fn GreaterThanOrEqualU8_lower node:Int :=
+\\ GreaterThanOrEqualU8_lower (Int)
+@fn GreaterThanOrEqualU8_lower node :=
     &compiler::ir_makeBinOp
         (&compiler::compiler_str_intern 'i32.ge_u', 0),
         (&compiler::compiler_lowerExpr (&compiler::compiler_ast_node_field node, (&compiler::compiler_str_intern 'left', 0))),
@@ -453,7 +492,8 @@
     &Compiler::register::typed_operator '/', 'UInt16';
     &Compiler::on::lower '/:UInt16', DivideU16_lower;
 };
-@fn DivideU16_lower node:Int :=
+\\ DivideU16_lower (Int)
+@fn DivideU16_lower node :=
     &compiler::ir_makeBinOp
         (&compiler::compiler_str_intern 'i32.div_u', 0),
         (&compiler::compiler_lowerExpr (&compiler::compiler_ast_node_field node, (&compiler::compiler_str_intern 'left', 0))),
@@ -464,7 +504,8 @@
     &Compiler::register::typed_operator '%', 'UInt16';
     &Compiler::on::lower '%:UInt16', ModuloU16_lower;
 };
-@fn ModuloU16_lower node:Int :=
+\\ ModuloU16_lower (Int)
+@fn ModuloU16_lower node :=
     &compiler::ir_makeBinOp
         (&compiler::compiler_str_intern 'i32.rem_u', 0),
         (&compiler::compiler_lowerExpr (&compiler::compiler_ast_node_field node, (&compiler::compiler_str_intern 'left', 0))),
@@ -475,7 +516,8 @@
     &Compiler::register::typed_operator '>>', 'UInt16';
     &Compiler::on::lower '>>:UInt16', ShiftRightU16_lower;
 };
-@fn ShiftRightU16_lower node:Int :=
+\\ ShiftRightU16_lower (Int)
+@fn ShiftRightU16_lower node :=
     &compiler::ir_makeBinOp
         (&compiler::compiler_str_intern 'i32.shr_u', 0),
         (&compiler::compiler_lowerExpr (&compiler::compiler_ast_node_field node, (&compiler::compiler_str_intern 'left', 0))),
@@ -486,7 +528,8 @@
     &Compiler::register::typed_operator '<', 'UInt16';
     &Compiler::on::lower '<:UInt16', LessThanU16_lower;
 };
-@fn LessThanU16_lower node:Int :=
+\\ LessThanU16_lower (Int)
+@fn LessThanU16_lower node :=
     &compiler::ir_makeBinOp
         (&compiler::compiler_str_intern 'i32.lt_u', 0),
         (&compiler::compiler_lowerExpr (&compiler::compiler_ast_node_field node, (&compiler::compiler_str_intern 'left', 0))),
@@ -497,7 +540,8 @@
     &Compiler::register::typed_operator '>', 'UInt16';
     &Compiler::on::lower '>:UInt16', GreaterThanU16_lower;
 };
-@fn GreaterThanU16_lower node:Int :=
+\\ GreaterThanU16_lower (Int)
+@fn GreaterThanU16_lower node :=
     &compiler::ir_makeBinOp
         (&compiler::compiler_str_intern 'i32.gt_u', 0),
         (&compiler::compiler_lowerExpr (&compiler::compiler_ast_node_field node, (&compiler::compiler_str_intern 'left', 0))),
@@ -508,7 +552,8 @@
     &Compiler::register::typed_operator '<=', 'UInt16';
     &Compiler::on::lower '<=:UInt16', LessThanOrEqualU16_lower;
 };
-@fn LessThanOrEqualU16_lower node:Int :=
+\\ LessThanOrEqualU16_lower (Int)
+@fn LessThanOrEqualU16_lower node :=
     &compiler::ir_makeBinOp
         (&compiler::compiler_str_intern 'i32.le_u', 0),
         (&compiler::compiler_lowerExpr (&compiler::compiler_ast_node_field node, (&compiler::compiler_str_intern 'left', 0))),
@@ -519,7 +564,8 @@
     &Compiler::register::typed_operator '>=', 'UInt16';
     &Compiler::on::lower '>=:UInt16', GreaterThanOrEqualU16_lower;
 };
-@fn GreaterThanOrEqualU16_lower node:Int :=
+\\ GreaterThanOrEqualU16_lower (Int)
+@fn GreaterThanOrEqualU16_lower node :=
     &compiler::ir_makeBinOp
         (&compiler::compiler_str_intern 'i32.ge_u', 0),
         (&compiler::compiler_lowerExpr (&compiler::compiler_ast_node_field node, (&compiler::compiler_str_intern 'left', 0))),
@@ -530,7 +576,8 @@
     &Compiler::register::typed_operator '/', 'UInt32';
     &Compiler::on::lower '/:UInt32', DivideU32_lower;
 };
-@fn DivideU32_lower node:Int :=
+\\ DivideU32_lower (Int)
+@fn DivideU32_lower node :=
     &compiler::ir_makeBinOp
         (&compiler::compiler_str_intern 'i32.div_u', 0),
         (&compiler::compiler_lowerExpr (&compiler::compiler_ast_node_field node, (&compiler::compiler_str_intern 'left', 0))),
@@ -541,7 +588,8 @@
     &Compiler::register::typed_operator '%', 'UInt32';
     &Compiler::on::lower '%:UInt32', ModuloU32_lower;
 };
-@fn ModuloU32_lower node:Int :=
+\\ ModuloU32_lower (Int)
+@fn ModuloU32_lower node :=
     &compiler::ir_makeBinOp
         (&compiler::compiler_str_intern 'i32.rem_u', 0),
         (&compiler::compiler_lowerExpr (&compiler::compiler_ast_node_field node, (&compiler::compiler_str_intern 'left', 0))),
@@ -552,7 +600,8 @@
     &Compiler::register::typed_operator '>>', 'UInt32';
     &Compiler::on::lower '>>:UInt32', ShiftRightU32_lower;
 };
-@fn ShiftRightU32_lower node:Int :=
+\\ ShiftRightU32_lower (Int)
+@fn ShiftRightU32_lower node :=
     &compiler::ir_makeBinOp
         (&compiler::compiler_str_intern 'i32.shr_u', 0),
         (&compiler::compiler_lowerExpr (&compiler::compiler_ast_node_field node, (&compiler::compiler_str_intern 'left', 0))),
@@ -563,7 +612,8 @@
     &Compiler::register::typed_operator '<', 'UInt32';
     &Compiler::on::lower '<:UInt32', LessThanU32_lower;
 };
-@fn LessThanU32_lower node:Int :=
+\\ LessThanU32_lower (Int)
+@fn LessThanU32_lower node :=
     &compiler::ir_makeBinOp
         (&compiler::compiler_str_intern 'i32.lt_u', 0),
         (&compiler::compiler_lowerExpr (&compiler::compiler_ast_node_field node, (&compiler::compiler_str_intern 'left', 0))),
@@ -574,7 +624,8 @@
     &Compiler::register::typed_operator '>', 'UInt32';
     &Compiler::on::lower '>:UInt32', GreaterThanU32_lower;
 };
-@fn GreaterThanU32_lower node:Int :=
+\\ GreaterThanU32_lower (Int)
+@fn GreaterThanU32_lower node :=
     &compiler::ir_makeBinOp
         (&compiler::compiler_str_intern 'i32.gt_u', 0),
         (&compiler::compiler_lowerExpr (&compiler::compiler_ast_node_field node, (&compiler::compiler_str_intern 'left', 0))),
@@ -585,7 +636,8 @@
     &Compiler::register::typed_operator '<=', 'UInt32';
     &Compiler::on::lower '<=:UInt32', LessThanOrEqualU32_lower;
 };
-@fn LessThanOrEqualU32_lower node:Int :=
+\\ LessThanOrEqualU32_lower (Int)
+@fn LessThanOrEqualU32_lower node :=
     &compiler::ir_makeBinOp
         (&compiler::compiler_str_intern 'i32.le_u', 0),
         (&compiler::compiler_lowerExpr (&compiler::compiler_ast_node_field node, (&compiler::compiler_str_intern 'left', 0))),
@@ -596,7 +648,8 @@
     &Compiler::register::typed_operator '>=', 'UInt32';
     &Compiler::on::lower '>=:UInt32', GreaterThanOrEqualU32_lower;
 };
-@fn GreaterThanOrEqualU32_lower node:Int :=
+\\ GreaterThanOrEqualU32_lower (Int)
+@fn GreaterThanOrEqualU32_lower node :=
     &compiler::ir_makeBinOp
         (&compiler::compiler_str_intern 'i32.ge_u', 0),
         (&compiler::compiler_lowerExpr (&compiler::compiler_ast_node_field node, (&compiler::compiler_str_intern 'left', 0))),
@@ -607,7 +660,8 @@
     &Compiler::register::typed_operator '/', 'UInt64';
     &Compiler::on::lower '/:UInt64', DivideU64_lower;
 };
-@fn DivideU64_lower node:Int :=
+\\ DivideU64_lower (Int)
+@fn DivideU64_lower node :=
     &compiler::ir_makeBinOp
         (&compiler::compiler_str_intern 'i64.div_u', 0),
         (&compiler::compiler_lowerExpr (&compiler::compiler_ast_node_field node, (&compiler::compiler_str_intern 'left', 0))),
@@ -618,7 +672,8 @@
     &Compiler::register::typed_operator '%', 'UInt64';
     &Compiler::on::lower '%:UInt64', ModuloU64_lower;
 };
-@fn ModuloU64_lower node:Int :=
+\\ ModuloU64_lower (Int)
+@fn ModuloU64_lower node :=
     &compiler::ir_makeBinOp
         (&compiler::compiler_str_intern 'i64.rem_u', 0),
         (&compiler::compiler_lowerExpr (&compiler::compiler_ast_node_field node, (&compiler::compiler_str_intern 'left', 0))),
@@ -629,7 +684,8 @@
     &Compiler::register::typed_operator '>>', 'UInt64';
     &Compiler::on::lower '>>:UInt64', ShiftRightU64_lower;
 };
-@fn ShiftRightU64_lower node:Int :=
+\\ ShiftRightU64_lower (Int)
+@fn ShiftRightU64_lower node :=
     &compiler::ir_makeBinOp
         (&compiler::compiler_str_intern 'i64.shr_u', 0),
         (&compiler::compiler_lowerExpr (&compiler::compiler_ast_node_field node, (&compiler::compiler_str_intern 'left', 0))),
@@ -640,7 +696,8 @@
     &Compiler::register::typed_operator '<', 'UInt64';
     &Compiler::on::lower '<:UInt64', LessThanU64_lower;
 };
-@fn LessThanU64_lower node:Int :=
+\\ LessThanU64_lower (Int)
+@fn LessThanU64_lower node :=
     &compiler::ir_makeBinOp
         (&compiler::compiler_str_intern 'i64.lt_u', 0),
         (&compiler::compiler_lowerExpr (&compiler::compiler_ast_node_field node, (&compiler::compiler_str_intern 'left', 0))),
@@ -651,7 +708,8 @@
     &Compiler::register::typed_operator '>', 'UInt64';
     &Compiler::on::lower '>:UInt64', GreaterThanU64_lower;
 };
-@fn GreaterThanU64_lower node:Int :=
+\\ GreaterThanU64_lower (Int)
+@fn GreaterThanU64_lower node :=
     &compiler::ir_makeBinOp
         (&compiler::compiler_str_intern 'i64.gt_u', 0),
         (&compiler::compiler_lowerExpr (&compiler::compiler_ast_node_field node, (&compiler::compiler_str_intern 'left', 0))),
@@ -662,7 +720,8 @@
     &Compiler::register::typed_operator '<=', 'UInt64';
     &Compiler::on::lower '<=:UInt64', LessThanOrEqualU64_lower;
 };
-@fn LessThanOrEqualU64_lower node:Int :=
+\\ LessThanOrEqualU64_lower (Int)
+@fn LessThanOrEqualU64_lower node :=
     &compiler::ir_makeBinOp
         (&compiler::compiler_str_intern 'i64.le_u', 0),
         (&compiler::compiler_lowerExpr (&compiler::compiler_ast_node_field node, (&compiler::compiler_str_intern 'left', 0))),
@@ -673,7 +732,8 @@
     &Compiler::register::typed_operator '>=', 'UInt64';
     &Compiler::on::lower '>=:UInt64', GreaterThanOrEqualU64_lower;
 };
-@fn GreaterThanOrEqualU64_lower node:Int :=
+\\ GreaterThanOrEqualU64_lower (Int)
+@fn GreaterThanOrEqualU64_lower node :=
     &compiler::ir_makeBinOp
         (&compiler::compiler_str_intern 'i64.ge_u', 0),
         (&compiler::compiler_lowerExpr (&compiler::compiler_ast_node_field node, (&compiler::compiler_str_intern 'left', 0))),

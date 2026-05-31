@@ -2,7 +2,8 @@
 # i64 rights flag positions are declared in src/strata/modules/
 # wasi_snapshot_preview1.si — the module registry generates the import
 # automatically.  The @toInt64 cast turns Int literals into i64 args.
-@fn try_open dir_fd:Int, path_ptr:Int, path_len:Int, fd_out:Int := {
+\\ try_open (Int, Int, Int, Int)
+@fn try_open dir_fd, path_ptr, path_len, fd_out := {
   &wasi_snapshot_preview1::path_open
     dir_fd, 0, path_ptr, path_len, 0,
     (&@toInt64 0), (&@toInt64 0),

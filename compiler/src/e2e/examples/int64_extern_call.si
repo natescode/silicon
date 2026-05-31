@@ -4,6 +4,6 @@
 #   - compiler-api resolveTypeName mapping Int64 → 'i64'
 #   - emitter writing (param i64) / (result i64) on the import
 #   - @toInt64 keyword lowering an i32 literal into (i64.extend_i32_s (i32.const N))
-@extern path_open_stub:Int64 rights:Int64;
+@extern { \\ path_open_stub (Int64) -> Int64 }
 
 &path_open_stub (&@toInt64 0);

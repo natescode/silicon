@@ -1,1 +1,2 @@
-@fn inc x:Int := { x = x + 1; x };
+\\ inc (Int)
+@fn inc x := { x = x + 1; x };

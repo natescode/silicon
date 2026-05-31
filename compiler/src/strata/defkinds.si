@@ -13,15 +13,16 @@
     &Compiler::on::lower '@fn', LetOrFn_lower;
 };
 
-@fn LetOrFn_lower node:Int := {
-    @local name:Int       := &compiler::compiler_watId
+\\ LetOrFn_lower (Int)
+@fn LetOrFn_lower node := {
+    @local name       := &compiler::compiler_watId
         (&compiler::compiler_ast_str_field node,
             (&compiler::compiler_str_intern 'name.name', 0));
-    @local params:Int     := &compiler::compiler_lowerParams node;
-    @local funcResult:Int := &compiler::compiler_lowerFunctionBody node, params;
-    @local body:Int       := &compiler::compiler_funcResult_body funcResult;
-    @local locals:Int     := &compiler::compiler_funcResult_locals funcResult;
-    @local returnType:Int := &compiler::compiler_resolveFunctionReturnType node, name, body;
+    @local params     := &compiler::compiler_lowerParams node;
+    @local funcResult := &compiler::compiler_lowerFunctionBody node, params;
+    @local body       := &compiler::compiler_funcResult_body funcResult;
+    @local locals     := &compiler::compiler_funcResult_locals funcResult;
+    @local returnType := &compiler::compiler_resolveFunctionReturnType node, name, body;
     &compiler::compiler_ctx_globals_set name, (&compiler::compiler_str_intern 'i32', 0);
     &compiler::ir_makeFunction name, params, returnType, locals, body
 };
@@ -39,16 +40,17 @@
     &Compiler::register::keyword '@var';
     &Compiler::on::lower '@var', VarDef_lower;
 };
-@fn VarDef_lower node:Int := {
-    @local name:Int     := &compiler::compiler_watId
+\\ VarDef_lower (Int)
+@fn VarDef_lower node := {
+    @local name     := &compiler::compiler_watId
         (&compiler::compiler_ast_str_field node,
             (&compiler::compiler_str_intern 'name.name', 0));
-    @local declared:Int := &compiler::compiler_resolveType
+    @local declared := &compiler::compiler_resolveType
         (&compiler::compiler_ast_node_field node,
             (&compiler::compiler_str_intern 'name.typeAnnotation', 0));
-    @local initInfo:Int := &compiler::compiler_lowerGlobalInit node, declared;
-    @local init:Int     := &compiler::compiler_globalInit_init initInfo;
-    @local wasmType:Int := &compiler::compiler_globalInit_wasmType initInfo;
+    @local initInfo := &compiler::compiler_lowerGlobalInit node, declared;
+    @local init     := &compiler::compiler_globalInit_init initInfo;
+    @local wasmType := &compiler::compiler_globalInit_wasmType initInfo;
     &compiler::compiler_ctx_globals_set name, wasmType;
     &compiler::compiler_ctx_varNames_add name;
     &compiler::ir_makeGlobal name, wasmType, 1, init
@@ -58,12 +60,13 @@
     &Compiler::register::keyword '@extern';
     &Compiler::on::lower '@extern', ExternDef_lower;
 };
-@fn ExternDef_lower node:Int := {
-    @local name:Int   := &compiler::compiler_watId
+\\ ExternDef_lower (Int)
+@fn ExternDef_lower node := {
+    @local name   := &compiler::compiler_watId
         (&compiler::compiler_ast_str_field node,
             (&compiler::compiler_str_intern 'name.name', 0));
-    @local params:Int := &compiler::compiler_lowerExternParams node;
-    @local result:Int := &compiler::compiler_lowerExternResult node;
+    @local params := &compiler::compiler_lowerExternParams node;
+    @local result := &compiler::compiler_lowerExternResult node;
     &compiler::ir_makeImport
         (&compiler::compiler_str_intern 'env', 0),
         name, name, params, result
@@ -77,13 +80,15 @@
     &Compiler::register::keyword '@type_alias';
     &Compiler::on::lower '@type_alias', TypeAliasDef_lower;
 };
-@fn TypeAliasDef_lower node:Int := &compiler::ir_null;
+\\ TypeAliasDef_lower (Int)
+@fn TypeAliasDef_lower node := &compiler::ir_null;
 
 @stratum TypeDistinctDef := {
     &Compiler::register::keyword '@type_distinct';
     &Compiler::on::lower '@type_distinct', TypeDistinctDef_lower;
 };
-@fn TypeDistinctDef_lower node:Int := &compiler::ir_null;
+\\ TypeDistinctDef_lower (Int)
+@fn TypeDistinctDef_lower node := &compiler::ir_null;
 
 # D-D-11d: @type_sum / @enum / @type migrated to the new @stratum form.
 # Each handler delegates to a TS-side expander (sumTypeExpander or
@@ -99,19 +104,22 @@
     &Compiler::register::keyword '@type_sum';
     &Compiler::on::lower '@type_sum', TypeSumDef_lower;
 };
-@fn TypeSumDef_lower node:Int := &compiler::compiler_expandSumType node;
+\\ TypeSumDef_lower (Int)
+@fn TypeSumDef_lower node := &compiler::compiler_expandSumType node;
 
 @stratum EnumDef := {
     &Compiler::register::keyword '@enum';
     &Compiler::on::lower '@enum', EnumDef_lower;
 };
-@fn EnumDef_lower node:Int := &compiler::compiler_expandSumType node;
+\\ EnumDef_lower (Int)
+@fn EnumDef_lower node := &compiler::compiler_expandSumType node;
 
 @stratum TypeRecordDef := {
     &Compiler::register::keyword '@type';
     &Compiler::on::lower '@type', TypeRecordDef_lower;
 };
-@fn TypeRecordDef_lower node:Int := &compiler::compiler_expandTypeRecord node;
+\\ TypeRecordDef_lower (Int)
+@fn TypeRecordDef_lower node := &compiler::compiler_expandTypeRecord node;
 
 # D-D-11a: @local migrated.  Handler reads the type + name, pushes a
 # pending local, sets up the local in ctx.locals, and emits no IR
@@ -123,19 +131,20 @@
     &Compiler::register::keyword '@local';
     &Compiler::on::lower '@local', LocalDef_lower;
 };
-@fn LocalDef_lower node:Int := {
-    @local wasmType:Int := &compiler::compiler_resolveType
+\\ LocalDef_lower (Int)
+@fn LocalDef_lower node := {
+    @local wasmType := &compiler::compiler_resolveType
         (&compiler::compiler_ast_node_field node,
             (&compiler::compiler_str_intern 'name.typeAnnotation', 0));
-    @local sname:Int := &compiler::compiler_watId
+    @local sname := &compiler::compiler_watId
         (&compiler::compiler_ast_str_field node,
             (&compiler::compiler_str_intern 'name.name', 0));
-    @local decl:Int := &compiler::ir_makeLocal sname, wasmType;
+    @local decl := &compiler::ir_makeLocal sname, wasmType;
     &compiler::compiler_ctx_pendingLocals_push decl;
     &compiler::compiler_ctx_locals_set sname, wasmType;
     # If there's a binding init (`@local x:Int := <expr>`), emit a LocalSet.
     # Otherwise (`@local x:Int;`), emit no IR (declaration only).
-    @local binding:Int := &compiler::compiler_ast_node_field node,
+    @local binding := &compiler::compiler_ast_node_field node,
         (&compiler::compiler_str_intern 'binding.expression', 0);
     &@if binding,
         { &compiler::ir_makeLocalSet sname, (&compiler::compiler_lowerExpr binding) },

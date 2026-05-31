@@ -8,12 +8,13 @@
     &Compiler::register::expression_keyword '@if';
     &Compiler::on::lower '@if', If_lower;
 };
-@fn If_lower node:Int := {
-    @local condN:Int := &compiler::compiler_arg node, 0;
-    @local thenN:Int := &compiler::compiler_arg node, 1;
-    @local elseN:Int := &compiler::compiler_arg node, 2;
-    @local cond:Int  := &compiler::compiler_lowerExpr condN;
-    @local then:Int  := &compiler::compiler_lowerExpr thenN;
-    @local else_:Int := &compiler::compiler_lowerExprIfDefined elseN;
+\\ If_lower (Int)
+@fn If_lower node := {
+    @local condN := &compiler::compiler_arg node, 0;
+    @local thenN := &compiler::compiler_arg node, 1;
+    @local elseN := &compiler::compiler_arg node, 2;
+    @local cond  := &compiler::compiler_lowerExpr condN;
+    @local then  := &compiler::compiler_lowerExpr thenN;
+    @local else_ := &compiler::compiler_lowerExprIfDefined elseN;
     &compiler::ir_makeIf cond, then, else_, 0
 };

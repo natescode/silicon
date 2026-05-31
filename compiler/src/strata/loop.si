@@ -7,13 +7,14 @@
     &Compiler::register::expression_keyword '@loop';
     &Compiler::on::lower '@loop', Loop_lower;
 };
-@fn Loop_lower node:Int := {
-    @local condN:Int := &compiler::compiler_arg node, 0;
-    @local bodyN:Int := &compiler::compiler_arg node, 1;
-    @local id:Int    := &compiler::compiler_ctx_nextLoopId;
+\\ Loop_lower (Int)
+@fn Loop_lower node := {
+    @local condN := &compiler::compiler_arg node, 0;
+    @local bodyN := &compiler::compiler_arg node, 1;
+    @local id    := &compiler::compiler_ctx_nextLoopId;
     &compiler::compiler_ctx_loopStack_push id;
-    @local cond:Int  := &compiler::compiler_lowerExpr condN;
-    @local body:Int  := &compiler::compiler_lowerExpr bodyN;
+    @local cond  := &compiler::compiler_lowerExpr condN;
+    @local body  := &compiler::compiler_lowerExpr bodyN;
     &compiler::compiler_ctx_loopStack_pop;
     &compiler::ir_makeLoop id, cond, body
 };

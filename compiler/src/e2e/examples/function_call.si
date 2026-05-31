@@ -1,2 +1,3 @@
-@fn add x:Int, y:Int := x + y;
+\\ add (Int, Int)
+@fn add x, y := x + y;
 &add 1, 2;

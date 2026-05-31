@@ -10,7 +10,8 @@
     &Compiler::register::operator '||';
     &Compiler::on::lower '||', Or_lower;
 };
-@fn Or_lower node:Int :=
+\\ Or_lower (Int)
+@fn Or_lower node :=
     &compiler::ir_makeIf
         (&compiler::compiler_lowerExpr (&compiler::compiler_ast_node_field node, (&compiler::compiler_str_intern 'left', 0))),
         (&compiler::ir_makeConst 1, (&compiler::compiler_str_intern 'i32', 0)),
@@ -21,7 +22,8 @@
     &Compiler::register::expression_keyword '@not';
     &Compiler::on::lower '@not', Not_lower;
 };
-@fn Not_lower node:Int :=
+\\ Not_lower (Int)
+@fn Not_lower node :=
     &compiler::ir_makeBinOp
         (&compiler::compiler_str_intern 'i32.eq', 0),
         (&compiler::compiler_lowerExpr (&compiler::compiler_arg node, 0)),
@@ -32,7 +34,8 @@
     &Compiler::register::expression_keyword '@and';
     &Compiler::on::lower '@and', And_lower;
 };
-@fn And_lower node:Int :=
+\\ And_lower (Int)
+@fn And_lower node :=
     &compiler::ir_makeIf
         (&compiler::compiler_lowerExpr (&compiler::compiler_arg node, 0)),
         (&compiler::compiler_lowerExpr (&compiler::compiler_arg node, 1)),
@@ -43,7 +46,8 @@
     &Compiler::register::expression_keyword '@or';
     &Compiler::on::lower '@or', OrKw_lower;
 };
-@fn OrKw_lower node:Int :=
+\\ OrKw_lower (Int)
+@fn OrKw_lower node :=
     &compiler::ir_makeIf
         (&compiler::compiler_lowerExpr (&compiler::compiler_arg node, 0)),
         (&compiler::ir_makeConst 1, (&compiler::compiler_str_intern 'i32', 0)),

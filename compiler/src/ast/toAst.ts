@@ -126,7 +126,7 @@ export default function addToAstSemantics(siliconGrammar: ohm.Grammar): ohm.Sema
                 const sig = attachedSigOpt.children[0].toAst() as { name: string; generics?: any; type: any }
                 const fnType = sig.type
                 if (fnType && Array.isArray(fnType.fnParams)) {
-                    // Function signature: zip domain types onto params, range → return.
+                    // `(T..) -> R` — zip domain types onto params, range → return.
                     paramList = paramList.map((p: any, i: number) => {
                         const slot = fnType.fnParams[i]
                         return slot
@@ -134,8 +134,15 @@ export default function addToAstSemantics(siliconGrammar: ohm.Grammar): ohm.Sema
                             : p
                     })
                     returnAnnotation = fnType.fnReturn?.typeAnnotation
+                } else if (fnType && fnType.__domain) {
+                    // `(T..)` with no arrow — typed params, return inferred from the body.
+                    paramList = paramList.map((p: any, i: number) => {
+                        const t = fnType.types[i]
+                        return t ? ASTFactory.parameter(p.name, t, p.isLiteral, p.value) : p
+                    })
+                    returnAnnotation = undefined
                 } else if (fnType) {
-                    // Non-function (value) signature → the binding's type.
+                    // Simple (value) signature → the binding's type.
                     returnAnnotation = fnType
                 }
                 if (sig.generics) genericParams = sig.generics
@@ -417,7 +424,10 @@ export default function addToAstSemantics(siliconGrammar: ohm.Grammar): ohm.Sema
             const a = atom.toAst() as any
             const isGroup = a && a.__domain === true
             if (arrowOpt.children.length === 0) {
-                if (isGroup) return a.types[0]   // grouping: (T) → T
+                // A parenthesised group with no arrow is a bare DOMAIN — a signature
+                // stating param types with the return left to inference (`\\ f (Int)`
+                // = one param Int, infer return).  The Definition distributes the
+                // __domain marker; a non-group atom is simply its own type.
                 return a
             }
             const range = arrowOpt.children[0].toAst() as TypeAnnotation

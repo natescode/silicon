@@ -7,14 +7,16 @@
     &Compiler::register::expression_keyword '@break';
     &Compiler::on::lower '@break', Break_lower;
 };
-@fn Break_lower node:Int :=
+\\ Break_lower (Int)
+@fn Break_lower node :=
     &compiler::ir_makeBreak &compiler::compiler_ctx_loopStack_peek;
 
 @stratum Continue := {
     &Compiler::register::expression_keyword '@continue';
     &Compiler::on::lower '@continue', Continue_lower;
 };
-@fn Continue_lower node:Int :=
+\\ Continue_lower (Int)
+@fn Continue_lower node :=
     &compiler::ir_makeContinue &compiler::compiler_ctx_loopStack_peek;
 
 @stratum Return := {
@@ -24,7 +26,8 @@
 # Phase 4: route through compiler_emitReturn so pending @defer cleanups
 # run in LIFO order before the Return instruction.  Reduces to plain
 # ir_makeReturn when the current function has no defers.
-@fn Return_lower node:Int :=
+\\ Return_lower (Int)
+@fn Return_lower node :=
     &compiler::compiler_emitReturn (&compiler::compiler_arg node, 0);
 
 @stratum Defer := {
@@ -33,7 +36,8 @@
 };
 # Phase 4: defer registration.  Lowers args[0] and pushes the resulting IR
 # onto the current function's deferStack; emits no inline IR at the site.
-@fn Defer_lower node:Int :=
+\\ Defer_lower (Int)
+@fn Defer_lower node :=
     &compiler::compiler_registerDefer node;
 
 # Phase 5 Workstream B — first-class functions.

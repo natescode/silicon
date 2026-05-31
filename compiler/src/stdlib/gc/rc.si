@@ -26,10 +26,14 @@
 # down to no-ops under wasm-gc.  Source code using Rc-as-stdlib +
 # @defer + &@with_arena compiles unchanged across both targets.
 
-@fn rc_new value:Int := value;
+\\ rc_new (Int)
+@fn rc_new value := value;
 
-@fn rc_clone r:Int := r;
+\\ rc_clone (Int)
+@fn rc_clone r := r;
 
-@fn rc_drop _r:Int := { };
+\\ rc_drop (Int)
+@fn rc_drop _r := { };
 
-@fn rc_get r:Int := r;
+\\ rc_get (Int)
+@fn rc_get r := r;

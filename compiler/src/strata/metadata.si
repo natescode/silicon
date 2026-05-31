@@ -8,18 +8,20 @@
     &Compiler::register::keyword '@platform';
     &Compiler::on::lower '@platform', PlatformDecl_lower;
 };
-@fn PlatformDecl_lower node:Int := &compiler::ir_null;
+\\ PlatformDecl_lower (Int)
+@fn PlatformDecl_lower node := &compiler::ir_null;
 
 @stratum ExportDecl := {
     &Compiler::register::keyword '@export';
     &Compiler::on::lower '@export', ExportDecl_lower;
 };
-@fn ExportDecl_lower node:Int := {
-    @local sname:Int := &compiler::compiler_watId
+\\ ExportDecl_lower (Int)
+@fn ExportDecl_lower node := {
+    @local sname := &compiler::compiler_watId
         (&compiler::compiler_ast_str_field node,
             (&compiler::compiler_str_intern 'name.name', 0));
-    @local isVar:Int := &compiler::compiler_isVarName sname;
-    @local kind:Int  := &compiler::compiler_choose isVar,
+    @local isVar := &compiler::compiler_isVarName sname;
+    @local kind  := &compiler::compiler_choose isVar,
         (&compiler::compiler_str_intern 'global', 0),
         (&compiler::compiler_str_intern 'func', 0);
     &compiler::ir_makeExport sname, sname, kind

@@ -1,11 +1,12 @@
 # Phase 4 (@defer) — early @return still runs deferred cleanup.
 # Mirrors the arena-cleanup pattern: take a handle, register cleanup,
 # then bail early via @return — the cleanup must still fire before exit.
-@extern acquire:Int;
-@extern release used:Int;
+@extern { \\ acquire () -> Int }
+@extern { \\ release (Int) -> Void }
 
-@fn maybe_bail:Int flag:Int := {
-    @local handle:Int := &acquire;
+\\ maybe_bail (Int) -> Int
+@fn maybe_bail flag := {
+    @local handle := &acquire;
     &@defer &release handle;
     &@if flag == 0, { &@return 0 };
     handle

@@ -16,4 +16,5 @@
     &Compiler::on::lower '@struct', StructDef_lower;
 };
 
-@fn StructDef_lower node:Int := &compiler::compiler_expandStruct node;
+\\ StructDef_lower (Int)
+@fn StructDef_lower node := &compiler::compiler_expandStruct node;

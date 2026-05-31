@@ -3,9 +3,10 @@
 #   Build:  sgl build --native examples/hello_native.si
 #   Run:    ./examples/hello_native
 
-@extern puts:Int s:String;
+@extern { \\ puts (String) -> Int }
 
-@fn print:Int s:String := {
+\\ print (String) -> Int
+@fn print s := {
     &puts s
 };
 

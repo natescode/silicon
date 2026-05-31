@@ -1,2 +1,2 @@
-@let n:Int := 42;
+@let n := 42;
 &@toFloat n;

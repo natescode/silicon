@@ -66,26 +66,32 @@
 # the lifecycle stories Rust expresses as `Rc`, `Box`, and `Drop` — without
 # the compiler having to learn any of them.
 
-@fn rc_new value:Int := {
-    @local p:Int := &alloc 8;
+\\ rc_new (Int)
+@fn rc_new value := {
+    @local p := &alloc 8;
     &WASM::i32_store p, 1;
     &WASM::i32_store (p + 4), value;
     p
 };
 
-@fn rc_clone r:Int := {
+\\ rc_clone (Int)
+@fn rc_clone r := {
     &WASM::i32_store r, ((&WASM::i32_load r) + 1);
     r
 };
 
 # Decrement the refcount; the slot is logically dead at refcount 0 but
 # physical free is the enclosing allocator's job (arena exit / GC).
-@fn rc_drop r:Int := {
+\\ rc_drop (Int)
+@fn rc_drop r := {
     &WASM::i32_store r, ((&WASM::i32_load r) - 1)
 };
 
-@fn rc_get r:Int := &WASM::i32_load (r + 4);
+\\ rc_get (Int)
+@fn rc_get r := &WASM::i32_load (r + 4);
 
-@fn rc_count r:Int := &WASM::i32_load r;
+\\ rc_count (Int)
+@fn rc_count r := &WASM::i32_load r;
 
-@fn rc_is_unique r:Int := (&rc_count r) == 1;
+\\ rc_is_unique (Int)
+@fn rc_is_unique r := (&rc_count r) == 1;

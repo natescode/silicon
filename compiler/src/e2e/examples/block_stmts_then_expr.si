@@ -1,1 +1,2 @@
-@fn compute x:Int, y:Int := { x = x + 1; x + y };
+\\ compute (Int, Int)
+@fn compute x, y := { x = x + 1; x + y };

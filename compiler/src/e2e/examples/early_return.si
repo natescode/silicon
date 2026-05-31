@@ -1,4 +1,5 @@
-@fn safeDivide x:Int, y:Int := {
+\\ safeDivide (Int, Int)
+@fn safeDivide x, y := {
   &@if y == 0, { &@return 0 };
   x / y
 };

@@ -14,7 +14,8 @@
 # write_bytes(fd, ptr, len) — write `len` raw bytes from `ptr` to `fd`.
 # Builds a one-entry iovec [ptr, len] in scratch space and calls fd_write.
 # Returns the WASI errno (0 = success).
-@fn write_bytes:Int fd:Int, ptr:Int, len:Int := {
+\\ write_bytes (Int, Int, Int) -> Int
+@fn write_bytes fd, ptr, len := {
     @local iovs := &scratch_alloc 8;
     &WASM::i32_store iovs, ptr;
     &WASM::i32_store (iovs + 4), len;
@@ -24,30 +25,35 @@
 
 # write_str(fd, s) — write a Silicon string (length-prefixed UTF-8) to fd.
 # Skips the 4-byte length header and writes only the UTF-8 payload bytes.
-@fn write_str:Int fd:Int, s:String := {
+\\ write_str (Int, String) -> Int
+@fn write_str fd, s := {
     &write_bytes fd, ((&str_ptr s) + 4), (&str_len s)
 };
 
 # write_nl(fd) — write a Unix newline (LF, byte 10) to fd.
-@fn write_nl:Int fd:Int := {
+\\ write_nl (Int) -> Int
+@fn write_nl fd := {
     @local buf := &scratch_alloc 4;
     &WASM::i32_store8 buf, 10;
     &write_bytes fd, buf, 1
 };
 
 # print(s) — write a string followed by a newline to stdout (fd 1).
-@fn print:Int s:String := {
+\\ print (String) -> Int
+@fn print s := {
     &write_str 1, s;
     &write_nl 1
 };
 
 # eprint(s) — write a string followed by a newline to stderr (fd 2).
-@fn eprint:Int s:String := {
+\\ eprint (String) -> Int
+@fn eprint s := {
     &write_str 2, s;
     &write_nl 2
 };
 
 # exit(code) — terminate the process with the given exit code.
-@fn exit code:Int := {
+\\ exit (Int)
+@fn exit code := {
     &wasi_snapshot_preview1::proc_exit code
 };
