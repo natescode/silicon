@@ -142,7 +142,7 @@ describe('invokeQbe', () => {
             return
         }
         const { compileToQbe } = await import('@silicon/compiler/native')
-        const { qbeIr } = compileToQbe('@fn add:Int x:Int, y:Int := x + y;')
+        const { qbeIr } = compileToQbe('\\\\ add (Int, Int) -> Int\n@fn add x, y := x + y;')
         const asm   = invokeQbe(qbeBin, qbeIr, hostQbeArch())
 
         expect(asm).toContain('add')   // the function body has an add instruction

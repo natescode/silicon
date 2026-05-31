@@ -49,7 +49,8 @@ function compile(src: string): { wat: string; errors: string[] } {
 
 describe('Phase A pre-pass: @fn bodies are collected into namedHandlers', () => {
     test('a top-level @fn is registered by name with its first param', () => {
-        const src = `@fn my_handler node:Int := { node };`
+        const src = `\\\\ my_handler (Int)
+@fn my_handler node := { node };`
         const prog = addToAstSemantics(siliconGrammar)(parse(src)).toAst() as any
         const registry = buildStrataRegistry(prog)
         const entry = lookupNamedHandler(registry, 'my_handler')
@@ -58,7 +59,8 @@ describe('Phase A pre-pass: @fn bodies are collected into namedHandlers', () => 
     })
 
     test('custom param name is captured', () => {
-        const src = `@fn h callNode:Int := { callNode };`
+        const src = `\\\\ h (Int)
+@fn h callNode := { callNode };`
         const prog = addToAstSemantics(siliconGrammar)(parse(src)).toAst() as any
         const registry = buildStrataRegistry(prog)
         const entry = lookupNamedHandler(registry, 'h')
@@ -66,7 +68,7 @@ describe('Phase A pre-pass: @fn bodies are collected into namedHandlers', () => 
     })
 
     test('paramless @fn falls back to "node" so legacy interpreter works', () => {
-        const src = `@fn h := { 1 };`
+        const src = `@fn h  := { 1 };`
         const prog = addToAstSemantics(siliconGrammar)(parse(src)).toAst() as any
         const registry = buildStrataRegistry(prog)
         const entry = lookupNamedHandler(registry, 'h')
@@ -95,7 +97,8 @@ describe('Phase A equivalence: inline-block vs named-handler', () => {
             &Compiler::register::keyword '@named_kw';
             &Compiler::on::decl '@named_kw', Named_decl;
         };
-        @fn Named_decl node:Int := {
+        \\\\ Named_decl (Int)
+        @fn Named_decl node := {
             @local s := &Compiler::state 'stratum';
             &s::set 'seen', node.name.name;
         };

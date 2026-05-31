@@ -2,7 +2,7 @@
 /**
  * Phase 9d-7 — tagged-struct sum-type lowering under wasm-gc.
  *
- * Under `--target=wasm-gc`, `@type Foo := $A x:Int | $B y:Int` lowers
+ * Under `--target=wasm-gc`, `@type Foo := $A x Int | $B y Int` lowers
  * to a single `(struct (field (mut i32)) (field (mut i32)) (field
  * (mut i32)))` — tag at field 0, pad-to-max payload at fields
  * 1..maxFields.  Construction uses `struct.new`; `@match` reads the
@@ -12,7 +12,7 @@
  *
  * Acceptance from the story:
  *   - Payload-free `@type Color := Red | Green | Blue` → (struct (mut i32)).
- *   - Payload-bearing `@type Shape := $Circle r:Int | $Rectangle w:Int, h:Int`
+ *   - Payload-bearing `@type Shape := $Circle r Int | $Rectangle w Int, h Int`
  *     → (struct (mut i32) (mut i32) (mut i32)) pad-to-max.
  *   - `@match` dispatches correctly under wasm-gc.
  *   - Out of scope: subtype hierarchy (v1.1 story 9.1-d-1).
@@ -55,8 +55,9 @@ describe('Phase 9d-7: WasmGC type-section registration for sums', () => {
         // both sides to keep match-syntax simple, but a richer
         // pad-to-max test lives in the dedicated constructor case below.
         const r = compile(`
-            @type Pair := $Pair v:Int;
-            @fn make_pair:Pair := &Pair 7;
+            @type Pair := $Pair v Int;
+            \\\\ make_pair () -> Pair
+            @fn make_pair  := &Pair 7;
         `, 'wasm-gc')
         expect(r.errors).toEqual([])
         expect(r.module).toBeDefined()
@@ -77,7 +78,8 @@ describe('Phase 9d-7: WasmGC type-section registration for sums', () => {
     test('payload-free sum (@enum-style) registers a one-field struct', () => {
         const r = compile(`
             @type_sum Color := Red | Green | Blue;
-            @fn make_red:Color := Color::Red;
+            \\\\ make_red () -> Color
+            @fn make_red  := Color::Red;
         `, 'wasm-gc')
         // Payload-free sums use the legacy @type_sum path which doesn't
         // hit the record expander — they're emitted as i32 globals.  No
@@ -93,10 +95,12 @@ describe('Phase 9d-7: WasmGC type-section registration for sums', () => {
         // Both Option_Int and Pair_Int have pad-to-max = 1, so structurally
         // identical.  Under nominal intern they must remain distinct.
         const r = compile(`
-            @type Option_Int := $Some_I v:Int | $None_I;
-            @type Pair_Int   := $Pair_I a:Int;
-            @fn s:Option_Int := &Some_I 1;
-            @fn p:Pair_Int   := &Pair_I 2;
+            @type Option_Int := $Some_I v Int | $None_I;
+            @type Pair_Int   := $Pair_I a Int;
+            \\\\ s () -> Option_Int
+            @fn s  := &Some_I 1;
+            \\\\ p () -> Pair_Int
+            @fn p  := &Pair_I 2;
         `, 'wasm-gc')
         expect(r.errors).toEqual([])
         const gc = r.module!.wasmGcTypes ?? []
@@ -109,8 +113,9 @@ describe('Phase 9d-7: WasmGC type-section registration for sums', () => {
 
     test('wasm-mvp emits no WasmGC type entries (regression)', () => {
         const r = compile(`
-            @type Shape := $Circle r:Int | $Rectangle w:Int, h:Int;
-            @fn make_circle:Shape := &Circle 7;
+            @type Shape := $Circle r Int | $Rectangle w Int, h Int;
+            \\\\ make_circle () -> Shape
+            @fn make_circle  := &Circle 7;
         `, 'host')
         expect(r.errors).toEqual([])
         // mvp: wasmGcTypes stays undefined (the snapshot path is skipped
@@ -125,8 +130,9 @@ describe('Phase 9d-7: constructor uses struct.new under wasm-gc', () => {
 
     test('payload-bearing constructor emits (struct.new $Opt (tag) field0 …)', () => {
         const r = compile(`
-            @type Opt := $Some v:Int | $None;
-            @fn make_some:Opt := &Some 7;
+            @type Opt := $Some v Int | $None;
+            \\\\ make_some () -> Opt
+            @fn make_some  := &Some 7;
         `, 'wasm-gc')
         expect(r.errors).toEqual([])
         // Some is the first variant (tag=0), with one payload field.
@@ -139,8 +145,9 @@ describe('Phase 9d-7: constructor uses struct.new under wasm-gc', () => {
 
     test('mvp constructor still uses alloc+i32.store (no regression)', () => {
         const r = compile(`
-            @type Opt := $Some v:Int | $None;
-            @fn make_some:Opt := &Some 7;
+            @type Opt := $Some v Int | $None;
+            \\\\ make_some () -> Opt
+            @fn make_some  := &Some 7;
         `, 'host')
         expect(r.errors).toEqual([])
         const ctor = extractUserFn(r.wat!, 'Some')
@@ -177,8 +184,9 @@ describe('Phase 9d-7: @match under wasm-gc uses struct.get', () => {
         // commas and isn't currently supported by the parser.  Field-index
         // arithmetic is the same regardless of variant fan-out.
         const r = compile(`
-            @type Opt := $Some v:Int | $None;
-            @fn unwrap o:Opt := &@match o,
+            @type Opt := $Some v Int | $None;
+            \\\\ unwrap (Opt)
+            @fn unwrap o := &@match o,
                 $Some v => v,
                 $None => 0;
         `, 'wasm-gc')
@@ -252,7 +260,7 @@ describe('Phase 9d-7: same source compiles cleanly under BOTH targets', () => {
 describe('Phase 9d-7: emitted modules validate under WebAssembly.compile', () => {
 
     test('sum declaration alone (constructors) validates', async () => {
-        const r = compile(`@type Opt := $Some v:Int | $None;`, 'wasm-gc')
+        const r = compile(`@type Opt := $Some v Int | $None;`, 'wasm-gc')
         expect(r.errors).toEqual([])
         expect(r.binary).not.toBeNull()
         const mod = await WebAssembly.compile(r.binary!)
@@ -261,8 +269,9 @@ describe('Phase 9d-7: emitted modules validate under WebAssembly.compile', () =>
 
     test('sum + user function returning the sum validates', async () => {
         const r = compile(`
-            @type Opt := $Some v:Int | $None;
-            @fn make_some:Opt := &Some 42;
+            @type Opt := $Some v Int | $None;
+            \\\\ make_some () -> Opt
+            @fn make_some  := &Some 42;
         `, 'wasm-gc')
         expect(r.errors).toEqual([])
         const mod = await WebAssembly.compile(r.binary!)
@@ -271,9 +280,11 @@ describe('Phase 9d-7: emitted modules validate under WebAssembly.compile', () =>
 
     test('sum + match + caller validates end-to-end', async () => {
         const r = compile(`
-            @type Opt := $Some v:Int | $None;
-            @fn unwrap o:Opt := &@match o, $Some v => v, $None => 0;
-            @fn test:Int := &unwrap (&Some 42);
+            @type Opt := $Some v Int | $None;
+            \\\\ unwrap (Opt)
+            @fn unwrap o := &@match o, $Some v => v, $None => 0;
+            \\\\ test () -> Int
+            @fn test  := &unwrap (&Some 42);
         `, 'wasm-gc')
         expect(r.errors).toEqual([])
         const mod = await WebAssembly.compile(r.binary!)
@@ -282,9 +293,11 @@ describe('Phase 9d-7: emitted modules validate under WebAssembly.compile', () =>
 
     test('wasm-mvp sum module also validates (regression — no surprises in the existing path)', async () => {
         const r = compile(`
-            @type Opt := $Some v:Int | $None;
-            @fn unwrap o:Opt := &@match o, $Some v => v, $None => 0;
-            @fn test:Int := &unwrap (&Some 42);
+            @type Opt := $Some v Int | $None;
+            \\\\ unwrap (Opt)
+            @fn unwrap o := &@match o, $Some v => v, $None => 0;
+            \\\\ test () -> Int
+            @fn test  := &unwrap (&Some 42);
         `, 'host')
         expect(r.errors).toEqual([])
         const mod = await WebAssembly.compile(r.binary!)

@@ -121,7 +121,7 @@ describe('cross-backend type consistency — WAT i32/f32/i64 ↔ QBE w/s/l', () 
     // `function w $name(...)`.
 
     test('Int param: WAT uses i32, QBE uses w', () => {
-        const src = '@fn add x:Int, y:Int := x + y;'
+        const src = '\\\\ add (Int, Int)\n@fn add x, y := x + y;'
         const wat = compileToWatString(src)
         const qbe = toQbeIr(src)
         expect(wat).toMatch(/param.*i32/)
@@ -129,7 +129,7 @@ describe('cross-backend type consistency — WAT i32/f32/i64 ↔ QBE w/s/l', () 
     })
 
     test('Int return: WAT uses i32 result, QBE uses function w', () => {
-        const src = '@fn id x:Int := x;'
+        const src = '\\\\ id (Int)\n@fn id x := x;'
         const wat = compileToWatString(src)
         const qbe = toQbeIr(src)
         expect(wat).toMatch(/result i32/)
@@ -137,7 +137,7 @@ describe('cross-backend type consistency — WAT i32/f32/i64 ↔ QBE w/s/l', () 
     })
 
     test('Float param: WAT uses f32, QBE uses s', () => {
-        const src = '@fn scale x:Float := x;'
+        const src = '\\\\ scale (Float)\n@fn scale x := x;'
         const wat = compileToWatString(src)
         const qbe = toQbeIr(src)
         expect(wat).toMatch(/param.*f32/)
@@ -145,7 +145,7 @@ describe('cross-backend type consistency — WAT i32/f32/i64 ↔ QBE w/s/l', () 
     })
 
     test('Float return: WAT uses f32 result, QBE uses function s', () => {
-        const src = '@fn half x:Float := x;'
+        const src = '\\\\ half (Float)\n@fn half x := x;'
         const wat = compileToWatString(src)
         const qbe = toQbeIr(src)
         expect(wat).toMatch(/result f32/)
@@ -153,7 +153,7 @@ describe('cross-backend type consistency — WAT i32/f32/i64 ↔ QBE w/s/l', () 
     })
 
     test('Int64 param: WAT uses i64, QBE uses l', () => {
-        const src = '@fn widen x:Int64 := x;'
+        const src = '\\\\ widen (Int64)\n@fn widen x := x;'
         const wat = compileToWatString(src)
         const qbe = toQbeIr(src)
         expect(wat).toMatch(/param.*i64/)
@@ -161,7 +161,7 @@ describe('cross-backend type consistency — WAT i32/f32/i64 ↔ QBE w/s/l', () 
     })
 
     test('Int64 return: WAT uses i64 result, QBE uses function l', () => {
-        const src = '@fn big x:Int64 := x;'
+        const src = '\\\\ big (Int64)\n@fn big x := x;'
         const wat = compileToWatString(src)
         const qbe = toQbeIr(src)
         expect(wat).toMatch(/result i64/)
@@ -169,7 +169,7 @@ describe('cross-backend type consistency — WAT i32/f32/i64 ↔ QBE w/s/l', () 
     })
 
     test('Bool param: WAT uses i32, QBE uses w', () => {
-        const src = '@fn flag b:Bool := b;'
+        const src = '\\\\ flag (Bool)\n@fn flag b := b;'
         const wat = compileToWatString(src)
         const qbe = toQbeIr(src)
         expect(wat).toMatch(/param.*i32/)
@@ -211,7 +211,7 @@ describe('siliconTypeToQbe type table correctness', () => {
 
 describe('WAT regression snapshots — known-good function shapes', () => {
     test('simple Int function has correct WAT shape', () => {
-        const wat = compileToWatString('@fn add x:Int, y:Int := x + y;')
+        const wat = compileToWatString('\\\\ add (Int, Int)\n@fn add x, y := x + y;')
         expect(wat).toContain('(func')
         expect(wat).toContain('(param')
         expect(wat).toContain('i32')
@@ -220,14 +220,14 @@ describe('WAT regression snapshots — known-good function shapes', () => {
     })
 
     test('global var appears in WAT data section', () => {
-        const wat = compileToWatString('@var count:Int := 0;')
+        const wat = compileToWatString('@var count := 0;')
         expect(wat).toContain('(global')
         expect(wat).toContain('i32')
     })
 
     test('@if lowers to WAT conditional correctly', () => {
         const wat = compileToWatString(
-            '@fn choose a:Int, b:Int, flag:Int := { &@if flag, { a }, { b } };'
+            '\\\\ choose (Int, Int, Int)\n@fn choose a, b, flag := { &@if flag, { a }, { b } };'
         )
         expect(wat).toContain('(if')
         expect(wat).toContain('(then')
@@ -236,7 +236,7 @@ describe('WAT regression snapshots — known-good function shapes', () => {
 
     test('@loop lowers to WAT block/loop pair', () => {
         const wat = compileToWatString(
-            '@fn f := { @var n:Int := 0; &@loop n < 5, { n = n + 1; }; n };'
+            '@fn f  := { @var n:Int := 0; &@loop n < 5, { n = n + 1; }; n };'
         )
         expect(wat).toContain('(block')
         expect(wat).toContain('(loop')
@@ -249,7 +249,7 @@ describe('WAT regression snapshots — known-good function shapes', () => {
 
 describe('QBE IR regression snapshots — known-good function shapes', () => {
     test('simple Int function has correct QBE shape', () => {
-        const qbe = toQbeIr('@fn add x:Int, y:Int := x + y;')
+        const qbe = toQbeIr('\\\\ add (Int, Int)\n@fn add x, y := x + y;')
         expect(qbe).toMatch(/function w \$add\(w %x, w %y\)/)
         expect(qbe).toContain('@start')
         expect(qbe).toContain('add')
@@ -257,13 +257,13 @@ describe('QBE IR regression snapshots — known-good function shapes', () => {
     })
 
     test('global var appears in QBE data/thread section', () => {
-        const qbe = toQbeIr('@var count:Int := 0;')
+        const qbe = toQbeIr('@var count := 0;')
         expect(qbe).toMatch(/\$(count|_count)/)
     })
 
     test('@if lowers to QBE jnz + labels', () => {
         const qbe = toQbeIr(
-            '@fn choose a:Int, b:Int, flag:Int := { &@if flag, { a }, { b } };'
+            '\\\\ choose (Int, Int, Int)\n@fn choose a, b, flag := { &@if flag, { a }, { b } };'
         )
         expect(qbe).toContain('jnz')
         expect(qbe).toContain('jmp')
@@ -271,7 +271,7 @@ describe('QBE IR regression snapshots — known-good function shapes', () => {
 
     test('@loop lowers to QBE head/exit label pair with jnz condition', () => {
         const qbe = toQbeIr(
-            '@fn f := { @var n:Int := 0; &@loop n < 5, { n = n + 1; }; n };'
+            '@fn f  := { @var n:Int := 0; &@loop n < 5, { n = n + 1; }; n };'
         )
         expect(qbe).toContain('@loop')       // loop head
         expect(qbe).toContain('@loop_exit')  // exit label
@@ -367,94 +367,94 @@ describe('Strata operator parity — WAT vs QBE backends (story 9.5-5)', () => {
     // -- WAT backend: operator → instruction ----------------------------------
 
     test('+ on Int: WAT emits i32.add', () => {
-        const wat = toWat('@fn add a:Int, b:Int := a + b;')
+        const wat = toWat('\\\\ add (Int, Int)\n@fn add a, b := a + b;')
         expect(wat).toContain('i32.add')
     })
 
     test('- on Int: WAT emits i32.sub', () => {
-        const wat = toWat('@fn sub a:Int, b:Int := a - b;')
+        const wat = toWat('\\\\ sub (Int, Int)\n@fn sub a, b := a - b;')
         expect(wat).toContain('i32.sub')
     })
 
     test('* on Int: WAT emits i32.mul', () => {
-        const wat = toWat('@fn mul a:Int, b:Int := a * b;')
+        const wat = toWat('\\\\ mul (Int, Int)\n@fn mul a, b := a * b;')
         expect(wat).toContain('i32.mul')
     })
 
     test('/ on Int: WAT emits i32.div_s', () => {
-        const wat = toWat('@fn div_ a:Int, b:Int := a / b;')
+        const wat = toWat('\\\\ div_ (Int, Int)\n@fn div_ a, b := a / b;')
         expect(wat).toContain('i32.div_s')
     })
 
     test('% on Int: WAT emits i32.rem_s', () => {
-        const wat = toWat('@fn mod_ a:Int, b:Int := a % b;')
+        const wat = toWat('\\\\ mod_ (Int, Int)\n@fn mod_ a, b := a % b;')
         expect(wat).toContain('i32.rem_s')
     })
 
     test('== on Int: WAT emits i32.eq', () => {
-        const wat = toWat('@fn eq a:Int, b:Int := a == b;')
+        const wat = toWat('\\\\ eq (Int, Int)\n@fn eq a, b := a == b;')
         expect(wat).toContain('i32.eq')
     })
 
     test('!= on Int: WAT emits i32.ne', () => {
-        const wat = toWat('@fn ne a:Int, b:Int := a != b;')
+        const wat = toWat('\\\\ ne (Int, Int)\n@fn ne a, b := a != b;')
         expect(wat).toContain('i32.ne')
     })
 
     test('< on Int: WAT emits i32.lt_s', () => {
-        const wat = toWat('@fn lt a:Int, b:Int := a < b;')
+        const wat = toWat('\\\\ lt (Int, Int)\n@fn lt a, b := a < b;')
         expect(wat).toContain('i32.lt_s')
     })
 
     test('> on Int: WAT emits i32.gt_s', () => {
-        const wat = toWat('@fn gt a:Int, b:Int := a > b;')
+        const wat = toWat('\\\\ gt (Int, Int)\n@fn gt a, b := a > b;')
         expect(wat).toContain('i32.gt_s')
     })
 
     test('<= on Int: WAT emits i32.le_s', () => {
-        const wat = toWat('@fn le a:Int, b:Int := a <= b;')
+        const wat = toWat('\\\\ le (Int, Int)\n@fn le a, b := a <= b;')
         expect(wat).toContain('i32.le_s')
     })
 
     test('>= on Int: WAT emits i32.ge_s', () => {
-        const wat = toWat('@fn ge a:Int, b:Int := a >= b;')
+        const wat = toWat('\\\\ ge (Int, Int)\n@fn ge a, b := a >= b;')
         expect(wat).toContain('i32.ge_s')
     })
 
     // -- QBE backend: same operators → QBE instructions ----------------------
 
     test('+ on Int: QBE emits add instruction', () => {
-        const qbe = toQbeIr('@fn add a:Int, b:Int := a + b;')
+        const qbe = toQbeIr('\\\\ add (Int, Int)\n@fn add a, b := a + b;')
         expect(qbe).toContain('add')
     })
 
     test('- on Int: QBE emits sub instruction', () => {
-        const qbe = toQbeIr('@fn sub a:Int, b:Int := a - b;')
+        const qbe = toQbeIr('\\\\ sub (Int, Int)\n@fn sub a, b := a - b;')
         expect(qbe).toContain('sub')
     })
 
     test('* on Int: QBE emits mul instruction', () => {
-        const qbe = toQbeIr('@fn mul a:Int, b:Int := a * b;')
+        const qbe = toQbeIr('\\\\ mul (Int, Int)\n@fn mul a, b := a * b;')
         expect(qbe).toContain('mul')
     })
 
     test('== on Int: QBE emits ceqw instruction', () => {
-        const qbe = toQbeIr('@fn eq a:Int, b:Int := a == b;')
+        const qbe = toQbeIr('\\\\ eq (Int, Int)\n@fn eq a, b := a == b;')
         expect(qbe).toContain('ceqw')
     })
 
     test('!= on Int: QBE emits cnew instruction', () => {
-        const qbe = toQbeIr('@fn ne a:Int, b:Int := a != b;')
+        const qbe = toQbeIr('\\\\ ne (Int, Int)\n@fn ne a, b := a != b;')
         expect(qbe).toContain('cnew')
     })
 
     test('< on Int: QBE emits csltw instruction', () => {
-        const qbe = toQbeIr('@fn lt a:Int, b:Int := a < b;')
+        const qbe = toQbeIr('\\\\ lt (Int, Int)\n@fn lt a, b := a < b;')
         expect(qbe).toContain('csltw')
     })
 
     test('> on Int: QBE emits csgtw instruction', () => {
-        const qbe = toQbeIr('@fn gt a:Int, b:Int := a > b;')
+        const qbe = toQbeIr('\\\\ gt (Int, Int)\n@fn gt a, b := a > b;')
         expect(qbe).toContain('csgtw')
     })
 
@@ -506,23 +506,28 @@ describe('Strata operator parity — WAT vs QBE backends (story 9.5-5)', () => {
 const ARENA_PROGRAMS: { name: string; src: string }[] = [
     {
         name: 'empty arena',
-        src:  `@fn probe:Int := { &@with_arena {}; 0 };`,
+        src:  `\\\\ probe () -> Int
+@fn probe  := { &@with_arena {}; 0 };`,
     },
     {
         name: 'arena with value-type tail',
-        src:  `@fn probe:Int := &@with_arena { 42 };`,
+        src:  `\\\\ probe () -> Int
+@fn probe  := &@with_arena { 42 };`,
     },
     {
         name: 'arena with String promotion',
-        src:  `@fn build:String := &@with_arena { @local s:String := 'hi'; &@move_to_parent_arena s };`,
+        src:  `\\\\ build () -> String
+@fn build  := &@with_arena { @local s:String := 'hi'; &@move_to_parent_arena s };`,
     },
     {
         name: 'arena with Array[Int] promotion',
-        src:  `@fn build:Int := &@with_arena { @local a := $[1,2,3]; &@move_to_parent_arena a };`,
+        src:  `\\\\ build () -> Int
+@fn build  := &@with_arena { @local a := $[1,2,3]; &@move_to_parent_arena a };`,
     },
     {
         name: 'nested arenas',
-        src:  `@fn probe:Int := { &@with_arena { &@with_arena {}; }; 0 };`,
+        src:  `\\\\ probe () -> Int
+@fn probe  := { &@with_arena { &@with_arena {}; }; 0 };`,
     },
 ]
 
@@ -538,15 +543,17 @@ describe('Phase 9c arena: WAT determinism', () => {
 
 describe('Phase 9c arena: WAT envelope shape', () => {
     test('arena body sets/gets the bump pointer via $heap', () => {
-        const wat = compileToWatString(`@fn probe:Int := { &@with_arena {}; 0 };`)
+        const wat = compileToWatString(`\\\\ probe () -> Int
+@fn probe  := { &@with_arena {}; 0 };`)
         expect(wat).toContain('global.get $heap')
         expect(wat).toContain('global.set $heap')
     })
 
     test('String promotion lowers to a $arena_promote call', () => {
         const wat = compileToWatString(`
-            @fn build:String := &@with_arena {
-                @local s:String := 'hi';
+            \\\\ build () -> String
+            @fn build  := &@with_arena {
+                @local s := 'hi';
                 &@move_to_parent_arena s
             };
         `)
@@ -556,26 +563,30 @@ describe('Phase 9c arena: WAT envelope shape', () => {
     test('arena prelude exports arena_promote', () => {
         // Spot-check the prelude wires the helper as a public export so
         // host tooling (and tests like arena.test.ts) can observe it.
-        const wat = compileToWatString(`@fn probe:Int := 0;`)
+        const wat = compileToWatString(`\\\\ probe () -> Int
+@fn probe  := 0;`)
         expect(wat).toContain('"arena_promote"')
     })
 })
 
 describe('Phase 9c arena: QBE rejection (allocator surface deferred)', () => {
     test('&@with_arena throws a structured error on the QBE backend', () => {
-        expect(() => toQbeIr(`@fn probe:Int := { &@with_arena {}; 0 };`))
+        expect(() => toQbeIr(`\\\\ probe () -> Int
+@fn probe  := { &@with_arena {}; 0 };`))
             .toThrow(/not yet supported on the native backend/)
     })
 
     test('&@move_to_parent_arena throws a structured error on the QBE backend', () => {
         expect(() => toQbeIr(`
-            @fn build:Int := &@with_arena { &@move_to_parent_arena 7 };
+            \\\\ build () -> Int
+            @fn build  := &@with_arena { &@move_to_parent_arena 7 };
         `)).toThrow(/not yet supported on the native backend/)
     })
 
     test('QBE rejection error names Phase 9c-6 follow-up', () => {
         try {
-            toQbeIr(`@fn probe:Int := { &@with_arena {}; 0 };`)
+            toQbeIr(`\\\\ probe () -> Int
+@fn probe  := { &@with_arena {}; 0 };`)
             throw new Error('expected toQbeIr to throw')
         } catch (e) {
             expect(String(e)).toContain('9c-6')

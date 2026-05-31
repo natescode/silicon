@@ -137,9 +137,10 @@ describe('Phase 9d-9: @struct parity', () => {
         // (mvp uses i32.load, gc uses struct.get) but the source program
         // doesn't change — `p.x` lowers correctly under both.
         await assertParity(`
-            @struct Point x:Int, y:Int;
-            @fn run:Int := {
-                @local p:Point := &Point 3, 4;
+            @struct Point x Int, y Int;
+            \\\\ run () -> Int
+            @fn run  := {
+                @local p := &Point 3, 4;
                 p.x + p.y
             };
             @export run;
@@ -156,8 +157,9 @@ describe('Phase 9d-9: sum-type parity', () => {
     test('payload-free @type_sum + @match parity', async () => {
         await assertParity(`
             @type_sum Color := Red | Green | Blue;
-            @fn run:Int := {
-                @local c:Color := Color::Green;
+            \\\\ run () -> Int
+            @fn run  := {
+                @local c := Color::Green;
                 &@match c,
                     Color::Red   => 1,
                     Color::Green => 2,
@@ -169,11 +171,13 @@ describe('Phase 9d-9: sum-type parity', () => {
 
     test('payload-bearing @type Sum + match arms (Some path)', async () => {
         await assertParity(`
-            @type Opt := $Some v:Int | $None;
-            @fn unwrap o:Opt := &@match o,
+            @type Opt := $Some v Int | $None;
+            \\\\ unwrap (Opt)
+            @fn unwrap o := &@match o,
                 $Some v => v,
                 $None => 0;
-            @fn run:Int := &unwrap (&Some 42);
+            \\\\ run () -> Int
+            @fn run  := &unwrap (&Some 42);
             @export run;
         `, 'run', 42)
     })
@@ -182,12 +186,15 @@ describe('Phase 9d-9: sum-type parity', () => {
         // Match-arm bodies with binary expressions need parens; the
         // zero-arg constructor call to `&None` also needs parens.
         await assertParity(`
-            @type Opt := $Some v:Int | $None;
-            @fn unwrap o:Opt := &@match o,
+            @type Opt := $Some v Int | $None;
+            \\\\ unwrap (Opt)
+            @fn unwrap o := &@match o,
                 $Some v => v,
                 $None => (0 - 7);
-            @fn make_none:Opt := (&None);
-            @fn run:Int := &unwrap (&make_none);
+            \\\\ make_none () -> Opt
+            @fn make_none  := (&None);
+            \\\\ run () -> Int
+            @fn run  := &unwrap (&make_none);
             @export run;
         `, 'run', -7)
     })
@@ -204,13 +211,15 @@ describe('Phase 9d-9: Option / Result stdlib parity', () => {
         // so a user program declaring its own Option-shaped type tests
         // the same machinery.
         await assertParity(`
-            @type Opt := $Some v:Int | $None;
-            @fn unwrap_or o:Opt, dflt:Int := &@match o,
+            @type Opt := $Some v Int | $None;
+            \\\\ unwrap_or (Opt, Int)
+            @fn unwrap_or o, dflt := &@match o,
                 $Some v => v,
                 $None => dflt;
-            @fn run:Int := {
-                @local a:Int := &unwrap_or (&Some 10), 99;
-                @local b:Int := &unwrap_or (&None), 99;
+            \\\\ run () -> Int
+            @fn run  := {
+                @local a := &unwrap_or (&Some 10), 99;
+                @local b := &unwrap_or (&None), 99;
                 a + b
             };
             @export run;
@@ -222,14 +231,17 @@ describe('Phase 9d-9: Option / Result stdlib parity', () => {
         // per-arm scope isn't ambiguous; same pattern Result-like
         // programs use in practice (`$Ok value`, `$Err code`).
         await assertParity(`
-            @type Res := $Ok value:Int | $Err code:Int;
-            @fn ok_value r:Res := &@match r,
+            @type Res := $Ok value Int | $Err code Int;
+            \\\\ ok_value (Res)
+            @fn ok_value r := &@match r,
                 $Ok value => value,
                 $Err code => 0;
-            @fn err_code r:Res := &@match r,
+            \\\\ err_code (Res)
+            @fn err_code r := &@match r,
                 $Ok value => 0,
                 $Err code => code;
-            @fn run:Int := (&ok_value (&Ok 7)) + (&err_code (&Err 3));
+            \\\\ run () -> Int
+            @fn run  := (&ok_value (&Ok 7)) + (&err_code (&Err 3));
             @export run;
         `, 'run', 10)
     })
@@ -256,9 +268,11 @@ describe('Phase 9d-9: programs validate under both targets', () => {
 
     test('Function taking a sum and returning the same sum (refResult/refParams encoding)', async () => {
         await assertBothValidate(`
-            @type Opt := $Some v:Int | $None;
-            @fn identity o:Opt := o;
-            @fn run:Int := &@match (&identity (&Some 5)),
+            @type Opt := $Some v Int | $None;
+            \\\\ identity (Opt)
+            @fn identity o := o;
+            \\\\ run () -> Int
+            @fn run  := &@match (&identity (&Some 5)),
                 $Some v => v,
                 $None => 0;
             @export run;
@@ -275,13 +289,17 @@ describe('Phase 9d-9: programs validate under both targets', () => {
         // by the binary parse (a parser-level quirk independent of
         // 9d-9).
         await assertBothValidate(`
-            @type Tag := $A x:Int | $B y:Int;
-            @fn make_a v:Int := &A v;
-            @fn make_b v:Int := &B v;
-            @fn classify t:Tag := &@match t,
+            @type Tag := $A x Int | $B y Int;
+            \\\\ make_a (Int)
+            @fn make_a v := &A v;
+            \\\\ make_b (Int)
+            @fn make_b v := &B v;
+            \\\\ classify (Tag)
+            @fn classify t := &@match t,
                 $A x => x,
                 $B y => (0 - y);
-            @fn run:Int := (&classify (&make_a 7)) + (&classify (&make_b 3));
+            \\\\ run () -> Int
+            @fn run  := (&classify (&make_a 7)) + (&classify (&make_b 3));
             @export run;
         `)
     })

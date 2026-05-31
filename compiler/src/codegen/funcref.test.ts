@@ -40,8 +40,10 @@ async function compileAndRun(src: string): Promise<any> {
 describe('Phase 5 Workstream B: @fnref + @call_indirect', () => {
     test('@fnref returns a stable i32 table index for a top-level @fn', async () => {
         const ex = await compileAndRun(`
-            @fn add_one:Int x:Int := x + 1;
-            @fn test_idx:Int := &@fnref add_one;
+            \\\\ add_one (Int) -> Int
+            @fn add_one x := x + 1;
+            \\\\ test_idx () -> Int
+            @fn test_idx  := &@fnref add_one;
             @export test_idx;
         `)
         // First @fnref to a function gets table slot 0.
@@ -50,10 +52,12 @@ describe('Phase 5 Workstream B: @fnref + @call_indirect', () => {
 
     test('@fnref to the same name twice returns the same index', async () => {
         const ex = await compileAndRun(`
-            @fn add_one:Int x:Int := x + 1;
-            @fn test_same:Int := {
-                @local a:Int := &@fnref add_one;
-                @local b:Int := &@fnref add_one;
+            \\\\ add_one (Int) -> Int
+            @fn add_one x := x + 1;
+            \\\\ test_same () -> Int
+            @fn test_same  := {
+                @local a := &@fnref add_one;
+                @local b := &@fnref add_one;
                 a - b
             };
             @export test_same;
@@ -63,11 +67,14 @@ describe('Phase 5 Workstream B: @fnref + @call_indirect', () => {
 
     test('@fnref to different functions returns distinct indices', async () => {
         const ex = await compileAndRun(`
-            @fn add_one:Int x:Int := x + 1;
-            @fn double:Int x:Int := x * 2;
-            @fn test_distinct:Int := {
-                @local a:Int := &@fnref add_one;
-                @local b:Int := &@fnref double;
+            \\\\ add_one (Int) -> Int
+            @fn add_one x := x + 1;
+            \\\\ double (Int) -> Int
+            @fn double x := x * 2;
+            \\\\ test_distinct () -> Int
+            @fn test_distinct  := {
+                @local a := &@fnref add_one;
+                @local b := &@fnref double;
                 b - a
             };
             @export test_distinct;
@@ -77,9 +84,11 @@ describe('Phase 5 Workstream B: @fnref + @call_indirect', () => {
 
     test('@call_indirect invokes the right function via table index', async () => {
         const ex = await compileAndRun(`
-            @fn add_one:Int x:Int := x + 1;
-            @fn call_via_ref:Int := {
-                @local cb:Int := &@fnref add_one;
+            \\\\ add_one (Int) -> Int
+            @fn add_one x := x + 1;
+            \\\\ call_via_ref () -> Int
+            @fn call_via_ref  := {
+                @local cb := &@fnref add_one;
                 &@call_indirect cb, 41
             };
             @export call_via_ref;
@@ -89,14 +98,18 @@ describe('Phase 5 Workstream B: @fnref + @call_indirect', () => {
 
     test('@call_indirect dispatches between multiple functions by index', async () => {
         const ex = await compileAndRun(`
-            @fn add_one:Int x:Int := x + 1;
-            @fn double:Int x:Int := x * 2;
-            @fn dispatch_add:Int := {
-                @local cb:Int := &@fnref add_one;
+            \\\\ add_one (Int) -> Int
+            @fn add_one x := x + 1;
+            \\\\ double (Int) -> Int
+            @fn double x := x * 2;
+            \\\\ dispatch_add () -> Int
+            @fn dispatch_add  := {
+                @local cb := &@fnref add_one;
                 &@call_indirect cb, 10
             };
-            @fn dispatch_double:Int := {
-                @local cb:Int := &@fnref double;
+            \\\\ dispatch_double () -> Int
+            @fn dispatch_double  := {
+                @local cb := &@fnref double;
                 &@call_indirect cb, 10
             };
             @export dispatch_add;
@@ -113,7 +126,8 @@ describe('Phase 5 Workstream B: @fnref + @call_indirect', () => {
         // check that adding the funcrefTable field doesn't accidentally
         // route non-funcref modules through WAT).
         const ex = await compileAndRun(`
-            @fn add:Int a:Int, b:Int := a + b;
+            \\\\ add (Int, Int) -> Int
+            @fn add a, b := a + b;
             @export add;
         `)
         expect(ex.add(2, 3)).toBe(5)

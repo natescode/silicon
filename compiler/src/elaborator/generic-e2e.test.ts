@@ -124,7 +124,8 @@ describe('@generic — full pipeline E2E', () => {
         // The export is what lets us call the synthesised function from JS.
         const wat = compileToWat(
             `@generic identity x:Int := x;
-             @fn run:Int x:Int := { (&identity x) };
+             \\\\ run (Int) -> Int
+             @fn run x := { (&identity x) };
              @export run;`,
             [stratumWithExport]
         )

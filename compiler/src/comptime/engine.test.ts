@@ -145,7 +145,8 @@ describe('Phase C — bridge: compileStrataHandlers caches compiled handlers', (
         // The integration with strata-loaded handlers is exercised by the
         // dissolution Phase A tests; here we're verifying just the bridge
         // mechanic: claimed name → cache entry after compileStrataHandlers.
-        const src = `@fn Bridge_handler n:Int := 99;`
+        const src = `\\\\ Bridge_handler (Int)
+@fn Bridge_handler n := 99;`
         const prog = parseProgram(src)
         const registry = buildStrataRegistry(prog)
         registry.strataHandlerFnNames.add('Bridge_handler')
@@ -161,8 +162,10 @@ describe('Phase C — bridge: compileStrataHandlers caches compiled handlers', (
 
     test('handlers with unsupported imports are excluded from the cache', async () => {
         const src = `
-            @fn Simple_handler n:Int := 1;
-            @fn Complex_handler n:Int := { (&Compiler::state 'stratum') };
+            \\\\ Simple_handler (Int)
+            @fn Simple_handler n := 1;
+            \\\\ Complex_handler (Int)
+            @fn Complex_handler n := { (&Compiler::state 'stratum') };
         `
         const prog = parseProgram(src)
         const registry = buildStrataRegistry(prog)
@@ -186,7 +189,8 @@ describe('Phase C — bridge wrapper invokes compiled handler over interpreter',
                 &Compiler::register::keyword '@spy_kw';
                 &Compiler::on::decl '@spy_kw', Spy_handler;
             };
-            @fn Spy_handler node:Int := 42;
+            \\\\ Spy_handler (Int)
+            @fn Spy_handler node := 42;
             @spy_kw target;
         `
         const prog = parseProgram(src)
@@ -245,7 +249,8 @@ describe('Phase C — fallback behavior', () => {
     })
 
     test('tryCompileHandler returns null if @fn doesn\'t exist in program', async () => {
-        const src = `@fn other n:Int := n;`
+        const src = `\\\\ other (Int)
+@fn other n := n;`
         const prog = parseProgram(src)
         const registry = buildStrataRegistry(prog)
         const compiled = await tryCompileHandler('missing', prog, registry)

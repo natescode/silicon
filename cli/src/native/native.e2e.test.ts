@@ -78,7 +78,7 @@ describe('native — arithmetic', () => {
         if (SKIP) { skip(); return }
         const tmpDir = await fsp.mkdtemp(path.join(os.tmpdir(), 'sgl-e2e-'))
         try {
-            const exe = await compileNative('@fn main:Int := 42;', tmpDir)
+            const exe = await compileNative('\\\\ main () -> Int\n@fn main  := 42;', tmpDir)
             expect(runExe(exe)).toBe(42)
         } finally { fs.rmSync(tmpDir, { recursive: true, force: true }) }
     })
@@ -87,7 +87,7 @@ describe('native — arithmetic', () => {
         if (SKIP) { skip(); return }
         const tmpDir = await fsp.mkdtemp(path.join(os.tmpdir(), 'sgl-e2e-'))
         try {
-            const exe = await compileNative('@fn main:Int := 20 + 22;', tmpDir)
+            const exe = await compileNative('\\\\ main () -> Int\n@fn main  := 20 + 22;', tmpDir)
             expect(runExe(exe)).toBe(42)
         } finally { fs.rmSync(tmpDir, { recursive: true, force: true }) }
     })
@@ -96,7 +96,7 @@ describe('native — arithmetic', () => {
         if (SKIP) { skip(); return }
         const tmpDir = await fsp.mkdtemp(path.join(os.tmpdir(), 'sgl-e2e-'))
         try {
-            const exe = await compileNative('@fn main:Int := 50 - 8;', tmpDir)
+            const exe = await compileNative('\\\\ main () -> Int\n@fn main  := 50 - 8;', tmpDir)
             expect(runExe(exe)).toBe(42)
         } finally { fs.rmSync(tmpDir, { recursive: true, force: true }) }
     })
@@ -105,7 +105,7 @@ describe('native — arithmetic', () => {
         if (SKIP) { skip(); return }
         const tmpDir = await fsp.mkdtemp(path.join(os.tmpdir(), 'sgl-e2e-'))
         try {
-            const exe = await compileNative('@fn main:Int := 6 * 7;', tmpDir)
+            const exe = await compileNative('\\\\ main () -> Int\n@fn main  := 6 * 7;', tmpDir)
             expect(runExe(exe)).toBe(42)
         } finally { fs.rmSync(tmpDir, { recursive: true, force: true }) }
     })
@@ -114,7 +114,7 @@ describe('native — arithmetic', () => {
         if (SKIP) { skip(); return }
         const tmpDir = await fsp.mkdtemp(path.join(os.tmpdir(), 'sgl-e2e-'))
         try {
-            const exe = await compileNative('@fn main:Int := 0;', tmpDir)
+            const exe = await compileNative('\\\\ main () -> Int\n@fn main  := 0;', tmpDir)
             expect(runExe(exe)).toBe(0)
         } finally { fs.rmSync(tmpDir, { recursive: true, force: true }) }
     })
@@ -129,7 +129,7 @@ describe('native — control flow', () => {
         if (SKIP) { skip(); return }
         const tmpDir = await fsp.mkdtemp(path.join(os.tmpdir(), 'sgl-e2e-'))
         try {
-            const src = '@fn main:Int := &@if @true, { 10 }, { 20 };'
+            const src = '\\\\ main () -> Int\n@fn main  := &@if @true, { 10 }, { 20 };'
             const exe = await compileNative(src, tmpDir)
             expect(runExe(exe)).toBe(10)
         } finally { fs.rmSync(tmpDir, { recursive: true, force: true }) }
@@ -139,7 +139,7 @@ describe('native — control flow', () => {
         if (SKIP) { skip(); return }
         const tmpDir = await fsp.mkdtemp(path.join(os.tmpdir(), 'sgl-e2e-'))
         try {
-            const src = '@fn main:Int := &@if @false, { 10 }, { 20 };'
+            const src = '\\\\ main () -> Int\n@fn main  := &@if @false, { 10 }, { 20 };'
             const exe = await compileNative(src, tmpDir)
             expect(runExe(exe)).toBe(20)
         } finally { fs.rmSync(tmpDir, { recursive: true, force: true }) }
@@ -149,7 +149,7 @@ describe('native — control flow', () => {
         if (SKIP) { skip(); return }
         const tmpDir = await fsp.mkdtemp(path.join(os.tmpdir(), 'sgl-e2e-'))
         try {
-            const src = '@fn main:Int := &@if 3 > 2, { 42 }, { 0 };'
+            const src = '\\\\ main () -> Int\n@fn main  := &@if 3 > 2, { 42 }, { 0 };'
             const exe = await compileNative(src, tmpDir)
             expect(runExe(exe)).toBe(42)
         } finally { fs.rmSync(tmpDir, { recursive: true, force: true }) }
@@ -166,8 +166,8 @@ describe('native — function calls', () => {
         const tmpDir = await fsp.mkdtemp(path.join(os.tmpdir(), 'sgl-e2e-'))
         try {
             const src = [
-                '@fn answer:Int := 42;',
-                '@fn main:Int := (&answer);',
+                '\\\\ answer () -> Int\n@fn answer  := 42;',
+                '\\\\ main () -> Int\n@fn main  := (&answer);',
             ].join('\n')
             const exe = await compileNative(src, tmpDir)
             expect(runExe(exe)).toBe(42)
@@ -179,8 +179,8 @@ describe('native — function calls', () => {
         const tmpDir = await fsp.mkdtemp(path.join(os.tmpdir(), 'sgl-e2e-'))
         try {
             const src = [
-                '@fn double:Int x:Int := x * 2;',
-                '@fn main:Int := (&double 21);',
+                '\\\\ double (Int) -> Int\n@fn double x := x * 2;',
+                '\\\\ main () -> Int\n@fn main  := (&double 21);',
             ].join('\n')
             const exe = await compileNative(src, tmpDir)
             expect(runExe(exe)).toBe(42)
@@ -193,8 +193,8 @@ describe('native — function calls', () => {
         try {
             // fib(7) = 13, fib(8) = 21, fib(9) = 34
             const src = [
-                '@fn fib:Int n:Int := &@if n <= 1, { n }, { (&fib n - 1) + (&fib n - 2) };',
-                '@fn main:Int := (&fib 9);',
+                '\\\\ fib (Int) -> Int\n@fn fib n := &@if n <= 1, { n }, { (&fib n - 1) + (&fib n - 2) };',
+                '\\\\ main () -> Int\n@fn main  := (&fib 9);',
             ].join('\n')
             const exe = await compileNative(src, tmpDir)
             expect(runExe(exe)).toBe(34)
@@ -213,7 +213,7 @@ describe('native — variables', () => {
         try {
             const src = [
                 '@fn main:Int := {',
-                '  @local x:Int := 42;',
+                '  @local x := 42;',
                 '  x',
                 '};',
             ].join('\n')
@@ -228,7 +228,7 @@ describe('native — variables', () => {
         try {
             const src = [
                 '@fn main:Int := {',
-                '  @local x:Int := 0;',
+                '  @local x := 0;',
                 '  x = x + 42;',
                 '  x',
                 '};',
@@ -278,7 +278,7 @@ describe('native — platform', () => {
 
     test('QBE IR contains expected type for Int return', () => {
         if (SKIP) { skip(); return }
-        const { qbeIr: ir } = compileToQbe('@fn main:Int := 42;')
+        const { qbeIr: ir } = compileToQbe('\\\\ main () -> Int\n@fn main  := 42;')
         expect(ir).toContain('function w $main()')
         expect(ir).toContain('ret')
     })
@@ -289,7 +289,7 @@ describe('native — platform', () => {
 
         const tmpDir = await fsp.mkdtemp(path.join(os.tmpdir(), 'sgl-e2e-'))
         try {
-            const exe = await compileNative('@fn main:Int := 0;', tmpDir)
+            const exe = await compileNative('\\\\ main () -> Int\n@fn main  := 0;', tmpDir)
             const bytes = await fsp.readFile(exe)
             // ELF magic: 0x7f 'E' 'L' 'F'
             expect(bytes[0]).toBe(0x7f)
@@ -305,7 +305,7 @@ describe('native — platform', () => {
 
         const tmpDir = await fsp.mkdtemp(path.join(os.tmpdir(), 'sgl-e2e-'))
         try {
-            const exe = await compileNative('@fn main:Int := 0;', tmpDir)
+            const exe = await compileNative('\\\\ main () -> Int\n@fn main  := 0;', tmpDir)
             const bytes = await fsp.readFile(exe)
             // 64-bit Mach-O little-endian magic: 0xCF 0xFA 0xED 0xFE
             expect(bytes[0]).toBe(0xcf)

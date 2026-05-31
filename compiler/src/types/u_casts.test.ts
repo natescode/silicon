@@ -50,7 +50,8 @@ function compileWat(src: string): string {
 describe('Phase 5b-4: @toU32 / @toU64 cast keywords', () => {
     test('@toU32 lets a function declare :u32 return type with an Int body', async () => {
         const ex = await compileAndRun(`
-            @fn make_u32:u32 := &@toU32 42;
+            \\\\ make_u32 () -> u32
+            @fn make_u32  := &@toU32 42;
             @export make_u32;
         `)
         // u32 lowers to i32 wasm — caller gets the raw value.
@@ -58,7 +59,8 @@ describe('Phase 5b-4: @toU32 / @toU64 cast keywords', () => {
     })
 
     test('@toU64 from Int emits i64.extend_i32_u (zero-extend)', () => {
-        const wat = compileWat(`@fn make:u64 := &@toU64 42;`)
+        const wat = compileWat(`\\\\ make () -> u64
+@fn make  := &@toU64 42;`)
         expect(wat).toContain('i64.extend_i32_u')
         // Function's WAT result type must match.
         expect(wat).toContain('(func $make (result i64)')
@@ -77,14 +79,16 @@ describe('Phase 5b-4: @toU32 / @toU64 cast keywords', () => {
         // Inner @toInt64 emits its own i64.extend_i32_s; outer @toU64:Int64
         // is a no-op.  Confirm we don't see a *second* extend instruction
         // wrapping the inner one.
-        const wat = compileWat(`@fn make:u64 := &@toU64 (&@toInt64 42);`)
+        const wat = compileWat(`\\\\ make () -> u64
+@fn make  := &@toU64 (&@toInt64 42);`)
         const extendCount = (wat.match(/i64\.extend_i32_/g) || []).length
         expect(extendCount).toBe(1)
     })
 
     test('@toU64 from Int64 produces the right runtime value', async () => {
         const ex = await compileAndRun(`
-            @fn make:u64 := &@toU64 (&@toInt64 99);
+            \\\\ make () -> u64
+            @fn make  := &@toU64 (&@toInt64 99);
             @export make;
         `)
         expect(ex.make()).toBe(99n)
@@ -92,7 +96,8 @@ describe('Phase 5b-4: @toU32 / @toU64 cast keywords', () => {
 
     test('typechecker rejects @toU32 on a non-Int argument', () => {
         // `42.0` is a Float literal; @toU32 expects Int.
-        const match = parse(`@fn bad:u32 := &@toU32 42.0;`)
+        const match = parse(`\\\\ bad () -> u32
+@fn bad  := &@toU32 42.0;`)
         const ast = addToAstSemantics(siliconGrammar)(match).toAst() as Program
         const registry = buildStrataRegistry(ast)
         const { program: elaborated } = elaborate(ast, registry)

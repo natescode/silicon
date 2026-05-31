@@ -41,12 +41,14 @@ async function compileAndRun(extra: string): Promise<Exports> {
 describe('Phase 5a-3: @try unwrap shorthand', () => {
     test('@try on Ok extracts the value; execution continues', async () => {
         const ex = await compileAndRun(`
-            @fn double:Result[Int, Int] r:Result[Int, Int] := {
-                @local v:Int := &@try r;
+            \\\\ double (Result[Int, Int]) -> Result[Int, Int]
+            @fn double r := {
+                @local v := &@try r;
                 &Ok (v * 2)
             };
-            @fn test_ok:Int := {
-                @local r:Result[Int, Int] := &double (&Ok 21);
+            \\\\ test_ok () -> Int
+            @fn test_ok  := {
+                @local r := &double (&Ok 21);
                 &result_unwrap_or r, 0
             };
             @export test_ok;
@@ -85,12 +87,14 @@ describe('Phase 5a-3: @try unwrap shorthand', () => {
         // without re-wrapping, so the caller sees the original Err's
         // error field at offset +4.
         const ex = await compileAndRun(`
-            @fn double:Result[Int, Int] r:Result[Int, Int] := {
-                @local v:Int := &@try r;
+            \\\\ double (Result[Int, Int]) -> Result[Int, Int]
+            @fn double r := {
+                @local v := &@try r;
                 &Ok (v * 2)
             };
-            @fn test_err_value:Int := {
-                @local r:Result[Int, Int] := &double (&Err 7777);
+            \\\\ test_err_value () -> Int
+            @fn test_err_value  := {
+                @local r := &double (&Err 7777);
                 # Err's error field is at offset +4 (same slot as Ok's value
                 # under @struct's pad-to-max layout).
                 &WASM::i32_load (r + 4)
@@ -102,19 +106,23 @@ describe('Phase 5a-3: @try unwrap shorthand', () => {
 
     test('chained @try: an outer fn calling an inner @try-using fn sees the Err', async () => {
         const ex = await compileAndRun(`
-            @fn inner:Result[Int, Int] x:Int := {
+            \\\\ inner (Int) -> Result[Int, Int]
+            @fn inner x := {
                 &@if x > 0, { &Ok (x * 10) }, { &Err x }
             };
-            @fn outer:Result[Int, Int] x:Int := {
-                @local v:Int := &@try (&inner x);
+            \\\\ outer (Int) -> Result[Int, Int]
+            @fn outer x := {
+                @local v := &@try (&inner x);
                 &Ok (v + 1)
             };
-            @fn test_chained_ok:Int := {
-                @local r:Result[Int, Int] := &outer 4;
+            \\\\ test_chained_ok () -> Int
+            @fn test_chained_ok  := {
+                @local r := &outer 4;
                 &result_unwrap_or r, 0
             };
-            @fn test_chained_err:Int := {
-                @local r:Result[Int, Int] := &outer (0 - 5);
+            \\\\ test_chained_err () -> Int
+            @fn test_chained_err  := {
+                @local r := &outer (0 - 5);
                 &result_unwrap_or r, 999
             };
             @export test_chained_ok;
@@ -128,8 +136,9 @@ describe('Phase 5a-3: @try unwrap shorthand', () => {
         let threw = false
         try {
             await compileAndRun(`
-                @fn bad:Result[Int, Int] := {
-                    @local v:Int := &@try (&Ok 1), (&Ok 2);
+                \\\\ bad () -> Result[Int, Int]
+                @fn bad  := {
+                    @local v := &@try (&Ok 1), (&Ok 2);
                     &Ok v
                 };
                 @export bad;

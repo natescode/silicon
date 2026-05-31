@@ -50,7 +50,7 @@ describe('parse()', () => {
     })
 
     test('tree.source preserves original text', () => {
-        const src = '@let x:Int := 42;'
+        const src = '@let x := 42;'
         const { tree } = parse(src)
         expect(tree.source).toBe(src)
     })
@@ -80,7 +80,7 @@ describe('buildRegistry()', () => {
 
 describe('elaborate()', () => {
     test('returns elaborated tree with no diagnostics on valid input', () => {
-        const { tree } = parse('@let x:Int := 1;')
+        const { tree } = parse('@let x := 1;')
         const reg = buildRegistry(tree)
         const result: ElabResult = elaborate(tree, reg)
         expect(result.diagnostics).toHaveLength(0)
@@ -89,7 +89,7 @@ describe('elaborate()', () => {
     })
 
     test('preserves source in the returned tree', () => {
-        const src = '@let y:Int := 2;'
+        const src = '@let y := 2;'
         const { tree } = parse(src)
         const reg = buildRegistry(tree)
         const { tree: elabTree } = elaborate(tree, reg)
@@ -103,7 +103,7 @@ describe('elaborate()', () => {
 
 describe('typecheck()', () => {
     test('returns SemanticModel on valid input', () => {
-        const src = '@let x:Int := 42;'
+        const src = '@let x := 42;'
         const { tree } = parse(src)
         const reg = buildRegistry(tree)
         const { tree: elab, registry } = elaborate(tree, reg)

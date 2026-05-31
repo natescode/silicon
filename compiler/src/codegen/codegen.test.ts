@@ -130,13 +130,13 @@ test("compile @let function without @export is not exported", () => {
 })
 
 test("compile @fn definition emits func with params", () => {
-    const wat = compile("@fn add x:Int, y:Int := x + y;")
+    const wat = compile("\\\\ add (Int, Int)\n@fn add x, y := x + y;")
     expect(wat).toContain("(func $add")
     expect(wat).toContain("i32.add")
 })
 
 test("compile @var definition emits mutable global", () => {
-    const wat = compile("@var count:Int := 0;")
+    const wat = compile("@var count := 0;")
     expect(wat).toContain("(global $count")
     expect(wat).toContain("(mut i32)")
     expect(wat).toContain("(i32.const 0)")
@@ -149,7 +149,7 @@ test("compile assignment to parameter uses local.set", () => {
 })
 
 test("compile @extern with no return type emits void import", () => {
-    const wat = compile("@extern print x:Int;")
+    const wat = compile("@extern { \\\\ print (Int) -> Void }")
     expect(wat).toContain('(import "env" "print"')
     expect(wat).toContain("(param i32)")
     const importLine = wat.split('\n').find(l => l.includes('(import "env" "print"')) ?? ''
@@ -157,13 +157,13 @@ test("compile @extern with no return type emits void import", () => {
 })
 
 test("compile @extern with return type emits result declaration", () => {
-    const wat = compile("@extern readInt:Int;")
+    const wat = compile("@extern { \\\\ readInt () -> Int }")
     expect(wat).toContain('(import "env" "readInt"')
     expect(wat).toContain("(result i32)")
 })
 
 test("compile @extern appears before function definitions in module", () => {
-    const wat = compile("@extern print x:Int;\n@let greet := { &print 42 };")
+    const wat = compile("@extern { \\\\ print (Int) -> Void }\n@let greet := { &print 42 };")
     const importPos = wat.indexOf("(import")
     const funcPos = wat.indexOf("(func $greet")
     expect(importPos).toBeGreaterThan(-1)
@@ -172,7 +172,7 @@ test("compile @extern appears before function definitions in module", () => {
 })
 
 test("compile @extern with multiple params", () => {
-    const wat = compile("@extern add x:Int, y:Int;")
+    const wat = compile("@extern { \\\\ add (Int, Int) -> Void }")
     expect(wat).toContain('(import "env" "add"')
     // IR emitter uses unnamed params in import declarations
     expect(wat).toContain("(param i32) (param i32)")

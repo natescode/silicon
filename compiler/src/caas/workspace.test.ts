@@ -4,8 +4,8 @@ import { Workspace } from './workspace'
 import { buildRegistry, parse } from './index'
 import type { DocumentChangeEvent } from './workspace'
 
-const SRC1 = '@fn answer:Int := { 42 };'
-const SRC2 = '@fn answer:Int := { 99 };'
+const SRC1 = '\\\\ answer () -> Int\n@fn answer  := { 42 };'
+const SRC2 = '\\\\ answer () -> Int\n@fn answer  := { 99 };'
 const BAD  = '@@@@invalid'
 
 describe('Workspace — openDocument()', () => {

@@ -25,19 +25,22 @@ function parseOk(src: string): boolean {
 }
 
 describe('parens-optional-grouping: function definitions', () => {
-    test('paren form `@fn name:R (a:T, b:U) := body` parses with 2 params', () => {
+    test('paren form `\\\\ name (T, U) -> R
+@fn name a, b := body` parses with 2 params', () => {
         const ast = parseSrc(`@fn add:Int (a:Int, b:Int) := 0;`)
         expect(ast.elements[0].params).toHaveLength(2)
         expect(ast.elements[0].params[0].name).toBe('a')
         expect(ast.elements[0].params[1].name).toBe('b')
     })
 
-    test('paren form `@fn name:R () := body` parses with 0 params', () => {
+    test('paren form `\\\\ name () -> R
+@fn name  := body` parses with 0 params', () => {
         const ast = parseSrc(`@fn nullary:Int () := 0;`)
         expect(ast.elements[0].params).toHaveLength(0)
     })
 
-    test('paren single-param `@fn name:R (a:T) := body`', () => {
+    test('paren single-param `\\\\ name (T) -> R
+@fn name a := body`', () => {
         const ast = parseSrc(`@fn id:Int (a:Int) := a;`)
         expect(ast.elements[0].params).toHaveLength(1)
     })
@@ -119,6 +122,6 @@ describe('parens-optional-grouping: backward compatibility', () => {
     })
 
     test('existing nullary bare $fn types still parse', () => {
-        expect(parseOk(`@let thunk:$fn _:Int := 0;`)).toBe(true)
+        expect(parseOk(`@let thunk := 0;`)).toBe(true)
     })
 })

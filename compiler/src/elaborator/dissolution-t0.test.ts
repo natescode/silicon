@@ -29,7 +29,8 @@ describe('T0 loader accepts the new @stratum + @fn forms', () => {
                 &Compiler::register::keyword '@test_kw_unique';
                 &Compiler::on::lower '@test_kw_unique', TestStrata_lower;
             };
-            @fn TestStrata_lower node:Int := 0;
+            \\\\ TestStrata_lower (Int)
+            @fn TestStrata_lower node := 0;
         `
         const registry = buildStrataRegistry(
             { type: 'Program', elements: [] } as any,
@@ -66,7 +67,8 @@ describe('@fn pre-pass extends to T0 sources too', () => {
         // for @fn definitions.  The T0 extension does the same for
         // builtin / extraSources sources, so a handler @fn declared in
         // those files is also discoverable.
-        const src = `@fn Discoverable_fn x:Int := x;`
+        const src = `\\\\ Discoverable_fn (Int)
+@fn Discoverable_fn x := x;`
         const registry = buildStrataRegistry(
             { type: 'Program', elements: [] } as any,
             [src],

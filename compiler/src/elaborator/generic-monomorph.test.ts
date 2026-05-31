@@ -122,8 +122,10 @@ describe('@generic — real per-call monomorphization', () => {
     test.skip('two calls with two different types produce two distinct monomorphs', () => {
         const wat = compileToWat(
             `@generic id x:T := x;
-             @fn run_i:Int := { (&id 42) };
-             @fn run_f:Float := { (&id 3.14) };
+             \\\\ run_i () -> Int
+             @fn run_i  := { (&id 42) };
+             \\\\ run_f () -> Float
+             @fn run_f  := { (&id 3.14) };
              @export run_i;
              @export run_f;`,
             [GENERIC_STRATUM]
@@ -141,8 +143,10 @@ describe('@generic — real per-call monomorphization', () => {
     test.skip('two calls with the same type share one monomorph', () => {
         const wat = compileToWat(
             `@generic id x:T := x;
-             @fn a:Int := { (&id 1) };
-             @fn b:Int := { (&id 2) };
+             \\\\ a () -> Int
+             @fn a  := { (&id 1) };
+             \\\\ b () -> Int
+             @fn b  := { (&id 2) };
              @export a;
              @export b;`,
             [GENERIC_STRATUM]
@@ -160,8 +164,10 @@ describe('@generic — real per-call monomorphization', () => {
     test.skip('the generated WASM actually runs and returns correct values for each monomorph', async () => {
         const wat = compileToWat(
             `@generic id x:T := x;
-             @fn run_i:Int x:Int := { (&id x) };
-             @fn run_f:Float x:Float := { (&id x) };
+             \\\\ run_i (Int) -> Int
+             @fn run_i x := { (&id x) };
+             \\\\ run_f (Float) -> Float
+             @fn run_f x := { (&id x) };
              @export run_i;
              @export run_f;`,
             [GENERIC_STRATUM]

@@ -45,7 +45,8 @@ describe('Phase 9d-8: Vec[Int] under wasm-gc — core API', () => {
 
     test('vec_new + vec_len: fresh vec has length 0', async () => {
         const ex = await compileGcRun(`
-            @fn test:Int := { @local v:Vec[Int] := &vec_new 4; &vec_len v };
+            \\\\ test () -> Int
+            @fn test  := { @local v:Vec[Int] := &vec_new 4; &vec_len v };
             @export test;
         `)
         expect(ex.test()).toBe(0)
@@ -53,7 +54,8 @@ describe('Phase 9d-8: Vec[Int] under wasm-gc — core API', () => {
 
     test('vec_new + vec_capacity: initial capacity matches request', async () => {
         const ex = await compileGcRun(`
-            @fn test:Int := { @local v:Vec[Int] := &vec_new 8; &vec_capacity v };
+            \\\\ test () -> Int
+            @fn test  := { @local v:Vec[Int] := &vec_new 8; &vec_capacity v };
             @export test;
         `)
         expect(ex.test()).toBe(8)
@@ -61,8 +63,9 @@ describe('Phase 9d-8: Vec[Int] under wasm-gc — core API', () => {
 
     test('vec_push_i32 then vec_len: length goes up by one', async () => {
         const ex = await compileGcRun(`
-            @fn test:Int := {
-                @local v:Vec[Int] := &vec_new 4;
+            \\\\ test () -> Int
+            @fn test  := {
+                @local v := &vec_new 4;
                 &vec_push_i32 v, 42;
                 &vec_len v
             };
@@ -73,8 +76,9 @@ describe('Phase 9d-8: Vec[Int] under wasm-gc — core API', () => {
 
     test('vec_get_i32 returns the stored value', async () => {
         const ex = await compileGcRun(`
-            @fn test:Int := {
-                @local v:Vec[Int] := &vec_new 4;
+            \\\\ test () -> Int
+            @fn test  := {
+                @local v := &vec_new 4;
                 &vec_push_i32 v, 100;
                 &vec_push_i32 v, 200;
                 &vec_push_i32 v, 300;
@@ -87,8 +91,9 @@ describe('Phase 9d-8: Vec[Int] under wasm-gc — core API', () => {
 
     test('vec_set_i32 overwrites the element', async () => {
         const ex = await compileGcRun(`
-            @fn test:Int := {
-                @local v:Vec[Int] := &vec_new 4;
+            \\\\ test () -> Int
+            @fn test  := {
+                @local v := &vec_new 4;
                 &vec_push_i32 v, 10;
                 &vec_push_i32 v, 20;
                 &vec_set_i32 v, 0, 99;
@@ -101,14 +106,16 @@ describe('Phase 9d-8: Vec[Int] under wasm-gc — core API', () => {
 
     test('vec_pop_i32 returns the last element and shrinks len', async () => {
         const ex = await compileGcRun(`
-            @fn pop_value:Int := {
-                @local v:Vec[Int] := &vec_new 4;
+            \\\\ pop_value () -> Int
+            @fn pop_value  := {
+                @local v := &vec_new 4;
                 &vec_push_i32 v, 7;
                 &vec_push_i32 v, 13;
                 &vec_pop_i32 v
             };
-            @fn len_after_pop:Int := {
-                @local v:Vec[Int] := &vec_new 4;
+            \\\\ len_after_pop () -> Int
+            @fn len_after_pop  := {
+                @local v := &vec_new 4;
                 &vec_push_i32 v, 7;
                 &vec_push_i32 v, 13;
                 &vec_pop_i32 v;
@@ -126,8 +133,9 @@ describe('Phase 9d-8: Vec[Int] grow path (capacity exceeded)', () => {
 
     test('pushing past initial capacity triggers grow + values survive', async () => {
         const ex = await compileGcRun(`
-            @fn test:Int := {
-                @local v:Vec[Int] := &vec_new 2;
+            \\\\ test () -> Int
+            @fn test  := {
+                @local v := &vec_new 2;
                 &vec_push_i32 v, 10;
                 &vec_push_i32 v, 20;
                 # capacity is 2 here — next push grows.
@@ -142,15 +150,17 @@ describe('Phase 9d-8: Vec[Int] grow path (capacity exceeded)', () => {
 
     test('grow from cap=0 expands to default size and preserves elements', async () => {
         const ex = await compileGcRun(`
-            @fn len_test:Int := {
-                @local v:Vec[Int] := &vec_new 0;
+            \\\\ len_test () -> Int
+            @fn len_test  := {
+                @local v := &vec_new 0;
                 &vec_push_i32 v, 1;
                 &vec_push_i32 v, 2;
                 &vec_push_i32 v, 3;
                 &vec_len v
             };
-            @fn val_test:Int := {
-                @local v:Vec[Int] := &vec_new 0;
+            \\\\ val_test () -> Int
+            @fn val_test  := {
+                @local v := &vec_new 0;
                 &vec_push_i32 v, 1;
                 &vec_push_i32 v, 2;
                 &vec_push_i32 v, 3;
@@ -165,8 +175,9 @@ describe('Phase 9d-8: Vec[Int] grow path (capacity exceeded)', () => {
 
     test('capacity reflects post-grow array size', async () => {
         const ex = await compileGcRun(`
-            @fn test:Int := {
-                @local v:Vec[Int] := &vec_new 2;
+            \\\\ test () -> Int
+            @fn test  := {
+                @local v := &vec_new 2;
                 # Force a grow.
                 &vec_push_i32 v, 1;
                 &vec_push_i32 v, 2;
@@ -187,9 +198,11 @@ describe('Phase 9d-8: Vec[Int] via function boundaries', () => {
         // the typechecker treats v as Vec[Int] at the Sigil level;
         // injectRefSlots upgrades the param to ref-typed at binary emit.
         const ex = await compileGcRun(`
-            @fn consumer v:Vec[Int] := &vec_get_i32 v, 0;
-            @fn test:Int := {
-                @local v:Vec[Int] := &vec_new 2;
+            \\\\ consumer (Vec[Int])
+            @fn consumer v := &vec_get_i32 v, 0;
+            \\\\ test () -> Int
+            @fn test  := {
+                @local v := &vec_new 2;
                 &vec_push_i32 v, 777;
                 &consumer v
             };
@@ -200,13 +213,15 @@ describe('Phase 9d-8: Vec[Int] via function boundaries', () => {
 
     test('returning Vec[Int] from a function works (refResult encoding)', async () => {
         const ex = await compileGcRun(`
-            @fn make_pair:Vec[Int] := {
-                @local v:Vec[Int] := &vec_new 2;
+            \\\\ make_pair () -> Vec[Int]
+            @fn make_pair  := {
+                @local v := &vec_new 2;
                 &vec_push_i32 v, 11;
                 &vec_push_i32 v, 22;
                 v
             };
-            @fn test:Int := &vec_get_i32 (&make_pair), 1;
+            \\\\ test () -> Int
+            @fn test  := &vec_get_i32 (&make_pair), 1;
             @export test;
         `)
         expect(ex.test()).toBe(22)

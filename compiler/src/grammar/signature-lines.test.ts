@@ -29,7 +29,7 @@ describe('signature-lines grammar — NEW syntax parses', () => {
         expect(matches(L(`${BS} run ((Int) -> Bool, Int) -> Void`, '@fn run cb, x := 0;'))).toBe(true)
     })
     test('nullary domain () -> T', () => {
-        expect(matches(L(`${BS} now () -> Int`, '@fn now := 0;'))).toBe(true)
+        expect(matches(L(`${BS} now () -> Int`, '@fn now  := 0;'))).toBe(true)
     })
     test('generic signature with [T, U]', () => {
         expect(matches(L(`${BS} map[T, U] ((T) -> U, Vec[T]) -> Vec[U]`, '@fn map f, xs := { f };'))).toBe(true)
@@ -52,6 +52,8 @@ describe('signature-lines grammar — NEW syntax parses', () => {
 })
 
 describe('signature-lines grammar — OLD syntax rejected', () => {
+    // NB: these inputs are intentionally OLD syntax (the snippet codemod must
+    // not be re-run over this block — it would migrate them and break the point).
     test('inline param types (name:Type) no longer parse', () => {
         expect(matches('@fn add a:Int, b:Int := a;')).toBe(false)
     })

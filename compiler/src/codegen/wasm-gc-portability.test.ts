@@ -124,7 +124,8 @@ describe('Phase 9d-5b: E0013 — physical-byte primitives under wasm-gc', () => 
 describe('Phase 9d-5c: lifecycle primitives compile-time elision under wasm-gc', () => {
 
     test('&@with_arena typechecks under wasm-gc (no rejection)', () => {
-        const src = `@fn probe:Int := &@with_arena { 42 };`
+        const src = `\\\\ probe () -> Int
+@fn probe  := &@with_arena { 42 };`
         const r = compile(src, 'wasm-gc')
         expect(r.errors).toEqual([])
     })
@@ -132,7 +133,8 @@ describe('Phase 9d-5c: lifecycle primitives compile-time elision under wasm-gc',
     test('&@with_arena under wasm-gc emits no save/restore envelope', () => {
         // Under wasm-mvp the body is wrapped in $heap_get save + $heap
         // restore.  Under wasm-gc both are elided.
-        const src = `@fn probe:Int := &@with_arena { 42 };`
+        const src = `\\\\ probe () -> Int
+@fn probe  := &@with_arena { 42 };`
         const rMvp = compile(src, 'host')
         const rGc  = compile(src, 'wasm-gc')
         // Mvp emits the save/restore globals access.
@@ -148,8 +150,9 @@ describe('Phase 9d-5c: lifecycle primitives compile-time elision under wasm-gc',
 
     test('&@with_arena under wasm-gc emits no $arena_promote call', () => {
         const src = `
-            @fn build:String := &@with_arena {
-                @local s:String := 'hello';
+            \\\\ build () -> String
+            @fn build  := &@with_arena {
+                @local s := 'hello';
                 &@move_to_parent_arena s
             };`
         const rGc = compile(src, 'wasm-gc')

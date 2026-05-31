@@ -72,8 +72,8 @@ describe('Phase 4: @defer keyword registration', () => {
 describe('Phase 4: @defer end-of-body cleanup', () => {
     test('single @defer in void function appends cleanup after body', async () => {
         const { mod } = await compile(`
-            @extern cleanup;
-            @fn foo := {
+            @extern { \\\\ cleanup () -> Void }
+            @fn foo  := {
                 &@defer &cleanup;
                 42
             };
@@ -96,10 +96,10 @@ describe('Phase 4: @defer end-of-body cleanup', () => {
 
     test('multiple @defers run in LIFO order at end of body', async () => {
         const { mod } = await compile(`
-            @extern first;
-            @extern second;
-            @extern third;
-            @fn foo := {
+            @extern { \\\\ first () -> Void }
+            @extern { \\\\ second () -> Void }
+            @extern { \\\\ third () -> Void }
+            @fn foo  := {
                 &@defer &first;
                 &@defer &second;
                 &@defer &third;
@@ -123,7 +123,7 @@ describe('Phase 4: @defer end-of-body cleanup', () => {
     })
 
     test('function with no @defer is not wrapped (body emitted unchanged)', async () => {
-        const { mod } = await compile(`@fn foo := { 42 };`)
+        const { mod } = await compile(`@fn foo  := { 42 };`)
         const fn = getFn(mod, 'foo')
         // Without @defer, the body should be the i32 literal Block (or just Const),
         // never a synthetic LocalSet/__defer_result/LocalGet wrap.
@@ -133,8 +133,9 @@ describe('Phase 4: @defer end-of-body cleanup', () => {
 
     test('non-void function with @defer preserves return value via temp local', async () => {
         const { mod } = await compile(`
-            @extern cleanup;
-            @fn foo:Int := {
+            @extern { \\\\ cleanup () -> Void }
+            \\\\ foo () -> Int
+            @fn foo  := {
                 &@defer &cleanup;
                 42
             };
@@ -154,8 +155,9 @@ describe('Phase 4: @defer end-of-body cleanup', () => {
 describe('Phase 4: @defer with @return', () => {
     test('@return runs pending defers before the return', async () => {
         const { mod } = await compile(`
-            @extern cleanup;
-            @fn foo:Int := {
+            @extern { \\\\ cleanup () -> Void }
+            \\\\ foo () -> Int
+            @fn foo  := {
                 &@defer &cleanup;
                 &@return 99
             };
@@ -170,9 +172,10 @@ describe('Phase 4: @defer with @return', () => {
 
     test('multiple @defers + @return: cleanups fire in LIFO order before return', async () => {
         const { mod } = await compile(`
-            @extern first;
-            @extern second;
-            @fn foo:Int := {
+            @extern { \\\\ first () -> Void }
+            @extern { \\\\ second () -> Void }
+            \\\\ foo () -> Int
+            @fn foo  := {
                 &@defer &first;
                 &@defer &second;
                 &@return 7

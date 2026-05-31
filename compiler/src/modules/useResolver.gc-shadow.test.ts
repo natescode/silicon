@@ -29,8 +29,8 @@ describe('useResolver: wasm-gc stdlib shadow', () => {
 
     test('target=wasm-gc picks gc/X.si over X.si when both exist', () => {
         const fs = inMemoryFs({
-            'project/src/stdlib/rc.si':    '@fn rc_new value:Int := { value + 1 };',   // mvp (sentinel value)
-            'project/src/stdlib/gc/rc.si': '@fn rc_new value:Int := value;',            // gc (identity sentinel)
+            'project/src/stdlib/rc.si':    '\\\\ rc_new (Int)\n@fn rc_new value := { value + 1 };',   // mvp (sentinel value)
+            'project/src/stdlib/gc/rc.si': '\\\\ rc_new (Int)\n@fn rc_new value := value;',            // gc (identity sentinel)
             'project/main.si':             "@use 'src/stdlib/rc.si';\n@fn use_it:Int := &rc_new 42;",
         })
         const { source, visited } = resolveUses(
@@ -98,9 +98,9 @@ describe('useResolver: wasm-gc stdlib shadow', () => {
             // A user-side helper that happens to live somewhere named
             // "stdlib" must NOT be redirected if it doesn't sit directly
             // under a `stdlib/` directory.
-            'project/lib/helper.si':       '@fn helper:Int := 0;',
+            'project/lib/helper.si':       '\\\\ helper () -> Int\n@fn helper  := 0;',
             // Even if there's a `lib/gc/helper.si` it shouldn't be used.
-            'project/lib/gc/helper.si':    '@fn helper:Int := 999;',
+            'project/lib/gc/helper.si':    '\\\\ helper () -> Int\n@fn helper  := 999;',
             'project/main.si':             "@use 'lib/helper.si';\n",
         })
         const { source, visited } = resolveUses(

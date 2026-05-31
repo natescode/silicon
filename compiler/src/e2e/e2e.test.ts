@@ -748,7 +748,7 @@ test("E2E: @type_alias compiles without error and emits no WAT for the declarati
 });
 
 test("E2E: @type_alias used as annotation compiles cleanly", () => {
-    const result = compileSource("@type_alias Metres := Int;\n@let distance:Metres := 100;");
+    const result = compileSource("@type_alias Metres := Int;\n@let distance := 100;");
 
     expect(result.success).toBe(true);
     expect(result.wat).toBeDefined();
@@ -795,7 +795,7 @@ test("E2E: @type_sum variant reference resolves via global.get", () => {
 test("E2E: @match emits nested (if ...) chain with i32.eq comparisons", () => {
     const src = [
         "@type_sum Color := Red | Green | Blue;",
-        "@var c:Color := Color::Red;",
+        "@var c := Color::Red;",
         "&@match c, Color::Red, { 1 }, Color::Green, { 2 }, Color::Blue, { 3 };",
     ].join("\n");
     const result = compileSource(src);
@@ -866,7 +866,7 @@ test("E2E: multiple @local variables each get their own WAT local", () => {
 // ---------------------------------------------------------------------------
 
 test("E2E: zero-param @let emits a function and references use (call ...)", () => {
-    const src = "@let five:Int := 5; five + 1;";
+    const src = "@let five := 5; five + 1;";
     const result = compileSource(src);
 
     expect(result.success).toBe(true);
@@ -897,7 +897,7 @@ test("E2E: @if strata has StrataType.Control via registry", () => {
 test("E2E: @match in expression position emits (if (result i32) ...)", () => {
     const src = [
         "@type_sum Color := Red | Green | Blue;",
-        "@var c:Color := Color::Red;",
+        "@var c := Color::Red;",
         "@let label := { &@match c, Color::Red, { 1 }, Color::Green, { 2 }, Color::Blue, { 3 } };",
     ].join("\n");
     const result = compileSource(src);
@@ -939,7 +939,7 @@ test("E2E: @and emits short-circuit AND WAT (if (result i32) ...)", () => {
 });
 
 test("E2E: || with variables produces correct short-circuit structure", () => {
-    const src = "@var a:Int := 1; @var b:Int := 0; a || b;";
+    const src = "@var a := 1; @var b:Int := 0; a || b;";
     const result = compileSource(src);
 
     expect(result.success).toBe(true);
@@ -957,7 +957,7 @@ test("E2E: @not of zero is 1 (i32.eqz (i32.const 0))", () => {
 });
 
 test("E2E: chained || short-circuits left to right", () => {
-    const src = "@var x:Int := 0; @var y:Int := 0; @var z:Int := 1; x || y || z;";
+    const src = "@var x := 0; @var y:Int := 0; @var z:Int := 1; x || y || z;";
     const result = compileSource(src);
 
     expect(result.success).toBe(true);
@@ -996,7 +996,7 @@ test.skip("Schema: @var with parameters is rejected (D-D-11c regression — new 
 });
 
 test.skip("Schema: @extern with a binding is rejected (D-D-11c regression — new register::keyword always allowsBinding=true)", () => {
-    const result = compileSource("@extern print := 5;");
+    const result = compileSource("@extern { \\\\ print () -> Void }");
     expect(result.success).toBe(false);
     expect(result.error).toContain("'@extern' does not accept a binding");
 });
@@ -1009,14 +1009,14 @@ test("Schema: @let with parameters and binding is accepted", () => {
 });
 
 test("Schema: @var with binding and no params is accepted", () => {
-    const result = compileSource("@var count:Int := 0;");
+    const result = compileSource("@var count := 0;");
 
     expect(result.success).toBe(true);
     expect(result.wat).toContain("(global $count");
 });
 
 test("Schema: @extern with params and no binding is accepted", () => {
-    const result = compileSource("@extern print x:Int;");
+    const result = compileSource("@extern { \\\\ print (Int) -> Void }");
 
     expect(result.success).toBe(true);
     expect(result.wat).toContain("(import");
@@ -1734,7 +1734,8 @@ test("Round 37: || produces short-circuit WAT driven by WASM::control_or intrins
 })
 
 test("Round 37: @export emits explicit WAT export for a global", () => {
-    const result = compileSource(`@var counter:Int := 0;\n@export counter;`)
+    const result = compileSource(`@var counter := 0;
+@export counter;`)
     expect(result.success).toBe(true)
     expect(result.wat).toContain('(export "counter" (global $counter))')
 })
@@ -1748,7 +1749,8 @@ test("Round 37: @export on a function emits explicit WAT export for the function
 test("Round 37: @export unknown keyword is an elaboration error without grammar changes", () => {
     // @export is registered via metadata.si strata — not a grammar keyword.
     // Verifies the mechanism works end-to-end (no parse error).
-    const result = compileSource(`@var n:Int := 1;\n@export n;`)
+    const result = compileSource(`@var n := 1;
+@export n;`)
     expect(result.success).toBe(true)
 })
 
@@ -1764,7 +1766,7 @@ test("Round 43: @match trailing default emits no i32.eq for the default arm", ()
     // Even arg count: last arg is the catch-all default, no comparison emitted for it.
     const src = [
         "@type_sum Color := Red | Green | Blue;",
-        "@var c:Color := Color::Red;",
+        "@var c := Color::Red;",
         "&@match c, Color::Red, { 1 }, { 0 };",
     ].join("\n")
     const result = compileSource(src)
@@ -1874,7 +1876,8 @@ test("Round 46: web::math_pow with two Float args is deduplicated across multipl
 test("Round 46: no @extern declaration needed for module functions", () => {
     // Previously you had to write @extern web_console_log_str ptr:String; — now it's gone.
     const result = compileSource(`
-        @fn log v:Int := {
+        \\\\ log (Int)
+        @fn log v := {
             &web::console_log v;
             v
         };
@@ -1886,7 +1889,8 @@ test("Round 46: no @extern declaration needed for module functions", () => {
 
 test("Round 46: unknown module throws a meaningful error", () => {
     const result = compileSource(`
-        @fn bad v:Int := {
+        \\\\ bad (Int)
+        @fn bad v := {
             &nonexistent::foo v
         };
     `)
@@ -1948,7 +1952,7 @@ test("Phase A i64: Int32 is recognised as a type name (alias for Int on wasm32)"
 test("Phase A i64: @toInt64 result type is Int64 — propagates to extern arg position", () => {
     // The @toInt64 cast must yield Int64 so the extern call typechecks.
     const result = compileSource(
-        "@extern wants64:Int64 a:Int64;" +
+        "@extern { \\\\ wants64 (Int64) -> Int64 }" +
         "@let run x:Int := { &wants64 (&@toInt64 x) };"
     )
     expect(result.success).toBe(true)
@@ -2047,7 +2051,8 @@ test("Phase D i64: wasi_snapshot_preview1.path_open module registry declares i64
     // Calling path_open without an explicit @extern (module sugar) emits
     // the right import signature: the two rights flags are i64.
     const result = compileSource(`
-        @fn try_open dir:Int, p:Int, l:Int, out:Int := {
+        \\\\ try_open (Int, Int, Int, Int)
+        @fn try_open dir, p, l, out := {
             &wasi_snapshot_preview1::path_open
                 dir, 0, p, l, 0,
                 (&@toInt64 0), (&@toInt64 0),
@@ -2067,9 +2072,9 @@ test("Phase D i64: wasi_snapshot_preview1.path_open module registry declares i64
 
 test("Phase 1a @struct: generates constructor function", () => {
     const result = compileSource(`
-        @struct Point x:Int, y:Int;
-        @fn main := {
-            @local p:Point := &Point 3, 7;
+        @struct Point x Int, y Int;
+        @fn main  := {
+            @local p := &Point 3, 7;
             p.x
         };
     `)
@@ -2082,9 +2087,9 @@ test("Phase 1a @struct: generates constructor function", () => {
 
 test("Phase 1a @struct: constructor stores fields at correct offsets", () => {
     const result = compileSource(`
-        @struct Point x:Int, y:Int;
-        @fn main := {
-            @local p:Point := &Point 3, 7;
+        @struct Point x Int, y Int;
+        @fn main  := {
+            @local p := &Point 3, 7;
             p.x
         };
     `)
@@ -2102,9 +2107,9 @@ test("Phase 1a @struct: field read generates i32.load", () => {
 
 test("Phase 1a @struct: typechecker recognises struct type annotation", () => {
     const result = compileSource(`
-        @struct Point x:Int, y:Int;
-        @fn main := {
-            @local p:Point := &Point 3, 7;
+        @struct Point x Int, y Int;
+        @fn main  := {
+            @local p := &Point 3, 7;
             p.x
         };
     `)
@@ -2114,8 +2119,9 @@ test("Phase 1a @struct: typechecker recognises struct type annotation", () => {
 
 test("Phase 1a @struct: typechecker resolves field type for p.x as Int", () => {
     const result = compileSource(`
-        @struct Point x:Int, y:Int;
-        @fn get_x p:Point := p.x;
+        @struct Point x Int, y Int;
+        \\\\ get_x (Point)
+        @fn get_x p := p.x;
     `)
     expect(result.success).toBe(true)
     expect(result.error).toBeNull()
@@ -2127,11 +2133,11 @@ test("Phase 1a @struct: typechecker resolves field type for p.x as Int", () => {
 
 test("Phase 1a-6 nested @struct: field read on outer struct compiles", () => {
     const result = compileSource(`
-        @struct Point x:Int, y:Int;
-        @struct Rect origin:Point, width:Int, height:Int;
-        @fn main := {
-            @local p:Point := &Point 3, 7;
-            @local r:Rect := &Rect p, 100, 50;
+        @struct Point x Int, y Int;
+        @struct Rect origin Point, width Int, height Int;
+        @fn main  := {
+            @local p := &Point 3, 7;
+            @local r := &Rect p, 100, 50;
             r.width
         };
     `)
@@ -2149,9 +2155,10 @@ test("Phase 1a-6 nested @struct: struct example file compiles", () => {
 
 test("Phase 1a-6 nested @struct: typechecker resolves outer field type", () => {
     const result = compileSource(`
-        @struct Point x:Int, y:Int;
-        @struct Rect origin:Point, width:Int, height:Int;
-        @fn get_width r:Rect := r.width;
+        @struct Point x Int, y Int;
+        @struct Rect origin Point, width Int, height Int;
+        \\\\ get_width (Rect)
+        @fn get_width r := r.width;
     `)
     expect(result.success).toBe(true)
     expect(result.error).toBeNull()
@@ -2159,9 +2166,10 @@ test("Phase 1a-6 nested @struct: typechecker resolves outer field type", () => {
 
 test("Phase 1a-6 nested @struct: field write on nested struct compiles", () => {
     const result = compileSource(`
-        @struct Point x:Int, y:Int;
-        @struct Rect origin:Point, width:Int, height:Int;
-        @fn update_width r:Rect, w:Int := {
+        @struct Point x Int, y Int;
+        @struct Rect origin Point, width Int, height Int;
+        \\\\ update_width (Rect, Int)
+        @fn update_width r, w := {
             r.width = w;
             r.width
         };
@@ -2177,11 +2185,15 @@ test("Phase 1a-6 nested @struct: field write on nested struct compiles", () => {
 
 test("Phase 1a-7 struct aggregates: Token struct models compiler data", () => {
     const result = compileSource(`
-        @struct Token kind:Int, start:Int, len:Int;
-        @fn make_token kind:Int, start:Int, len:Int := &Token kind, start, len;
-        @fn token_kind t:Token := t.kind;
-        @fn token_start t:Token := t.start;
-        @fn token_len t:Token := t.len;
+        @struct Token kind Int, start Int, len Int;
+        \\\\ make_token (Int, Int, Int)
+        @fn make_token kind, start, len := &Token kind, start, len;
+        \\\\ token_kind (Token)
+        @fn token_kind t := t.kind;
+        \\\\ token_start (Token)
+        @fn token_start t := t.start;
+        \\\\ token_len (Token)
+        @fn token_len t := t.len;
     `)
     expect(result.success).toBe(true)
     expect(result.wat).toContain('(func $Token')
@@ -2192,9 +2204,11 @@ test("Phase 1a-7 struct aggregates: Token struct models compiler data", () => {
 
 test("Phase 1a-7 struct aggregates: Span struct with read/write", () => {
     const result = compileSource(`
-        @struct Span start:Int, end:Int;
-        @fn span_len s:Span := s.end - s.start;
-        @fn span_shift s:Span, delta:Int := {
+        @struct Span start Int, end Int;
+        \\\\ span_len (Span)
+        @fn span_len s := s.end - s.start;
+        \\\\ span_shift (Span, Int)
+        @fn span_shift s, delta := {
             s.start = s.start + delta;
             s.end = s.end + delta
         };
@@ -2207,10 +2221,12 @@ test("Phase 1a-7 struct aggregates: Span struct with read/write", () => {
 
 test("Phase 1a-7 struct aggregates: nested node models AST-like structure", () => {
     const result = compileSource(`
-        @struct Span start:Int, end:Int;
-        @struct ASTNode kind:Int, span:Span, value:Int;
-        @fn node_kind n:ASTNode := n.kind;
-        @fn node_value n:ASTNode := n.value;
+        @struct Span start Int, end Int;
+        @struct ASTNode kind Int, span Span, value Int;
+        \\\\ node_kind (ASTNode)
+        @fn node_kind n := n.kind;
+        \\\\ node_value (ASTNode)
+        @fn node_value n := n.value;
     `)
     expect(result.success).toBe(true)
     expect(result.wat).toContain('(func $Span')

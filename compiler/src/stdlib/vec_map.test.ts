@@ -64,7 +64,8 @@ describe('Phase 5a-5 + 5d-4: Vec.map proof', () => {
                 @local doubled:Int := &vec_map_i32_i32 v, (&@fnref double);
                 (&vec_get_i32 doubled, 0) + (&vec_get_i32 doubled, 1) + (&vec_get_i32 doubled, 2)
             }`,
-        }, `@fn double:Int x:Int := x * 2;`)
+        }, `\\\\ double (Int) -> Int
+@fn double x := x * 2;`)
         expect(ex.test_double_sum()).toBe(12)  // 2 + 4 + 6
     })
 
@@ -78,7 +79,8 @@ describe('Phase 5a-5 + 5d-4: Vec.map proof', () => {
                 @local out:Int := &vec_map_i32_i32 v, (&@fnref identity);
                 &vec_len out
             }`,
-        }, `@fn identity:Int x:Int := x;`)
+        }, `\\\\ identity (Int) -> Int
+@fn identity x := x;`)
         expect(ex.test_len()).toBe(3)
     })
 
@@ -91,7 +93,8 @@ describe('Phase 5a-5 + 5d-4: Vec.map proof', () => {
                 &vec_map_i32_i32 v, (&@fnref add_one);
                 (&vec_get_i32 v, 0) + (&vec_get_i32 v, 1)
             }`,
-        }, `@fn add_one:Int x:Int := x + 1;`)
+        }, `\\\\ add_one (Int) -> Int
+@fn add_one x := x + 1;`)
         expect(ex.test_source_unchanged()).toBe(11)  // 5 + 6 — not 6 + 7
     })
 
@@ -108,8 +111,10 @@ describe('Phase 5a-5 + 5d-4: Vec.map proof', () => {
                 (&vec_get_i32 doubled, 0) + (&vec_get_i32 doubled, 1)
                 + (&vec_get_i32 incremented, 0) + (&vec_get_i32 incremented, 1)
             }`,
-        }, `@fn double:Int x:Int := x * 2;
-            @fn add_one:Int x:Int := x + 1;`)
+        }, `\\\\ double (Int) -> Int
+@fn double x := x * 2;
+            \\\\ add_one (Int) -> Int
+            @fn add_one x := x + 1;`)
         // 20 + 40 + 11 + 21 = 92
         expect(ex.test_two_maps()).toBe(92)
     })
@@ -121,7 +126,8 @@ describe('Phase 5a-5 + 5d-4: Vec.map proof', () => {
                 @local mapped:Int := &vec_map_i32_i32 v, (&@fnref add_one);
                 &vec_len mapped
             }`,
-        }, `@fn add_one:Int x:Int := x + 1;`)
+        }, `\\\\ add_one (Int) -> Int
+@fn add_one x := x + 1;`)
         expect(ex.test_empty()).toBe(0)
     })
 })

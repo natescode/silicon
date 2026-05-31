@@ -79,48 +79,56 @@ describe('watInstrToQbeInstr', () => {
 
 describe('lowerToQbe — function signatures', () => {
     test('zero-param void function emits correct header', () => {
-        const out = toQbe(`@fn noop := {};`)
+        const out = toQbe(`@fn noop  := {};`)
         expect(out).toContain('function $noop()')
         expect(out).toContain('@start')
         expect(out).toContain('}')
     })
 
     test('i32-returning function emits w return type', () => {
-        const out = toQbe(`@fn answer:Int := 42;`)
+        const out = toQbe(`\\\\ answer () -> Int
+@fn answer  := 42;`)
         expect(out).toContain('function w $answer()')
     })
 
     test('single Int param uses w type', () => {
-        const out = toQbe(`@fn double:Int x:Int := x + x;`)
+        const out = toQbe(`\\\\ double (Int) -> Int
+@fn double x := x + x;`)
         expect(out).toContain('w %x')
     })
 
     test('multi-param function lists all params', () => {
-        const out = toQbe(`@fn add:Int x:Int, y:Int := x + y;`)
+        const out = toQbe(`\\\\ add (Int, Int) -> Int
+@fn add x, y := x + y;`)
         expect(out).toContain('$add(w %x, w %y)')
     })
 
     test('Float param uses s type', () => {
-        const out = toQbe(`@fn neg:Float v:Float := v;`)
+        const out = toQbe(`\\\\ neg (Float) -> Float
+@fn neg v := v;`)
         expect(out).toContain('s %v')
     })
 
     test('multiple functions all appear in output', () => {
         const out = toQbe(`
-            @fn one:Int := 1;
-            @fn two:Int := 2;
+            \\\\ one () -> Int
+            @fn one  := 1;
+            \\\\ two () -> Int
+            @fn two  := 2;
         `)
         expect(out).toContain('$one')
         expect(out).toContain('$two')
     })
 
     test('output contains @start block entry label', () => {
-        const out = toQbe(`@fn f:Int x:Int := x;`)
+        const out = toQbe(`\\\\ f (Int) -> Int
+@fn f x := x;`)
         expect(out).toContain('@start')
     })
 
     test('output is syntactically a QBE function block', () => {
-        const out = toQbe(`@fn f:Int := 0;`)
+        const out = toQbe(`\\\\ f () -> Int
+@fn f  := 0;`)
         // Must open with "function", contain @start, close with }
         expect(out).toMatch(/function.*\{/)
         expect(out).toContain('@start')
@@ -134,14 +142,14 @@ describe('lowerToQbe — function signatures', () => {
 
 describe('lowerToQbe — @extern', () => {
     test('@extern emits a comment (not a real function block)', () => {
-        const out = toQbe(`@extern write:Int fd:Int, buf:Int, len:Int;`)
+        const out = toQbe(`@extern { \\\\ write (Int, Int, Int) -> Int }`)
         expect(out).toContain('# extern function')
         expect(out).toContain('$write')
         expect(out).not.toContain('@start')
     })
 
     test('@extern comment includes parameter types', () => {
-        const out = toQbe(`@extern read:Int fd:Int;`)
+        const out = toQbe(`@extern { \\\\ read (Int) -> Int }`)
         expect(out).toContain('$read')
         expect(out).toContain('# extern function')
     })
@@ -153,26 +161,27 @@ describe('lowerToQbe — @extern', () => {
 
 describe('lowerToQbe — @var globals', () => {
     test('@var Int emits a w-typed data declaration', () => {
-        const out = toQbe(`@var counter:Int := 0;`)
+        const out = toQbe(`@var counter := 0;`)
         expect(out).toContain('data $counter')
         expect(out).toContain('w 0')
     })
 
     test('@var with non-zero init emits the actual value', () => {
-        const out = toQbe(`@var answer:Int := 42;`)
+        const out = toQbe(`@var answer := 42;`)
         expect(out).toContain('w 42')
     })
 
     test('@var Float emits an s-typed data declaration', () => {
-        const out = toQbe(`@var pi:Float := 3.14;`)
+        const out = toQbe(`@var pi := 3.14;`)
         expect(out).toContain('data $pi')
         expect(out).toContain('s ')
     })
 
     test('global appears before functions in output', () => {
         const out = toQbe(`
-            @var x:Int := 0;
-            @fn f:Int := 1;
+            @var x := 0;
+            \\\\ f () -> Int
+            @fn f  := 1;
         `)
         const globalPos = out.indexOf('data $x')
         const funcPos   = out.indexOf('function')
@@ -181,16 +190,17 @@ describe('lowerToQbe — @var globals', () => {
 
     test('global read in function body emits loadw', () => {
         const out = toQbe(`
-            @var g:Int := 0;
-            @fn read_g:Int := g;
+            @var g := 0;
+            \\\\ read_g () -> Int
+            @fn read_g  := g;
         `)
         expect(out).toContain('loadw $g')
     })
 
     test('global write in function body emits storew', () => {
         const out = toQbe(`
-            @var g:Int := 0;
-            @fn set_g := { g = 99; };
+            @var g := 0;
+            @fn set_g  := { g = 99; };
         `)
         expect(out).toContain('storew')
         expect(out).toContain('$g')
@@ -198,8 +208,8 @@ describe('lowerToQbe — @var globals', () => {
 
     test('global read-modify-write emits load + op + store', () => {
         const out = toQbe(`
-            @var counter:Int := 0;
-            @fn inc := { counter = counter + 1; };
+            @var counter := 0;
+            @fn inc  := { counter = counter + 1; };
         `)
         expect(out).toContain('loadw $counter')
         expect(out).toContain('storew')
@@ -212,44 +222,52 @@ describe('lowerToQbe — @var globals', () => {
 
 describe('lowerToQbe — literals', () => {
     test('integer constant in return position', () => {
-        const out = toQbe(`@fn answer:Int := 42;`)
+        const out = toQbe(`\\\\ answer () -> Int
+@fn answer  := 42;`)
         expect(out).toContain('ret 42')
     })
 
     test('boolean true constant', () => {
-        const out = toQbe(`@fn always_true:Bool := @true;`)
+        const out = toQbe(`\\\\ always_true () -> Bool
+@fn always_true  := @true;`)
         expect(out).toContain('ret 1')
     })
 })
 
 describe('lowerToQbe — binary arithmetic', () => {
     test('Int addition emits QBE add instruction', () => {
-        const out = toQbe(`@fn add:Int x:Int, y:Int := x + y;`)
+        const out = toQbe(`\\\\ add (Int, Int) -> Int
+@fn add x, y := x + y;`)
         expect(out).toContain('=w add %x, %y')
     })
 
     test('Int subtraction emits sub', () => {
-        const out = toQbe(`@fn sub:Int x:Int, y:Int := x - y;`)
+        const out = toQbe(`\\\\ sub (Int, Int) -> Int
+@fn sub x, y := x - y;`)
         expect(out).toContain('=w sub %x, %y')
     })
 
     test('Int multiplication emits mul', () => {
-        const out = toQbe(`@fn mul:Int x:Int, y:Int := x * y;`)
+        const out = toQbe(`\\\\ mul (Int, Int) -> Int
+@fn mul x, y := x * y;`)
         expect(out).toContain('=w mul %x, %y')
     })
 
     test('Int equality emits ceqw', () => {
-        const out = toQbe(`@fn eq:Bool x:Int, y:Int := x == y;`)
+        const out = toQbe(`\\\\ eq (Int, Int) -> Bool
+@fn eq x, y := x == y;`)
         expect(out).toContain('ceqw')
     })
 
     test('Float addition emits QBE add instruction (single via =s sigil)', () => {
-        const out = toQbe(`@fn fadd:Float x:Float, y:Float := x + y;`)
+        const out = toQbe(`\\\\ fadd (Float, Float) -> Float
+@fn fadd x, y := x + y;`)
         expect(out).toContain('=s add %x, %y')
     })
 
     test('nested arithmetic emits multiple instructions', () => {
-        const out = toQbe(`@fn calc:Int x:Int := (x + 1) * 2;`)
+        const out = toQbe(`\\\\ calc (Int) -> Int
+@fn calc x := (x + 1) * 2;`)
         // Should have at least two instructions for the two operations
         const instrCount = (out.match(/^\s+%t\d+ =/gm) ?? []).length
         expect(instrCount).toBeGreaterThanOrEqual(2)
@@ -263,32 +281,37 @@ describe('lowerToQbe — binary arithmetic', () => {
 describe('lowerToQbe — function calls', () => {
     test('user function call emits QBE call instruction', () => {
         const out = toQbe(`
-            @fn add:Int a:Int, b:Int := a + b;
-            @fn main:Int := &add 1, 2;
+            \\\\ add (Int, Int) -> Int
+            @fn add a, b := a + b;
+            \\\\ main () -> Int
+            @fn main  := &add 1, 2;
         `)
         expect(out).toContain('call $add(')
     })
 
     test('user function call result stored in temp', () => {
         const out = toQbe(`
-            @fn double:Int x:Int := x + x;
-            @fn main:Int := &double 5;
+            \\\\ double (Int) -> Int
+            @fn double x := x + x;
+            \\\\ main () -> Int
+            @fn main  := &double 5;
         `)
         expect(out).toMatch(/%t\d+ =w call \$double/)
     })
 
     test('extern function call emits QBE call instruction', () => {
         const out = toQbe(`
-            @extern write:Int fd:Int, buf:Int, len:Int;
-            @fn f:Int := &write 1, 2, 3;
+            @extern { \\\\ write (Int, Int, Int) -> Int }
+            \\\\ f () -> Int
+            @fn f  := &write 1, 2, 3;
         `)
         expect(out).toContain('call $write(')
     })
 
     test('void function call emits call without assignment', () => {
         const out = toQbe(`
-            @fn noop := {};
-            @fn caller := { &noop; };
+            @fn noop  := {};
+            @fn caller  := { &noop; };
         `)
         // void call — no assignment, just bare call
         expect(out).toMatch(/\tcall \$noop\(\)/)
@@ -296,8 +319,10 @@ describe('lowerToQbe — function calls', () => {
 
     test('call with typed args emits correct types', () => {
         const out = toQbe(`
-            @fn add:Int a:Int, b:Int := a + b;
-            @fn main:Int := &add 10, 20;
+            \\\\ add (Int, Int) -> Int
+            @fn add a, b := a + b;
+            \\\\ main () -> Int
+            @fn main  := &add 10, 20;
         `)
         expect(out).toContain('w 10')
         expect(out).toContain('w 20')
@@ -306,17 +331,20 @@ describe('lowerToQbe — function calls', () => {
 
 describe('lowerToQbe — @return', () => {
     test('@return in function body emits ret instruction', () => {
-        const out = toQbe(`@fn f:Int x:Int := { &@return x; x };`)
+        const out = toQbe(`\\\\ f (Int) -> Int
+@fn f x := { &@return x; x };`)
         expect(out).toContain('ret %x')
     })
 
     test('@return with literal emits ret literal', () => {
-        const out = toQbe(`@fn zero:Int := { &@return 0; 1 };`)
+        const out = toQbe(`\\\\ zero () -> Int
+@fn zero  := { &@return 0; 1 };`)
         expect(out).toContain('ret 0')
     })
 
     test('early @return stops at first ret, trailing expr also has ret', () => {
-        const out = toQbe(`@fn f:Int x:Int := { &@return 0; x };`)
+        const out = toQbe(`\\\\ f (Int) -> Int
+@fn f x := { &@return 0; x };`)
         // At least one ret 0 appears
         expect(out).toContain('ret 0')
     })
@@ -328,30 +356,34 @@ describe('lowerToQbe — @return', () => {
 
 describe('lowerToQbe — @local variable declarations', () => {
     test('@local Int declaration emits copy instruction', () => {
-        const out = toQbe(`@fn f:Int := { @local x:Int := 5; x };`)
+        const out = toQbe(`\\\\ f () -> Int
+@fn f  := { @local x:Int := 5; x };`)
         expect(out).toContain('=w copy 5')
     })
 
     test('@local variable is readable after declaration', () => {
-        const out = toQbe(`@fn f:Int := { @local x:Int := 42; x };`)
+        const out = toQbe(`\\\\ f () -> Int
+@fn f  := { @local x:Int := 42; x };`)
         expect(out).toContain('ret %x')
     })
 
     test('assignment to local emits copy', () => {
-        const out = toQbe(`@fn f:Int := { @local x:Int := 0; x = 7; x };`)
+        const out = toQbe(`\\\\ f () -> Int
+@fn f  := { @local x:Int := 0; x = 7; x };`)
         expect(out).toContain('=w copy 7')
     })
 })
 
 describe('lowerToQbe — @if', () => {
     test('@if with no else emits jnz + block labels', () => {
-        const out = toQbe(`@fn f := { @local x:Int := 0; &@if x == 0, { x = 1 }; };`)
+        const out = toQbe(`@fn f  := { @local x:Int := 0; &@if x == 0, { x = 1 }; };`)
         expect(out).toContain('jnz')
         expect(out).toMatch(/@\w+/)
     })
 
     test('@if with else emits two branches', () => {
-        const out = toQbe(`@fn abs:Int x:Int := &@if x < 0, { 0 - x }, { x };`)
+        const out = toQbe(`\\\\ abs (Int) -> Int
+@fn abs x := &@if x < 0, { 0 - x }, { x };`)
         // Both 0 - x and the else branch should appear
         expect(out).toContain('jnz')
         // Two block labels: then + else
@@ -360,35 +392,38 @@ describe('lowerToQbe — @if', () => {
     })
 
     test('@if condition uses the correct comparison instruction', () => {
-        const out = toQbe(`@fn f:Int x:Int := &@if x == 0, { 1 }, { 0 };`)
+        const out = toQbe(`\\\\ f (Int) -> Int
+@fn f x := &@if x == 0, { 1 }, { 0 };`)
         expect(out).toContain('ceqw')
         expect(out).toContain('jnz')
     })
 
     test('@if result is returned from function', () => {
-        const out = toQbe(`@fn sign:Int x:Int := &@if x < 0, { 0 - 1 }, { 1 };`)
+        const out = toQbe(`\\\\ sign (Int) -> Int
+@fn sign x := &@if x < 0, { 0 - 1 }, { 1 };`)
         expect(out).toContain('ret')
     })
 })
 
 describe('lowerToQbe — @loop / @break', () => {
     test('@loop emits a loop head block', () => {
-        const out = toQbe(`@fn f := { &@loop { &@break }; };`)
+        const out = toQbe(`@fn f  := { &@loop { &@break }; };`)
         // Must have at least two labels: the loop head + exit
         const labels = (out.match(/^@\w+/gm) ?? []).filter(l => l !== '@start')
         expect(labels.length).toBeGreaterThanOrEqual(2)
     })
 
     test('@break emits a jump to the loop exit label', () => {
-        const out = toQbe(`@fn f := { &@loop { &@break }; };`)
+        const out = toQbe(`@fn f  := { &@loop { &@break }; };`)
         // A jmp instruction that targets a loop exit label must appear
         expect(out).toMatch(/jmp @\w+/)
     })
 
     test('loop body executes until @break', () => {
         const out = toQbe(`
-            @fn count:Int := {
-                @local i:Int := 0;
+            \\\\ count () -> Int
+            @fn count  := {
+                @local i := 0;
                 &@loop {
                     i = i + 1;
                     &@if i == 3, { &@break };
@@ -408,8 +443,9 @@ describe('lowerToQbe — @loop / @break', () => {
 describe('lowerToQbe — @defer', () => {
     test('@defer cleanup runs before normal function return', () => {
         const out = toQbe(`
-            @extern cleanup:Int h:Int;
-            @fn f:Int h:Int := {
+            @extern { \\\\ cleanup (Int) -> Int }
+            \\\\ f (Int) -> Int
+            @fn f h := {
                 &@defer &cleanup h;
                 h
             };
@@ -423,8 +459,9 @@ describe('lowerToQbe — @defer', () => {
 
     test('@defer runs before early @return', () => {
         const out = toQbe(`
-            @extern release:Int h:Int;
-            @fn f:Int flag:Int, h:Int := {
+            @extern { \\\\ release (Int) -> Int }
+            \\\\ f (Int, Int) -> Int
+            @fn f flag, h := {
                 &@defer &release h;
                 &@if flag == 0, { &@return 0 };
                 h
@@ -436,9 +473,9 @@ describe('lowerToQbe — @defer', () => {
 
     test('@defer LIFO: last registered runs first', () => {
         const out = toQbe(`
-            @extern a:Int;
-            @extern b:Int;
-            @fn f := {
+            @extern { \\\\ a () -> Int }
+            @extern { \\\\ b () -> Int }
+            @fn f  := {
                 &@defer &a;
                 &@defer &b;
             };
@@ -457,7 +494,8 @@ describe('lowerToQbe — @defer', () => {
 describe('lowerToQbe — complete function lowering', () => {
     test('safe_div: early return + arithmetic', () => {
         const out = toQbe(`
-            @fn safe_div:Int a:Int, b:Int := {
+            \\\\ safe_div (Int, Int) -> Int
+            @fn safe_div a, b := {
                 &@if b == 0, { &@return 0 };
                 a / b
             };
@@ -469,8 +507,9 @@ describe('lowerToQbe — complete function lowering', () => {
 
     test('clamp: multi-branch mutation + return', () => {
         const out = toQbe(`
-            @fn clamp:Int x:Int, lo:Int, hi:Int := {
-                @local r:Int := x;
+            \\\\ clamp (Int, Int, Int) -> Int
+            @fn clamp x, lo, hi := {
+                @local r := x;
                 &@if r < lo, { r = lo };
                 &@if r > hi, { r = hi };
                 r
@@ -483,8 +522,10 @@ describe('lowerToQbe — complete function lowering', () => {
 
     test('nested calls: double + quad', () => {
         const out = toQbe(`
-            @fn double:Int x:Int := x + x;
-            @fn quad:Int x:Int := &double (&double x);
+            \\\\ double (Int) -> Int
+            @fn double x := x + x;
+            \\\\ quad (Int) -> Int
+            @fn quad x := &double (&double x);
         `)
         const doubleCount = (out.match(/call \$double/g) ?? []).length
         expect(doubleCount).toBe(2)

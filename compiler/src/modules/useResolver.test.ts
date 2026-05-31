@@ -41,7 +41,7 @@ describe('resolveUses', () => {
     test('single @use is resolved and prepended', () => {
         const fs = inMemoryFs({
             'main.si': "@use 'helper.si';\n@let m := &help 1;",
-            'helper.si': '@fn help v:Int := { v + 1 };',
+            'helper.si': '\\\\ help (Int)\n@fn help v := { v + 1 };',
         })
         const { source, visited } = resolveUses(fs.files[P('main.si')]!, P('main.si'), fs)
         expect(visited).toEqual([P('helper.si'), P('main.si')])
@@ -58,7 +58,7 @@ describe('resolveUses', () => {
         const fs = inMemoryFs({
             'main.si': "@use 'mid.si';\n@let m := &mid_fn;",
             'mid.si':  "@use 'leaf.si';\n@fn mid_fn := { &leaf_fn };",
-            'leaf.si': '@fn leaf_fn := { 1 };',
+            'leaf.si': '@fn leaf_fn  := { 1 };',
         })
         const { visited } = resolveUses(fs.files[P('main.si')]!, P('main.si'), fs)
         expect(visited).toEqual([P('leaf.si'), P('mid.si'), P('main.si')])
@@ -67,7 +67,7 @@ describe('resolveUses', () => {
     test('duplicate @use of the same file emits the file only once', () => {
         const fs = inMemoryFs({
             'main.si': "@use 'a.si';\n@use 'a.si';\n@let m := 0;",
-            'a.si':    '@fn a := { 1 };',
+            'a.si':    '@fn a  := { 1 };',
         })
         const { source, visited } = resolveUses(fs.files[P('main.si')]!, P('main.si'), fs)
         expect(visited).toEqual([P('a.si'), P('main.si')])
@@ -110,7 +110,7 @@ describe('resolveUses', () => {
         const fs = inMemoryFs({
             'proj/main.si':       "@use 'lib/a.si';\n@let m := 0;",
             'proj/lib/a.si':      "@use './b.si';\n@fn a := { 1 };",
-            'proj/lib/b.si':      '@fn b := { 2 };',
+            'proj/lib/b.si':      '@fn b  := { 2 };',
         })
         const { visited } = resolveUses(fs.files[P('proj/main.si')]!, P('proj/main.si'), fs)
         expect(visited).toEqual([

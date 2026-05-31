@@ -313,13 +313,15 @@ describe('Phase 9c: &@with_arena + &@move_to_parent_arena', () => {
         // Array element type is inferred — surface annotations for
         // Array[T] aren't part of the v1.0 grammar.
         const r = await compileAndRun(`
-            @fn build:Int := &@with_arena {
-                @local scratch:String := 'noise';
+            \\\\ build () -> Int
+            @fn build  := &@with_arena {
+                @local scratch := 'noise';
                 @local arr := $[10, 20, 30];
                 &@move_to_parent_arena arr
             };
             @export build;
-            @fn heap_now:Int := &heap_get;
+            \\\\ heap_now () -> Int
+            @fn heap_now  := &heap_get;
             @export heap_now;
         `)
         if (!r.ok) throw new Error(r.error)
@@ -339,12 +341,13 @@ describe('Phase 9c: &@with_arena + &@move_to_parent_arena', () => {
         // calls memory.grow which returns -1, then traps via
         // `unreachable` — wasmtime surfaces a clean trap reason.
         const r = await compileAndRun(`
-            @fn fifty_kb_blob:String := {
-                @local s:String := 'pad-this-up';
+            \\\\ fifty_kb_blob () -> String
+            @fn fifty_kb_blob  := {
+                @local s := 'pad-this-up';
                 # &str_concat doubles ~ish each call; 100 iterations
                 # well exceeds 2 pages.
-                @var i:Int := 0;
-                @var acc:String := 'x';
+                @var i := 0;
+                @var acc := 'x';
                 &@loop i < 1000, {
                     acc = &str_concat acc, s;
                     i = i + 1;
@@ -386,8 +389,9 @@ describe('Phase 9c: &@with_arena + &@move_to_parent_arena', () => {
         // `&str_concat` forces a runtime allocation: 'ab' + 'cd' →
         // [len=4][a][b][c][d] = 4 + 4 = 8 bytes consumed.
         const r = await compileAndRun(`
-            @fn probe:Int := {
-                @local _s:String := &str_concat 'ab', 'cd';
+            \\\\ probe () -> Int
+            @fn probe  := {
+                @local _s := &str_concat 'ab', 'cd';
                 &heap_used
             };
             @export probe;
@@ -398,12 +402,13 @@ describe('Phase 9c: &@with_arena + &@move_to_parent_arena', () => {
 
     test('&heap_used resets back when &@with_arena unwinds', async () => {
         const r = await compileAndRun(`
-            @fn probe:Int := {
-                @local before:Int := &heap_used;
+            \\\\ probe () -> Int
+            @fn probe  := {
+                @local before := &heap_used;
                 &@with_arena {
-                    @local _s:String := 'scratch';
+                    @local _s := 'scratch';
                 };
-                @local after:Int := &heap_used;
+                @local after := &heap_used;
                 after - before
             };
             @export probe;
@@ -414,9 +419,10 @@ describe('Phase 9c: &@with_arena + &@move_to_parent_arena', () => {
 
     test('&arena_used tracks the current arena bump distance', async () => {
         const r = await compileAndRun(`
-            @fn probe:Int := &@with_arena {
-                @local saved:Int := &heap_get;
-                @local _s:String := &str_concat 'hel', 'lo';
+            \\\\ probe () -> Int
+            @fn probe  := &@with_arena {
+                @local saved := &heap_get;
+                @local _s := &str_concat 'hel', 'lo';
                 &arena_used saved
             };
             @export probe;
@@ -428,12 +434,14 @@ describe('Phase 9c: &@with_arena + &@move_to_parent_arena', () => {
 
     test('promoted String persists across many arena iterations', async () => {
         const r = await compileAndRun(`
-            @fn build:String := &@with_arena {
-                @local s:String := 'loop result';
+            \\\\ build () -> String
+            @fn build  := &@with_arena {
+                @local s := 'loop result';
                 &@move_to_parent_arena s
             };
             @export build;
-            @fn heap_now:Int := &heap_get;
+            \\\\ heap_now () -> Int
+            @fn heap_now  := &heap_get;
             @export heap_now;
         `)
         if (!r.ok) throw new Error(r.error)

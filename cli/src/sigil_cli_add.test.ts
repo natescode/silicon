@@ -39,10 +39,10 @@ describe('sgl add (story 6b-11) — local-path dependencies', () => {
             '[package]\nname = "scratch"\nversion = "0.0.1"\nentry = "src/main.si"\n\n[dependencies]\n',
             'utf-8')
         mkdirSync(join(scratch, 'src'), { recursive: true })
-        writeFileSync(join(scratch, 'src', 'main.si'), '@fn main := 0; @export main;\n', 'utf-8')
+        writeFileSync(join(scratch, 'src', 'main.si'), '@fn main  := 0; @export main;\n', 'utf-8')
         // Plant a helper "project" the dep will point at.
         mkdirSync(join(helperDir, 'src'), { recursive: true })
-        writeFileSync(join(helperDir, 'src', 'main.si'), '@fn helper := 42; @export helper;\n', 'utf-8')
+        writeFileSync(join(helperDir, 'src', 'main.si'), '@fn helper  := 42; @export helper;\n', 'utf-8')
     })
 
     afterEach(() => {

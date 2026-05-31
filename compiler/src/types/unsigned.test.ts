@@ -105,55 +105,65 @@ describe('Phase 5b: type predicates', () => {
 
 describe('Phase 5b: codegen routes unsigned ops to *_u WASM variants', () => {
     test('u32 / u32 emits i32.div_u', async () => {
-        const wat = await compileToWat(`@fn divu a:u32, b:u32 := a / b;`)
+        const wat = await compileToWat(`\\\\ divu (u32, u32)
+@fn divu a, b := a / b;`)
         expect(wat).toContain('i32.div_u')
         expect(wat).not.toContain('i32.div_s')
     })
     test('u32 % u32 emits i32.rem_u', async () => {
-        const wat = await compileToWat(`@fn modu a:u32, b:u32 := a % b;`)
+        const wat = await compileToWat(`\\\\ modu (u32, u32)
+@fn modu a, b := a % b;`)
         expect(wat).toContain('i32.rem_u')
         expect(wat).not.toContain('i32.rem_s')
     })
     test('u32 < u32 emits i32.lt_u', async () => {
-        const wat = await compileToWat(`@fn ltu a:u32, b:u32 := a < b;`)
+        const wat = await compileToWat(`\\\\ ltu (u32, u32)
+@fn ltu a, b := a < b;`)
         expect(wat).toContain('i32.lt_u')
         expect(wat).not.toContain('i32.lt_s')
     })
     test('u64 / u64 emits i64.div_u', async () => {
-        const wat = await compileToWat(`@fn divu64 a:u64, b:u64 := a / b;`)
+        const wat = await compileToWat(`\\\\ divu64 (u64, u64)
+@fn divu64 a, b := a / b;`)
         expect(wat).toContain('i64.div_u')
         expect(wat).not.toContain('i64.div_s')
     })
     test('u64 > u64 emits i64.gt_u', async () => {
-        const wat = await compileToWat(`@fn gtu64 a:u64, b:u64 := a > b;`)
+        const wat = await compileToWat(`\\\\ gtu64 (u64, u64)
+@fn gtu64 a, b := a > b;`)
         expect(wat).toContain('i64.gt_u')
         expect(wat).not.toContain('i64.gt_s')
     })
     test('u8 / u8 routes through the u8 typed stratum', async () => {
-        const wat = await compileToWat(`@fn divu8 a:u8, b:u8 := a / b;`)
+        const wat = await compileToWat(`\\\\ divu8 (u8, u8)
+@fn divu8 a, b := a / b;`)
         expect(wat).toContain('i32.div_u')
     })
 
     // Operators where signed and unsigned WASM instructions are the same:
     // these should still compile and emit the shared instruction.
     test('u32 + u32 emits i32.add (no signedness distinction needed)', async () => {
-        const wat = await compileToWat(`@fn addu a:u32, b:u32 := a + b;`)
+        const wat = await compileToWat(`\\\\ addu (u32, u32)
+@fn addu a, b := a + b;`)
         expect(wat).toContain('i32.add')
     })
     test('u32 == u32 emits i32.eq (no signedness distinction needed)', async () => {
-        const wat = await compileToWat(`@fn equ a:u32, b:u32 := a == b;`)
+        const wat = await compileToWat(`\\\\ equ (u32, u32)
+@fn equ a, b := a == b;`)
         expect(wat).toContain('i32.eq')
     })
 })
 
 describe('Phase 5b: signed vs unsigned dispatch is operand-driven', () => {
     test('signed Int / Int still uses div_s', async () => {
-        const wat = await compileToWat(`@fn divs a:Int, b:Int := a / b;`)
+        const wat = await compileToWat(`\\\\ divs (Int, Int)
+@fn divs a, b := a / b;`)
         expect(wat).toContain('i32.div_s')
         expect(wat).not.toContain('i32.div_u')
     })
     test('signed Int64 / Int64 still uses i64.div_s', async () => {
-        const wat = await compileToWat(`@fn divs64 a:Int64, b:Int64 := a / b;`)
+        const wat = await compileToWat(`\\\\ divs64 (Int64, Int64)
+@fn divs64 a, b := a / b;`)
         expect(wat).toContain('i64.div_s')
         expect(wat).not.toContain('i64.div_u')
     })

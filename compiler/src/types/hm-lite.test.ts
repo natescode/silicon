@@ -3,8 +3,9 @@
  * HM-lite end-to-end tests.
  *
  * Proves the typechecker delivers on the UX promise:
- *   - `@fn id[T] x:T := x;` typechecks without explicit type args at the call.
- *   - `@type Option[T] := $Some value:T | $None;` makes `Option[Int]` and
+ *   - `\\\\ id[T] (T)
+@fn id x := x;` typechecks without explicit type args at the call.
+ *   - `@type Option[T] := $Some value T | $None;` makes `Option[Int]` and
  *     `Option[Float]` distinct nominal types.
  *   - Type variables flow through nested calls (the `unwrap_or (Some 42), 0`
  *     case where `T` is determined by a chain of unifications).
@@ -54,24 +55,33 @@ function errs(src: string, ...substrings: string[]): void {
 
 describe('@fn[T] — generic functions', () => {
     test('id called with Int — no explicit [Int] needed', () => {
-        ok(`@fn id[T] x:T := x;
-            @fn use:Int := (&id 42);`)
+        ok(`\\\\ id[T] (T)
+@fn id x := x;
+            \\\\ use () -> Int
+            @fn use  := (&id 42);`)
     })
 
     test('id called with Float — independently inferred per call', () => {
-        ok(`@fn id[T] x:T := x;
-            @fn use_i:Int := (&id 42);
-            @fn use_f:Float := (&id 3.14);`)
+        ok(`\\\\ id[T] (T)
+@fn id x := x;
+            \\\\ use_i () -> Int
+            @fn use_i  := (&id 42);
+            \\\\ use_f () -> Float
+            @fn use_f  := (&id 3.14);`)
     })
 
     test('two-parameter generic — both type vars inferred', () => {
-        ok(`@fn second[A, B] x:A, y:B := y;
-            @fn use:Int := (&second 'hello', 42);`)
+        ok(`\\\\ second[A, B] (A, B)
+@fn second x, y := y;
+            \\\\ use () -> Int
+            @fn use  := (&second 'hello', 42);`)
     })
 
     test('passing wrong arg type — error pins it to the surrounding context', () => {
-        errs(`@fn id[T] x:T := x;
-              @fn use:Int := (&id 'hello');`,
+        errs(`\\\\ id[T] (T)
+@fn id x := x;
+              \\\\ use () -> Int
+              @fn use  := (&id 'hello');`,
             'declared as Int but initialiser has type String')
     })
 
@@ -251,35 +261,41 @@ describe('@match arm-expression form', () => {
         // => v` would bind v:Int and the arm would type as Int, mismatching
         // the dflt:Float arm.  Now we look up the variant scheme and
         // substitute the discriminant's typeArgs for the variant's tvars.
-        ok(`@type Option[T] := $Some value:T | $None;
-            @fn unwrap_or[T] opt:Option[T], dflt:T := {
+        ok(`@type Option[T] := $Some value T | $None;
+            \\\\ unwrap_or[T] (Option[T], T)
+            @fn unwrap_or opt, dflt := {
                 &@match opt,
                     $Some v => v,
                     $None => dflt
             };
-            @fn use_f:Float := (&unwrap_or (&Some 3.14), 0.0);`)
+            \\\\ use_f () -> Float
+            @fn use_f  := (&unwrap_or (&Some 3.14), 0.0);`)
     })
 
     test('field binding catches wrong-type body for Float-Option used as Int', () => {
-        errs(`@type Option[T] := $Some value:T | $None;
-              @fn unwrap_or[T] opt:Option[T], dflt:T := {
+        errs(`@type Option[T] := $Some value T | $None;
+              \\\\ unwrap_or[T] (Option[T], T)
+              @fn unwrap_or opt, dflt := {
                   &@match opt,
                       $Some v => v,
                       $None => dflt
               };
-              @fn bad:Int := (&unwrap_or (&Some 3.14), 0.0);`,
+              \\\\ bad () -> Int
+              @fn bad  := (&unwrap_or (&Some 3.14), 0.0);`,
             'bad')
     })
 
     test('Name::Variant namespace paths resolve (gap #2)', () => {
         // Color::Red used in pattern position — legacy flat form
         ok(`@type Color := $Red | $Green | $Blue;
-            @fn warm c:Color := { &@match c, Color::Red, { 1 }, Color::Blue, { 0 } };`)
+            \\\\ warm (Color)
+            @fn warm c := { &@match c, Color::Red, { 1 }, Color::Blue, { 0 } };`)
     })
 
     test('Name::Variant works with arm-expression form + alternation', () => {
         ok(`@type Color := $Red | $Green | $Blue;
-            @fn warm c:Color := {
+            \\\\ warm (Color)
+            @fn warm c := {
                 &@match c,
                     Color::Red | Color::Green => 1,
                     Color::Blue => 0
@@ -288,7 +304,8 @@ describe('@match arm-expression form', () => {
 
     test('Name::Variant usable as a value', () => {
         ok(`@type Color := $Red | $Green | $Blue;
-            @fn red:Color := Color::Red;`)
+            \\\\ red () -> Color
+            @fn red  := Color::Red;`)
     })
 })
 
@@ -298,13 +315,17 @@ describe('@match arm-expression form', () => {
 
 describe('non-generic code unchanged', () => {
     test('plain @fn add x:Int, y:Int := x + y; — strict-equality path', () => {
-        ok(`@fn add x:Int, y:Int := (x + y);
-            @fn use:Int := (&add 1, 2);`)
+        ok(`\\\\ add (Int, Int)
+@fn add x, y := (x + y);
+            \\\\ use () -> Int
+            @fn use  := (&add 1, 2);`)
     })
 
     test('arg-type mismatch on monomorphic fn — still errors clearly', () => {
-        errs(`@fn add x:Int, y:Int := (x + y);
-              @fn bad:Int := (&add 1, 'hi');`,
+        errs(`\\\\ add (Int, Int)
+@fn add x, y := (x + y);
+              \\\\ bad () -> Int
+              @fn bad  := (&add 1, 'hi');`,
             'add', 'arg 1')
     })
 
