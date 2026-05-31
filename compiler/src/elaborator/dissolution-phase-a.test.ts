@@ -122,8 +122,9 @@ describe('Phase A equivalence: inline-block vs named-handler', () => {
         const src = `@stratum W := {
             &Compiler::on::call_site W_cs;
         };
-        @fn W_cs node:Int := { 0 };
-        @fn run := (&unrelated);`
+        \\\\ W_cs (Int)
+        @fn W_cs node := { 0 };
+        @fn run  := (&unrelated);`
         // Should compile without lookup errors (the handler fires but does
         // nothing observable except not crashing).
         expect(() => compile(src)).not.toThrow()
@@ -133,8 +134,9 @@ describe('Phase A equivalence: inline-block vs named-handler', () => {
         const src = `@stratum F := {
             &Compiler::on::module_finalize F_finalize;
         };
-        @fn F_finalize node:Int := { 0 };
-        @fn main := 1;`
+        \\\\ F_finalize (Int)
+        @fn F_finalize node := { 0 };
+        @fn main  := 1;`
         expect(() => compile(src)).not.toThrow()
     })
 
@@ -143,7 +145,8 @@ describe('Phase A equivalence: inline-block vs named-handler', () => {
             &Compiler::register::annotation '@@mark';
             &Compiler::on::annotation '@@mark', A_ann;
         };
-        @fn A_ann node:Int := { 0 };`
+        \\\\ A_ann (Int)
+        @fn A_ann node := { 0 };`
         expect(() => compile(src)).not.toThrow()
     })
 
@@ -152,7 +155,8 @@ describe('Phase A equivalence: inline-block vs named-handler', () => {
         const src = `@stratum C := {
             &Compiler::on::comptime '++', C_concat;
         };
-        @fn C_concat arg0:Int := { arg0 };`
+        \\\\ C_concat (Int)
+        @fn C_concat arg0 := { arg0 };`
         // Compile and check that the comptime handler is registered.
         const prog = addToAstSemantics(siliconGrammar)(parse(src)).toAst() as any
         const registry = buildStrataRegistry(prog)
@@ -204,7 +208,8 @@ describe('Phase A forward references', () => {
 
         @fwd_kw alpha;
 
-        @fn Forward_handler node:Int := {
+        \\\\ Forward_handler (Int)
+        @fn Forward_handler node := {
             @local s := &Compiler::state 'stratum';
             &s::set 'fired', 1;
         };`

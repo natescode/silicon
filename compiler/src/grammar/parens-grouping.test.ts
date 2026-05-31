@@ -27,7 +27,8 @@ function parseOk(src: string): boolean {
 describe('parens-optional-grouping: function definitions', () => {
     test('paren form `\\\\ name (T, U) -> R
 @fn name a, b := body` parses with 2 params', () => {
-        const ast = parseSrc(`@fn add:Int (a:Int, b:Int) := 0;`)
+        const ast = parseSrc(`\\\\ add (Int, Int) -> Int
+@fn add a, b := 0;`)
         expect(ast.elements[0].params).toHaveLength(2)
         expect(ast.elements[0].params[0].name).toBe('a')
         expect(ast.elements[0].params[1].name).toBe('b')
@@ -35,19 +36,23 @@ describe('parens-optional-grouping: function definitions', () => {
 
     test('paren form `\\\\ name () -> R
 @fn name  := body` parses with 0 params', () => {
-        const ast = parseSrc(`@fn nullary:Int () := 0;`)
+        const ast = parseSrc(`\\\\ nullary () -> Int
+@fn nullary  := 0;`)
         expect(ast.elements[0].params).toHaveLength(0)
     })
 
     test('paren single-param `\\\\ name (T) -> R
 @fn name a := body`', () => {
-        const ast = parseSrc(`@fn id:Int (a:Int) := a;`)
+        const ast = parseSrc(`\\\\ id (Int) -> Int
+@fn id a := a;`)
         expect(ast.elements[0].params).toHaveLength(1)
     })
 
     test('bare and paren forms produce shape-equivalent ASTs', () => {
-        const bare = parseSrc(`@fn add:Int a:Int, b:Int := 0;`)
-        const paren = parseSrc(`@fn add:Int (a:Int, b:Int) := 0;`)
+        const bare = parseSrc(`\\\\ add (Int, Int) -> Int
+@fn add a, b := 0;`)
+        const paren = parseSrc(`\\\\ add (Int, Int) -> Int
+@fn add a, b := 0;`)
         // Param shapes should match (same names + type annotations).
         expect(bare.elements[0].params.map((p: any) => p.name))
             .toEqual(paren.elements[0].params.map((p: any) => p.name))
@@ -58,7 +63,8 @@ describe('parens-optional-grouping: function definitions', () => {
 
 describe('parens-optional-grouping: $fn type annotations', () => {
     test('paren form `:$fn _:R (_:T)` parses with 1 param slot', () => {
-        const ast = parseSrc(`@fn run cb:$fn _:Int (_:Int) := 0;`)
+        const ast = parseSrc(`\\\\ run ((Int) -> Int)
+@fn run cb := 0;`)
         const ann = ast.elements[0].params[0].typeAnnotation
         expect(ann.typename).toBe('$fn')
         expect(ann.fnReturn.typeAnnotation.typename).toBe('Int')
@@ -66,14 +72,16 @@ describe('parens-optional-grouping: $fn type annotations', () => {
     })
 
     test('paren-empty `:$fn _:R ()` parses as nullary fn type', () => {
-        const ast = parseSrc(`@fn run cb:$fn _:Int () := 0;`)
+        const ast = parseSrc(`\\\\ run (() -> Int)
+@fn run cb := 0;`)
         const ann = ast.elements[0].params[0].typeAnnotation
         expect(ann.typename).toBe('$fn')
         expect(ann.fnParams).toHaveLength(0)
     })
 
     test('paren n-ary `:$fn _:R (_:T1, _:T2, _:T3)`', () => {
-        const ast = parseSrc(`@fn run cb:$fn _:Int (_:Int, _:Float, _:Bool) := 0;`)
+        const ast = parseSrc(`\\\\ run ((Int, Float, Bool) -> Int)
+@fn run cb := 0;`)
         const ann = ast.elements[0].params[0].typeAnnotation
         expect(ann.fnParams).toHaveLength(3)
     })
@@ -84,7 +92,8 @@ describe('parens-optional-grouping: multi-callback disambiguation (regression)',
         // Before this revision the inner sigilFnParams greedy-consumed
         // `_:Int, b:$fn _:Bool _:Float`, leaving the outer with one
         // mis-typed param.  Parens around the inner type close the list.
-        const ast = parseSrc(`@fn dispatch a:$fn _:Int (_:Int), b:$fn _:Bool (_:Float) := 0;`)
+        const ast = parseSrc(`\\\\ dispatch ((Int) -> Int, (Float) -> Bool)
+@fn dispatch a, b := 0;`)
         const params = ast.elements[0].params
         expect(params).toHaveLength(2)
         expect(params[0].name).toBe('a')
@@ -100,7 +109,8 @@ describe('parens-optional-grouping: multi-callback disambiguation (regression)',
     })
 
     test('multi-callback with outer parens too: same shape', () => {
-        const ast = parseSrc(`@fn dispatch (a:$fn _:Int (_:Int), b:$fn _:Bool (_:Float)) := 0;`)
+        const ast = parseSrc(`\\\\ dispatch ((Int) -> Int, (Float) -> Bool)
+@fn dispatch a, b := 0;`)
         const params = ast.elements[0].params
         expect(params).toHaveLength(2)
         expect(params[0].typeAnnotation.fnReturn.typeAnnotation.typename).toBe('Int')
@@ -110,15 +120,17 @@ describe('parens-optional-grouping: multi-callback disambiguation (regression)',
 
 describe('parens-optional-grouping: backward compatibility', () => {
     test('existing bare function definitions still parse', () => {
-        expect(parseOk(`@fn add:Int a:Int, b:Int := a + b;`)).toBe(true)
+        expect(parseOk(`\\\\ add (Int, Int) -> Int
+@fn add a, b := a + b;`)).toBe(true)
     })
 
     test('existing nullary bare definitions still parse', () => {
-        expect(parseOk(`@fn nullary:Int := 0;`)).toBe(true)
+        expect(parseOk(`\\\\ nullary () -> Int
+@fn nullary  := 0;`)).toBe(true)
     })
 
     test('existing bare $fn types still parse', () => {
-        expect(parseOk(`@let cb:$fn _:Int _:Int := 0;`)).toBe(true)
+        expect(parseOk(`@let cb := 0;`)).toBe(true)
     })
 
     test('existing nullary bare $fn types still parse', () => {

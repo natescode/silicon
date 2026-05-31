@@ -74,10 +74,11 @@ describe('Phase 9c: &@with_arena + &@move_to_parent_arena', () => {
 
     test('empty arena resets heap to entry-point value', async () => {
         const r = await compileAndRun(`
-            @fn probe:Int := {
-                @local before:Int := &heap_get;
+            \\\\ probe () -> Int
+            @fn probe  := {
+                @local before := &heap_get;
                 &@with_arena {};
-                @local after:Int := &heap_get;
+                @local after := &heap_get;
                 after - before
             };
             @export probe;
@@ -89,12 +90,13 @@ describe('Phase 9c: &@with_arena + &@move_to_parent_arena', () => {
 
     test('arena reset frees inside-arena allocations', async () => {
         const r = await compileAndRun(`
-            @fn probe:Int := {
-                @local before:Int := &heap_get;
+            \\\\ probe () -> Int
+            @fn probe  := {
+                @local before := &heap_get;
                 &@with_arena {
-                    @local s:String := 'scratch allocation here';
+                    @local s := 'scratch allocation here';
                 };
-                @local after:Int := &heap_get;
+                @local after := &heap_get;
                 after - before
             };
             @export probe;
@@ -106,16 +108,17 @@ describe('Phase 9c: &@with_arena + &@move_to_parent_arena', () => {
 
     test('repeated arenas do not leak memory', async () => {
         const r = await compileAndRun(`
-            @fn probe:Int := {
-                @local before:Int := &heap_get;
-                @var i:Int := 0;
+            \\\\ probe () -> Int
+            @fn probe  := {
+                @local before := &heap_get;
+                @var i := 0;
                 &@loop i < 100, {
                     &@with_arena {
-                        @local s:String := 'scratch';
+                        @local s := 'scratch';
                     };
                     i = i + 1;
                 };
-                @local after:Int := &heap_get;
+                @local after := &heap_get;
                 after - before
             };
             @export probe;
@@ -127,8 +130,9 @@ describe('Phase 9c: &@with_arena + &@move_to_parent_arena', () => {
 
     test('value-type tail (Int) survives arena reset', async () => {
         const r = await compileAndRun(`
-            @fn probe:Int := &@with_arena {
-                @local s:String := 'throwaway';
+            \\\\ probe () -> Int
+            @fn probe  := &@with_arena {
+                @local s := 'throwaway';
                 42
             };
             @export probe;
@@ -139,13 +143,14 @@ describe('Phase 9c: &@with_arena + &@move_to_parent_arena', () => {
 
     test('value-type tail does not leak the scratch allocation', async () => {
         const r = await compileAndRun(`
-            @fn probe:Int := {
-                @local before:Int := &heap_get;
-                @local _ignored:Int := &@with_arena {
-                    @local s:String := 'throwaway';
+            \\\\ probe () -> Int
+            @fn probe  := {
+                @local before := &heap_get;
+                @local _ignored := &@with_arena {
+                    @local s := 'throwaway';
                     7
                 };
-                @local after:Int := &heap_get;
+                @local after := &heap_get;
                 after - before
             };
             @export probe;
@@ -156,13 +161,15 @@ describe('Phase 9c: &@with_arena + &@move_to_parent_arena', () => {
 
     test('&@move_to_parent_arena promotes a String to the parent arena', async () => {
         const r = await compileAndRun(`
-            @fn build:String := &@with_arena {
-                @local scratch:String := 'scratch garbage';
-                @local out:String := 'hello, world';
+            \\\\ build () -> String
+            @fn build  := &@with_arena {
+                @local scratch := 'scratch garbage';
+                @local out := 'hello, world';
                 &@move_to_parent_arena out
             };
             @export build;
-            @fn heap_now:Int := &heap_get;
+            \\\\ heap_now () -> Int
+            @fn heap_now  := &heap_get;
             @export heap_now;
         `)
         if (!r.ok) throw new Error(r.error)
@@ -182,13 +189,14 @@ describe('Phase 9c: &@with_arena + &@move_to_parent_arena', () => {
         // returning the value — bytes-to-copy is 0 and the heap unwinds
         // to the saved boundary.
         const r = await compileAndRun(`
-            @fn probe:Int := {
-                @local before:Int := &heap_get;
-                @local v:Int := &@with_arena {
-                    @local scratch:String := 'throwaway';
+            \\\\ probe () -> Int
+            @fn probe  := {
+                @local before := &heap_get;
+                @local v := &@with_arena {
+                    @local scratch := 'throwaway';
                     &@move_to_parent_arena 99
                 };
-                @local after:Int := &heap_get;
+                @local after := &heap_get;
                 v + (after - before)
             };
             @export probe;
@@ -200,8 +208,9 @@ describe('Phase 9c: &@with_arena + &@move_to_parent_arena', () => {
 
     test('heap-returning body without &@move_to_parent_arena is a compile error', async () => {
         const r = await compileAndRun(`
-            @fn build:String := &@with_arena {
-                @local out:String := 'would dangle';
+            \\\\ build () -> String
+            @fn build  := &@with_arena {
+                @local out := 'would dangle';
                 out
             };
             @export build;
@@ -215,7 +224,8 @@ describe('Phase 9c: &@with_arena + &@move_to_parent_arena', () => {
 
     test('&@move_to_parent_arena outside &@with_arena is a compile error', async () => {
         const r = await compileAndRun(`
-            @fn probe:Int := &@move_to_parent_arena 1;
+            \\\\ probe () -> Int
+            @fn probe  := &@move_to_parent_arena 1;
             @export probe;
         `)
         expect(r.ok).toBe(false)
@@ -227,16 +237,17 @@ describe('Phase 9c: &@with_arena + &@move_to_parent_arena', () => {
 
     test('nested arenas: inner reset restores to inner entry, outer to outer entry', async () => {
         const r = await compileAndRun(`
-            @fn probe:Int := {
-                @local before:Int := &heap_get;
+            \\\\ probe () -> Int
+            @fn probe  := {
+                @local before := &heap_get;
                 &@with_arena {
-                    @local a:String := 'outer scratch';
+                    @local a := 'outer scratch';
                     &@with_arena {
-                        @local b:String := 'inner scratch';
+                        @local b := 'inner scratch';
                     };
-                    @local c:String := 'more outer scratch';
+                    @local c := 'more outer scratch';
                 };
-                @local after:Int := &heap_get;
+                @local after := &heap_get;
                 after - before
             };
             @export probe;
@@ -249,14 +260,16 @@ describe('Phase 9c: &@with_arena + &@move_to_parent_arena', () => {
         // @type Pair := $Pair x:Int, y:Int — pad-to-max layout is
         // [tag:i32, field0:i32, field1:i32] = 12 bytes.
         const r = await compileAndRun(`
-            @type Pair := $Pair x:Int, y:Int;
-            @fn build:Pair := &@with_arena {
-                @local scratch:String := 'noise';
+            @type Pair := $Pair x Int, y Int;
+            \\\\ build () -> Pair
+            @fn build  := &@with_arena {
+                @local scratch := 'noise';
                 @local p := &Pair 11, 22;
                 &@move_to_parent_arena p
             };
             @export build;
-            @fn heap_now:Int := &heap_get;
+            \\\\ heap_now () -> Int
+            @fn heap_now  := &heap_get;
             @export heap_now;
         `)
         if (!r.ok) throw new Error(r.error)
@@ -274,13 +287,15 @@ describe('Phase 9c: &@with_arena + &@move_to_parent_arena', () => {
         // Even though $Circle only has one field, every value of Shape
         // occupies 12 bytes (4 + 2*4 pad-to-max).
         const r = await compileAndRun(`
-            @type Shape := $Circle r:Int | $Rectangle w:Int, h:Int;
-            @fn build:Shape := &@with_arena {
+            @type Shape := $Circle r Int | $Rectangle w Int, h Int;
+            \\\\ build () -> Shape
+            @fn build  := &@with_arena {
                 @local c := &Circle 7;
                 &@move_to_parent_arena c
             };
             @export build;
-            @fn heap_now:Int := &heap_get;
+            \\\\ heap_now () -> Int
+            @fn heap_now  := &heap_get;
             @export heap_now;
         `)
         if (!r.ok) throw new Error(r.error)
@@ -294,8 +309,9 @@ describe('Phase 9c: &@with_arena + &@move_to_parent_arena', () => {
 
     test('Sum with String-typed payload is rejected as nested heap', async () => {
         const r = await compileAndRun(`
-            @type Tagged := $Named s:String;
-            @fn build:Tagged := &@with_arena {
+            @type Tagged := $Named s String;
+            \\\\ build () -> Tagged
+            @fn build  := &@with_arena {
                 @local t := &Named 'hello';
                 &@move_to_parent_arena t
             };
@@ -377,7 +393,8 @@ describe('Phase 9c: &@with_arena + &@move_to_parent_arena', () => {
 
     test('&heap_used is 0 immediately at program start', async () => {
         const r = await compileAndRun(`
-            @fn probe:Int := &heap_used;
+            \\\\ probe () -> Int
+            @fn probe  := &heap_used;
             @export probe;
         `)
         if (!r.ok) throw new Error(r.error)

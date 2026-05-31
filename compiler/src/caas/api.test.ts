@@ -117,7 +117,7 @@ describe('typecheck()', () => {
     test('captures type errors as diagnostics, never throws', () => {
         // Intentional type mismatch — no implicit coercion in Silicon.
         // We just verify it doesn't throw and returns an object.
-        const src = '@let x:Int := 42;'
+        const src = '@let x := 42;'
         const { tree } = parse(src)
         const reg = buildRegistry(tree)
         const { tree: elab, registry } = elaborate(tree, reg)
@@ -133,7 +133,7 @@ describe('typecheck()', () => {
 
 describe('lower()', () => {
     test('produces WAT on a valid minimal program', () => {
-        const src = '@fn answer:Int := { 42 };'
+        const src = '\\\\ answer () -> Int\n@fn answer  := { 42 };'
         const { tree } = parse(src)
         const reg = buildRegistry(tree)
         const { tree: elab, registry } = elaborate(tree, reg)
@@ -162,7 +162,7 @@ describe('lower()', () => {
 
 describe('compile()', () => {
     test('returns WAT for a valid program', () => {
-        const result: CompileResult = compile('@fn answer:Int := { 42 };')
+        const result: CompileResult = compile('\\\\ answer () -> Int\n@fn answer  := { 42 };')
         expect(result.diagnostics).toHaveLength(0)
         expect(result.wat).toContain('(module')
     })
@@ -175,7 +175,7 @@ describe('compile()', () => {
     })
 
     test('model is defined after a successful compile', () => {
-        const result = compile('@let x:Int := 1;')
+        const result = compile('@let x := 1;')
         expect(result.model).toBeDefined()
     })
 
@@ -196,53 +196,53 @@ describe('compile()', () => {
 
 describe('SyntaxTree.withText()', () => {
     test('is a method on SyntaxTree instances', () => {
-        const { tree } = parse('@let x:Int := 1;')
+        const { tree } = parse('@let x := 1;')
         expect(typeof tree.withText).toBe('function')
         expect(tree instanceof SyntaxTree).toBe(true)
     })
 
     test('returns a ParseResult with the new source', () => {
-        const { tree: original } = parse('@let x:Int := 1;')
-        const result = original.withText('@let y:Int := 2;')
+        const { tree: original } = parse('@let x := 1;')
+        const result = original.withText('@let y := 2;')
         expect(result.diagnostics).toHaveLength(0)
-        expect(result.tree.source).toBe('@let y:Int := 2;')
+        expect(result.tree.source).toBe('@let y := 2;')
     })
 
     test('new tree is independent — original source is unchanged', () => {
-        const src = '@let x:Int := 1;'
+        const src = '@let x := 1;'
         const { tree: original } = parse(src)
-        original.withText('@let y:Int := 99;')
+        original.withText('@let y := 99;')
         expect(original.source).toBe(src)
     })
 
     test('preserves the file name from the original tree', () => {
-        const { tree } = parse('@let x:Int := 1;', { file: 'foo.si' })
+        const { tree } = parse('@let x := 1;', { file: 'foo.si' })
         expect(tree.file).toBe('foo.si')
-        const { tree: reparsed } = tree.withText('@let y:Int := 2;')
+        const { tree: reparsed } = tree.withText('@let y := 2;')
         expect(reparsed.file).toBe('foo.si')
     })
 
     test('file override in options is respected', () => {
-        const { tree } = parse('@let x:Int := 1;', { file: 'a.si' })
-        const { tree: reparsed } = tree.withText('@let y:Int := 2;', { file: 'b.si' })
+        const { tree } = parse('@let x := 1;', { file: 'a.si' })
+        const { tree: reparsed } = tree.withText('@let y := 2;', { file: 'b.si' })
         expect(reparsed.file).toBe('b.si')
     })
 
     test('captures parse errors without throwing', () => {
-        const { tree } = parse('@let x:Int := 1;')
+        const { tree } = parse('@let x := 1;')
         const result = tree.withText('@@@@invalid')
         expect(result.diagnostics.length).toBeGreaterThan(0)
         expect(result.diagnostics[0].phase).toBe('parse')
     })
 
     test('registry reuse pattern: elaborate with old registry after withText', () => {
-        const src1 = '@fn answer:Int := { 42 };'
+        const src1 = '\\\\ answer () -> Int\n@fn answer  := { 42 };'
         const { tree: t1 } = parse(src1)
         const reg = buildRegistry(t1)
         const { tree: elab1 } = elaborate(t1, reg)
 
         // Edit: change the return value, keep the same function name.
-        const src2 = '@fn answer:Int := { 99 };'
+        const src2 = '\\\\ answer () -> Int\n@fn answer  := { 99 };'
         const { tree: t2 } = t1.withText(src2)
 
         // Reuse the old registry — no buildRegistry call.

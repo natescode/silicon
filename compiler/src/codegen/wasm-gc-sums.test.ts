@@ -160,8 +160,9 @@ describe('Phase 9d-7: constructor uses struct.new under wasm-gc', () => {
         // $None has 0 fields but Opt's maxFields=1 (from $Some), so the
         // $None constructor must pass `tag=1, 0` (one zero-fill slot).
         const r = compile(`
-            @type Opt := $Some v:Int | $None;
-            @fn make_none:Opt := &None;
+            @type Opt := $Some v Int | $None;
+            \\\\ make_none () -> Opt
+            @fn make_none  := &None;
         `, 'wasm-gc')
         expect(r.errors).toEqual([])
         const ctor = extractUserFn(r.wat!, 'None')
@@ -200,8 +201,9 @@ describe('Phase 9d-7: @match under wasm-gc uses struct.get', () => {
 
     test('@match field-bind uses struct.get $Foo (fieldIdx+1)', () => {
         const r = compile(`
-            @type Opt := $Some v:Int | $None;
-            @fn unwrap o:Opt := &@match o,
+            @type Opt := $Some v Int | $None;
+            \\\\ unwrap (Opt)
+            @fn unwrap o := &@match o,
                 $Some v => v,
                 $None => 0;
         `, 'wasm-gc')
@@ -212,8 +214,9 @@ describe('Phase 9d-7: @match under wasm-gc uses struct.get', () => {
 
     test('mvp @match still uses i32.load (no regression)', () => {
         const r = compile(`
-            @type Opt := $Some v:Int | $None;
-            @fn unwrap o:Opt := &@match o,
+            @type Opt := $Some v Int | $None;
+            \\\\ unwrap (Opt)
+            @fn unwrap o := &@match o,
                 $Some v => v,
                 $None => 0;
         `, 'host')
@@ -230,12 +233,15 @@ describe('Phase 9d-7: same source compiles cleanly under BOTH targets', () => {
 
     test('Opt constructors + match compile under host AND wasm-gc', () => {
         const src = `
-            @type Opt := $Some v:Int | $None;
-            @fn unwrap o:Opt := &@match o,
+            @type Opt := $Some v Int | $None;
+            \\\\ unwrap (Opt)
+            @fn unwrap o := &@match o,
                 $Some v => v,
                 $None => 0;
-            @fn test_some:Int := &unwrap (&Some 42);
-            @fn test_none:Int := &unwrap (&None);
+            \\\\ test_some () -> Int
+            @fn test_some  := &unwrap (&Some 42);
+            \\\\ test_none () -> Int
+            @fn test_none  := &unwrap (&None);
         `
         const rMvp = compile(src, 'host')
         const rGc  = compile(src, 'wasm-gc')

@@ -103,7 +103,8 @@ describe('@generic — real per-call monomorphization', () => {
     test.skip('one call with one type produces one monomorph', () => {
         const wat = compileToWat(
             `@generic id x:T := x;
-             @fn run:Int x:Int := { (&id x) };
+             \\\\ run (Int) -> Int
+             @fn run x := { (&id x) };
              @export run;`,
             [GENERIC_STRATUM]
         )

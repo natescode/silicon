@@ -146,7 +146,8 @@ describe('Strata 2.0 §2: on::decl phase handler', () => {
             return null
         })
 
-        const fnDef = parseSource(`@fn add x:Int, y:Int := x;`)
+        const fnDef = parseSource(`\\\\ add (Int, Int)
+@fn add x, y := x;`)
         const elaborated = elaborate(fnDef, registry)
         lowerProgram(elaborated.program, registry, new Map())
 
@@ -179,7 +180,7 @@ describe('Strata 2.0 §2: on::decl phase handler', () => {
         const registry = buildStrataRegistry(ASTFactory.program([]))
         registerPhaseHandler(registry, 'decl', '@fn', (_node, _api) => { count.n++ })
 
-        const prog = parseSource(`@fn f1 := 1; @fn f2 := 2; @fn f3 := 3;`)
+        const prog = parseSource(`@fn f1  := 1; @fn f2 := 2; @fn f3 := 3;`)
         const elab = elaborate(prog, registry)
         lowerProgram(elab.program, registry, new Map())
 
@@ -201,7 +202,8 @@ describe('Strata 2.0 §2: on::callSite phase handler', () => {
             return null
         })
 
-        const prog = parseSource(`@fn add x:Int, y:Int := x; &add 1, 2;`)
+        const prog = parseSource(`\\\\ add (Int, Int)
+@fn add x, y := x; &add 1, 2;`)
         const elab = elaborate(prog, registry)
         const { program: typedProg, functions } = typecheck(elab.program, registry)
         lowerProgram(typedProg, registry, functions)
@@ -778,7 +780,7 @@ describe('GENERIC PATTERN: generics implementable in Strata 2.0', () => {
             return null
         })
 
-        const prog = parseSource(`@fn to_clone := 1;`)
+        const prog = parseSource(`@fn to_clone  := 1;`)
         const elab = elaborate(prog, registry)
         const { program: typed, functions } = typecheck(elab.program, registry)
         const mod = lowerProgram(typed, registry, functions)

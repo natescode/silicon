@@ -50,7 +50,7 @@ describe('useResolver: wasm-gc stdlib shadow', () => {
     test('target=wasm-gc falls through to X.si when no gc shadow exists', () => {
         const fs = inMemoryFs({
             // option.si has no gc shadow yet (9d-7 hasn't routed sums).
-            'project/src/stdlib/option.si': '@fn opt_marker:Int := 7;',
+            'project/src/stdlib/option.si': '\\\\ opt_marker () -> Int\n@fn opt_marker  := 7;',
             'project/main.si':              "@use 'src/stdlib/option.si';\n",
         })
         const { source, visited } = resolveUses(
@@ -64,8 +64,8 @@ describe('useResolver: wasm-gc stdlib shadow', () => {
 
     test('target=host (default) always uses X.si even when gc shadow exists', () => {
         const fs = inMemoryFs({
-            'project/src/stdlib/rc.si':    '@fn rc_new value:Int := { value + 1 };',
-            'project/src/stdlib/gc/rc.si': '@fn rc_new value:Int := value;',
+            'project/src/stdlib/rc.si':    '\\\\ rc_new (Int)\n@fn rc_new value := { value + 1 };',
+            'project/src/stdlib/gc/rc.si': '\\\\ rc_new (Int)\n@fn rc_new value := value;',
             'project/main.si':             "@use 'src/stdlib/rc.si';\n",
         })
         const { source, visited } = resolveUses(
@@ -80,8 +80,8 @@ describe('useResolver: wasm-gc stdlib shadow', () => {
 
     test('target undefined behaves like host (no shadow)', () => {
         const fs = inMemoryFs({
-            'project/src/stdlib/rc.si':    '@fn rc_new value:Int := { value + 1 };',
-            'project/src/stdlib/gc/rc.si': '@fn rc_new value:Int := value;',
+            'project/src/stdlib/rc.si':    '\\\\ rc_new (Int)\n@fn rc_new value := { value + 1 };',
+            'project/src/stdlib/gc/rc.si': '\\\\ rc_new (Int)\n@fn rc_new value := value;',
             'project/main.si':             "@use 'src/stdlib/rc.si';\n",
         })
         const { source, visited } = resolveUses(
@@ -121,7 +121,7 @@ describe('useResolver: wasm-gc stdlib shadow', () => {
         // the resolver shouldn't try to redirect …/stdlib/gc/X.si to
         // …/stdlib/gc/gc/X.si.
         const fs = inMemoryFs({
-            'project/src/stdlib/gc/string.si': "@fn gc_string_marker:Int := 1;",
+            'project/src/stdlib/gc/string.si': "\\\\ gc_string_marker () -> Int\n@fn gc_string_marker  := 1;",
             // No `gc/gc/string.si` exists — if the resolver tries to
             // redirect it, the fileExists check returns false, and the
             // fallthrough should pick the original `gc/string.si`.

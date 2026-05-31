@@ -163,7 +163,8 @@ describe('Phase 9d-5c: lifecycle primitives compile-time elision under wasm-gc',
     test('&@move_to_parent_arena under wasm-gc is identity (allowed anywhere)', () => {
         // Under wasm-mvp this would error — &@move_to_parent_arena
         // outside an arena is rejected.  Under wasm-gc it's just identity.
-        const src = `@fn probe:Int := &@move_to_parent_arena 99;`
+        const src = `\\\\ probe () -> Int
+@fn probe  := &@move_to_parent_arena 99;`
         const rGc = compile(src, 'wasm-gc')
         expect(rGc.errors).toEqual([])
     })
@@ -172,9 +173,10 @@ describe('Phase 9d-5c: lifecycle primitives compile-time elision under wasm-gc',
         // The whole point of the portability split: any program that
         // uses only lifecycle primitives + value types compiles unchanged.
         const src = `
-            @fn portable:Int := &@with_arena {
-                @local x:Int := 42;
-                @local y:Int := x + 1;
+            \\\\ portable () -> Int
+            @fn portable  := &@with_arena {
+                @local x := 42;
+                @local y := x + 1;
                 &@move_to_parent_arena y
             };`
         const rMvp = compile(src, 'host')
@@ -188,7 +190,8 @@ describe('Phase 9d-5c: lifecycle primitives compile-time elision under wasm-gc',
 
     test('nested arenas elide cleanly under wasm-gc', () => {
         const src = `
-            @fn probe:Int := {
+            \\\\ probe () -> Int
+            @fn probe  := {
                 &@with_arena {
                     &@with_arena {};
                 };

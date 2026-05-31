@@ -68,7 +68,8 @@ describe('Phase 5b-4: @toU32 / @toU64 cast keywords', () => {
 
     test('@toU64 from Int returns i64 value at runtime', async () => {
         const ex = await compileAndRun(`
-            @fn make_u64:u64 := &@toU64 42;
+            \\\\ make_u64 () -> u64
+            @fn make_u64  := &@toU64 42;
             @export make_u64;
         `)
         // BigInt because the wasm return is i64.

@@ -89,8 +89,9 @@ describe('@fn[T] — generic functions', () => {
         // `use_no_ctx`'s return type isn't annotated, so the call to id
         // produces a fresh `?T1` that unification leaves unresolved.
         // That's fine — the body just synthesises some type, no error.
-        ok(`@fn id[T] x:T := x;
-            @fn use_no_ctx := (&id 42);`)
+        ok(`\\\\ id[T] (T)
+@fn id x := x;
+            @fn use_no_ctx  := (&id 42);`)
     })
 })
 
@@ -100,37 +101,44 @@ describe('@fn[T] — generic functions', () => {
 
 describe('@type[T] — parametric sum types', () => {
     test('Option[T] declaration alone typechecks', () => {
-        ok(`@type Option[T] := $Some value:T | $None;`)
+        ok(`@type Option[T] := $Some value T | $None;`)
     })
 
     test('&Some arg type drives Option[T] — no explicit [Int]', () => {
-        ok(`@type Option[T] := $Some value:T | $None;
-            @fn give:Option[Int] := (&Some 42);`)
+        ok(`@type Option[T] := $Some value T | $None;
+            \\\\ give () -> Option[Int]
+            @fn give  := (&Some 42);`)
     })
 
     test('Some 1.0 with Option[Float] annotation works', () => {
-        ok(`@type Option[T] := $Some value:T | $None;
-            @fn give:Option[Float] := (&Some 1.0);`)
+        ok(`@type Option[T] := $Some value T | $None;
+            \\\\ give () -> Option[Float]
+            @fn give  := (&Some 1.0);`)
     })
 
     test('&None with explicit annotation — annotation pins ?T', () => {
         // No arg to drive inference, but `:Option[Int]` unification on the
         // body type pins ?T to Int.
-        ok(`@type Option[T] := $Some value:T | $None;
-            @fn nothing:Option[Int] := (&None);`)
+        ok(`@type Option[T] := $Some value T | $None;
+            \\\\ nothing () -> Option[Int]
+            @fn nothing  := (&None);`)
     })
 
     test('Option[Int] and Option[Float] are distinct types', () => {
-        errs(`@type Option[T] := $Some value:T | $None;
-              @fn want_int x:Option[Int] := 0;
-              @fn give_float:Option[Float] := (&Some 1.0);
-              @fn mismatch:Int := (&want_int (&give_float));`,
+        errs(`@type Option[T] := $Some value T | $None;
+              \\\\ want_int (Option[Int])
+              @fn want_int x := 0;
+              \\\\ give_float () -> Option[Float]
+              @fn give_float  := (&Some 1.0);
+              \\\\ mismatch () -> Int
+              @fn mismatch  := (&want_int (&give_float));`,
             'expected Option[Int]', 'got Option[Float]')
     })
 
     test('Some with the wrong arg type fails against the annotation', () => {
-        errs(`@type Option[T] := $Some value:T | $None;
-              @fn bad:Option[Int] := (&Some 1.0);`,
+        errs(`@type Option[T] := $Some value T | $None;
+              \\\\ bad () -> Option[Int]
+              @fn bad  := (&Some 1.0);`,
             'declared as Option[Int]', 'Option[Float]')
     })
 })
@@ -141,26 +149,33 @@ describe('@type[T] — parametric sum types', () => {
 
 describe('generic fns over generic types', () => {
     test('unwrap_or[T] opt:Option[T], dflt:T :T — declares cleanly', () => {
-        ok(`@type Option[T] := $Some value:T | $None;
-            @fn unwrap_or[T] opt:Option[T], dflt:T := dflt;`)
+        ok(`@type Option[T] := $Some value T | $None;
+            \\\\ unwrap_or[T] (Option[T], T)
+            @fn unwrap_or opt, dflt := dflt;`)
     })
 
     test('unwrap_or((Some 42), 0) — T flows through the whole call chain', () => {
-        ok(`@type Option[T] := $Some value:T | $None;
-            @fn unwrap_or[T] opt:Option[T], dflt:T := dflt;
-            @fn use:Int := (&unwrap_or (&Some 42), 0);`)
+        ok(`@type Option[T] := $Some value T | $None;
+            \\\\ unwrap_or[T] (Option[T], T)
+            @fn unwrap_or opt, dflt := dflt;
+            \\\\ use () -> Int
+            @fn use  := (&unwrap_or (&Some 42), 0);`)
     })
 
     test('unwrap_or((None), 0) — &None inherits T from dflt:Int', () => {
-        ok(`@type Option[T] := $Some value:T | $None;
-            @fn unwrap_or[T] opt:Option[T], dflt:T := dflt;
-            @fn use:Int := (&unwrap_or (&None), 0);`)
+        ok(`@type Option[T] := $Some value T | $None;
+            \\\\ unwrap_or[T] (Option[T], T)
+            @fn unwrap_or opt, dflt := dflt;
+            \\\\ use () -> Int
+            @fn use  := (&unwrap_or (&None), 0);`)
     })
 
     test('unwrap_or((Some 1.0), 0) — opt type mismatches dflt → error', () => {
-        errs(`@type Option[T] := $Some value:T | $None;
-              @fn unwrap_or[T] opt:Option[T], dflt:T := dflt;
-              @fn bad:Int := (&unwrap_or (&Some 1.0), 0);`,
+        errs(`@type Option[T] := $Some value T | $None;
+              \\\\ unwrap_or[T] (Option[T], T)
+              @fn unwrap_or opt, dflt := dflt;
+              \\\\ bad () -> Int
+              @fn bad  := (&unwrap_or (&Some 1.0), 0);`,
             'unwrap_or', 'arg 1')
     })
 })
@@ -171,20 +186,25 @@ describe('generic fns over generic types', () => {
 
 describe('@match with parametric sums', () => {
     test('non-generic Option match typechecks', () => {
-        ok(`@type Option := $Some value:Int | $None;
-            @fn unwrap opt:Option, dflt:Int := { &@match opt, $Some v, { v }, $None, { dflt } };`)
+        ok(`@type Option := $Some value Int | $None;
+            \\\\ unwrap (Option, Int)
+            @fn unwrap opt, dflt := { &@match opt, $Some v, { v }, $None, { dflt } };`)
     })
 
     test('generic Option[T] match — arm result types unify through T', () => {
-        ok(`@type Option[T] := $Some value:T | $None;
-            @fn unwrap_or[T] opt:Option[T], dflt:T := { &@match opt, $Some v, { v }, $None, { dflt } };`)
+        ok(`@type Option[T] := $Some value T | $None;
+            \\\\ unwrap_or[T] (Option[T], T)
+            @fn unwrap_or opt, dflt := { &@match opt, $Some v, { v }, $None, { dflt } };`)
     })
 
     test('generic match at a concrete call site', () => {
-        ok(`@type Option[T] := $Some value:T | $None;
-            @fn unwrap_or[T] opt:Option[T], dflt:T := { &@match opt, $Some v, { v }, $None, { dflt } };
-            @fn use_i:Int := (&unwrap_or (&Some 42), 0);
-            @fn use_n:Int := (&unwrap_or (&None), 7);`)
+        ok(`@type Option[T] := $Some value T | $None;
+            \\\\ unwrap_or[T] (Option[T], T)
+            @fn unwrap_or opt, dflt := { &@match opt, $Some v, { v }, $None, { dflt } };
+            \\\\ use_i () -> Int
+            @fn use_i  := (&unwrap_or (&Some 42), 0);
+            \\\\ use_n () -> Int
+            @fn use_n  := (&unwrap_or (&None), 7);`)
     })
 })
 
@@ -194,8 +214,9 @@ describe('@match with parametric sums', () => {
 
 describe('@match arm-expression form', () => {
     test('simple arm-expression form typechecks', () => {
-        ok(`@type Option := $Some value:Int | $None;
-            @fn unwrap opt:Option, dflt:Int := {
+        ok(`@type Option := $Some value Int | $None;
+            \\\\ unwrap (Option, Int)
+            @fn unwrap opt, dflt := {
                 &@match opt,
                     $Some v => v,
                     $None => dflt
@@ -203,8 +224,9 @@ describe('@match arm-expression form', () => {
     })
 
     test('arm-expression form with braced bodies', () => {
-        ok(`@type Option := $Some value:Int | $None;
-            @fn unwrap opt:Option, dflt:Int := {
+        ok(`@type Option := $Some value Int | $None;
+            \\\\ unwrap (Option, Int)
+            @fn unwrap opt, dflt := {
                 &@match opt,
                     $Some v => { v },
                     $None => { dflt }
@@ -212,18 +234,21 @@ describe('@match arm-expression form', () => {
     })
 
     test('arm-expression with generic Option[T] and HM-lite', () => {
-        ok(`@type Option[T] := $Some value:T | $None;
-            @fn unwrap_or[T] opt:Option[T], dflt:T := {
+        ok(`@type Option[T] := $Some value T | $None;
+            \\\\ unwrap_or[T] (Option[T], T)
+            @fn unwrap_or opt, dflt := {
                 &@match opt,
                     $Some v => v,
                     $None => dflt
             };
-            @fn use:Int := (&unwrap_or (&Some 42), 0);`)
+            \\\\ use () -> Int
+            @fn use  := (&unwrap_or (&Some 42), 0);`)
     })
 
     test('per-arm pattern alternation: $Red | $Green => …', () => {
         ok(`@type Color := $Red | $Green | $Blue;
-            @fn warm c:Color := {
+            \\\\ warm (Color)
+            @fn warm c := {
                 &@match c,
                     $Red | $Green => 1,
                     $Blue => 0
@@ -232,7 +257,8 @@ describe('@match arm-expression form', () => {
 
     test('three-way alternation', () => {
         ok(`@type Shape := $Circle | $Square | $Triangle | $Pentagon;
-            @fn polygon s:Shape := {
+            \\\\ polygon (Shape)
+            @fn polygon s := {
                 &@match s,
                     $Square | $Triangle | $Pentagon => 1,
                     $Circle => 0
@@ -241,7 +267,8 @@ describe('@match arm-expression form', () => {
 
     test('arm-expression with trailing default', () => {
         ok(`@type Color := $Red | $Green | $Blue;
-            @fn cls c:Color := {
+            \\\\ cls (Color)
+            @fn cls c := {
                 &@match c,
                     $Red => 1,
                     0
@@ -249,8 +276,9 @@ describe('@match arm-expression form', () => {
     })
 
     test('legacy flat form still works (regression)', () => {
-        ok(`@type Option := $Some value:Int | $None;
-            @fn unwrap opt:Option, dflt:Int := {
+        ok(`@type Option := $Some value Int | $None;
+            \\\\ unwrap (Option, Int)
+            @fn unwrap opt, dflt := {
                 &@match opt, $Some v, { v }, $None, { dflt }
             };`)
     })

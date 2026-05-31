@@ -24,7 +24,8 @@ function parseProgram(src: string): any {
 
 describe('Phase C — compile a handler @fn to WASM and run it', () => {
     test('identity handler: @fn h n:Int := n  compiles and round-trips its arg', async () => {
-        const src = `@fn h n:Int := n;`
+        const src = `\\\\ h (Int)
+@fn h n := n;`
         const prog = parseProgram(src)
         const registry = buildStrataRegistry(prog)
         registry.strataHandlerFnNames.add('h')
@@ -36,7 +37,8 @@ describe('Phase C — compile a handler @fn to WASM and run it', () => {
     })
 
     test('handler returning a literal constant', async () => {
-        const src = `@fn lit n:Int := 99;`
+        const src = `\\\\ lit (Int)
+@fn lit n := 99;`
         const prog = parseProgram(src)
         const registry = buildStrataRegistry(prog)
         registry.strataHandlerFnNames.add('lit')
@@ -47,7 +49,8 @@ describe('Phase C — compile a handler @fn to WASM and run it', () => {
     })
 
     test('handler doing arithmetic on its arg', async () => {
-        const src = `@fn double n:Int := { (n + n) };`
+        const src = `\\\\ double (Int)
+@fn double n := { (n + n) };`
         const prog = parseProgram(src)
         const registry = buildStrataRegistry(prog)
         registry.strataHandlerFnNames.add('double')
@@ -59,7 +62,8 @@ describe('Phase C — compile a handler @fn to WASM and run it', () => {
     })
 
     test('handler with branching @if returns expected value', async () => {
-        const src = `@fn abs n:Int := { &@if (n < 0), { (0 - n) }, { n } };`
+        const src = `\\\\ abs (Int)
+@fn abs n := { &@if (n < 0), { (0 - n) }, { n } };`
         const prog = parseProgram(src)
         const registry = buildStrataRegistry(prog)
         registry.strataHandlerFnNames.add('abs')
@@ -74,7 +78,8 @@ describe('Phase C — compile a handler @fn to WASM and run it', () => {
     test('handler can call &compiler::ir_makeConst — end-to-end WASM-side', async () => {
         // Build a handler that ignores its node arg and constructs an IR
         // Const 42 via the host import.  Returns the IR-handle id.
-        const src = `@fn build_const n:Int := &compiler::ir_makeConst 42, 0;`
+        const src = `\\\\ build_const (Int)
+@fn build_const n := &compiler::ir_makeConst 42, 0;`
         const prog = parseProgram(src)
         const registry = buildStrataRegistry(prog)
         registry.strataHandlerFnNames.add('build_const')
@@ -97,7 +102,8 @@ describe('Phase C — compile a handler @fn to WASM and run it', () => {
         // type (passing 0 as the wasmType string id).  With it, they can
         // construct a Const with any explicit wasmType.
         const src = `
-            @fn build_f32_const n:Int :=
+            \\\\ build_f32_const (Int)
+            @fn build_f32_const n :=
                 &compiler::ir_makeConst 7, (&compiler::compiler_str_intern 'f32', 0);
         `
         const prog = parseProgram(src)
@@ -118,7 +124,8 @@ describe('Phase C — compile a handler @fn to WASM and run it', () => {
         // are 0 (empty string id) so we test pure composition without
         // needing a string-pool argument.
         const src = `
-            @fn build_x_plus_42 n:Int :=
+            \\\\ build_x_plus_42 (Int)
+            @fn build_x_plus_42 n :=
                 &compiler::ir_makeBinOp 0,
                     (&compiler::ir_makeLocalGet 0, 0),
                     (&compiler::ir_makeConst 42, 0),
@@ -231,7 +238,8 @@ describe('Phase C — fallback behavior', () => {
         // A handler with `&Compiler::*` calls would need @extern declarations
         // that the engine doesn't yet generate.  Instantiation will fail;
         // tryCompileHandler swallows that as null so callers fall back.
-        const src = `@fn weird n:Int := { (&Compiler::state 'stratum') };`
+        const src = `\\\\ weird (Int)
+@fn weird n := { (&Compiler::state 'stratum') };`
         const prog = parseProgram(src)
         const registry = buildStrataRegistry(prog)
         registry.strataHandlerFnNames.add('weird')

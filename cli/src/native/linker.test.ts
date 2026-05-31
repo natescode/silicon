@@ -130,7 +130,7 @@ describe('link — integration', () => {
         const { link } = await import('./linker')
         const { compileToQbe } = await import('@silicon/compiler/native')
 
-        const src = '@fn main:Int := 0 - 1;'   // returns -1 → exit code 255 (wraps on byte)
+        const src = '\\\\ main () -> Int\n@fn main  := 0 - 1;'   // returns -1 → exit code 255 (wraps on byte)
         const { qbeIr } = compileToQbe(src)
         const asmOut = invokeQbe(qbeBin, qbeIr, hostQbeArch())
 

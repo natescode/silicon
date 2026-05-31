@@ -76,7 +76,8 @@ describe('@generic — full pipeline E2E', () => {
     test.skip('a @generic decl followed by a call site lowers the call to the synthesised function', () => {
         const wat = compileToWat(
             `@generic identity x:Int := x;
-             @fn test:Int := { (&identity 42) };`,
+             \\\\ test () -> Int
+             @fn test  := { (&identity 42) };`,
             [GENERIC_STRATUM]
         )
 

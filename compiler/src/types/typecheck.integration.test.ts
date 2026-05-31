@@ -105,18 +105,18 @@ test('all comparison operators on Int clean', () => {
 
 test('type annotation Int matches int literal', () => {
     // Silicon grammar supports `@let x:Int := 5`
-    const { errors } = check('@let x:Int := 5;')
+    const { errors } = check('@let x := 5;')
     expect(errors).toHaveLength(0)
 })
 
 test('type annotation Float on int binding is an error', () => {
-    const { errors } = check('@let x:Float := 5;')
+    const { errors } = check('@let x := 5;')
     expect(errors.length).toBeGreaterThan(0)
     expect(errors[0].kind).toBe('Annotation')
 })
 
 test('unknown type annotation errors', () => {
-    const { errors } = check('@let x:Widget := 5;')
+    const { errors } = check('@let x := 5;')
     expect(errors.length).toBeGreaterThan(0)
     expect(errors[0].kind).toBe('UnknownType')
 })
@@ -134,7 +134,7 @@ test('WASM::i32_add with float operand fails', () => {
 
 test('annotation informs inferred types (i32 alias)', () => {
     // Using i32 as annotation is allowed as a low-level escape hatch
-    const { errors, program } = check('@let x:i32 := 42;')
+    const { errors, program } = check('@let x := 42;')
     expect(errors).toHaveLength(0)
     // The definition's type should resolve as Int
     // (we don't introspect beyond "no errors" since Definition node isn't
@@ -158,7 +158,7 @@ test('@if result type flows through to caller', () => {
 
 test('@if with mismatched branch types produces an error', () => {
     // then: Int, else: Float → mismatch
-    const { errors } = check('@let x:Int := { &@if 1, { 1 }, { 2.5 } };')
+    const { errors } = check('@let x := { &@if 1, { 1 }, { 2.5 } };')
     expect(errors.length).toBeGreaterThan(0)
 })
 
@@ -211,19 +211,19 @@ test('forward reference: correct call before definition has no errors', () => {
 // ------------------------------------------------------------------
 
 test('@let binding cannot be reassigned', () => {
-    const { errors } = check('@let x:Int := 5; x = 10;')
+    const { errors } = check('@let x := 5; x = 10;')
     expect(errors.length).toBeGreaterThan(0)
     expect(errors[0].kind).toBe('ImmutableAssignment')
 })
 
 test('@fn binding cannot be reassigned', () => {
-    const { errors } = check('@fn add x:Int, y:Int := x + y; add = 0;')
+    const { errors } = check('\\\\ add (Int, Int)\n@fn add x, y := x + y; add = 0;')
     expect(errors.length).toBeGreaterThan(0)
     expect(errors[0].kind).toBe('ImmutableAssignment')
 })
 
 test('@var binding can be reassigned', () => {
-    const { errors } = check('@var count:Int := 0; count = 1;')
+    const { errors } = check('@var count := 0; count = 1;')
     expect(errors).toHaveLength(0)
 })
 
@@ -257,12 +257,12 @@ test('@type_alias: declaration alone produces no errors', () => {
 })
 
 test('@type_alias: annotation using the alias resolves correctly', () => {
-    const { errors } = check('@type_alias age := Int;\n@let my_age:age := 34;')
+    const { errors } = check('@type_alias age := Int;\n@let my_age := 34;')
     expect(errors).toHaveLength(0)
 })
 
 test('@type_alias: alias is transparent — alias value + Int is valid', () => {
-    const { errors } = check('@type_alias age := Int;\n@let x:age := 5;\nx + 10;')
+    const { errors } = check('@type_alias age := Int;\n@let x := 5;\nx + 10;')
     expect(errors).toHaveLength(0)
 })
 
@@ -300,7 +300,7 @@ test('@type_distinct: registered as Distinct kind in typeAliases', () => {
 })
 
 test('@type_distinct: assigning Int to distinct-typed binding is a type error', () => {
-    const { errors } = check('@type_distinct UserId := Int;\n@let id:UserId := 42;')
+    const { errors } = check('@type_distinct UserId := Int;\n@let id := 42;')
     // 42 is Int; UserId is Distinct — they are not equal, so this is a type error.
     expect(errors.length).toBeGreaterThan(0)
     expect(errors[0].kind).toBe('Annotation')
@@ -364,7 +364,7 @@ test('@type_sum: single-variant sum type works', () => {
 test('@match: basic sum type matching has no errors', () => {
     const { errors } = check(
         '@type_sum Color := Red | Green | Blue;\n' +
-        '@var c:Color := Color::Red;\n' +
+        '@var c := Color::Red;\n' +
         '&@match c, Color::Red, { 1 }, Color::Green, { 2 }, Color::Blue, { 3 };'
     )
     expect(errors).toHaveLength(0)
@@ -374,7 +374,7 @@ test('@match: wrong pattern type is a type error', () => {
     // Pattern is Int literal, discriminant is Color — Mismatch
     const { errors } = check(
         '@type_sum Color := Red | Green | Blue;\n' +
-        '@var c:Color := Color::Red;\n' +
+        '@var c := Color::Red;\n' +
         '&@match c, 1, { 10 }, 2, { 20 };'
     )
     expect(errors.length).toBeGreaterThan(0)
@@ -385,7 +385,7 @@ test('@match: mismatched arm result types is a type error', () => {
     // First arm returns Int, second returns Float
     const { errors } = check(
         '@type_sum Color := Red | Green | Blue;\n' +
-        '@var c:Color := Color::Red;\n' +
+        '@var c := Color::Red;\n' +
         '&@match c, Color::Red, { 1 }, Color::Green, { 2.5 };'
     )
     expect(errors.length).toBeGreaterThan(0)
@@ -396,7 +396,7 @@ test('@match: result type flows through to caller', () => {
     // @match returns Int, so 3 + result should be valid
     const { errors } = check(
         '@type_sum Color := Red | Green | Blue;\n' +
-        '@var c:Color := Color::Red;\n' +
+        '@var c := Color::Red;\n' +
         '3 + &@match c, Color::Red, { 1 }, Color::Green, { 2 }, Color::Blue, { 3 };'
     )
     expect(errors).toHaveLength(0)
@@ -439,18 +439,18 @@ test('@local: wrong type in reassignment is a type error', () => {
 // ---------------------------------------------------------------------------
 
 test('@extern: call with correct arg type has no errors', () => {
-    const { errors } = check("@extern print msg:String; &print 'hello';")
+    const { errors } = check("@extern { \\\\ print (String) -> Void }")
     expect(errors).toHaveLength(0)
 })
 
 test('@extern: call with wrong arg type is a Mismatch', () => {
-    const { errors } = check('@extern print msg:String; &print 42;')
+    const { errors } = check('@extern { \\\\ print (String) -> Void }')
     expect(errors.length).toBeGreaterThan(0)
     expect(errors[0].kind).toBe('Mismatch')
 })
 
 test('@extern: wrong arity is an ArityMismatch', () => {
-    const { errors } = check('@extern add x:Int, y:Int; &add 1;')
+    const { errors } = check('@extern { \\\\ add (Int, Int) -> Void }')
     expect(errors.length).toBeGreaterThan(0)
     expect(errors[0].kind).toBe('ArityMismatch')
 })

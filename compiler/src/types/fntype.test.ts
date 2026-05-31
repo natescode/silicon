@@ -32,7 +32,8 @@ function check(src: string) {
 
 describe('Phase 5d-3: $fn surface annotation resolves to a Function SiliconType', () => {
     test('parameter `:$fn _:Int` (nullary callback) → Function([], Int)', () => {
-        const { errors, functions } = check(`@fn run cb:$fn _:Int := 0;`)
+        const { errors, functions } = check(`\\\\ run (() -> Int)
+@fn run cb := 0;`)
         expect(errors.length).toBe(0)
         const sig = functions.get('run')
         expect(sig).toBeDefined()
@@ -41,14 +42,16 @@ describe('Phase 5d-3: $fn surface annotation resolves to a Function SiliconType'
     })
 
     test('parameter `:$fn _:Bool _:Int` (unary callback) → Function([Int], Bool)', () => {
-        const { errors, functions } = check(`@fn run cb:$fn _:Bool _:Int := 0;`)
+        const { errors, functions } = check(`\\\\ run ((Int) -> Bool)
+@fn run cb := 0;`)
         expect(errors.length).toBe(0)
         const sig = functions.get('run')
         expect(typeEquals(sig!.params[0], FunctionOf([TypeInt], TypeBool))).toBe(true)
     })
 
     test('parameter `:$fn _:Int _:Int, _:Float, _:Bool` (3-ary callback)', () => {
-        const { errors, functions } = check(`@fn run cb:$fn _:Int _:Int, _:Float, _:Bool := 0;`)
+        const { errors, functions } = check(`\\\\ run ((Int, Float, Bool) -> Int)
+@fn run cb := 0;`)
         expect(errors.length).toBe(0)
         const sig = functions.get('run')
         expect(typeEquals(sig!.params[0], FunctionOf([TypeInt, TypeFloat, TypeBool], TypeInt))).toBe(true)
@@ -59,8 +62,10 @@ describe('Phase 5d-3: $fn surface annotation resolves to a Function SiliconType'
         // distinct under typeEquals — this is the core invariant for
         // later call_indirect typing (5d-2).
         const { functions } = check(`
-            @fn a cb:$fn _:Int _:Int := 0;
-            @fn b cb:$fn _:Int _:Float := 0;
+            \\\\ a ((Int) -> Int)
+            @fn a cb := 0;
+            \\\\ b ((Float) -> Int)
+            @fn b cb := 0;
         `)
         const ra = (functions.get('a') as any).params[0]
         const rb = (functions.get('b') as any).params[0]

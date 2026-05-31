@@ -26,14 +26,14 @@ function modelFor(source: string) {
 
 describe('Symbol.definitionSpan', () => {
     test('is defined on symbols from real-parser programs', () => {
-        const model = modelFor('@fn answer:Int := { 42 };')
+        const model = modelFor('\\\\ answer () -> Int\n@fn answer  := { 42 };')
         const sym = model.symbolNamed('answer')
         expect(sym).toBeDefined()
         expect(sym!.definitionSpan).toBeDefined()
     })
 
     test('definitionSpan.line is 1 for a single-line program', () => {
-        const model = modelFor('@fn answer:Int := { 42 };')
+        const model = modelFor('\\\\ answer () -> Int\n@fn answer  := { 42 };')
         const sym = model.symbolNamed('answer')!
         expect(sym.definitionSpan!.line).toBe(1)
     })
@@ -41,7 +41,7 @@ describe('Symbol.definitionSpan', () => {
     test('definitionSpan.col points at the name identifier', () => {
         //  @fn answer:Int := { 42 };
         //      ^--- col of "answer"
-        const src = '@fn answer:Int := { 42 };'
+        const src = '\\\\ answer () -> Int\n@fn answer  := { 42 };'
         const model = modelFor(src)
         const sym = model.symbolNamed('answer')!
         // 'answer' starts at col 5 (1-based: @=1, f=2, n=3, space=4, a=5)
@@ -49,13 +49,13 @@ describe('Symbol.definitionSpan', () => {
     })
 
     test('definitionSpan.length equals the identifier length', () => {
-        const model = modelFor('@fn answer:Int := { 42 };')
+        const model = modelFor('\\\\ answer () -> Int\n@fn answer  := { 42 };')
         const sym = model.symbolNamed('answer')!
         expect(sym.definitionSpan!.length).toBe('answer'.length)
     })
 
     test('definitionSpan.file matches the parse file option', () => {
-        const { tree } = parse('@fn foo:Int := { 1 };', { file: 'my.si' })
+        const { tree } = parse('\\\\ foo () -> Int\n@fn foo  := { 1 };', { file: 'my.si' })
         const reg = buildRegistry(tree)
         const { tree: elab, registry } = elaborate(tree, reg)
         const { model } = typecheck(elab, registry)
@@ -65,8 +65,8 @@ describe('Symbol.definitionSpan', () => {
 
     test('multi-line: definitionSpan.line reflects actual line number', () => {
         const src = [
-            '@let x:Int := 1;',
-            '@fn answer:Int := { 42 };',
+            '@let x := 1;',
+            '\\\\ answer () -> Int\n@fn answer  := { 42 };',
         ].join('\n')
         const model = modelFor(src)
         const sym = model.symbolNamed('answer')!
@@ -81,8 +81,8 @@ describe('Symbol.definitionSpan', () => {
 describe('SemanticModel.referenceSpans()', () => {
     test('returns spans for each call site', () => {
         const src = [
-            '@fn add x:Int, y:Int := { x + y };',
-            '@let r:Int := &add 1, 2;',
+            '\\\\ add (Int, Int)\n@fn add x, y := { x + y };',
+            '@let r := &add 1, 2;',
         ].join('\n')
         const model = modelFor(src)
         const sym = model.symbolNamed('add')!
@@ -91,7 +91,7 @@ describe('SemanticModel.referenceSpans()', () => {
     })
 
     test('each returned span has file/line/col/length', () => {
-        const src = '@fn f:Int := { 1 };\n@let r:Int := &f;'
+        const src = '\\\\ f () -> Int\n@fn f  := { 1 };\n@let r := &f;'
         const model = modelFor(src)
         const sym = model.symbolNamed('f')!
         const spans = model.referenceSpans(sym)
@@ -104,7 +104,7 @@ describe('SemanticModel.referenceSpans()', () => {
     })
 
     test('returns empty array for a symbol with no references', () => {
-        const model = modelFor('@fn unused:Int := { 0 };')
+        const model = modelFor('\\\\ unused () -> Int\n@fn unused  := { 0 };')
         const sym = model.symbolNamed('unused')!
         const spans = model.referenceSpans(sym)
         expect(spans).toHaveLength(0)
@@ -119,14 +119,14 @@ describe('SemanticModel.symbolAtPosition()', () => {
     test('finds symbol at its definition site', () => {
         //  @fn answer:Int := { 42 };
         //      ^---- col 5, "answer" (length 6, so cols 5-10)
-        const model = modelFor('@fn answer:Int := { 42 };')
+        const model = modelFor('\\\\ answer () -> Int\n@fn answer  := { 42 };')
         const sym = model.symbolAtPosition(1, 5)
         expect(sym).toBeDefined()
         expect(sym!.name).toBe('answer')
     })
 
     test('finds symbol inside its name span', () => {
-        const model = modelFor('@fn answer:Int := { 42 };')
+        const model = modelFor('\\\\ answer () -> Int\n@fn answer  := { 42 };')
         // col 7 is inside 'answer' (cols 5-10)
         const sym = model.symbolAtPosition(1, 7)
         expect(sym).toBeDefined()
@@ -134,14 +134,14 @@ describe('SemanticModel.symbolAtPosition()', () => {
     })
 
     test('returns undefined for position outside any symbol', () => {
-        const model = modelFor('@fn answer:Int := { 42 };')
+        const model = modelFor('\\\\ answer () -> Int\n@fn answer  := { 42 };')
         // col 1 is '@', not a symbol name
         const sym = model.symbolAtPosition(1, 1)
         expect(sym).toBeUndefined()
     })
 
     test('finds symbol at a reference site', () => {
-        const src = '@fn f:Int := { 1 };\n@let r:Int := &f;'
+        const src = '\\\\ f () -> Int\n@fn f  := { 1 };\n@let r := &f;'
         const model = modelFor(src)
         // line 2: '@let r:Int := &f;'
         //                         ^ 'f' is at some column on line 2
@@ -158,7 +158,7 @@ describe('SemanticModel.symbolAtPosition()', () => {
 describe('Workspace.findDefinition()', () => {
     test('returns the symbol at the definition site', () => {
         const ws = new Workspace()
-        ws.openDocument('main.si', '@fn answer:Int := { 42 };')
+        ws.openDocument('main.si', '\\\\ answer () -> Int\n@fn answer  := { 42 };')
         const sym = ws.findDefinition('main.si', 1, 5)
         expect(sym).toBeDefined()
         expect(sym!.name).toBe('answer')
@@ -172,7 +172,7 @@ describe('Workspace.findDefinition()', () => {
 
     test('returns undefined for position outside any symbol', () => {
         const ws = new Workspace()
-        ws.openDocument('main.si', '@fn answer:Int := { 42 };')
+        ws.openDocument('main.si', '\\\\ answer () -> Int\n@fn answer  := { 42 };')
         const sym = ws.findDefinition('main.si', 1, 1)
         expect(sym).toBeUndefined()
     })
@@ -180,7 +180,7 @@ describe('Workspace.findDefinition()', () => {
 
 describe('Workspace.findReferences()', () => {
     test('returns spans from a reference site', () => {
-        const src = '@fn f:Int := { 1 };\n@let r:Int := &f;'
+        const src = '\\\\ f () -> Int\n@fn f  := { 1 };\n@let r := &f;'
         const ws = new Workspace()
         ws.openDocument('main.si', src)
         // Ask for references starting from the definition of 'f'
@@ -198,7 +198,7 @@ describe('Workspace.findReferences()', () => {
 
     test('returns empty array when no symbol at position', () => {
         const ws = new Workspace()
-        ws.openDocument('main.si', '@fn answer:Int := { 42 };')
+        ws.openDocument('main.si', '\\\\ answer () -> Int\n@fn answer  := { 42 };')
         const refs = ws.findReferences('main.si', 1, 1)
         expect(refs).toHaveLength(0)
     })

@@ -91,23 +91,26 @@ describe('Phase 9d-9: primitives parity', () => {
 
     test('Int arithmetic returns the same value on both targets', async () => {
         await assertParity(`
-            @fn run:Int := (1 + 2) * 3 - 4;
+            \\\\ run () -> Int
+            @fn run  := (1 + 2) * 3 - 4;
             @export run;
         `, 'run', 5)
     })
 
     test('Int comparisons return the same i32 (0/1) on both targets', async () => {
         await assertParity(`
-            @fn run:Int := &@if 5 > 3, { 1 }, { 0 };
+            \\\\ run () -> Int
+            @fn run  := &@if 5 > 3, { 1 }, { 0 };
             @export run;
         `, 'run', 1)
     })
 
     test('Loop accumulator preserves arithmetic semantics', async () => {
         await assertParity(`
-            @fn run:Int := {
-                @var sum:Int := 0;
-                @var i:Int := 1;
+            \\\\ run () -> Int
+            @fn run  := {
+                @var sum := 0;
+                @var i := 1;
                 &@loop i <= 10, { sum = sum + i; i = i + 1; };
                 sum
             };
@@ -117,10 +120,12 @@ describe('Phase 9d-9: primitives parity', () => {
 
     test('Recursive function compiles + runs the same', async () => {
         await assertParity(`
-            @fn fib n:Int := &@if n < 2,
+            \\\\ fib (Int)
+            @fn fib n := &@if n < 2,
                 { n },
                 { (&fib (n - 1)) + (&fib (n - 2)) };
-            @fn run:Int := &fib 10;
+            \\\\ run () -> Int
+            @fn run  := &fib 10;
             @export run;
         `, 'run', 55)
     })

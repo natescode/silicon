@@ -62,16 +62,19 @@ describe('Phase 5a-3: @try unwrap shorthand', () => {
         // wrapper returns Err (result_is_ok = 0) and (b) result_unwrap_or
         // falls through to the default.
         const ex = await compileAndRun(`
-            @fn double:Result[Int, Int] r:Result[Int, Int] := {
-                @local v:Int := &@try r;
+            \\\\ double (Result[Int, Int]) -> Result[Int, Int]
+            @fn double r := {
+                @local v := &@try r;
                 &Ok (v * 2)
             };
-            @fn test_err_unwrap:Int := {
-                @local r:Result[Int, Int] := &double (&Err 99);
+            \\\\ test_err_unwrap () -> Int
+            @fn test_err_unwrap  := {
+                @local r := &double (&Err 99);
                 &result_unwrap_or r, 1234
             };
-            @fn test_err_is_ok:Int := {
-                @local r:Result[Int, Int] := &double (&Err 99);
+            \\\\ test_err_is_ok () -> Int
+            @fn test_err_is_ok  := {
+                @local r := &double (&Err 99);
                 &result_is_ok r
             };
             @export test_err_unwrap;

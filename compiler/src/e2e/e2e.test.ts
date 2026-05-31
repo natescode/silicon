@@ -1388,7 +1388,7 @@ test("Round 26: >> operator registered (D-D-4 migrated)", () => {
 
 test("Round 26: | and || are distinct operators", () => {
     // Bitwise OR and logical OR must coexist without conflict
-    const src = "@var x:Int := 5; @var y:Int := 3; x | y; x || y;";
+    const src = "@var x := 5; @var y:Int := 3; x | y; x || y;";
     const result = compileSource(src);
     expect(result.success).toBe(true);
     expect(result.wat).toContain("i32.or");
@@ -1494,7 +1494,7 @@ test("Phase 4: defer_with_return.si — early @return runs cleanup before return
 test("Phase 4: @defer site itself produces no inline IR", () => {
     // A function whose only statement is @defer should not call any function
     // at the defer site — the cleanup is only materialised at function exit.
-    const src = `@extern cleanup; @fn empty := { &@defer &cleanup };`
+    const src = `@extern { \\\\ cleanup () -> Void }`
     const result = compileSource(src);
     expect(result.success).toBe(true);
     const uw = userWat(result.wat!)
@@ -1595,13 +1595,13 @@ test("Round 28: Float + Float compiles successfully", () => {
 });
 
 test("Round 28: annotation mismatch — @let x:Int := 3.14 is a type error", () => {
-    const result = compileSource("@let x:Int := 3.14;");
+    const result = compileSource("@let x := 3.14;");
     expect(result.success).toBe(false);
     expect(result.error).toMatch(/mismatch|annotation|Int|Float/i);
 });
 
 test("Round 28: assignment to immutable @let is a type error", () => {
-    const result = compileSource("@let x:Int := 5; x = 10;");
+    const result = compileSource("@let x := 5; x = 10;");
     expect(result.success).toBe(false);
     expect(result.error).toMatch(/immutable|x/i);
 });
@@ -1785,7 +1785,7 @@ test("Round 43: @match trailing default emits no i32.eq for the default arm", ()
 test("Round 43: @match two explicit arms + trailing default", () => {
     const src = [
         "@type_sum Status := Ok | Warn | Error;",
-        "@var s:Status := Status::Warn;",
+        "@var s := Status::Warn;",
         "&@match s, Status::Ok, { 0 }, Status::Error, { 2 }, { 1 };",
     ].join("\n")
     const result = compileSource(src)
@@ -1801,7 +1801,7 @@ test("Round 43: @match two explicit arms + trailing default", () => {
 test("Round 43: type checker accepts trailing default @match without errors", () => {
     const src = [
         "@type_sum Bool2 := Yes | No;",
-        "@var b:Bool2 := Bool2::Yes;",
+        "@var b := Bool2::Yes;",
         "&@match b, Bool2::Yes, { 1 }, { 0 };",
     ].join("\n")
     const result = compileSource(src)
@@ -1813,7 +1813,7 @@ test("Round 43: @match trailing default type mismatch is a type error", () => {
     // Default is Float but arm result is Int — should error.
     const src = [
         "@type_sum Color := Red | Green;",
-        "@var c:Color := Color::Red;",
+        "@var c := Color::Red;",
         "&@match c, Color::Red, { 1 }, { 2.5 };",
     ].join("\n")
     const result = compileSource(src)
@@ -1840,7 +1840,8 @@ test("Round 43: @type_sum lowering uses def expander (sum-type globals still emi
 
 test("Round 46: web::console_log_str auto-generates WASM import from module registry", () => {
     const result = compileSource(`
-        @fn greet msg:String := {
+        \\\\ greet (String)
+        @fn greet msg := {
             &web::console_log_str msg;
             msg
         };
@@ -1852,7 +1853,8 @@ test("Round 46: web::console_log_str auto-generates WASM import from module regi
 
 test("Round 46: web::math_sqrt auto-generates float import", () => {
     const result = compileSource(`
-        @fn root x:Float := {
+        \\\\ root (Float)
+        @fn root x := {
             &web::math_sqrt x
         };
     `)
@@ -1863,7 +1865,8 @@ test("Round 46: web::math_sqrt auto-generates float import", () => {
 
 test("Round 46: web::math_pow with two Float args is deduplicated across multiple calls", () => {
     const result = compileSource(`
-        @fn hyp a:Float, b:Float := {
+        \\\\ hyp (Float, Float)
+        @fn hyp a, b := {
             &web::math_sqrt ((&web::math_pow a, 2.0) + (&web::math_pow b, 2.0))
         };
     `)
