@@ -444,13 +444,13 @@ test('@extern: call with correct arg type has no errors', () => {
 })
 
 test('@extern: call with wrong arg type is a Mismatch', () => {
-    const { errors } = check('@extern { \\\\ print (String) -> Void }')
+    const { errors } = check('@extern { \\\\ print (String) -> Void }\n&print 42;')
     expect(errors.length).toBeGreaterThan(0)
     expect(errors[0].kind).toBe('Mismatch')
 })
 
 test('@extern: wrong arity is an ArityMismatch', () => {
-    const { errors } = check('@extern { \\\\ add (Int, Int) -> Void }')
+    const { errors } = check('@extern { \\\\ add (Int, Int) -> Void }\n&add 1;')
     expect(errors.length).toBeGreaterThan(0)
     expect(errors[0].kind).toBe('ArityMismatch')
 })

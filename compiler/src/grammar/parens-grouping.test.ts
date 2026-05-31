@@ -25,8 +25,7 @@ function parseOk(src: string): boolean {
 }
 
 describe('parens-optional-grouping: function definitions', () => {
-    test('paren form `\\\\ name (T, U) -> R
-@fn name a, b := body` parses with 2 params', () => {
+    test('paren form: signature (T, U) -> R + bare params parses with 2 params', () => {
         const ast = parseSrc(`\\\\ add (Int, Int) -> Int
 @fn add a, b := 0;`)
         expect(ast.elements[0].params).toHaveLength(2)
@@ -34,15 +33,13 @@ describe('parens-optional-grouping: function definitions', () => {
         expect(ast.elements[0].params[1].name).toBe('b')
     })
 
-    test('paren form `\\\\ name () -> R
-@fn name  := body` parses with 0 params', () => {
+    test('paren form: signature () -> R parses with 0 params', () => {
         const ast = parseSrc(`\\\\ nullary () -> Int
 @fn nullary  := 0;`)
         expect(ast.elements[0].params).toHaveLength(0)
     })
 
-    test('paren single-param `\\\\ name (T) -> R
-@fn name a := body`', () => {
+    test('paren single-param: signature (T) -> R', () => {
         const ast = parseSrc(`\\\\ id (Int) -> Int
 @fn id a := a;`)
         expect(ast.elements[0].params).toHaveLength(1)
