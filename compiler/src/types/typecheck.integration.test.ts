@@ -104,7 +104,7 @@ test('all comparison operators on Int clean', () => {
 })
 
 test('type annotation Int matches int literal', () => {
-    // Silicon grammar supports `@let x:Int := 5`
+    // Silicon grammar supports `@let x := 5`
     const { errors } = check('@let x := 5;')
     expect(errors).toHaveLength(0)
 })
@@ -407,29 +407,29 @@ test('@match: result type flows through to caller', () => {
 // ---------------------------------------------------------------------------
 
 test('@local: declaration with matching annotation has no errors', () => {
-    const { errors } = check('\\\\ f (Int)\n@let f x := { @local tmp:Int := x + 1; tmp };')
+    const { errors } = check('\\\\ f (Int)\n@let f x := { @local tmp := x + 1; tmp };')
     expect(errors).toHaveLength(0)
 })
 
 test('@local: wrong annotation type is a type error', () => {
-    const { errors } = check('\\\\ f (Int)\n@let f x := { @local tmp:Float := x + 1; tmp };')
+    const { errors } = check('\\\\ f (Int)\n@let f x := { @local tmp := x + 1; tmp };')
     expect(errors.length).toBeGreaterThan(0)
     expect(errors[0].kind).toBe('Annotation')
 })
 
 test('@local: is mutable — reassignment does not error', () => {
-    const { errors } = check('\\\\ f (Int)\n@let f x := { @local tmp:Int := 0; tmp = x + 1; tmp };')
+    const { errors } = check('\\\\ f (Int)\n@let f x := { @local tmp := 0; tmp = x + 1; tmp };')
     expect(errors).toHaveLength(0)
 })
 
 test('@local: type flows through to caller', () => {
     // tmp is Int, so tmp + 1 should be valid
-    const { errors } = check('\\\\ f (Int)\n@let f x := { @local tmp:Int := x; tmp + 1 };')
+    const { errors } = check('\\\\ f (Int)\n@let f x := { @local tmp := x; tmp + 1 };')
     expect(errors).toHaveLength(0)
 })
 
 test('@local: wrong type in reassignment is a type error', () => {
-    const { errors } = check('\\\\ f (Int)\n@let f x := { @local tmp:Int := 0; tmp = 3.14; tmp };')
+    const { errors } = check('\\\\ f (Int)\n@let f x := { @local tmp := 0; tmp = 3.14; tmp };')
     expect(errors.length).toBeGreaterThan(0)
     expect(errors[0].kind).toBe('Mismatch')
 })

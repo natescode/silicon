@@ -31,7 +31,7 @@ describe('useResolver: wasm-gc stdlib shadow', () => {
         const fs = inMemoryFs({
             'project/src/stdlib/rc.si':    '\\\\ rc_new (Int)\n@fn rc_new value := { value + 1 };',   // mvp (sentinel value)
             'project/src/stdlib/gc/rc.si': '\\\\ rc_new (Int)\n@fn rc_new value := value;',            // gc (identity sentinel)
-            'project/main.si':             "@use 'src/stdlib/rc.si';\n@fn use_it:Int := &rc_new 42;",
+            'project/main.si':             "@use 'src/stdlib/rc.si';\n@fn use_it := &rc_new 42;",
         })
         const { source, visited } = resolveUses(
             fs.files[P('project/main.si')]!,

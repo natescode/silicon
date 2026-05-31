@@ -28,7 +28,7 @@ const RC_GC_PATH  = resolve(__dirname, 'gc', 'rc.si')
 describe('Phase 9d-6: src/stdlib/gc/rc.si shadow', () => {
 
     test('wasm-gc resolves to gc/rc.si, not rc.si', () => {
-        const main = `@use '${RC_MVP_PATH}';\n@fn test_id:Int := &rc_new 42;`
+        const main = `@use '${RC_MVP_PATH}';\n@fn test_id := &rc_new 42;`
         const { visited } = resolveUses(main, resolve(__dirname, 'test-main.si'),
             { target: 'wasm-gc' })
         expect(visited).toContain(RC_GC_PATH)
@@ -36,7 +36,7 @@ describe('Phase 9d-6: src/stdlib/gc/rc.si shadow', () => {
     })
 
     test('host resolves to the original rc.si (gc shadow is ignored)', () => {
-        const main = `@use '${RC_MVP_PATH}';\n@fn test_id:Int := &rc_new 42;`
+        const main = `@use '${RC_MVP_PATH}';\n@fn test_id := &rc_new 42;`
         const { visited } = resolveUses(main, resolve(__dirname, 'test-main.si'),
             { target: 'host' })
         expect(visited).toContain(RC_MVP_PATH)
@@ -45,9 +45,9 @@ describe('Phase 9d-6: src/stdlib/gc/rc.si shadow', () => {
 
     test('gc/rc.si identity shim typechecks cleanly under wasm-gc', () => {
         const main = `@use '${RC_MVP_PATH}';
-            @fn test_lifecycle:Int := {
-                @local r:Int := &rc_new 42;
-                @local r2:Int := &rc_clone r;
+            @fn test_lifecycle := {
+                @local r := &rc_new 42;
+                @local r2 := &rc_clone r;
                 &rc_drop r2;
                 &rc_get r
             };`
@@ -69,8 +69,8 @@ describe('Phase 9d-6: src/stdlib/gc/rc.si shadow', () => {
         // misleading results.  Calling them from user code under
         // wasm-gc raises E0012.
         const main = `@use '${RC_MVP_PATH}';
-            @fn test_count:Int := {
-                @local r:Int := &rc_new 1;
+            @fn test_count := {
+                @local r := &rc_new 1;
                 &rc_count r
             };`
         const { source } = resolveUses(main, resolve(__dirname, 'test-main.si'),
@@ -88,9 +88,9 @@ describe('Phase 9d-6: src/stdlib/gc/rc.si shadow', () => {
 
     test('full Rc lifecycle compiles under wasm-mvp (Phase 9c regression)', () => {
         const main = `@use '${RC_MVP_PATH}';
-            @fn test_full:Int := {
-                @local r:Int := &rc_new 100;
-                @local r2:Int := &rc_clone r;
+            @fn test_full := {
+                @local r := &rc_new 100;
+                @local r2 := &rc_clone r;
                 &rc_drop r2;
                 &rc_get r
             };`

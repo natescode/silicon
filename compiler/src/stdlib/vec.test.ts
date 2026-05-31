@@ -32,7 +32,7 @@ interface Exports {
  *  named `test_*` are auto-exported by appending `@export name;` lines. */
 async function compileAndRun(testFns: Record<string, string>): Promise<Exports> {
     const userFns = Object.entries(testFns)
-        .map(([name, body]) => `@fn ${name}:Int := ${body};`)
+        .map(([name, body]) => `@fn ${name} := ${body};`)
         .join('\n')
     const userExports = Object.keys(testFns)
         .map(name => `@export ${name};`)
@@ -54,8 +54,8 @@ async function compileAndRun(testFns: Record<string, string>): Promise<Exports> 
 describe('Phase 5a-4: Vec[i32] runtime', () => {
     test('vec_new returns a header with len=0 and the requested capacity', async () => {
         const ex = await compileAndRun({
-            test_len:      `{ @local v:Int := &vec_new 4; &vec_len v }`,
-            test_capacity: `{ @local v:Int := &vec_new 4; &vec_capacity v }`,
+            test_len:      `{ @local v := &vec_new 4; &vec_len v }`,
+            test_capacity: `{ @local v := &vec_new 4; &vec_capacity v }`,
         })
         expect(ex.test_len()).toBe(0)
         expect(ex.test_capacity()).toBe(4)
@@ -64,14 +64,14 @@ describe('Phase 5a-4: Vec[i32] runtime', () => {
     test('vec_push_i32 + vec_get_i32 round-trip below capacity', async () => {
         const ex = await compileAndRun({
             test_push_get: `{
-                @local v:Int := &vec_new 4;
+                @local v := &vec_new 4;
                 &vec_push_i32 v, 10;
                 &vec_push_i32 v, 20;
                 &vec_push_i32 v, 30;
                 (&vec_get_i32 v, 0) + (&vec_get_i32 v, 1) + (&vec_get_i32 v, 2)
             }`,
             test_len_after_3: `{
-                @local v:Int := &vec_new 4;
+                @local v := &vec_new 4;
                 &vec_push_i32 v, 10;
                 &vec_push_i32 v, 20;
                 &vec_push_i32 v, 30;
@@ -88,7 +88,7 @@ describe('Phase 5a-4: Vec[i32] runtime', () => {
         // reallocs.
         const ex = await compileAndRun({
             test_grow_sum: `{
-                @local v:Int := &vec_new 2;
+                @local v := &vec_new 2;
                 &vec_push_i32 v, 1;
                 &vec_push_i32 v, 2;
                 &vec_push_i32 v, 3;
@@ -98,7 +98,7 @@ describe('Phase 5a-4: Vec[i32] runtime', () => {
                 + (&vec_get_i32 v, 3) + (&vec_get_i32 v, 4)
             }`,
             test_grow_cap: `{
-                @local v:Int := &vec_new 2;
+                @local v := &vec_new 2;
                 &vec_push_i32 v, 1;
                 &vec_push_i32 v, 2;
                 &vec_push_i32 v, 3;
@@ -107,7 +107,7 @@ describe('Phase 5a-4: Vec[i32] runtime', () => {
                 &vec_capacity v
             }`,
             test_grow_len: `{
-                @local v:Int := &vec_new 2;
+                @local v := &vec_new 2;
                 &vec_push_i32 v, 1;
                 &vec_push_i32 v, 2;
                 &vec_push_i32 v, 3;
@@ -124,7 +124,7 @@ describe('Phase 5a-4: Vec[i32] runtime', () => {
     test('vec_set_i32 mutates in place', async () => {
         const ex = await compileAndRun({
             test_set: `{
-                @local v:Int := &vec_new 4;
+                @local v := &vec_new 4;
                 &vec_push_i32 v, 10;
                 &vec_push_i32 v, 20;
                 &vec_set_i32 v, 0, 99;
@@ -137,14 +137,14 @@ describe('Phase 5a-4: Vec[i32] runtime', () => {
     test('vec_pop_i32 returns the last element and decrements len', async () => {
         const ex = await compileAndRun({
             test_pop_val: `{
-                @local v:Int := &vec_new 4;
+                @local v := &vec_new 4;
                 &vec_push_i32 v, 10;
                 &vec_push_i32 v, 20;
                 &vec_push_i32 v, 30;
                 &vec_pop_i32 v
             }`,
             test_pop_len: `{
-                @local v:Int := &vec_new 4;
+                @local v := &vec_new 4;
                 &vec_push_i32 v, 10;
                 &vec_push_i32 v, 20;
                 &vec_push_i32 v, 30;
@@ -152,12 +152,12 @@ describe('Phase 5a-4: Vec[i32] runtime', () => {
                 &vec_len v
             }`,
             test_pop_twice: `{
-                @local v:Int := &vec_new 4;
+                @local v := &vec_new 4;
                 &vec_push_i32 v, 10;
                 &vec_push_i32 v, 20;
                 &vec_push_i32 v, 30;
-                @local a:Int := &vec_pop_i32 v;
-                @local b:Int := &vec_pop_i32 v;
+                @local a := &vec_pop_i32 v;
+                @local b := &vec_pop_i32 v;
                 a + b
             }`,
         })
@@ -171,8 +171,8 @@ describe('Phase 5a-4: Vec[i32] runtime', () => {
         // value `v` (header pointer) is unchanged.
         const ex = await compileAndRun({
             test_stable_header: `{
-                @local v:Int := &vec_new 2;
-                @local before:Int := v;
+                @local v := &vec_new 2;
+                @local before := v;
                 &vec_push_i32 v, 1;
                 &vec_push_i32 v, 2;
                 &vec_push_i32 v, 3;

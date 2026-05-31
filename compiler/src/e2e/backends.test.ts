@@ -197,7 +197,8 @@ describe('siliconTypeToQbe type table correctness', () => {
         test(`${siType.kind}: QBE=${expectedQbe}, WAT=${expectedWat}`, () => {
             expect(siliconTypeToQbe(siType)).toBe(expectedQbe)
             // Verify WAT-side via a round-trip through the actual compiler.
-            const src = `@fn probe x:${siType.kind} := x;`
+            const src = `\\\\ probe (${siType.kind})
+@fn probe x := x;`
             // Some types (UInt8/UInt64) map to the same wasm type as Int/Int64.
             const wat = compileToWatString(src)
             expect(wat).toMatch(new RegExp(`param.*${expectedWat}`))
@@ -236,7 +237,7 @@ describe('WAT regression snapshots — known-good function shapes', () => {
 
     test('@loop lowers to WAT block/loop pair', () => {
         const wat = compileToWatString(
-            '@fn f  := { @var n:Int := 0; &@loop n < 5, { n = n + 1; }; n };'
+            '@fn f  := { @var n := 0; &@loop n < 5, { n = n + 1; }; n };'
         )
         expect(wat).toContain('(block')
         expect(wat).toContain('(loop')
@@ -271,7 +272,7 @@ describe('QBE IR regression snapshots — known-good function shapes', () => {
 
     test('@loop lowers to QBE head/exit label pair with jnz condition', () => {
         const qbe = toQbeIr(
-            '@fn f  := { @var n:Int := 0; &@loop n < 5, { n = n + 1; }; n };'
+            '@fn f  := { @var n := 0; &@loop n < 5, { n = n + 1; }; n };'
         )
         expect(qbe).toContain('@loop')       // loop head
         expect(qbe).toContain('@loop_exit')  // exit label
@@ -517,7 +518,7 @@ const ARENA_PROGRAMS: { name: string; src: string }[] = [
     {
         name: 'arena with String promotion',
         src:  `\\\\ build () -> String
-@fn build  := &@with_arena { @local s:String := 'hi'; &@move_to_parent_arena s };`,
+@fn build  := &@with_arena { @local s := 'hi'; &@move_to_parent_arena s };`,
     },
     {
         name: 'arena with Array[Int] promotion',

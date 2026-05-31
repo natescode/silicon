@@ -357,26 +357,26 @@ describe('lowerToQbe — @return', () => {
 describe('lowerToQbe — @local variable declarations', () => {
     test('@local Int declaration emits copy instruction', () => {
         const out = toQbe(`\\\\ f () -> Int
-@fn f  := { @local x:Int := 5; x };`)
+@fn f  := { @local x := 5; x };`)
         expect(out).toContain('=w copy 5')
     })
 
     test('@local variable is readable after declaration', () => {
         const out = toQbe(`\\\\ f () -> Int
-@fn f  := { @local x:Int := 42; x };`)
+@fn f  := { @local x := 42; x };`)
         expect(out).toContain('ret %x')
     })
 
     test('assignment to local emits copy', () => {
         const out = toQbe(`\\\\ f () -> Int
-@fn f  := { @local x:Int := 0; x = 7; x };`)
+@fn f  := { @local x := 0; x = 7; x };`)
         expect(out).toContain('=w copy 7')
     })
 })
 
 describe('lowerToQbe — @if', () => {
     test('@if with no else emits jnz + block labels', () => {
-        const out = toQbe(`@fn f  := { @local x:Int := 0; &@if x == 0, { x = 1 }; };`)
+        const out = toQbe(`@fn f  := { @local x := 0; &@if x == 0, { x = 1 }; };`)
         expect(out).toContain('jnz')
         expect(out).toMatch(/@\w+/)
     })

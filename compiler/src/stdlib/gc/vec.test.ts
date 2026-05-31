@@ -46,7 +46,7 @@ describe('Phase 9d-8: Vec[Int] under wasm-gc — core API', () => {
     test('vec_new + vec_len: fresh vec has length 0', async () => {
         const ex = await compileGcRun(`
             \\\\ test () -> Int
-            @fn test  := { @local v:Vec[Int] := &vec_new 4; &vec_len v };
+            @fn test  := { @local v := &vec_new 4; &vec_len v };
             @export test;
         `)
         expect(ex.test()).toBe(0)
@@ -55,7 +55,7 @@ describe('Phase 9d-8: Vec[Int] under wasm-gc — core API', () => {
     test('vec_new + vec_capacity: initial capacity matches request', async () => {
         const ex = await compileGcRun(`
             \\\\ test () -> Int
-            @fn test  := { @local v:Vec[Int] := &vec_new 8; &vec_capacity v };
+            @fn test  := { @local v := &vec_new 8; &vec_capacity v };
             @export test;
         `)
         expect(ex.test()).toBe(8)

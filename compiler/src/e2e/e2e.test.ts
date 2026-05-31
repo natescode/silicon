@@ -816,7 +816,7 @@ test("E2E: @match emits nested (if ...) chain with i32.eq comparisons", () => {
 // ---------------------------------------------------------------------------
 
 test("E2E: @local emits (local ...) in function preamble", () => {
-    const src = "\\\\ f (Int)\n@let f x := { @local tmp:Int := x + 1; tmp };";
+    const src = "\\\\ f (Int)\n@let f x := { @local tmp := x + 1; tmp };";
     const result = compileSource(src);
 
     expect(result.success).toBe(true);
@@ -825,7 +825,7 @@ test("E2E: @local emits (local ...) in function preamble", () => {
 });
 
 test("E2E: @local binding emits local.set at the binding site", () => {
-    const src = "\\\\ f (Int)\n@let f x := { @local tmp:Int := x + 1; tmp };";
+    const src = "\\\\ f (Int)\n@let f x := { @local tmp := x + 1; tmp };";
     const result = compileSource(src);
 
     expect(result.success).toBe(true);
@@ -833,7 +833,7 @@ test("E2E: @local binding emits local.set at the binding site", () => {
 });
 
 test("E2E: @local reference emits local.get", () => {
-    const src = "\\\\ f (Int)\n@let f x := { @local tmp:Int := x + 1; tmp };";
+    const src = "\\\\ f (Int)\n@let f x := { @local tmp := x + 1; tmp };";
     const result = compileSource(src);
 
     expect(result.success).toBe(true);
@@ -843,7 +843,7 @@ test("E2E: @local reference emits local.get", () => {
 
 test("E2E: @local is reassignable via assignment", () => {
     // After @local tmp := 0; reassign tmp = x; the assignment emits local.set.
-    const src = "\\\\ f (Int)\n@let f x := { @local tmp:Int := 0; tmp = x; tmp };";
+    const src = "\\\\ f (Int)\n@let f x := { @local tmp := 0; tmp = x; tmp };";
     const result = compileSource(src);
 
     expect(result.success).toBe(true);
@@ -853,7 +853,7 @@ test("E2E: @local is reassignable via assignment", () => {
 });
 
 test("E2E: multiple @local variables each get their own WAT local", () => {
-    const src = "\\\\ f (Int)\n@let f x := { @local a:Int := x; @local b:Int := a + 1; b };";
+    const src = "\\\\ f (Int)\n@let f x := { @local a := x; @local b := a + 1; b };";
     const result = compileSource(src);
 
     expect(result.success).toBe(true);
@@ -939,7 +939,7 @@ test("E2E: @and emits short-circuit AND WAT (if (result i32) ...)", () => {
 });
 
 test("E2E: || with variables produces correct short-circuit structure", () => {
-    const src = "@var a := 1; @var b:Int := 0; a || b;";
+    const src = "@var a := 1; @var b := 0; a || b;";
     const result = compileSource(src);
 
     expect(result.success).toBe(true);
@@ -957,7 +957,7 @@ test("E2E: @not of zero is 1 (i32.eqz (i32.const 0))", () => {
 });
 
 test("E2E: chained || short-circuits left to right", () => {
-    const src = "@var x := 0; @var y:Int := 0; @var z:Int := 1; x || y || z;";
+    const src = "@var x := 0; @var y := 0; @var z := 1; x || y || z;";
     const result = compileSource(src);
 
     expect(result.success).toBe(true);
@@ -1241,7 +1241,7 @@ test("Round 24: count_loop.si example compiles successfully", () => {
 });
 
 test("Round 24: condition-based loop — condition embedded in br_if check", () => {
-    const src = "@let run := { @var n:Int := 0; &@loop n < 5, { n = n + 1; }; n };";
+    const src = "@let run := { @var n := 0; &@loop n < 5, { n = n + 1; }; n };";
     const result = compileSource(src);
     expect(result.success).toBe(true);
     const uw = userWat(result.wat!)
@@ -1257,7 +1257,7 @@ test("Round 24: condition-based loop — condition embedded in br_if check", () 
 test("Round 24: loop body with mutation-as-item is void — local.set before br $cont_", () => {
     // The loop body { n = n + 1; } ends with a semicolon → no trailing expression.
     // local.set $n leaves nothing on the stack, so br $cont_ is reached with empty stack.
-    const src = "@let run := { @var n:Int := 0; &@loop n < 5, { n = n + 1; }; n };";
+    const src = "@let run := { @var n := 0; &@loop n < 5, { n = n + 1; }; n };";
     const result = compileSource(src);
     expect(result.success).toBe(true);
     const uw = userWat(result.wat!)
@@ -1269,7 +1269,7 @@ test("Round 24: loop body with mutation-as-item is void — local.set before br 
 });
 
 test("Round 24: loop with @if-break pattern — conditional exit inside body", () => {
-    const src = "@let run := { @var n:Int := 0; &@loop 1, { n = n + 1; &@if n >= 3, { &@break }; }; n };";
+    const src = "@let run := { @var n := 0; &@loop 1, { n = n + 1; &@if n >= 3, { &@break }; }; n };";
     const result = compileSource(src);
     expect(result.success).toBe(true);
     const uw = userWat(result.wat!)
@@ -1388,7 +1388,7 @@ test("Round 26: >> operator registered (D-D-4 migrated)", () => {
 
 test("Round 26: | and || are distinct operators", () => {
     // Bitwise OR and logical OR must coexist without conflict
-    const src = "@var x := 5; @var y:Int := 3; x | y; x || y;";
+    const src = "@var x := 5; @var y := 3; x | y; x || y;";
     const result = compileSource(src);
     expect(result.success).toBe(true);
     expect(result.wat).toContain("i32.or");
@@ -1594,7 +1594,7 @@ test("Round 28: Float + Float compiles successfully", () => {
     expect(result.wat).toContain("f32.add");
 });
 
-test("Round 28: annotation mismatch — @let x:Int := 3.14 is a type error", () => {
+test("Round 28: annotation mismatch — @let x := 3.14 is a type error", () => {
     const result = compileSource("@let x := 3.14;");
     expect(result.success).toBe(false);
     expect(result.error).toMatch(/mismatch|annotation|Int|Float/i);

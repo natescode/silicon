@@ -226,25 +226,25 @@ describe('stdlib helpers: option_is_some / option_is_none / result_is_err', () =
 
     test('option_is_some/some Int → true', () => {
         ok(`${OPTION}
-            @fn check:Bool := (&option_is_some (&Some 7));`)
+            @fn check := (&option_is_some (&Some 7));`)
     })
 
     test('option_is_some/none with annotation', () => {
         ok(`${OPTION}
-            @fn check:Bool := {
-                @local x:Option[Int] := (&None);
+            @fn check := {
+                @local x := (&None);
                 &option_is_some x
             };`)
     })
 
     test('option_is_none over Float', () => {
         ok(`${OPTION}
-            @fn check:Bool := (&option_is_none (&Some 1.5));`)
+            @fn check := (&option_is_none (&Some 1.5));`)
     })
 
     test('result_is_err on Ok and Err of distinct types', () => {
         ok(`${RESULT}
-            @fn a:Bool := (&result_is_err (&Ok 42));
-            @fn b:Bool := (&result_is_err (&Err 'oops'));`)
+            @fn a := (&result_is_err (&Ok 42));
+            @fn b := (&result_is_err (&Err 'oops'));`)
     })
 })

@@ -312,8 +312,8 @@ describe('Phase 9d-9: programs validate under both targets', () => {
     test('Lifecycle: arena + Rc compose cleanly under both targets', async () => {
         await assertBothValidate(`
             @use 'src/stdlib/rc.si';
-            @fn run:Int := &@with_arena {
-                @local r:Int := &rc_new 42;
+            @fn run := &@with_arena {
+                @local r := &rc_new 42;
                 &@defer &rc_drop r;
                 &rc_get r
             };

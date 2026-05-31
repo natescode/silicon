@@ -312,7 +312,7 @@ test('Unbound identifier produces error', () => {
 // ------------------------------------------------------------------
 
 test('Definition with matching type annotation passes', () => {
-    // @let x:Int := 5
+    // @let x := 5
     const typed = ASTFactory.typedIdentifier('x', ASTFactory.typeAnnotation('Int'))
     const binding = ASTFactory.binding(intExpEnd('5'))
     const def = ASTFactory.definition('@let', typed, [], undefined, binding)
@@ -326,7 +326,7 @@ test('Definition with matching type annotation passes', () => {
 })
 
 test('Definition with mismatched type annotation produces error', () => {
-    // @let x:Float := 5
+    // @let x := 5
     const typed = ASTFactory.typedIdentifier('x', ASTFactory.typeAnnotation('Float'))
     const binding = ASTFactory.binding(intExpEnd('5'))
     const def = ASTFactory.definition('@let', typed, [], undefined, binding)

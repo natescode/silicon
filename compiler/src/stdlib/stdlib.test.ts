@@ -46,8 +46,8 @@ describe('Phase 5a-1: Option stdlib', () => {
 
     test('Option[Int] usage via &Some / &None type-checks', async () => {
         const { errors } = await compile(`${optionSrc}
-            @fn pick:Int := &option_unwrap_or (&Some 42), 0;
-            @fn miss:Int := &option_unwrap_or (&None), 7;
+            @fn pick := &option_unwrap_or (&Some 42), 0;
+            @fn miss := &option_unwrap_or (&None), 7;
         `)
         expect(errors.length).toBe(0)
     })
@@ -56,15 +56,16 @@ describe('Phase 5a-1: Option stdlib', () => {
         // Negative test: passing a Float Some to a function expecting Option[Int]
         // should produce a type error.
         const { errors } = await compile(`${optionSrc}
-            @fn want_int x:Option[Int] := &option_unwrap_or x, 0;
-            @fn wrong:Int := &want_int (&Some 1.5);
+            \\ want_int (Option[Int])
+            @fn want_int x := &option_unwrap_or x, 0;
+            @fn wrong := &want_int (&Some 1.5);
         `)
         expect(errors.length).toBeGreaterThan(0)
     })
 
     test('option_unwrap_or compiles end-to-end and emits a callable function', async () => {
         const { mod } = await compile(`${optionSrc}
-            @fn pick:Int := &option_unwrap_or (&Some 42), 0;
+            @fn pick := &option_unwrap_or (&Some 42), 0;
         `)
         const wat = emitModule(mod, '')
         // The synthesised match-arms reduce to ifs, so the WAT contains
@@ -94,7 +95,7 @@ describe('Phase 5a-2: Result stdlib', () => {
     test('Pattern-match on Result via @match returns the right branch type', async () => {
         // No explicit annotation — inference flows from &Ok 42 / &Err arg.
         const { errors } = await compile(`${resultSrc}
-            @fn pick:Int := {
+            @fn pick := {
                 &@match (&Ok 42),
                     $Ok v => v,
                     $Err _e => 0
@@ -108,7 +109,7 @@ describe('Phase 5a-2: Result stdlib', () => {
         // type is `Result[Int, ?E]` for &Ok 42 — the constructor is
         // polymorphic in E since &Ok doesn't carry the error type.
         const { errors } = await compile(`${resultSrc}
-            @fn pick:Int := {
+            @fn pick := {
                 @local r := &Ok 42;
                 &@match r,
                     $Ok v   => v,
@@ -123,14 +124,14 @@ describe('Phase 5a-2: Result stdlib', () => {
         // parameter is `:Result[T, E]`.  Before the Phase 5 grammar
         // revision the parser silently lost the `[T, E]` to GenericParams.
         const { errors } = await compile(`${resultSrc}
-            @fn pick:Int := &result_unwrap_or (&Ok 42), 0;
+            @fn pick := &result_unwrap_or (&Ok 42), 0;
         `)
         expect(errors.length).toBe(0)
     })
 
     test('result_is_ok returns Bool from a Result[T, E] parameter', async () => {
         const { errors } = await compile(`${resultSrc}
-            @fn check:Bool := &result_is_ok (&Ok 42);
+            @fn check := &result_is_ok (&Ok 42);
         `)
         expect(errors.length).toBe(0)
     })
@@ -139,8 +140,8 @@ describe('Phase 5a-2: Result stdlib', () => {
 describe('Phase 5a: stdlib types coexist in one program', () => {
     test('Option and Result both load together without name collisions', async () => {
         const { errors } = await compile(`${optionSrc}\n${resultSrc}
-            @fn use_both:Int := {
-                @local maybe:Option[Int] := &Some 7;
+            @fn use_both := {
+                @local maybe := &Some 7;
                 @local r := &Ok 42;
                 @local picked := &@match r, $Ok v => v, $Err _e => 0;
                 (&option_unwrap_or maybe, 0) + picked

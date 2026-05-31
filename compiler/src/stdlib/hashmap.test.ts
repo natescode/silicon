@@ -27,7 +27,7 @@ interface Exports {
 
 async function compileAndRun(testFns: Record<string, string>): Promise<Exports> {
     const userFns = Object.entries(testFns)
-        .map(([name, body]) => `@fn ${name}:Int := ${body};`)
+        .map(([name, body]) => `@fn ${name} := ${body};`)
         .join('\n')
     const userExports = Object.keys(testFns)
         .map(name => `@export ${name};`)
@@ -49,8 +49,8 @@ async function compileAndRun(testFns: Record<string, string>): Promise<Exports> 
 describe('Phase 5a-6: HashMap[i32→i32] runtime', () => {
     test('hashmap_new returns a header with len=0 and requested capacity', async () => {
         const ex = await compileAndRun({
-            test_len:      `{ @local h:Int := &hashmap_new 8; &hashmap_len h }`,
-            test_capacity: `{ @local h:Int := &hashmap_new 8; &hashmap_capacity h }`,
+            test_len:      `{ @local h := &hashmap_new 8; &hashmap_len h }`,
+            test_capacity: `{ @local h := &hashmap_new 8; &hashmap_capacity h }`,
         })
         expect(ex.test_len()).toBe(0)
         expect(ex.test_capacity()).toBe(8)
@@ -59,12 +59,12 @@ describe('Phase 5a-6: HashMap[i32→i32] runtime', () => {
     test('set + get round-trip on a single key', async () => {
         const ex = await compileAndRun({
             test_get: `{
-                @local h:Int := &hashmap_new 8;
+                @local h := &hashmap_new 8;
                 &hashmap_set_i32_i32 h, 42, 100;
                 &hashmap_get_i32_i32 h, 42
             }`,
             test_len_after_set: `{
-                @local h:Int := &hashmap_new 8;
+                @local h := &hashmap_new 8;
                 &hashmap_set_i32_i32 h, 42, 100;
                 &hashmap_len h
             }`,
@@ -76,12 +76,12 @@ describe('Phase 5a-6: HashMap[i32→i32] runtime', () => {
     test('has returns 1 for present key, 0 for absent', async () => {
         const ex = await compileAndRun({
             test_has_present: `{
-                @local h:Int := &hashmap_new 8;
+                @local h := &hashmap_new 8;
                 &hashmap_set_i32_i32 h, 42, 100;
                 &hashmap_has_i32 h, 42
             }`,
             test_has_absent: `{
-                @local h:Int := &hashmap_new 8;
+                @local h := &hashmap_new 8;
                 &hashmap_set_i32_i32 h, 42, 100;
                 &hashmap_has_i32 h, 99
             }`,
@@ -93,14 +93,14 @@ describe('Phase 5a-6: HashMap[i32→i32] runtime', () => {
     test('multiple keys round-trip without collisions', async () => {
         const ex = await compileAndRun({
             test_multi: `{
-                @local h:Int := &hashmap_new 8;
+                @local h := &hashmap_new 8;
                 &hashmap_set_i32_i32 h, 1, 10;
                 &hashmap_set_i32_i32 h, 2, 20;
                 &hashmap_set_i32_i32 h, 3, 30;
                 (&hashmap_get_i32_i32 h, 1) + (&hashmap_get_i32_i32 h, 2) + (&hashmap_get_i32_i32 h, 3)
             }`,
             test_multi_len: `{
-                @local h:Int := &hashmap_new 8;
+                @local h := &hashmap_new 8;
                 &hashmap_set_i32_i32 h, 1, 10;
                 &hashmap_set_i32_i32 h, 2, 20;
                 &hashmap_set_i32_i32 h, 3, 30;
@@ -114,13 +114,13 @@ describe('Phase 5a-6: HashMap[i32→i32] runtime', () => {
     test('updating an existing key keeps len unchanged', async () => {
         const ex = await compileAndRun({
             test_update_val: `{
-                @local h:Int := &hashmap_new 8;
+                @local h := &hashmap_new 8;
                 &hashmap_set_i32_i32 h, 42, 100;
                 &hashmap_set_i32_i32 h, 42, 200;
                 &hashmap_get_i32_i32 h, 42
             }`,
             test_update_len: `{
-                @local h:Int := &hashmap_new 8;
+                @local h := &hashmap_new 8;
                 &hashmap_set_i32_i32 h, 42, 100;
                 &hashmap_set_i32_i32 h, 42, 200;
                 &hashmap_len h
@@ -133,24 +133,24 @@ describe('Phase 5a-6: HashMap[i32→i32] runtime', () => {
     test('remove marks key as tombstone, has returns 0, len decrements', async () => {
         const ex = await compileAndRun({
             test_remove_returns_1: `{
-                @local h:Int := &hashmap_new 8;
+                @local h := &hashmap_new 8;
                 &hashmap_set_i32_i32 h, 42, 100;
                 &hashmap_remove_i32 h, 42
             }`,
             test_remove_has: `{
-                @local h:Int := &hashmap_new 8;
+                @local h := &hashmap_new 8;
                 &hashmap_set_i32_i32 h, 42, 100;
                 &hashmap_remove_i32 h, 42;
                 &hashmap_has_i32 h, 42
             }`,
             test_remove_len: `{
-                @local h:Int := &hashmap_new 8;
+                @local h := &hashmap_new 8;
                 &hashmap_set_i32_i32 h, 42, 100;
                 &hashmap_remove_i32 h, 42;
                 &hashmap_len h
             }`,
             test_remove_absent: `{
-                @local h:Int := &hashmap_new 8;
+                @local h := &hashmap_new 8;
                 &hashmap_set_i32_i32 h, 42, 100;
                 &hashmap_remove_i32 h, 99
             }`,
@@ -164,14 +164,14 @@ describe('Phase 5a-6: HashMap[i32→i32] runtime', () => {
     test('insert-then-remove-then-insert reuses tombstone slot', async () => {
         const ex = await compileAndRun({
             test_reuse: `{
-                @local h:Int := &hashmap_new 8;
+                @local h := &hashmap_new 8;
                 &hashmap_set_i32_i32 h, 42, 100;
                 &hashmap_remove_i32 h, 42;
                 &hashmap_set_i32_i32 h, 42, 200;
                 &hashmap_get_i32_i32 h, 42
             }`,
             test_reuse_len: `{
-                @local h:Int := &hashmap_new 8;
+                @local h := &hashmap_new 8;
                 &hashmap_set_i32_i32 h, 42, 100;
                 &hashmap_remove_i32 h, 42;
                 &hashmap_set_i32_i32 h, 42, 200;
@@ -188,7 +188,7 @@ describe('Phase 5a-6: HashMap[i32→i32] runtime', () => {
         // least two resizes (4 → 8 → 16).  All values should survive.
         const ex = await compileAndRun({
             test_resize_sum: `{
-                @local h:Int := &hashmap_new 4;
+                @local h := &hashmap_new 4;
                 &hashmap_set_i32_i32 h, 1, 100;
                 &hashmap_set_i32_i32 h, 2, 200;
                 &hashmap_set_i32_i32 h, 3, 300;
@@ -200,7 +200,7 @@ describe('Phase 5a-6: HashMap[i32→i32] runtime', () => {
                 + (&hashmap_get_i32_i32 h, 5) + (&hashmap_get_i32_i32 h, 6)
             }`,
             test_resize_len: `{
-                @local h:Int := &hashmap_new 4;
+                @local h := &hashmap_new 4;
                 &hashmap_set_i32_i32 h, 1, 100;
                 &hashmap_set_i32_i32 h, 2, 200;
                 &hashmap_set_i32_i32 h, 3, 300;
@@ -210,7 +210,7 @@ describe('Phase 5a-6: HashMap[i32→i32] runtime', () => {
                 &hashmap_len h
             }`,
             test_resize_cap: `{
-                @local h:Int := &hashmap_new 4;
+                @local h := &hashmap_new 4;
                 &hashmap_set_i32_i32 h, 1, 100;
                 &hashmap_set_i32_i32 h, 2, 200;
                 &hashmap_set_i32_i32 h, 3, 300;
@@ -228,8 +228,8 @@ describe('Phase 5a-6: HashMap[i32→i32] runtime', () => {
     test('header pointer is stable across resize', async () => {
         const ex = await compileAndRun({
             test_stable: `{
-                @local h:Int := &hashmap_new 4;
-                @local before:Int := h;
+                @local h := &hashmap_new 4;
+                @local before := h;
                 &hashmap_set_i32_i32 h, 1, 100;
                 &hashmap_set_i32_i32 h, 2, 200;
                 &hashmap_set_i32_i32 h, 3, 300;

@@ -56,7 +56,7 @@ describe('Phase 9d-5a: E0012 — introspection primitives under wasm-gc', () => 
 
     for (const { name, call } of introspection) {
         test(`${name} raises E0012 under wasm-gc`, () => {
-            const r = compile(`@fn probe:Int := ${call};`, 'wasm-gc')
+            const r = compile(`@fn probe := ${call};`, 'wasm-gc')
             expect(r.errors.length).toBeGreaterThan(0)
             const e = r.errors.find(e => e.kind === 'MvpOnlyIntrospection')
             expect(e).toBeDefined()
@@ -65,7 +65,7 @@ describe('Phase 9d-5a: E0012 — introspection primitives under wasm-gc', () => 
         })
 
         test(`${name} compiles fine under wasm-mvp (no regression)`, () => {
-            const r = compile(`@fn probe:Int := ${call};`, 'host')
+            const r = compile(`@fn probe := ${call};`, 'host')
             // Either no errors, or unrelated errors — but no E0012.
             const e0012 = r.errors.filter(e => e.kind === 'MvpOnlyIntrospection')
             expect(e0012.length).toBe(0)
@@ -74,8 +74,9 @@ describe('Phase 9d-5a: E0012 — introspection primitives under wasm-gc', () => 
 
     test('rc_count and rc_is_unique raise E0012 when called', () => {
         const src = `${rcSrc}
-            @fn probe:Int := {
-                @local r:Int := &rc_new 1;
+            \\ probe () -> Int
+            @fn probe := {
+                @local r := &rc_new 1;
                 &rc_count r
             };`
         const r = compile(src, 'wasm-gc')
@@ -100,8 +101,8 @@ describe('Phase 9d-5b: E0013 — physical-byte primitives under wasm-gc', () => 
             // an Int-returning fn that uses the call (even if void, the
             // E0013 fires before any return-type mismatch could trigger).
             const wrap = name === 'mem_copy'
-                ? `@fn probe:Int := { ${call}; 0 };`
-                : `@fn probe:Int := ${call};`
+                ? `@fn probe := { ${call}; 0 };`
+                : `@fn probe := ${call};`
             const r = compile(wrap, 'wasm-gc')
             const e = r.errors.find(e => e.kind === 'MvpOnlyPhysicalByte')
             expect(e).toBeDefined()
@@ -110,8 +111,8 @@ describe('Phase 9d-5b: E0013 — physical-byte primitives under wasm-gc', () => 
 
         test(`${name} compiles fine under wasm-mvp (no regression)`, () => {
             const wrap = name === 'mem_copy'
-                ? `@fn probe:Int := { ${call}; 0 };`
-                : `@fn probe:Int := ${call};`
+                ? `@fn probe := { ${call}; 0 };`
+                : `@fn probe := ${call};`
             const r = compile(wrap, 'host')
             const e0013 = r.errors.filter(e => e.kind === 'MvpOnlyPhysicalByte')
             expect(e0013.length).toBe(0)

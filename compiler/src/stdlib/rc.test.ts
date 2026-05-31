@@ -29,7 +29,7 @@ interface Exports {
 
 async function compileAndRun(testFns: Record<string, string>): Promise<Exports> {
     const userFns = Object.entries(testFns)
-        .map(([name, body]) => `@fn ${name}:Int := ${body};`)
+        .map(([name, body]) => `@fn ${name} := ${body};`)
         .join('\n')
     const userExports = Object.keys(testFns)
         .map(name => `@export ${name};`)
@@ -52,8 +52,8 @@ describe('Phase 9c Tier B: Rc smart pointer — core lifecycle', () => {
 
     test('rc_new wraps a value with refcount 1', async () => {
         const ex = await compileAndRun({
-            test_count: `{ @local r:Int := &rc_new 42; &rc_count r }`,
-            test_get:   `{ @local r:Int := &rc_new 42; &rc_get r }`,
+            test_count: `{ @local r := &rc_new 42; &rc_count r }`,
+            test_get:   `{ @local r := &rc_new 42; &rc_get r }`,
         })
         expect(ex.test_count()).toBe(1)
         expect(ex.test_get()).toBe(42)
@@ -62,13 +62,13 @@ describe('Phase 9c Tier B: Rc smart pointer — core lifecycle', () => {
     test('rc_clone bumps the refcount without copying the value', async () => {
         const ex = await compileAndRun({
             test_clone: `{
-                @local r:Int := &rc_new 99;
-                @local r2:Int := &rc_clone r;
+                @local r := &rc_new 99;
+                @local r2 := &rc_clone r;
                 &rc_count r
             }`,
             test_ptr_eq: `{
-                @local r:Int := &rc_new 99;
-                @local r2:Int := &rc_clone r;
+                @local r := &rc_new 99;
+                @local r2 := &rc_clone r;
                 r - r2
             }`,
         })
@@ -80,13 +80,13 @@ describe('Phase 9c Tier B: Rc smart pointer — core lifecycle', () => {
     test('rc_drop decrements the refcount', async () => {
         const ex = await compileAndRun({
             test_drop_once: `{
-                @local r:Int := &rc_new 7;
-                @local r2:Int := &rc_clone r;
+                @local r := &rc_new 7;
+                @local r2 := &rc_clone r;
                 &rc_drop r2;
                 &rc_count r
             }`,
             test_drop_to_zero: `{
-                @local r:Int := &rc_new 7;
+                @local r := &rc_new 7;
                 &rc_drop r;
                 &rc_count r
             }`,
@@ -98,17 +98,17 @@ describe('Phase 9c Tier B: Rc smart pointer — core lifecycle', () => {
     test('rc_is_unique is true exactly when refcount == 1', async () => {
         const ex = await compileAndRun({
             test_fresh_is_unique: `{
-                @local r:Int := &rc_new 1;
+                @local r := &rc_new 1;
                 &@if (&rc_is_unique r), { 1 }, { 0 }
             }`,
             test_clone_not_unique: `{
-                @local r:Int := &rc_new 1;
-                @local r2:Int := &rc_clone r;
+                @local r := &rc_new 1;
+                @local r2 := &rc_clone r;
                 &@if (&rc_is_unique r), { 1 }, { 0 }
             }`,
             test_drop_back_to_unique: `{
-                @local r:Int := &rc_new 1;
-                @local r2:Int := &rc_clone r;
+                @local r := &rc_new 1;
+                @local r2 := &rc_clone r;
                 &rc_drop r2;
                 &@if (&rc_is_unique r), { 1 }, { 0 }
             }`,
@@ -121,9 +121,9 @@ describe('Phase 9c Tier B: Rc smart pointer — core lifecycle', () => {
     test('rc_get returns the boxed value regardless of refcount', async () => {
         const ex = await compileAndRun({
             test_get_after_clones: `{
-                @local r:Int := &rc_new 1234;
-                @local r2:Int := &rc_clone r;
-                @local r3:Int := &rc_clone r;
+                @local r := &rc_new 1234;
+                @local r2 := &rc_clone r;
+                @local r3 := &rc_clone r;
                 (&rc_get r) + (&rc_get r2) + (&rc_get r3)
             }`,
         })
@@ -137,9 +137,9 @@ describe('Phase 9c Tier B: Rc — multi-owner lifecycle', () => {
         // Owner counts: new=1, clone→2, clone→3, drop→2, drop→1.
         const ex = await compileAndRun({
             test_three_owner_dance: `{
-                @local r:Int := &rc_new 555;
-                @local b:Int := &rc_clone r;
-                @local c:Int := &rc_clone r;
+                @local r := &rc_new 555;
+                @local b := &rc_clone r;
+                @local c := &rc_clone r;
                 &rc_drop b;
                 &rc_drop c;
                 &rc_count r
@@ -151,8 +151,8 @@ describe('Phase 9c Tier B: Rc — multi-owner lifecycle', () => {
     test('value is preserved across the clone+drop dance', async () => {
         const ex = await compileAndRun({
             test_value_preserved: `{
-                @local r:Int := &rc_new 4321;
-                @local b:Int := &rc_clone r;
+                @local r := &rc_new 4321;
+                @local b := &rc_clone r;
                 &rc_drop b;
                 &rc_get r
             }`,
@@ -170,7 +170,7 @@ describe('Phase 9c Tier B: Rc + @defer composition (stratum power demo)', () => 
         // 1 (after new) and that the function returns cleanly.
         const ex = await compileAndRun({
             test_defer_drops: `{
-                @local r:Int := &rc_new 11;
+                @local r := &rc_new 11;
                 &@defer &rc_drop r;
                 &rc_count r
             }`,
@@ -184,11 +184,11 @@ describe('Phase 9c Tier B: Rc + @defer composition (stratum power demo)', () => 
         // We capture pre-defer state (count == 3) as the return value.
         const ex = await compileAndRun({
             test_three_defers: `{
-                @local a:Int := &rc_new 1;
+                @local a := &rc_new 1;
                 &@defer &rc_drop a;
-                @local b:Int := &rc_clone a;
+                @local b := &rc_clone a;
                 &@defer &rc_drop b;
-                @local c:Int := &rc_clone a;
+                @local c := &rc_clone a;
                 &@defer &rc_drop c;
                 &rc_count a
             }`,
@@ -206,14 +206,14 @@ describe('Phase 9c Tier B: Rc + &@with_arena composition', () => {
         // before/after; should be equal.
         const ex = await compileAndRun({
             test_arena_frees_rc: `{
-                @local before:Int := &heap_get;
+                @local before := &heap_get;
                 &@with_arena {
-                    @local r:Int := &rc_new 99;
-                    @local r2:Int := &rc_clone r;
-                    @local r3:Int := &rc_clone r;
+                    @local r := &rc_new 99;
+                    @local r2 := &rc_clone r;
+                    @local r3 := &rc_clone r;
                     # deliberately do NOT drop — arena cleanup wins
                 };
-                @local after:Int := &heap_get;
+                @local after := &heap_get;
                 after - before
             }`,
         })
@@ -226,7 +226,7 @@ describe('Phase 9c Tier B: Rc + &@with_arena composition', () => {
         // Promoted Rc has [count:i32, value:i32].
         const ex = await compileAndRun({
             test_promote_rc_value: `&@with_arena {
-                @local r:Int := &rc_new 777;
+                @local r := &rc_new 777;
                 &@move_to_parent_arena r
             }`,
         })
@@ -245,8 +245,8 @@ describe('Phase 9c Tier B: Rc with heap-pointer payloads (String)', () => {
         // address and store it in the Rc payload.
         const ex = await compileAndRun({
             test_rc_string: `{
-                @local s:String := 'hello';
-                @local r:Int := &rc_new (&str_ptr s);
+                @local s := 'hello';
+                @local r := &rc_new (&str_ptr s);
                 &WASM::i32_load ((&rc_get r) + 4)
             }`,
         })

@@ -39,7 +39,7 @@ describe('Symbol.definitionSpan', () => {
     })
 
     test('definitionSpan.col points at the name identifier', () => {
-        //  @fn answer:Int := { 42 };
+        //  @fn answer := { 42 };
         //      ^--- col of "answer"
         const src = '\\\\ answer () -> Int\n@fn answer  := { 42 };'
         const model = modelFor(src)
@@ -117,7 +117,7 @@ describe('SemanticModel.referenceSpans()', () => {
 
 describe('SemanticModel.symbolAtPosition()', () => {
     test('finds symbol at its definition site', () => {
-        //  @fn answer:Int := { 42 };
+        //  @fn answer := { 42 };
         //      ^---- col 5, "answer" (length 6, so cols 5-10)
         const model = modelFor('\\\\ answer () -> Int\n@fn answer  := { 42 };')
         const sym = model.symbolAtPosition(1, 5)
@@ -143,7 +143,7 @@ describe('SemanticModel.symbolAtPosition()', () => {
     test('finds symbol at a reference site', () => {
         const src = '\\\\ f () -> Int\n@fn f  := { 1 };\n@let r := &f;'
         const model = modelFor(src)
-        // line 2: '@let r:Int := &f;'
+        // line 2: '@let r := &f;'
         //                         ^ 'f' is at some column on line 2
         const sym = model.symbolAtPosition(2, 16)
         expect(sym).toBeDefined()
