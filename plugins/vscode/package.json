@@ -76,18 +76,18 @@
     "vscode:prepublish": "bun run build",
     "build": "bun run build:client && bun run build:server",
     "build:client": "bun build ./client/src/extension.ts --outdir ./client/dist --target node --external vscode",
-    "build:server": "bun build ./lsp/src/index.ts --outdir ./lsp/dist --target node --format esm && cp ./src/codegen/std.wat ./lsp/dist/std.wat && cp ./src/grammar/silicon-official.ohm ./lsp/dist/silicon-official.ohm",
-    "test:server": "bun test lsp/src/smoke.test.ts"
+    "build:server": "bun build ../../lsp/src/index.ts --outdir ./lsp/dist --target node --format esm && cp ../../compiler/src/codegen/std.wat ./lsp/dist/std.wat && cp ../../compiler/src/grammar/silicon-official.ohm ./lsp/dist/silicon-official.ohm",
+    "test:server": "bun --cwd ../../lsp test"
+  },
+  "dependencies": {
+    "@silicon/lsp": "workspace:*"
   },
   "devDependencies": {
     "@types/bun": "latest",
     "@types/node": "^20.14.2",
     "@types/vscode": "^1.70.0",
     "@vscode/vsce": "^3.9.1",
-    "ohm-js": "^17.1.0",
-    "vscode-languageclient": "^9.0.1",
-    "vscode-languageserver": "^9.0.1",
-    "vscode-languageserver-textdocument": "^1.0.12"
+    "vscode-languageclient": "^9.0.1"
   },
   "peerDependencies": {
     "typescript": "^5.0.0"

@@ -1,9 +1,0 @@
-{
-  "name": "web",
-  "version": "1.0.0",
-  "features": [
-    { "name": "canvas", "file": "canvas.si",  "runtime": "canvas" },
-    { "name": "game",   "file": "game.si",    "runtime": "game",  "requiresExport": "tick" },
-    { "name": "dom",    "file": "dom.si",     "runtime": "dom" }
-  ]
-}

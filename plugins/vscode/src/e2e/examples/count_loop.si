@@ -1,5 +1,0 @@
-@fn countTo5 := {
-    @var n:Int := 0;
-    &@loop n < 5, { n = n + 1; };
-    n
-};
