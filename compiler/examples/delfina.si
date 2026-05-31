@@ -1,0 +1,25 @@
+# Show my beautiful girlfriend my language.
+#
+# wasmtime is a WASI runtime — there is no console_log.  Instead we
+# write to stdout (fd 1) via the WASI fd_write surface, wrapped in
+# boot/std/io.si :: write_str.
+#
+# io.si calls into wasi_snapshot_preview1 but doesn't declare the
+# externs itself, so any program that pulls io.si in via @use has
+# to declare every extern that io.si references — even ones the
+# user code never calls directly (the compiled WAT for the unused
+# wrappers still references them).
+@extern wasi_snapshot_preview1::fd_write:Int
+  fd:Int, iovs_ptr:Int, iovs_len:Int, nwritten_out:Int;
+@extern wasi_snapshot_preview1::fd_read:Int
+  fd:Int, iovs_ptr:Int, iovs_len:Int, nread_out:Int;
+@extern wasi_snapshot_preview1::proc_exit
+  code:Int;
+
+@use '../boot/std/io.si';
+
+@let name:String := 'Delfina';
+
+## Print Delfina's name + newline to stdout.
+&write_str  1, name;
+&write_byte 1, 10;

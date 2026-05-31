@@ -1,0 +1,332 @@
+// SPDX-License-Identifier: MIT
+/**
+ * Elaborator Tests
+ *
+ * Tests for the elaboration pass:
+ * - Registry building from @stratum definitions
+ * - Semantic attachment to BinOp nodes
+ * - Recursive elaboration of nested structures
+ */
+
+import { test, expect } from "bun:test"
+import elaborate from "./elaborator"
+import {
+  ASTFactory,
+  type Program,
+  type ExpressionStart,
+  type ExpressionEnd,
+  type IntLiteral,
+  type Namespace,
+  type BinOp,
+  type Element,
+  type Item,
+  type Statement,
+  type Assignment,
+} from "../ast/astNodes"
+import { StrataType } from "./strataenum"
+
+/**
+ * Helper: Create a simple binary operation AST
+ * Represents: 1 + 2
+ */
+function createSimpleBinOpAST(): Program {
+  const left = ASTFactory.intLiteral('1', 'decimal')
+  const leftLit = ASTFactory.literal('int', left)
+  const leftExpEnd = ASTFactory.expressionEnd('literal', leftLit)
+  const leftExp = ASTFactory.expressionStart('expressionEnd', leftExpEnd)
+
+  const right = ASTFactory.intLiteral('2', 'decimal')
+  const rightLit = ASTFactory.literal('int', right)
+  const rightExpEnd = ASTFactory.expressionEnd('literal', rightLit)
+
+  const binOp = ASTFactory.binOp(leftExp, '+', rightExpEnd)
+  const exp = ASTFactory.expressionStart('binOp', binOp)
+
+  const item = ASTFactory.item('expression', exp)
+  const stmt = ASTFactory.statement('definition', {
+    type: 'Definition',
+    keyword: '@test',
+    name: ASTFactory.typedIdentifier('test'),
+    params: []
+  })
+  const element = ASTFactory.element('item', item)
+
+  return ASTFactory.program([element])
+}
+
+/**
+ * Helper: Create a binary operation AST with custom operator
+ * Represents: 1 @@@ 2 (using a custom operator not in builtins)
+ */
+function createCustomOpBinOpAST(): Program {
+  const left = ASTFactory.intLiteral('1', 'decimal')
+  const leftLit = ASTFactory.literal('int', left)
+  const leftExpEnd = ASTFactory.expressionEnd('literal', leftLit)
+  const leftExp = ASTFactory.expressionStart('expressionEnd', leftExpEnd)
+
+  const right = ASTFactory.intLiteral('2', 'decimal')
+  const rightLit = ASTFactory.literal('int', right)
+  const rightExpEnd = ASTFactory.expressionEnd('literal', rightLit)
+
+  const binOp = ASTFactory.binOp(leftExp, '@@@', rightExpEnd)
+  const exp = ASTFactory.expressionStart('binOp', binOp)
+
+  const item = ASTFactory.item('expression', exp)
+  const stmt = ASTFactory.statement('definition', {
+    type: 'Definition',
+    keyword: '@test',
+    name: ASTFactory.typedIdentifier('test'),
+    params: []
+  })
+  const element = ASTFactory.element('item', item)
+
+  return ASTFactory.program([element])
+}
+
+
+// Test 1: elaborate is a function
+test("elaborate is a function", () => {
+  expect(typeof elaborate).toBe('function')
+})
+
+// Test 2: accepts a Program AST and returns a Program
+test("elaborate accepts a Program AST and returns a Program", () => {
+  const ast = createSimpleBinOpAST()
+  const { program: result } = elaborate(ast)
+  expect(result.type).toBe('Program')
+  expect(Array.isArray(result.elements)).toBe(true)
+})
+
+// Test 3: preserves AST structure when no elaborators found
+test("elaborate preserves AST structure when no elaborators found", () => {
+  const ast = createSimpleBinOpAST()
+  const { program: result } = elaborate(ast)
+  expect(result.elements.length).toBe(ast.elements.length)
+})
+
+// Test 4: does not crash on empty program
+test("elaborate does not crash on empty program", () => {
+  const emptyProgram = ASTFactory.program([])
+  const { program: result } = elaborate(emptyProgram)
+  expect(result.type).toBe('Program')
+  expect(result.elements.length).toBe(0)
+})
+
+// Test 5: leaves BinOp semantics undefined when operator not registered
+test("elaborate leaves BinOp semantics undefined when operator not registered", () => {
+  const ast = createCustomOpBinOpAST()
+  const { program: result } = elaborate(ast)
+
+  // Extract the BinOp from the result
+  const firstElement = result.elements[0]
+  if (firstElement.kind === 'item') {
+    const item = firstElement.value as Item
+    if (item.kind === 'expression') {
+      const expr = item.value as ExpressionStart
+      if (expr.kind === 'binOp') {
+        const binOp = expr.value as BinOp
+        // Should be undefined since no elaborator was registered
+        expect(binOp.semantics).toBeUndefined()
+      }
+    }
+  }
+})
+
+// Test 6 (legacy Elaboration-based attach-semantics test) removed by the
+// Phase 5 grammar revision.  Equivalent coverage for the unified
+// @stratum form lives in src/elaborator/strata2.test.ts.
+
+// Test 7: elaborates nested expressions
+test("elaborate elaborates nested expressions", () => {
+  // Create: (1 + 2) + 3
+  // This requires two binary operations
+
+  const left2 = ASTFactory.intLiteral('1', 'decimal')
+  const leftLit2 = ASTFactory.literal('int', left2)
+  const leftExpEnd2 = ASTFactory.expressionEnd('literal', leftLit2)
+  const leftExp2 = ASTFactory.expressionStart('expressionEnd', leftExpEnd2)
+
+  const middle2 = ASTFactory.intLiteral('2', 'decimal')
+  const middleLit = ASTFactory.literal('int', middle2)
+  const middleExpEnd = ASTFactory.expressionEnd('literal', middleLit)
+
+  const innerBinOp = ASTFactory.binOp(leftExp2, '+', middleExpEnd)
+  const innerExp = ASTFactory.expressionStart('binOp', innerBinOp)
+
+  const right2 = ASTFactory.intLiteral('3', 'decimal')
+  const rightLit2 = ASTFactory.literal('int', right2)
+  const rightExpEnd2 = ASTFactory.expressionEnd('literal', rightLit2)
+
+  const outerBinOp = ASTFactory.binOp(innerExp, '+', rightExpEnd2)
+  const outerExp = ASTFactory.expressionStart('binOp', outerBinOp)
+
+  const item2 = ASTFactory.item('expression', outerExp)
+  const element2 = ASTFactory.element('item', item2)
+  const program2 = ASTFactory.program([element2])
+
+  const { program: result2 } = elaborate(program2)
+  expect(result2.type).toBe('Program')
+  // Just verify it doesn't crash and produces a valid AST
+})
+
+// Test 8 (legacy Elaboration-extraction test) removed by the Phase 5
+// grammar revision — strata2.test.ts covers @stratum extraction.
+
+// Test 9: builtin elaborators are registered
+test("elaborate registers builtin elaborators for arithmetic operators", () => {
+  const ast = createSimpleBinOpAST()
+  const { program: result } = elaborate(ast)
+
+  // Extract the BinOp from the result
+  const firstElement = result.elements[0]
+  if (firstElement.kind === 'item') {
+    const item = firstElement.value as Item
+    if (item.kind === 'expression') {
+      const expr = item.value as ExpressionStart
+      if (expr.kind === 'binOp') {
+        const binOp = expr.value as BinOp
+        // The + operator should be found in builtins and have semantics
+        expect(binOp.semantics).toBeDefined()
+        expect(binOp.semantics?.discriminant).toBe('+')
+      }
+    }
+  }
+})
+
+// Test: @let definition gets hook = 'stratum_def' after elaboration (D-D-11b migrated)
+test("elaborate sets hook 'stratum_def' on @let Definition (D-D-11b migrated)", () => {
+  const def = ASTFactory.definition('@let', ASTFactory.typedIdentifier('add'), [], undefined, undefined)
+  const stmt = ASTFactory.statement('definition', def)
+  const item = ASTFactory.item('statement', stmt)
+  const element = ASTFactory.element('item', item)
+  const program = ASTFactory.program([element])
+
+  const { program: result } = elaborate(program)
+
+  const el = result.elements[0] as any
+  const elaboratedDef = el.value.value.value
+  expect(elaboratedDef.type).toBe('Definition')
+  expect(elaboratedDef.hook).toBe('stratum_def')
+})
+
+// Test: unknown definition keyword produces an elaboration error
+test("elaborate sets hook false on unknown definition keyword", () => {
+  const def = ASTFactory.definition('@unknown', ASTFactory.typedIdentifier('foo'), [], undefined, undefined)
+  const stmt = ASTFactory.statement('definition', def)
+  const item = ASTFactory.item('statement', stmt)
+  const element = ASTFactory.element('item', item)
+  const program = ASTFactory.program([element])
+
+  const { errors } = elaborate(program)
+
+  expect(errors.length).toBeGreaterThan(0)
+  expect(errors[0].keyword).toBe('@unknown')
+  expect(errors[0].message).toContain('Unknown definition keyword')
+})
+
+// D-D-11b migrated: @let/@fn now use codegenKind 'stratum_def'.  The
+// engine's synthesised @fn still gets hook='function' via the elaborator's
+// preserve-pre-stamped-hook path (see elaborator.ts:182 comment).
+test("elaborate registry contains @let def-kind (D-D-11b migrated)", () => {
+  const program = ASTFactory.program([])
+  const { registry } = elaborate(program)
+  expect(registry.defKinds['@let']).toBeDefined()
+  expect(registry.defKinds['@let'].codegenKind).toBe('stratum_def')
+})
+
+test("elaborate registry contains @fn def-kind (D-D-11b migrated)", () => {
+  const program = ASTFactory.program([])
+  const { registry } = elaborate(program)
+  expect(registry.defKinds['@fn']).toBeDefined()
+  expect(registry.defKinds['@fn'].codegenKind).toBe('stratum_def')
+})
+
+// Test: defKinds registry is populated with @var (D-D-11c migrated)
+test("elaborate registry contains @var def-kind (D-D-11c migrated)", () => {
+  const program = ASTFactory.program([])
+  const { registry } = elaborate(program)
+  expect(registry.defKinds['@var']).toBeDefined()
+  expect(registry.defKinds['@var'].codegenKind).toBe('stratum_def')
+})
+
+test("elaborate registers @if as a keyword stratum (D-D-2: new @stratum form)", () => {
+  // D-D-2 migration: @if rewritten to the new @stratum + @fn-handler form.
+  // The keyword is still registered, and the lowerer / typechecker now
+  // dispatch via the on::lower handler instead of the legacy `IR::control_if`
+  // intrinsic marker (which is no longer set in the new form).
+  const program = ASTFactory.program([])
+  const { registry } = elaborate(program)
+  const entry = registry.keywords['@if']
+  expect(entry).toBeDefined()
+  expect(registry.handlers.lower.has('@if')).toBe(true)
+})
+
+test("elaborate registers @loop as keyword stratum (D-D-9 migrated)", () => {
+  const program = ASTFactory.program([])
+  const { registry } = elaborate(program)
+  const entry = registry.keywords['@loop']
+  expect(entry).toBeDefined()
+  expect(registry.handlers.lower.has('@loop')).toBe(true)
+})
+
+// Test 10: builtin elaborators for various operators
+test("elaborate: @if registered (D-D-2 migrated — StrataType.Keyword in new form)", () => {
+  // D-D-2 migration: @if now registers via register::expression_keyword.
+  // The new-form stub uses StrataType.Keyword; legacy form used Control.
+  const { registry } = elaborate(ASTFactory.program([]))
+  expect(registry.keywords['@if']).toBeDefined()
+  expect(registry.keywords['@if'].type).toBe(StrataType.Keyword)
+})
+
+test("elaborate: @let registered (D-D-11b migrated; StrataType.Keyword in new form)", () => {
+  const { registry } = elaborate(ASTFactory.program([]))
+  expect(registry.keywords['@let']).toBeDefined()
+  expect(registry.keywords['@let'].type).toBe(StrataType.Keyword)
+})
+
+test("elaborate: '+' operator strata is registered (D-D-7a migrated; StrataType.Keyword)", () => {
+  // D-D-7a: '+' migrated to new @stratum form via register::operator.
+  // The new-form stub uses StrataType.Keyword (the legacy expression-form
+  // type); legacy '@stratum_operator' set StrataType.Operator.
+  const { registry } = elaborate(ASTFactory.program([]))
+  expect(registry.operators['+']).toBeDefined()
+  expect(registry.handlers.lower.has('+')).toBe(true)
+})
+
+// Test 10: builtin elaborators for various operators
+test("elaborate registers builtin elaborators for multiple operators", () => {
+  const operators = ['+', '-', '*', '/', '%', '==', '!=', '<', '>', '<=', '>=']
+
+  for (const op of operators) {
+    const left = ASTFactory.intLiteral('1', 'decimal')
+    const leftLit = ASTFactory.literal('int', left)
+    const leftExpEnd = ASTFactory.expressionEnd('literal', leftLit)
+    const leftExp = ASTFactory.expressionStart('expressionEnd', leftExpEnd)
+
+    const right = ASTFactory.intLiteral('2', 'decimal')
+    const rightLit = ASTFactory.literal('int', right)
+    const rightExpEnd = ASTFactory.expressionEnd('literal', rightLit)
+
+    const binOp = ASTFactory.binOp(leftExp, op, rightExpEnd)
+    const exp = ASTFactory.expressionStart('binOp', binOp)
+    const item = ASTFactory.item('expression', exp)
+    const element = ASTFactory.element('item', item)
+    const program = ASTFactory.program([element])
+
+    const { program: result } = elaborate(program)
+
+    // Extract and verify semantics are attached
+    const resultElement = result.elements[0]
+    if (resultElement.kind === 'item') {
+      const resultItem = resultElement.value as Item
+      if (resultItem.kind === 'expression') {
+        const resultExpr = resultItem.value as ExpressionStart
+        if (resultExpr.kind === 'binOp') {
+          const resultBinOp = resultExpr.value as BinOp
+          expect(resultBinOp.semantics).toBeDefined()
+          expect(resultBinOp.semantics?.discriminant).toBe(op)
+        }
+      }
+    }
+  }
+})

@@ -1,0 +1,1898 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Sigil 1.0 — Bootstrap Requirements</title>
+  <style>
+    :root {
+      --bg: #0f1117;
+      --surface: #1a1d27;
+      --surface2: #222535;
+      --border: #2e3248;
+      --accent: #6c8ef7;
+      --accent2: #b06cf7;
+      --accent3: #3ecf8e;
+      --accent4: #f7a06c;
+      --accent5: #f76c6c;
+      --accent6: #f7e36c;
+      --text: #dde1f0;
+      --muted: #7b82a8;
+      --code-bg: #13151f;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.55;
+      padding: 32px 24px;
+    }
+    .page { max-width: 1100px; margin: 0 auto; }
+    h1 { font-size: 1.9rem; color: var(--accent); margin-bottom: 6px; }
+    h2 { font-size: 1.35rem; color: var(--accent2); margin: 40px 0 12px; border-bottom: 1px solid var(--border); padding-bottom: 6px; }
+    h3 { font-size: 1.05rem; color: var(--accent3); margin: 22px 0 8px; }
+    h4 { font-size: 0.96rem; color: var(--accent4); margin: 16px 0 6px; }
+    p  { margin-bottom: 10px; color: var(--text); font-size: 0.93rem; }
+    .subtitle { color: var(--muted); font-size: 0.95rem; margin-bottom: 24px; }
+    .legend { background: var(--surface2); border: 1px solid var(--border); border-radius: 8px; padding: 12px 18px; margin: 14px 0 24px; font-size: 0.85rem; }
+    .legend code { background: var(--code-bg); padding: 1px 6px; border-radius: 4px; }
+    pre {
+      background: var(--code-bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 10px 12px;
+      overflow-x: auto;
+      font-family: 'Cascadia Code', 'Fira Code', 'Consolas', monospace;
+      font-size: 0.78rem;
+      line-height: 1.5;
+      margin: 6px 0;
+    }
+    code { font-family: 'Cascadia Code', 'Fira Code', 'Consolas', monospace; font-size: 0.85em; background: var(--code-bg); padding: 1px 5px; border-radius: 4px; }
+    .verdict {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-left: 4px solid var(--accent3);
+      border-radius: 6px;
+      padding: 14px 18px;
+      margin: 16px 0 24px;
+      font-size: 0.95rem;
+    }
+    .verdict strong { color: var(--accent3); }
+    .risk {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-left: 4px solid var(--accent5);
+      border-radius: 6px;
+      padding: 12px 16px;
+      margin: 10px 0;
+    }
+    .risk.hard { border-left-color: var(--accent5); }
+    .risk.arch { border-left-color: var(--accent4); }
+    .risk.cleanup { border-left-color: var(--accent6); }
+    .risk.debt { border-left-color: var(--accent2); }
+    .risk h4 { margin-top: 0; }
+    .risk .meta { font-size: 0.82rem; color: var(--muted); margin: 6px 0 8px; }
+    .risk .meta strong { color: var(--accent); }
+    .risk .action { background: var(--surface2); border-radius: 4px; padding: 8px 12px; margin-top: 10px; font-size: 0.88rem; }
+    .risk .action strong { color: var(--accent3); }
+    .risk .evidence { font-size: 0.84rem; color: var(--muted); font-style: italic; margin: 4px 0; }
+    .toc { background: var(--surface2); border: 1px solid var(--border); border-radius: 8px; padding: 12px 18px; margin: 14px 0 28px; }
+    .toc h3 { margin-top: 0; color: var(--accent); font-size: 0.82rem; text-transform: uppercase; letter-spacing: 0.08em; }
+    .toc ol { padding-left: 18px; font-size: 0.9rem; }
+    .toc a { color: var(--text); text-decoration: none; border-bottom: 1px dotted var(--muted); }
+    .toc a:hover { color: var(--accent); border-bottom-color: var(--accent); }
+    table { width: 100%; border-collapse: collapse; margin: 8px 0; font-size: 0.85rem; }
+    th { background: var(--surface2); color: var(--accent); padding: 6px 10px; text-align: left; border: 1px solid var(--border); }
+    td { padding: 6px 10px; border: 1px solid var(--border); vertical-align: top; }
+    .sev-high { color: var(--accent5); font-weight: 700; }
+    .sev-med  { color: var(--accent4); font-weight: 700; }
+    .sev-low  { color: var(--accent6); font-weight: 700; }
+    .est { color: var(--muted); font-size: 0.85em; background: var(--surface2); padding: 1px 8px; border-radius: 10px; }
+    .phase-intro { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 12px 18px; margin: 12px 0 18px; font-size: 0.9rem; }
+    ol.steps { padding-left: 22px; margin: 10px 0; }
+    ol.steps li { margin-bottom: 8px; font-size: 0.92rem; }
+    ol.steps li strong { color: var(--accent); }
+    .step-block { background: var(--surface); border: 1px solid var(--border); border-radius: 6px; padding: 12px 16px; margin: 10px 0; }
+    .step-block h4 { color: var(--accent); margin-top: 0; }
+    ul.detail { padding-left: 22px; font-size: 0.88rem; color: var(--text); }
+    ul.detail li { margin-bottom: 4px; }
+    .file-ref { color: var(--accent); font-family: monospace; font-size: 0.85em; }
+    .crit { color: var(--accent5); font-weight: 600; }
+    .ok { color: var(--accent3); font-weight: 600; }
+    .diagram-block {
+      background: var(--code-bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 14px 18px;
+      margin: 14px 0;
+      overflow-x: auto;
+    }
+    .diagram-block pre {
+      background: transparent;
+      border: none;
+      padding: 0;
+      margin: 0;
+      font-size: 0.76rem;
+      line-height: 1.45;
+      color: var(--text);
+      white-space: pre;
+    }
+    .diagram-caption {
+      font-size: 0.84rem;
+      color: var(--muted);
+      margin-top: 8px;
+      font-style: italic;
+    }
+    .diagram-caption strong { color: var(--accent4); }
+    .api-block {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 12px 16px;
+      margin: 12px 0;
+    }
+    .api-block h4 {
+      margin-top: 0;
+      color: var(--accent);
+      font-family: 'Cascadia Code', 'Fira Code', 'Consolas', monospace;
+      font-size: 0.92rem;
+    }
+    .api-block .sig {
+      background: var(--code-bg);
+      border-left: 3px solid var(--accent);
+      padding: 8px 12px;
+      margin: 6px 0 10px;
+      font-family: 'Cascadia Code', 'Fira Code', 'Consolas', monospace;
+      font-size: 0.82rem;
+      color: var(--text);
+      overflow-x: auto;
+    }
+    .api-block .desc { font-size: 0.88rem; color: var(--text); }
+    .api-block .stability {
+      display: inline-block;
+      font-size: 0.72rem;
+      padding: 1px 8px;
+      border-radius: 10px;
+      margin-left: 6px;
+      font-family: 'Cascadia Code', monospace;
+    }
+    .stability.stable   { background: rgba(62,207,142,0.15); color: var(--accent3); border: 1px solid var(--accent3); }
+    .stability.internal { background: rgba(247,160,108,0.15); color: var(--accent4); border: 1px solid var(--accent4); }
+    .stability.risk     { background: rgba(247,108,108,0.15); color: var(--accent5); border: 1px solid var(--accent5); }
+    .legend-strip {
+      display: flex;
+      gap: 14px;
+      flex-wrap: wrap;
+      font-size: 0.78rem;
+      color: var(--muted);
+      margin: 10px 0;
+      padding: 8px 12px;
+      background: var(--surface2);
+      border-radius: 6px;
+    }
+    .legend-strip span code { background: var(--code-bg); padding: 0 4px; border-radius: 3px; }
+  </style>
+</head>
+<body>
+<div class="page">
+
+<h1>Sigil 1.0 — Bootstrap Requirements</h1>
+<p class="subtitle">
+  Audit of <code>src/</code> TypeScript compiler gaps that must be resolved before
+  porting to <code>boot/</code> Silicon and permanently deleting <code>src/</code>.
+  Date: 2026-05-26.  Companion to
+  <a href="v1-user-stories.html" style="color: var(--accent);">v1-user-stories.html</a>
+  (Phase 7 boot/ port) and <a href="api-boundaries.md" style="color: var(--accent);">api-boundaries.md</a>.
+</p>
+
+<div class="verdict">
+  <strong>Verdict.</strong>  <code>src/</code> is roughly <strong>80% ready</strong> to be the
+  spec for a permanent boot/ port, but <strong>eight unresolved items</strong>
+  — if not closed first — will force expensive re-litigation in Silicon syntax later.
+  Three are <span class="sev-high">hard blockers</span> (architectural decisions
+  baked into surface contracts), three are <span class="sev-med">surface
+  stability issues</span> (decisions you'll regret leaving open), and two are
+  <span class="sev-low">completion debt</span> (things known-broken in src/
+  that boot/ would inherit).  None individually are large; collectively they're
+  <strong>~2–3 weeks of focused work</strong>.
+  <br/><br/>
+  The single biggest hidden risk is <strong><code>@generic</code>
+  monomorphization</strong>: it has 4/4 + 5/6 skipped tests in src/.  It is
+  <em>not</em> working end-to-end.  If you port the current shape to boot/, you
+  bake a non-functional surface into the self-host gate.
+</div>
+
+<div class="toc">
+  <h3>Contents</h3>
+  <ol>
+    <li><a href="#methodology">Audit methodology &amp; scope</a></li>
+    <li><a href="#hard-blockers">Hard blockers — architectural decisions</a></li>
+    <li><a href="#arch-decisions">Architectural decisions still pending</a></li>
+    <li><a href="#cleanup">Surface cleanup before port</a></li>
+    <li><a href="#debt">Completion debt boot/ would inherit</a></li>
+    <li><a href="#what-can-port-now">What is already safe to port</a></li>
+    <li><a href="#sequence">Recommended sequence</a></li>
+    <li><a href="#delete-gate">Gate criteria for deleting <code>src/</code></a></li>
+    <li><a href="#summary-table">Summary risk table</a></li>
+    <li><a href="#caas-api">CaaS API reference</a> <span style="color: var(--muted); font-size: 0.78em;">(appendix)</span></li>
+    <li><a href="#diagrams">Detailed architectural diagrams</a> <span style="color: var(--muted); font-size: 0.78em;">(appendix)</span></li>
+  </ol>
+  <p style="margin-top: 10px; font-size: 0.82rem; color: var(--muted);">
+    <strong style="color: var(--accent4);">Visual orientation:</strong>
+    See the <a href="#problem-map" style="color: var(--accent);">problem-map diagram</a> below for a one-page view of where the issues live in the compilation pipeline.
+  </p>
+</div>
+
+<!-- ================================================================== -->
+<h2 id="problem-map" style="color: var(--accent4);">Problem map — at a glance</h2>
+
+<p style="margin-bottom: 10px;">
+  The diagram below shows the full <code>src/</code> pipeline.  Each problem from
+  this audit is annotated in red at the stage where it lives.  The detailed
+  diagrams in the <a href="#diagrams">appendix</a> drill into each problem
+  individually.
+</p>
+
+<div class="legend-strip">
+  <span><code style="color: var(--accent3);">✓</code> stable / ready to port</span>
+  <span><code style="color: var(--accent6);">🟡</code> partial / decisions pending</span>
+  <span><code style="color: var(--accent5);">🔴</code> hard blocker / known broken</span>
+</div>
+
+<div class="diagram-block">
+<pre>
+                            SILICON SOURCE (.si)
+                                    │
+              ┌─────────────────────┴─────────────────────┐
+              │                                           │
+              ▼                                           ▼
+       ┌──────────────┐                            ┌──────────────┐
+       │   src/       │                            │   boot/      │
+       │   Ohm parse  │  ✓                         │   parse.si   │  🔴 5a
+       │              │                            │  ~40% cov   │
+       └──────┬───────┘                            └──────┬───────┘
+              │                                           │
+              ▼                                           ▼
+       ┌──────────────┐                            ┌──────────────┐
+       │  Build       │                            │  Build       │
+       │  Strata      │  ✓                         │  Strata      │  🟡 7a partial
+       │  Registry    │                            │  Registry    │  (Phase 7)
+       └──────┬───────┘                            └──────────────┘
+              │
+              ▼
+       ┌─────────────────────────────────────────┐
+       │           ELABORATOR                    │
+       │  ┌───────────────────────────────────┐  │
+       │  │ legacyBlockTranslator             │  │  🔴 2b — load-bearing transitional
+       │  │   &amp;Compiler::* → &amp;compiler::*   │  │      17 skipped strata2 tests
+       │  └───────────────────────────────────┘  │
+       │  ┌───────────────────────────────────┐  │
+       │  │ Phase hooks fire:                 │  │  ✓ all 5 wired
+       │  │   on::decl / callSite /           │  │
+       │  │   annotation / lower /            │  │
+       │  │   module_finalize / comptime      │  │
+       │  └───────────────────────────────────┘  │
+       │  ┌───────────────────────────────────┐  │
+       │  │ @generic monomorphization         │  │  🔴 2a — 4/4 + 5/6 skipped
+       │  │   stratum                         │  │      not shipping E2E
+       │  └───────────────────────────────────┘  │
+       └────────────────┬────────────────────────┘
+                        │
+                        ▼
+       ┌─────────────────────────────────────────┐
+       │  COMPTIME ENGINE (bridge pattern)       │
+       │   Handler @fn → WASM → instantiate      │  🔴 2c — import surface
+       │   ↘ fallback: AST interpreter (deleted) │      incomplete; handlers
+       │                                          │      using ast::clone etc.
+       │                                          │      crash today
+       └────────────────┬────────────────────────┘
+                        │
+                        ▼
+       ┌─────────────────────────────────────────┐
+       │  TYPECHECK (HM-lite)         ✓          │
+       │    unify · applySubst · instantiate     │
+       │    SemanticModel built                  │
+       └────────────────┬────────────────────────┘
+                        │
+                        ▼
+       ┌─────────────────────────────────────────┐
+       │  IR LOWER (lower.ts)         ✓          │
+       │    AbstractOp · backend-agnostic        │
+       │    (Phase 9.5 shipped)                  │
+       └────────────────┬────────────────────────┘
+                        │
+       ┌────────────────┼────────────────┬─────────────────────┐
+       ▼                ▼                ▼                     ▼
+┌────────────┐  ┌──────────────┐  ┌───────────────┐    ┌───────────────┐
+│  WAT text  │  │ WASM binary  │  │   QBE IR      │    │ (no uniform   │
+│  emit.ts   │  │ wasm-emitter │  │  qbe/lower.ts │    │  Backend&lt;T&gt;  │
+│     ✓      │  │  🟡 3c       │  │   🟡 4a       │    │  interface)   │
+│            │  │  funcref →   │  │  ~65% feature │    │   🟡 3a       │
+│            │  │  WAT fallback│  │  missing str  │    │               │
+│            │  │              │  │  struct, cast │    │ 3 ad-hoc      │
+│            │  │              │  │  @extern,defer│    │ entry points  │
+└────────────┘  └──────────────┘  └───────────────┘    └───────────────┘
+                                                          (boot/ port
+                                                           inherits
+                                                           ad-hoc shape)
+</pre>
+<p class="diagram-caption">
+  <strong>Legend.</strong>  Annotation codes (2a, 2b, 3c, …) reference the
+  detailed sections of this document.  The two columns at the top show that
+  src/ and boot/ are in two different states for the parser; everything below
+  the elaborator is single-track (src/-only today).
+</p>
+</div>
+
+<div class="diagram-block">
+<pre>
+                       CAAS PUBLIC API SURFACE (src/api.ts)
+                       ────────────────────────────────────
+
+   ┌─────────────────────────────────────────────────────────────┐
+   │                       Workspace                              │
+   │   ┌─────────────────────────────────────────────────────┐    │
+   │   │ openDocument · editDocument · closeDocument         │    │
+   │   │ onDidChange (subscribe)                             │    │
+   │   │ findDefinition · findReferences                     │    │
+   │   │                                                     │    │
+   │   │ documents: ReadonlyMap&lt;uri, Document&gt;   🟡 3b      │    │
+   │   └────────────────────┬────────────────────────────────┘    │
+   │                        │                                     │
+   │   ┌────────────────────▼────────────────────────────────┐    │
+   │   │                Document                              │    │
+   │   │   uri · source · version · diagnostics              │    │
+   │   │   tree (SyntaxTree) · elabTree · model              │    │
+   │   └──┬───────────┬───────────────────────┬──────────────┘    │
+   │      │           │                       │                   │
+   │      ▼           ▼                       ▼                   │
+   │ ┌────────┐ ┌──────────┐         ┌─────────────────┐         │
+   │ │SyntaxTree│ │Elaborator│         │ SemanticModel   │         │
+   │ │  ✓     │ │ Registry │         │  typeOf · symbolAt │         │
+   │ │.withText│ │   ✓     │         │  symbolAtPosition │         │
+   │ └────────┘ └──────────┘         │  referencesTo     │         │
+   │                                  │  WeakMap&lt;node,T&gt; 🟡 3b │   │
+   │                                  └─────────────────┘         │
+   └─────────────────────────────────────────────────────────────┘
+                       │           │           │
+                       ▼           ▼           ▼
+                  ┌────────┐ ┌─────────┐ ┌────────┐
+                  │  parse │ │elaborate│ │typecheck│  ◀── pure functions
+                  └────────┘ └─────────┘ └────────┘     (never throw;
+                                       │                 diagnostics-as-data)
+                                       ▼
+                                  ┌────────┐
+                                  │ lower  │  ──▶  WAT text
+                                  └────────┘
+
+   Diagnostics flow upward through every layer as `readonly Diagnostic[]`.
+   No exceptions cross the API boundary.
+</pre>
+<p class="diagram-caption">
+  <strong>CaaS surface (full reference in <a href="#caas-api">§10</a>).</strong>
+  The two <code>🟡 3b</code> markers are the public types that expose JS-only
+  <code>Map</code> / <code>WeakMap</code> shapes — porting hazard for boot/.
+  Everything else is Silicon-portable.
+</p>
+</div>
+
+<!-- ================================================================== -->
+<h2 id="methodology">1. Audit methodology &amp; scope</h2>
+
+<div class="phase-intro">
+  The audit covered five orthogonal angles against the current <code>src/</code>
+  tree (63 TypeScript files, ~16,300 LOC; 21 skipped tests across the suite):
+  <ul class="detail" style="margin-top: 8px;">
+    <li><strong>CaaS API surface</strong> — is <code>src/caas/</code> + <code>src/api.ts</code> stable enough to port?</li>
+    <li><strong>Strata 2.0 surface</strong> — is the unified <code>@stratum := { ... }</code> + phase-hooks model finalized?</li>
+    <li><strong>Type system &amp; HM-lite</strong> — is generics, inference, and monomorphization shipping?</li>
+    <li><strong>Codegen backends</strong> — are WAT, WASM-binary, and QBE paths uniformly abstracted?</li>
+    <li><strong>JS/Bun/Node coupling</strong> — what TypeScript-specific patterns won't translate to Silicon?</li>
+  </ul>
+  The output below distinguishes <em>what must be fixed in src/ before porting</em>
+  (this doc) from <em>what's tracked as Phase 7 work in boot/</em>
+  (see <a href="v1-user-stories.html#phase-7">v1-user-stories.html § Phase 7</a>).
+  These are complementary lists, not duplicates.
+</div>
+
+<!-- ================================================================== -->
+<h2 id="hard-blockers">2. Hard blockers — architectural decisions</h2>
+
+<p style="margin-bottom: 14px;">
+  These are <span class="crit">design questions</span> not yet locked in src/.  Each one bakes
+  itself into the surface contract — porting them to Silicon without an answer
+  means committing to a shape you may want to revise later, in the harder language.
+</p>
+
+<div class="risk hard">
+  <h4>2a. <code>@generic</code> monomorphization is aspirational, not shipping</h4>
+  <div class="meta">
+    <strong>Severity:</strong> <span class="sev-high">HIGH</span> ·
+    <strong>Type:</strong> Architectural decision ·
+    <strong>Est:</strong> <span class="est">decide ~1d; ship if chosen ~3d</span>
+  </div>
+  <p>
+    <span class="file-ref">src/elaborator/generic-monomorph.test.ts</span> — <strong>4/4
+    tests are <code>test.skip</code></strong>.
+    <span class="file-ref">src/elaborator/generic-e2e.test.ts</span> — <strong>5/6 tests are
+    <code>test.skip</code></strong>.
+  </p>
+  <p>
+    HM-lite inference itself works (33 e2e + 38 unit tests pass).
+    <code>Option[T]</code> / <code>Result[T,E]</code> ship cleanly <em>because they're
+    polymorphic sum types</em>, not polymorphic <em>functions</em>.  But for a
+    user-written <code>@generic id[T] x:T := x;</code> followed by
+    <code>&amp;id 42</code> and <code>&amp;id 3.14</code>, the monomorphization stratum
+    (capture-template → infer at call site → mangle name → push synthesised
+    <code>@fn</code> → rewrite call) does <strong>not</strong> actually run.
+  </p>
+  <p class="evidence">
+    Evidence: the skipped tests document the intended behaviour but never assert
+    on real output.  The stratum exists in src/strata/modules/ but isn't wired
+    into the lowering pass beyond a no-op on::lower hook.
+  </p>
+  <p>
+    <strong>Why this blocks the port:</strong> the entire Strata 2.0 surface
+    advertises monomorphization as the canonical pattern
+    (<code>docs/strata-authoring-guide.md</code> §8).  Porting it to boot/ in its
+    current skipped state means the boot/ tests for it would also need to be
+    skipped — and you can't validate the boot/ implementation works without a
+    working src/ reference.
+  </p>
+  <div class="action">
+    <strong>Action:</strong> answer the question <em>"does 1.0 ship with
+    user-written <code>@generic</code> functions, or does that move to Phase 11
+    (interpreter-only)?"</em>  Either complete the @generic stratum in src/ (the
+    aspirational test bodies sketch the design well), or formally move
+    monomorphization to v1.1 and stop documenting it in 1.0 strata-authoring
+    materials.  This single answer reshapes 30–40% of remaining Phase 7 work.
+  </div>
+</div>
+
+<div class="risk hard">
+  <h4>2b. <code>legacyBlockTranslator.ts</code>: keep permanently or rip out?</h4>
+  <div class="meta">
+    <strong>Severity:</strong> <span class="sev-high">HIGH</span> ·
+    <strong>Type:</strong> Architectural decision ·
+    <strong>Est:</strong> <span class="est">decide ~2h; rewrite path ~4–6h</span>
+  </div>
+  <p>
+    <span class="file-ref">src/elaborator/legacyBlockTranslator.ts</span> rewrites
+    inline-handler <code>&amp;Compiler::*</code> bodies into the post-dissolution
+    <code>&amp;compiler::*</code> form.  <strong>17 strata2 tests skip pending
+    "new-form rewrites."</strong>  The translator is currently <strong>load-bearing</strong>
+    — the Phase C engine has no interpreter fallback, so when WASM compilation
+    of a handler fails the compiler errors out instead of falling back.
+  </p>
+  <p>
+    If you port the translator to Silicon, you're committing to maintain two
+    surface forms forever in the self-hosted compiler.  If you don't, every
+    built-in stratum in <code>boot/strata/builtin/*.si</code> and
+    <code>src/strata/modules/*.si</code> that uses <code>&amp;Compiler::*</code>
+    must be rewritten to <code>&amp;compiler::*</code> first.
+  </p>
+  <p class="evidence">
+    Evidence: ~17 <code>test.skip</code> entries in
+    <code>src/elaborator/strata2.test.ts</code> with notes like "interpreter-specific
+    patterns (template-handle field access, scope-variable method calls)
+    skipped pending new-form rewrites."
+  </p>
+  <div class="action">
+    <strong>Action:</strong> the cleanest path is <em>"rewrite all in-tree
+    strata to new <code>&amp;compiler::*</code> form, delete the translator,
+    then port"</em>.  Roughly half a day of mechanical rewrites; saves ~400
+    LOC of Silicon you'd otherwise need to author and maintain.  Pair with
+    unskipping the 17 strata2 tests as the acceptance gate.
+  </div>
+</div>
+
+<div class="risk hard">
+  <h4>2c. Comptime engine production path (story 3-22 / 8-9)</h4>
+  <div class="meta">
+    <strong>Severity:</strong> <span class="sev-high">HIGH</span> ·
+    <strong>Type:</strong> Architectural decision ·
+    <strong>Est:</strong> <span class="est">decide ~1d; complete import shim ~1d</span>
+  </div>
+  <p>
+    src/ ships an AST-interpreter shim today, not the WASM-in-WASM engine.  The
+    plan moved from "embed a tiny wasm interpreter" to "link wasmtime as a C
+    library from the Phase 8 native binary."  This is a scoping decision that
+    affects what boot/ needs to do <em>at all</em> — if wasmtime-as-library is
+    the answer, boot/ never needs a WASM-in-WASM engine, and a chunk of story
+    3-22 evaporates.
+  </p>
+  <p>
+    Today's src/ bridge pattern has a hardcoded handler-import surface
+    (<span class="file-ref">src/comptime/imports.ts</span>) that is <strong>incomplete</strong>
+    — it lacks <code>ast::clone</code>, <code>ast::patch_types</code>, the
+    <code>type::*</code> primitives, and complex AST field accessors.  Handlers
+    that need these silently fall back to interpretation — but the interpreter
+    was deleted in Phase 1 dissolution, so they crash today.
+  </p>
+  <p class="evidence">
+    Evidence: <code>src/comptime/engine.ts</code> lines 93, 137 document the
+    fallback; <code>src/comptime/imports.ts</code> top-of-file comment lists what's
+    NOT yet wired through.  Story 3-22 in v1-user-stories.html confirms
+    "production deferred to 8-9."
+  </p>
+  <div class="action">
+    <strong>Action:</strong> lock the comptime engine architecture.  Either
+    (a) complete <code>src/comptime/imports.ts</code> so the bridge surface
+    is total in src/ (and boot/ has a faithful target), or (b) commit to
+    "comptime engine = wasmtime FFI" and stop growing the JS-side import
+    shim.  Either way, document the final import surface in
+    <code>docs/compiler-api.md</code> so the boot/ port has a fixed target.
+  </div>
+</div>
+
+<!-- ================================================================== -->
+<h2 id="arch-decisions">3. Architectural decisions still pending</h2>
+
+<p style="margin-bottom: 14px;">
+  Below the hard blockers are three medium-severity items.  Each is a
+  <em>cross-cutting refactor</em> that is much cheaper to do in TypeScript now
+  than in Silicon later.
+</p>
+
+<div class="risk arch">
+  <h4>3a. No uniform <code>Backend</code> interface</h4>
+  <div class="meta">
+    <strong>Severity:</strong> <span class="sev-med">MEDIUM</span> ·
+    <strong>Type:</strong> Refactor ·
+    <strong>Est:</strong> <span class="est">~4h</span>
+  </div>
+  <p>
+    Today <code>compileToWat(p, ...)</code>, <code>compileToWasm(p, ...)</code>,
+    and <code>lowerToQbe(p, ...)</code> are three independent entry points with
+    different signatures.  Boot/ inherits the same ad-hoc shape unless you
+    finalize a <code>Backend&lt;T&gt;</code> abstraction now.
+  </p>
+  <p>
+    This isn't a bug today — but it's the kind of cross-cutting refactor
+    that's painful to do <em>in Silicon</em> in boot/, much cheaper to do
+    <em>in TypeScript</em> in src/.  The boot/ port will be 3× faster if there's
+    a single contract to mirror instead of three ad-hoc ones.
+  </p>
+  <div class="action">
+    <strong>Action:</strong> add a <code>Backend&lt;T&gt;</code> interface
+    (~30 lines TS) with three implementations.  Define the contract as
+    <code>compile(program, registry, fns, opts): { artefact: T, diagnostics: Diagnostic[] }</code>.
+    Wire <code>src/sigil_cli.ts</code> through the interface so the public CLI
+    proves the abstraction holds.
+  </div>
+</div>
+
+<div class="risk arch">
+  <h4>3b. <code>Map</code> / <code>WeakMap</code> in public CaaS types</h4>
+  <div class="meta">
+    <strong>Severity:</strong> <span class="sev-med">MEDIUM</span> ·
+    <strong>Type:</strong> Surface refactor ·
+    <strong>Est:</strong> <span class="est">~6h</span>
+  </div>
+  <p>
+    <span class="file-ref">src/modules/registry.ts:16</span> exposes
+    <code>Map&lt;string, ModuleEntry&gt;</code> in <code>LowerOptions2</code>.
+    <span class="file-ref">src/caas/workspace.ts</span> returns
+    <code>ReadonlyMap&lt;string, Document&gt;</code>.
+    <span class="file-ref">src/ast/semanticModel.ts</span> uses
+    <code>WeakMap&lt;object, SiliconType&gt;</code> for type annotations.
+  </p>
+  <p>
+    Silicon has no <code>Map</code>; boot/ will need a HashMap stdlib type
+    (which exists per 5a-6 ✅) or arrays-of-pairs.  The current public types
+    <strong>declare a porting hazard</strong> — if you ship 1.0 with these
+    signatures, the boot/ compiler must either (a) expose JS-Map-shaped data
+    through a HashMap-backed wrapper that breaks the stability contract, or
+    (b) you break it earlier by changing the surface in 1.x.
+  </p>
+  <div class="action">
+    <strong>Action:</strong> redesign the affected public signatures to use
+    arrays-of-pairs or named opaque types.  Internal Maps can stay; the
+    <em>surface</em> must be Silicon-portable.  Approximately 3 type
+    definitions and ~10 call sites to update.
+  </div>
+</div>
+
+<div class="risk arch">
+  <h4>3c. Direct WASM binary emitter has a WAT-fallback escape hatch</h4>
+  <div class="meta">
+    <strong>Severity:</strong> <span class="sev-med">MEDIUM</span> ·
+    <strong>Type:</strong> Backend completion or formal retirement ·
+    <strong>Est:</strong> <span class="est">~1d either way</span>
+  </div>
+  <p>
+    <span class="file-ref">src/codegen/wasm-emitter.ts</span> doesn't handle
+    <code>IRCallIndirect</code> — funcref-using modules currently route through
+    <code>compileToWat → watToWasmSync</code> (binaryen.js).  If boot/ ports
+    this as-is, you replicate the same crutch — and boot/ doesn't have
+    binaryen.js to fall back to without shelling out to wabt/wasm-tools.
+  </p>
+  <p>
+    Mixed mode (sometimes direct binary, sometimes WAT-fallback) is the worst
+    case to inherit because callers can't predict which path a given program
+    takes.
+  </p>
+  <div class="action">
+    <strong>Action:</strong> two acceptable paths.  Either (a) complete the
+    direct binary emitter (funcref type/table/elem/call_indirect sections,
+    ~1d), or (b) formally retire the direct emitter for 1.0 and route
+    everything through WAT → binaryen until v1.1.  Document the decision in
+    <code>docs/wasm-binary-emitter-plan.md</code>.  <em>Mixed mode is not an
+    acceptable port target.</em>
+  </div>
+</div>
+
+<!-- ================================================================== -->
+<h2 id="cleanup">4. Surface cleanup before port</h2>
+
+<p style="margin-bottom: 14px;">
+  These are <span class="sev-low">low-severity</span> hygiene items, but each
+  represents a "thing that doesn't make sense to translate to Silicon."
+  Cheaper to remove or finalize in src/ than to litigate in boot/.
+</p>
+
+<div class="risk cleanup">
+  <h4>4a. QBE backend missing critical Silicon features</h4>
+  <div class="meta">
+    <strong>Severity:</strong> <span class="sev-med">MEDIUM</span> (blocks native self-host) ·
+    <strong>Type:</strong> Completion ·
+    <strong>Est:</strong> <span class="est">~4–5d</span>
+  </div>
+  <p>
+    QBE lowerer is ~65% complete.  Missing:
+  </p>
+  <ul class="detail">
+    <li><strong>String literals &amp; data segments</strong> — selfhost excludes
+      <code>string_literal.si</code> from the QBE-self-host gate</li>
+    <li><strong>Structs &amp; field layout</strong> — <code>struct_basic.si</code>,
+      <code>struct_nested.si</code> excluded</li>
+    <li><strong>Type casts</strong> (<code>@toFloat</code>, <code>@toInt</code>) — three
+      explicit <code># TODO(qbe)</code> markers in <code>src/codegen/qbe/lower.ts</code>
+      (lines 530, 764, 922)</li>
+    <li><strong><code>@extern</code> FFI marshaling</strong> —
+      <code>int64_extern_call.si</code> excluded; no implementations provided</li>
+    <li><strong><code>@defer</code> cleanup expressions</strong> — <code>defer_*.si</code>
+      excluded</li>
+    <li><strong>Struct-based <code>@let</code></strong> — uncertain call-style access</li>
+  </ul>
+  <p>
+    If you delete src/ before these land, you also delete the reference
+    implementation for boot/'s QBE port (story 9.5-6).  Self-hosting on native
+    (no wasmtime) requires them.
+  </p>
+  <div class="action">
+    <strong>Action:</strong> ship Phase 8 stories 8-6+ to feature parity.
+    Each missing feature is a session of work; the list is well-scoped because
+    each is gated by an excluded selfhost test.
+  </div>
+</div>
+
+<div class="risk cleanup">
+  <h4>4b. Dead code in <code>src/codegen/qbe/types.ts</code></h4>
+  <div class="meta">
+    <strong>Severity:</strong> <span class="sev-low">LOW</span> ·
+    <strong>Type:</strong> Cleanup ·
+    <strong>Est:</strong> <span class="est">~30min</span>
+  </div>
+  <p>
+    <code>WAT_TO_QBE_INSTR</code> (lines 69–115) is <strong>unused</strong> since
+    the AbstractOp introduction in Phase 9.5 but kept around as an
+    intermediate.  Delete before porting — boot/ shouldn't inherit confused
+    intermediate layers.
+  </p>
+  <div class="action">
+    <strong>Action:</strong> delete the unused table; rerun the test suite to
+    confirm zero references.
+  </div>
+</div>
+
+<div class="risk cleanup">
+  <h4>4c. Pretty renderer is documented as "throwaway"</h4>
+  <div class="meta">
+    <strong>Severity:</strong> <span class="sev-low">LOW</span> ·
+    <strong>Type:</strong> Lock surface ·
+    <strong>Est:</strong> <span class="est">~3h</span>
+  </div>
+  <p>
+    <span class="file-ref">src/errors/diagnostic.ts:6</span> — <em>"pretty
+    rendering is throwaway, so we land the records now and skip the rendering
+    polish."</em>  The <code>renderPretty</code> function exists but is ~20 lines
+    of placeholder.  The diagnostic <em>record schema</em> is final
+    (code/span/message/hint/snippet/severity), but the renderer that produces
+    user-facing output is not.
+  </p>
+  <p>
+    Re-implementing a different style in Silicon is wasteful.  Re-implementing
+    the same throwaway is wasteful.  Pick a final style now.
+  </p>
+  <div class="action">
+    <strong>Action:</strong> lock the renderer surface in src/ — caret style
+    (Rust-style ASCII vs ANSI box-drawing), color story (true-color, 256, or
+    none in 1.0), hint formatting (inline "hint:" prefix vs separate block),
+    "did you mean" position (above vs below the caret).  Update
+    <code>docs/diagnostics.md</code> with the final shape.
+  </div>
+</div>
+
+<!-- ================================================================== -->
+<h2 id="debt">5. Completion debt boot/ would inherit</h2>
+
+<div class="risk debt">
+  <h4>5a. Bootstrap parser grammar coverage (~40%)</h4>
+  <div class="meta">
+    <strong>Severity:</strong> <span class="sev-high">HIGH</span> ·
+    <strong>Type:</strong> Boot/ completion (tracked under story 3-26) ·
+    <strong>Est:</strong> <span class="est">~1–2d (revising 3-26 estimate up)</span>
+  </div>
+  <p>
+    <span class="file-ref">boot/parser/parse.si</span> (755 lines) currently
+    covers <strong>~40%</strong> of the Ohm grammar — literals, namespaces,
+    binary expressions, function calls, parens.  Missing: <strong>Block,
+    Definition, DocComment, Assignment, VariantDecl, ArrayLiteral,
+    ObjectLiteral, TupleLiteral, generic type params.</strong>
+  </p>
+  <p>
+    Note: this isn't a src/ deficiency — it's that boot/parse.si lags.  But
+    it's a hard prerequisite for src/ deletion.  Don't underestimate it —
+    story 3-26 is rated "L, ~8h" in v1-user-stories.html, but the actual
+    surface area touches ~50 semantic actions in
+    <code>src/ast/toAst.ts</code> (448 lines), each of which needs a
+    Silicon-side equivalent.
+  </p>
+  <div class="action">
+    <strong>Action:</strong> revise the story 3-26 estimate upward (XL, ~1–2d
+    rather than L, ~8h).  Sequence as several small commits that each preserve
+    byte-equal (the self-host gate constrains this), pairing with
+    <code>boot/tests/</code> additions that mirror src/'s grammar tests.
+  </div>
+</div>
+
+<div class="risk debt">
+  <h4>5b. CaaS Symbol/Reference schema not future-proofed</h4>
+  <div class="meta">
+    <strong>Severity:</strong> <span class="sev-med">MEDIUM</span> ·
+    <strong>Type:</strong> Schema design ·
+    <strong>Est:</strong> <span class="est">~2h</span>
+  </div>
+  <p>
+    <span class="file-ref">src/caas/workspace.ts:23</span> — "Cross-document
+    symbol resolution (CaaS-5) is not yet implemented."  Block-local scope
+    tracking is also deferred.  Both are post-1.0 acceptable per the v1 plan,
+    but they <em>shape the Symbol/Reference types in the public API</em>.
+  </p>
+  <p>
+    If you ship symbol types that don't account for cross-doc and scope, then
+    v1.1 breaks the stability contract when adding them.  Optional fields are
+    free at the type level; mandatory schema breaks are expensive.
+  </p>
+  <div class="action">
+    <strong>Action:</strong> finalize the Symbol/Reference type shape now with
+    optional <code>containingScope?: Scope</code> and
+    <code>crossDocumentReferences?: Reference[]</code>, even if the
+    implementation returns <code>undefined</code> / empty array in 1.0.
+    Future-proof the schema without doing the work.
+  </div>
+</div>
+
+<!-- ================================================================== -->
+<h2 id="what-can-port-now">6. What is already safe to port</h2>
+
+<div class="phase-intro">
+  Not everything is at risk.  The audit found these subsystems
+  <span class="ok">architecturally ready</span> to be mirrored in boot/ today:
+  <ul class="detail" style="margin-top: 8px;">
+    <li><strong>HM-lite type inference core</strong> — <code>src/types/unify.ts</code> +
+      <code>typechecker.ts</code> are self-contained, 33 e2e + 38 unit tests
+      passing.  Phase 2 boot/ port (docs/phase-2-typechecker-port.md) is the
+      faithful target.</li>
+    <li><strong>Sum types with type parameters</strong> — Option[T], Result[T,E]
+      ship cleanly.  Multi-parameter types work post-Phase-5 grammar fix.</li>
+    <li><strong>IR (post-9.5 abstract opcodes)</strong> — <code>IRBinOp.op:
+      AbstractOp</code> is backend-agnostic.  WAT emitter and WASM binary
+      emitter consume via the same intrinsics registry lookup.</li>
+    <li><strong>Intrinsics registry</strong> — single source of truth for WASM ops;
+      <code>wasmIntrinsics</code> + <code>ABSTRACT_OP_TO_QBE</code> are the only
+      tables.  Already mirrored in boot/.</li>
+    <li><strong>Diagnostic record schema</strong> — phase/code/span/message/hint/
+      severity is final.  Only the renderer is throwaway.</li>
+    <li><strong>Phase hooks integration</strong> — all 5 hooks (decl, callSite,
+      annotation, lower, module_finalize) fire from src/ir/lower.ts in
+      production today.  Boot/ Phase 7 firing helpers exist (3-10 ✅); only
+      lowering-pass integration is opt-in.</li>
+    <li><strong>Tier model</strong> — T0/T1/T2 tier ordering enforced; cycle
+      detection shipping.  @@before / @@after across strata is the only
+      partial part (registration order suffices for MVP).</li>
+    <li><strong><code>sgl</code> CLI shape</strong> — subcommand routing, manifest
+      parser, init/build/check/fmt all stable.  Stub commands (test/eval/add)
+      formally deferred to Phase 12.</li>
+  </ul>
+</div>
+
+<!-- ================================================================== -->
+<h2 id="sequence">7. Recommended sequence</h2>
+
+<p style="margin-bottom: 14px;">
+  Four phases.  Total ~2–3 weeks of src/ work before boot/ port can proceed
+  safely.  Each phase has a clear acceptance gate.
+</p>
+
+<div class="step-block">
+  <h4>Step 1 — Architectural locks (src/, ~1 week)</h4>
+  <p style="margin-bottom: 8px;"><em>The most expensive decisions to defer.
+  Each is a yes/no question with downstream consequences.</em></p>
+  <ol class="steps">
+    <li><strong>Decide @generic monomorphization (1d)</strong> — ship it in src/
+      <em>or</em> formally move to Phase 11 (interpreter-only).  Update
+      <code>docs/strata-authoring-guide.md</code> §8 either way.  Unskip or
+      delete <code>generic-monomorph.test.ts</code> + <code>generic-e2e.test.ts</code>.
+      <br/><span class="evidence">Acceptance: zero skipped tests in those two files; or both files deleted with rationale in commit message.</span></li>
+
+    <li><strong>Rewrite all in-tree strata to new <code>&amp;compiler::*</code> form (4–6h)</strong>
+      — mechanical rewrites of <code>src/strata/modules/*.si</code> and
+      <code>boot/strata/builtin/*.si</code>.  Delete
+      <code>src/elaborator/legacyBlockTranslator.ts</code>.  Unskip the 17
+      strata2 tests as the acceptance gate.
+      <br/><span class="evidence">Acceptance: legacyBlockTranslator.ts deleted; strata2.test.ts shows 0 skipped tests.</span></li>
+
+    <li><strong>Lock comptime engine architecture (1d)</strong> — answer
+      "wasmtime-as-library vs WASM-in-WASM."  Either complete
+      <code>src/comptime/imports.ts</code> to total coverage (and update
+      story 3-22 to reflect the import-shim path), or commit to wasmtime FFI
+      (and document the C-library binding shape in story 8-9).
+      <br/><span class="evidence">Acceptance: docs/compiler-api.md lists every host-import the comptime engine exposes; no "deferred to interpreter" footnotes.</span></li>
+
+    <li><strong>Add <code>Backend&lt;T&gt;</code> interface (4h)</strong> — single
+      contract with three implementations (WAT text, WASM binary, QBE IR).
+      Wire <code>src/sigil_cli.ts</code> through the interface.
+      <br/><span class="evidence">Acceptance: sigil_cli.ts has zero direct imports from src/codegen/qbe/ or src/codegen/wasm-emitter.ts; only the Backend interface.</span></li>
+  </ol>
+</div>
+
+<div class="step-block">
+  <h4>Step 2 — Surface stability (src/, ~3 days)</h4>
+  <p style="margin-bottom: 8px;"><em>Lock the shapes that boot/ will inherit
+  forever.  Cheap now, expensive later.</em></p>
+  <ol class="steps">
+    <li><strong>Refactor public Map / WeakMap → arrays / HashMap-shaped types (6h)</strong>
+      — three type definitions (ModuleRegistry, Workspace.documents,
+      SemanticModel type annotations) and ~10 call sites.  Internal Maps can
+      stay; the surface must be portable.
+      <br/><span class="evidence">Acceptance: zero <code>Map&lt;...&gt;</code> or <code>WeakMap&lt;...&gt;</code> in the public exports of src/api.ts or src/caas/index.ts.</span></li>
+
+    <li><strong>Finalize Symbol / Reference schema with optional fields (2h)</strong>
+      — add <code>containingScope?</code> and <code>crossDocumentReferences?</code>
+      now, return <code>undefined</code> / empty array in 1.0.  Documents the
+      v1.1 extension points without doing the work.
+      <br/><span class="evidence">Acceptance: stability.md §3 lists Symbol/Reference fields with their 1.0 contract; CaaS-5 story explicitly references the existing optional fields.</span></li>
+
+    <li><strong>Lock <code>renderPretty</code> caret / color / hint formatting (3h)</strong>
+      — pick a final style.  Re-implement <code>src/errors/diagnostic.ts</code>
+      lines 167–185 with the locked behaviour.  Update
+      <code>docs/diagnostics.md</code> with worked examples.
+      <br/><span class="evidence">Acceptance: docs/diagnostics.md shows three rendered examples (type error, parse error, hint with did-you-mean); src/errors/diagnostic.ts comment no longer says "throwaway."</span></li>
+  </ol>
+</div>
+
+<div class="step-block">
+  <h4>Step 3 — Completion debt (src/, ~5 days)</h4>
+  <p style="margin-bottom: 8px;"><em>Things known-broken in src/ that boot/
+  would inherit.  Each one removes a footnote from the boot/ port stories.</em></p>
+  <ol class="steps">
+    <li><strong>Complete QBE backend (4–5d)</strong> — strings, structs, type
+      casts, @extern marshaling, @defer cleanup, struct-based @let.  Each
+      feature is gated by a currently-excluded selfhost test
+      (<code>src/e2e/selfhost.test.ts</code> lines 87–95 list them).
+      <br/><span class="evidence">Acceptance: src/e2e/selfhost.test.ts excludeList shrinks to ≤ 2 entries; each remaining exclusion has a tracked v1.1 story.</span></li>
+
+    <li><strong>Finish direct WASM emitter funcref support OR formally retire it (1d)</strong>
+      — pick one.  If complete, add type/table/elem/call_indirect sections to
+      <code>src/codegen/wasm-emitter.ts</code>.  If retire, delete the direct
+      path and route everything through WAT → binaryen until v1.1.
+      <br/><span class="evidence">Acceptance: zero <code>compileToWat → watToWasmSync</code> fallbacks remain in compileToWasm; or compileToWasm itself is deleted from the public API.</span></li>
+
+    <li><strong>Delete dead intermediate layers (30min)</strong> —
+      <code>WAT_TO_QBE_INSTR</code> in <code>src/codegen/qbe/types.ts</code>
+      lines 69–115; any other unused tables.
+      <br/><span class="evidence">Acceptance: grep for <code>WAT_TO_QBE_INSTR</code> returns no matches outside git history.</span></li>
+  </ol>
+</div>
+
+<div class="step-block">
+  <h4>Step 4 — Boot/ port can proceed safely</h4>
+  <p style="margin-bottom: 8px;"><em>With Steps 1–3 done, the existing Phase 7 +
+  9.5-6 + Phase 11 work has a stable target.  No re-litigation of architecture
+  in Silicon syntax.</em></p>
+  <ol class="steps">
+    <li><strong>Phase 7 (21 open stories)</strong> — Strata 2.0 in boot/, by then
+      has a stable target.  Estimated ~18 days as currently scoped.</li>
+
+    <li><strong>Phase 9.5-6</strong> — QBE abstract opcode dispatch in
+      boot/strata/builtin.  Unblocked once Phase 7 is substantially complete and
+      Step 3 has shipped full QBE features in src/ as reference.</li>
+
+    <li><strong>Phase 11 (Silicon interpreter)</strong> — can begin in parallel
+      with Phase 7 endgame.  Sequencing constraint: needs Phase 9 (QBE) ✅ so
+      interpreter compiles to native for usable performance.</li>
+
+    <li><strong>Phase 12 (interpreter-backed sgl subcommands)</strong> — closes
+      the loop after both Phase 8 ✅ and Phase 11 are done.</li>
+  </ol>
+</div>
+
+<!-- ================================================================== -->
+<h2 id="delete-gate">8. Gate criteria for deleting <code>src/</code></h2>
+
+<div class="phase-intro">
+  <strong>Do not delete <code>src/</code> until all of the following hold simultaneously:</strong>
+  <ol class="steps" style="margin-top: 10px;">
+    <li><strong>Self-host byte-equal gate passes</strong> — <code>./build.sh check</code>
+      produces a byte-identical <code>wasm-bin/stage1.wasm</code> using only
+      boot/ sources, with no src/ involvement.</li>
+    <li><strong>Full src/e2e/ corpus passes via boot/</strong> — every test
+      currently in <code>src/e2e/e2e.test.ts</code> (and selfhost / backends
+      tests) has a Silicon-side translation in <code>boot/tests/</code> that
+      passes under wasmtime.</li>
+    <li><strong>All three backends emit from boot/</strong> — boot/ produces WAT
+      text, WASM binary, and QBE IR with byte-equal output to src/'s outputs
+      on the example corpus.</li>
+    <li><strong>CaaS surface implemented in boot/</strong> — Workspace, Document,
+      SemanticModel, Symbol, Reference types and their methods callable from
+      Silicon code.  At least one consumer (sgl fmt) proves the surface
+      works.</li>
+    <li><strong>Phase 7 (Strata 2.0 in boot/) is at 32/32</strong> — including
+      story 5a-7 (Vec/HashMap/Option internal data structure migration).</li>
+    <li><strong>Comptime engine has shipped its production answer</strong> —
+      either the import-shim is total in boot/, or the wasmtime FFI binding
+      works in the native sigilc binary.  No more "deferred to interpreter"
+      fallbacks.</li>
+    <li><strong>Stability contract honoured</strong> — every exported name in
+      <code>src/api.ts</code> has an equivalent in boot/ with the documented
+      contract from <code>docs/stability.md</code>.</li>
+  </ol>
+  <p style="margin-top: 10px;">
+    Until all seven hold, src/ stays in the tree as the reference implementation.
+    The day all seven pass, src/ can be removed in a single commit — and that
+    commit is the formal cut-over to permanent self-hosting.
+  </p>
+</div>
+
+<!-- ================================================================== -->
+<h2 id="summary-table">9. Summary risk table</h2>
+
+<table>
+  <thead>
+    <tr>
+      <th>Item</th>
+      <th>Type</th>
+      <th>Severity</th>
+      <th>Est</th>
+      <th>Blocks</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>2a. @generic monomorphization</td>
+      <td>Decision</td>
+      <td class="sev-high">HIGH</td>
+      <td>1d + 3d</td>
+      <td>Strata 2.0 boot/ port; user-facing 1.0 surface</td>
+    </tr>
+    <tr>
+      <td>2b. legacyBlockTranslator decision</td>
+      <td>Decision</td>
+      <td class="sev-high">HIGH</td>
+      <td>4–6h</td>
+      <td>17 skipped strata2 tests; boot/ port size</td>
+    </tr>
+    <tr>
+      <td>2c. Comptime engine production path</td>
+      <td>Decision</td>
+      <td class="sev-high">HIGH</td>
+      <td>1–2d</td>
+      <td>Story 3-22 / 8-9; @comptime user surface</td>
+    </tr>
+    <tr>
+      <td>3a. Uniform Backend interface</td>
+      <td>Refactor</td>
+      <td class="sev-med">MEDIUM</td>
+      <td>4h</td>
+      <td>Boot/ port velocity; 3× cost savings</td>
+    </tr>
+    <tr>
+      <td>3b. Map/WeakMap in public CaaS types</td>
+      <td>Surface refactor</td>
+      <td class="sev-med">MEDIUM</td>
+      <td>6h</td>
+      <td>Stability contract; v1.1 schema breaks</td>
+    </tr>
+    <tr>
+      <td>3c. Direct WASM emitter funcref gap</td>
+      <td>Complete or retire</td>
+      <td class="sev-med">MEDIUM</td>
+      <td>1d</td>
+      <td>Boot/ port (no binaryen.js available)</td>
+    </tr>
+    <tr>
+      <td>4a. QBE backend missing features</td>
+      <td>Completion</td>
+      <td class="sev-med">MEDIUM</td>
+      <td>4–5d</td>
+      <td>Native self-host; Phase 9.5-6 reference</td>
+    </tr>
+    <tr>
+      <td>4b. Dead WAT_TO_QBE_INSTR table</td>
+      <td>Cleanup</td>
+      <td class="sev-low">LOW</td>
+      <td>30min</td>
+      <td>Cognitive load on boot/ port</td>
+    </tr>
+    <tr>
+      <td>4c. renderPretty throwaway lock</td>
+      <td>Lock surface</td>
+      <td class="sev-low">LOW</td>
+      <td>3h</td>
+      <td>Wasted work re-implementing different style</td>
+    </tr>
+    <tr>
+      <td>5a. boot/ parse.si grammar coverage</td>
+      <td>Boot/ completion</td>
+      <td class="sev-high">HIGH</td>
+      <td>1–2d</td>
+      <td>Story 3-26; src/ deletion gate criterion #1</td>
+    </tr>
+    <tr>
+      <td>5b. CaaS Symbol/Reference schema</td>
+      <td>Schema design</td>
+      <td class="sev-med">MEDIUM</td>
+      <td>2h</td>
+      <td>v1.1 cross-doc symbol stability contract</td>
+    </tr>
+  </tbody>
+</table>
+
+<p style="margin-top: 16px; padding: 12px 16px; background: var(--surface); border-radius: 6px; border-left: 3px solid var(--accent3);">
+  <strong>Total estimate:</strong> ~2–3 weeks src/ work before boot/ port can
+  proceed safely.  The single most important question to answer first:
+  <em>"does 1.0 ship with user-written <code>@generic</code> functions, or does
+  that move to Phase 11 (interpreter-only)?"</em>  That single decision
+  unlocks or reshapes 30–40% of the remaining Phase 7 work.
+</p>
+
+<!-- ================================================================== -->
+<h2 id="caas-api">10. CaaS API reference</h2>
+
+<p style="margin-bottom: 12px;">
+  Full reference for the public Silicon CaaS surface, exported from
+  <code>src/api.ts</code>.  All names listed here are covered by the 1.0
+  stability promise (<a href="stability.md" style="color: var(--accent);">docs/stability.md</a> §2)
+  unless tagged <span class="stability internal">@internal</span> or
+  <span class="stability risk">port hazard</span>.  This is the contract
+  boot/ must mirror before <code>src/</code> can be deleted.
+</p>
+
+<h3>10.1 Pipeline functions</h3>
+
+<p style="font-size: 0.88rem; color: var(--muted); margin-bottom: 10px;">
+  Pure functions, one per phase.  None throw on user errors — failures land in
+  the returned <code>diagnostics</code> array.  Compose freely; each takes the
+  previous stage's output as input.
+</p>
+
+<div class="api-block">
+  <h4>parse(source, options?) → ParseResult <span class="stability stable">stable</span></h4>
+  <div class="sig">function parse(source: string, options?: ParseOptions): ParseResult</div>
+  <p class="desc">
+    Parse Silicon source text into a <code>SyntaxTree</code>.  Parse failures
+    are captured as <code>Diagnostic</code> records with <code>phase='parse'</code>
+    and code <code>E0000</code>; a minimal valid tree is returned so callers
+    don't have to null-check.
+  </p>
+  <div class="sig">interface ParseOptions { file?: string }      // span attribution; defaults to '&lt;input&gt;'</div>
+</div>
+
+<div class="api-block">
+  <h4>buildRegistry(tree, extraSources?) → ElaboratorRegistry <span class="stability stable">stable</span></h4>
+  <div class="sig">function buildRegistry(tree: SyntaxTree, extraSources?: string[]): ElaboratorRegistry</div>
+  <p class="desc">
+    Walk the tree's <code>@stratum</code> declarations and build the
+    elaboration registry.  Call after <code>parse()</code> and before
+    <code>elaborate()</code>.  In a long-lived workspace, build once and reuse
+    across edits — only call again when strata themselves change.
+  </p>
+</div>
+
+<div class="api-block">
+  <h4>elaborate(tree, registry, options?) → ElabResult <span class="stability stable">stable</span></h4>
+  <div class="sig">function elaborate(tree: SyntaxTree, registry: ElaboratorRegistry, options?: ElabOptions): ElabResult</div>
+  <p class="desc">
+    Resolve operators and keywords against the strata registry.  Returns a
+    new <code>SyntaxTree</code> with the elaborated program.  Elaboration
+    errors are captured as <code>Diagnostic</code> records with
+    <code>phase='elaborate'</code> and code <code>E0001</code>.
+  </p>
+  <div class="sig">interface ElabOptions { extraSources?: string[] }      // additional strata source text to merge in</div>
+</div>
+
+<div class="api-block">
+  <h4>typecheck(tree, registry, options?) → CheckResult <span class="stability stable">stable</span></h4>
+  <div class="sig">function typecheck(tree: SyntaxTree, registry: ElaboratorRegistry, options?: CheckOptions): CheckResult</div>
+  <p class="desc">
+    Type-check an elaborated tree using HM-lite inference.  Builds a
+    <code>SemanticModel</code> with queryable type and symbol information.
+    All type errors are captured as <code>Diagnostic</code> records with
+    <code>phase='typecheck'</code> and stable codes (E0001–E0009; see
+    <code>TYPE_ERROR_CODES</code>).
+  </p>
+  <div class="sig">interface CheckOptions { moduleRegistry?: ModuleRegistry }   // pre-registered module signatures (WASI, etc.)</div>
+</div>
+
+<div class="api-block">
+  <h4>lower(tree, registry, model, options?) → LowerResult <span class="stability stable">stable</span></h4>
+  <div class="sig">function lower(tree: SyntaxTree, registry: ElaboratorRegistry, model: SemanticModel, options?: LowerOptions2): LowerResult</div>
+  <p class="desc">
+    Lower a type-checked tree to WAT (WebAssembly text format).  Lowering
+    errors land in the result's <code>diagnostics</code> array with
+    <code>phase='lower'</code> and code <code>E0010</code>.
+  </p>
+  <div class="sig">interface LowerOptions2 extends LowerOptions {
+    moduleRegistry?: ModuleRegistry         // required for WASI / external module calls
+    _functions?: Map&lt;string, FunctionSig&gt;   <span style="color: var(--accent4);">// @internal — port hazard 🔴 3b</span>
+}</div>
+</div>
+
+<div class="api-block">
+  <h4>compile(source, options?) → CompileResult <span class="stability stable">stable</span></h4>
+  <div class="sig">function compile(source: string, options?: ParseOptions &amp; ElabOptions &amp; LowerOptions2): CompileResult</div>
+  <p class="desc">
+    Convenience wrapper running the full pipeline: parse → buildRegistry →
+    elaborate → typecheck → lower.  Returns at the first phase that produces
+    diagnostics.  On success, <code>wat</code> holds the emitted WAT text.
+  </p>
+  <div class="sig">interface CompileResult {
+    readonly wat: string
+    readonly model: SemanticModel | undefined
+    readonly diagnostics: readonly Diagnostic[]
+}</div>
+</div>
+
+<h3>10.2 Workspace API (CaaS-4)</h3>
+
+<p style="font-size: 0.88rem; color: var(--muted); margin-bottom: 10px;">
+  Multi-document project state.  A <code>Workspace</code> owns a shared strata
+  registry and a set of open <code>Document</code>s, each with its own
+  versioned source, trees, semantic model, and diagnostics.
+</p>
+
+<div class="api-block">
+  <h4>class Workspace <span class="stability stable">stable</span></h4>
+  <div class="sig">new Workspace(options?: WorkspaceOptions)
+interface WorkspaceOptions { registry?: ElaboratorRegistry }    // pre-built registry; else built lazily from first opened doc</div>
+  <p class="desc">
+    Construct a workspace.  The strata registry is built lazily from the first
+    opened document unless a pre-built one is provided.
+  </p>
+</div>
+
+<div class="api-block">
+  <h4>workspace.openDocument(uri, source) → Document <span class="stability stable">stable</span></h4>
+  <div class="sig">openDocument(uri: string, source: string): Document</div>
+  <p class="desc">
+    Open a new document and run all compilation phases on its source.  Throws
+    if <code>uri</code> is already open — use <code>editDocument</code> for
+    subsequent versions.  Fires a <code>'opened'</code> change event.
+  </p>
+</div>
+
+<div class="api-block">
+  <h4>workspace.editDocument(uri, newSource) → Document <span class="stability stable">stable</span></h4>
+  <div class="sig">editDocument(uri: string, newSource: string): Document</div>
+  <p class="desc">
+    Apply a full-text replacement to an open document.  Re-parses,
+    re-elaborates, and re-typechecks against the shared registry.  Bumps
+    <code>version</code> by 1.  Fires a <code>'changed'</code> change event.
+    Throws if <code>uri</code> is not open.
+  </p>
+</div>
+
+<div class="api-block">
+  <h4>workspace.closeDocument(uri) → void <span class="stability stable">stable</span></h4>
+  <div class="sig">closeDocument(uri: string): void</div>
+  <p class="desc">
+    Remove a document from the workspace.  No-op if not open.  Fires a
+    <code>'closed'</code> change event.
+  </p>
+</div>
+
+<div class="api-block">
+  <h4>workspace.onDidChange(listener) → unsubscribe <span class="stability stable">stable</span></h4>
+  <div class="sig">onDidChange(listener: (event: DocumentChangeEvent) =&gt; void): () =&gt; void
+
+interface DocumentChangeEvent {
+    readonly kind: 'opened' | 'changed' | 'closed'
+    readonly uri: string
+    readonly document: Document | undefined    // undefined when kind === 'closed'
+}</div>
+  <p class="desc">
+    Subscribe to document lifecycle events.  Returns an unsubscribe function.
+    Listeners fire synchronously after the workspace state mutates.
+  </p>
+</div>
+
+<div class="api-block">
+  <h4>workspace.findDefinition(uri, line, col) → CaaSSymbol | undefined <span class="stability stable">stable</span></h4>
+  <div class="sig">findDefinition(uri: string, line: number, col: number): CaaSSymbol | undefined</div>
+  <p class="desc">
+    Find the symbol whose definition or reference covers the 1-based
+    <code>(line, col)</code> cursor in <code>uri</code>.  Returns
+    <code>undefined</code> if the document is not open or no symbol covers
+    the position.  Use <code>symbol.definitionSpan</code> to jump to the
+    declaration site.
+  </p>
+</div>
+
+<div class="api-block">
+  <h4>workspace.findReferences(uri, line, col) → readonly SourceSpan[] <span class="stability stable">stable</span></h4>
+  <div class="sig">findReferences(uri: string, line: number, col: number): readonly SourceSpan[]</div>
+  <p class="desc">
+    Find all reference spans for the symbol at <code>(line, col)</code> in
+    <code>uri</code>.  Returns an empty array if the position covers no
+    symbol or location info was not recorded.  Cross-document references are
+    deferred (CaaS-5).
+  </p>
+</div>
+
+<div class="api-block">
+  <h4>workspace.documents <span class="stability risk">port hazard 🔴 3b</span></h4>
+  <div class="sig">get documents(): ReadonlyMap&lt;string, Document&gt;</div>
+  <p class="desc">
+    All currently open documents, keyed by URI.  <strong>Port hazard:</strong>
+    Silicon has no <code>Map</code> type.  See §3b — should be redesigned to
+    return a Silicon-portable shape (array-of-pairs or named opaque type)
+    before boot/ port.
+  </p>
+</div>
+
+<h3>10.3 Document type</h3>
+
+<div class="api-block">
+  <h4>interface Document <span class="stability stable">stable</span></h4>
+  <div class="sig">interface Document {
+    readonly uri: string                        // path / URI key
+    readonly source: string                     // current text
+    readonly version: number                    // monotonically increasing, starts at 1
+    readonly tree: SyntaxTree                   // parse-phase output
+    readonly elabTree: SyntaxTree               // elaborate-phase output
+    readonly model: SemanticModel               // typecheck-phase output; queryable overlay
+    readonly diagnostics: readonly Diagnostic[] // union of all per-phase diagnostics, in pipeline order
+}</div>
+  <p class="desc">
+    Immutable snapshot of one source file's compiled state.  Every edit
+    produces a new <code>Document</code> instance (the workspace replaces the
+    map entry); never mutated in place.
+  </p>
+</div>
+
+<h3>10.4 SemanticModel — queryable overlay</h3>
+
+<p style="font-size: 0.88rem; color: var(--muted); margin-bottom: 10px;">
+  Built by the type-checker; consumed by lowering, the formatter, the LSP,
+  and any other tool that needs to ask <em>"what's the type of this node?"</em>
+  or <em>"where is this symbol defined?"</em>.
+</p>
+
+<div class="api-block">
+  <h4>model.typeOf(node) → SiliconType | undefined <span class="stability stable">stable</span></h4>
+  <div class="sig">typeOf(node: object): SiliconType | undefined</div>
+  <p class="desc">
+    Look up the inferred Silicon type of any AST node.  Returns
+    <code>undefined</code> if no type was recorded for the node (e.g. a
+    statement-position node).
+  </p>
+</div>
+
+<div class="api-block">
+  <h4>model.symbolAt(node) → Symbol | undefined <span class="stability stable">stable</span></h4>
+  <div class="sig">symbolAt(node: object): Symbol | undefined</div>
+  <p class="desc">
+    Resolve a <code>Namespace</code> reference node (or any node whose
+    identity was recorded during typechecking) to its declared
+    <code>Symbol</code>.
+  </p>
+</div>
+
+<div class="api-block">
+  <h4>model.symbolNamed(name) → Symbol | undefined <span class="stability stable">stable</span></h4>
+  <div class="sig">symbolNamed(name: string): Symbol | undefined</div>
+  <p class="desc">
+    Look up a symbol by its declared name (the fully-qualified namespace
+    string, e.g. <code>"module::function"</code>).
+  </p>
+</div>
+
+<div class="api-block">
+  <h4>model.symbolAtPosition(line, col) → Symbol | undefined <span class="stability stable">stable</span></h4>
+  <div class="sig">symbolAtPosition(line: number, col: number): Symbol | undefined</div>
+  <p class="desc">
+    Find the symbol whose definition or reference covers the 1-based
+    <code>(line, col)</code> position.  Searches definition sites first, then
+    references.  Returns <code>undefined</code> if no span covers the
+    position.
+  </p>
+</div>
+
+<div class="api-block">
+  <h4>model.referencesTo(symbol) → readonly object[] <span class="stability stable">stable</span></h4>
+  <div class="sig">referencesTo(symbol: Symbol): readonly object[]</div>
+  <p class="desc">
+    All AST nodes that reference <code>symbol</code>.  Use
+    <code>referenceSpans</code> instead if you only need source locations.
+  </p>
+</div>
+
+<div class="api-block">
+  <h4>model.referenceSpans(symbol) → readonly SourceSpan[] <span class="stability stable">stable</span></h4>
+  <div class="sig">referenceSpans(symbol: Symbol): readonly SourceSpan[]</div>
+  <p class="desc">
+    Source spans of every reference to <code>symbol</code>.  Returns an empty
+    array when location info was not recorded (pre-Ohm ASTs in unit tests).
+  </p>
+</div>
+
+<div class="api-block">
+  <h4>model.diagnosticsIn(range?) → readonly Diagnostic[] <span class="stability stable">stable</span></h4>
+  <div class="sig">diagnosticsIn(range?: SourceRange): readonly Diagnostic[]</div>
+  <p class="desc">
+    All diagnostics whose span overlaps the given range.  Pass
+    <code>undefined</code> to get all diagnostics for the document.
+  </p>
+</div>
+
+<div class="api-block">
+  <h4>model.allSymbols / model.allDiagnostics <span class="stability stable">stable</span></h4>
+  <div class="sig">get allSymbols(): IterableIterator&lt;Symbol&gt;
+readonly allDiagnostics: readonly Diagnostic[]</div>
+  <p class="desc">
+    Flat iteration over every declared symbol and every recorded diagnostic
+    in the document.
+  </p>
+</div>
+
+<h3>10.5 Diagnostic record schema</h3>
+
+<div class="api-block">
+  <h4>interface Diagnostic <span class="stability stable">schema stable</span> <span class="stability internal">renderer in flux 🟡 4c</span></h4>
+  <div class="sig">interface Diagnostic {
+    phase: 'parse' | 'elaborate' | 'typecheck' | 'lower' | 'emit'
+    code: string                  // stable identifier (E0001…); never reused
+    span: SourceSpan              // where in source the diagnostic points
+    message: string               // short human message; no "Error:" prefix
+    hint?: string                 // optional secondary advice ("did you mean…")
+    notes?: Diagnostic[]          // optional related sub-diagnostics
+    snippet?: string              // optional verbatim source line for caret rendering
+}
+
+interface SourceSpan {
+    file: string                  // empty when synthesised
+    line: number                  // 1-based
+    col: number                   // 1-based
+    length: number                // byte length; 0 = point span
+}</div>
+  <p class="desc">
+    Authoritative diagnostic record.  Every error site SHOULD emit a
+    <code>Diagnostic</code> rather than throwing.  The schema is final; only
+    the pretty renderer (<code>renderPretty</code>) is documented as
+    throwaway in src/ and must be locked before porting (see §4c).
+  </p>
+</div>
+
+<h3>10.6 SyntaxTree class</h3>
+
+<div class="api-block">
+  <h4>class SyntaxTree <span class="stability stable">stable</span></h4>
+  <div class="sig">class SyntaxTree {
+    readonly program: Program       // the underlying AST
+    readonly source: string         // original source text
+    readonly file: string           // file name for diagnostic spans
+
+    constructor(program: Program, source: string, file?: string)
+
+    withText(newSource: string, options?: ParseOptions): ParseResult
+}</div>
+  <p class="desc">
+    Immutable wrapper around a parsed program; the currency between pipeline
+    stages.  <code>withText</code> re-parses new source <em>without</em>
+    rebuilding the strata registry — the typical LSP / REPL incremental-edit
+    path.  Strata added or removed in the new source are invisible until
+    <code>buildRegistry</code> runs again.
+  </p>
+</div>
+
+<h3>10.7 Symbol type</h3>
+
+<div class="api-block">
+  <h4>interface Symbol <span class="stability stable">schema stable</span> <span class="stability internal">extension points pending 🟡 5b</span></h4>
+  <div class="sig">type SymbolKind = 'function' | 'variable' | 'type' | 'parameter' | 'stratum'
+
+interface Symbol {
+    readonly name: string                    // fully-qualified declared name
+    readonly kind: SymbolKind
+    readonly definitionNode: object          // Definition AST node
+    readonly type: SiliconType | undefined   // inferred or annotated type
+    readonly definitionSpan?: SourceSpan     // source span of the name; undefined if unknown
+    <span style="color: var(--accent4);">// — pending additions before 1.0 (§5b) —</span>
+    <span style="color: var(--accent4);">// readonly containingScope?: Scope</span>
+    <span style="color: var(--accent4);">// readonly crossDocumentReferences?: readonly Reference[]</span>
+}</div>
+  <p class="desc">
+    Definition-site record.  See §5b — the two commented-out fields should be
+    added (as optional) to the 1.0 schema even if their implementations are
+    deferred, so v1.1 doesn't break the stability contract when scope and
+    cross-document tracking land.
+  </p>
+</div>
+
+<h3>10.8 Other re-exports</h3>
+
+<div class="api-block">
+  <h4>Re-exported types <span class="stability stable">stable</span></h4>
+  <div class="sig">// From the type system
+export type { SiliconType }
+
+// From the elaborator
+export type { ElaboratorRegistry }
+
+// From the module loader
+export type { ModuleRegistry }
+
+// From the AST/semantic model
+export type { SourceRange, CaaSSymbol, SymbolKind }
+
+// Result types
+export type { ParseResult, ElabResult, CheckResult, LowerResult, CompileResult }
+
+// Option types
+export type { ParseOptions, ElabOptions, CheckOptions }
+
+// Shared
+export type { Diagnostic, SourceSpan, Phase, SemanticModel }</div>
+  <p class="desc">
+    All exported from <code>src/api.ts</code>.  See
+    <code>docs/api-boundaries.md</code> for the rules governing which
+    internals are exposed through CaaS vs. which are intentionally
+    CLI-internal (e.g. <code>compileToWasm</code>, QBE tools,
+    <code>loadModules</code>).
+  </p>
+</div>
+
+<h3>10.9 What boot/ must mirror</h3>
+
+<div class="phase-intro">
+  When porting to boot/, every name in §10.1–§10.7 needs a Silicon-side
+  equivalent with the documented contract.  The mechanical surface is
+  ~22 functions / ~12 record types / 2 classes — bounded and well-scoped.
+  <br/><br/>
+  <strong>Per-section porting notes:</strong>
+  <ul class="detail" style="margin-top: 8px;">
+    <li><strong>§10.1 Pipeline functions</strong> — pure functions, port directly.
+      Boot/ Phase 7 already has parse, elaborate, typecheck, lower as separate
+      passes; wrapping them in the CaaS shape is a thin API layer.</li>
+    <li><strong>§10.2 Workspace</strong> — needs a Silicon <code>HashMap</code>
+      (shipped 5a-6 ✅) or array-of-pairs.  The <code>onDidChange</code>
+      callback model needs Silicon closures (Phase 11) <em>or</em> a
+      table-of-handlers indirection if porting before Phase 11.</li>
+    <li><strong>§10.3 Document</strong> — pure record, port directly.</li>
+    <li><strong>§10.4 SemanticModel</strong> — the
+      <code>WeakMap&lt;node, type&gt;</code> shape doesn't translate.  Use
+      <code>HashMap[i32, i32]</code> keyed by AST node id instead.</li>
+    <li><strong>§10.5 Diagnostic</strong> — pure record shape, port directly.
+      Renderer comes after.</li>
+    <li><strong>§10.6 SyntaxTree</strong> — port directly; class becomes a
+      record + free functions.</li>
+    <li><strong>§10.7 Symbol</strong> — add the optional extension fields before
+      porting so the boot/ side starts with the future-proof shape.</li>
+  </ul>
+</div>
+
+<!-- ================================================================== -->
+<h2 id="diagrams">11. Detailed architectural diagrams</h2>
+
+<p style="margin-bottom: 12px;">
+  Drill-down diagrams for each problem area, with file references and
+  highlighted hot spots.  Use these alongside §2–§5 above when reading the
+  detailed findings.
+</p>
+
+<h3>11.1 Strata 2.0 elaborator — legacy translator hot spot (§2b)</h3>
+
+<div class="diagram-block">
+<pre>
+                       STRATA 2.0 ELABORATION PATH
+
+           AST (Definition / FunctionCall / BinaryOp)
+                            │
+                            ▼
+              ┌──────────────────────────┐
+              │   strataLoader.ts        │
+              │   buildStrataRegistry    │  builds Registry from @stratum
+              └──────────┬───────────────┘   declarations in source
+                         │
+                         ▼
+              ┌──────────────────────────┐
+              │   Registry tables:       │
+              │     - keywords           │
+              │     - operators          │
+              │     - phaseHandlers      │   (decl / callSite / annotation /
+              │     - strataState        │    lower / module_finalize / comptime)
+              │     - namedHandlers      │
+              └──────────┬───────────────┘
+                         │
+        ┌────────────────┼────────────────────┐
+        │                │                    │
+        ▼                ▼                    ▼
+┌──────────────┐  ┌──────────────┐    ┌─────────────────────┐
+│ T0 built-ins │  │ T1 inline    │    │ T2 external sources │
+│ from boot/   │  │ from current │    │ from extraSources[] │
+│ strata/      │  │ file         │    │                     │
+│ builtin/*.si │  │              │    │                     │
+└──────┬───────┘  └──────┬───────┘    └─────────┬───────────┘
+       │                 │                      │
+       └─────────────────┼──────────────────────┘
+                         │
+                         ▼
+              ┌──────────────────────────┐
+              │   compileStrataHandlers  │  iterates to fixpoint;
+              │   (Phase C)              │  co-dependent handlers all converge
+              └──────────┬───────────────┘
+                         │
+                         ▼
+         ┌──────────────────────────────────────────────┐
+         │  legacyBlockTranslator        🔴 §2b         │
+         │  ┌────────────────────────────────────────┐  │
+         │  │  Rewrites &amp;Compiler::* (old form)     │  │  17 strata2.test.ts
+         │  │  → &amp;compiler::*  (new host imports)   │  │  tests SKIPPED
+         │  │                                        │  │  pending decision
+         │  │  Auto-extracts inline blocks to        │  │
+         │  │  synthetic @fn → compiled via Phase C  │  │
+         │  └────────────────────────────────────────┘  │
+         │  LOAD-BEARING: no fallback if removed today  │
+         └────────────────────┬─────────────────────────┘
+                              │
+                              ▼
+              ┌──────────────────────────┐
+              │   Handler dispatch       │  fires from src/ir/lower.ts
+              │   during lowering        │  during the main walk
+              └──────────────────────────┘
+
+DECISION TREE (§2b):
+   ┌─────────────────────────────────────────────────┐
+   │ Option A: Rewrite all in-tree strata to new form│
+   │           Delete translator.                    │
+   │           Half-day work; ~400 LOC of Silicon    │
+   │           saved in boot/.                       │
+   │                                                 │
+   │ Option B: Keep translator as permanent bridge.  │
+   │           Port to Silicon (~400 LOC).           │
+   │           Maintain two surface forms forever.   │
+   └─────────────────────────────────────────────────┘
+</pre>
+<p class="diagram-caption">
+  <strong>Hot spot.</strong>  legacyBlockTranslator is on every Phase C
+  handler-compilation path.  The 17 skipped strata2 tests can't run without
+  it, and they document patterns the new form should support natively.
+</p>
+</div>
+
+<h3>11.2 Comptime engine — bridge pattern gap (§2c)</h3>
+
+<div class="diagram-block">
+<pre>
+                       COMPTIME ENGINE (today)
+
+         Stratum handler body (Silicon code)
+                       │
+                       ▼
+          ┌────────────────────────────┐
+          │  Synthesise @fn wrapper     │
+          │  (legacyBlockTranslator     │
+          │   if needed)                │
+          └─────────────┬──────────────┘
+                        │
+                        ▼
+          ┌────────────────────────────┐
+          │  Compile @fn through       │
+          │  full pipeline → WAT       │
+          └─────────────┬──────────────┘
+                        │
+                        ▼
+          ┌────────────────────────────┐
+          │  WebAssembly.instantiate   │
+          │  with host imports         │
+          └─────────────┬──────────────┘
+                        │
+                        ▼
+          ┌──────────────────────────────────────────┐
+          │  src/comptime/imports.ts                 │
+          │   createComptimeImports()                │
+          │                                          │
+          │  Host import surface — INCOMPLETE 🔴 §2c │
+          │  ┌────────────────────────────────────┐  │
+          │  │ ✓ ir_makeBinOp / makeCall /        │  │
+          │  │   makeConst / makeNamespace        │  │
+          │  │ ✓ type_isInt / isFloat / format    │  │
+          │  │ ✓ module_pushDefinition            │  │
+          │  │ ✓ diag_error / diag_warn           │  │
+          │  │                                    │  │
+          │  │ ✗ ast::clone           — MISSING   │  │
+          │  │ ✗ ast::patch_types     — MISSING   │  │
+          │  │ ✗ ast::substitute      — partial   │  │
+          │  │ ✗ type::variable       — MISSING   │  │
+          │  │ ✗ type::substitute     — MISSING   │  │
+          │  │ ✗ complex field access — MISSING   │  │
+          │  └────────────────────────────────────┘  │
+          └─────────────┬────────────────────────────┘
+                        │
+                        ▼
+       ┌─────────────────────────────────────────┐
+       │  IF import call hits missing function:  │
+       │                                          │
+       │    Old behaviour: fall back to          │
+       │                   AST interpreter       │
+       │    New behaviour: AST interpreter was   │
+       │                   deleted in dissolution│
+       │                   → CRASH at runtime    │
+       └─────────────────────────────────────────┘
+
+DECISION (§2c):
+   ┌─────────────────────────────────────────────────┐
+   │ A. Complete the import shim in src/             │
+   │    (~1d) — gives boot/ a faithful target        │
+   │                                                 │
+   │ B. Commit to wasmtime-as-C-library (story 8-9)  │
+   │    — no shim needed; sigilc native binary       │
+   │    embeds wasmtime, comptime runs on it         │
+   └─────────────────────────────────────────────────┘
+</pre>
+<p class="diagram-caption">
+  <strong>Bridge gap.</strong>  The dissolution PR deleted the interpreter
+  fallback, but the import surface wasn't completed.  Today,
+  handlers calling missing APIs <em>crash</em> rather than degrade.  Either
+  finish the shim or commit to the wasmtime-FFI alternative.
+</p>
+</div>
+
+<h3>11.3 Backend abstraction — three ad-hoc entry points (§3a)</h3>
+
+<div class="diagram-block">
+<pre>
+                       TODAY: AD-HOC ENTRY POINTS
+
+   ┌──────────────────────────────────────────────────────────┐
+   │                                                          │
+   │ Program ──┬─▶ compileToWat(program, registry, fns,       │
+   │           │                  moduleReg, opts, model)     │
+   │           │                  → string                    │
+   │           │                                              │
+   │           ├─▶ compileToWasm(program, registry, fns,      │
+   │           │                  moduleReg, opts, model)     │
+   │           │                  → Uint8Array                │
+   │           │                  (falls back to compileToWat │
+   │           │                   for funcref modules 🟡 §3c)│
+   │           │                                              │
+   │           └─▶ lowerToQbe(program, registry, fns,         │
+   │                          moduleReg, opts, model)         │
+   │                          → string                        │
+   │                          (then invokeQbe + link)         │
+   │                                                          │
+   │ 🟡 §3a — three independent shapes; sigil_cli.ts must     │
+   │          dispatch by target string and call the right    │
+   │          one.  boot/ will inherit the same ad-hoc shape  │
+   │          unless we add the interface now.                │
+   └──────────────────────────────────────────────────────────┘
+
+                       PROPOSED: Backend&lt;T&gt; INTERFACE
+
+   ┌──────────────────────────────────────────────────────────┐
+   │                                                          │
+   │ interface Backend&lt;T&gt; {                                   │
+   │     readonly target: 'wat' | 'wasm' | 'qbe'              │
+   │     readonly artefactName: string                        │
+   │                                                          │
+   │     compile(                                             │
+   │         program: Program,                                │
+   │         registry: ElaboratorRegistry,                    │
+   │         functions: Map&lt;string, FunctionSig&gt;,             │
+   │         opts: BackendOptions,                            │
+   │     ): { artefact: T, diagnostics: readonly Diagnostic[] }│
+   │ }                                                        │
+   │                                                          │
+   │ const watBackend:  Backend&lt;string&gt;                       │
+   │ const wasmBackend: Backend&lt;Uint8Array&gt;                   │
+   │ const qbeBackend:  Backend&lt;QbeArtefact&gt;                  │
+   │                                                          │
+   │ src/sigil_cli.ts dispatches by `target`:                 │
+   │   const backend = pickBackend(opts.target)               │
+   │   const { artefact, diagnostics } = backend.compile(…)   │
+   │                                                          │
+   │ boot/ ports a single interface, 3 implementations.       │
+   └──────────────────────────────────────────────────────────┘
+</pre>
+<p class="diagram-caption">
+  <strong>3× cost saving.</strong>  Defining the interface in TypeScript
+  is ~30 LOC; the boot/ port can mirror one shape instead of three.
+  Estimated ~4h in src/; saves ~1–2d of duplicated work in boot/.
+</p>
+</div>
+
+<h3>11.4 Generic monomorphization — aspirational shape (§2a)</h3>
+
+<div class="diagram-block">
+<pre>
+                       @generic — DESIGNED, NOT SHIPPING
+
+   User writes:
+       @generic id[T] x:T := x;
+       &amp;id 42;
+       &amp;id 3.14;
+
+   INTENDED FLOW (per generic-monomorph.test.ts skipped tests):
+
+       AST: @generic id[T] x:T
+                │
+                ▼
+       ┌───────────────────────────┐
+       │ on::decl handler fires    │
+       │ ast::capture_template(id) │  stash template in stratum state
+       └───────────┬───────────────┘
+                   │
+                   ▼
+       ┌───────────────────────────┐
+       │ Wildcard on::call_site    │  on each &amp;id call
+       │   fires:                  │
+       │     - infer arg types     │
+       │     - bind T to inferred  │
+       │     - mangle name         │
+       │       id__Int / id__Float │
+       └───────────┬───────────────┘
+                   │
+                   ▼
+       ┌───────────────────────────┐
+       │ ast::clone(template)      │
+       │ ast::substitute(T → Int)  │  produce a concrete @fn
+       │ ast::patch_types          │
+       └───────────┬───────────────┘
+                   │
+                   ▼
+       ┌───────────────────────────┐
+       │ module::push_definition   │  inject id__Int into module
+       │ rewrite call site:        │
+       │   &amp;id 42 → &amp;id__Int 42  │
+       └───────────────────────────┘
+
+   STATUS:
+   ┌───────────────────────────────────────────────────────────┐
+   │  HM-lite inference engine:               ✓ shipping       │
+   │  &amp;Compiler::ast::capture_template:       ✓ in API         │
+   │  &amp;Compiler::ast::clone:                  🔴 missing host  │
+   │  &amp;Compiler::ast::substitute:             🟡 partial       │
+   │  &amp;Compiler::ast::patch_types:            🔴 missing host  │
+   │  &amp;Compiler::module::push_definition:     ✓ in API         │
+   │  Wildcard on::call_site dispatcher:      🟡 registered    │
+   │                                          but not wired E2E│
+   │  generic-monomorph.test.ts:              4/4 SKIPPED      │
+   │  generic-e2e.test.ts:                    5/6 SKIPPED      │
+   └───────────────────────────────────────────────────────────┘
+</pre>
+<p class="diagram-caption">
+  <strong>Aspirational.</strong>  The pieces exist in isolation; the
+  end-to-end story doesn't.  The skipped tests document the design but
+  never run.  This is the single biggest hidden risk — porting it to boot/
+  in this state bakes a non-functional surface into the self-host gate.
+</p>
+</div>
+
+<h3>11.5 Boot/ parser coverage gap (§5a)</h3>
+
+<div class="diagram-block">
+<pre>
+                       boot/parser/parse.si COVERAGE vs Ohm grammar
+
+   ╔═══════════════════════════╤══════════════════════════════════╗
+   ║ Grammar production         │ boot/ status                     ║
+   ╠═══════════════════════════╪══════════════════════════════════╣
+   ║ intLiteral                 │ ✓ supported                      ║
+   ║ floatLiteral               │ ✓ supported                      ║
+   ║ stringLiteral              │ ✓ supported                      ║
+   ║ booleanLiteral             │ ✓ supported                      ║
+   ║ namespace (dot / ::)       │ ✓ supported                      ║
+   ║ binary expressions         │ ✓ flat left-fold                 ║
+   ║ function calls (&amp;name)    │ ✓ supported                      ║
+   ║ parens                     │ ✓ supported                      ║
+   ╠═══════════════════════════╪══════════════════════════════════╣
+   ║ Block { … }                │ 🔴 MISSING                       ║
+   ║ Definition (@let / @fn …)  │ 🔴 MISSING                       ║
+   ║ DocComment (##)            │ 🔴 MISSING                       ║
+   ║ Assignment (:=, +=, etc.)  │ 🔴 MISSING                       ║
+   ║ VariantDecl ($Tag…)        │ 🔴 MISSING                       ║
+   ║ ArrayLiteral               │ 🔴 MISSING                       ║
+   ║ ObjectLiteral              │ 🔴 MISSING                       ║
+   ║ TupleLiteral               │ 🔴 MISSING                       ║
+   ║ generic type params [T]    │ 🔴 MISSING                       ║
+   ║ $fn surface annotation     │ 🔴 MISSING                       ║
+   ║ _ discard identifier       │ 🔴 MISSING                       ║
+   ║ multi-arg typeArgs[T, U]   │ 🔴 MISSING                       ║
+   ║ parens-as-grouping         │ 🔴 MISSING                       ║
+   ╚═══════════════════════════╧══════════════════════════════════╝
+
+   Source size today:
+     boot/parser/parse.si:  755 LOC   (handwritten recursive descent)
+     src/ast/toAst.ts:      448 LOC   (50+ Ohm semantic actions to mirror)
+
+   Story 3-26 estimate (current):  L, ~8h
+   Realistic estimate (revised):   XL, ~1–2d
+   Reason: each missing production needs hand-written recursive descent
+           + byte-equal self-host gate must pass after every commit.
+</pre>
+<p class="diagram-caption">
+  <strong>~40% coverage.</strong>  Story 3-26 in v1-user-stories.html
+  estimates this at 8h — the real number is closer to 1–2d when you account
+  for the byte-equal gate constraint and the 50+ semantic actions in
+  <code>toAst.ts</code> that need Silicon equivalents.
+</p>
+</div>
+
+<h3>11.6 Cut-over flow — when src/ can finally be deleted</h3>
+
+<div class="diagram-block">
+<pre>
+                       SRC/ → BOOT/ CUT-OVER SEQUENCE
+
+   today                                                        future
+   ─────                                                        ──────
+
+   ┌───────────┐    Steps 1–3 (this doc, §7)
+   │   src/    │    ─────────────────────────▶    [src/ + boot/ both work]
+   │  ~16 KLOC │
+   │     +     │    Phase 7 boot/ port (v1 stories)
+   │  boot/    │    ─────────────────────────▶    [byte-equal gate passes]
+   │  ~16 KLOC │
+   └───────────┘    Phase 9.5-6 + Phase 11
+                    (interpreter, native QBE)
+                    ─────────────────────────▶    [all 3 backends in boot/]
+
+                                                  Gate criteria pass (§9)
+                                                  ─────────────────────▶
+                                                                  ┌────────────┐
+                                                                  │   boot/    │
+                                                                  │  ~20 KLOC  │
+                                                                  │            │
+                                                                  │  permanent │
+                                                                  │  self-host │
+                                                                  └────────────┘
+
+   GATE CRITERIA (§9 — all must hold):
+   ┌──────────────────────────────────────────────────────────┐
+   │ ① ./build.sh check passes (byte-equal self-host)         │
+   │ ② Full src/e2e/ corpus translated and passing under boot/│
+   │ ③ All 3 backends emit byte-equal output from boot/       │
+   │ ④ CaaS surface implemented in boot/ (§10 API mirrored)   │
+   │ ⑤ Phase 7 (Strata 2.0) at 32/32 stories                  │
+   │ ⑥ Comptime engine production answer shipped              │
+   │ ⑦ Stability contract honoured                            │
+   └──────────────────────────────────────────────────────────┘
+
+   Day all seven hold:  src/ deleted in a single commit.
+                        That commit is the formal cut-over to
+                        permanent self-hosting.
+</pre>
+<p class="diagram-caption">
+  <strong>One-shot cut-over.</strong>  src/ stays in tree as the reference
+  implementation until every gate criterion holds.  No intermediate
+  "src/ deprecated" state — when the day comes, it's a single deletion
+  commit that marks the formal milestone.
+</p>
+</div>
+
+</div>
+</body>
+</html>

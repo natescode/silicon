@@ -1,0 +1,19 @@
+# SPDX-License-Identifier: MIT
+# D-D-6: ++ (string concat) migrated to new @stratum form.
+# Builds an IRCall to $str_concat with [left, right] args.
+@stratum Concat := {
+    &Compiler::register::operator '++';
+    &Compiler::on::lower '++', Concat_lower;
+};
+@fn Concat_lower node:Int := {
+    @local args:Int := &compiler::compiler_arr_new;
+    &compiler::compiler_arr_push args,
+        (&compiler::compiler_lowerExpr (&compiler::compiler_ast_node_field node, (&compiler::compiler_str_intern 'left', 0)));
+    &compiler::compiler_arr_push args,
+        (&compiler::compiler_lowerExpr (&compiler::compiler_ast_node_field node, (&compiler::compiler_str_intern 'right', 0)));
+    &compiler::ir_makeCall
+        (&compiler::compiler_str_intern 'str_concat', 0),
+        args,
+        (&compiler::compiler_str_intern 'i32', 0),
+        (&compiler::compiler_str_intern 'user', 0)
+};

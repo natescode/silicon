@@ -1,0 +1,16 @@
+## User-defined operator stratum via the unified @stratum form.
+## Defines `+++` to lower to i32.add and uses it inside a typed function.
+
+@stratum MyAdd := {
+    &Compiler::register::operator '+++';
+    &Compiler::on::lower '+++', MyAdd_lower;
+};
+
+@fn MyAdd_lower node:Int :=
+    &compiler::ir_makeBinOp
+        (&compiler::compiler_str_intern 'i32.add', 0),
+        (&compiler::compiler_lowerExpr (&compiler::compiler_ast_node_field node, (&compiler::compiler_str_intern 'left', 0))),
+        (&compiler::compiler_lowerExpr (&compiler::compiler_ast_node_field node, (&compiler::compiler_str_intern 'right', 0))),
+        (&compiler::compiler_str_intern 'i32', 0);
+
+@fn myAdd x:Int, y:Int := x +++ y;

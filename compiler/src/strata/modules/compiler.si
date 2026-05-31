@@ -1,0 +1,158 @@
+# SPDX-License-Identifier: MIT
+# Compiler comptime imports.
+#
+# This module surface mirrors `src/comptime/imports.ts` — host-side
+# implementations provided by `createComptimeImports(env)`.  Strata @fn
+# handlers compiled to WASM (Phase C of the dissolution) call these via
+# `&compiler::fn_name args` in their bodies.  Each function gets an
+# `(import "compiler" "fn_name" ...)` in the emitted WAT, satisfied by
+# the host JS at `WebAssembly.instantiate` time.
+#
+# All arguments and returns are `Int` (i32) — strings cross via
+# StringPool ids, AST nodes / IR nodes / templates / state buckets via
+# HandleTable ids.  Tagged-i32 returns (`compiler_ast_field`) encode the
+# discriminator in the high 4 bits — see `compiler_tag_kind`.
+#
+# See `src/comptime/IR_HANDLE_ABI.md` for the full calling convention.
+
+# ── Registration (one-shot at strata-load time) ────────────────────────
+@extern register_keyword              token:Int;
+@extern register_operator             token:Int;
+@extern register_annotation           token:Int;
+
+@extern on_decl                       token:Int, handlerName:Int;
+@extern on_call_site                  token:Int, handlerName:Int;
+@extern on_annotation                 token:Int, handlerName:Int;
+@extern on_module_finalize            handlerName:Int;
+@extern on_comptime                   token:Int, handlerName:Int;
+
+# ── State buckets (per-stratum or per-instance) ────────────────────────
+@extern state_stratum:Int;
+@extern state_instance:Int;
+@extern state_has:Int                 bucketId:Int, keyId:Int;
+@extern state_get:Int                 bucketId:Int, keyId:Int;
+@extern state_set                     bucketId:Int, keyId:Int, valueId:Int;
+
+# ── Array builders (used by IR builders that take arrays) ──────────────
+@extern compiler_arr_new:Int;
+@extern compiler_arr_push             arrId:Int, valueId:Int;
+@extern compiler_arr_push_str         arrId:Int, strId:Int;
+@extern compiler_arr_len:Int          arrId:Int;
+@extern compiler_arr_get:Int          arrId:Int, index:Int;
+
+# ── IR builders — basic ─────────────────────────────────────────────────
+@extern ir_makeConst:Int              value:Int, wasmType:Int;
+@extern ir_makeLocalGet:Int           name:Int, wasmType:Int;
+@extern ir_makeLocalSet:Int           name:Int, valueH:Int;
+@extern ir_makeGlobalGet:Int          name:Int, wasmType:Int;
+@extern ir_makeGlobalSet:Int          name:Int, valueH:Int;
+@extern ir_makeBinOp:Int              instr:Int, left:Int, right:Int, wasmType:Int;
+@extern ir_makeBlock:Int              stmtsArr:Int, trailing:Int, wasmType:Int;
+@extern ir_null:Int;
+@extern ir_makeCall:Int               calleeStr:Int, argsArr:Int, wasmType:Int, callKindStr:Int;
+
+# ── IR builders — control flow ─────────────────────────────────────────
+@extern ir_makeIf:Int                 cond:Int, then:Int, else_:Int, wasmType:Int;
+@extern ir_makeLoop:Int               id:Int, cond:Int, body:Int;
+@extern ir_makeBreak:Int              id:Int;
+@extern ir_makeContinue:Int           id:Int;
+@extern ir_makeReturn:Int             valueH:Int;
+
+# ── IR builders — module-level ──────────────────────────────────────────
+@extern ir_makeExport:Int             alias:Int, internalName:Int, what:Int;
+@extern ir_makeLocal:Int              name:Int, wasmType:Int;
+@extern ir_makeParam:Int              name:Int, wasmType:Int;
+@extern ir_makeGlobal:Int             name:Int, wasmType:Int, mutable:Int, init:Int;
+@extern ir_makeFunction:Int           name:Int, params:Int, returnType:Int,
+                                      locals:Int, body:Int;
+@extern ir_makeImport:Int             envStr:Int, field:Int, name:Int,
+                                      params:Int, result:Int;
+
+# ── AST field accessor — tagged i32 returns ────────────────────────────
+@extern compiler_ast_field:Int        nodeH:Int, path:Int;
+@extern compiler_tag_kind:Int         tagged:Int;
+@extern compiler_tag_value:Int        tagged:Int;
+# Convenience: walk a dotted path and unbox directly to a string-pool id
+# (returns 0 if not string-shaped) or a node handle (returns 0 if not a
+# node-shaped value).  Cuts boilerplate for migrations.
+@extern compiler_ast_str_field:Int    nodeH:Int, path:Int;
+@extern compiler_ast_node_field:Int   nodeH:Int, path:Int;
+
+# ── AST manipulation — templates ───────────────────────────────────────
+@extern ast_capture_template:Int      nodeH:Int, kind:Int;
+@extern ast_clone:Int                 templateH:Int;
+@extern ast_with_keyword:Int          templateH:Int, keyword:Int;
+@extern ast_with_name:Int             templateH:Int, name:Int;
+@extern ast_rewrite_call              callH:Int, newName:Int;
+@extern ast_patch_types:Int           templateH:Int, bindingsH:Int;
+
+# ── Types-as-data ───────────────────────────────────────────────────────
+@extern type_int:Int;
+@extern type_int64:Int;
+@extern type_float:Int;
+@extern type_bool:Int;
+@extern type_string:Int;
+@extern type_void:Int;
+@extern type_variable:Int             name:Int;
+@extern type_array:Int                elemTypeH:Int;
+@extern type_equals:Int               aH:Int, bH:Int;
+@extern type_format:Int               tH:Int;
+@extern type_substitute:Int           templateH:Int, bindingsH:Int;
+@extern type_mangle_suffix:Int        bindingsH:Int;
+
+# ── Diagnostics (T-5 accumulator model) ────────────────────────────────
+@extern diag_error                    codeStr:Int, spanH:Int, messageStr:Int, hintStr:Int;
+@extern diag_warn                     codeStr:Int, spanH:Int, messageStr:Int, hintStr:Int;
+
+# ── Utility helpers (pure) ──────────────────────────────────────────────
+# Read UTF-8 bytes from the handler's exported memory; intern in StringPool.
+# Pass `lenOrZero=0` for the Silicon string-literal layout (4-byte LE
+# length header at ptr, body at ptr+4).  Pass an explicit `len` for a raw
+# (ptr, len) range.
+@extern compiler_str_intern:Int       ptr:Int, lenOrZero:Int;
+@extern compiler_watId:Int            nameStr:Int;
+@extern compiler_freshId:Int          prefixStr:Int;
+@extern compiler_arg:Int              nodeH:Int, index:Int;
+@extern compiler_choose:Int           cond:Int, aH:Int, bH:Int;
+@extern compiler_isVarName:Int        nameStr:Int;
+
+# ── Ctx accessors (require env.ctx — set per firing by the wrapper) ────
+@extern compiler_ctx_locals_set       nameStr:Int, wasmTypeStr:Int;
+@extern compiler_ctx_locals_get:Int   nameStr:Int;
+@extern compiler_ctx_globals_set      nameStr:Int, wasmTypeStr:Int;
+@extern compiler_ctx_globals_get:Int  nameStr:Int;
+@extern compiler_ctx_varNames_add     nameStr:Int;
+@extern compiler_ctx_varNames_has:Int nameStr:Int;
+@extern compiler_ctx_pendingLocals_push   localH:Int;
+@extern compiler_ctx_loopStack_push   id:Int;
+@extern compiler_ctx_loopStack_pop:Int;
+@extern compiler_ctx_loopStack_peek:Int;
+@extern compiler_ctx_nextLoopId:Int;
+
+# ── Module accumulators ─────────────────────────────────────────────────
+@extern module_push_definition        defH:Int;
+@extern module_push_global            nameStr:Int, typeH:Int, initH:Int;
+
+# ── Lowering helpers (require env.api — set per firing) ────────────────
+@extern compiler_lowerExpr:Int            nodeH:Int;
+@extern compiler_lowerExprIfDefined:Int   nodeH:Int;
+@extern compiler_registerDefer:Int        nodeH:Int;
+@extern compiler_emitReturn:Int           argNodeH:Int;
+@extern compiler_lowerParams:Int          nodeH:Int;
+@extern compiler_lowerFunctionBody:Int    nodeH:Int, paramsArrH:Int;
+@extern compiler_funcResult_body:Int      resultH:Int;
+@extern compiler_funcResult_locals:Int    resultH:Int;
+@extern compiler_resolveFunctionReturnType:Int   nodeH:Int, nameStr:Int, bodyH:Int;
+@extern compiler_resolveType:Int          annotH:Int;
+@extern compiler_expandMatchChain:Int     rawArgsArrH:Int, inferredTypeH:Int;
+@extern compiler_lowerGlobalInit:Int      nodeH:Int, defaultTypeStr:Int;
+@extern compiler_globalInit_init:Int      resultH:Int;
+@extern compiler_globalInit_wasmType:Int  resultH:Int;
+@extern compiler_lowerExternParams:Int    nodeH:Int;
+@extern compiler_lowerExternResult:Int    nodeH:Int;
+@extern compiler_expandSumType:Int        nodeH:Int;
+@extern compiler_expandTypeRecord:Int     nodeH:Int;
+@extern compiler_expandStruct:Int         nodeH:Int;
+
+# ── Test-only ───────────────────────────────────────────────────────────
+@extern test_observe                  value:Int;

@@ -1,0 +1,31 @@
+name: Property Tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  properties:
+    name: Property suite
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      # 60-second budget per property is enforced inside the test runner via
+      # `--timeout 60000`. The job-level timeout-minutes above is the outer
+      # safety net for the whole suite (parser load + lockfile resolution
+      # dominate, so 10 minutes is plenty).
+      - name: Run property tests
+        run: bun run test:properties

@@ -1,0 +1,436 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Silicon-Only Bootstrap — Drop TypeScript &amp; Bun</title>
+  <style>
+    :root {
+      --bg: #0f1117;
+      --surface: #1a1d27;
+      --surface2: #222535;
+      --border: #2e3248;
+      --accent: #6c8ef7;
+      --accent2: #b06cf7;
+      --accent3: #3ecf8e;
+      --accent4: #f7a06c;
+      --accent5: #f76c6c;
+      --accent6: #f7e36c;
+      --text: #dde1f0;
+      --muted: #7b82a8;
+      --code-bg: #13151f;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+      padding: 40px 24px;
+    }
+    .page { max-width: 1150px; margin: 0 auto; }
+    h1 { font-size: 2rem; color: var(--accent); margin-bottom: 8px; }
+    h2 { font-size: 1.4rem; color: var(--accent2); margin: 40px 0 16px; border-bottom: 1px solid var(--border); padding-bottom: 8px; }
+    h3 { font-size: 1.1rem; color: var(--accent3); margin: 24px 0 10px; }
+    h4 { font-size: 0.95rem; color: var(--accent4); margin: 16px 0 8px; }
+    p  { margin-bottom: 12px; color: var(--text); }
+    .subtitle { color: var(--muted); font-size: 1rem; margin-bottom: 32px; }
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 20px 24px;
+      margin-bottom: 20px;
+    }
+    .card.warn { border-color: var(--accent5); }
+    .card.ok   { border-color: var(--accent3); }
+    .card.info { border-color: var(--accent);  }
+    .card.note { border-color: var(--accent4); }
+    .card.idea { border-color: var(--accent2); }
+    pre {
+      background: var(--code-bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 16px;
+      overflow-x: auto;
+      font-family: 'Cascadia Code', 'Fira Code', 'Consolas', monospace;
+      font-size: 0.82rem;
+      line-height: 1.55;
+      margin: 12px 0;
+    }
+    code { font-family: 'Cascadia Code', 'Fira Code', 'Consolas', monospace; font-size: 0.85em; background: var(--code-bg); padding: 1px 5px; border-radius: 4px; }
+    .si  { color: var(--accent3); }
+    .ir  { color: var(--accent4); }
+    .api { color: var(--accent2); }
+    .ts  { color: var(--accent5); }
+    table { width: 100%; border-collapse: collapse; margin: 12px 0; font-size: 0.85rem; }
+    th { background: var(--surface2); color: var(--accent); padding: 8px 12px; text-align: left; border: 1px solid var(--border); }
+    td { padding: 8px 12px; border: 1px solid var(--border); vertical-align: top; }
+    tr:nth-child(even) td { background: #141620; }
+    ul, ol { padding-left: 24px; margin: 8px 0 16px; }
+    li { margin-bottom: 4px; }
+    .tag {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 12px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      margin-right: 4px;
+    }
+    .tag.red    { background: #3a1515; color: var(--accent5); border: 1px solid #5a2020; }
+    .tag.green  { background: #0f2d1f; color: var(--accent3); border: 1px solid #1a4a30; }
+    .tag.blue   { background: #0f1a3a; color: var(--accent);  border: 1px solid #1a2e5a; }
+    .tag.purple { background: #1e1030; color: var(--accent2); border: 1px solid #3a1a50; }
+    .tag.orange { background: #2d1a0f; color: var(--accent4); border: 1px solid #5a3010; }
+    .tag.yellow { background: #2d2a0f; color: var(--accent6); border: 1px solid #5a5510; }
+    .phase-head {
+      display: flex;
+      align-items: baseline;
+      gap: 14px;
+      margin: 36px 0 6px;
+      padding-bottom: 8px;
+      border-bottom: 1px solid var(--border);
+    }
+    .phase-num {
+      font-size: 0.75rem;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--muted);
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 2px 10px;
+    }
+    .phase-name { color: var(--accent3); font-size: 1.25rem; font-weight: 600; }
+    .meta-row { display: grid; grid-template-columns: 110px 1fr; gap: 8px 18px; margin: 12px 0 18px; font-size: 0.88rem; }
+    .meta-row .k { color: var(--muted); }
+    .meta-row .v { color: var(--text); }
+    .gate {
+      background: #131e1a;
+      border: 1px solid var(--accent3);
+      border-radius: 6px;
+      padding: 8px 14px;
+      margin: 12px 0;
+      font-size: 0.85rem;
+    }
+    .gate .lbl { color: var(--accent3); font-weight: 600; text-transform: uppercase; font-size: 0.72rem; letter-spacing: 0.08em; }
+  </style>
+</head>
+<body>
+<div class="page">
+
+<h1>Silicon-Only Bootstrap</h1>
+<p class="subtitle">
+  Path from today's TypeScript-driven Stage 0 to a repo where every Sigil development
+  task — adding language features, running tests, producing wasm artifacts — happens
+  in Silicon alone. The deletion of <code>src/</code> is the <em>last</em> step, not the first.
+</p>
+
+<div class="card info">
+  <p><strong>What this doc is.</strong> A staged plan with concrete gates so each phase
+  lands as its own merge-able PR while the TypeScript backstop still works. No
+  phase requires the previous phase to be deleted; the cutover (Phase 7) only
+  fires after every replacement is proven by a byte-equal gate or executable test.</p>
+</div>
+
+<h2>Definition of done</h2>
+<ul>
+  <li>A fresh clone of the repo contains <strong>only</strong>: <code>boot/*.si</code>, a
+      tiny shell/PowerShell driver, and a checked-in <code>wasm-bin/stage1.wasm</code>
+      seed. No <code>src/</code>, no <code>package.json</code>, no <code>bun.lockb</code>,
+      no <code>node_modules</code>.</li>
+  <li>External tool requirements: <code>wasmtime ≥ 14</code> on <code>PATH</code>;
+      <code>wat2wasm</code> from <a href="https://github.com/WebAssembly/wabt">wabt</a> on
+      <code>PATH</code>.  Nothing else.</li>
+  <li><code>./build.sh</code> (or <code>./build.ps1</code>) rebuilds
+      <code>stage1.wasm</code> from <code>boot/*.si</code> using the prior
+      <code>stage1.wasm</code> as the compiler. The new artifact is byte-equal to
+      the seed (fixed-point check).</li>
+  <li><code>./build.sh test</code> runs the full Silicon-side test corpus
+      (a Silicon-driven harness, no <code>bun test</code>).</li>
+  <li>Adding a new <code>@stratum_keyword</code> to a <code>boot/strata/*.si</code> file is
+      sufficient to change <code>stage1</code>'s output. No TS or C glue.</li>
+</ul>
+
+<h2>Today's audit (2026-05-17)</h2>
+
+<div class="card warn">
+  <p><strong>Critical:</strong> <code>stage1.wasm</code> today is a bootstrap fixed
+  point <em>for the <code>boot/*</code> tree itself</em>, not a general Silicon
+  compiler. Several systems still live exclusively in TypeScript and must move
+  to Silicon (or to a tiny shell driver) before TS can be removed.</p>
+</div>
+
+<table>
+  <thead>
+    <tr>
+      <th>Subsystem</th>
+      <th>TypeScript source</th>
+      <th>Silicon side</th>
+      <th>Est. LoC to port</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Body interpreter for <code>&amp;Compiler::*</code> (17 entry points)</td>
+      <td><code>src/elaborator/strataBody.ts</code> (~280)</td>
+      <td><span class="tag red">missing</span> <code>boot/elab/body.si</code> handles only the simple template path (i32 binops + <code>i32_eqz</code>).</td>
+      <td>~300 + ~600 for the API surface backing</td>
+    </tr>
+    <tr>
+      <td>Typechecker</td>
+      <td><code>src/types/*</code> (~64 KB, 4 files)</td>
+      <td><span class="tag red">missing</span> No Silicon equivalent. Stage 1 currently accepts type-incorrect programs that Stage 0 rejects.</td>
+      <td>~600</td>
+    </tr>
+    <tr>
+      <td>Strata-driven IR lowering</td>
+      <td><code>src/ir/lower.ts</code>, <code>src/ir/defExpanders.ts</code>, <code>src/ir/irKinds.ts</code></td>
+      <td><span class="tag orange">hardcoded</span> <code>boot/ir/lower.si</code> (61 KB) is hand-written per-kind dispatch.  Adding a stratum in <code>src/strata/*.si</code> has no effect on stage1.</td>
+      <td>~400 (after Phase 1 lands the API)</td>
+    </tr>
+    <tr>
+      <td><code>@use</code> resolver</td>
+      <td><code>src/modules/useResolver.ts</code></td>
+      <td><span class="tag red">missing</span> Host concatenates sources before feeding stage1.</td>
+      <td>~150</td>
+    </tr>
+    <tr>
+      <td>WAT → WASM assembler</td>
+      <td><code>src/codegen/toWasm.ts</code> (wabt bindings)</td>
+      <td><span class="tag orange">external</span> Stage 1 emits WAT text; binary assembly lives in TS.</td>
+      <td>0 (shell out to <code>wat2wasm</code>) or ~800 (encoder in Silicon)</td>
+    </tr>
+    <tr>
+      <td>CLI / build driver</td>
+      <td><code>src/sigil_cli.ts</code>, <code>scripts/build-stage1.ts</code>, <code>scripts/build-boot.ts</code>, <code>scripts/run-silicon.ts</code></td>
+      <td><span class="tag orange">partial</span> <code>boot/cli.si</code> handles <code>--help</code>, path opens, accepts <code>--emit=wasix</code> as no-op.</td>
+      <td>~200 Silicon + a 50-line shell driver</td>
+    </tr>
+    <tr>
+      <td>Diagnostics (spans, JSON renderer)</td>
+      <td><code>src/errors/diagnostic.ts</code></td>
+      <td><span class="tag red">missing</span> Stage 1 panics with bare strings.</td>
+      <td>~150</td>
+    </tr>
+    <tr>
+      <td>Test harness</td>
+      <td>575 tests in <code>tests/</code> + colocated <code>*.test.ts</code></td>
+      <td><span class="tag orange">partial</span> ~12 <code>boot/tests/*.si</code> smoke tests, no generic runner, no property/fuzz coverage.</td>
+      <td>~250 for a runner; corpus port is a long tail</td>
+    </tr>
+    <tr>
+      <td>Grammar</td>
+      <td><code>src/grammar/silicon-official.ohm</code> loaded by Ohm at runtime</td>
+      <td><span class="tag orange">partial</span> Hand-rolled lexer + parser in <code>boot/parser/*.si</code> (38 KB).  Skips generic params, doc-attached metadata.</td>
+      <td>~150 for the gaps</td>
+    </tr>
+    <tr>
+      <td>LSP / VSCode extension</td>
+      <td><code>lsp-silicon/</code>, <code>vscode-silicon/</code></td>
+      <td><span class="tag blue">out of scope</span> Scheduled to move to separate repos.</td>
+      <td>n/a</td>
+    </tr>
+  </tbody>
+</table>
+
+<h2>Strategic principle</h2>
+<div class="card idea">
+  <p>Every phase ends with the repo still buildable via the existing TS toolchain
+  <em>and</em> via the new Silicon-only path. The two paths produce byte-equal
+  artifacts as the gate. We never have a "soft" cutover; the deletion in Phase 7
+  is mechanical once all gates are green.</p>
+</div>
+
+<!-- ─── Phase 1 ─── -->
+<div class="phase-head"><div class="phase-num">Phase 1</div><div class="phase-name">Body interpreter — full <code>&amp;Compiler::*</code> surface</div></div>
+<div class="meta-row">
+  <div class="k">Scope</div>     <div class="v">Extend <code>boot/elab/body.si</code> to evaluate rich strata bodies: scope, multi-segment <code>Node.x.y</code> paths, <code>@local</code> bindings, and dispatch of every <code>&amp;Compiler::*</code> call to a Silicon-backed implementation.</div>
+  <div class="k">Touches</div>   <div class="v"><code>boot/elab/body.si</code> (+~300), <code>boot/compiler_api/*.si</code> (new, ~600 across 17 ops), <code>boot/ir/lower.si</code> (refactor: extract scope/locals/globals as Compiler-API providers).</div>
+  <div class="k">Gate</div>      <div class="v">Stage 1 emits byte-equal WAT vs Stage 0 for the existing <code>src/e2e/examples/*.si</code> corpus, with <code>boot/ir/lower.si</code> patched to dispatch each rich-body keyword through <code>interpret_body</code> instead of its current hard-coded branch.</div>
+  <div class="k">Why first</div> <div class="v">Every later phase depends on it. Until rich bodies actually execute in Silicon, the strata in <code>src/strata/*.si</code> are dead text inside stage1 and <code>boot/ir/lower.si</code> is the real source of truth.</div>
+</div>
+
+<h3>Subslices (each landable on its own branch)</h3>
+<ol>
+  <li><strong>1a — Scope &amp; multi-segment path eval.</strong> Add a scope vec to <code>body.si</code>, support <code>@local x := expr;</code> bindings, evaluate <code>Node.foo.bar</code> by walking <code>AST_*</code> field offsets. <em>Tested in isolation; not yet wired into lower.si.</em></li>
+  <li><strong>1b — <code>Compiler::ir::*</code> constructors.</strong> 8 entry points that just call the existing <code>ir_*</code> builders in <code>boot/ir/nodes.si</code>: <code>makeFunction</code>, <code>makeGlobal</code>, <code>makeImport</code>, <code>makeLocal</code>, <code>makeExport</code>, <code>makeIf</code>, <code>makeLoop</code>, <code>makeConst</code>, <code>makeBreak</code>, <code>makeContinue</code>, <code>makeReturn</code>.</li>
+  <li><strong>1c — <code>Compiler::ctx::*</code> state surface.</strong> <code>globals::set</code>, <code>varNames::add</code>, <code>pendingLocals::push</code>, <code>locals::set</code>, <code>loopStack::{push,pop,peek}</code>, <code>nextLoopId</code>.  These are thin wrappers over the existing per-file globals in <code>boot/ir/lower.si</code>; the refactor moves them into a shared <code>boot/compiler_api/ctx.si</code>.</li>
+  <li><strong>1d — Lowering helpers.</strong> <code>lowerExpr</code>, <code>lowerExprIfDefined</code>, <code>arg</code>, <code>watId</code>, <code>resolveType</code>, <code>resolveFunctionReturnType</code>, <code>lowerParams</code>, <code>lowerFunctionBody</code>, <code>lowerGlobalInit</code>, <code>lowerExternParams</code>, <code>lowerExternResult</code>, <code>assertDefined</code>, <code>choose</code>, <code>isVarName</code>, <code>expandMatchChain</code>.</li>
+  <li><strong>1e — Wire-up + byte-equal gate.</strong> Replace the hard-coded <code>lower_definition</code> branches in <code>boot/ir/lower.si</code> with calls to <code>interpret_body</code> on the keyword's elaborated semantics block. Diff stage1 WAT vs stage0 WAT byte-for-byte across the e2e corpus.</li>
+</ol>
+
+<div class="gate"><span class="lbl">Gate 1</span> &nbsp; For every <code>src/e2e/examples/*.si</code> fixture: <code>stage1.wasm &lt; fixture.si</code> produces WAT byte-equal to <code>compileToWat(typecheck(elaborate(parse(fixture))))</code>.  Plus stage1==stage2 self-host stays green.</div>
+
+<!-- ─── Phase 1.5 ─── -->
+<div class="phase-head"><div class="phase-num">Phase 1.5</div><div class="phase-name">Stage1 codegen — strict-WAT correctness</div></div>
+<div class="meta-row">
+  <div class="k">Scope</div>     <div class="v">Fix the family of emit bugs in <code>boot/emit/wat.si</code> that produce WAT only wabt-NPM's permissive <code>toBinary()</code> tolerates.  Identified so far: <code>drop</code> after a void-returning <code>call</code> inside <code>@if</code> branches; same pattern in loop bodies; likely siblings in <code>@match</code> arms and tail-position void calls in function bodies.</div>
+  <div class="k">Why now</div>   <div class="v">The Phase 4+5 shell pipeline relies on standalone <code>wat2wasm</code>, which performs strict validation.  Today's stage1 output trips type-mismatch errors on every non-trivial fixture (verified on <code>arena_test</code>, <code>vec_test</code>, <code>ir_nodes_test</code>, <code>body_*_test</code>).  wabt-NPM's API path silently emits bytes that <code>wasmtime</code> then rejects at load — a worse failure mode than the strict CLI catching them up front.</div>
+  <div class="k">Triage</div>    <div class="v">Use <code>scripts/check-ts-watToWasm.ts</code> to confirm whether a given WAT is "silently invalid" (TS wabt accepts; wasmtime rejects).  If yes → stage1 codegen bug.</div>
+  <div class="k">Gate</div>      <div class="v">Every fixture in <code>boot/tests/*_test.si</code> compiles via stage1 + standalone <code>wat2wasm</code> and runs under <code>wasmtime</code> producing the expected output.  <code>./test.sh</code> exits 0.</div>
+</div>
+
+<div class="card warn">
+  <p><strong>This is the new gating phase for TS deletion.</strong>  Phase 7 cannot
+  fire until Phase 1.5's gate is green — otherwise <code>./build.sh</code> users
+  would have a working stage1 binary but no way to compile any non-trivial
+  Silicon program with it.  The bug is latent today because the bun-driven
+  test suite compiles user fixtures via Stage 0 TS (where wabt-NPM smooths
+  over the issue), not via stage1.</p>
+</div>
+
+<!-- ─── Phase 2 ─── -->
+<div class="phase-head"><div class="phase-num">Phase 2</div><div class="phase-name">Typechecker port</div></div>
+<div class="meta-row">
+  <div class="k">Scope</div>     <div class="v">Port <code>src/types/typechecker.ts</code> (1100 LoC of TS) to <code>boot/types/*.si</code>. Inference for literals, binops, calls, locals, blocks, returns; intrinsic signatures via the strata registry.</div>
+  <div class="k">Touches</div>   <div class="v"><code>boot/types/{types,checker,errors,intrinsicSig}.si</code> (new); minor hook in <code>boot/stage1.si</code> between parse and lower.</div>
+  <div class="k">Gate</div>      <div class="v">For every fixture in <code>src/types/typechecker.test.ts</code> + property-test corpus, stage1's type-error JSON dump matches Stage 0's, byte-for-byte.</div>
+</div>
+
+<div class="card note">
+  <p><strong>Sequencing risk.</strong> The typechecker is the single largest port.
+  Split it into slices mirroring TS file structure: <code>types.si</code> (the
+  <code>SiliconType</code> ADT), <code>intrinsicSig.si</code>, <code>errors.si</code>,
+  <code>checker.si</code> (top-down walker).  Each slice ships with its own
+  byte-equal gate against the corresponding TS module's exposed behaviour.</p>
+</div>
+
+<!-- ─── Phase 3 ─── -->
+<div class="phase-head"><div class="phase-num">Phase 3</div><div class="phase-name"><code>@use</code> resolver + multi-file entry</div></div>
+<div class="meta-row">
+  <div class="k">Scope</div>     <div class="v">Port <code>src/modules/useResolver.ts</code> (cycle-safe, depth-first <code>@use</code> walk) to <code>boot/modules/use.si</code>. Update <code>stage1.si</code>'s entry so that, given a single source-file path, it resolves the <code>@use</code> graph from disk via <code>path_open</code> + <code>fd_read</code> rather than expecting a concat bundle on stdin.</div>
+  <div class="k">Gate</div>      <div class="v"><code>wasmtime --dir . stage1.wasm boot/main.si</code> compiles the same WAT as the existing host-concat path.</div>
+</div>
+
+<!-- ─── Phase 4 ─── -->
+<div class="phase-head"><div class="phase-num">Phase 4</div><div class="phase-name">WAT-to-WASM step</div></div>
+<div class="meta-row">
+  <div class="k">Decision</div>  <div class="v"><strong>Shell out to <code>wat2wasm</code></strong> (from wabt). Pure encoder in Silicon is ~800 LoC of fiddly leb128 + section ordering — deferred to a Phase 4-bis if external wabt becomes unacceptable.</div>
+  <div class="k">Touches</div>   <div class="v"><code>build.sh</code>, <code>build.ps1</code> — shell drivers that run <code>wasmtime stage1.wasm &lt; bundle | wat2wasm - -o out.wasm</code>.</div>
+  <div class="k">Gate</div>      <div class="v">Same byte sequence as <code>watToWasm()</code> in <code>src/codegen/toWasm.ts</code> on every fixture; <code>stage1.wasm</code> produced by the shell path equals the one produced by <code>scripts/build-stage1.ts</code>.</div>
+</div>
+
+<div class="card note">
+  <p><strong>Why wabt is acceptable.</strong> <code>wat2wasm</code> is a single static
+  binary, redistributable, and already required for the existing test suite.
+  Treating it as a "platform" tool (like <code>wasmtime</code> itself) keeps the
+  Silicon-only repo honest without growing a second 800-LoC subsystem.</p>
+</div>
+
+<!-- ─── Phase 5 ─── -->
+<div class="phase-head"><div class="phase-num">Phase 5</div><div class="phase-name">Shell-driven build &amp; self-host loop</div></div>
+<div class="meta-row">
+  <div class="k">Scope</div>     <div class="v">Replace <code>scripts/build-stage1.ts</code> + <code>scripts/run-silicon.ts</code> with a single shell driver that uses only the prior <code>stage1.wasm</code> as the compiler.</div>
+  <div class="k">Touches</div>   <div class="v"><code>build.sh</code>, <code>build.ps1</code>, optional <code>Makefile</code>.</div>
+  <div class="k">Gate</div>      <div class="v">Fixed-point: <code>./build.sh stage1</code> produces a wasm byte-equal to the seed stage1 in <code>wasm-bin/</code>; <code>./build.sh stage1 stage2</code> produces wasm byte-equal to that.</div>
+</div>
+
+<pre>
+# build.sh (sketch)
+#!/usr/bin/env bash
+set -euo pipefail
+STAGE_IN=${1:-wasm-bin/stage1.wasm}
+STAGE_OUT=${2:-wasm-bin/stage1.next.wasm}
+
+# Concat boot/ tree in dependency order. boot/build_order.txt is checked in.
+cat $(cat boot/build_order.txt) > /tmp/sigil-bundle.si
+
+# Compile with the existing stage1 → WAT.
+wasmtime --dir . "$STAGE_IN" < /tmp/sigil-bundle.si > /tmp/stage.wat
+
+# Assemble.
+wat2wasm /tmp/stage.wat -o "$STAGE_OUT"
+
+# Self-host check.
+cmp "$STAGE_IN" "$STAGE_OUT" && echo "fixed point ✓"
+</pre>
+
+<!-- ─── Phase 6 ─── -->
+<div class="phase-head"><div class="phase-num">Phase 6</div><div class="phase-name">Silicon-side test runner</div></div>
+<div class="meta-row">
+  <div class="k">Scope</div>     <div class="v"><code>boot/test_runner.si</code>: walks a tests dir, runs each <code>*.test.si</code>'s entry under stage1, asserts that the printed output matches a sibling <code>*.expected</code> file. Port the most critical TS tests as Silicon fixtures.</div>
+  <div class="k">Gate</div>      <div class="v">All Phase 1/2/3 gate tests now run under the Silicon runner. <code>./build.sh test</code> exits 0 on a clean tree.</div>
+</div>
+
+<!-- ─── Phase 7 ─── -->
+<div class="phase-head"><div class="phase-num">Phase 7</div><div class="phase-name">Delete TypeScript</div></div>
+<div class="meta-row">
+  <div class="k">Scope</div>     <div class="v">Mechanical removal. Delete <code>src/</code>, <code>scripts/*.ts</code>, <code>tests/</code> (after porting what's needed), <code>package.json</code>, <code>bun.lockb</code>, <code>tsconfig.json</code>, <code>node_modules</code>. Update README + CLAUDE.md.</div>
+  <div class="k">Pre-flight</div><div class="v">Phases 1–6 all green on CI. Seed <code>stage1.wasm</code> committed to <code>wasm-bin/</code> (yes, binary in git — same precedent as boot.wasm today).</div>
+  <div class="k">Gate</div>      <div class="v">Fresh clone → <code>./build.sh</code> → byte-equal stage1; <code>./build.sh test</code> → exit 0. Nothing else.</div>
+</div>
+
+<h2>Risks &amp; mitigations</h2>
+<table>
+  <thead><tr><th>Risk</th><th>Mitigation</th></tr></thead>
+  <tbody>
+    <tr><td>Phase 1 introduces subtle ordering bugs that break stage1==stage2.</td><td>Each subslice (1a–1e) ships behind a feature flag in <code>boot/ir/lower.si</code> — old hard-coded path stays as fallback until 1e's byte-equal gate passes on the full corpus.</td></tr>
+    <tr><td>Typechecker port (Phase 2) drifts from Stage 0's error messages.</td><td>Compare JSON-mode output, not human strings. Stage 0 already has <code>--diagnostics=json</code>; stage1's port emits the same schema.</td></tr>
+    <tr><td>Bootstrapping from zero (no prior stage1.wasm).</td><td>Seed <code>wasm-bin/stage1.wasm</code> stays in git. Treat it like a Rust compiler treats its seed binary. Updating it requires a <code>./build.sh stage1 stage2 &amp;&amp; cp …</code> incantation, intentionally a two-step ritual.</td></tr>
+    <tr><td>Grammar gap discovered late.</td><td>Run the Stage 0 corpus through stage1's parser on every PR; failing fixtures gate the merge. Already wired up (38/40 byte-equal today).</td></tr>
+    <tr><td>Loss of property tests / fuzz coverage.</td><td>Out of scope for Phase 7. The Silicon-side runner doesn't replace property tests on day one; treat fuzz/property suites as a separate (TS-bound) CI job that can stay in a sibling tooling repo if needed.</td></tr>
+  </tbody>
+</table>
+
+<h2>What landed on <code>bootstrap/silicon-only</code> this session</h2>
+<ul>
+  <li>This plan doc.</li>
+  <li><strong>Phase 1a</strong> — scope + multi-segment <code>Node.x.y</code> path eval helpers in
+      <code>boot/elab/body_scope.si</code>; tested in isolation via
+      <code>boot/tests/body_scope_test.si</code>.  Additive — does not touch
+      <code>lower.si</code>; stage1==stage2 self-host gate preserved.</li>
+  <li><strong>Phase 1b</strong> — rich-body dispatcher (<code>boot/elab/body_rich.si</code>)
+      handling <code>&amp;IR::null</code>, <code>&amp;Compiler::ir::makeConst</code>,
+      <code>makeIf</code>, <code>makeBreak</code>, <code>makeContinue</code>,
+      <code>makeReturn</code>, <code>makeLoop</code>; <code>@local</code> bindings
+      evaluated against the scope; nested call args recurse.  Tested via
+      <code>boot/tests/body_rich_test.si</code> (6 assertions).</li>
+  <li><strong>Phase 4+5</strong> — <code>build.sh</code> / <code>build.ps1</code> shell drivers
+      that rebuild <code>stage1.wasm</code> from <code>boot/*.si</code> using only
+      <code>wasmtime</code> + <code>wat2wasm</code>.  Bundle composition verified
+      byte-equal to <code>scripts/build-stage1.ts</code> output (261 371 bytes WAT).
+      <code>wasm-bin/stage1.wasm</code> checked in as the bootstrap seed.</li>
+  <li><strong>Phase 6 (skeleton)</strong> — <code>test.sh</code> with shell-side
+      <code>@use</code> resolver; structural pipeline correct but blocked by
+      Phase 1.5 codegen issue (see card above).</li>
+  <li><strong>Diagnostic tool</strong> — <code>scripts/check-ts-watToWasm.ts</code> for
+      triaging "silently invalid" WAT output.</li>
+</ul>
+
+<h3>Not landed; deletion blockers</h3>
+<ul>
+  <li><strong>Phase 1.5</strong> — stage1 emits invalid WAT for arbitrary user
+      programs.  Strict <code>wat2wasm</code> rejects; wabt-NPM silently emits
+      bytes that <code>wasmtime</code> then rejects.  Must fix before Phase 7.</li>
+  <li><strong>Phase 1c–1e</strong> — stage1 still uses hardcoded per-keyword
+      branches in <code>boot/ir/lower.si</code>; rich-body dispatch isn't wired in.
+      Adding a stratum to <code>src/strata/*.si</code> doesn't yet change stage1's
+      output.</li>
+  <li><strong>Phase 2</strong> — no Silicon-side typechecker.</li>
+  <li><strong>Phase 3</strong> — no Silicon-side <code>@use</code> resolver; build
+      scripts still hand-concatenate the bundle.</li>
+  <li><strong>Phase 6 (full)</strong> — Silicon-driven test runner blocked on
+      Phase 1.5.</li>
+  <li><strong>Phase 7</strong> — TypeScript deletion gated on all of the above.</li>
+</ul>
+
+<div class="card warn">
+  <p><strong>Honest scope for TS deletion.</strong>  The repo can today rebuild
+  stage1 byte-equal via the shell pipeline (Phase 4+5), but stage1 itself
+  cannot yet compile arbitrary user programs cleanly through standalone
+  <code>wat2wasm</code> (Phase 1.5 codegen bug).  Deleting <code>src/</code> in this
+  state would leave new-feature development effectively dead: no typechecker,
+  no working Silicon test loop, codegen bugs only the TS-side wabt-NPM
+  permissive mode papered over.</p>
+</div>
+
+<div class="card ok">
+  <p><strong>Tracking.</strong> Update <code>docs/bootstrap-status.md</code> as each
+  phase merges. The status doc is already the canonical "where are we"
+  reference; this plan is the "where are we going" companion.</p>
+</div>
+
+</div>
+</body>
+</html>

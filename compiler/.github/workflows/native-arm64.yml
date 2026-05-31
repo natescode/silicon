@@ -1,0 +1,73 @@
+name: Native Backend (Linux ARM64)
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'src/codegen/qbe/**'
+      - 'src/sigil_cli.ts'
+      - '.github/workflows/native-arm64.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'src/codegen/qbe/**'
+      - 'src/sigil_cli.ts'
+      - '.github/workflows/native-arm64.yml'
+
+jobs:
+  native-linux-arm64:
+    name: QBE native backend — Linux ARM64
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Install QBE and GCC
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y qbe gcc
+
+      - name: Verify toolchain
+        run: |
+          qbe -h 2>&1 | head -3 || true
+          gcc --version | head -1
+          cc --version  | head -1
+          uname -m
+
+      # Run the full QBE test suite: unit tests + linker tests + native e2e
+      # On ARM64 the hostQbeArch() e2e check validates 'arm64' target selection.
+      - name: Run QBE tests (unit + integration + e2e)
+        run: bun run test:qbe
+
+      # Smoke-test the sgl CLI's --native flag end-to-end.
+      # sgl run --native propagates the program's exit code, so we capture it explicitly.
+      - name: sgl run --native smoke test (exit 0)
+        run: |
+          echo '@fn main:Int := 0;' > /tmp/smoke_zero.si
+          bun run src/sigil_cli.ts run --native /tmp/smoke_zero.si
+          echo "Exit code: $?"
+
+      - name: sgl run --native smoke test (exit 42 — expect failure captured)
+        run: |
+          echo '@fn main:Int := 42;' > /tmp/smoke42.si
+          bun run src/sigil_cli.ts run --native /tmp/smoke42.si || code=$?
+          echo "Program exited with code ${code:-0}"
+          [ "${code:-0}" -eq 42 ] && echo "PASS: got expected exit code 42"
+
+      - name: sgl build --native smoke test
+        run: |
+          echo '@fn main:Int := 0;' > /tmp/arith.si
+          bun run src/sigil_cli.ts build --native /tmp/arith.si
+          # defaultExePath strips the directory; the executable lands in the cwd as ./arith
+          ./arith
+          echo "Exit code from ./arith: $?"

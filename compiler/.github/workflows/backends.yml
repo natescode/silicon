@@ -1,0 +1,60 @@
+name: Backend consistency — WAT + QBE determinism
+
+# Verifies that both compilation backends produce byte-equal output across
+# runs (determinism gate) and agree on type encodings (cross-backend
+# consistency gate).  No qbe or cc binary required — all assertions are
+# textual.  Runs on the full tier-1 platform matrix to catch any
+# platform-specific non-determinism (locale, filesystem ordering, etc.).
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'src/codegen/**'
+      - 'src/ir/**'
+      - 'src/e2e/backends.test.ts'
+      - 'src/e2e/examples/**'
+      - '.github/workflows/backends.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'src/codegen/**'
+      - 'src/ir/**'
+      - 'src/e2e/backends.test.ts'
+      - 'src/e2e/examples/**'
+      - '.github/workflows/backends.yml'
+
+jobs:
+  backends:
+    name: backends (${{ matrix.label }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            label: linux-x64
+          - os: ubuntu-24.04-arm
+            label: linux-arm64
+          - os: macos-14
+            label: macos-arm64
+          - os: macos-13
+            label: macos-x64
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      # No qbe/cc install needed — all tests are textual.
+      - name: Run backend consistency tests
+        run: bun run test:backends

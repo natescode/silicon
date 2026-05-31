@@ -1,0 +1,1240 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Sigil Stage 0 — Production-Grade Roadmap</title>
+  <style>
+    :root {
+      --bg: #0f1117;
+      --surface: #1a1d27;
+      --surface2: #222535;
+      --border: #2e3248;
+      --accent: #6c8ef7;
+      --accent2: #b06cf7;
+      --accent3: #3ecf8e;
+      --accent4: #f7a06c;
+      --accent5: #f76c6c;
+      --accent6: #f7e36c;
+      --text: #dde1f0;
+      --muted: #7b82a8;
+      --code-bg: #13151f;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+      padding: 40px 24px;
+    }
+    .page { max-width: 1200px; margin: 0 auto; }
+    h1 { font-size: 2rem; color: var(--accent); margin-bottom: 8px; }
+    h2 { font-size: 1.45rem; color: var(--accent2); margin: 44px 0 16px; border-bottom: 1px solid var(--border); padding-bottom: 8px; }
+    h3 { font-size: 1.05rem; color: var(--accent3); margin: 22px 0 10px; }
+    p  { margin-bottom: 12px; color: var(--text); }
+    .subtitle { color: var(--muted); font-size: 1rem; margin-bottom: 32px; }
+    code { font-family: 'Cascadia Code', 'Fira Code', 'Consolas', monospace; font-size: 0.85em; background: var(--code-bg); padding: 1px 5px; border-radius: 4px; }
+    pre { background: var(--code-bg); border: 1px solid var(--border); border-radius: 8px; padding: 14px; font-family: 'Cascadia Code', monospace; font-size: 0.82rem; overflow-x: auto; margin: 10px 0; }
+    .toc { background: var(--surface2); border: 1px solid var(--border); border-radius: 8px; padding: 14px 20px; margin: 16px 0 28px; }
+    .toc h3 { margin-top: 0; color: var(--accent); font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.08em; }
+    .toc ol { columns: 2; column-gap: 32px; padding-left: 18px; }
+    .toc a { color: var(--text); text-decoration: none; border-bottom: 1px dotted var(--muted); }
+    .toc a:hover { color: var(--accent); border-bottom-color: var(--accent); }
+    .legend { display: flex; gap: 16px; flex-wrap: wrap; margin: 14px 0 24px; font-size: 0.82rem; }
+    .legend .item { display: flex; align-items: center; gap: 6px; }
+    .tag {
+      display: inline-block;
+      padding: 1px 8px;
+      border-radius: 10px;
+      font-size: 0.7rem;
+      font-weight: 600;
+      letter-spacing: 0.02em;
+      margin-right: 2px;
+      vertical-align: middle;
+    }
+    .tag.p0 { background: #3a1515; color: var(--accent5); border: 1px solid #5a2020; }
+    .tag.p1 { background: #2d1a0f; color: var(--accent4); border: 1px solid #5a3010; }
+    .tag.p2 { background: #2d2a0f; color: var(--accent6); border: 1px solid #5a5510; }
+    .tag.p3 { background: #0f1a3a; color: var(--accent);  border: 1px solid #1a2e5a; }
+    .tag.xs { background: #1e1030; color: var(--accent2); border: 1px solid #3a1a50; }
+    .tag.s  { background: #1e1030; color: var(--accent2); border: 1px solid #3a1a50; }
+    .tag.m  { background: #1e1030; color: var(--accent2); border: 1px solid #3a1a50; }
+    .tag.l  { background: #1e1030; color: var(--accent2); border: 1px solid #3a1a50; }
+    .tag.xl { background: #1e1030; color: var(--accent2); border: 1px solid #3a1a50; }
+    .tag.xxl { background: #1e1030; color: var(--accent2); border: 1px solid #3a1a50; }
+    .tag.dep { background: var(--surface2); color: var(--muted); border: 1px solid var(--border); }
+    .story {
+      background: var(--surface);
+      border-left: 3px solid var(--border);
+      border-radius: 0 6px 6px 0;
+      padding: 12px 18px;
+      margin: 10px 0;
+    }
+    .story.p0 { border-left-color: var(--accent5); }
+    .story.p1 { border-left-color: var(--accent4); }
+    .story.p2 { border-left-color: var(--accent6); }
+    .story.p3 { border-left-color: var(--accent); }
+    .story .head { display: flex; gap: 10px; align-items: baseline; margin-bottom: 6px; flex-wrap: wrap; }
+    .story .id   { font-family: monospace; font-size: 0.78rem; color: var(--muted); min-width: 75px; }
+    .story .title { color: var(--text); font-weight: 600; flex: 1 1 auto; }
+    .story .meta { font-size: 0.78rem; color: var(--muted); }
+    .story .body { color: var(--text); font-size: 0.92rem; line-height: 1.55; }
+    .story .body p { margin-bottom: 6px; }
+    .story .body em { color: var(--accent3); font-style: normal; }
+    .story .body strong { color: var(--accent4); font-weight: 600; }
+    .story .ac { margin-top: 6px; padding-left: 18px; }
+    .story .ac li { margin-bottom: 3px; font-size: 0.88rem; color: var(--text); }
+    .group-intro { color: var(--muted); font-size: 0.92rem; margin-bottom: 16px; }
+    hr.thin { border: none; border-top: 1px solid var(--border); margin: 30px 0 18px; }
+    .scale-table { width: 100%; border-collapse: collapse; margin: 10px 0 24px; font-size: 0.85rem; }
+    .scale-table th { background: var(--surface2); color: var(--accent); padding: 6px 12px; text-align: left; border: 1px solid var(--border); }
+    .scale-table td { padding: 6px 12px; border: 1px solid var(--border); vertical-align: top; }
+  </style>
+</head>
+<body>
+<div class="page">
+
+<h1>Sigil Stage 0 — Production-Grade Roadmap</h1>
+<p class="subtitle">
+  Ordered user stories grouped by feature.  Goal: take the TypeScript
+  Stage 0 compiler from "works for the maintainer" to "an outside
+  developer picks it up and ships software with it."
+  Companion to <a href="bootstrap-audit.html" style="color: var(--accent);">bootstrap-audit.html</a>;
+  this doc focuses on Stage 0, the bootstrap audit on stage1.
+</p>
+
+<h2 style="margin-top: 20px;">Scales</h2>
+
+<table class="scale-table">
+  <tr><th style="width: 110px;">Priority</th><th>Meaning</th></tr>
+  <tr><td><span class="tag p0">P0</span></td><td>Blocking &mdash; a developer hits this on day 1 / first hour.  Compiler isn't "production" without it.</td></tr>
+  <tr><td><span class="tag p1">P1</span></td><td>High &mdash; developer hits within first non-trivial project.  Required for serious adoption.</td></tr>
+  <tr><td><span class="tag p2">P2</span></td><td>Medium &mdash; quality-of-life.  Differentiates a "respectable" compiler from a "modern" one.</td></tr>
+  <tr><td><span class="tag p3">P3</span></td><td>Low &mdash; nice-to-have, post-1.0.  Polish, ecosystem, advanced features.</td></tr>
+</table>
+
+<table class="scale-table">
+  <tr><th style="width: 110px;">Effort</th><th>Approx engineer-days</th></tr>
+  <tr><td><span class="tag xs">XS</span></td><td>&lt; 1 day</td></tr>
+  <tr><td><span class="tag s">S</span></td><td>1&ndash;3 days</td></tr>
+  <tr><td><span class="tag m">M</span></td><td>3&ndash;10 days</td></tr>
+  <tr><td><span class="tag l">L</span></td><td>2&ndash;4 weeks</td></tr>
+  <tr><td><span class="tag xl">XL</span></td><td>1&ndash;3 months</td></tr>
+  <tr><td><span class="tag xxl">XXL</span></td><td>3+ months</td></tr>
+</table>
+
+<div class="toc">
+  <h3>Feature groups</h3>
+  <ol>
+    <li><a href="#diag">Error reporting &amp; diagnostics</a></li>
+    <li><a href="#tool">Developer tooling</a></li>
+    <li><a href="#std">Standard library</a></li>
+    <li><a href="#pkg">Module system &amp; package management</a></li>
+    <li><a href="#lang">Language features</a></li>
+    <li><a href="#perf">Compiler performance</a></li>
+    <li><a href="#dist">Distribution &amp; packaging</a></li>
+    <li><a href="#test">Testing &amp; quality assurance</a></li>
+    <li><a href="#wasm">WASM target maturity</a></li>
+    <li><a href="#doc">Documentation &amp; learning resources</a></li>
+    <li><a href="#ci">CI / DevOps</a></li>
+  </ol>
+</div>
+
+<!-- ============================================================== -->
+<h2 id="diag">1. Error reporting &amp; diagnostics</h2>
+<p class="group-intro">
+  The single most user-visible part of a compiler.  Modern languages (Rust, Elm,
+  Swift) compete on diagnostic quality; Silicon's current messages are
+  functional but plain.  Stage 0 already has line/col info; this group makes
+  that info actionable.
+</p>
+
+<div class="story p0">
+  <div class="head">
+    <span class="id">DIAG-1</span>
+    <span class="title">Source-line excerpt with caret pointer</span>
+    <span class="meta"><span class="tag p0">P0</span> <span class="tag s">S</span></span>
+  </div>
+  <div class="body">
+    <p>As a <em>Silicon developer</em>, I want each error to include the source line and a caret pointing at the offending token, so that I don't have to open the file and count to find the location.</p>
+    <p><strong>Today:</strong> <code>[Mismatch] 12:5: expected Int, got Float</code></p>
+    <p><strong>Target:</strong></p>
+    <pre>error[E0102]: type mismatch
+  --&gt; src/main.si:12:5
+   |
+12 |     @let count:Int := 3.14;
+   |     ^^^^^^^^^^^^^^^^^^^^^^ expected Int, got Float
+   |</pre>
+    <ol class="ac">
+      <li>Error output includes file path, line, column.</li>
+      <li>Source line is rendered with line number gutter.</li>
+      <li>Caret span matches the AST node's source range (start col → end col).</li>
+      <li>Multi-line spans render the first + last lines with <code>...</code> elision.</li>
+    </ol>
+  </div>
+</div>
+
+<div class="story p0">
+  <div class="head">
+    <span class="id">DIAG-2</span>
+    <span class="title">Color-coded terminal output</span>
+    <span class="meta"><span class="tag p0">P0</span> <span class="tag xs">XS</span> <span class="tag dep">needs DIAG-1</span></span>
+  </div>
+  <div class="body">
+    <p>As a <em>Silicon developer</em>, I want errors color-coded (red for errors, yellow for warnings, blue for notes, dim grey for gutters), so the important information jumps out at a glance.</p>
+    <ol class="ac">
+      <li>ANSI escape codes when stderr is a TTY; plain text when piped.</li>
+      <li><code>--color=auto|always|never</code> flag respects user preference.</li>
+      <li><code>NO_COLOR</code> env var disables color (industry standard).</li>
+    </ol>
+  </div>
+</div>
+
+<div class="story p1">
+  <div class="head">
+    <span class="id">DIAG-3</span>
+    <span class="title">Stable error codes with documentation pages</span>
+    <span class="meta"><span class="tag p1">P1</span> <span class="tag m">M</span></span>
+  </div>
+  <div class="body">
+    <p>As a <em>Silicon developer</em>, I want every diagnostic to carry a stable <code>E####</code> code that I can look up online, so I can find the canonical explanation and example fix.</p>
+    <ol class="ac">
+      <li>Every <code>TypeError</code> / <code>ElaborationError</code> / parse error gets a code.</li>
+      <li><code>docs/errors/E0001.md</code> &hellip; one page per code with: explanation, example failing code, example fix, related codes.</li>
+      <li>Error output includes a link: <code>For more, see https://silicon-lang.dev/errors/E0102</code>.</li>
+      <li><code>silicon explain E0102</code> prints the doc page locally.</li>
+    </ol>
+  </div>
+</div>
+
+<div class="story p1">
+  <div class="head">
+    <span class="id">DIAG-4</span>
+    <span class="title">"Did you mean" suggestions for typos</span>
+    <span class="meta"><span class="tag p1">P1</span> <span class="tag m">M</span></span>
+  </div>
+  <div class="body">
+    <p>As a <em>Silicon developer</em>, I want the compiler to suggest the closest valid identifier / type / keyword when I make a typo.</p>
+    <p>Example: <code>@let x:Itn := 5;</code> → <em>note: did you mean <code>Int</code>?</em></p>
+    <ol class="ac">
+      <li>Levenshtein distance &le; 2 against in-scope identifiers / known types / registered keywords.</li>
+      <li>Suggestion rendered as a separate <em>note</em> line under the main error.</li>
+      <li>Suggestion only fires when there is exactly one obvious candidate (avoid noise).</li>
+    </ol>
+  </div>
+</div>
+
+<div class="story p1">
+  <div class="head">
+    <span class="id">DIAG-5</span>
+    <span class="title">Cross-file error chains for <code>@use</code> imports</span>
+    <span class="meta"><span class="tag p1">P1</span> <span class="tag s">S</span></span>
+  </div>
+  <div class="body">
+    <p>As a <em>Silicon developer</em>, I want errors from <code>@use</code>'d files to show the import chain that led to them, so I can navigate from "consumer.si compile failed" to the root cause in a dependency.</p>
+    <ol class="ac">
+      <li>Errors record the <code>@use</code> stack at the time of import.</li>
+      <li>Output prefixes each cross-file error with <em>note: imported from a.si:3 → b.si:7 → c.si</em>.</li>
+    </ol>
+  </div>
+</div>
+
+<div class="story p2">
+  <div class="head">
+    <span class="id">DIAG-6</span>
+    <span class="title">Machine-readable JSON output</span>
+    <span class="meta"><span class="tag p2">P2</span> <span class="tag s">S</span></span>
+  </div>
+  <div class="body">
+    <p>As an <em>editor integrator</em> (LSP, CI, custom tools), I want a <code>--message-format=json</code> flag that emits one JSON object per diagnostic on stdout, so I can consume diagnostics programmatically without parsing the pretty-printed text.</p>
+    <ol class="ac">
+      <li>Schema documented at <code>docs/diagnostic-schema.json</code>.</li>
+      <li>Includes file, span (line/col + byte offsets), severity, code, message, hint, source label.</li>
+    </ol>
+  </div>
+</div>
+
+<div class="story p2">
+  <div class="head">
+    <span class="id">DIAG-7</span>
+    <span class="title">GitHub Actions annotation format</span>
+    <span class="meta"><span class="tag p2">P2</span> <span class="tag xs">XS</span> <span class="tag dep">needs DIAG-6</span></span>
+  </div>
+  <div class="body">
+    <p>As a <em>CI maintainer</em>, I want <code>--message-format=github</code> to emit errors as GitHub Actions annotations, so failures land as inline annotations in the PR diff view.</p>
+    <ol class="ac">
+      <li>Outputs <code>::error file=src/main.si,line=12,col=5::expected Int, got Float</code>.</li>
+      <li>Documented in <code>.github/workflows/test.yml</code> example.</li>
+    </ol>
+  </div>
+</div>
+
+<div class="story p2">
+  <div class="head">
+    <span class="id">DIAG-8</span>
+    <span class="title">Parse-error recovery for multiple errors per file</span>
+    <span class="meta"><span class="tag p2">P2</span> <span class="tag l">L</span></span>
+  </div>
+  <div class="body">
+    <p>As a <em>Silicon developer</em>, I want the parser to recover from one syntax error and continue, so the compiler reports as many errors as it can find in a single run.</p>
+    <ol class="ac">
+      <li>Parser sync points: <code>;</code>, top-level keyword, <code>}</code>.</li>
+      <li>Reports up to N errors per file (default 16, configurable) before bailing.</li>
+      <li>Doesn't cascade — a parse error doesn't generate fake type errors downstream.</li>
+    </ol>
+  </div>
+</div>
+
+<!-- ============================================================== -->
+<h2 id="tool">2. Developer tooling</h2>
+<p class="group-intro">
+  Beyond the compiler binary itself.  Modern language ecosystems expect a
+  formatter, scaffolder, doc generator, and watch mode in the box.
+</p>
+
+<div class="story p0">
+  <div class="head">
+    <span class="id">TOOL-1</span>
+    <span class="title"><code>silicon fmt</code> &mdash; canonical formatter</span>
+    <span class="meta"><span class="tag p0">P0</span> <span class="tag m">M</span></span>
+  </div>
+  <div class="body">
+    <p>As a <em>Silicon developer working on a team</em>, I want a deterministic formatter so we stop bikeshedding style and diffs stay minimal.</p>
+    <ol class="ac">
+      <li><code>silicon fmt src/</code> formats every <code>.si</code> file in place.</li>
+      <li><code>silicon fmt --check src/</code> exits non-zero on any deviation (for CI).</li>
+      <li>Idempotent: <code>fmt(fmt(x)) == fmt(x)</code>.</li>
+      <li>Preserves <code>#</code> line comments and <code>##</code> doc comments.</li>
+      <li>No configuration knobs (Go-style — opinionated).</li>
+    </ol>
+  </div>
+</div>
+
+<div class="story p1">
+  <div class="head">
+    <span class="id">TOOL-2</span>
+    <span class="title"><code>silicon new</code> &mdash; project scaffolding</span>
+    <span class="meta"><span class="tag p1">P1</span> <span class="tag s">S</span></span>
+  </div>
+  <div class="body">
+    <p>As a <em>new Silicon user</em>, I want one command to generate a working starter project, so I'm not copying boilerplate from a README.</p>
+    <ol class="ac">
+      <li><code>silicon new my-app</code> creates a directory with: <code>silicon.toml</code>, <code>src/main.si</code> (hello-world template), <code>.gitignore</code>, <code>README.md</code>.</li>
+      <li><code>silicon new --lib my-lib</code> for libraries (different template).</li>
+      <li>Generated project compiles + runs immediately: <code>silicon run</code>.</li>
+    </ol>
+  </div>
+</div>
+
+<div class="story p1">
+  <div class="head">
+    <span class="id">TOOL-3</span>
+    <span class="title"><code>silicon watch</code> &mdash; rebuild on save</span>
+    <span class="meta"><span class="tag p1">P1</span> <span class="tag s">S</span> <span class="tag dep">amortized by PERF-1</span></span>
+  </div>
+  <div class="body">
+    <p>As a <em>Silicon developer</em>, I want the compiler to watch source files and rebuild on save, so my dev loop is &lt; 500 ms.</p>
+    <ol class="ac">
+      <li><code>silicon watch [path]</code> uses chokidar (or Bun's <code>--watch</code>) to react to <code>.si</code> changes.</li>
+      <li>Re-runs the full pipeline; later combined with incremental cache (PERF-1) for sub-second response.</li>
+      <li>Clear-screen on each rebuild; persistent error list at the bottom until clean.</li>
+    </ol>
+  </div>
+</div>
+
+<div class="story p1">
+  <div class="head">
+    <span class="id">TOOL-4</span>
+    <span class="title"><code>silicon check</code> &mdash; typecheck without codegen</span>
+    <span class="meta"><span class="tag p1">P1</span> <span class="tag xs">XS</span></span>
+  </div>
+  <div class="body">
+    <p>As a <em>Silicon developer in an editor</em>, I want a fast "did this compile?" command that skips codegen and just runs parse → elaborate → typecheck.</p>
+    <ol class="ac">
+      <li>Outputs diagnostics only; no WAT/WASM artifacts.</li>
+      <li>2&ndash;3&times; faster than full <code>silicon build</code> on cold cache.</li>
+      <li>Used by the LSP for save-time validation.</li>
+    </ol>
+  </div>
+</div>
+
+<div class="story p2">
+  <div class="head">
+    <span class="id">TOOL-5</span>
+    <span class="title"><code>silicon doc</code> &mdash; HTML docs from <code>##</code> comments</span>
+    <span class="meta"><span class="tag p2">P2</span> <span class="tag m">M</span></span>
+  </div>
+  <div class="body">
+    <p>As a <em>library author</em>, I want a tool that generates browseable HTML documentation from my source's <code>##</code> doc comments, so consumers can read my API without opening the source.</p>
+    <ol class="ac">
+      <li>Walks the AST, extracts <code>##</code> blocks preceding each definition.</li>
+      <li>Renders Markdown inside doc bodies.</li>
+      <li>Cross-links references to types and functions.</li>
+      <li>Output: <code>docs/api/</code> static HTML.</li>
+    </ol>
+  </div>
+</div>
+
+<div class="story p2">
+  <div class="head">
+    <span class="id">TOOL-6</span>
+    <span class="title"><code>silicon repl</code> &mdash; interactive prompt</span>
+    <span class="meta"><span class="tag p2">P2</span> <span class="tag l">L</span></span>
+  </div>
+  <div class="body">
+    <p>As a <em>Silicon learner</em>, I want a REPL where I can type expressions and see their values, so I can experiment without writing a full program.</p>
+    <ol class="ac">
+      <li>Wraps each input in a synthetic <code>_start</code>, compiles to WASM, runs under an in-process wasmtime, prints result.</li>
+      <li>State accumulates: <code>@let x := 5</code> then <code>x + 1</code> works.</li>
+      <li>Handles incomplete input (newline continuation on unmatched brace).</li>
+    </ol>
+  </div>
+</div>
+
+<div class="story p3">
+  <div class="head">
+    <span class="id">TOOL-7</span>
+    <span class="title"><code>silicon explain</code> &mdash; offline error code lookup</span>
+    <span class="meta"><span class="tag p3">P3</span> <span class="tag xs">XS</span> <span class="tag dep">needs DIAG-3</span></span>
+  </div>
+  <div class="body">
+    <p>As an <em>offline Silicon developer</em>, I want <code>silicon explain E0102</code> to print the local doc page for an error code without opening a browser.</p>
+    <ol class="ac">
+      <li>Embeds <code>docs/errors/*.md</code> into the binary.</li>
+      <li>Renders Markdown to ANSI in the terminal.</li>
+    </ol>
+  </div>
+</div>
+
+<!-- ============================================================== -->
+<h2 id="std">3. Standard library</h2>
+<p class="group-intro">
+  Today <code>std.wat</code> ships only a bump allocator + a few I/O primitives.
+  A modern stdlib covers strings, collections, math, I/O abstractions,
+  serialization, and testing.  Each entry below is a separate Silicon
+  module under <code>std/*.si</code>.
+</p>
+
+<div class="story p0">
+  <div class="head">
+    <span class="id">STD-1</span>
+    <span class="title">Robust string operations</span>
+    <span class="meta"><span class="tag p0">P0</span> <span class="tag m">M</span></span>
+  </div>
+  <div class="body">
+    <p>As a <em>Silicon developer</em>, I want <code>std::string</code> with concat, length, slice, indexOf, replace, split, trim, toUpper/toLower, repeat, contains, startsWith/endsWith, parseInt, parseFloat.</p>
+    <ol class="ac">
+      <li>All operations UTF-8 correct (not just byte arrays).</li>
+      <li>Indices in bytes by default; <code>chars()</code> iterator for code points.</li>
+      <li>Documented edge cases for malformed UTF-8 input.</li>
+    </ol>
+  </div>
+</div>
+
+<div class="story p1">
+  <div class="head">
+    <span class="id">STD-2</span>
+    <span class="title">Collections: List, Map, Set</span>
+    <span class="meta"><span class="tag p1">P1</span> <span class="tag l">L</span> <span class="tag dep">needs LANG-2 (generics) for ergonomics</span></span>
+  </div>
+  <div class="body">
+    <p>As a <em>Silicon developer</em>, I want generic List/Map/Set in the stdlib, so I don't reach for raw arrays for every collection task.</p>
+    <ol class="ac">
+      <li><code>List&lt;T&gt;</code>: dynamic array with push/pop/get/set/len/iter.</li>
+      <li><code>Map&lt;K, V&gt;</code>: hash map; K constrained to hashable types.</li>
+      <li><code>Set&lt;T&gt;</code>: hash set.</li>
+      <li>Iterator protocol (<code>std::iter</code>) so they compose with for-each.</li>
+    </ol>
+  </div>
+</div>
+
+<div class="story p1">
+  <div class="head">
+    <span class="id">STD-3</span>
+    <span class="title">Testing framework: <code>std::test</code></span>
+    <span class="meta"><span class="tag p1">P1</span> <span class="tag m">M</span></span>
+  </div>
+  <div class="body">
+    <p>As a <em>Silicon developer</em>, I want a built-in testing framework so I don't roll my own harness.</p>
+    <ol class="ac">
+      <li><code>@test</code> attribute marks a function as a test case.</li>
+      <li><code>silicon test</code> discovers + compiles + runs every <code>@test</code> in the project.</li>
+      <li>Assertion API: <code>assert_eq</code>, <code>assert_ne</code>, <code>assert</code>, <code>assert_panics</code>.</li>
+      <li>Pretty output: green checkmarks, red X with assertion message + line.</li>
+      <li><code>silicon test --filter foo</code> runs matching tests only.</li>
+    </ol>
+  </div>
+</div>
+
+<div class="story p1">
+  <div class="head">
+    <span class="id">STD-4</span>
+    <span class="title">Math: <code>std::math</code></span>
+    <span class="meta"><span class="tag p1">P1</span> <span class="tag s">S</span></span>
+  </div>
+  <div class="body">
+    <p>As a <em>Silicon developer</em>, I want <code>std::math</code> with sqrt, pow, log, exp, sin/cos/tan, abs, min, max, floor, ceil, round, PI, E.</p>
+    <ol class="ac">
+      <li>Float-typed; uses WASM intrinsics where they exist (sqrt, abs, floor, ceil).</li>
+      <li>Pure-Silicon implementations for transcendentals (Taylor / Pade / Remez).</li>
+    </ol>
+  </div>
+</div>
+
+<div class="story p2">
+  <div class="head">
+    <span class="id">STD-5</span>
+    <span class="title">I/O abstractions: <code>std::io</code></span>
+    <span class="meta"><span class="tag p2">P2</span> <span class="tag m">M</span></span>
+  </div>
+  <div class="body">
+    <p>As a <em>Silicon developer</em>, I want higher-level I/O abstractions (open/read/write/close, file iterators, formatted print) rather than raw WASI fd_write calls.</p>
+    <ol class="ac">
+      <li><code>std::io::open(path, mode) -&gt; File</code>.</li>
+      <li><code>std::io::read_to_string(path) -&gt; String</code>.</li>
+      <li><code>println(fmt, args...)</code> (depends on STD-6 format strings).</li>
+      <li>Automatically declares the WASI externs so users don't have to.</li>
+    </ol>
+  </div>
+</div>
+
+<div class="story p2">
+  <div class="head">
+    <span class="id">STD-6</span>
+    <span class="title">Format strings: <code>std::fmt</code></span>
+    <span class="meta"><span class="tag p2">P2</span> <span class="tag m">M</span></span>
+  </div>
+  <div class="body">
+    <p>As a <em>Silicon developer</em>, I want printf-style formatting (<code>{}</code>, <code>{:d}</code>, <code>{:.2f}</code>) so I can compose output without manual concatenation.</p>
+    <ol class="ac">
+      <li><code>std::fmt::format("x = {}, y = {:.2f}", x, y)</code> returns a <code>String</code>.</li>
+      <li>Type-checked at compile time: number of args matches placeholders, types match specs.</li>
+      <li>Supports <code>Debug</code> trait equivalent for user types (depends on LANG-7).</li>
+    </ol>
+  </div>
+</div>
+
+<div class="story p2">
+  <div class="head">
+    <span class="id">STD-7</span>
+    <span class="title">JSON encode / decode: <code>std::json</code></span>
+    <span class="meta"><span class="tag p2">P2</span> <span class="tag m">M</span></span>
+  </div>
+  <div class="body">
+    <p>As a <em>Silicon developer</em>, I want JSON support so Silicon programs can talk to the web / tooling without inventing a wire format.</p>
+    <ol class="ac">
+      <li><code>std::json::parse(s) -&gt; Value</code>; <code>Value</code> is a sum type of Null/Bool/Number/String/Array/Object.</li>
+      <li><code>std::json::stringify(v) -&gt; String</code>.</li>
+      <li>Schema-derived encode/decode for user types (depends on LANG-7).</li>
+    </ol>
+  </div>
+</div>
+
+<div class="story p3">
+  <div class="head">
+    <span class="id">STD-8</span>
+    <span class="title">Date / time: <code>std::time</code></span>
+    <span class="meta"><span class="tag p3">P3</span> <span class="tag s">S</span></span>
+  </div>
+  <div class="body">
+    <p>As a <em>Silicon developer</em>, I want monotonic + wall-clock time access, basic Duration arithmetic, and a Date type.</p>
+    <ol class="ac">
+      <li>Backed by WASI <code>clock_time_get</code>.</li>
+      <li><code>std::time::now()</code>, <code>std::time::Duration</code>, basic ISO 8601 formatting.</li>
+    </ol>
+  </div>
+</div>
+
+<div class="story p3">
+  <div class="head">
+    <span class="id">STD-9</span>
+    <span class="title">Random: <code>std::random</code></span>
+    <span class="meta"><span class="tag p3">P3</span> <span class="tag s">S</span></span>
+  </div>
+  <div class="body">
+    <p>As a <em>Silicon developer</em>, I want a seedable PRNG with uniform int / float / range / pick helpers.</p>
+    <ol class="ac">
+      <li>WASI <code>random_get</code> for seeding entropy; xoshiro256** for the algorithm.</li>
+      <li>Reproducible from a seed for testing.</li>
+    </ol>
+  </div>
+</div>
+
+<!-- ============================================================== -->
+<h2 id="pkg">4. Module system &amp; package management</h2>
+<p class="group-intro">
+  Today <code>@use</code> handles relative-path imports only.  To go from "single
+  developer" to "ecosystem", Silicon needs a package manifest, a way to depend
+  on remote packages, and a lockfile.  These stories define what that looks
+  like.
+</p>
+
+<div class="story p1">
+  <div class="head">
+    <span class="id">PKG-1</span>
+    <span class="title">Package manifest: <code>silicon.toml</code></span>
+    <span class="meta"><span class="tag p1">P1</span> <span class="tag m">M</span></span>
+  </div>
+  <div class="body">
+    <p>As a <em>Silicon developer</em>, I want a project-level manifest that declares package name, version, entry point, and dependencies, so the compiler knows the project structure without flag-passing.</p>
+    <ol class="ac">
+      <li>TOML format at the project root.</li>
+      <li>Keys: <code>name</code>, <code>version</code>, <code>main</code> (or <code>lib</code>), <code>silicon</code> (compiler version), <code>dependencies</code>.</li>
+      <li><code>silicon build</code> discovers it walking up from cwd.</li>
+    </ol>
+  </div>
+</div>
+
+<div class="story p1">
+  <div class="head">
+    <span class="id">PKG-2</span>
+    <span class="title">Lockfile: <code>silicon.lock</code></span>
+    <span class="meta"><span class="tag p1">P1</span> <span class="tag s">S</span> <span class="tag dep">needs PKG-1, PKG-3</span></span>
+  </div>
+  <div class="body">
+    <p>As a <em>team</em>, I want a lockfile committed alongside the manifest so every build pins the exact same dependency versions.</p>
+    <ol class="ac">
+      <li>Resolved dependency graph + content hashes for each package.</li>
+      <li><code>silicon build</code> uses the lock; <code>silicon update</code> regenerates it.</li>
+    </ol>
+  </div>
+</div>
+
+<div class="story p2">
+  <div class="head">
+    <span class="id">PKG-3</span>
+    <span class="title">Remote dependencies via git</span>
+    <span class="meta"><span class="tag p2">P2</span> <span class="tag l">L</span> <span class="tag dep">needs PKG-1</span></span>
+  </div>
+  <div class="body">
+    <p>As a <em>Silicon developer</em>, I want to depend on a package hosted in a git repo, identified by URL + git ref, so I can share code across projects.</p>
+    <ol class="ac">
+      <li><code>silicon.toml</code> accepts <code>foo = { git = "...", tag = "v1.0" }</code>.</li>
+      <li><code>silicon build</code> clones into <code>~/.silicon/cache/</code> and adds to the @use search path.</li>
+      <li>SHA pinned in lockfile.</li>
+    </ol>
+  </div>
+</div>
+
+<div class="story p2">
+  <div class="head">
+    <span class="id">PKG-4</span>
+    <span class="title">Workspaces: multi-package repos</span>
+    <span class="meta"><span class="tag p2">P2</span> <span class="tag m">M</span> <span class="tag dep">needs PKG-1</span></span>
+  </div>
+  <div class="body">
+    <p>As a <em>large-project maintainer</em>, I want to define a workspace with multiple packages in one repo so they can depend on each other locally.</p>
+    <ol class="ac">
+      <li>Root <code>silicon.toml</code> with <code>[workspace] members = ["pkg-a", "pkg-b"]</code>.</li>
+      <li>Member packages can declare <code>{ path = "../pkg-a" }</code> dependencies.</li>
+      <li><code>silicon build --workspace</code> builds all members.</li>
+    </ol>
+  </div>
+</div>
+
+<div class="story p3">
+  <div class="head">
+    <span class="id">PKG-5</span>
+    <span class="title">Public registry: silicon-lang.dev/packages</span>
+    <span class="meta"><span class="tag p3">P3</span> <span class="tag xxl">XXL</span> <span class="tag dep">needs PKG-1, PKG-3, infra</span></span>
+  </div>
+  <div class="body">
+    <p>As an <em>ecosystem participant</em>, I want a central registry where I can publish + discover Silicon packages, so adoption isn't gated on finding each other on GitHub.</p>
+    <ol class="ac">
+      <li>Registry service (npmjs-style) accepting <code>silicon publish</code> uploads.</li>
+      <li><code>silicon.toml</code> accepts <code>foo = "^1.0"</code> short-form.</li>
+      <li>Web UI for browsing + searching.</li>
+      <li>Cargo / npm-style version resolution (semver, ranges).</li>
+    </ol>
+  </div>
+</div>
+
+<!-- ============================================================== -->
+<h2 id="lang">5. Language features</h2>
+<p class="group-intro">
+  Silicon's surface is intentionally minimal and grammar-frozen; new features
+  ride the strata system.  Some features below are achievable as strata; others
+  need core compiler support.  Each story flags which.
+</p>
+
+<div class="story p1">
+  <div class="head">
+    <span class="id">LANG-1</span>
+    <span class="title">Generic types (parametric polymorphism)</span>
+    <span class="meta"><span class="tag p1">P1</span> <span class="tag xl">XL</span> <span class="tag dep">core compiler change</span></span>
+  </div>
+  <div class="body">
+    <p>As a <em>Silicon developer</em>, I want to write <code>@fn first&lt;T&gt; xs:List&lt;T&gt; := { ... }</code>, so collection types and helpers don't require copy-paste-per-type.</p>
+    <ol class="ac">
+      <li>Type-parameter syntax in <code>@fn</code>, <code>@let</code>, <code>@type</code>.</li>
+      <li>Monomorphization at call sites (no boxing / dynamic dispatch).</li>
+      <li>Type inference at the call site doesn't require explicit <code>::&lt;T&gt;</code>.</li>
+      <li>Bounded generics (<code>T: Hashable</code>) require LANG-3.</li>
+    </ol>
+  </div>
+</div>
+
+<div class="story p2">
+  <div class="head">
+    <span class="id">LANG-2</span>
+    <span class="title">First-class functions / closures</span>
+    <span class="meta"><span class="tag p2">P2</span> <span class="tag xl">XL</span> <span class="tag dep">core compiler change</span></span>
+  </div>
+  <div class="body">
+    <p>As a <em>Silicon developer</em>, I want to pass functions as values and write closures that capture lexical scope, so I can write <code>list.map(fn)</code>.</p>
+    <ol class="ac">
+      <li>Function type syntax: <code>(Int, Int) -&gt; Int</code>.</li>
+      <li>Anonymous function literal: <code>fn(x) { x + 1 }</code> or similar.</li>
+      <li>Closures box captured locals; cleanup handled by the bump arena (not GC).</li>
+      <li>WASM lowering via <code>call_indirect</code> + a function table.</li>
+    </ol>
+  </div>
+</div>
+
+<div class="story p2">
+  <div class="head">
+    <span class="id">LANG-3</span>
+    <span class="title">Traits / interfaces</span>
+    <span class="meta"><span class="tag p2">P2</span> <span class="tag xl">XL</span> <span class="tag dep">needs LANG-1</span></span>
+  </div>
+  <div class="body">
+    <p>As a <em>library author</em>, I want to define traits (<code>Display</code>, <code>Hashable</code>, <code>Eq</code>) and implement them per type, so generic code can constrain its type parameters.</p>
+    <ol class="ac">
+      <li><code>@trait Display { @fn fmt:String self; }</code> declares.</li>
+      <li><code>@impl Display for Int := { ... }</code> provides.</li>
+      <li>Trait bounds: <code>@fn show&lt;T: Display&gt; x:T := ...</code>.</li>
+      <li>Monomorphized; no vtables unless explicitly boxed.</li>
+    </ol>
+  </div>
+</div>
+
+<div class="story p2">
+  <div class="head">
+    <span class="id">LANG-4</span>
+    <span class="title">Pattern-match guards</span>
+    <span class="meta"><span class="tag p2">P2</span> <span class="tag s">S</span></span>
+  </div>
+  <div class="body">
+    <p>As a <em>Silicon developer</em>, I want <code>when</code> clauses on match arms so I can constrain pattern matches with arbitrary boolean predicates.</p>
+    <pre>&@match x,
+  $Some n when n > 0, { ... },
+  $Some n,             { ... },
+  $None,               { ... }</pre>
+    <ol class="ac">
+      <li>Parser accepts <code>when expr</code> after a pattern.</li>
+      <li>Lowering: guard becomes an inner <code>@if</code>.</li>
+      <li>Exhaustiveness check ignores guarded arms.</li>
+    </ol>
+  </div>
+</div>
+
+<div class="story p2">
+  <div class="head">
+    <span class="id">LANG-5</span>
+    <span class="title">Records / named tuples</span>
+    <span class="meta"><span class="tag p2">P2</span> <span class="tag m">M</span></span>
+  </div>
+  <div class="body">
+    <p>As a <em>Silicon developer</em>, I want a way to declare a struct-like type with named fields without going through <code>@type</code>'s sum-with-single-variant form.</p>
+    <ol class="ac">
+      <li><code>@record Point := x:Int, y:Int;</code>.</li>
+      <li>Field access via dot: <code>p.x</code>.</li>
+      <li>Construct via <code>$Point x:1, y:2</code> (consistent with variant syntax).</li>
+    </ol>
+  </div>
+</div>
+
+<div class="story p3">
+  <div class="head">
+    <span class="id">LANG-6</span>
+    <span class="title">Result / Option in std (Rust-style)</span>
+    <span class="meta"><span class="tag p3">P3</span> <span class="tag s">S</span> <span class="tag dep">needs LANG-1</span></span>
+  </div>
+  <div class="body">
+    <p>As a <em>Silicon developer</em>, I want <code>Option&lt;T&gt;</code> and <code>Result&lt;T, E&gt;</code> in std as the canonical way to model absence and failure.</p>
+    <ol class="ac">
+      <li>Defined as <code>@type Option&lt;T&gt; := $None | $Some T;</code>.</li>
+      <li>Standard methods: <code>unwrap</code>, <code>unwrap_or</code>, <code>map</code>, <code>and_then</code>, <code>is_some</code>, <code>is_none</code>.</li>
+      <li><code>?</code> operator for early-return propagation (sugar, parser-level).</li>
+    </ol>
+  </div>
+</div>
+
+<div class="story p3">
+  <div class="head">
+    <span class="id">LANG-7</span>
+    <span class="title">Iterators / for-each</span>
+    <span class="meta"><span class="tag p3">P3</span> <span class="tag l">L</span> <span class="tag dep">needs LANG-1, LANG-3</span></span>
+  </div>
+  <div class="body">
+    <p>As a <em>Silicon developer</em>, I want a <code>for x in collection</code> form that desugars to iterator-protocol method calls.</p>
+  </div>
+</div>
+
+<div class="story p3">
+  <div class="head">
+    <span class="id">LANG-8</span>
+    <span class="title">Async / await</span>
+    <span class="meta"><span class="tag p3">P3</span> <span class="tag xxl">XXL</span></span>
+  </div>
+  <div class="body">
+    <p>As a <em>Silicon developer targeting WASI 0.3 or the Component Model</em>, I want async functions so I can integrate with async hosts.  Deliberately late-stage — async is the single hardest feature to get right and shouldn't land before the core is stable.</p>
+  </div>
+</div>
+
+<!-- ============================================================== -->
+<h2 id="perf">6. Compiler performance</h2>
+<p class="group-intro">
+  Stage 0 is fast enough today for projects under a few kLoC.  These stories
+  matter once Silicon projects get to tens of thousands of lines + editor
+  integration.
+</p>
+
+<div class="story p2">
+  <div class="head">
+    <span class="id">PERF-1</span>
+    <span class="title">Incremental compilation cache</span>
+    <span class="meta"><span class="tag p2">P2</span> <span class="tag l">L</span></span>
+  </div>
+  <div class="body">
+    <p>As a <em>Silicon developer with a large project</em>, I want unchanged files to skip recompilation, so editing one file doesn't rebuild the world.</p>
+    <ol class="ac">
+      <li>Cache key: SHA256 of source bytes + compiler version + dependency cache keys.</li>
+      <li>Cache at <code>target/incremental/&lt;hash&gt;.json</code>: AST + types + emitted WAT.</li>
+      <li>Invalidation: a file's downstream consumers re-typecheck when the file's <em>exported signatures</em> change (not its body).</li>
+    </ol>
+  </div>
+</div>
+
+<div class="story p2">
+  <div class="head">
+    <span class="id">PERF-2</span>
+    <span class="title">Parallel module compilation</span>
+    <span class="meta"><span class="tag p2">P2</span> <span class="tag m">M</span> <span class="tag dep">needs PERF-1</span></span>
+  </div>
+  <div class="body">
+    <p>As a <em>Silicon developer</em>, I want independent modules to compile in parallel, using all available cores.</p>
+    <ol class="ac">
+      <li>Build a module dependency DAG; compile in topo order, with siblings in parallel.</li>
+      <li>Worker pool sized to <code>nproc</code> by default.</li>
+    </ol>
+  </div>
+</div>
+
+<div class="story p3">
+  <div class="head">
+    <span class="id">PERF-3</span>
+    <span class="title">WAT output optimizer</span>
+    <span class="meta"><span class="tag p3">P3</span> <span class="tag l">L</span></span>
+  </div>
+  <div class="body">
+    <p>As a <em>Silicon developer shipping a binary</em>, I want the compiler to apply standard WAT-level optimizations (constant folding, dead code elimination, inlining hot calls) so my output is competitive in size and speed.</p>
+    <ol class="ac">
+      <li><code>silicon build --release</code> runs optimizer passes.</li>
+      <li>Optionally pipe through <code>binaryen</code>'s <code>wasm-opt</code> for the heavy lifting.</li>
+    </ol>
+  </div>
+</div>
+
+<!-- ============================================================== -->
+<h2 id="dist">7. Distribution &amp; packaging</h2>
+<p class="group-intro">
+  Today users install Sigil by cloning the repo + running <code>bun install</code>.
+  A production compiler is one binary download.
+</p>
+
+<div class="story p1">
+  <div class="head">
+    <span class="id">DIST-1</span>
+    <span class="title">Single-binary releases per OS</span>
+    <span class="meta"><span class="tag p1">P1</span> <span class="tag m">M</span></span>
+  </div>
+  <div class="body">
+    <p>As a <em>new Silicon user</em>, I want one binary download per platform (macOS arm64/x64, Linux arm64/x64, Windows x64) so I'm not installing a JS runtime.</p>
+    <ol class="ac">
+      <li>Bun's <code>bun build --compile</code> emits standalone binaries.</li>
+      <li>GitHub Releases artifact for each platform.</li>
+      <li>Binary embeds the grammar + std.wat as bundled assets.</li>
+    </ol>
+  </div>
+</div>
+
+<div class="story p1">
+  <div class="head">
+    <span class="id">DIST-2</span>
+    <span class="title">npm package: <code>silicon-cli</code></span>
+    <span class="meta"><span class="tag p1">P1</span> <span class="tag s">S</span></span>
+  </div>
+  <div class="body">
+    <p>As a <em>developer with Node already installed</em>, I want <code>npm install -g silicon-cli</code> to install the compiler.</p>
+    <ol class="ac">
+      <li>npm package wraps the platform binary (postinstall fetches the right one).</li>
+      <li><code>silicon</code> command on PATH.</li>
+    </ol>
+  </div>
+</div>
+
+<div class="story p2">
+  <div class="head">
+    <span class="id">DIST-3</span>
+    <span class="title">Homebrew formula</span>
+    <span class="meta"><span class="tag p2">P2</span> <span class="tag xs">XS</span> <span class="tag dep">needs DIST-1</span></span>
+  </div>
+  <div class="body">
+    <p>As a <em>macOS / Linux user</em>, I want <code>brew install silicon</code>.</p>
+    <ol class="ac">
+      <li>Tap or core formula references the GitHub Release binary.</li>
+      <li>Auto-updated on each release via a release hook.</li>
+    </ol>
+  </div>
+</div>
+
+<div class="story p2">
+  <div class="head">
+    <span class="id">DIST-4</span>
+    <span class="title">Scoop manifest (Windows)</span>
+    <span class="meta"><span class="tag p2">P2</span> <span class="tag xs">XS</span> <span class="tag dep">needs DIST-1</span></span>
+  </div>
+  <div class="body">
+    <p>As a <em>Windows user</em>, I want <code>scoop install silicon</code>.</p>
+  </div>
+</div>
+
+<div class="story p3">
+  <div class="head">
+    <span class="id">DIST-5</span>
+    <span class="title">Docker image</span>
+    <span class="meta"><span class="tag p3">P3</span> <span class="tag xs">XS</span></span>
+  </div>
+  <div class="body">
+    <p>As a <em>CI user</em>, I want a pinned <code>ghcr.io/natescode/silicon:v0.3</code> image with the compiler + wasmtime preinstalled.</p>
+  </div>
+</div>
+
+<div class="story p2">
+  <div class="head">
+    <span class="id">DIST-6</span>
+    <span class="title">Release automation</span>
+    <span class="meta"><span class="tag p2">P2</span> <span class="tag s">S</span></span>
+  </div>
+  <div class="body">
+    <p>As a <em>maintainer</em>, I want <code>git tag v0.3.0 &amp;&amp; git push --tags</code> to trigger: build binaries, publish npm, push Docker, update Homebrew/Scoop, generate changelog, draft GitHub Release.</p>
+  </div>
+</div>
+
+<!-- ============================================================== -->
+<h2 id="test">8. Testing &amp; quality assurance</h2>
+<p class="group-intro">
+  Today Stage 0 has unit tests + property tests + a fuzz harness.  Production
+  needs an integration corpus, snapshot tests for WAT output, and continuous
+  coverage measurement.
+</p>
+
+<div class="story p0">
+  <div class="head">
+    <span class="id">TEST-1</span>
+    <span class="title">Integration test corpus</span>
+    <span class="meta"><span class="tag p0">P0</span> <span class="tag m">M</span></span>
+  </div>
+  <div class="body">
+    <p>As a <em>compiler contributor</em>, I want a corpus of <code>.si</code> programs each with an expected exit code / stdout, so regressions in code generation get caught automatically.</p>
+    <ol class="ac">
+      <li><code>tests/integration/&lt;name&gt;.si</code> + <code>tests/integration/&lt;name&gt;.expected</code>.</li>
+      <li>Test runner compiles + runs each + diffs.</li>
+      <li>Initial corpus &ge; 50 programs covering: arith, control, strings, arrays, sum types, generics (once landed), I/O, std lib.</li>
+      <li>Catches the bootstrap-audit findings C-2 / C-3 / C-4 if anyone tries to delete src/ again.</li>
+    </ol>
+  </div>
+</div>
+
+<div class="story p1">
+  <div class="head">
+    <span class="id">TEST-2</span>
+    <span class="title">WAT snapshot tests</span>
+    <span class="meta"><span class="tag p1">P1</span> <span class="tag s">S</span></span>
+  </div>
+  <div class="body">
+    <p>As a <em>codegen reviewer</em>, I want each fixture program's WAT output snapshotted under git, so semantic-neutral output changes still surface in review.</p>
+    <ol class="ac">
+      <li><code>SILICON_SNAPSHOT_UPDATE=1 bun test</code> regenerates snapshots.</li>
+      <li>Default <code>bun test</code> diffs against committed snapshots.</li>
+    </ol>
+  </div>
+</div>
+
+<div class="story p1">
+  <div class="head">
+    <span class="id">TEST-3</span>
+    <span class="title">Coverage measurement</span>
+    <span class="meta"><span class="tag p1">P1</span> <span class="tag xs">XS</span></span>
+  </div>
+  <div class="body">
+    <p>As a <em>maintainer</em>, I want test coverage measured per PR so I can spot drops.</p>
+    <ol class="ac">
+      <li>Bun's <code>--coverage</code> emits LCOV.</li>
+      <li>CI publishes the report; failing if a PR drops total coverage by &gt; 1%.</li>
+    </ol>
+  </div>
+</div>
+
+<div class="story p2">
+  <div class="head">
+    <span class="id">TEST-4</span>
+    <span class="title">Performance benchmarks + regression detection</span>
+    <span class="meta"><span class="tag p2">P2</span> <span class="tag m">M</span></span>
+  </div>
+  <div class="body">
+    <p>As a <em>maintainer</em>, I want compile-time / output-size benchmarks measured per PR, so perf regressions surface before merge.</p>
+  </div>
+</div>
+
+<div class="story p2">
+  <div class="head">
+    <span class="id">TEST-5</span>
+    <span class="title">Differential testing vs stage1</span>
+    <span class="meta"><span class="tag p2">P2</span> <span class="tag s">S</span></span>
+  </div>
+  <div class="body">
+    <p>As a <em>maintainer</em>, I want the integration corpus also run through <code>stage1.wasm</code> + diff against Stage 0 output, so the two pipelines stay in sync (or divergences are explicit).</p>
+  </div>
+</div>
+
+<!-- ============================================================== -->
+<h2 id="wasm">9. WASM target maturity</h2>
+<p class="group-intro">
+  Silicon targets <code>wasm32</code> + WASI preview1 today.  These stories
+  bring it into the modern WASM ecosystem.
+</p>
+
+<div class="story p2">
+  <div class="head">
+    <span class="id">WASM-1</span>
+    <span class="title">Source maps for debugging</span>
+    <span class="meta"><span class="tag p2">P2</span> <span class="tag m">M</span></span>
+  </div>
+  <div class="body">
+    <p>As a <em>Silicon developer debugging in Chrome DevTools / Firefox</em>, I want WASM source maps so stack traces point at <code>.si</code> lines, not WAT instructions.</p>
+    <ol class="ac">
+      <li>Emit a <code>sourceMappingURL</code> custom section.</li>
+      <li>Each IR node carries its <code>SourceLocation</code> through to the emitter.</li>
+    </ol>
+  </div>
+</div>
+
+<div class="story p3">
+  <div class="head">
+    <span class="id">WASM-2</span>
+    <span class="title">DWARF debug info</span>
+    <span class="meta"><span class="tag p3">P3</span> <span class="tag l">L</span> <span class="tag dep">needs WASM-1</span></span>
+  </div>
+  <div class="body">
+    <p>As a <em>Silicon developer using lldb / gdb on wasmtime</em>, I want full DWARF debug info including local variable names and line tables.</p>
+  </div>
+</div>
+
+<div class="story p3">
+  <div class="head">
+    <span class="id">WASM-3</span>
+    <span class="title">Tail-call optimization</span>
+    <span class="meta"><span class="tag p3">P3</span> <span class="tag s">S</span></span>
+  </div>
+  <div class="body">
+    <p>As a <em>Silicon developer writing recursive functions</em>, I want guaranteed tail-call elimination via the WASM <code>tail_call</code> proposal, so I can write iterative algorithms recursively without blowing the stack.</p>
+  </div>
+</div>
+
+<div class="story p3">
+  <div class="head">
+    <span class="id">WASM-4</span>
+    <span class="title">WASI preview2 / Component Model</span>
+    <span class="meta"><span class="tag p3">P3</span> <span class="tag xxl">XXL</span></span>
+  </div>
+  <div class="body">
+    <p>As a <em>Silicon developer targeting modern WASM hosts</em>, I want preview2 + Component Model support so Silicon-compiled components compose with other-language components.</p>
+  </div>
+</div>
+
+<div class="story p3">
+  <div class="head">
+    <span class="id">WASM-5</span>
+    <span class="title">WASM-GC reference types</span>
+    <span class="meta"><span class="tag p3">P3</span> <span class="tag xl">XL</span></span>
+  </div>
+  <div class="body">
+    <p>As a <em>Silicon developer</em>, I want strings and aggregates to use WASM-GC reference types instead of the bump arena, so my programs play nice with host GC.</p>
+  </div>
+</div>
+
+<div class="story p3">
+  <div class="head">
+    <span class="id">WASM-6</span>
+    <span class="title">SIMD intrinsics</span>
+    <span class="meta"><span class="tag p3">P3</span> <span class="tag m">M</span></span>
+  </div>
+  <div class="body">
+    <p>As a <em>Silicon developer writing numerics</em>, I want <code>WASM::v128_*</code> intrinsics so I can hand-vectorize hot loops.</p>
+  </div>
+</div>
+
+<!-- ============================================================== -->
+<h2 id="doc">10. Documentation &amp; learning resources</h2>
+<p class="group-intro">
+  Compilers without docs don't get adopted.  These stories cover what a new
+  developer reads in their first week.
+</p>
+
+<div class="story p0">
+  <div class="head">
+    <span class="id">DOC-1</span>
+    <span class="title">Getting Started tutorial</span>
+    <span class="meta"><span class="tag p0">P0</span> <span class="tag s">S</span></span>
+  </div>
+  <div class="body">
+    <p>As a <em>new Silicon user</em>, I want a 15-minute tutorial that takes me from install → hello world → a small CLI tool with tests + dependencies, so I can decide whether to invest more time in the language.</p>
+    <ol class="ac">
+      <li>Single page; runnable code samples at every step.</li>
+      <li>Ends with "what to read next" links.</li>
+    </ol>
+  </div>
+</div>
+
+<div class="story p1">
+  <div class="head">
+    <span class="id">DOC-2</span>
+    <span class="title">Language reference</span>
+    <span class="meta"><span class="tag p1">P1</span> <span class="tag l">L</span></span>
+  </div>
+  <div class="body">
+    <p>As a <em>Silicon developer</em>, I want a formal language reference that documents every syntactic form + its semantics, so I can resolve ambiguities without reading the compiler source.</p>
+    <ol class="ac">
+      <li>One page per construct.</li>
+      <li>EBNF grammar fragment at the top of each construct's page.</li>
+      <li>Cross-references to the relevant strata + lowering.</li>
+    </ol>
+  </div>
+</div>
+
+<div class="story p1">
+  <div class="head">
+    <span class="id">DOC-3</span>
+    <span class="title">Cookbook / examples library</span>
+    <span class="meta"><span class="tag p1">P1</span> <span class="tag m">M</span></span>
+  </div>
+  <div class="body">
+    <p>As a <em>Silicon developer</em>, I want a cookbook of recipes (read a file, parse JSON, walk a directory, simple HTTP, etc.), so I can copy-paste a starting point instead of figuring out the std API from scratch.</p>
+  </div>
+</div>
+
+<div class="story p2">
+  <div class="head">
+    <span class="id">DOC-4</span>
+    <span class="title">Strata authoring guide</span>
+    <span class="meta"><span class="tag p2">P2</span> <span class="tag s">S</span></span>
+  </div>
+  <div class="body">
+    <p>As a <em>library author</em>, I want a guide that walks me through adding a new keyword via <code>@stratum_keyword</code>, with worked examples (<code>@nz</code>, <code>@const</code>, <code>@loc</code>) and the available <code>&amp;Compiler::*</code> surface.</p>
+  </div>
+</div>
+
+<div class="story p2">
+  <div class="head">
+    <span class="id">DOC-5</span>
+    <span class="title">Compiler internals doc</span>
+    <span class="meta"><span class="tag p2">P2</span> <span class="tag m">M</span></span>
+  </div>
+  <div class="body">
+    <p>As a <em>compiler contributor</em>, I want a document explaining the pipeline (parse → AST → elaborate → typecheck → IR → emit) with file-level pointers, so I can find where to make a change.</p>
+    <ol class="ac">
+      <li>CLAUDE.md already covers the bootstrap side; this is the Stage 0 equivalent.</li>
+    </ol>
+  </div>
+</div>
+
+<!-- ============================================================== -->
+<h2 id="ci">11. CI / DevOps</h2>
+<p class="group-intro">
+  The infrastructure that makes "production grade" durable rather than
+  point-in-time.
+</p>
+
+<div class="story p0">
+  <div class="head">
+    <span class="id">CI-1</span>
+    <span class="title">GitHub Actions: test on every PR</span>
+    <span class="meta"><span class="tag p0">P0</span> <span class="tag xs">XS</span></span>
+  </div>
+  <div class="body">
+    <p>As a <em>maintainer</em>, I want CI to run on every PR, blocking merge until tests pass.</p>
+    <ol class="ac">
+      <li><code>.github/workflows/test.yml</code> runs <code>bun test</code> on Ubuntu + macOS + Windows.</li>
+      <li>Required status check on the <code>main</code> branch protection.</li>
+    </ol>
+  </div>
+</div>
+
+<div class="story p1">
+  <div class="head">
+    <span class="id">CI-2</span>
+    <span class="title">Type-check + format-check + lint on PR</span>
+    <span class="meta"><span class="tag p1">P1</span> <span class="tag xs">XS</span> <span class="tag dep">needs TOOL-1</span></span>
+  </div>
+  <div class="body">
+    <p>As a <em>maintainer</em>, I want <code>silicon fmt --check</code> + <code>tsc --noEmit</code> + ESLint enforced in CI, so style stays consistent automatically.</p>
+  </div>
+</div>
+
+<div class="story p1">
+  <div class="head">
+    <span class="id">CI-3</span>
+    <span class="title">Bootstrap fixed-point check in CI</span>
+    <span class="meta"><span class="tag p1">P1</span> <span class="tag xs">XS</span></span>
+  </div>
+  <div class="body">
+    <p>As a <em>maintainer</em>, I want <code>./build.sh check</code> run in CI on every PR, so the byte-equal self-host gate doesn't quietly break.</p>
+  </div>
+</div>
+
+<div class="story p2">
+  <div class="head">
+    <span class="id">CI-4</span>
+    <span class="title">Dependency / security audit</span>
+    <span class="meta"><span class="tag p2">P2</span> <span class="tag xs">XS</span></span>
+  </div>
+  <div class="body">
+    <p>As a <em>maintainer</em>, I want Dependabot + <code>bun audit</code> on every PR + weekly scheduled scans, so CVEs in dependencies surface promptly.</p>
+  </div>
+</div>
+
+<div class="story p2">
+  <div class="head">
+    <span class="id">CI-5</span>
+    <span class="title">Changelog automation</span>
+    <span class="meta"><span class="tag p2">P2</span> <span class="tag s">S</span></span>
+  </div>
+  <div class="body">
+    <p>As a <em>maintainer</em>, I want commit messages following Conventional Commits to drive automatic CHANGELOG generation on release, so I'm not hand-writing release notes.</p>
+  </div>
+</div>
+
+<hr class="thin" />
+
+<p style="color: var(--muted); font-size: 0.82rem; margin-top: 24px;">
+  Stories ordered within each group by priority then by what unblocks the
+  most downstream work.  An ambitious team could close the P0 set
+  (DIAG-1, DIAG-2, TOOL-1, STD-1, TEST-1, DOC-1, CI-1) in roughly
+  three engineer-weeks; that alone moves Sigil from "interesting
+  prototype" to "credibly usable for a small project."  P1 stories
+  bring the experience to early-adopter parity with modern languages;
+  P2+ is post-1.0 polish and ecosystem work.
+</p>
+<p style="color: var(--muted); font-size: 0.82rem; margin-top: 6px;">
+  Companion doc: <a href="bootstrap-audit.html" style="color: var(--accent);">bootstrap-audit.html</a> &mdash; what's
+  specifically wrong with <code>stage1.wasm</code> as a canonical compiler,
+  and which of those findings overlap with this Stage-0 roadmap (mostly:
+  DIAG-1, TOOL-1, DOC-1, TEST-1).
+</p>
+
+</div>
+</body>
+</html>

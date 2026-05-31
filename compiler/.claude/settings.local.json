@@ -1,0 +1,28 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(bun run *)",
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)",
+      "Bash(rm -f C:/repos/sigil/.git/index.lock)",
+      "Bash(bun test *)",
+      "Bash(node *)",
+      "Bash(grep -A5 'func $add')",
+      "Bash(grep -A10 'func $compute')",
+      "Bash(git commit *)",
+      "Bash(powershell -c \"\\(Get-Content 'C:\\\\repos\\\\sigil\\\\src\\\\types\\\\typecheck.integration.test.ts'\\).Count\")",
+      "Bash(powershell *)",
+      "Bash(Get-ChildItem -Path \"C:\\\\repos\\\\sigil\\\\src\" -Recurse -File)",
+      "Bash(Select-Object -ExpandProperty FullName)",
+      "Bash(Sort-Object)",
+      "PowerShell(Get-Content *)",
+      "Bash(git stash *)",
+      "Bash(curl -s -X POST http://localhost:3001/compile -H 'Content-Type: application/json' -d '{ *)",
+      "Bash(bun -e \"const d=await Bun.stdin.text\\(\\); const r=JSON.parse\\(d\\); if\\(!r.success\\){console.log\\('ERROR:', r.error\\)}else{console.log\\('OK'\\); console.log\\(JSON.stringify\\(r.exports,null,2\\)\\)}\")",
+      "Bash(git *)",
+      "Bash(awk 'NR>=1760 && NR<=1820' src/e2e/e2e.test.ts)",
+      "Bash(bun add *)",
+      "Bash(dir C:\\\\repos\\\\sigil\\\\tests)"
+    ]
+  }
+}

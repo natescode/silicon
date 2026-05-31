@@ -1,0 +1,32 @@
+@type_sum Color := Red | Green | Blue;
+@type_sum Status := Ok | Warn | Error;
+
+@fn add a:Int, b:Int := { a + b };
+
+@fn safeDivide x:Int, y:Int := {
+    &@if y == 0, { &@return 0 };
+    x / y
+};
+
+@fn countDown n:Int := {
+    @var i:Int := n;
+    &@loop i > 0, { i = i - 1; };
+    i
+};
+
+@fn colorCode c:Color := {
+    &@match c, Color::Red, { 1 }, Color::Green, { 2 }, { 0 }
+};
+
+@fn statusPriority s:Status := {
+    &@match s, Status::Error, { 2 }, Status::Warn, { 1 }, { 0 }
+};
+
+@fn circleArea r:Float := { r * r };
+
+@export add;
+@export safeDivide;
+@export countDown;
+@export colorCode;
+@export statusPriority;
+@export circleArea;

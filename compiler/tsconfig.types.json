@@ -1,0 +1,31 @@
+{
+  "//": "Declaration-only build for api-extractor. Not used by the runtime — bun runs sources directly.",
+  "//": "Looser than tsconfig.json: skipLibCheck on, noEmitOnError off, strict off. The point",
+  "//": "is to roll up .d.ts files, not to re-typecheck the codebase.",
+
+  "compilerOptions": {
+    "lib": ["ESNext", "DOM"],
+    "target": "ESNext",
+    "module": "ESNext",
+    "moduleResolution": "node",
+    "jsx": "react-jsx",
+    "allowJs": true,
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true,
+    "resolveJsonModule": true,
+
+    "declaration": true,
+    "emitDeclarationOnly": true,
+    "noEmit": false,
+    "noEmitOnError": false,
+    "outDir": "dist/types",
+    "rootDir": "src",
+
+    "strict": false,
+    "skipLibCheck": true,
+    "noImplicitAny": false,
+    "types": ["node"]
+  },
+  "include": ["src/api.ts", "src/caas/**/*.ts"],
+  "exclude": ["**/*.test.ts", "**/*.bench.ts", "node_modules"]
+}

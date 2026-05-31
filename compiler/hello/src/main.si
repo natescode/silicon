@@ -1,0 +1,24 @@
+# src/main.si — Silicon Hello World
+# Compile:  sgl build
+# Run:      sgl run
+
+@fn write_bytes:Int fd:Int, ptr:Int, len:Int := {
+    @local iovs := &scratch_alloc 8;
+    &WASM::i32_store iovs, ptr;
+    &WASM::i32_store (iovs + 4), len;
+    @local nwritten := &scratch_alloc 4;
+    &wasi_snapshot_preview1::fd_write fd, iovs, 1, nwritten
+};
+
+@fn write_str:Int fd:Int, s:String := {
+    &write_bytes fd, ((&str_ptr s) + 4), (&str_len s)
+};
+
+@fn write_nl:Int fd:Int := {
+    @local buf := &scratch_alloc 4;
+    &WASM::i32_store8 buf, 10;
+    &write_bytes fd, buf, 1
+};
+
+&write_str 1, 'Hello, Silicon!';
+&write_nl 1;

@@ -1,0 +1,813 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Sigil Bootstrap Audit — Staff Engineer Assessment</title>
+  <style>
+    :root {
+      --bg: #0f1117;
+      --surface: #1a1d27;
+      --surface2: #222535;
+      --border: #2e3248;
+      --accent: #6c8ef7;
+      --accent2: #b06cf7;
+      --accent3: #3ecf8e;
+      --accent4: #f7a06c;
+      --accent5: #f76c6c;
+      --accent6: #f7e36c;
+      --text: #dde1f0;
+      --muted: #7b82a8;
+      --code-bg: #13151f;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+      padding: 40px 24px;
+    }
+    .page { max-width: 1150px; margin: 0 auto; }
+    h1 { font-size: 2rem; color: var(--accent); margin-bottom: 8px; }
+    h2 { font-size: 1.45rem; color: var(--accent2); margin: 44px 0 16px; border-bottom: 1px solid var(--border); padding-bottom: 8px; }
+    h3 { font-size: 1.1rem; color: var(--accent3); margin: 26px 0 10px; }
+    h4 { font-size: 0.95rem; color: var(--accent4); margin: 16px 0 8px; }
+    p  { margin-bottom: 12px; color: var(--text); }
+    .subtitle { color: var(--muted); font-size: 1rem; margin-bottom: 32px; }
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 20px 24px;
+      margin-bottom: 20px;
+    }
+    .card.warn { border-color: var(--accent5); }
+    .card.ok   { border-color: var(--accent3); }
+    .card.info { border-color: var(--accent);  }
+    .card.note { border-color: var(--accent4); }
+    .card.idea { border-color: var(--accent2); }
+    pre {
+      background: var(--code-bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 16px;
+      overflow-x: auto;
+      font-family: 'Cascadia Code', 'Fira Code', 'Consolas', monospace;
+      font-size: 0.82rem;
+      line-height: 1.55;
+      margin: 12px 0;
+    }
+    code { font-family: 'Cascadia Code', 'Fira Code', 'Consolas', monospace; font-size: 0.85em; background: var(--code-bg); padding: 1px 5px; border-radius: 4px; }
+    .si  { color: var(--accent3); }
+    .ir  { color: var(--accent4); }
+    .api { color: var(--accent2); }
+    .err { color: var(--accent5); }
+    table { width: 100%; border-collapse: collapse; margin: 12px 0; font-size: 0.85rem; }
+    th { background: var(--surface2); color: var(--accent); padding: 8px 12px; text-align: left; border: 1px solid var(--border); }
+    td { padding: 8px 12px; border: 1px solid var(--border); vertical-align: top; }
+    tr:nth-child(even) td { background: #141620; }
+    ul, ol { padding-left: 24px; margin: 8px 0 16px; }
+    li { margin-bottom: 6px; }
+    .tag {
+      display: inline-block;
+      padding: 2px 10px;
+      border-radius: 12px;
+      font-size: 0.72rem;
+      font-weight: 600;
+      letter-spacing: 0.02em;
+      margin-right: 4px;
+      vertical-align: middle;
+    }
+    .tag.crit  { background: #3a1515; color: var(--accent5); border: 1px solid #5a2020; }
+    .tag.high  { background: #2d1a0f; color: var(--accent4); border: 1px solid #5a3010; }
+    .tag.med   { background: #2d2a0f; color: var(--accent6); border: 1px solid #5a5510; }
+    .tag.low   { background: #0f1a3a; color: var(--accent);  border: 1px solid #1a2e5a; }
+    .tag.green { background: #0f2d1f; color: var(--accent3); border: 1px solid #1a4a30; }
+    .verdict {
+      background: linear-gradient(180deg, #1e1530 0%, #14182a 100%);
+      border: 1px solid var(--accent2);
+      border-radius: 10px;
+      padding: 22px 26px;
+      margin: 24px 0 36px;
+    }
+    .verdict h2 {
+      margin-top: 0;
+      border-bottom: none;
+      padding-bottom: 0;
+      color: var(--accent2);
+    }
+    .verdict .one-liner {
+      font-size: 1.1rem;
+      color: var(--text);
+      margin: 8px 0 14px;
+      font-weight: 500;
+    }
+    .toc { background: var(--surface2); border: 1px solid var(--border); border-radius: 8px; padding: 14px 20px; margin: 14px 0 30px; }
+    .toc h3 { margin-top: 0; color: var(--accent); font-size: 0.9rem; text-transform: uppercase; letter-spacing: 0.08em; }
+    .toc ol { columns: 2; column-gap: 32px; padding-left: 18px; }
+    .toc a { color: var(--text); text-decoration: none; border-bottom: 1px dotted var(--muted); }
+    .toc a:hover { color: var(--accent); border-bottom-color: var(--accent); }
+    .finding {
+      background: var(--surface);
+      border-left: 4px solid var(--accent5);
+      border-radius: 0 8px 8px 0;
+      padding: 14px 18px;
+      margin: 18px 0;
+    }
+    .finding.high    { border-left-color: var(--accent4); }
+    .finding.med     { border-left-color: var(--accent6); }
+    .finding.low     { border-left-color: var(--accent); }
+    .finding.strength { border-left-color: var(--accent3); }
+    .finding h4 { margin-top: 0; color: var(--text); display: flex; align-items: baseline; gap: 12px; }
+    .finding .id { font-family: monospace; font-size: 0.75rem; color: var(--muted); }
+    .meta-row { display: grid; grid-template-columns: 110px 1fr; gap: 8px 18px; margin: 10px 0; font-size: 0.85rem; }
+    .meta-row .k { color: var(--muted); }
+    hr.thin { border: none; border-top: 1px solid var(--border); margin: 20px 0; }
+  </style>
+</head>
+<body>
+<div class="page">
+
+<h1>Sigil Bootstrap — Staff Engineer Audit</h1>
+<p class="subtitle">
+  Honest assessment of <code>wasm-bin/stage1.wasm</code> as a production compiler.
+  Written at the level a senior compiler engineer would deliver to an eng-leadership
+  audience after a half-day deep-dive.
+  Date: 2026-05-19.  Subject commit: <code>natescode/sigil@phase-7</code>.
+</p>
+
+<!-- ================================================================ -->
+<div class="verdict">
+  <h2>TL;DR</h2>
+  <p class="one-liner">
+    <strong>Not currently feasible as a production compiler.  Genuinely impressive
+    as a proof-of-concept bootstrap.  Path to production is real and bounded
+    (~6&ndash;10 focused engineer-weeks), but the gap is bigger than "polish".</strong>
+  </p>
+  <ul style="margin: 12px 0 0 0;">
+    <li><span class="tag green">REAL WIN</span> The byte-equal self-host fixed point holds.  Stage1
+        compiles its own 10.6 kLoC source to <em>byte-identical</em>
+        <code>stage1.wasm</code>.  That gate is rare in the industry and is
+        load-bearing for trust in the binary.</li>
+    <li><span class="tag crit">CRITICAL</span> The parser does not report syntax errors.
+        Garbage input silently produces a no-op WAT module.  This is the single
+        most disqualifying issue for a self-respecting compiler.</li>
+    <li><span class="tag crit">CRITICAL</span> Surface language features that worked in the
+        TypeScript-era Stage 0 are <em>broken</em> in stage1: <code>@match</code>
+        destructuring, <code>@enum</code> variant constants, half of the std
+        helpers (<code>arr_load_i32</code>, <code>alloc_array</code>,
+        <code>print_int</code>).  Anyone trying to port a real program will hit
+        these immediately.</li>
+    <li><span class="tag high">HIGH</span> Type diagnostics have no line/column.  The typechecker
+        is also opt-in and warn-only — it never refuses to compile.</li>
+    <li><span class="tag high">HIGH</span> Subprojects (silicon-playground,
+        silicon-vscode) carry frozen <em>copies</em> of the TS compiler.
+        That works today but creates three sources of truth for the
+        language; coordinating changes is manual.</li>
+  </ul>
+  <p style="margin-top: 14px;">
+    <strong>Use the bootstrap for:</strong> demonstrating self-hosting, the
+    strata extension system, the WASI compile pipeline.  <strong>Do not use
+    it for:</strong> compiling user programs of any non-trivial size, anyone
+    who isn't deeply familiar with the project's internals, or as the
+    canonical compiler for the Silicon language until the issues below are
+    closed.
+  </p>
+</div>
+
+<div class="toc">
+  <h3>Contents</h3>
+  <ol>
+    <li><a href="#scope">Scope &amp; methodology</a></li>
+    <li><a href="#metrics">Hard numbers</a></li>
+    <li><a href="#strengths">What's genuinely good</a></li>
+    <li><a href="#critical">Critical findings</a></li>
+    <li><a href="#high">High-severity findings</a></li>
+    <li><a href="#medium">Medium-severity findings</a></li>
+    <li><a href="#risks">Architectural risks</a></li>
+    <li><a href="#roadmap">Roadmap to production</a></li>
+    <li><a href="#repro">Reproduction commands</a></li>
+  </ol>
+</div>
+
+<!-- ================================================================ -->
+<h2 id="scope">1. Scope &amp; methodology</h2>
+
+<p>
+  This audit evaluates <code>wasm-bin/stage1.wasm</code> &mdash; the
+  Silicon-implemented Silicon compiler &mdash; against the standard a staff
+  compiler engineer would apply when deciding whether to declare it the
+  canonical implementation of the Silicon language.  Out of scope: the TS
+  Stage 0 (deleted), the playground, the LSP/VS Code extension.  The
+  language design itself is taken as given.
+</p>
+
+<p>The session:</p>
+<ul>
+  <li>Counted lines of Silicon source per module (with and without tests)</li>
+  <li>Read the parser (<code>boot/parser/parse.si</code>), the IR + WAT
+      emitter (<code>boot/ir/lower.si</code>, <code>boot/emit/wat.si</code>),
+      and the typechecker port we just landed
+      (<code>boot/types/*.si</code>)</li>
+  <li>Compiled and ran 7 deliberate user programs &mdash; recursion, loop+
+      mutation, sum types, enums, arrays, type-error, string I/O,
+      ill-formed garbage &mdash; through <code>stage1.wasm</code> + wat2wasm
+      + wasmtime end-to-end</li>
+  <li>Disassembled the emitted stage1.wat to inspect the std-runtime surface
+      it actually ships</li>
+  <li>Cross-checked against the TS-era <code>src/codegen/std.wat</code> that
+      lives in the playground snapshot to identify what regressed</li>
+  <li>Ran the project's own <code>./test.sh</code> (20 tests, all green)
+      and <code>./build.sh check</code> (byte-equal fixed point holds)</li>
+</ul>
+
+<!-- ================================================================ -->
+<h2 id="metrics">2. Hard numbers</h2>
+
+<table>
+  <tr><th>Metric</th><th>Value</th><th>Read</th></tr>
+  <tr>
+    <td>Non-test Silicon source</td>
+    <td>10,613 LoC across 30 files</td>
+    <td>Comparable to a small but real compiler.  Manageable.</td>
+  </tr>
+  <tr>
+    <td>Test source</td>
+    <td>2,754 LoC across 20 active fixtures</td>
+    <td>~26% test:code ratio.  Modest by industry standard (commercial
+        compilers run 1:1 or higher).</td>
+  </tr>
+  <tr>
+    <td><code>stage1.wasm</code> size</td>
+    <td>83,227 bytes (81 KB)</td>
+    <td>Tiny.  Indicates the strata system + IR pipeline are reasonably
+        compact.</td>
+  </tr>
+  <tr>
+    <td><code>stage1.wat</code> (uncompressed)</td>
+    <td>410,170 bytes &mdash; 750 functions</td>
+    <td>Average function is &lt; 600 bytes of WAT.  No giant emitted
+        functions.</td>
+  </tr>
+  <tr>
+    <td>Compile throughput (cold)</td>
+    <td>2,704 LoC in ~124 ms = <strong>~22 kLoC/s</strong></td>
+    <td>Fine for a bootstrap.  Roughly 5&times; slower than a mature C
+        compiler frontend; not slow enough to be a UX problem at the
+        sizes Silicon programs reach today.</td>
+  </tr>
+  <tr>
+    <td>std.wat helpers stage1 ships</td>
+    <td>6 (<code>alloc</code>, <code>scratch_alloc</code>,
+        <code>str_ptr</code>, <code>str_len</code>, <code>heap_get</code>,
+        <code>heap_set</code>)</td>
+    <td>TS stage 0 shipped 17.  <span class="err">Regression</span> &mdash;
+        see finding C-3.</td>
+  </tr>
+  <tr>
+    <td>Test count</td>
+    <td>20 standalone + 14 inactive .si files</td>
+    <td>Most inactive ones were Stage-0-comparison tests that no longer
+        apply.</td>
+  </tr>
+  <tr>
+    <td>Self-host fixed point</td>
+    <td>Holds.  <code>./build.sh check</code> green every run.</td>
+    <td>Load-bearing for trust.  Real engineering accomplishment.</td>
+  </tr>
+</table>
+
+<!-- ================================================================ -->
+<h2 id="strengths">3. What's genuinely good</h2>
+
+<div class="finding strength">
+  <h4>S-1.  Byte-equal self-host gate <span class="tag green">SHIP</span></h4>
+  <p><code>stage1.wasm</code> recompiles its own source byte-for-byte.
+  This is non-trivial — it requires deterministic codegen (no
+  hash-randomized iteration order, no timestamp leakage, no allocator-
+  address-dependent output).  Hitting this gate at all is a stronger
+  signal of compiler correctness than any number of unit tests, and the
+  Silicon authors should be proud of it.</p>
+</div>
+
+<div class="finding strength">
+  <h4>S-2.  The strata extension system works <span class="tag green">PROVEN</span></h4>
+  <p>The three user-defined keywords landed via strata only
+  (<code>@nz</code>, <code>@const</code>, <code>@loc</code>) demonstrate
+  that the "add a feature without touching the compiler" loop is real.
+  This is genuinely rare; most "extensible" languages still need core
+  changes for anything interesting.  The body interpreter
+  (<code>boot/elab/body_rich.si</code>) is the load-bearing piece and
+  it dispatches cleanly.</p>
+</div>
+
+<div class="finding strength">
+  <h4>S-3.  Modular file layout <span class="tag green">CLEAN</span></h4>
+  <p>The 30 source files break down sensibly: parser/, ir/, emit/,
+  elab/, strata/, types/, compiler_api/, modules/, std/.  No file is
+  egregiously large (largest is <code>ir/lower.si</code> at 1,764 LoC,
+  which is reasonable for an IR lowering pass).  A new contributor can
+  navigate the tree without an architecture diagram.</p>
+</div>
+
+<div class="finding strength">
+  <h4>S-4.  Generated WAT is correct (for the subset that lowers) <span class="tag green">PASSES</span></h4>
+  <p>The programs that <em>do</em> compile produce valid WAT that
+  wat2wasm accepts under strict validation and wasmtime executes
+  correctly.  fib(10) → 55, sum 1..100 → 5050, nested if/else, mutating
+  loop with assignment — all behave correctly with the right exit codes.
+  When stage1 commits to lowering a program, the lowering is sound.</p>
+</div>
+
+<div class="finding strength">
+  <h4>S-5.  Bootstrap pipeline is clean shell <span class="tag green">REPRODUCIBLE</span></h4>
+  <p><code>./build.sh check</code> on a fresh clone needs only
+  <code>wasmtime</code>, <code>wat2wasm</code>, and bash.  No npm, no
+  Bun, no toolchain drift.  This is what bootstrap is supposed to feel
+  like.</p>
+</div>
+
+<!-- ================================================================ -->
+<h2 id="critical">4. Critical findings <span class="tag crit">BLOCKING</span></h2>
+<p>Each of these would, individually, prevent a staff engineer from
+endorsing the compiler for external use.</p>
+
+<div class="finding">
+  <h4>C-1.  Parser silently accepts arbitrary input <span class="id">boot/parser/parse.si</span></h4>
+  <div class="meta-row">
+    <span class="k">Severity</span><span class="v">Critical &mdash; correctness</span>
+    <span class="k">Repro</span><span class="v"><code>echo 'this is utter garbage that is not silicon' | wasmtime stage1.wasm</code></span>
+    <span class="k">Observed</span><span class="v">Exit 0.  42-line WAT module containing just the std prelude.</span>
+    <span class="k">Expected</span><span class="v">Non-zero exit, diagnostic to stderr identifying line and unexpected token.</span>
+  </div>
+  <p>
+    <code>parse.si</code> appears to recover silently on every unexpected
+    token, treating unrecognised top-level constructs as no-ops.  There is
+    no <code>panic_stderr</code> or equivalent on the parser path.  Even
+    obviously malformed programs (<code>@let MISSING_TYPE := 5; @let x :=
+    MISSING_TYPE + ;</code>, dangling operator, missing brace) produce a
+    nominally-valid WAT module that just lacks the user's code.
+  </p>
+  <p>
+    A compiler that doesn't refuse malformed input is not a compiler &mdash;
+    it's a code-shaped lossy filter.  Users will spend hours wondering why
+    their program "compiled" but does nothing.  This is the single most
+    urgent fix.
+  </p>
+  <p>
+    <strong>Fix sketch:</strong> introduce a <code>panic_stderr</code> at
+    every parser-error site, with the source span.  Aim for "every
+    branch in parse_* that hits an unexpected token writes a diagnostic
+    and proc_exit's with a non-zero code".  ~200 LoC across parse.si.
+  </p>
+</div>
+
+<div class="finding">
+  <h4>C-2.  <code>@match</code> destructuring does not lower <span class="id">boot/strata/builtin/match.si + boot/ir/lower.si</span></h4>
+  <div class="meta-row">
+    <span class="k">Severity</span><span class="v">Critical &mdash; feature regression</span>
+    <span class="k">Repro</span><span class="v">See <code>audit/match.si</code> &mdash; sum-type w/ <code>@match</code> on Circle/Rectangle.</span>
+    <span class="k">Observed</span><span class="v">Emitted WAT has <code>call $r</code> / <code>call $w</code> / <code>call $h</code> where pattern-variable <em>locals</em> should be.  wat2wasm rejects: "undefined function variable $r".</span>
+  </div>
+  <p>
+    The pattern-variable bindings introduced by <code>@match</code> arms
+    (<code>$Circle r:Int</code>) are lowered as if <code>r</code> were a
+    function call rather than a local-variable bind.  The codegen for
+    <code>@match</code>'s payload destructuring is incomplete.
+  </p>
+  <p>
+    <strong>Why this matters:</strong> sum types with payloads were a
+    flagship language feature in the TS stage 0 (see <code>docs/strata.md</code>).
+    Their loss in stage1 is not a "won't fix later" — it's a regression
+    against an advertised feature.
+  </p>
+</div>
+
+<div class="finding">
+  <h4>C-3.  <code>@enum</code> variant constants do not lower <span class="id">boot/ir/lower.si</span></h4>
+  <div class="meta-row">
+    <span class="k">Severity</span><span class="v">Critical &mdash; feature regression</span>
+    <span class="k">Repro</span><span class="v"><code>@enum Color := Red | Green | Blue;</code> then refer to <code>Green</code>.</span>
+    <span class="k">Observed</span><span class="v">Emitted WAT has <code>call $Green</code> where <code>i32.const 1</code> should be.</span>
+  </div>
+  <p>
+    The <code>EnumDef</code> stratum dispatches to
+    <code>&amp;IR::def_type_sum</code>, but the corresponding lowering in
+    <code>lower.si</code> does not emit the per-variant immutable globals.
+    Variant names then fall through to <code>lower_call</code> and become
+    function references.
+  </p>
+  <p>
+    Same severity reasoning as C-2: <code>@enum</code> is a documented
+    feature.  Until this works, sum types are essentially absent.
+  </p>
+</div>
+
+<div class="finding">
+  <h4>C-4.  std.wat is truncated &mdash; major helpers missing <span class="id">boot/codegen / emit_program</span></h4>
+  <div class="meta-row">
+    <span class="k">Severity</span><span class="v">Critical &mdash; runtime regression</span>
+    <span class="k">Observed</span><span class="v">Stage 1 ships 6 std helpers.  TS Stage 0 shipped 17.  Missing: <code>alloc_array</code>, <code>alloc_string</code>, <code>arr_len</code>, <code>arr_load_i32</code>, <code>arr_store_i32</code>, <code>arr_load_f32</code>, <code>print_int</code>, <code>print_bool</code>, <code>print_float</code>, <code>str_concat</code> (partial).</span>
+  </div>
+  <p>
+    The bootstrap appears to have inlined only the helpers
+    <em>stage1's own source</em> needs.  Anything user code might
+    reasonably want &mdash; arrays of any kind, formatted integer
+    output, string concatenation &mdash; is absent from the emitted
+    runtime.  The typechecker we just landed even pre-registers these
+    helpers, suggesting they're expected to be available, but the
+    codegen surface doesn't include them.
+  </p>
+  <p>
+    <strong>Fix sketch:</strong> std.wat lives in the compiler binary as
+    a string; expand it to match the TS-era 17 helpers.  The runtime
+    cost is small (each helper is a handful of WAT instructions); the
+    inclusion criterion currently looks like "needed for self-host"
+    rather than "intended public API".
+  </p>
+</div>
+
+<div class="finding">
+  <h4>C-5.  WASI extern declaration leak in <code>boot/std/io.si</code> <span class="id">boot/std/io.si</span></h4>
+  <div class="meta-row">
+    <span class="k">Severity</span><span class="v">Critical &mdash; usability blocker</span>
+    <span class="k">Documented</span><span class="v">Yes &mdash; this audit's prior conversation noted the issue and added a TODO comment.  Not yet fixed.</span>
+  </div>
+  <p>
+    Every user program that does <code>@use '../boot/std/io.si'</code>
+    must manually <code>@extern</code>-declare
+    <code>wasi_snapshot_preview1::fd_write</code> /
+    <code>fd_read</code> / <code>proc_exit</code>, because
+    <code>io.si</code> calls them without declaring them.  This is the
+    first thing every new user trips on (literally happened earlier
+    today when compiling <code>delfina.si</code>).
+  </p>
+  <p>
+    The right fix is either to inline the extern declarations into
+    <code>io.si</code> (currently blocked by duplicate-declaration when
+    build.sh's stub injection runs) or to teach the lowerer to treat
+    repeated identical <code>@extern</code> as idempotent.  Until one
+    of those lands, every example, every README snippet, every blog
+    post about Silicon has to carry six lines of WASI boilerplate.
+  </p>
+</div>
+
+<!-- ================================================================ -->
+<h2 id="high">5. High-severity findings <span class="tag high">SHOULD-FIX-BEFORE-USERS</span></h2>
+
+<div class="finding high">
+  <h4>H-1.  Diagnostics have no source location <span class="id">boot/types/errors.si</span></h4>
+  <p>
+    Every diagnostic <code>err_write_msg</code> produces is of the form
+    <code>[Mismatch] expected Int, got Float</code> &mdash; no
+    <code>file:line:col</code> prefix.  The error record stores
+    <code>src_off</code> / <code>src_len</code> (byte offsets into P_SRC),
+    but they're never converted to line/column or printed.  For a
+    multi-file program this makes diagnostics essentially unusable —
+    the user knows <em>that</em> there's a type error somewhere but not
+    <em>where</em>.
+  </p>
+  <p>
+    The TS Stage 0 produced <code>file.si:12:5: [Mismatch] ...</code>
+    format diagnostics consistently.  Recovering that in stage1 needs a
+    byte-offset → line/col converter (one pass over P_SRC building a line
+    table) plus a format change in <code>err_write_msg</code>.  ~50 LoC.
+  </p>
+</div>
+
+<div class="finding high">
+  <h4>H-2.  Typechecker is opt-in and warn-only</h4>
+  <p>
+    <code>--typecheck</code> is a flag that defaults <em>off</em>, and
+    even when enabled it prints diagnostics to stderr without changing
+    the compile-exit code.  The intent (per the slice 2f commit) was
+    to keep the byte-equal gate working while the checker matures;
+    that's defensible at this stage but is not the steady state.
+  </p>
+  <p>
+    A real compiler refuses to emit code that it knows is type-incorrect.
+    Path to production needs the flag flipped to default-on plus
+    a <code>--no-typecheck</code> escape hatch, and a non-zero exit on
+    diagnostic count &gt; 0.
+  </p>
+</div>
+
+<div class="finding high">
+  <h4>H-3.  Typechecker misclassifies parse errors as unbound identifiers <span class="id">boot/types/check.si:check_namespace</span></h4>
+  <p>
+    Repro: <code>echo 'totally not silicon at all' | stage1.wasm --typecheck</code>
+    produces five <code>[UnboundIdentifier]</code> diagnostics, one per
+    bare word.  The parser accepted the input (see C-1) and built an
+    AST whose top-level elements are bare namespace references; the
+    typechecker dutifully reports each as unbound.
+  </p>
+  <p>
+    Knock-on effect of C-1: if the parser refused garbage in the first
+    place, this misclassification wouldn't happen.  Worth noting that
+    fixing C-1 likely fixes this too.
+  </p>
+</div>
+
+<div class="finding high">
+  <h4>H-4.  The typechecker walks <em>function bodies</em> with no parameter scope</h4>
+  <p>
+    <code>preregister_defs</code> seeds the top-level function table
+    with each <code>@fn</code>'s signature, but the inline
+    <code>check_inline_def</code> path only handles
+    <em>expression-position</em> definitions (<code>@let</code> /
+    <code>@loc</code> inside a body).  When the main walk descends
+    into an <code>@fn</code>'s body, the parameters themselves
+    (<code>a:Int</code>, <code>b:Int</code>) are not pushed into the
+    symbol table.  Result: every reference to a parameter inside a
+    function body is flagged as <code>UnboundIdentifier</code>.
+  </p>
+  <p>
+    Manifests immediately on real source.  Try
+    <code>--typecheck</code> on <code>audit/fib.si</code> &mdash; you'll
+    get a flood of "unbound n" errors.  The checker is currently only
+    useful for top-level expressions.
+  </p>
+  <p>
+    Fix: <code>check_fn_def</code> wrapper that pushes params into the
+    scope before recursing into the body and pops on exit.  ~30 LoC.
+  </p>
+</div>
+
+<div class="finding high">
+  <h4>H-5.  No incremental compilation, no caching</h4>
+  <p>
+    Every <code>stage1.wasm</code> invocation re-parses, re-elaborates,
+    re-typechecks, and re-lowers everything from scratch.  This was
+    fine for the bootstrap (compile-once, ship the .wasm); it scales
+    badly as soon as you have a project with imports and an editor
+    polling on save.  The LSP already feels this pain &mdash; the
+    silicon-vscode bundled server re-runs the full pipeline on every
+    keystroke debounce.
+  </p>
+  <p>
+    Path forward: serialize an intermediate cache (P_AST + types
+    keyed by source file hash).  Not urgent, but blocks "Silicon
+    feels nice in an editor."
+  </p>
+</div>
+
+<!-- ================================================================ -->
+<h2 id="medium">6. Medium-severity findings</h2>
+
+<div class="finding med">
+  <h4>M-1.  Error messages lack hints / fix suggestions</h4>
+  <p>
+    Modern compilers (Rust, Elm, Clang) competed for years to produce
+    diagnostics that suggest fixes.  Silicon's are bare:
+    <code>[Mismatch] expected Int, got Float</code>.  No "did you mean
+    <code>&amp;@toInt x</code>?" hint.  Field is in the
+    <code>TypeError</code> record for future use but never populated.
+  </p>
+</div>
+
+<div class="finding med">
+  <h4>M-2.  Test corpus emphasizes internal data structures over generated-code semantics</h4>
+  <p>
+    Of the 20 tests in <code>./test.sh</code>:
+    7 verify generated-code semantics (the keyword tests, the
+    runtime/data-structure tests &mdash; vec_test, arena_test).  13 verify
+    the typechecker's <em>internal data structures</em> (does the
+    SiliconType arena round-trip, does the symbol table shadow correctly).
+    That's a meaningful test suite but it's mostly white-box.  A
+    black-box "compile this Silicon program, check the exit code or
+    stdout" corpus (the Rust <code>compiletest</code> model, the
+    Ghc/Haskell testsuite model) would catch C-2, C-3, C-4 within
+    minutes of writing.
+  </p>
+  <p>
+    Recommendation: <code>tests/integration/*.si</code> directory, one
+    program per language feature, with an expected exit code or stdout.
+    <code>./test.sh integration</code> would compile + run each and
+    diff stdout.
+  </p>
+</div>
+
+<div class="finding med">
+  <h4>M-3.  Lots of known-bug TODOs left in source</h4>
+  <p>
+    Comments in <code>boot/strata/builtin/logic.si</code> document a
+    "latent bug" where two keyword strata sharing the same first-call
+    marker confuse the loader.  <code>boot/std/io.si</code> documents
+    the WASI extern issue (C-5).  <code>boot/types/check.si</code>
+    contains TYPE_NONE placeholder propagation that the comments
+    acknowledge as imperfect.  These are honest, but they're
+    "incidents waiting to happen for an external user."
+  </p>
+</div>
+
+<div class="finding med">
+  <h4>M-4.  No tooling beyond the compiler</h4>
+  <p>
+    No formatter, no linter, no documentation generator.  The
+    silicon-vscode extension is a real win, but VS Code users get
+    syntax highlighting + LSP and nothing else.  For comparison:
+    <code>gofmt</code> ships with Go 1.0; Rust started with rustdoc
+    pre-1.0.  Sigil at this maturity needs at minimum a
+    <code>silicon-fmt</code> built atop the existing AST.
+  </p>
+</div>
+
+<div class="finding med">
+  <h4>M-5.  Vendored compiler copies in three subprojects</h4>
+  <p>
+    silicon-playground and silicon-vscode both carry frozen
+    <code>src/</code> copies of the TS Stage 0 compiler (the latter
+    bundled into the VSIX, the former for the playground server).
+    Any future improvement to the canonical Silicon compiler
+    (this repo's <code>boot/*.si</code>) has to be ported by hand
+    to the other two.  The long-term plan is to point both at
+    <code>stage1.wasm</code>, but until then we have three
+    independently-drifting compilers branded as "Silicon."
+  </p>
+</div>
+
+<!-- ================================================================ -->
+<h2 id="risks">7. Architectural risks (longer horizon)</h2>
+
+<div class="finding low">
+  <h4>R-1.  Grammar lives in code, not in a spec</h4>
+  <p>
+    The canonical grammar is whatever <code>boot/parser/parse.si</code>
+    accepts.  There's no <code>.ohm</code> file or BNF document.
+    "Reading parse.si to learn the language" is technically feasible
+    but is not a substitute for a spec when implementing alternate
+    parsers, linters, or syntax-aware tools.  The TS Stage 0 had a
+    <code>.ohm</code> grammar; that's gone.
+  </p>
+</div>
+
+<div class="finding low">
+  <h4>R-2.  No formal versioning or stability story</h4>
+  <p>
+    <code>silicon-vscode</code> is now v0.2.0 on the Marketplace.  The
+    compiler's <code>boot/</code> source has no version stamp.  When
+    you ship breaking changes, you'll have no way to tell which
+    <code>.si</code> programs were written against which compiler.
+    Pragmatic fix: a <code>@platform</code> stratum that takes a
+    <code>silicon:1.0</code> argument and refuses to compile under a
+    newer compiler unless overridden.
+  </p>
+</div>
+
+<div class="finding low">
+  <h4>R-3.  WASM target is implicitly wasm32</h4>
+  <p>
+    <code>Int</code> = <code>i32</code> is hardcoded throughout
+    <code>lower.si</code>.  The CLAUDE.md docs cleanly describe an
+    eventual wasm64 transition where <code>Int = i64</code>.  Today,
+    that transition would require touching dozens of lowering sites
+    that pattern-match on <code>'i32'</code>.  Not urgent, but the
+    abstraction is leakier than the docs suggest.
+  </p>
+</div>
+
+<div class="finding low">
+  <h4>R-4.  Memory growth is heap-only, never reclaimed</h4>
+  <p>
+    The bump allocator in std.wat grows the wasm memory but never
+    shrinks.  Long-running stage1 processes (LSP, watch mode) will
+    accumulate memory across compiles.  For a one-shot CLI compiler
+    this is fine; for the LSP it'll eventually cause issues.  No
+    arena reset between compiles either &mdash; each compile sits on
+    top of the previous.
+  </p>
+</div>
+
+<!-- ================================================================ -->
+<h2 id="roadmap">8. Roadmap to production</h2>
+
+<p>
+  Rough effort estimate assuming one focused engineer.  These are
+  ordered by what unblocks the most downstream work.
+</p>
+
+<table>
+  <tr><th>Phase</th><th>Work</th><th>Effort</th><th>Unblocks</th></tr>
+  <tr>
+    <td>P1</td>
+    <td>Fix C-1: parser refuses malformed input with a real error</td>
+    <td>2-3 days</td>
+    <td>Everything else.  Without this, no honest dogfooding.</td>
+  </tr>
+  <tr>
+    <td>P2</td>
+    <td>Fix C-5 (WASI extern) + H-1 (line/col in diagnostics) + H-4 (fn body scope).  These are individually small but block any non-trivial Silicon authoring.</td>
+    <td>2-3 days</td>
+    <td>External users.  At this point the docs/examples are accurate.</td>
+  </tr>
+  <tr>
+    <td>P3</td>
+    <td>Black-box integration test corpus + CI.  ~30 programs covering arith, control, strings, arrays, sum types.  Wire to <code>./test.sh integration</code>.</td>
+    <td>3-4 days</td>
+    <td>Catches every other regression in this audit + future ones.</td>
+  </tr>
+  <tr>
+    <td>P4</td>
+    <td>Fix C-2 (@match) and C-3 (@enum) — flagship features back to working.  Likely 1-2 days each once P3's tests are in place to drive them.</td>
+    <td>3-4 days</td>
+    <td>Sum types story restored.</td>
+  </tr>
+  <tr>
+    <td>P5</td>
+    <td>Fix C-4: full std.wat surface.  Mechanical port from the playground's frozen copy.</td>
+    <td>1-2 days</td>
+    <td>Real user programs.</td>
+  </tr>
+  <tr>
+    <td>P6</td>
+    <td>H-2: make <code>--typecheck</code> default-on, exit non-zero on errors, add <code>--no-typecheck</code>.  Triage every check that fires on <code>boot/*.si</code> itself (sigil's own source needs to typecheck clean).</td>
+    <td>4-5 days</td>
+    <td>Calls the compiler "type-safe" without lying.</td>
+  </tr>
+  <tr>
+    <td>P7</td>
+    <td>M-4: <code>silicon-fmt</code> built on the existing AST.</td>
+    <td>2-3 days</td>
+    <td>Editor experience parity with peers.</td>
+  </tr>
+  <tr>
+    <td>P8</td>
+    <td>M-2 polish: hints / "did you mean" / fix suggestions in diagnostics.</td>
+    <td>5-7 days</td>
+    <td>Diagnostic-quality competitive with modern languages.</td>
+  </tr>
+</table>
+
+<p style="margin-top:18px;">
+  Total: <strong>~22-31 engineer-days</strong>, or 5-7 calendar weeks at
+  a typical pace with reviews.  After P5 the compiler is usable for
+  real programs; after P6 it's defensible as the canonical
+  implementation; after P8 it's competitive.
+</p>
+
+<p>
+  The work that won't go on this list because the architecture
+  already supports it: more language features.  The strata system
+  genuinely works — anything ridable on
+  <code>@stratum_keyword</code> /
+  <code>@stratum_operator</code> can land without compiler changes.
+  Future work like async, generators, or richer types is
+  surface-level and orthogonal to the issues above.
+</p>
+
+<!-- ================================================================ -->
+<h2 id="repro">9. Reproduction commands</h2>
+
+<p>Everything in this report is reproducible in &lt; 5 minutes on a clean
+clone with wasmtime + wat2wasm installed.  Try these to validate the
+findings:</p>
+
+<pre><span class="err"># C-1: parser accepts garbage</span>
+echo 'totally not silicon' | wasmtime wasm-bin/stage1.wasm
+# → exit 0, ~40-line WAT module
+
+<span class="err"># C-2: @match broken</span>
+cat &gt; audit/match.si &lt;&lt;'EOF'
+@type Shape := $Circle r:Int | $Rectangle w:Int, h:Int;
+@fn area:Int s:Shape := {
+  &amp;@match s,
+    $Circle r:Int, { (r * r * 3) },
+    $Rectangle w:Int, h:Int, { (w * h) }
+};
+EOF
+wasmtime --dir . wasm-bin/stage1.wasm audit/match.si &gt; audit/match.wat
+bin/wat2wasm audit/match.wat -o /tmp/x.wasm
+# → wat2wasm error "undefined function variable $r"
+
+<span class="err"># C-3: @enum broken</span>
+echo '@enum Color := Red | Green | Blue;' &gt; audit/e.si
+wasmtime --dir . wasm-bin/stage1.wasm audit/e.si &gt; audit/e.wat
+bin/wat2wasm audit/e.wat -o /tmp/x.wasm
+# → wat2wasm error "undefined function variable $Green"
+
+<span class="err"># C-4: missing std helpers</span>
+bin/wasm2wat wasm-bin/stage1.wasm | grep -E '^\(func \$arr_load|^\(func \$alloc_array|^\(func \$print_int'
+# → empty
+
+<span class="err"># H-1 + H-4: typechecker UX</span>
+echo '@fn add:Int a:Int, b:Int := { (a + b) };' | wasmtime wasm-bin/stage1.wasm --typecheck
+# → diagnostics with no line/col + unbound on params
+
+<span class="api"># S-1: byte-equal self-host (works correctly)</span>
+./build.sh check
+# → ✓ fixed point — rebuilt stage1.wasm byte-equal to seed</pre>
+
+<hr class="thin" />
+
+<p style="color: var(--muted); font-size: 0.82rem; margin-top: 30px;">
+  Methodology note: this audit took ~90 minutes of investigation across
+  source reading, code execution, and disassembly.  Time-box matters
+  for these reports &mdash; deeper investigation would surface more, but
+  the issues above are individually showstoppers and don't need
+  further triage to decide whether to land the work.
+</p>
+
+</div>
+</body>
+</html>

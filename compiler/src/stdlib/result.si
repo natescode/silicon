@@ -1,0 +1,38 @@
+# SPDX-License-Identifier: MIT
+# Phase 5a-2 — stdlib Result[T, E] type and helpers.
+#
+# Result models a computation that may succeed with a T or fail with an E.
+# Implemented as a parametric sum type with two type parameters.
+#
+#   @use '/path/to/sigil/src/stdlib/result.si';
+#   @local ok  := &Ok 42;        ;; inferred Result[Int, ?E]
+#   @local err := &Err 'oops';   ;; inferred Result[?T, String]
+#   @local x   := &result_unwrap_or ok, 0;
+#
+# `?` unwrap shorthand and `@try` (story 5a-3) are still deferred — they
+# need an `on::callSite` stratum.
+
+@type Result[T, E] := $Ok value:T | $Err error:E;
+
+# Extract the success value or fall back to `dflt`.  T and E are inferred
+# from the call site.  Multi-arg type annotations like `:Result[T, E]` in
+# parameter position were unblocked by the Phase 5 grammar revision.
+@fn result_unwrap_or[T, E] r:Result[T, E], dflt:T := {
+    &@match r,
+        $Ok v   => v,
+        $Err _e => dflt
+};
+
+# True if the result is an Ok.
+@fn result_is_ok[T, E] r:Result[T, E] := {
+    &@match r,
+        $Ok _v  => @true,
+        $Err _e => @false
+};
+
+# True if the result is an Err.
+@fn result_is_err[T, E] r:Result[T, E] := {
+    &@match r,
+        $Ok _v  => @false,
+        $Err _e => @true
+};

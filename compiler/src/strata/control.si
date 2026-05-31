@@ -1,0 +1,81 @@
+# SPDX-License-Identifier: MIT
+# D-D-8: @break / @continue / @return migrated to the new @stratum form.
+# Handler bodies read the current loop-id via compiler_ctx_loopStack_peek
+# and the @return value via compiler_arg + compiler_lowerExprIfDefined.
+
+@stratum Break := {
+    &Compiler::register::expression_keyword '@break';
+    &Compiler::on::lower '@break', Break_lower;
+};
+@fn Break_lower node:Int :=
+    &compiler::ir_makeBreak &compiler::compiler_ctx_loopStack_peek;
+
+@stratum Continue := {
+    &Compiler::register::expression_keyword '@continue';
+    &Compiler::on::lower '@continue', Continue_lower;
+};
+@fn Continue_lower node:Int :=
+    &compiler::ir_makeContinue &compiler::compiler_ctx_loopStack_peek;
+
+@stratum Return := {
+    &Compiler::register::expression_keyword '@return';
+    &Compiler::on::lower '@return', Return_lower;
+};
+# Phase 4: route through compiler_emitReturn so pending @defer cleanups
+# run in LIFO order before the Return instruction.  Reduces to plain
+# ir_makeReturn when the current function has no defers.
+@fn Return_lower node:Int :=
+    &compiler::compiler_emitReturn (&compiler::compiler_arg node, 0);
+
+@stratum Defer := {
+    &Compiler::register::expression_keyword '@defer';
+    &Compiler::on::lower '@defer', Defer_lower;
+};
+# Phase 4: defer registration.  Lowers args[0] and pushes the resulting IR
+# onto the current function's deferStack; emits no inline IR at the site.
+@fn Defer_lower node:Int :=
+    &compiler::compiler_registerDefer node;
+
+# Phase 5 Workstream B — first-class functions.
+# `@fnref name` produces the i32 table index of a top-level @fn,
+# adding it to the module's funcref table on demand.
+# `@call_indirect cb, arg` invokes the function whose table index is
+# `cb` with one i32 argument, returning i32 — the 1.0 surface fixes the
+# signature to i32 → i32 (the common case for Vec.map / Result.map);
+# multi-arg / mixed-type variants are mechanical extensions.
+@stratum FnRef := {
+    &Compiler::register::expression_keyword '@fnref';
+};
+
+@stratum CallIndirect := {
+    &Compiler::register::expression_keyword '@call_indirect';
+};
+
+# Phase 5a-3 — Result early-return shorthand.
+# `&@try r` desugars to a small inline expression: if the Result's tag
+# byte is Ok (0), take the payload value; otherwise `@return` the
+# original Result pointer unchanged (Err propagates).  Hardcoded in
+# `lower.ts:lowerTry` because it needs to allocate a fresh local and
+# construct a multi-statement Block with a trailing If.
+@stratum Try := {
+    &Compiler::register::expression_keyword '@try';
+};
+
+# Phase 9c (ADR 0008) — explicit-arena memory management.
+# `&@with_arena { body }` saves the bump heap pointer at entry, runs
+# the body, and resets the heap pointer at exit — every byte allocated
+# inside is freed at once.  `&@move_to_parent_arena value` (tail position
+# only) memcpys the value's bytes from inside the arena to the saved
+# boundary before the unwind so the block evaluates to a pointer that
+# survives the reset.  Both keywords are hardcoded in
+# `lower.ts:lowerWithArena` / `lowerMoveToParentArena` because the
+# lowering needs to allocate fresh locals, inspect the body's tail
+# expression at AST time, and consult the typechecker for value size.
+# See docs/v1-user-stories.html#phase-9c.
+@stratum WithArena := {
+    &Compiler::register::expression_keyword '@with_arena';
+};
+
+@stratum MoveToParentArena := {
+    &Compiler::register::expression_keyword '@move_to_parent_arena';
+};

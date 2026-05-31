@@ -1,0 +1,143 @@
+# SPDX-License-Identifier: MIT
+# D-D-11b: @let and @fn migrated to the new @stratum form.  Both share
+# the same handler (LetOrFn_lower) — @fn is a syntactic alias for @let
+# that conventionally marks function-style definitions.
+
+@stratum LetDef := {
+    &Compiler::register::keyword '@let';
+    &Compiler::on::lower '@let', LetOrFn_lower;
+};
+
+@stratum FnDef := {
+    &Compiler::register::keyword '@fn';
+    &Compiler::on::lower '@fn', LetOrFn_lower;
+};
+
+@fn LetOrFn_lower node:Int := {
+    @local name:Int       := &compiler::compiler_watId
+        (&compiler::compiler_ast_str_field node,
+            (&compiler::compiler_str_intern 'name.name', 0));
+    @local params:Int     := &compiler::compiler_lowerParams node;
+    @local funcResult:Int := &compiler::compiler_lowerFunctionBody node, params;
+    @local body:Int       := &compiler::compiler_funcResult_body funcResult;
+    @local locals:Int     := &compiler::compiler_funcResult_locals funcResult;
+    @local returnType:Int := &compiler::compiler_resolveFunctionReturnType node, name, body;
+    &compiler::compiler_ctx_globals_set name, (&compiler::compiler_str_intern 'i32', 0);
+    &compiler::ir_makeFunction name, params, returnType, locals, body
+};
+
+# D-D-11c: @var and @extern migrated to the new @stratum form.
+#
+# @var: top-level binds a mutable global; in-function use is handled
+# specially in lowerAsStmt (recognised by keyword).  Forward-ref
+# pre-scan is preserved by adding a keyword check in lowerProgram.
+#
+# @extern: declares a WASI / module import.  Handler builds an IRImport
+# from the @extern declaration's param/result types.
+
+@stratum VarDef := {
+    &Compiler::register::keyword '@var';
+    &Compiler::on::lower '@var', VarDef_lower;
+};
+@fn VarDef_lower node:Int := {
+    @local name:Int     := &compiler::compiler_watId
+        (&compiler::compiler_ast_str_field node,
+            (&compiler::compiler_str_intern 'name.name', 0));
+    @local declared:Int := &compiler::compiler_resolveType
+        (&compiler::compiler_ast_node_field node,
+            (&compiler::compiler_str_intern 'name.typeAnnotation', 0));
+    @local initInfo:Int := &compiler::compiler_lowerGlobalInit node, declared;
+    @local init:Int     := &compiler::compiler_globalInit_init initInfo;
+    @local wasmType:Int := &compiler::compiler_globalInit_wasmType initInfo;
+    &compiler::compiler_ctx_globals_set name, wasmType;
+    &compiler::compiler_ctx_varNames_add name;
+    &compiler::ir_makeGlobal name, wasmType, 1, init
+};
+
+@stratum ExternDef := {
+    &Compiler::register::keyword '@extern';
+    &Compiler::on::lower '@extern', ExternDef_lower;
+};
+@fn ExternDef_lower node:Int := {
+    @local name:Int   := &compiler::compiler_watId
+        (&compiler::compiler_ast_str_field node,
+            (&compiler::compiler_str_intern 'name.name', 0));
+    @local params:Int := &compiler::compiler_lowerExternParams node;
+    @local result:Int := &compiler::compiler_lowerExternResult node;
+    &compiler::ir_makeImport
+        (&compiler::compiler_str_intern 'env', 0),
+        name, name, params, result
+};
+
+# D-D-11a: leaf def-kinds (@type_alias, @type_distinct, @local) migrated to
+# the new @stratum form.  These either emit no IR (type aliases) or build
+# their IR through compiler_ctx_* and ir_makeLocal.
+
+@stratum TypeAliasDef := {
+    &Compiler::register::keyword '@type_alias';
+    &Compiler::on::lower '@type_alias', TypeAliasDef_lower;
+};
+@fn TypeAliasDef_lower node:Int := &compiler::ir_null;
+
+@stratum TypeDistinctDef := {
+    &Compiler::register::keyword '@type_distinct';
+    &Compiler::on::lower '@type_distinct', TypeDistinctDef_lower;
+};
+@fn TypeDistinctDef_lower node:Int := &compiler::ir_null;
+
+# D-D-11d: @type_sum / @enum / @type migrated to the new @stratum form.
+# Each handler delegates to a TS-side expander (sumTypeExpander or
+# typeRecordExpander) which does the heavy lifting:
+#   - extract variants from the AST
+#   - emit one IRGlobal per variant tag (sum types) or one IRFunction
+#     per variant constructor (record types)
+#   - register tag globals in ctx for forward references
+# The handler returns the array of IR objects; lowerProgram's append()
+# already handles array results.
+
+@stratum TypeSumDef := {
+    &Compiler::register::keyword '@type_sum';
+    &Compiler::on::lower '@type_sum', TypeSumDef_lower;
+};
+@fn TypeSumDef_lower node:Int := &compiler::compiler_expandSumType node;
+
+@stratum EnumDef := {
+    &Compiler::register::keyword '@enum';
+    &Compiler::on::lower '@enum', EnumDef_lower;
+};
+@fn EnumDef_lower node:Int := &compiler::compiler_expandSumType node;
+
+@stratum TypeRecordDef := {
+    &Compiler::register::keyword '@type';
+    &Compiler::on::lower '@type', TypeRecordDef_lower;
+};
+@fn TypeRecordDef_lower node:Int := &compiler::compiler_expandTypeRecord node;
+
+# D-D-11a: @local migrated.  Handler reads the type + name, pushes a
+# pending local, sets up the local in ctx.locals, and emits no IR
+# itself — the local declaration appears in the function preamble
+# through the pendingLocals accumulator.  Companion change in
+# lowerAsStmt added a `stratum_def` branch so the handler runs when
+# @local appears inside a function body.
+@stratum LocalDef := {
+    &Compiler::register::keyword '@local';
+    &Compiler::on::lower '@local', LocalDef_lower;
+};
+@fn LocalDef_lower node:Int := {
+    @local wasmType:Int := &compiler::compiler_resolveType
+        (&compiler::compiler_ast_node_field node,
+            (&compiler::compiler_str_intern 'name.typeAnnotation', 0));
+    @local sname:Int := &compiler::compiler_watId
+        (&compiler::compiler_ast_str_field node,
+            (&compiler::compiler_str_intern 'name.name', 0));
+    @local decl:Int := &compiler::ir_makeLocal sname, wasmType;
+    &compiler::compiler_ctx_pendingLocals_push decl;
+    &compiler::compiler_ctx_locals_set sname, wasmType;
+    # If there's a binding init (`@local x:Int := <expr>`), emit a LocalSet.
+    # Otherwise (`@local x:Int;`), emit no IR (declaration only).
+    @local binding:Int := &compiler::compiler_ast_node_field node,
+        (&compiler::compiler_str_intern 'binding.expression', 0);
+    &@if binding,
+        { &compiler::ir_makeLocalSet sname, (&compiler::compiler_lowerExpr binding) },
+        { &compiler::ir_null }
+};

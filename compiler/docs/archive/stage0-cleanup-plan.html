@@ -1,0 +1,517 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Stage 0 Cleanup Plan — Sigil Compiler</title>
+  <style>
+    :root {
+      --bg: #0f1117;
+      --surface: #1a1d27;
+      --surface2: #222535;
+      --border: #2e3248;
+      --accent: #6c8ef7;
+      --accent2: #b06cf7;
+      --accent3: #3ecf8e;
+      --accent4: #f7a06c;
+      --accent5: #f76c6c;
+      --accent6: #f7e36c;
+      --text: #dde1f0;
+      --muted: #7b82a8;
+      --code-bg: #13151f;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+      padding: 40px 24px;
+    }
+    .page { max-width: 1100px; margin: 0 auto; }
+    h1 { font-size: 2rem; color: var(--accent); margin-bottom: 8px; }
+    h2 { font-size: 1.4rem; color: var(--accent2); margin: 40px 0 16px; border-bottom: 1px solid var(--border); padding-bottom: 8px; }
+    h3 { font-size: 1.1rem; color: var(--accent3); margin: 24px 0 10px; }
+    h4 { font-size: 0.95rem; color: var(--accent4); margin: 16px 0 8px; }
+    p  { margin-bottom: 12px; color: var(--text); }
+    .subtitle { color: var(--muted); font-size: 1rem; margin-bottom: 32px; }
+
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 20px 24px;
+      margin-bottom: 20px;
+    }
+    .card.warn { border-color: var(--accent5); }
+    .card.ok   { border-color: var(--accent3); }
+    .card.info { border-color: var(--accent);  }
+    .card.note { border-color: var(--accent4); }
+    .card.idea { border-color: var(--accent2); }
+
+    pre {
+      background: var(--code-bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 16px;
+      overflow-x: auto;
+      font-family: 'Cascadia Code', 'Fira Code', 'Consolas', monospace;
+      font-size: 0.82rem;
+      line-height: 1.55;
+      margin: 12px 0;
+    }
+    code { font-family: 'Cascadia Code', 'Fira Code', 'Consolas', monospace; font-size: 0.85em; background: var(--code-bg); padding: 1px 5px; border-radius: 4px; }
+    .kw  { color: #c792ea; }
+    .fn  { color: #82aaff; }
+    .str { color: #c3e88d; }
+    .cm  { color: #546e7a; }
+    .ty  { color: #ffcb6b; }
+    .op  { color: #89ddff; }
+    .si  { color: var(--accent3); }
+    .ir  { color: var(--accent4); }
+
+    table { width: 100%; border-collapse: collapse; margin: 12px 0; font-size: 0.85rem; }
+    th { background: var(--surface2); color: var(--accent); padding: 8px 12px; text-align: left; border: 1px solid var(--border); }
+    td { padding: 8px 12px; border: 1px solid var(--border); vertical-align: top; }
+    tr:nth-child(even) td { background: #141620; }
+
+    .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin: 16px 0; }
+    @media (max-width: 700px) { .two-col { grid-template-columns: 1fr; } }
+
+    .tag {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 12px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      margin-right: 4px;
+    }
+    .tag.red    { background: #3a1515; color: var(--accent5); border: 1px solid #5a2020; }
+    .tag.green  { background: #0f2d1f; color: var(--accent3); border: 1px solid #1a4a30; }
+    .tag.blue   { background: #0f1a3a; color: var(--accent);  border: 1px solid #1a2e5a; }
+    .tag.purple { background: #1e1030; color: var(--accent2); border: 1px solid #3a1a50; }
+    .tag.orange { background: #2d1a0f; color: var(--accent4); border: 1px solid #5a3010; }
+    .tag.yellow { background: #2d2a0f; color: var(--accent6); border: 1px solid #5a5510; }
+
+    .ws-head {
+      display: flex;
+      align-items: baseline;
+      gap: 14px;
+      margin: 36px 0 6px;
+      padding-bottom: 8px;
+      border-bottom: 1px solid var(--border);
+    }
+    .ws-num {
+      font-size: 0.75rem;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--muted);
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 2px 10px;
+    }
+    .ws-name { color: var(--accent3); font-size: 1.25rem; font-weight: 600; }
+
+    .divider { border: none; border-top: 1px solid var(--border); margin: 40px 0; }
+
+    ul, ol { padding-left: 24px; margin-bottom: 12px; }
+    li { margin-bottom: 4px; }
+
+    .meta-row {
+      display: grid;
+      grid-template-columns: 130px 1fr;
+      gap: 4px 16px;
+      font-size: 0.85rem;
+      margin: 10px 0 14px;
+    }
+    .meta-row .k { color: var(--muted); }
+    .meta-row .v { color: var(--text); }
+
+    .done {
+      background: #131e1a;
+      border-left: 3px solid var(--accent3);
+      padding: 8px 14px;
+      margin: 12px 0;
+      font-size: 0.85rem;
+      border-radius: 4px;
+    }
+    .done .lbl { color: var(--accent3); font-weight: 600; text-transform: uppercase; font-size: 0.72rem; letter-spacing: 0.08em; }
+  </style>
+</head>
+<body>
+<div class="page">
+
+  <h1>Stage 0 Cleanup Plan</h1>
+  <p class="subtitle">Six focused workstreams to harden the TypeScript/Bun Sigil compiler before the self-host begins · <strong>Companion to:</strong> <code>docs/bootstrap-plan.html</code></p>
+
+  <!-- ─────────────────────────────────────────────── -->
+  <h2>1. Executive Summary</h2>
+  <div class="card info">
+    <p><strong>Premise.</strong> Stage 0 (the TS compiler) is going away — but not before it bootstraps Stage 1. Every shortcut left in Stage 0 either propagates into the bootstrap source or makes the bootstrap measurably harder. This plan picks the cleanups that pay for themselves <em>during</em> the bootstrap, and explicitly skips the cleanups that don't.</p>
+    <p><strong>Scope.</strong> Six workstreams, sequenced so each unblocks the next. None require new language design beyond what the bootstrap plan already lists in Phase −1.</p>
+    <p><strong>Non-goal.</strong> Polishing Stage 0 for its own sake. Anything that doesn't survive into Stage 1 or de-risk the bootstrap is explicitly excluded (see §10).</p>
+  </div>
+
+  <h3>1.1 The Six Workstreams</h3>
+  <table>
+    <thead><tr><th>#</th><th>Workstream</th><th>Pays Off In</th><th>Effort</th></tr></thead>
+    <tbody>
+      <tr><td>1</td><td>Determinism property + initial property tests</td><td>Phase 9 fixed-point</td><td>~3 days</td></tr>
+      <tr><td>2</td><td>UTF-8 string migration</td><td>Phase 1 parser, removes §6.2 row D risk</td><td>~2 days</td></tr>
+      <tr><td>3</td><td>Enum / sum-type split + payload layout</td><td>Phase −1.A unblocks; Phase 2 AST nodes</td><td>~1–2 weeks</td></tr>
+      <tr><td>4</td><td>Structured errors + source spans</td><td>Phase 5 format-parity gate becomes meaningful</td><td>~1 week</td></tr>
+      <tr><td>5</td><td>Docs cleanup (CLAUDE.md, strata.md)</td><td>Onboarding; future contributors</td><td>~½ day</td></tr>
+      <tr><td>6</td><td>Parser fuzzing harness</td><td>Catches Phase 1 latent bugs continuously</td><td>~3 days; ongoing</td></tr>
+    </tbody>
+  </table>
+
+  <!-- ─────────────────────────────────────────────── -->
+  <h2>2. Why Now (Sequencing Against the Bootstrap)</h2>
+  <p>Each workstream is a precondition for a later bootstrap phase, or it shrinks a risk register row, or both:</p>
+  <table>
+    <thead><tr><th>Workstream</th><th>Bootstrap dependency</th></tr></thead>
+    <tbody>
+      <tr><td>1 — Determinism</td><td>Phase 9 fixed-point check. Latent non-determinism caught now is one bug; caught after Stage 2 self-compiles, it's a maze.</td></tr>
+      <tr><td>2 — UTF-8 strings</td><td>Resolves §6.2 row D entirely — bootstrap parser reads UTF-8 source and compares to UTF-8 string literals with no convert step.</td></tr>
+      <tr><td>3 — Enum/sum types</td><td>Phase −1.A is on the Phase −1 critical path. Bootstrap source can't represent its own AST without this.</td></tr>
+      <tr><td>4 — Structured errors</td><td>Phase 5's error-format-parity gate is meaningless if Stage 0 errors are just strings. Spans must propagate through every IR layer or Stage 1 inherits a flat error world.</td></tr>
+      <tr><td>5 — Docs</td><td>Soft dependency: prevents new contributors from leaning on outdated patterns (f32-sniffing, single-keyword <code>@type_sum</code>) that disappear post-bootstrap.</td></tr>
+      <tr><td>6 — Fuzzing</td><td>Every property the fuzzer enforces in Stage 0 becomes a fixture Stage 1 must also satisfy. Test corpus grows for free.</td></tr>
+    </tbody>
+  </table>
+
+  <!-- ─────────────────────────────────────────────── -->
+  <h2>3. Workstreams</h2>
+
+  <!-- ─── WS 1 ─── -->
+  <div class="ws-head"><span class="ws-num">WS 1</span><span class="ws-name">Determinism Property + Initial Property Tests</span></div>
+  <div class="meta-row">
+    <div class="k">Goal</div><div class="v">Catch latent non-determinism in Stage 0 before it propagates into Stage 1 and breaks the Phase 9 fixed-point check.</div>
+    <div class="k">Deliverable</div><div class="v"><code>src/e2e/determinism.property.test.ts</code> + four supporting property tests.</div>
+    <div class="k">Tool</div><div class="v"><code>fast-check</code> (TS property-test library) added to <code>devDependencies</code>.</div>
+  </div>
+  <p>This is workstream #1 because it surfaces existing bugs before any other workstream introduces churn. Expect 2-3 hits — almost certainly one in strata-registry iteration order, possibly one in <code>allocString</code> caching, possibly one in module loader directory iteration (<code>readdirSync</code> isn't sorted on all platforms).</p>
+
+  <h4>1.1 Properties to Land Day One</h4>
+  <table>
+    <thead><tr><th>Property</th><th>Assertion</th></tr></thead>
+    <tbody>
+      <tr><td><strong>Compilation determinism</strong></td><td>For any program <code>p</code>: <code>compile(p) == compile(p)</code> byte-for-byte. Run compile twice in the same process and across two fresh processes.</td></tr>
+      <tr><td>Source-location coverage</td><td>Every AST node has <code>sourceLocation</code> set. Walk a parsed program and assert no nulls. (Catches new node kinds forgetting the field.)</td></tr>
+      <tr><td>IR type coverage</td><td>Every IR expression node has a non-<code>void</code> <code>wasmType</code>, except in the explicit allow-list (<code>IRBlock</code> trailing void, <code>IRReturn</code>, &hellip;).</td></tr>
+      <tr><td>Strata registry uniqueness</td><td>No duplicate keys in <code>operatorExpanders</code>, <code>defExpanders</code>, or any future registry table.</td></tr>
+      <tr><td>AST JSON round-trip</td><td>Parsing source → AST → JSON → parsing JSON → AST is the identity. Catches serialiser bugs the bootstrap will rely on for fixture diffs.</td></tr>
+    </tbody>
+  </table>
+
+  <h4>1.2 Concrete Tasks</h4>
+  <ol>
+    <li>Add <code>fast-check</code> dependency.</li>
+    <li>Write the five property tests above. Run them. <strong>Expect failures.</strong></li>
+    <li>Fix every failure. The likely fixes: sort <code>Map</code> iterations before serialising, replace <code>readdirSync</code> with sorted version, audit any <code>Date.now()</code> or <code>Math.random()</code> call in compile paths.</li>
+    <li>Add a CI job that runs property tests on every PR with a 60-second budget per property.</li>
+  </ol>
+
+  <div class="done"><span class="lbl">Done when</span> &nbsp; All five properties pass with a 60s budget, CI gate green, and a writeup in <code>tests/properties/README.md</code> listing what each property defends against.</div>
+
+  <div class="card ok">
+    <p><strong>Status:</strong> <span class="tag green">Landed</span></p>
+    <ul>
+      <li>All five properties implemented in <code>tests/properties/</code> and passing under <code>bun run test:properties</code> (60s budget per property).</li>
+      <li>CI workflow <code>.github/workflows/properties.yml</code> runs the suite on every push / PR to <code>main</code>.</li>
+      <li>Source-location property is scaffolded in coverage-report mode; flip <code>PROMOTE_TO_STRICT</code> when WS 4 wires Ohm spans into <code>toAst.ts</code>.</li>
+      <li>Writeup at <code>tests/properties/README.md</code> ties each property to the bootstrap dependency it defends.</li>
+    </ul>
+  </div>
+
+  <!-- ─── WS 2 ─── -->
+  <div class="ws-head"><span class="ws-num">WS 2</span><span class="ws-name">UTF-8 String Migration</span></div>
+  <div class="meta-row">
+    <div class="k">Goal</div><div class="v">Replace UTF-16 LE string encoding with UTF-8 throughout. Source files, string literals, and stdlib string helpers all speak the same encoding.</div>
+    <div class="k">Deliverable</div><div class="v">Updated <code>allocString</code> (<code>src/ir/lower.ts:79</code>), updated <code>std.wat</code> length-header semantics, updated stdlib string fns, fixture refresh.</div>
+    <div class="k">Touches</div><div class="v"><code>ir/lower.ts</code>, <code>codegen/std.wat</code>, any test that asserts on string byte layout.</div>
+  </div>
+
+  <h4>2.1 Why</h4>
+  <ul>
+    <li>Matches source-file encoding — bootstrap parser reads UTF-8 from <code>fd_read</code>, compares to UTF-8 string literals, no convert step. <strong>Eliminates §6.2 row D of the bootstrap plan entirely.</strong></li>
+    <li>Matches WASI/WASIX syscall surface — no convert at I/O time.</li>
+    <li>Half the size for ASCII-heavy content, which is ~all source and ~all log output.</li>
+    <li>Matches every other tool Silicon will interoperate with.</li>
+  </ul>
+
+  <h4>2.2 Layout</h4>
+  <pre><span class="cm"># Old (UTF-16 LE):</span>
+[byte_len:i32][utf16_le_bytes...]   <span class="cm"># byte_len = char_count * 2</span>
+
+<span class="cm"># New (UTF-8):</span>
+[byte_len:i32][utf8_bytes...]       <span class="cm"># byte_len = exact byte count</span></pre>
+  <p>The header stays 4-byte little-endian length-prefix; only the payload encoding changes. <code>std.wat</code>'s <code>$str_concat</code> is already byte-based (copies bytes blindly) — no change needed there. <code>$str_len</code> still returns <code>i32.load 0(ptr)</code>.</p>
+
+  <h4>2.3 Char Type — Don't Add One</h4>
+  <div class="card note">
+    <p>The spec is right: there is no single "character" in Unicode. Stdlib gets three explicit views over a string buffer:</p>
+    <ul>
+      <li><code>str_bytes(s) -> Iter&lt;Int&gt;</code> — raw bytes (cheap, what the parser actually wants)</li>
+      <li><code>str_codepoints(s) -> Iter&lt;Int&gt;</code> — decoded U+ codepoints</li>
+      <li><code>str_graphemes(s) -> Iter&lt;String&gt;</code> — user-perceived characters (post-bootstrap)</li>
+    </ul>
+    <p>None of these are needed by the bootstrap; document them as the public API and implement only <code>str_bytes</code> in Stage 0.</p>
+  </div>
+
+  <div class="done"><span class="lbl">Done when</span> &nbsp; All existing tests pass with UTF-8 layout. New test asserts a string literal of <code>'hello'</code> produces exactly <code>[5, 'h', 'e', 'l', 'l', 'o']</code> in the data segment. Bootstrap-plan §6.2 row D removed.</div>
+
+  <!-- ─── WS 3 ─── -->
+  <div class="ws-head"><span class="ws-num">WS 3</span><span class="ws-name">Enum / Sum-Type Split with Payload Layout</span></div>
+  <div class="meta-row">
+    <div class="k">Goal</div><div class="v">Rename today's enum-only <code>@type_sum</code> to <code>@enum</code>; introduce <code>@type</code> as the general sum-type-with-payloads form. Pattern-match supports variant destructure.</div>
+    <div class="k">Deliverable</div><div class="v">New <code>@enum</code> + <code>@type</code> strata in <code>defkinds.si</code>; extended <code>@match</code>; AST/IR support for tagged-record constructors; round-trip fixture.</div>
+    <div class="k">Touches</div><div class="v">grammar (no change — same definition form), <code>strata/defkinds.si</code>, <code>strata/match.si</code>, <code>defExpanders.ts</code>, <code>typechecker.ts</code>, <code>ir/lower.ts</code>.</div>
+  </div>
+
+  <h4>3.1 Terminology</h4>
+  <table>
+    <thead><tr><th>Construct</th><th>Payloads</th><th>Layout</th><th>Keyword</th></tr></thead>
+    <tbody>
+      <tr><td><strong>Enum</strong></td><td>No</td><td>Single i32 constant per variant (today's behaviour)</td><td><code>@enum</code></td></tr>
+      <tr><td><strong>Sum type / Tagged union / ADT</strong></td><td>Yes</td><td><code>(tag:i32, field0:i32, ..., fieldN:i32)</code> padded to max variant</td><td><code>@type</code></td></tr>
+      <tr><td>Untagged union</td><td>Overlapping</td><td>—</td><td><span class="tag red">Excluded</span></td></tr>
+    </tbody>
+  </table>
+  <p>Two keywords intentionally: <code>@enum</code> tells the reader the variants are guaranteed payload-free, enabling cheaper codegen and exhaustive switch-on-i32. <code>@type</code> is the general form — variants may have zero fields (degenerate enum) or many.</p>
+
+  <h4>3.2 Layout Decision: Pad-to-Max, Not Boxed</h4>
+  <div class="card ok">
+    <p>For each <code>@type</code>, compute <code>max_fields = max(arity(v) for v in variants)</code>. Every value is laid out as:</p>
+    <pre>[tag:i32][f0:i32][f1:i32]...[f<sub>max-1</sub>:i32]</pre>
+    <p>Variants with fewer fields leave the trailing slots uninitialised (or zero — pick one and stick with it for determinism). Total size is <code>4 * (1 + max_fields)</code> bytes per value, allocated contiguously in the arena.</p>
+    <p><strong>Why not boxed:</strong> a pointer + heap allocation per variant doubles arena pressure during AST construction, and the bootstrap AST is allocation-heavy. Stage 1 doesn't need mixed-size variants (everything's i32 in the bootstrap).</p>
+    <p><strong>Future:</strong> when post-Stage-3 work adds non-i32 fields (strings as <code>(ptr, len)</code> pairs, nested structs), the layout generalises to "max of <code>sizeof(variant)</code>" — same principle, different arithmetic.</p>
+  </div>
+
+  <h4>3.3 Pattern Destructure</h4>
+  <pre><span class="kw">@type</span> <span class="ty">AstNode</span> :=
+  | <span class="ty">Literal</span> value:<span class="ty">Int</span>
+  | <span class="ty">BinOp</span>   op:<span class="ty">Int</span>, left:<span class="ty">Int</span>, right:<span class="ty">Int</span>
+  | <span class="ty">Call</span>    name:<span class="ty">Int</span>, args:<span class="ty">Int</span>;
+
+<span class="kw">@fn</span> evalNode n:<span class="ty">Int</span> -> <span class="ty">Int</span> := {
+  <span class="kw">@match</span> n {
+    <span class="ty">Literal</span> {value}        => value;
+    <span class="ty">BinOp</span> {op, left, right} => binop op, (evalNode left), (evalNode right);
+    <span class="ty">Call</span> {name, args}      => callFn name, args;
+  };
+};</pre>
+  <p>Compiles to a chain of <code>if (tag == TAG_Literal) { bind value := load(node+4); ... }</code> via <code>expandMatchChain</code>.</p>
+
+  <h4>3.4 Round-Trip Fixture</h4>
+  <p>The acceptance gate is a single end-to-end program that exercises every operation:</p>
+  <pre><span class="kw">@type</span> <span class="ty">Shape</span> :=
+  | <span class="ty">Circle</span>    r:<span class="ty">Int</span>
+  | <span class="ty">Rectangle</span> w:<span class="ty">Int</span>, h:<span class="ty">Int</span>;
+
+<span class="kw">@fn</span> area s:<span class="ty">Int</span> -> <span class="ty">Int</span> := {
+  <span class="kw">@match</span> s {
+    <span class="ty">Circle</span> {r}       => r * r * 3;
+    <span class="ty">Rectangle</span> {w,h} => w * h;
+  };
+};
+
+<span class="kw">@export</span> main := {
+  <span class="kw">@local</span> c := <span class="ty">Circle</span> 5;
+  <span class="kw">@local</span> r := <span class="ty">Rectangle</span> 4, 6;
+  (area c) + (area r);  <span class="cm"># 75 + 24 = 99</span>
+};</pre>
+  <p>Constructors are function-call syntax (form 3 lookup resolves <code>Circle</code> in scope). <code>area</code> compiles, runs, returns 99.</p>
+
+  <div class="done"><span class="lbl">Done when</span> &nbsp; The fixture above compiles, runs under <code>wasmer</code>, returns 99. <code>@type_sum</code> renamed to <code>@enum</code> everywhere; <code>@type</code> handles the new general case. Bootstrap-plan Phase −1.A and −1.B move from <span class="tag yellow">pending</span> to <span class="tag green">done</span>.</div>
+
+  <!-- ─── WS 4 ─── -->
+  <div class="ws-head"><span class="ws-num">WS 4</span><span class="ws-name">Structured Errors + Source Spans</span></div>
+  <div class="meta-row">
+    <div class="k">Goal</div><div class="v">Errors are structured records with source spans, not formatted strings. Rendering becomes a thin disposable layer.</div>
+    <div class="k">Deliverable</div><div class="v"><code>src/errors/diagnostic.ts</code> defining the <code>Diagnostic</code> record; every error site emits a <code>Diagnostic</code>; CLI dumps them as JSON by default with a <code>--pretty</code> flag for the throwaway TS pretty-printer.</div>
+    <div class="k">Touches</div><div class="v"><code>types/errors.ts</code>, <code>ir/lower.ts</code>, <code>parser/parser.ts</code>, <code>elaborator/elaborator.ts</code>, <code>sigil_cli.ts</code>, every test that asserts on error text.</div>
+  </div>
+
+  <h4>4.1 The Split: Structural in Stage 0, Rich Rendering in Stage 1</h4>
+  <div class="card idea">
+    <p>This is the deliberate scope cut. <strong>Source spans are infrastructure</strong> — painful to retrofit later. <strong>Pretty rendering is throwaway</strong> — anything you write in TS gets replaced when Stage 1 reformats. So: do the infrastructure, skip the rendering polish.</p>
+  </div>
+
+  <table>
+    <thead><tr><th>Stage 0 (now)</th><th>Stage 1 (post-bootstrap)</th></tr></thead>
+    <tbody>
+      <tr>
+        <td>
+          <ul>
+            <li>Every AST node has <code>sourceLocation: {file, line, col, span}</code></li>
+            <li>Every IR node has back-ref to origin AST node</li>
+            <li>Structured <code>Diagnostic</code> records: <code>{ phase, code, span, message, hint? }</code></li>
+            <li>CLI default: dump diagnostics as JSON</li>
+            <li>50-line disposable pretty-printer behind <code>--pretty</code></li>
+          </ul>
+        </td>
+        <td>
+          <ul>
+            <li>Multi-line context rendering with carets <code>^^^</code></li>
+            <li>Color codes, terminal width awareness</li>
+            <li>"Did you mean&hellip;" suggestions</li>
+            <li>Error recovery (continue parsing past first error)</li>
+            <li>LSP JSON format (free — already structured)</li>
+          </ul>
+        </td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h4>4.2 The <code>Diagnostic</code> Record</h4>
+  <pre><span class="kw">interface</span> <span class="ty">Diagnostic</span> {
+  phase:    <span class="str">'parse'</span> | <span class="str">'elaborate'</span> | <span class="str">'typecheck'</span> | <span class="str">'lower'</span> | <span class="str">'emit'</span>;
+  code:     <span class="ty">string</span>;       <span class="cm">// e.g. 'E0042' — stable identifiers for matchers/tests</span>
+  span:     <span class="ty">SourceSpan</span>;   <span class="cm">// {file, line, col, length}</span>
+  message:  <span class="ty">string</span>;       <span class="cm">// human, short</span>
+  hint?:    <span class="ty">string</span>;       <span class="cm">// optional, secondary</span>
+  notes?:   <span class="ty">Diagnostic</span>[]; <span class="cm">// related secondary diagnostics</span>
+}</pre>
+
+  <h4>4.3 Why This Strengthens the Bootstrap</h4>
+  <ul>
+    <li>The Phase 5 format-parity gate becomes <em>meaningful</em>. Today it'd diff <code>"type error"</code> strings; with structured diagnostics it diffs <code>(phase, code, span)</code> tuples — a real semantic guarantee.</li>
+    <li>The Stage 1 error implementation has spans to render. Otherwise it'd be retrofitting spans into a self-hosted compiler — exactly the kind of unbounded work that derails bootstraps.</li>
+    <li>Test fixtures get tighter — assert <code>code == 'E0042'</code> instead of substring-matching on prose.</li>
+  </ul>
+
+  <div class="done"><span class="lbl">Done when</span> &nbsp; All error paths emit <code>Diagnostic</code> records. CLI default output is JSON. Existing text-asserting tests updated to assert on <code>code</code> + <code>span</code> instead. The <code>--pretty</code> renderer is &lt;100 LoC.</div>
+
+  <!-- ─── WS 5 ─── -->
+  <div class="ws-head"><span class="ws-num">WS 5</span><span class="ws-name">Docs Cleanup</span></div>
+  <div class="meta-row">
+    <div class="k">Goal</div><div class="v">Remove stale claims from CLAUDE.md and docs/strata.md so new contributors don't lean on patterns that disappear post-bootstrap.</div>
+    <div class="k">Deliverable</div><div class="v">Updated <code>CLAUDE.md</code>, expanded <code>docs/strata.md</code>, pointer in <code>README.md</code> to the bootstrap plan.</div>
+  </div>
+
+  <h4>5.1 CLAUDE.md — Strike List</h4>
+  <table>
+    <thead><tr><th>Line</th><th>Why strike</th></tr></thead>
+    <tbody>
+      <tr><td>"Type inference in codegen currently sniffs for <code>f32.const</code>…"</td><td>False since the IR layer landed. <code>wasmType</code> is pre-computed in <code>ir/nodes.ts</code>.</td></tr>
+      <tr><td>"Source → Parser → AST → Elaborator → TypeChecker → Codegen → WAT" (6 stages)</td><td>Stale. It's now 8 stages with IR Lower + IR Emit between TypeCheck and WAT.</td></tr>
+      <tr><td>References to <code>@type_sum</code></td><td>Will be <code>@enum</code> after WS 3.</td></tr>
+    </tbody>
+  </table>
+
+  <h4>5.2 CLAUDE.md — Additions</h4>
+  <ul>
+    <li>Status line at top: "Stage 0 (TypeScript); self-host planned per <code>docs/bootstrap-plan.html</code>."</li>
+    <li>"Where to look first" section: language semantics live in <code>src/strata/*.si</code>, <em>not</em> in <code>lower.ts</code>. The TS side is mostly the body interpreter and IR plumbing.</li>
+    <li>Pointer to <code>docs/bootstrap-plan.html</code> and <code>docs/stage0-cleanup-plan.html</code>.</li>
+  </ul>
+
+  <h4>5.3 <code>docs/strata.md</code> — Expand</h4>
+  <p>Today it's one page listing the nine StrataTypes without saying which are implemented. Back-port the status table from <code>bootstrap-plan.html §7.1</code> so the spec page tells the truth. Cite <code>compiler-api.md</code> as the authoritative API reference.</p>
+
+  <div class="done"><span class="lbl">Done when</span> &nbsp; CLAUDE.md and docs/strata.md describe the codebase as it actually is today. A new contributor reading them would not be misled into looking for f32-sniffing or for <code>@type_sum</code> with payloads.</div>
+
+  <!-- ─── WS 6 ─── -->
+  <div class="ws-head"><span class="ws-num">WS 6</span><span class="ws-name">Parser Fuzzing Harness</span></div>
+  <div class="meta-row">
+    <div class="k">Goal</div><div class="v">Find latent parser bugs continuously, and grow the test corpus the bootstrap depends on.</div>
+    <div class="k">Deliverable</div><div class="v"><code>tests/fuzz/parser.fuzz.ts</code> + nightly CI job; corpus of seed inputs in <code>tests/fuzz/corpus/</code>.</div>
+    <div class="k">Tool</div><div class="v"><code>fast-check</code> generators reused from WS 1.</div>
+  </div>
+
+  <h4>6.1 Three Fuzz Targets (Land in Order)</h4>
+  <table>
+    <thead><tr><th>Target</th><th>Input generator</th><th>Assertion</th></tr></thead>
+    <tbody>
+      <tr>
+        <td><strong>Random bytes</strong></td>
+        <td>Arbitrary <code>Uint8Array</code></td>
+        <td>Parser must either succeed or return a structured error. Must never throw, crash, infinite-loop, or allocate unbounded memory.</td>
+      </tr>
+      <tr>
+        <td><strong>Random token streams</strong></td>
+        <td>fast-check generator that emits valid tokens in arbitrary order</td>
+        <td>Parser either produces a parse tree or returns an error pointing at the first bad token.</td>
+      </tr>
+      <tr>
+        <td><strong>Generative round-trip</strong></td>
+        <td>Generate random valid AST, pretty-print, re-parse</td>
+        <td>Re-parsed AST equals original AST (modulo trivial differences).</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h4>6.2 Budget</h4>
+  <ul>
+    <li>Local <code>bun test:fuzz</code> — 60 seconds per target.</li>
+    <li>Nightly CI — 30 minutes per target. Failures auto-file an issue with the minimised input.</li>
+    <li>Every reproducer minimised by fast-check gets committed to <code>tests/fuzz/corpus/</code> as a permanent regression test.</li>
+  </ul>
+
+  <h4>6.3 Bootstrap Bonus</h4>
+  <p>Every fixture the fuzzer minimises is added to <code>tests/corpus/</code> (the bootstrap's structural-equivalence harness from <code>bootstrap-plan.html §9.4</code>). The fuzzer is therefore a corpus-growth engine for free — by the time Phase 1 starts, the bootstrap parser has hundreds of edge-case fixtures to validate against.</p>
+
+  <div class="done"><span class="lbl">Done when</span> &nbsp; All three targets run for 60s in <code>bun test:fuzz</code> with zero failures. Nightly CI green for a week. Corpus seeded with at least 50 minimised inputs.</div>
+
+  <!-- ─────────────────────────────────────────────── -->
+  <hr class="divider" />
+  <h2>4. Out of Scope (Throwaway in Stage 0)</h2>
+  <div class="card warn">
+    <p>Explicitly <em>not</em> doing in Stage 0:</p>
+    <ul>
+      <li><strong>Error recovery</strong> (continue parsing past first error). Useful for IDEs; implement in Stage 1 where it survives.</li>
+      <li><strong>Rich error rendering</strong> (color, carets, suggestions). Stage 0 dumps JSON; Stage 1 renders. Per WS 4.</li>
+      <li><strong>LSP support.</strong> Free once errors are structured + spans are everywhere. Build it in Silicon, not TS.</li>
+      <li><strong>Optimisation passes</strong> (const-fold, DCE). The IR pass middleware loop lands as Phase 6.5 of the bootstrap; passes themselves come post-Stage-3.</li>
+      <li><strong>Generics / type parameters.</strong> Bootstrap uses monomorphic i32-handles. Generics post-Stage-3.</li>
+      <li><strong>Annotations (<code>@@</code>), comptime calls (<code>&amp;&amp;</code>), lambdas (<code>\</code>).</strong> Post-Stage-3 per <code>bootstrap-plan.html §3.4</code>.</li>
+      <li><strong>WASIX <code>_start</code> export</strong> — actually that <em>is</em> in scope, but lives in <code>bootstrap-plan.html</code> Phase −1.E, not here. Different workstream.</li>
+      <li><strong>Performance work on Stage 0.</strong> It's going away. As long as compile times are tolerable, leave it alone.</li>
+    </ul>
+  </div>
+
+  <!-- ─────────────────────────────────────────────── -->
+  <h2>5. Sequencing &amp; Branches</h2>
+  <p>WS 1 first — surfaces existing non-determinism before any other workstream introduces churn. WS 2 next because it's cheap and shrinks a bootstrap-plan risk row immediately. WS 3 is the longest pole; everything else is parallelisable after WS 1.</p>
+
+  <table>
+    <thead><tr><th>Order</th><th>Branch</th><th>Blocked by</th><th>Effort</th></tr></thead>
+    <tbody>
+      <tr><td>1</td><td><code>stage0/01-determinism</code></td><td>—</td><td>~3 days</td></tr>
+      <tr><td>2</td><td><code>stage0/02-utf8</code></td><td>WS 1 merged (so fixed properties stay passing)</td><td>~2 days</td></tr>
+      <tr><td>3</td><td><code>stage0/03-types</code></td><td>WS 1</td><td>~1–2 weeks</td></tr>
+      <tr><td>4</td><td><code>stage0/04-diagnostics</code></td><td>WS 1</td><td>~1 week</td></tr>
+      <tr><td>5</td><td><code>stage0/05-docs</code></td><td>WS 2 + 3 merged (so docs reflect new state)</td><td>~½ day</td></tr>
+      <tr><td>6</td><td><code>stage0/06-fuzz</code></td><td>WS 1 (shares <code>fast-check</code> setup)</td><td>~3 days + ongoing</td></tr>
+    </tbody>
+  </table>
+  <p>WS 3 and WS 4 can run in parallel — different files, different reviewers. WS 6 can start as soon as WS 1 lands.</p>
+
+  <!-- ─────────────────────────────────────────────── -->
+  <h2>6. Definition of Done</h2>
+  <div class="card ok">
+    <ul>
+      <li><strong>All six workstreams merged</strong> with their respective "Done when" gates green.</li>
+      <li><strong>Bootstrap-plan risk register shrinks by three rows</strong> — UTF-8 mismatch (WS 2), sum-types-with-payloads design churn (WS 3, in part — design now locked), and a class of determinism risks (WS 1 + 6).</li>
+      <li><strong>Bootstrap-plan Phase −1 workstreams A and B are unblocked</strong> — payload sum types exist, pattern destructure works.</li>
+      <li><strong>CI runs property tests on every PR and fuzz tests nightly.</strong></li>
+      <li><strong>Stage 0 tag <code>v0.bootstrap-ready</code></strong> as defined in <code>bootstrap-plan.html</code> Phase −1 gate.</li>
+    </ul>
+  </div>
+
+  <!-- ─────────────────────────────────────────────── -->
+  <h2>7. Open Questions</h2>
+  <ol>
+    <li>For <code>@type</code> variants with zero fields: do we require <code>Circle 0</code>-arg call syntax or allow a bare <code>Foo</code> name to construct? (Recommendation: bare name; calling a zero-arg constructor with empty parens is noise.)</li>
+    <li>Pad-to-max with unused slots zero-init or undefined-init? Zero-init is deterministic but slightly more codegen; undefined-init is faster but a footgun for code that reads the wrong slot. (Recommendation: zero-init in Stage 1; revisit when performance matters.)</li>
+    <li>Should <code>@enum</code> variants be auto-numbered (0, 1, 2…) or require explicit values like <code>Red := 0xFF0000</code>? (Recommendation: auto-numbered by default; explicit values via <code>@enum Foo := { Red := 1, Green := 2 }</code> when the user needs control.)</li>
+    <li>Diagnostic codes — pick a scheme now. <code>E0042</code>-style (rustc) vs <code>parse/unexpected-token</code>-style (eslint)? Both work; the first is shorter, the second self-documenting. (Recommendation: <code>E0042</code>-style for compactness; maintain a separate <code>docs/diagnostics.md</code> with descriptions.)</li>
+    <li>Fuzzing seed strategy: time-based (fast feedback, non-reproducible) or commit-hash-based (reproducible, predictable)? (Recommendation: commit-hash for CI, time-based for local <code>bun test:fuzz</code>.)</li>
+  </ol>
+
+</div>
+</body>
+</html>

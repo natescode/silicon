@@ -1,0 +1,106 @@
+# SPDX-License-Identifier: MIT
+# D-D-5: cast keywords migrated to the new @stratum form.
+# Each handler builds an IRCall with callKind='instr' to the right
+# WASM cast instruction.  ToIntFromInt64 (the typed Int64 overload)
+# stays legacy — new-form typed-overload registration isn't yet wired,
+# and the typed dispatch in lowerBuiltinCall still picks the legacy
+# Int64 overload before falling back to the migrated primary.
+
+@stratum ToFloat := {
+    &Compiler::register::expression_keyword '@toFloat';
+    &Compiler::on::lower '@toFloat', ToFloat_lower;
+};
+@fn ToFloat_lower node:Int := {
+    @local args:Int := &compiler::compiler_arr_new;
+    &compiler::compiler_arr_push args,
+        (&compiler::compiler_lowerExpr (&compiler::compiler_arg node, 0));
+    &compiler::ir_makeCall
+        (&compiler::compiler_str_intern 'f32.convert_i32_s', 0),
+        args,
+        (&compiler::compiler_str_intern 'f32', 0),
+        (&compiler::compiler_str_intern 'instr', 0)
+};
+
+@stratum ToInt := {
+    &Compiler::register::expression_keyword '@toInt';
+    &Compiler::on::lower '@toInt', ToInt_lower;
+};
+@fn ToInt_lower node:Int := {
+    @local args:Int := &compiler::compiler_arr_new;
+    &compiler::compiler_arr_push args,
+        (&compiler::compiler_lowerExpr (&compiler::compiler_arg node, 0));
+    &compiler::ir_makeCall
+        (&compiler::compiler_str_intern 'i32.trunc_f32_s', 0),
+        args,
+        (&compiler::compiler_str_intern 'i32', 0),
+        (&compiler::compiler_str_intern 'instr', 0)
+};
+
+@stratum ToInt64 := {
+    &Compiler::register::expression_keyword '@toInt64';
+    &Compiler::on::lower '@toInt64', ToInt64_lower;
+};
+@fn ToInt64_lower node:Int := {
+    @local args:Int := &compiler::compiler_arr_new;
+    &compiler::compiler_arr_push args,
+        (&compiler::compiler_lowerExpr (&compiler::compiler_arg node, 0));
+    &compiler::ir_makeCall
+        (&compiler::compiler_str_intern 'i64.extend_i32_s', 0),
+        args,
+        (&compiler::compiler_str_intern 'i64', 0),
+        (&compiler::compiler_str_intern 'instr', 0)
+};
+
+# D-D-5 complete: Int64→Int typed overload of @toInt now uses the new
+# typed-keyword registration (mirrors register::typed_operator).
+@stratum ToIntFromInt64 := {
+    &Compiler::register::typed_keyword '@toInt', 'Int64';
+    &Compiler::on::lower '@toInt:Int64', ToIntFromInt64_lower;
+};
+@fn ToIntFromInt64_lower node:Int := {
+    @local args:Int := &compiler::compiler_arr_new;
+    &compiler::compiler_arr_push args,
+        (&compiler::compiler_lowerExpr (&compiler::compiler_arg node, 0));
+    &compiler::ir_makeCall
+        (&compiler::compiler_str_intern 'i32.wrap_i64', 0),
+        args,
+        (&compiler::compiler_str_intern 'i32', 0),
+        (&compiler::compiler_str_intern 'instr', 0)
+};
+
+# Phase 5b-4 — unsigned-integer casts (Int → u32, Int → u64,
+# Int64 → u64).  Int → u32 is a pure type relabel (both share the
+# i32 WASM representation); the handler just returns the lowered
+# operand IR with no wrapping instruction.  Int → u64 zero-extends
+# via i64.extend_i32_u.  Int64 → u64 is a pure type relabel
+# (both share the i64 WASM representation), handled via a
+# typed_keyword overload below.
+
+@stratum ToU32 := {
+    &Compiler::register::expression_keyword '@toU32';
+    &Compiler::on::lower '@toU32', ToU32_lower;
+};
+@fn ToU32_lower node:Int :=
+    &compiler::compiler_lowerExpr (&compiler::compiler_arg node, 0);
+
+@stratum ToU64 := {
+    &Compiler::register::expression_keyword '@toU64';
+    &Compiler::on::lower '@toU64', ToU64_lower;
+};
+@fn ToU64_lower node:Int := {
+    @local args:Int := &compiler::compiler_arr_new;
+    &compiler::compiler_arr_push args,
+        (&compiler::compiler_lowerExpr (&compiler::compiler_arg node, 0));
+    &compiler::ir_makeCall
+        (&compiler::compiler_str_intern 'i64.extend_i32_u', 0),
+        args,
+        (&compiler::compiler_str_intern 'i64', 0),
+        (&compiler::compiler_str_intern 'instr', 0)
+};
+
+@stratum ToU64FromInt64 := {
+    &Compiler::register::typed_keyword '@toU64', 'Int64';
+    &Compiler::on::lower '@toU64:Int64', ToU64FromInt64_lower;
+};
+@fn ToU64FromInt64_lower node:Int :=
+    &compiler::compiler_lowerExpr (&compiler::compiler_arg node, 0);

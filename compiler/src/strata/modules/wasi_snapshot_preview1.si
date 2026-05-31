@@ -1,0 +1,48 @@
+# SPDX-License-Identifier: MIT
+# WASI Preview 1 — the runtime surface used by the Sigil bootstrap.
+#
+# Each declaration becomes an `(import "wasi_snapshot_preview1" "<name>" ...)`
+# in the emitted WAT.  Call them from Silicon as
+# `&wasi_snapshot_preview1::fd_write fd, iovs, len, nwritten_out`.
+#
+# All WASI calls return an errno (i32 — 0 on success).  Out-pointer
+# arguments follow the bootstrap-plan §-1.F convention: pass a
+# &scratch_alloc N address; the host writes through it.
+#
+# Reference: https://github.com/WebAssembly/WASI/blob/main/legacy/preview1/docs/WASI.md
+# Restricted to the surface listed in bootstrap-plan.html §5.3.
+#
+# Phase 5b-4 status: type annotations stay at `:Int` / `:Int64` for
+# compatibility with the (off-limits) `boot/main.si`, which calls
+# fd_write / fd_read / proc_exit with `Int` args and is compiled
+# through this compiler.  The full u32/u64 migration ships when boot/
+# opens up alongside story 3-26 (Phase 5 grammar revisions → boot/).
+# The supporting `@toU32` / `@toU64` cast keywords from 5b-4 ARE
+# shipped today (src/strata/cast.si) so user code that wants
+# spec-correct unsigned types can opt in directly.
+
+# ---- I/O ----
+@extern fd_write:Int           fd:Int, iovs_ptr:Int, iovs_len:Int, nwritten_out:Int;
+@extern fd_read:Int            fd:Int, iovs_ptr:Int, iovs_len:Int, nread_out:Int;
+@extern fd_close:Int           fd:Int;
+@extern fd_prestat_get:Int     fd:Int, buf_out:Int;
+@extern fd_prestat_dir_name:Int fd:Int, path_ptr:Int, path_len:Int;
+@extern path_open:Int          dirfd:Int, dirflags:Int, path_ptr:Int, path_len:Int,
+                               oflags:Int, fs_rights_base:Int64, fs_rights_inheriting:Int64,
+                               fdflags:Int, fd_out:Int;
+
+# ---- Optional WASI surfaces with i64 fields (declared honestly so
+# future callers can use them without re-typing). ----
+@extern fd_seek:Int            fd:Int, offset:Int64, whence:Int, newoffset_out:Int;
+@extern fd_tell:Int            fd:Int, offset_out:Int;
+@extern fd_filestat_get:Int    fd:Int, buf_out:Int;
+
+# ---- Process / args / env ----
+@extern args_get:Int           argv_ptr:Int, argv_buf:Int;
+@extern args_sizes_get:Int     argc_out:Int, argv_buf_size_out:Int;
+@extern environ_get:Int        env_ptr:Int, env_buf:Int;
+@extern environ_sizes_get:Int  envc_out:Int, env_buf_size_out:Int;
+@extern proc_exit              code:Int;
+
+# ---- Clock (optional — compile timings) ----
+@extern clock_time_get:Int     clock_id:Int, precision:Int, time_out:Int;

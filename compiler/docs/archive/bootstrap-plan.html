@@ -1,0 +1,1125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Sigil Bootstrap Plan — Silicon Self-Hosting on WASIX / Wasmer</title>
+  <style>
+    :root {
+      --bg: #0f1117;
+      --surface: #1a1d27;
+      --surface2: #222535;
+      --border: #2e3248;
+      --accent: #6c8ef7;
+      --accent2: #b06cf7;
+      --accent3: #3ecf8e;
+      --accent4: #f7a06c;
+      --accent5: #f76c6c;
+      --accent6: #f7e36c;
+      --text: #dde1f0;
+      --muted: #7b82a8;
+      --code-bg: #13151f;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+      padding: 40px 24px;
+    }
+    .page { max-width: 1150px; margin: 0 auto; }
+    h1 { font-size: 2rem; color: var(--accent); margin-bottom: 8px; }
+    h2 { font-size: 1.4rem; color: var(--accent2); margin: 40px 0 16px; border-bottom: 1px solid var(--border); padding-bottom: 8px; }
+    h3 { font-size: 1.1rem; color: var(--accent3); margin: 24px 0 10px; }
+    h4 { font-size: 0.95rem; color: var(--accent4); margin: 16px 0 8px; }
+    p  { margin-bottom: 12px; color: var(--text); }
+    .subtitle { color: var(--muted); font-size: 1rem; margin-bottom: 32px; }
+
+    /* Cards */
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 20px 24px;
+      margin-bottom: 20px;
+    }
+    .card.warn { border-color: var(--accent5); }
+    .card.ok   { border-color: var(--accent3); }
+    .card.info { border-color: var(--accent);  }
+    .card.note { border-color: var(--accent4); }
+    .card.idea { border-color: var(--accent2); }
+
+    /* Pipeline */
+    .pipeline {
+      display: flex;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 0;
+      margin: 20px 0;
+    }
+    .stage {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 10px 16px;
+      font-size: 0.85rem;
+      text-align: center;
+      min-width: 120px;
+    }
+    .stage .label { color: var(--muted); font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.05em; }
+    .stage .name  { color: var(--text); font-weight: 600; }
+    .stage .file  { color: var(--accent); font-size: 0.72rem; margin-top: 2px; }
+    .arrow {
+      color: var(--muted);
+      font-size: 1.2rem;
+      padding: 0 4px;
+      flex-shrink: 0;
+    }
+    .stage.highlight { border-color: var(--accent2); background: #1e1830; }
+    .stage.changed   { border-color: var(--accent3); background: #131e1a; }
+    .stage.new       { border-color: var(--accent4); background: #1e1810; }
+    .stage.future    { border-color: var(--accent6); background: #1e1c10; }
+
+    /* Flow */
+    .flow { display: flex; flex-direction: column; gap: 8px; margin: 16px 0; }
+    .flow-row { display: flex; align-items: flex-start; gap: 12px; }
+    .flow-step {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 8px 14px;
+      font-size: 0.85rem;
+      flex: 1;
+    }
+    .flow-step .num {
+      display: inline-block;
+      background: var(--accent);
+      color: #fff;
+      border-radius: 50%;
+      width: 20px; height: 20px;
+      text-align: center;
+      line-height: 20px;
+      font-size: 0.75rem;
+      margin-right: 8px;
+      flex-shrink: 0;
+    }
+    .flow-arrow { color: var(--muted); font-size: 1.4rem; align-self: center; }
+
+    /* Code blocks */
+    pre {
+      background: var(--code-bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 16px;
+      overflow-x: auto;
+      font-family: 'Cascadia Code', 'Fira Code', 'Consolas', monospace;
+      font-size: 0.82rem;
+      line-height: 1.55;
+      margin: 12px 0;
+    }
+    code { font-family: 'Cascadia Code', 'Fira Code', 'Consolas', monospace; font-size: 0.85em; background: var(--code-bg); padding: 1px 5px; border-radius: 4px; }
+    .kw  { color: #c792ea; }
+    .fn  { color: #82aaff; }
+    .str { color: #c3e88d; }
+    .cm  { color: #546e7a; }
+    .ty  { color: #ffcb6b; }
+    .op  { color: #89ddff; }
+    .si  { color: var(--accent3); }
+    .ir  { color: var(--accent4); }
+    .api { color: var(--accent2); }
+
+    /* Tables */
+    table { width: 100%; border-collapse: collapse; margin: 12px 0; font-size: 0.85rem; }
+    th { background: var(--surface2); color: var(--accent); padding: 8px 12px; text-align: left; border: 1px solid var(--border); }
+    td { padding: 8px 12px; border: 1px solid var(--border); vertical-align: top; }
+    tr:nth-child(even) td { background: #141620; }
+
+    .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin: 16px 0; }
+    @media (max-width: 700px) { .two-col { grid-template-columns: 1fr; } }
+
+    /* Tags */
+    .tag {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 12px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      margin-right: 4px;
+    }
+    .tag.red    { background: #3a1515; color: var(--accent5); border: 1px solid #5a2020; }
+    .tag.green  { background: #0f2d1f; color: var(--accent3); border: 1px solid #1a4a30; }
+    .tag.blue   { background: #0f1a3a; color: var(--accent);  border: 1px solid #1a2e5a; }
+    .tag.purple { background: #1e1030; color: var(--accent2); border: 1px solid #3a1a50; }
+    .tag.orange { background: #2d1a0f; color: var(--accent4); border: 1px solid #5a3010; }
+    .tag.yellow { background: #2d2a0f; color: var(--accent6); border: 1px solid #5a5510; }
+
+    /* Phase header */
+    .phase-head {
+      display: flex;
+      align-items: baseline;
+      gap: 14px;
+      margin: 36px 0 6px;
+      padding-bottom: 8px;
+      border-bottom: 1px solid var(--border);
+    }
+    .phase-num {
+      font-size: 0.75rem;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--muted);
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 2px 10px;
+    }
+    .phase-name { color: var(--accent3); font-size: 1.25rem; font-weight: 600; }
+
+    /* Divider */
+    .divider { border: none; border-top: 1px solid var(--border); margin: 40px 0; }
+
+    ul, ol { padding-left: 24px; margin-bottom: 12px; }
+    li { margin-bottom: 4px; }
+
+    .legend { display: flex; gap: 16px; flex-wrap: wrap; font-size: 0.8rem; margin: 12px 0; }
+    .legend-item { display: flex; align-items: center; gap: 6px; }
+    .legend-dot { width: 12px; height: 12px; border-radius: 3px; }
+
+    .section-label {
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: var(--muted);
+      margin-bottom: 4px;
+    }
+
+    .meta-row {
+      display: grid;
+      grid-template-columns: 130px 1fr;
+      gap: 4px 16px;
+      font-size: 0.85rem;
+      margin: 10px 0 14px;
+    }
+    .meta-row .k { color: var(--muted); }
+    .meta-row .v { color: var(--text); }
+
+    .gate {
+      background: #131e1a;
+      border-left: 3px solid var(--accent3);
+      padding: 8px 14px;
+      margin: 12px 0;
+      font-size: 0.85rem;
+      border-radius: 4px;
+    }
+    .gate .lbl { color: var(--accent3); font-weight: 600; text-transform: uppercase; font-size: 0.72rem; letter-spacing: 0.08em; }
+  </style>
+</head>
+<body>
+<div class="page">
+
+  <h1>Sigil Bootstrap Plan</h1>
+  <p class="subtitle">Self-hosting the Silicon compiler · <strong>Target:</strong> WebAssembly (WASIX) executed by Wasmer · <strong>Stage 0:</strong> the current TypeScript/Bun compiler · <strong>Stage&nbsp;N:</strong> Silicon compiling Silicon</p>
+
+  <!-- ─────────────────────────────────────────────── -->
+  <h2>1. Executive Summary</h2>
+  <div class="card info">
+    <p><strong>Goal.</strong> Rewrite the Sigil compiler in Silicon itself, compile it with the existing TypeScript-on-Bun compiler, and have the resulting <code>sigil.wasm</code> module — running under <strong>Wasmer with the WASIX runtime</strong> — compile any Silicon program (including its own source) to a byte-identical <code>main.wat</code>.</p>
+    <p><strong>Strategy.</strong> Bring the compiler up <em>one phase at a time</em>, starting with the parser. Each phase ships as a stand-alone Silicon module whose output the TypeScript compiler can still cross-check. A phase is "done" only when its Silicon implementation produces the same AST/IR/WAT as the TypeScript reference for every fixture in the test corpus.</p>
+    <p><strong>Acceptance.</strong> The bootstrap is complete when <code>sigil-tsN(src) == sigil-siN(src)</code> for the full fixture corpus <em>and</em> <code>sigil-siN.wasm</code> reproduces itself bit-for-bit (the classic stage-2 / stage-3 fixed-point check).</p>
+  </div>
+
+  <div class="card idea">
+    <p><strong>Why this is achievable for Silicon.</strong> Silicon's grammar is fixed and small, the elaboration model is data-driven (strata), and the compiler's "interesting" logic already lives in <code>.si</code> files. The bootstrap is therefore mostly about porting six relatively independent passes — not redesigning the language.</p>
+  </div>
+
+  <!-- ─────────────────────────────────────────────── -->
+  <h2>2. Bootstrap Theory and Terminology</h2>
+
+  <h3>2.1 Stage Vocabulary</h3>
+  <table>
+    <thead><tr><th>Name</th><th>Implementation</th><th>Runtime</th><th>Role</th></tr></thead>
+    <tbody>
+      <tr><td><strong>Stage 0</strong></td><td>TypeScript (<code>src/</code> today)</td><td>Bun</td><td>Reference compiler. Produces every byte the bootstrap is measured against.</td></tr>
+      <tr><td><strong>Stage 1</strong></td><td>Silicon source (<code>boot/</code>)</td><td>WASIX / Wasmer (compiled by Stage 0)</td><td>First Silicon-in-Silicon compiler. May be naïve; only required to compile its own source.</td></tr>
+      <tr><td><strong>Stage 2</strong></td><td>Same Silicon source as Stage 1</td><td>WASIX / Wasmer (compiled by Stage 1)</td><td>First fully self-hosted artifact. Must match Stage 0 on the test corpus.</td></tr>
+      <tr><td><strong>Stage 3</strong></td><td>Same Silicon source as Stage 1</td><td>WASIX / Wasmer (compiled by Stage 2)</td><td>Fixed-point check: must equal Stage 2 byte-for-byte.</td></tr>
+    </tbody>
+  </table>
+
+  <h3>2.2 The Triple Test</h3>
+  <div class="card ok">
+    <p>For each commit on the bootstrap branch the CI runs:</p>
+    <ol>
+      <li><code>sigil-ts0 boot/*.si → sigil-si1.wasm</code></li>
+      <li><code>wasmer run sigil-si1.wasm -- boot/*.si → sigil-si2.wasm</code></li>
+      <li><code>wasmer run sigil-si2.wasm -- boot/*.si → sigil-si3.wasm</code></li>
+      <li><code>sha256(sigil-si2.wasm) == sha256(sigil-si3.wasm)</code> — fixed point reached</li>
+      <li>For every fixture <code>f.si</code> in <code>tests/corpus/</code>: <code>sigil-ts0 f.si == wasmer run sigil-si2.wasm -- f.si</code></li>
+    </ol>
+  </div>
+
+  <h3>2.3 What "Phase" Means in This Plan</h3>
+  <p>A <em>phase</em> is one compiler subsystem ported to Silicon. The TypeScript reference for that subsystem stays in place until the Silicon port passes a structural-equivalence test, after which the TypeScript copy becomes a debugging fallback (<code>--ts-fallback &lt;phase&gt;</code>) and is eventually deleted.</p>
+
+  <!-- ─────────────────────────────────────────────── -->
+  <h2>3. The Four Grammatical Forms</h2>
+
+  <div class="card idea">
+    <p><strong>Silicon has four grammar rules.</strong> The Ohm file (<code>src/grammar/silicon-official.ohm</code>) lists ~30 productions, but they are nearly all interior structure or wrapper layers introduced for Ohm's pattern-match conveniences. Semantically, every Silicon program is built from exactly four top-level forms, each picked by a single leading sigil. The bootstrap parser is organised around <em>these four forms</em>, not the 30 Ohm productions.</p>
+  </div>
+
+  <h3>3.1 The Four Forms</h3>
+  <table>
+    <thead><tr><th>#</th><th>Form</th><th>Lead sigil</th><th>Surface syntax</th><th>Example</th></tr></thead>
+    <tbody>
+      <tr><td>1</td><td><strong>Definition</strong></td><td><code>@</code></td><td><code>@kw name [params] [: type] [:= body];</code></td><td><code>@let add a, b := a + b;</code></td></tr>
+      <tr><td>2</td><td><strong>Annotation</strong></td><td><code>@@</code></td><td><code>@@name [args]</code> — decorates the next form</td><td><code>@@inline @fn fast := ...;</code></td></tr>
+      <tr><td>3</td><td><strong>Function call</strong></td><td><code>&amp;</code> &middot; <code>&amp;&amp;</code> &middot; <code>\</code></td><td><code>&amp;name [args]</code> (<code>&amp;&amp;</code> = comptime, <code>\</code> = lambda invocation)</td><td><code>&amp;print 'hello'</code></td></tr>
+      <tr><td>4</td><td><strong>Binary expression</strong></td><td>none</td><td><code>expr op expr (op expr)*</code> — flat, no precedence</td><td><code>a + b * c == 30</code></td></tr>
+    </tbody>
+  </table>
+
+  <h3>3.2 What Is Not a New Form (Interior Structure)</h3>
+  <p>Everything else in the Ohm grammar is interior structure used <em>within</em> the four forms. None of it appears at the top of a parse:</p>
+  <ul>
+    <li><strong>Literals:</strong> <code>'string'</code>, <code>42</code>, <code>3.14</code>, <code>$[1,2,3]</code>, <code>${k=v}</code>, <code>$(a,b)</code>, <code>@true</code>/<code>@false</code></li>
+    <li><strong>Namespaces:</strong> <code>a.b</code>, <code>a::b</code></li>
+    <li><strong>Blocks:</strong> <code>{ item; item; trailing }</code> — recursively a sequence of the four forms</li>
+    <li><strong>Type annotations:</strong> <code>: TypeName</code></li>
+    <li><strong>Generic params:</strong> <code>[T, U]</code></li>
+    <li><strong>Doc comments:</strong> <code>## line</code></li>
+  </ul>
+  <p>The Ohm productions <code>Element</code>, <code>Item</code>, <code>Statement</code>, <code>ExpressionStart</code>, <code>ExpressionEnd</code> are <em>wrapper layers</em> that exist for Ohm's semantic-action API. They carry no meaning of their own — every parse tree node of one of those kinds has exactly one child of one of the four forms. The bootstrap parser does not reproduce them.</p>
+
+  <h3>3.3 Why This Matters for the Bootstrap</h3>
+  <ul>
+    <li><strong>Five-way top-level dispatch, not 30.</strong> When the parser peeks the first token of an element, it sees one of five lead sigils (<code>@@</code>, <code>@</code>, <code>&amp;&amp;</code>, <code>&amp;</code>, <code>\</code>) or falls through to a binary-expression parse. That's the entire top-level grammar.</li>
+    <li><strong>The Ohm wrappers are dead weight.</strong> Re-implementing <code>Element → Item → Statement → Definition</code> in Silicon "for fidelity" inflates the parser, the AST, and every later phase that has to walk those nodes. The bootstrap emits AST nodes for the four forms <em>directly</em>.</li>
+    <li><strong>Guardrail against language growth.</strong> A proposed feature that requires a fifth top-level form is changing Silicon's surface — not just adding sugar. New features fit inside one of the four; usually as a new <code>@kw</code> definition or a new <code>@@name</code> annotation.</li>
+    <li><strong>Strata fit naturally inside the four.</strong> <code>@stratum_keyword</code> and <code>@stratum_operator</code> are definitions (form 1); their bodies are sequences of function calls (form 3) and binary expressions (form 4). The mod architecture in §7 needs no new grammatical category.</li>
+    <li><strong>Stage 1 only needs forms 1, 3 (just <code>&amp;</code>), and 4.</strong> Annotations (<code>@@</code>), comptime calls (<code>&amp;&amp;</code>), and lambdas (<code>\</code>) are post-Stage-3 — the bootstrap compiler doesn't even tokenise them.</li>
+  </ul>
+
+  <h3>3.4 Bootstrap Status of Each Form</h3>
+  <table>
+    <thead><tr><th>Form</th><th>Stage 0 Today</th><th>Bootstrap Phase</th></tr></thead>
+    <tbody>
+      <tr><td>1 — Definition</td><td>Implemented</td><td>Phase 1</td></tr>
+      <tr><td>2 — Annotation (<code>@@</code>)</td><td><span class="tag red">Spec-only</span> — Ohm does not tokenise <code>@@</code>. Today's "annotations" (<code>@export</code>, <code>@platform</code>) ride form 1.</td><td><span class="tag orange">Post-Stage-3</span> — bootstrap compiler does not tokenise <code>@@</code>; lands later alongside Metadata-Strata work</td></tr>
+      <tr><td>3 — Function call</td><td><code>&amp;</code> implemented; <code>&amp;&amp;</code> and <code>\</code> spec-only</td><td>Phase 1 (just <code>&amp;</code>); <code>&amp;&amp;</code> &amp; <code>\</code> post-Stage-3</td></tr>
+      <tr><td>4 — Binary expression</td><td>Implemented — flat, no precedence</td><td>Phase 1</td></tr>
+    </tbody>
+  </table>
+  <p>Stage 1 only needs forms <strong>1, 3 (<code>&amp;</code> only), and 4</strong>. Annotations, comptime calls, and lambdas are post-Stage-3 additions — once self-hosted, they're added as ordinary Silicon edits to the compiler.</p>
+
+  <h3>3.5 Sketch: the Parser's Top-Level Dispatch</h3>
+  <pre><span class="kw">@fn</span> parseElement -> <span class="ty">Int</span> := {
+  <span class="kw">@local</span> t := peek;
+  <span class="cm"># Five lead sigils — one of four forms; default is binary expression.</span>
+  <span class="kw">@if</span> t == TOK_AT_AT      { <span class="kw">@return</span> parseAnnotation;     };  <span class="cm"># form 2</span>
+  <span class="kw">@if</span> t == TOK_AT         { <span class="kw">@return</span> parseDefinition;     };  <span class="cm"># form 1</span>
+  <span class="kw">@if</span> t == TOK_AMP_AMP    { <span class="kw">@return</span> parseComptimeCall;   };  <span class="cm"># form 3 (comptime)</span>
+  <span class="kw">@if</span> t == TOK_AMP        { <span class="kw">@return</span> parseCall;           };  <span class="cm"># form 3</span>
+  <span class="kw">@if</span> t == TOK_BACKSLASH  { <span class="kw">@return</span> parseLambda;         };  <span class="cm"># form 3 (lambda)</span>
+  parseBinaryExpression;                                                <span class="cm"># form 4 (default)</span>
+};</pre>
+  <p>Six lines cover every top-level position in Silicon. Recursion under each of those parsers is bounded by a small fixed set of terminators (<code>;</code>, <code>)</code>, <code>}</code>, <code>,</code>, end-of-input), which is what keeps the parser at ~600 LoC.</p>
+
+  <div class="card warn">
+    <strong>Drift warning for Phase 1.</strong> When the parser implementer starts work, the temptation will be to mirror Ohm's <code>Element → Item → Statement → Definition → ExpressionStart → ExpressionEnd</code> hierarchy in Silicon "for fidelity." <em>Do not.</em> Those wrappers exist for Ohm's pattern-match API, not for Silicon. The bootstrap parser produces exactly four AST root kinds from <code>parseElement</code>, matching the four forms above.
+  </div>
+
+  <!-- ─────────────────────────────────────────────── -->
+  <h2>4. Today's Pipeline vs Self-Hosted Pipeline</h2>
+
+  <h3>4.1 Stage 0 (today)</h3>
+  <div class="pipeline">
+    <div class="stage"><div class="label">1</div><div class="name">Parser</div><div class="file">parser/ + Ohm.js</div></div>
+    <div class="arrow">→</div>
+    <div class="stage"><div class="label">2</div><div class="name">AST</div><div class="file">ast/toAst.ts</div></div>
+    <div class="arrow">→</div>
+    <div class="stage"><div class="label">3</div><div class="name">Strata Load</div><div class="file">strataLoader.ts</div></div>
+    <div class="arrow">→</div>
+    <div class="stage"><div class="label">4</div><div class="name">Elaborate</div><div class="file">elaborator.ts</div></div>
+    <div class="arrow">→</div>
+    <div class="stage"><div class="label">5</div><div class="name">TypeCheck</div><div class="file">types/</div></div>
+    <div class="arrow">→</div>
+    <div class="stage"><div class="label">6</div><div class="name">IR Lower</div><div class="file">ir/lower.ts</div></div>
+    <div class="arrow">→</div>
+    <div class="stage"><div class="label">7</div><div class="name">IR Emit</div><div class="file">ir/emit.ts</div></div>
+    <div class="arrow">→</div>
+    <div class="stage"><div class="label">8</div><div class="name">WAT</div><div class="file">main.wat</div></div>
+  </div>
+  <p>All eight phases live in TypeScript and are loaded by the Bun runtime. <code>std.wat</code>, <code>silicon-official.ohm</code>, and <code>src/strata/*.si</code> are read from disk at compile time.</p>
+
+  <h3>4.2 Stage 2 (target)</h3>
+  <div class="pipeline">
+    <div class="stage new"><div class="label">0</div><div class="name">WASIX shim</div><div class="file">boot/runtime/</div></div>
+    <div class="arrow">→</div>
+    <div class="stage changed"><div class="label">1</div><div class="name">Parser</div><div class="file">boot/parser/</div></div>
+    <div class="arrow">→</div>
+    <div class="stage changed"><div class="label">2</div><div class="name">AST</div><div class="file">boot/ast/</div></div>
+    <div class="arrow">→</div>
+    <div class="stage changed"><div class="label">3</div><div class="name">Strata Load</div><div class="file">boot/strata/</div></div>
+    <div class="arrow">→</div>
+    <div class="stage changed"><div class="label">4</div><div class="name">Elaborate</div><div class="file">boot/elab/</div></div>
+    <div class="arrow">→</div>
+    <div class="stage changed"><div class="label">5</div><div class="name">TypeCheck</div><div class="file">boot/types/</div></div>
+    <div class="arrow">→</div>
+    <div class="stage changed"><div class="label">6</div><div class="name">IR Lower</div><div class="file">boot/ir/</div></div>
+    <div class="arrow">→</div>
+    <div class="stage changed"><div class="label">7</div><div class="name">IR Emit</div><div class="file">boot/emit/</div></div>
+    <div class="arrow">→</div>
+    <div class="stage"><div class="label">8</div><div class="name">WAT</div><div class="file">main.wat</div></div>
+  </div>
+
+  <div class="legend">
+    <div class="legend-item"><div class="legend-dot" style="background:#131e1a; border:1px solid #1a4a30"></div> ported to Silicon</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#1e1810; border:1px solid #5a3010"></div> new runtime layer (WASIX glue)</div>
+  </div>
+
+  <!-- ─────────────────────────────────────────────── -->
+  <h2>5. Runtime Target: WASIX on Wasmer</h2>
+
+  <h3>5.1 Why WASIX (and not plain WASI)</h3>
+  <p>The compiler needs more than what the WASI preview snapshots offer:</p>
+  <table>
+    <thead><tr><th>Need</th><th>WASI p1</th><th>WASI p2 (preview)</th><th>WASIX</th></tr></thead>
+    <tbody>
+      <tr><td>Read source files (open / read / stat)</td><td><span class="tag green">Yes</span></td><td><span class="tag green">Yes</span></td><td><span class="tag green">Yes</span></td></tr>
+      <tr><td>Write WAT to disk</td><td><span class="tag green">Yes</span></td><td><span class="tag green">Yes</span></td><td><span class="tag green">Yes</span></td></tr>
+      <tr><td>Argv / env / exit codes</td><td><span class="tag green">Yes</span></td><td><span class="tag green">Yes</span></td><td><span class="tag green">Yes</span></td></tr>
+      <tr><td>Stdout / stderr</td><td><span class="tag green">Yes</span></td><td><span class="tag green">Yes</span></td><td><span class="tag green">Yes</span></td></tr>
+      <tr><td>Sockets (LSP, watch mode, REPL bridge)</td><td><span class="tag red">No</span></td><td><span class="tag orange">Partial</span></td><td><span class="tag green">Yes</span></td></tr>
+      <tr><td>Threads / atomics (parallel compile)</td><td><span class="tag red">No</span></td><td><span class="tag red">No</span></td><td><span class="tag green">Yes</span></td></tr>
+      <tr><td>Long-lived processes (<code>fork</code>, daemon)</td><td><span class="tag red">No</span></td><td><span class="tag red">No</span></td><td><span class="tag green">Yes</span></td></tr>
+      <tr><td>Wasmer ecosystem reach (registry, CLI, edge)</td><td><span class="tag orange">Partial</span></td><td><span class="tag orange">Partial</span></td><td><span class="tag green">Yes</span></td></tr>
+    </tbody>
+  </table>
+  <p>The compile-and-exit happy path only needs WASI p1, but every roadmap item beyond Stage 2 (LSP, watch mode, parallel package builds) needs WASIX. Targeting WASIX from day one avoids a second runtime swap later.</p>
+
+  <h3>5.2 Wasmer Invocation</h3>
+  <pre><span class="cm"># Compile a single file with the self-hosted compiler</span>
+wasmer run sigil.wasm --use wasix --dir=. -- compile main.si
+
+<span class="cm"># Inside the .wasm, argv[0] == 'sigil', argv[1..] == ['compile','main.si']</span>
+<span class="cm"># The --dir=. flag preopens the CWD so WASI fd_open can reach main.si</span></pre>
+
+  <h3>5.3 WASIX Surface Used by Sigil</h3>
+  <p>The Stage 1 compiler must only depend on the following WASIX/WASI imports. Anything fancier (threads, sockets) is deferred to post-bootstrap features.</p>
+  <table>
+    <thead><tr><th>Import</th><th>Wraps</th><th>Used For</th></tr></thead>
+    <tbody>
+      <tr><td><code>wasi_snapshot_preview1.args_get</code></td><td>argv buffer</td><td>CLI parsing</td></tr>
+      <tr><td><code>wasi_snapshot_preview1.environ_get</code></td><td>env buffer</td><td><code>SIGIL_DEBUG</code>, <code>SIGIL_STDLIB</code></td></tr>
+      <tr><td><code>wasi_snapshot_preview1.fd_read</code></td><td>read(2)</td><td>Source files, strata, std.wat</td></tr>
+      <tr><td><code>wasi_snapshot_preview1.fd_write</code></td><td>write(2)</td><td>stdout, stderr, ast.json, main.wat</td></tr>
+      <tr><td><code>wasi_snapshot_preview1.path_open</code></td><td>open(2)</td><td>Preopened-dir relative path resolution</td></tr>
+      <tr><td><code>wasi_snapshot_preview1.fd_close</code></td><td>close(2)</td><td>File cleanup</td></tr>
+      <tr><td><code>wasi_snapshot_preview1.proc_exit</code></td><td>exit(2)</td><td>Non-zero on compile error</td></tr>
+      <tr><td><code>wasi_snapshot_preview1.clock_time_get</code></td><td>clock_gettime</td><td>Compile timings (optional)</td></tr>
+    </tbody>
+  </table>
+
+  <!-- ─────────────────────────────────────────────── -->
+  <h2>6. The Silicon-Core Feature Budget</h2>
+  <p>Silicon is large. The bootstrap compiler must <em>not</em> use every feature — only a stable subset (Silicon-Core) that the existing Stage 0 compiler already handles correctly. This freezes the bootstrap source against churn in the rest of the language.</p>
+
+  <h3>6.1 Already in Stage 0 (no new work)</h3>
+  <div class="card ok">
+    <p>An audit of <code>src/ir/</code>, <code>src/intrinsics/</code>, and <code>src/codegen/std.wat</code> confirms the following are already supported and the bootstrap can rely on them as-is:</p>
+    <ul>
+      <li><strong>Memory intrinsics</strong> — <code>WASM::i32_load</code>, <code>i32_store</code>, <code>i32_load8_u</code>, <code>i32_load8_s</code>, <code>i32_store8</code>, <code>f32_load</code>, <code>f32_store</code>, <code>memory.grow</code>, <code>memory.size</code> all callable from Silicon (<code>intrinsics.ts:94–106</code>).</li>
+      <li><strong>String literal interning</strong> — string literals lower to length-prefixed UTF-16 LE data segments via <code>allocString</code> (<code>lower.ts:79</code>); <code>IRDataSegment</code> emission works (<code>emit.ts:67</code>).</li>
+      <li><strong>Heap runtime</strong> — <code>$alloc</code> bump allocator and <code>$str_concat</code> already live in <code>std.wat</code> and are inlined into every module.</li>
+      <li><strong>Definition kinds</strong> — <code>@let</code>, <code>@fn</code>, <code>@local</code>, <code>@var</code>, <code>@extern</code>, <code>@export</code> all lower correctly via existing strata.</li>
+      <li><strong>Expressions</strong> — arithmetic, comparison, bitwise (signed i32 + f32), <code>@if</code>, <code>@match</code> on values, <code>@loop</code>, <code>@break</code>, <code>@continue</code>, <code>@return</code>, blocks, function calls, intrinsics.</li>
+    </ul>
+  </div>
+
+  <h3>6.2 <span style="color:var(--accent5)">Stage 0 Gaps That Block the Bootstrap</span></h3>
+  <div class="card warn">
+    <p>These features are <em>required</em> by the self-hosted compiler but Stage 0 does not yet provide them. Each must land before <strong>Phase −1</strong> completes.</p>
+  </div>
+  <table>
+    <thead><tr><th>Gap</th><th>Evidence</th><th>Why the bootstrap needs it</th></tr></thead>
+    <tbody>
+      <tr>
+        <td><strong>Sum types with payloads</strong></td>
+        <td><code>defExpanders.ts:50</code> — <code>sumTypeExpander</code> emits one i32 global per variant <em>and nothing else</em>. <code>@type_sum</code> today is C-style enum only.</td>
+        <td>Every AST and IR node is a tagged union with fields (<code>Definition{keyword, name, params, binding}</code>). Without payload sum types the bootstrap cannot represent its own data.</td>
+      </tr>
+      <tr>
+        <td><strong>Records / structs</strong></td>
+        <td>Grammar has <code>ObjectLiteral</code> (<code>${ k=v, … }</code>) but <code>lower.ts</code> has no <code>ObjectLiteral</code> case — they don't compile.</td>
+        <td>Either records, or sum-type variants with named fields, are needed to encode AST nodes ergonomically. Workaround: hand-rolled arena layout with offset constants — viable but verbose.</td>
+      </tr>
+      <tr>
+        <td><strong>Pattern destructuring in <code>@match</code></strong></td>
+        <td><code>match.si</code> + <code>expandMatchChain</code> handle value patterns only — no variant + field binding.</td>
+        <td>Tree-walking is unreadable without it. Either land destructuring or live with <code>if (node.tag == AST_DEF) { … node.field …}</code> everywhere.</td>
+      </tr>
+      <tr>
+        <td><strong>Multi-file imports</strong></td>
+        <td>Grammar has no <code>@use</code>/<code>@import</code> production. <code>modules/loader.ts</code> only ingests <code>@extern</code> declarations, not callable Silicon functions across files.</td>
+        <td>The bootstrap is described as 8+ files (<code>boot/parser/lex.si</code>, <code>boot/ast/nodes.si</code>, &hellip;). Without imports the entire compiler must be concatenated into one file — the <code>--strata</code> flag does exactly this for strata, but extending it to ordinary code needs a CLI knob and a name-collision policy.</td>
+      </tr>
+      <tr>
+        <td><strong>UTF-8 source bytes</strong></td>
+        <td><code>allocString</code> in <code>lower.ts:81</code> hard-codes UTF-16 LE — every string literal becomes a UTF-16 buffer.</td>
+        <td>Source files on disk are UTF-8. The parser reads UTF-8 bytes via <code>fd_read</code>. Comparing those bytes against UTF-16 string literals does not work. Three options: (a) add a UTF-8 string mode to Stage 0 (recommended), (b) convert source UTF-8 → UTF-16 once at file-load time, (c) avoid string literals in the parser and use hand-coded byte tables.</td>
+      </tr>
+      <tr>
+        <td><strong>WASIX <code>_start</code> export</strong></td>
+        <td><code>lower.ts:221</code> synthesises <code>$__start</code> as the module-init wrapper but never exports it with the name Wasmer-WASIX expects.</td>
+        <td>Wasmer's WASIX runner invokes the function exported as exactly <code>_start: () -&gt; ()</code>. Either rename <code>$__start</code> &rarr; <code>$_start</code> + auto-export it, or let <code>@export</code> rebind it via an explicit user declaration.</td>
+      </tr>
+      <tr>
+        <td><strong>Multi-return / out-param in <code>@extern</code></strong></td>
+        <td><code>modules/loader.ts:70</code> parses a single <code>result</code>; WASI <code>path_open</code> et al. return an errno and write an fd via an out-pointer arg.</td>
+        <td>Survivable: the bootstrap can pass scratch memory addresses as i32 args and read the result back. Worth documenting as the calling convention.</td>
+      </tr>
+      <tr>
+        <td><strong>Mutual recursion across files</strong></td>
+        <td>Untested. Within one file, <code>ctx.globals.set</code> happens before body lowering (<code>defkinds.si</code> LetDef line 11), so forward refs work intra-file.</td>
+        <td>Parser functions are deeply mutually recursive. If the bootstrap is one concatenated file (per the import workaround above), the intra-file behaviour already works.</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h3>6.3 Survivable, Don't-Fix-Yet</h3>
+  <div class="card note">
+    <ul>
+      <li><strong>No function tables / <code>call_indirect</code></strong> — strata dispatch in the bootstrap is a giant <code>@match</code> on integer tag. Slower than a table lookup; fine for Stage 1.</li>
+      <li><strong>No generics</strong> — every container is monomorphic <code>vec&lt;i32&gt;</code>; we cast through i32 handles.</li>
+      <li><strong>No ARC/GC</strong> — arena allocator + free-at-end-of-pass.</li>
+      <li><strong><code>@type_alias</code>, <code>@type_distinct</code></strong> declared but no-op today — readability loss only.</li>
+      <li><strong>Coroutines, effects, <code>@try</code></strong> — post-Stage 3.</li>
+      <li><strong>Annotations (<code>@@</code>)</strong> — post-Stage-3. Bootstrap compiler does not tokenise <code>@@</code>; once self-hosted, annotations land as a normal Silicon-side feature addition (parser, elaborator, Metadata-Strata registration). Keeping them out of the bootstrap also keeps the fixed-point invariant safe from macro-expansion non-determinism.</li>
+    </ul>
+  </div>
+
+  <h3>6.4 The <code>boot::std</code> Mini-Runtime</h3>
+  <p>Most of what <code>boot::std</code> needs is already in <code>std.wat</code>. The Silicon side is mostly thin wrappers around intrinsics + WASIX externs.</p>
+  <pre><span class="cm"># boot/std/std.si  (excerpt — note $alloc is provided by std.wat)</span>
+
+<span class="kw">@extern</span> wasi_fd_read  : <span class="ty">Int</span>, <span class="ty">Int</span>, <span class="ty">Int</span>, <span class="ty">Int</span> -> <span class="ty">Int</span>;
+<span class="kw">@extern</span> wasi_fd_write : <span class="ty">Int</span>, <span class="ty">Int</span>, <span class="ty">Int</span>, <span class="ty">Int</span> -> <span class="ty">Int</span>;
+<span class="kw">@extern</span> wasi_path_open: <span class="ty">Int</span>, <span class="ty">Int</span>, <span class="ty">Int</span>, <span class="ty">Int</span>, <span class="ty">Int</span>, <span class="ty">Int</span>, <span class="ty">Int</span>, <span class="ty">Int</span>, <span class="ty">Int</span> -> <span class="ty">Int</span>;
+<span class="kw">@extern</span> wasi_proc_exit: <span class="ty">Int</span> -> <span class="ty">Int</span>;
+
+<span class="cm"># Reset the std.wat $alloc bump pointer between compile passes.</span>
+<span class="kw">@fn</span> arena_reset := { <span class="cm"># writes the saved base back to the heap_next global</span> };
+
+<span class="cm"># Byte-level helpers over UTF-8 source buffers (different from UTF-16 string literals).</span>
+<span class="kw">@fn</span> buf_at b:<span class="ty">Int</span>, i:<span class="ty">Int</span> -> <span class="ty">Int</span> := { &amp;<span class="ir">WASM::i32_load8_u</span> (b + i); };
+<span class="kw">@fn</span> buf_eq a:<span class="ty">Int</span>, b:<span class="ty">Int</span>, n:<span class="ty">Int</span> -> <span class="ty">Int</span> := { ... };
+
+<span class="cm"># Vector of i32 — grows by doubling, used everywhere.</span>
+<span class="kw">@fn</span> vec_new      -> <span class="ty">Int</span> := { ... };
+<span class="kw">@fn</span> vec_push  v:<span class="ty">Int</span>, x:<span class="ty">Int</span> := { ... };
+<span class="kw">@fn</span> vec_get   v:<span class="ty">Int</span>, i:<span class="ty">Int</span> -> <span class="ty">Int</span> := { ... };
+<span class="kw">@fn</span> vec_len   v:<span class="ty">Int</span> -> <span class="ty">Int</span> := { ... };</pre>
+
+  <!-- ─────────────────────────────────────────────── -->
+  <h2>7. Strata as Mods — The Open Extension Surface</h2>
+
+  <div class="card idea">
+    <p><strong>Strata are not just a dispatch table for operators and keywords.</strong> The Silicon spec (<code>docs/strata.md</code>) positions strata as the language's mod system — third-party packages add new <em>types</em>, new <em>type systems</em>, new <em>IR passes</em>, custom <em>codegen backends</em>, embedded <em>DSLs</em>, and quote/unquote <em>macros</em>. Think of them as the way Doom WADs extend the engine without recompiling it.</p>
+    <p>This shapes the bootstrap from day one. Even though Stage 1 ships with only built-in strata filling every extension point, the <em>architecture</em> must be registry-driven everywhere so that user strata can plug in later without a compiler rewrite.</p>
+  </div>
+
+  <h3>7.1 The Nine StrataTypes (from <code>docs/strata.md</code>)</h3>
+  <table>
+    <thead><tr><th>StrataType</th><th>What it Extends</th><th>Stage 0 Today</th><th>Bootstrap Status</th></tr></thead>
+    <tbody>
+      <tr><td><strong>Operator</strong></td><td>Binary infix operators (e.g. <code>+</code>, <code>==</code>)</td><td>Works (<code>operators.si</code>)</td><td><span class="tag green">Phase 4</span> — built-ins only in Stage 1</td></tr>
+      <tr><td><strong>Control</strong></td><td>Control-flow keywords (<code>@if</code>, <code>@loop</code>, <code>@break</code>, <code>@match</code>, <code>@return</code>)</td><td>Works (<code>if.si</code>, <code>loop.si</code>, <code>control.si</code>, <code>match.si</code>)</td><td><span class="tag green">Phase 4</span> — built-ins only</td></tr>
+      <tr><td><strong>Type</strong></td><td>Declares a new named type the type system understands</td><td>Hard-coded (<code>Int</code>, <code>Float</code>, <code>Bool</code>, <code>String</code> in <code>types/</code>)</td><td><span class="tag yellow">Phase −1.A</span> — payload sum types are the first user-defined types the bootstrap needs</td></tr>
+      <tr><td><strong>Constraint</strong></td><td>Typeclass/protocol-style constraints (<em>"T must implement Eq"</em>)</td><td><span class="tag red">None</span></td><td><span class="tag orange">Post-Stage-3</span> — leave the hook, don't fill it</td></tr>
+      <tr><td><strong>Codegen</strong></td><td>Replaces or supplements lowering for a given AST/IR node kind</td><td>Partial — robust-strata work moved many lowerers to <code>.si</code>; new node kinds still need TS</td><td><span class="tag yellow">Phase 6 architecture</span>, built-ins only in Stage 1</td></tr>
+      <tr><td><strong>Runtime</strong></td><td>Registers runtime hooks (custom allocators, schedulers, panic handlers)</td><td><span class="tag red">None</span></td><td><span class="tag orange">Post-Stage-3</span></td></tr>
+      <tr><td><strong>Capability</strong></td><td>Declares an effect / permission gate that other strata must hold to perform sensitive operations</td><td><span class="tag red">None</span></td><td><span class="tag orange">Post-Stage-3</span> — but bake the check stub into Phase 3 so adding it later is non-breaking</td></tr>
+      <tr><td><strong>Metadata</strong></td><td>Defines annotation kinds and what they do (<code>@export</code>, <code>@platform</code>, future <code>@deprecated</code>, <code>@inline</code>)</td><td>Limited — <code>@export</code> and <code>@platform</code> only (<code>metadata.si</code>)</td><td><span class="tag green">Phase 4</span> — generalised in Stage 1</td></tr>
+      <tr><td><strong>DSL</strong></td><td>Delegates a syntactic region to a sub-parser supplied by the stratum (HTML, SQL, regex, custom math)</td><td><span class="tag red">None</span></td><td><span class="tag orange">Post-Stage-5</span> — but Phase 1 reserves the <code>parse_dsl_region(open, close)</code> hook</td></tr>
+    </tbody>
+  </table>
+
+  <h3>7.2 Architectural Requirements the Bootstrap Must Honour</h3>
+  <p>Three concrete requirements fall out of the "strata as mods" framing. Skipping any of them means the post-Stage-3 capabilities require a compiler rewrite.</p>
+
+  <div class="card ok">
+    <h4>R1 — The IR is open-tagged, not a closed <code>@type_sum</code></h4>
+    <p>Stage 0 today encodes IR node kinds as a TypeScript discriminated union (<code>'Const' | 'BinOp' | 'If' | …</code> in <code>ir/nodes.ts</code>). The bootstrap cannot follow that pattern: a Codegen-Stratum installed by a user must be able to register a new IR node kind (e.g. <code>'VectorAdd'</code>, <code>'AtomicCmpXchg'</code>) without forking the compiler.</p>
+    <ul>
+      <li>IR node kinds are <strong>strings registered into the strata registry</strong> at load time, each carrying a printer hook and a lowering hook.</li>
+      <li>The Silicon-side representation is still <code>(tag:i32, …fields)</code> records in the arena, but <code>tag</code> is a registry-allocated integer, not a closed enum.</li>
+      <li>Emit-phase dispatch is "look up the printer registered for this tag," not a hard-coded switch.</li>
+    </ul>
+  </div>
+
+  <div class="card ok">
+    <h4>R2 — Every phase is a registered middleware list</h4>
+    <p>Phases 4–7 stop being monolithic functions; they become ordered pipelines whose stages are contributed by strata.</p>
+    <table>
+      <thead><tr><th>Phase</th><th>Pipeline shape</th><th>Stage 1 contents</th></tr></thead>
+      <tbody>
+        <tr><td>1 — Parser</td><td>Core parser + zero or more <code>parse_dsl_region</code> hooks keyed on (open-token, close-token)</td><td>Core only</td></tr>
+        <tr><td>4 — Elaborate</td><td>Walker + <code>operator_expanders[]</code>, <code>defkind_expanders[]</code>, <code>metadata_expanders[]</code></td><td>Built-in strata only</td></tr>
+        <tr><td>5 — Type Check</td><td>Generic constraint engine fed by <code>type_strata[]</code> and <code>constraint_strata[]</code></td><td>One built-in type stratum supplying <code>Int</code>, <code>Float</code>, <code>Bool</code>, sum types</td></tr>
+        <tr><td>6 — IR Lower</td><td>Walker + <code>codegen_strata[]</code> per AST kind</td><td>Built-ins only</td></tr>
+        <tr><td>6.5 — Optimise</td><td><strong>(new)</strong> Ordered list of <code>ir_pass[]</code> middleware</td><td>Empty in Stage 1; const-fold lands post-Stage-3</td></tr>
+        <tr><td>7 — Emit</td><td>Backend selected from <code>codegen_backends[]</code> by target name</td><td>One backend: <code>wat</code></td></tr>
+      </tbody>
+    </table>
+    <p>Concretely: the Phase 6 lowerer is <em>not</em> a giant <code>@match</code> on AST tag with a default arm. It is a loop over <code>codegen_strata</code>, each stratum claiming the AST tags it handles. The default "no stratum claimed this" case is a compile error, surfaced with the same diagnostic regardless of whether the missing tag is built-in or user-defined.</p>
+  </div>
+
+  <div class="card ok">
+    <h4>R3 — The strata registry is the spine of the toolchain</h4>
+    <p>Phase 3 stops being "load <code>defkinds.si</code> into a dict." It becomes the central registry consulted by every later phase. Two implications for the bootstrap:</p>
+    <ul>
+      <li><strong>Two-pass loading.</strong> The bootstrap parses just enough of the source to find <code>@use 'stratum.si'</code> declarations and built-in strata bundles; then it loads them; then it re-enters the main parse with any DSL/macro hooks now registered. Stage 1 skips the re-entry (no DSL strata) but the entry point exists.</li>
+      <li><strong>Capability stub.</strong> Each registration carries a <code>required_caps: i32</code> bitmask checked against the installing stratum's granted caps. In Stage 1 every cap is granted; the check is a no-op. Post-Stage-3 it becomes load-bearing.</li>
+    </ul>
+  </div>
+
+  <h3>7.3 Macros, Quote / Unquote, and Compile-Time Evaluation</h3>
+  <p>The Silicon spec (<code>v1-features.md</code>) lists quote/unquote macros (<code>'expr'</code>) as a v1 feature. The bootstrap acquires this almost for free:</p>
+  <ul>
+    <li>The strata body interpreter built in Phase 4 <em>is</em> a compile-time Silicon evaluator.</li>
+    <li>Generalising it from "evaluate a strata body" to "evaluate any Silicon expression with the <code>@comp</code> / quote marker" is a small extension, deferred until the Sulfur (dynamic superset) work begins.</li>
+    <li>Bootstrap requirement: the body interpreter must be a standalone module, not coupled to strata loading.</li>
+  </ul>
+
+  <h3>7.4 What This Doesn't Change About the Plan</h3>
+  <div class="card note">
+    <p>The phase ordering, gates, and corpus structure stay the same. What changes is the <em>internal shape</em> of Phases 3–7: registry-driven dispatch instead of hard-coded switches; open IR tags instead of closed unions; capability stubs at every registration site. The phase deliverables (§8 below) are updated to call out the registry-driven shape.</p>
+  </div>
+
+  <!-- ─────────────────────────────────────────────── -->
+  <h2>8. Phase-by-Phase Plan</h2>
+  <p>Phases are ordered by their data dependency. Each phase produces an artifact the next phase consumes, so phases are <em>not</em> safe to parallelise across developers — but <em>within</em> a phase, work splits cleanly.</p>
+
+  <div class="card note">
+    <p>For every phase below:</p>
+    <ul>
+      <li><strong>Deliverable</strong> — the artifact under <code>boot/</code> that didn't exist before.</li>
+      <li><strong>Inputs</strong> — what previous-phase output it consumes.</li>
+      <li><strong>Outputs</strong> — the data structure / file it produces.</li>
+      <li><strong>Gate</strong> — the structural-equivalence test that must pass before merging.</li>
+      <li><strong>Risk</strong> — the one thing most likely to derail this phase.</li>
+    </ul>
+  </div>
+
+  <!-- ─── PHASE −1 ─── -->
+  <div class="phase-head"><span class="phase-num">Phase −1</span><span class="phase-name">Land Stage 0 Pre-Bootstrap Features</span></div>
+  <div class="meta-row">
+    <div class="k">Goal</div><div class="v">Close every gap listed in §6.2 in the Stage 0 (TypeScript) compiler so that Silicon-Core can actually express a compiler.</div>
+    <div class="k">Deliverable</div><div class="v">Tagged PR per feature, each with fixtures under <code>tests/corpus/lang-features/</code>.</div>
+    <div class="k">Inputs</div><div class="v">Existing TS compiler.</div>
+    <div class="k">Outputs</div><div class="v">A Stage 0 release tagged <code>v0.bootstrap-ready</code> with the features below.</div>
+  </div>
+  <h4>−1.1 Workstreams</h4>
+  <table>
+    <thead><tr><th>#</th><th>Feature</th><th>Touches</th><th>Acceptance</th></tr></thead>
+    <tbody>
+      <tr>
+        <td>A</td>
+        <td><strong>Sum types with payloads</strong> — extend <code>@type_sum</code> to permit <code>Variant Field1:Int, Field2:Int</code> constructors. Lower as <code>(tag:i32, field0:i32, field1:i32, …)</code> records in the arena.</td>
+        <td><code>strata/defkinds.si</code>, <code>defExpanders.ts</code>, <code>lower.ts</code>, <code>typechecker.ts</code></td>
+        <td>Round-trip fixture: declare AST sum type, construct value, pattern-match, read field — emits expected i32 sequence.</td>
+      </tr>
+      <tr>
+        <td>B</td>
+        <td><strong>Pattern destructure in <code>@match</code></strong> — variant tag + field-binding form: <code>@match n { Definition{keyword, name} => … }</code>.</td>
+        <td><code>strata/match.si</code>, <code>lower.ts</code> (<code>expandMatchChain</code>), <code>typechecker.ts</code></td>
+        <td>Fixtures with nested destructure and exhaustiveness checks.</td>
+      </tr>
+      <tr>
+        <td>C</td>
+        <td><strong>Multi-file include</strong> — add <code>@use 'path.si'</code> keyword (or extend <code>--strata</code> to allow arbitrary function defs, not just <code>@extern</code>). Resolve relative paths from the importing file; detect cycles.</td>
+        <td>grammar (<em>one line</em>, an opaque keyword definition routed through a stratum), <code>sigil_cli.ts</code>, <code>strataLoader.ts</code></td>
+        <td>Two-file fixture: <code>main.si</code> calls <code>helper.si</code>'s <code>@fn</code> — compiles and runs.</td>
+      </tr>
+      <tr>
+        <td>D</td>
+        <td><strong>UTF-8 byte buffers</strong> — runtime-only feature: a new <code>@extern</code> read path that hands the caller a <code>(ptr, byte_len)</code> into raw UTF-8. String literals stay UTF-16; the parser uses <code>WASM::i32_load8_u</code> on the byte buffer and compares numeric byte-runs against per-keyword constant tables (no string-vs-string compare). <em>No language change required if we adopt this convention.</em></td>
+        <td>convention only; docs</td>
+        <td>Smoke test: read a UTF-8 file, compare first 4 bytes against the bytes of <code>'@let'</code> coded as integers.</td>
+      </tr>
+      <tr>
+        <td>E</td>
+        <td><strong>WASIX <code>_start</code> entry</strong> — when targeting WASIX, emit <code>(export "_start" (func $__start))</code> automatically, or honour an explicit <code>@export _start := main</code>.</td>
+        <td><code>lower.ts</code>, <code>emit.ts</code>, CLI flag <code>--target=wasix</code></td>
+        <td><code>wasmer run hello.wasm</code> runs <code>main</code> without an <code>--invoke</code> flag.</td>
+      </tr>
+      <tr>
+        <td>F</td>
+        <td><strong>Out-pointer calling convention for <code>@extern</code></strong> — no syntax change; document and test that an i32 arg can be a writable memory address the host writes into (as WASI <code>path_open</code> requires). Provide <code>boot::std::scratch_alloc(n)</code>.</td>
+        <td>docs + std.wat helpers</td>
+        <td>Round-trip <code>path_open</code> call in Silicon returns the host-written fd.</td>
+      </tr>
+      <tr>
+        <td>G</td>
+        <td><strong>(Optional, deferrable)</strong> <code>@type_alias</code> lowering — make <code>@type_alias NodeIdx = Int</code> a real type. Pure ergonomics for the bootstrap source.</td>
+        <td><code>typechecker.ts</code>, <code>defExpanders.ts</code></td>
+        <td>Aliases accepted in annotations; resolve to underlying type.</td>
+      </tr>
+    </tbody>
+  </table>
+  <div class="gate"><span class="lbl">Gate</span> &nbsp; A miniature "AST node" fixture compiles end-to-end: declare a sum type with payloads, build a value via constructor, destructure via <code>@match</code>, return one field. Plus the two-file include fixture passes. Tag the commit <code>v0.bootstrap-ready</code>.</div>
+  <div class="card warn"><strong>Risk:</strong> Items A and B touch the most code (typechecker + lowering + at least one stratum each). Estimate them at ~1 week each; sequence A before B (destructure needs the payload representation).</div>
+
+  <!-- ─── PHASE 0 ─── -->
+  <div class="phase-head"><span class="phase-num">Phase 0</span><span class="phase-name">Bootstrap Harness &amp; WASIX Runtime</span></div>
+  <div class="meta-row">
+    <div class="k">Goal</div><div class="v">A "hello world" Silicon program compiled by Stage 0, run by Wasmer-WASIX, that opens a file, reads it, writes it back, and exits with code 0.</div>
+    <div class="k">Deliverable</div><div class="v"><code>boot/std/std.si</code>, <code>boot/runtime/wasix.si</code>, <code>tests/wasix-smoke.test.ts</code></div>
+    <div class="k">Inputs</div><div class="v">Existing Stage 0 compiler; WASIX <code>@extern</code> signatures from the Wasmer docs.</div>
+    <div class="k">Outputs</div><div class="v">A reusable <code>boot::std</code> module, a Wasmer launcher script, and a CI job that runs the smoke test.</div>
+  </div>
+  <ul>
+    <li>Write the <code>@extern</code> declarations for the WASI surface listed in §5.3.</li>
+    <li>Implement the arena allocator in Silicon — verified against the simplest possible test (alloc, alloc, reset, alloc).</li>
+    <li>Implement strings-as-<code>(ptr,len)</code> and a <code>vec_i32</code> dynamic array. These are the data structures every subsequent phase will rely on.</li>
+    <li>Author <code>boot/main.si</code> with a <code>main</code> that does <code>read(argv[1])</code> &rarr; <code>write(stdout, content)</code>.</li>
+    <li>Add the <code>wasmer run</code> invocation to <code>scripts/run-boot.ts</code>.</li>
+  </ul>
+  <div class="gate"><span class="lbl">Gate</span> &nbsp; <code>wasmer run boot/main.wasm -- README.md</code> prints README.md to stdout and exits 0. <code>strace</code> shows only the WASI imports from §5.3.</div>
+  <div class="card warn"><strong>Risk:</strong> WASI <code>path_open</code> requires a preopened dir and computed rights bitmasks. Get the bitmasks wrong and every open call returns <code>errno=8 (EBADF)</code>. <em>Mitigation:</em> copy Wasmer's reference C example verbatim, then port.</div>
+
+  <!-- ─── PHASE 1 ─── -->
+  <div class="phase-head"><span class="phase-num">Phase 1</span><span class="phase-name">Parser (Silicon Source → AST)</span></div>
+  <div class="meta-row">
+    <div class="k">Goal</div><div class="v">A Silicon-in-Silicon parser that consumes a UTF-8 source buffer and produces the same AST that Phase 2 expects. No intermediate CST is required — the parser builds AST nodes directly.</div>
+    <div class="k">Deliverable</div><div class="v"><code>boot/parser/lex.si</code>, <code>boot/parser/parse.si</code></div>
+    <div class="k">Inputs</div><div class="v">A byte slice <code>(ptr, len)</code> from <code>std.read_file</code>.</div>
+    <div class="k">Outputs</div><div class="v">An AST root index, in the flat <code>vec&lt;i32&gt;</code> encoding used by every later phase.</div>
+  </div>
+
+  <h4>1.1 Why a single-pass predictive parser is enough</h4>
+  <p>Silicon was designed to be trivially parseable. Three properties make a hand-written predictive parser the right tool:</p>
+  <ul>
+    <li><strong>No operator precedence.</strong> Binary expressions are a flat left-to-right chain (<code>ExpressionStart = ExpressionEnd (BinOp ExpressionEnd)*</code>). No Pratt parser, no climb tables.</li>
+    <li><strong>Sigil-led tokens.</strong> Every interesting construct starts with a unique sigil: <code>@</code> for keywords and definitions, <code>&amp;</code> for calls, <code>$</code> for literals, <code>'</code> for strings, digits for numbers. One token of lookahead picks the right rule every time.</li>
+    <li><strong>Fixed, small grammar.</strong> ~25 non-terminals; no left recursion in any rule that can't be re-expressed as a loop.</li>
+  </ul>
+  <p>So the bootstrap uses a <strong>straight-line LL(1) parser</strong> — no backtracking, no packrat memo, no codegen. Each rule is one Silicon function that reads tokens and emits one AST node. Total: ~600 LoC of Silicon, no library dependencies.</p>
+
+  <div class="card note">
+    <strong>Ohm.js is scaffolding, not spec.</strong> The Stage 0 CST shape is an implementation detail of how Ohm happens to encode parses. The bootstrap is free to skip the CST layer entirely and produce AST nodes directly from the token stream. The normative output of Phase 1 is "the AST that Phase 2 expects" — nothing more.
+  </div>
+
+  <h4>1.2 Lexer</h4>
+  <p>Whitespace-skipping with <code>#</code>-line comments. Tokens are <code>(kind, source_offset, source_length)</code> triples in a flat <code>vec&lt;i32&gt;</code> — no token-string allocation. Kinds:</p>
+  <pre>NUM_DEC, NUM_HEX, NUM_BIN, NUM_OCT, NUM_FLOAT,
+STRING, IDENT, NAMESPACE_SEP,                <span class="cm"># '::' or '.'</span>
+KEYWORD,                                     <span class="cm"># '@xxx'</span>
+SIGIL_AMP, SIGIL_DOLLAR, SIGIL_AT, SIGIL_BACKSLASH,
+LBRACE, RBRACE, LPAREN, RPAREN, LBRACK, RBRACK,
+COMMA, SEMI, COLON, EQ, COLONEQ,             <span class="cm"># ':='</span>
+DOC_COMMENT,                                 <span class="cm"># '##' to end-of-line</span>
+OPERATOR,                                    <span class="cm"># one or more operatorChars</span>
+EOF</pre>
+
+  <h4>1.3 Parser</h4>
+  <p>One function per grammar production. Each function consumes tokens from a shared cursor and returns the index of an AST node (or <code>-1</code> on miss). Iteration is an explicit <code>@loop</code>; "choice" is a one-token <code>peek</code> followed by a dispatch.</p>
+  <pre><span class="kw">@fn</span> parseProgram -> <span class="ty">Int</span> := {
+  <span class="kw">@local</span> elements:<span class="ty">Int</span> := vec_new;
+  <span class="kw">@loop</span> {
+    <span class="kw">@if</span> peek == TOK_EOF { <span class="kw">@break</span>; };
+    <span class="kw">@local</span> elt:<span class="ty">Int</span> := parseElement;
+    vec_push elements, elt;
+  };
+  ast_make AST_PROGRAM, elements;
+};
+
+<span class="kw">@fn</span> parseExpressionStart -> <span class="ty">Int</span> := {
+  <span class="cm"># No precedence — left-fold a flat chain of BinOps.</span>
+  <span class="kw">@local</span> lhs:<span class="ty">Int</span> := parseExpressionEnd;
+  <span class="kw">@loop</span> {
+    <span class="kw">@if</span> peek != TOK_OPERATOR { <span class="kw">@break</span>; };
+    <span class="kw">@local</span> op  := take;
+    <span class="kw">@local</span> rhs := parseExpressionEnd;
+    lhs := ast_make_binop op, lhs, rhs;
+  };
+  lhs;
+};</pre>
+
+  <div class="gate"><span class="lbl">Gate</span> &nbsp; Every fixture in <code>tests/corpus/parser/</code> parses without error <em>and</em> the Phase 2 gate (AST JSON equivalence with Stage 0) passes when fed the Silicon parser's output. There is no separate CST-equivalence check.</div>
+  <div class="card warn"><strong>Risk:</strong> Empty/lone/trailing-separator cases in <code>ListOf&lt;X, sep&gt;</code>-style rules. <em>Mitigation:</em> add targeted fixtures for empty arg lists, single-arg lists, trailing commas, and empty blocks before tackling full programs.</div>
+
+  <!-- ─── PHASE 2 ─── -->
+  <div class="phase-head"><span class="phase-num">Phase 2</span><span class="phase-name">AST Node Definitions &amp; Serialiser</span></div>
+  <div class="meta-row">
+    <div class="k">Goal</div><div class="v">Define the AST node types the parser emits, and provide a JSON serialiser so Phase 1's output can be diffed against Stage 0.</div>
+    <div class="k">Deliverable</div><div class="v"><code>boot/ast/nodes.si</code> (sum types &amp; constructors), <code>boot/ast/json.si</code> (serialiser)</div>
+    <div class="k">Inputs</div><div class="v">AST root index from Phase 1.</div>
+    <div class="k">Outputs</div><div class="v">A canonical <code>ast.json</code> matching Stage 0's format.</div>
+  </div>
+  <ul>
+    <li>Mirror <code>astNodes.ts</code>: one <code>@type_sum</code> per discriminated union (<code>Element</code>, <code>Item</code>, <code>Definition</code>, <code>ExpressionStart</code>, &hellip;). Sum-type expanders already exist in Stage 0.</li>
+    <li>Use the same node names and field names as TypeScript so the JSON output is byte-comparable.</li>
+    <li>The serialiser is the contract: anything the Silicon parser builds that round-trips to the same JSON Stage 0 emits is, by definition, the right AST.</li>
+  </ul>
+  <div class="gate"><span class="lbl">Gate</span> &nbsp; For every fixture in <code>tests/corpus/ast/</code>, <code>sigil-ts0 --emit-ast f.si</code> and <code>wasmer run boot.wasm -- --emit-ast f.si</code> produce identical <code>ast.json</code>. (This is also the real gate for Phase 1.)</div>
+  <div class="card warn"><strong>Risk:</strong> Stage 0's <code>toAst.ts</code> bakes in some Ohm-specific arity quirks (single-element vs list flattening). Without a CST middle layer, the bootstrap has to reproduce those flattening rules directly in the parser. <em>Mitigation:</em> port one node kind at a time and pin a JSON-diff fixture for each.</div>
+
+  <!-- ─── PHASE 3 ─── -->
+  <div class="phase-head"><span class="phase-num">Phase 3</span><span class="phase-name">Strata Loader &amp; Registry — the Toolchain Spine</span></div>
+  <div class="meta-row">
+    <div class="k">Goal</div><div class="v">Load every stratum file (built-in bundle + any <code>@use 'x.si'</code> includes), parse all nine StrataTypes (§7.1), and produce the central registry every later phase consults.</div>
+    <div class="k">Deliverable</div><div class="v"><code>boot/strata/loader.si</code>, <code>boot/strata/registry.si</code>, <code>boot/strata/caps.si</code></div>
+    <div class="k">Inputs</div><div class="v">AST root from Phase 2 (strata files are just more Silicon source).</div>
+    <div class="k">Outputs</div><div class="v">A <strong>registry</strong> with one table per extension point: <code>operator_expanders</code>, <code>defkind_expanders</code>, <code>type_strata</code>, <code>codegen_strata</code>, <code>metadata_handlers</code>, <code>ir_kinds</code>, <code>ir_passes</code>, <code>parse_dsl_regions</code>, <code>capability_grants</code>.</div>
+  </div>
+  <ul>
+    <li><strong>Two-pass loader.</strong> First pass scans the AST for <code>@use</code> declarations and walks the dependency tree; second pass parses each stratum file in dependency order and registers every <code>@stratum_*</code> definition into the right table.</li>
+    <li><strong>Open IR-kind table.</strong> <code>ir_kinds</code> maps a kind name (e.g. <code>'BinOp'</code>) to <code>(int_tag, printer_hook, lowering_hook, type_signature)</code>. Built-in IR kinds register here just like user-supplied ones — there is no separate hard-coded list (R1 in §7.2).</li>
+    <li><strong>Capability stub.</strong> Every registration carries a <code>required_caps: i32</code>. In Stage 1 every cap is granted (<code>caps.si</code> hands out <code>0xFFFFFFFF</code> to every stratum). The check happens at registration time so post-Stage-3 work can swap in a real policy without touching call sites.</li>
+    <li><strong>Embed strata as data segments.</strong> The built-in strata bundle is baked into <code>sigil.wasm</code> via WAT <code>(data ...)</code> segments (see §9.2). User <code>@use</code> includes are read at compile time via WASIX <code>fd_read</code>.</li>
+    <li>Port <code>codegenKindFromIntrinsic('IR::def_local') → 'local'</code> etc. from <code>strataLoader.ts</code> as a normal table-driven helper.</li>
+  </ul>
+  <div class="gate"><span class="lbl">Gate</span> &nbsp; Loader emits the same registry tables (sorted by key) as the TypeScript loader for every commit on <code>src/strata/</code>. Additional fixture: a hand-written stratum that registers a brand-new IR kind <code>'TestKind'</code> with a no-op printer round-trips through emit without TS changes.</div>
+
+  <!-- ─── PHASE 4 ─── -->
+  <div class="phase-head"><span class="phase-num">Phase 4</span><span class="phase-name">Elaborator + Strata Body Interpreter</span></div>
+  <div class="meta-row">
+    <div class="k">Goal</div><div class="v">Walk the AST, attach <code>hook = '&lt;codegenKind&gt;'</code> to each <code>Definition</code> and resolve every binary operator against the registry. Then run the rich-body interpreter so user-supplied strata behave identically to built-ins.</div>
+    <div class="k">Deliverable</div><div class="v"><code>boot/elab/elaborator.si</code>, <code>boot/elab/body.si</code></div>
+    <div class="k">Inputs</div><div class="v">AST from Phase 2 + Registry from Phase 3.</div>
+    <div class="k">Outputs</div><div class="v">Elaborated AST with <code>hook</code> stamps and resolved operator entries.</div>
+  </div>
+  <ul>
+    <li>The body interpreter (currently <code>strataBody.ts</code>) is small and self-contained — about 250 LoC of straightforward tree-walking. Port one expression kind at a time.</li>
+    <li>The interpreter calls into the <em>Silicon-resident</em> <code>&amp;Compiler::*</code> namespace. In Stage 1 this is just a normal Silicon module, not a JS reflection target — so dispatch is a giant <code>@match</code> on namespace path.</li>
+    <li>Preserve eager-arg evaluation semantics. The interpreter's invariant — "no control flow inside a body, no recursion" — makes the implementation straightforward.</li>
+  </ul>
+  <div class="gate"><span class="lbl">Gate</span> &nbsp; AST-after-elaboration JSON identical to Stage 0 across the full corpus; every <code>&amp;Compiler::*</code> call from the built-in strata returns the same value the TypeScript host would.</div>
+  <div class="card warn"><strong>Risk:</strong> The CompilerAPI surface is wide (see <code>docs/compiler-api.md</code>) — &gt;40 entry points. <em>Mitigation:</em> generate stubs for the whole surface up front, fail-loud on any unimplemented call, port them in order of "first failing test".</div>
+
+  <!-- ─── PHASE 5 ─── -->
+  <div class="phase-head"><span class="phase-num">Phase 5</span><span class="phase-name">Type Checker — Generic Constraint Engine + Plugin Type Strata</span></div>
+  <div class="meta-row">
+    <div class="k">Goal</div><div class="v">Annotate every expression node with an <code>inferredType</code> and collect all type errors. The engine is generic — every concrete type (<code>Int</code>, <code>Float</code>, <code>Bool</code>, sum types) is contributed by a registered <strong>Type-Stratum</strong>.</div>
+    <div class="k">Deliverable</div><div class="v"><code>boot/types/engine.si</code> (the constraint solver), <code>boot/types/errors.si</code>, plus one built-in <code>boot/strata/types-core.si</code> contributing the primitive types.</div>
+    <div class="k">Inputs</div><div class="v">Elaborated AST from Phase 4 + <code>type_strata</code> + <code>constraint_strata</code> tables from the registry.</div>
+    <div class="k">Outputs</div><div class="v">Typed AST + error list.</div>
+  </div>
+  <ul>
+    <li><strong>The engine knows nothing about specific types.</strong> It walks the AST emitting constraints (<code>node X has type ?T</code>, <code>?T must unify with the type returned by stratum-supplied operator handler for '+'</code>) and asks each registered Type-Stratum to discharge them.</li>
+    <li><strong>Built-in scope.</strong> Stage 1 ships exactly one Type-Stratum (<code>types-core.si</code>) that supplies <code>Int</code>, <code>Float</code>, <code>Bool</code>, <code>String</code>, function arrows, and the sum-type schema landed in Phase −1.A. No generics yet, no constraints yet — those slots are empty.</li>
+    <li><strong>Forward compatibility.</strong> A future <code>strata/refinement-types.si</code> registers a second Type-Stratum that contributes refinement types alongside the core ones; the engine doesn't change.</li>
+    <li>Error-format struct matches Stage 0's <code>formatTypeError</code> output byte-for-byte so CLI tests don't diverge on text.</li>
+  </ul>
+  <div class="gate"><span class="lbl">Gate</span> &nbsp; Same <code>(line, col, message)</code> tuple set as Stage 0 across the corpus. Additional fixture: a test Type-Stratum that adds a <code>BigInt</code> type type-checks an <code>@let x:BigInt := 5</code> program without engine changes.</div>
+
+  <!-- ─── PHASE 6 ─── -->
+  <div class="phase-head"><span class="phase-num">Phase 6</span><span class="phase-name">IR Lowering — Codegen-Stratum Middleware</span></div>
+  <div class="meta-row">
+    <div class="k">Goal</div><div class="v">Lower typed AST into the open-tagged IR (§7.2 R1). Dispatch is driven by <code>codegen_strata[]</code> — each stratum claims the AST tags it handles; an unclaimed tag is a compile error.</div>
+    <div class="k">Deliverable</div><div class="v"><code>boot/ir/nodes.si</code> (the arena layout for IR records), <code>boot/ir/lower.si</code> (the walker that dispatches to <code>codegen_strata</code>).</div>
+    <div class="k">Inputs</div><div class="v">Typed AST from Phase 5 + <code>codegen_strata</code> table from the registry.</div>
+    <div class="k">Outputs</div><div class="v">IR module — a flat-vec list of <code>IRFunction</code> / <code>IRGlobal</code> / <code>IRImport</code> / <code>IRExport</code> entries; every expression carries an open-tag and a <code>wasmType</code>.</div>
+  </div>
+  <ul>
+    <li><strong>No hard-coded switch on AST tag.</strong> The walker asks <code>registry.codegen_strata[tag]</code> for the lowering hook and invokes it. Built-in lowering is contributed by Silicon strata (<code>strata/codegen-core.si</code>) using the body interpreter from Phase 4 — the same machinery the robust-strata project established.</li>
+    <li><strong>Open IR kinds.</strong> Built-in IR kinds (<code>'Const'</code>, <code>'BinOp'</code>, <code>'If'</code>, <code>'Loop'</code>, <code>'Function'</code>, &hellip;) are registered into <code>ir_kinds</code> at strata load time, exactly the same way a hypothetical user <code>VectorAdd</code> kind would register.</li>
+    <li><strong>Remaining TypeScript debt to port:</strong> <code>lowerExpr</code>, <code>lowerBlock</code>, <code>lowerFunctionBody</code>, <code>lowerParams</code>, <code>expandMatchChain</code> (~800 LoC). Most of these become two-line Silicon entries that defer to a Codegen-Stratum body.</li>
+    <li>Serialise IR to JSON for the equivalence harness. The JSON uses the registered tag <em>name</em>, not the integer, so the format stays stable as new tags are added.</li>
+  </ul>
+  <div class="gate"><span class="lbl">Gate</span> &nbsp; IR-JSON dumps match across the corpus, including <code>wasmType</code> on every expression node. Additional fixture: a test Codegen-Stratum that overrides <code>'BinOp'</code> with a no-op printer turns the corpus into errors uniformly — proving dispatch goes through the registry, not a hard-coded path.</div>
+
+  <!-- ─── PHASE 6.5 ─── -->
+  <div class="phase-head"><span class="phase-num">Phase 6.5</span><span class="phase-name">Optimisation Middleware (Scaffold Only)</span></div>
+  <div class="meta-row">
+    <div class="k">Goal</div><div class="v">Reserve the <code>ir_passes[]</code> middleware loop so future passes (const-fold, DCE, loop unrolling) can register without rewriting the driver.</div>
+    <div class="k">Deliverable</div><div class="v"><code>boot/ir/passes.si</code> — a 30-line loop that takes an <code>IRModule</code> and folds <code>ir_passes</code> over it.</div>
+    <div class="k">Inputs</div><div class="v">IR module from Phase 6 + <code>ir_passes</code> table (empty in Stage 1).</div>
+    <div class="k">Outputs</div><div class="v">Possibly-transformed IR module.</div>
+  </div>
+  <ul>
+    <li>Stage 1 ships zero passes — the loop is a no-op. The scaffold exists so that the first user-supplied <code>strata/const-fold.si</code> post-Stage-3 doesn't require a compiler change.</li>
+    <li>Pass ordering is registered explicitly (<code>register_pass(name, after=[...], before=[...])</code>); the loader topologically sorts.</li>
+  </ul>
+  <div class="gate"><span class="lbl">Gate</span> &nbsp; A test pass that doubles every <code>IRConst</code> value, when registered, transforms a <code>5;</code> program into <code>10;</code> in the emitted WAT. When unregistered, output is unchanged.</div>
+
+  <!-- ─── PHASE 7 ─── -->
+  <div class="phase-head"><span class="phase-num">Phase 7</span><span class="phase-name">Emit — Backend Selected from <code>codegen_backends</code></span></div>
+  <div class="meta-row">
+    <div class="k">Goal</div><div class="v">Render the IR module via a registered backend. Stage 1 ships one backend (<code>wat</code>); the dispatch is registry-driven so a future <code>js</code> or <code>native</code> backend slots in without changing the driver.</div>
+    <div class="k">Deliverable</div><div class="v"><code>boot/emit/wat.si</code> (the backend) + <code>boot/emit/driver.si</code> (selects backend by name), embedded <code>std.wat</code> bytes.</div>
+    <div class="k">Inputs</div><div class="v">Optimised IR module from Phase 6.5 + <code>--target</code> flag (default <code>wat</code>).</div>
+    <div class="k">Outputs</div><div class="v">A single WAT string written to <code>main.wat</code>.</div>
+  </div>
+  <ul>
+    <li>The WAT backend is a templated string builder — per-IR-kind printers come from <code>ir_kinds[tag].printer</code>, so adding a new IR kind comes with its own printer hook automatically.</li>
+    <li>Byte-exact output (indentation, operand ordering) is required so the binary-diff gate stays clean.</li>
+    <li>Embed <code>std.wat</code> as a baked data segment, same trick as the strata files in Phase 3.</li>
+    <li><strong>Out of scope for Stage 1:</strong> alternative backends. The registry slot exists; only one entry occupies it.</li>
+  </ul>
+  <div class="gate"><span class="lbl">Gate</span> &nbsp; <code>diff &lt;(sigil-ts0 f.si) &lt;(wasmer run boot.wasm -- f.si)</code> reports no differences for every fixture. The Stage 1 binary now passes the full test corpus.</div>
+
+  <!-- ─── PHASE 8 ─── -->
+  <div class="phase-head"><span class="phase-num">Phase 8</span><span class="phase-name">CLI &amp; Driver Integration</span></div>
+  <div class="meta-row">
+    <div class="k">Goal</div><div class="v">Replace <code>src/sigil_cli.ts</code>'s public behaviour with the WASIX binary. Same flags, same exit codes, same stdout/stderr.</div>
+    <div class="k">Deliverable</div><div class="v"><code>boot/cli/main.si</code>, the released <code>sigil.wasm</code></div>
+    <div class="k">Inputs</div><div class="v">All previous phases.</div>
+    <div class="k">Outputs</div><div class="v">A single deployable artifact runnable as <code>wasmer run sigil.wasm -- &lt;args&gt;</code>.</div>
+  </div>
+  <ul>
+    <li>Argv parsing in Silicon — mirror the <code>--strata</code>, <code>--wasm</code>, and positional handling in <code>sigil_cli.ts</code>.</li>
+    <li>The <code>--wasm</code> path uses <code>wat2wasm</code>; Stage 1 invokes it externally via a wrapper script (the bundled binaryen WASM is post-bootstrap work).</li>
+    <li>Module must export <code>_start: () -&gt; ()</code> by exact name (delivered by Phase −1.E); otherwise <code>wasmer run sigil.wasm</code> exits without invoking anything.</li>
+    <li>Wrap with a tiny <code>scripts/sigil.sh</code> / <code>scripts/sigil.ps1</code> that calls <code>wasmer run --use wasix --dir=. -- "$@"</code> so end users don't see the Wasmer invocation.</li>
+  </ul>
+  <div class="gate"><span class="lbl">Gate</span> &nbsp; Existing end-to-end tests (<code>src/e2e/</code>) pass with the launcher script substituted for <code>bun run src/sigil_cli.ts</code>. CI matrix: Linux, macOS, Windows.</div>
+
+  <!-- ─── PHASE 9 ─── -->
+  <div class="phase-head"><span class="phase-num">Phase 9</span><span class="phase-name">Stage-2 Self-Compile &amp; Fixed Point</span></div>
+  <div class="meta-row">
+    <div class="k">Goal</div><div class="v">Run the triple-test from §2.2. Burn down byte-diffs until Stage 2 ≡ Stage 3.</div>
+    <div class="k">Deliverable</div><div class="v">A <code>boot/STAGE-2.md</code> reporting <code>sha256</code> of the canonical artifact and a CI job enforcing the fixed point.</div>
+  </div>
+  <ul>
+    <li>The most common source of stage-2/stage-3 drift is non-determinism: hash-map iteration order, allocator addresses leaking into output, timestamps. Stage 1 must be <em>fully deterministic</em>.</li>
+    <li>Pin <code>arena_base</code>, sort every iteration over hash maps, never embed timing data, lock <code>wasmer</code> &amp; <code>wat2wasm</code> versions in CI.</li>
+  </ul>
+  <div class="gate"><span class="lbl">Gate</span> &nbsp; <code>sha256(sigil-si2.wasm) == sha256(sigil-si3.wasm)</code> on a clean CI runner for three consecutive commits.</div>
+
+  <!-- ─── PHASE 10 ─── -->
+  <div class="phase-head"><span class="phase-num">Phase 10</span><span class="phase-name">TypeScript Sunset</span></div>
+  <ul>
+    <li>Move <code>src/</code> &rarr; <code>legacy/ts-stage0/</code>. CI keeps building it as the reference for one release cycle.</li>
+    <li>Delete the Ohm.js / Bun dependencies from <code>package.json</code>.</li>
+    <li>Publish the WASM artifact via the Wasmer registry (<code>wasmer publish</code>) so <code>wasmer run natescode/sigil -- main.si</code> works.</li>
+    <li>Move <code>boot/</code> &rarr; <code>src/</code>. The bootstrap is no longer a separate codebase.</li>
+  </ul>
+
+  <!-- ─────────────────────────────────────────────── -->
+  <h2>9. Cross-Cutting Concerns</h2>
+
+  <h3>9.1 Determinism</h3>
+  <div class="card warn">
+    <p>Every byte of <code>sigil.wasm</code>'s output must be a pure function of the input. <em>Anything</em> non-deterministic — iteration order, pointer values, timestamps, RNG, file-system order — breaks the stage-N=stage-N+1 invariant.</p>
+    <ul>
+      <li>All hash maps iterate in insertion order.</li>
+      <li>All <code>glob</code>-style directory reads sort their results alphabetically.</li>
+      <li>No <code>clock_time_get</code> inside any compile phase (only the CLI's "wall time" log line at the end).</li>
+      <li>The arena allocator must reset to the same base address on every run — never seed from <code>argv</code>.</li>
+    </ul>
+  </div>
+
+  <h3>9.2 Embedding Data (strata, std.wat, grammar)</h3>
+  <p>Stage 0 reads <code>src/strata/*.si</code>, <code>std.wat</code>, and <code>silicon-official.ohm</code> from disk. Stage 1 cannot do that without leaking the install path. Instead, the build embeds these files as WAT <code>(data ...)</code> segments at known offsets:</p>
+  <pre><span class="cm"># Generated at Stage 0 build time (one-shot script: scripts/embed-stdlib.ts):</span>
+(data (i32.const 0x0010_0000) <span class="str">"# operators.si\n@stratum_operator Plus (...)\n..."</span>)
+(data (i32.const 0x0014_0000) <span class="str">"# defkinds.si\n..."</span>)
+(data (i32.const 0x0020_0000) <span class="str">"(module ...)"</span>)  <span class="cm"># std.wat</span></pre>
+  <p>A tiny <code>embedded::open(filename)</code> function returns the right <code>(ptr,len)</code> for the requested logical name. Once Phase 1 is self-hosted the grammar file is no longer needed (the parser is handwritten); only the strata files and <code>std.wat</code> stay embedded.</p>
+
+  <h3>9.3 Error Reporting Parity</h3>
+  <p>Stage 0's error format must be preserved character-for-character so that test fixtures don't have to be rewritten. Concretely: line/column numbers, the <code>formatTypeError</code> templates, and the ANSI color sequences in <code>sigil_cli.ts</code>.</p>
+
+  <h3>9.4 Test Corpus</h3>
+  <p>The corpus is the spec for the bootstrap. Before Phase 1 starts, freeze a corpus tree:</p>
+  <table>
+    <thead><tr><th>Tier</th><th>Path</th><th>What it Asserts</th></tr></thead>
+    <tbody>
+      <tr><td>Lex</td><td><code>tests/corpus/lex/*.si</code></td><td>Token-stream equivalence (Phase 1)</td></tr>
+      <tr><td>Parse</td><td><code>tests/corpus/parser/*.si</code></td><td>Fixtures parse without error (Phase 1)</td></tr>
+      <tr><td>AST</td><td><code>tests/corpus/ast/*.si</code></td><td>AST JSON equivalence — the real Phase 1 + 2 gate</td></tr>
+      <tr><td>Elab</td><td><code>tests/corpus/elab/*.si</code></td><td>Elaborated AST JSON equivalence (Phase 4)</td></tr>
+      <tr><td>Type</td><td><code>tests/corpus/types/*.si</code></td><td>Inferred-type annotations + error sets (Phase 5)</td></tr>
+      <tr><td>IR</td><td><code>tests/corpus/ir/*.si</code></td><td>IR JSON equivalence (Phase 6)</td></tr>
+      <tr><td>WAT</td><td><code>tests/corpus/wat/*.si</code></td><td>Byte-exact WAT diff (Phase 7)</td></tr>
+      <tr><td>E2E</td><td><code>tests/corpus/e2e/*.si</code></td><td><code>wasmer run main.wasm --invoke fn args</code> output (Phases 7–10)</td></tr>
+    </tbody>
+  </table>
+
+  <h3>9.5 Continuous Equivalence Harness</h3>
+  <pre><span class="cm"># tools/equiv.ts — runs in CI on every PR</span>
+<span class="kw">for</span> phase <span class="kw">in</span> [<span class="str">'lex','ast','elab','types','ir','wat'</span>]:
+  <span class="kw">for</span> f <span class="kw">in</span> tests/corpus/<span class="op">$phase</span>/*.si:
+    a = sigil-ts0    --emit <span class="op">$phase</span> f
+    b = wasmer run boot.wasm -- --emit <span class="op">$phase</span> f
+    assert canonical(a) == canonical(b),
+           f<span class="str">' diverges at phase '</span>+phase</pre>
+
+  <h3>9.6 Memory Model</h3>
+  <div class="two-col">
+    <div class="card">
+      <h4>Layout</h4>
+      <ul>
+        <li><code>0x0000_0000..0x0010_0000</code> — runtime globals + stack</li>
+        <li><code>0x0010_0000..0x0030_0000</code> — embedded read-only data (strata, std.wat)</li>
+        <li><code>0x0030_0000..0x0F00_0000</code> — arena heap (grows by <code>memory.grow</code>)</li>
+        <li><code>0x0F00_0000..</code> — output buffer (WAT being built)</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h4>Lifecycle</h4>
+      <ol>
+        <li>argv parsed; source read into arena.</li>
+        <li>Lex &rarr; parse &rarr; AST in arena.</li>
+        <li>Elab/typecheck/lower in arena.</li>
+        <li>Emit WAT to output buffer.</li>
+        <li>WASIX <code>fd_write</code> output buffer to <code>main.wat</code>.</li>
+        <li><code>arena_reset</code> &amp; <code>proc_exit</code>.</li>
+      </ol>
+    </div>
+  </div>
+
+  <!-- ─────────────────────────────────────────────── -->
+  <h2>10. Risk Register</h2>
+  <table>
+    <thead><tr><th>Risk</th><th>Phase</th><th>Severity</th><th>Mitigation</th></tr></thead>
+    <tbody>
+      <tr>
+        <td><strong>Closed IR forecloses Codegen-Strata.</strong> If the bootstrap encodes IR kinds as a hard-coded sum/switch (like Stage 0 does today), every future Codegen-Stratum requires a compiler patch.</td>
+        <td>3 / 6</td>
+        <td><span class="tag red">High</span></td>
+        <td>Enforce R1 (§7.2) with the "test Codegen-Stratum that registers <code>'TestKind'</code>" fixture from the Phase 3 + 6 gates. Treat any hard-coded IR-kind switch in <code>boot/</code> as a CI failure.</td>
+      </tr>
+      <tr>
+        <td><strong>Type-system hardcoded.</strong> If the type-checker bakes in <code>Int</code>/<code>Float</code>/<code>Bool</code> as language-level keywords instead of contributions from a Type-Stratum, future refinement/linear/dependent type strata require an engine rewrite.</td>
+        <td>5</td>
+        <td><span class="tag orange">Med</span></td>
+        <td>Land <code>types-core.si</code> as a regular stratum from day one — never special-cased in the engine. Phase 5 gate's <code>BigInt</code> fixture catches regressions.</td>
+      </tr>
+      <tr>
+        <td><strong>DSL parser hook never reserved.</strong> If Phase 1 hard-codes the token-dispatch, adding embedded-language strata later (HTML, SQL, regex) requires rewriting the parser.</td>
+        <td>1</td>
+        <td><span class="tag yellow">Low</span></td>
+        <td>Reserve a single <code>parse_dsl_region(open, close)</code> hook in the parser even though Stage 1 never calls it. ~10 LoC of dead code now saves a rewrite later.</td>
+      </tr>
+      <tr>
+        <td>Sum-types-with-payloads design churn</td>
+        <td>−1</td>
+        <td><span class="tag red">High</span></td>
+        <td>Decide layout (tag+fields contiguous, or boxed pointer) before writing any expander; document in <code>strata/defkinds.si</code> first.</td>
+      </tr>
+      <tr>
+        <td>Multi-file include semantics (visibility, cycles, name collision)</td>
+        <td>−1</td>
+        <td><span class="tag orange">Med</span></td>
+        <td>Match the simplest possible rule: include = textual concatenation in dependency order, error on cycles. Defer namespacing until post-Stage-3.</td>
+      </tr>
+      <tr>
+        <td>UTF-8 source vs UTF-16 literal mismatch caught late</td>
+        <td>−1 / 1</td>
+        <td><span class="tag orange">Med</span></td>
+        <td>Adopt the byte-table convention in §6.2 row D; never <code>str_eq</code> a UTF-8 buffer against a Silicon string literal.</td>
+      </tr>
+      <tr>
+        <td>WASIX <code>path_open</code> rights bitmask incorrect</td>
+        <td>0</td>
+        <td><span class="tag red">High</span></td>
+        <td>Copy Wasmer C example verbatim, port one syscall at a time.</td>
+      </tr>
+      <tr>
+        <td>AST flattening rules drift from Stage 0 (no CST middle layer to anchor to)</td>
+        <td>1–2</td>
+        <td><span class="tag orange">Med</span></td>
+        <td>AST-JSON diff fixture per node kind, ported one at a time.</td>
+      </tr>
+      <tr>
+        <td>Sum-type lowering doesn't support cyclic AST types</td>
+        <td>2</td>
+        <td><span class="tag orange">Med</span></td>
+        <td>Use i32 indices instead of pointers — already the design.</td>
+      </tr>
+      <tr>
+        <td>CompilerAPI surface too large to port in one pass</td>
+        <td>4</td>
+        <td><span class="tag orange">Med</span></td>
+        <td>Stub all 40+ entry points day 1, drive porting from failing tests.</td>
+      </tr>
+      <tr>
+        <td>Type-error message drift</td>
+        <td>5</td>
+        <td><span class="tag yellow">Low</span></td>
+        <td>Snapshot tests with exact-string assertion.</td>
+      </tr>
+      <tr>
+        <td>WAT byte-drift from operand ordering</td>
+        <td>7</td>
+        <td><span class="tag red">High</span></td>
+        <td>Golden-file diff on every PR; phase-7 must own a normaliser.</td>
+      </tr>
+      <tr>
+        <td>Non-deterministic iteration breaks fixed point</td>
+        <td>9</td>
+        <td><span class="tag red">High</span></td>
+        <td>Insertion-order maps; lint rule against unsorted directory iteration.</td>
+      </tr>
+      <tr>
+        <td>Wasmer version drift changes WASIX semantics</td>
+        <td>0/8</td>
+        <td><span class="tag orange">Med</span></td>
+        <td>Pin Wasmer version in CI; bump deliberately with a triple-test re-run.</td>
+      </tr>
+      <tr>
+        <td>Slow Stage 1 makes CI prohibitive</td>
+        <td>9</td>
+        <td><span class="tag yellow">Low</span></td>
+        <td>Acceptable: Stage 1 only needs to be fast enough to build itself in &lt;5 min. Optimise post-Stage-3.</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <!-- ─────────────────────────────────────────────── -->
+  <h2>11. Suggested Working Order &amp; Branches</h2>
+  <table>
+    <thead><tr><th>Branch</th><th>Phases</th><th>Merge gate</th></tr></thead>
+    <tbody>
+      <tr><td><code>bootstrap/-1-langfeat</code></td><td>Phase −1</td><td>Tag <code>v0.bootstrap-ready</code>; AST-sum-with-payload fixture compiles</td></tr>
+      <tr><td><code>bootstrap/00-runtime</code></td><td>Phase 0</td><td>WASIX smoke test green</td></tr>
+      <tr><td><code>bootstrap/01-parser</code></td><td>Phase 1</td><td>Corpus parses without error; AST gate (Phase 2) green</td></tr>
+      <tr><td><code>bootstrap/02-ast</code></td><td>Phase 2</td><td>AST JSON corpus zero-diff</td></tr>
+      <tr><td><code>bootstrap/03-strata</code></td><td>Phase 3</td><td>Registry corpus zero-diff</td></tr>
+      <tr><td><code>bootstrap/04-elab</code></td><td>Phase 4</td><td>Elab corpus zero-diff</td></tr>
+      <tr><td><code>bootstrap/05-types</code></td><td>Phase 5</td><td>Type-error set match</td></tr>
+      <tr><td><code>bootstrap/06-ir</code></td><td>Phase 6</td><td>IR corpus zero-diff</td></tr>
+      <tr><td><code>bootstrap/07-emit</code></td><td>Phase 7</td><td>WAT byte-diff zero</td></tr>
+      <tr><td><code>bootstrap/08-cli</code></td><td>Phase 8</td><td>e2e suite green on launcher</td></tr>
+      <tr><td><code>bootstrap/09-fixedpoint</code></td><td>Phase 9</td><td>Stage 2 ≡ Stage 3 sha256</td></tr>
+      <tr><td><code>bootstrap/10-sunset</code></td><td>Phase 10</td><td>TS removed; <code>wasmer publish</code> succeeds</td></tr>
+    </tbody>
+  </table>
+
+  <!-- ─────────────────────────────────────────────── -->
+  <h2>12. Definition of Done</h2>
+  <div class="card ok">
+    <ul>
+      <li><strong>Self-host:</strong> <code>wasmer run sigil-si2.wasm -- boot/main.si</code> emits a <code>sigil-si3.wasm</code> identical to itself.</li>
+      <li><strong>Coverage:</strong> the full <code>tests/corpus/</code> tree produces identical artifacts under Stage 0 and Stage 2.</li>
+      <li><strong>End user:</strong> <code>wasmer run natescode/sigil -- compile main.si</code> compiles a fresh Silicon project end-to-end with no Bun, no Node, no Ohm.js, no TypeScript on the user's machine.</li>
+      <li><strong>Docs:</strong> <code>README.md</code> install instructions reduced to "install Wasmer, run <code>wasmer install natescode/sigil</code>".</li>
+      <li><strong>Stage 0 retained</strong> in <code>legacy/ts-stage0/</code> for one release cycle as the reference implementation; CI keeps building it.</li>
+      <li><strong>Open-extension fixtures green</strong> — the three "test stratum" fixtures from the Phase 3, 5, and 6 gates pass:
+        <ul>
+          <li>Registering a new IR kind <code>'TestKind'</code> round-trips through emit (Phase 3).</li>
+          <li>A test Type-Stratum adding <code>BigInt</code> type-checks an <code>@let x:BigInt := 5</code> program (Phase 5).</li>
+          <li>A test Codegen-Stratum overriding <code>'BinOp'</code> changes lowering output (Phase 6).</li>
+        </ul>
+        Together these prove that <em>none</em> of the nine StrataTypes is hard-coded into the bootstrap — the architecture is mod-ready even if only built-ins are loaded.
+      </li>
+    </ul>
+  </div>
+
+  <!-- ─────────────────────────────────────────────── -->
+  <h2>13. Open Questions</h2>
+  <ol>
+    <li><code>silicon-official.ohm</code> was Stage 0 scaffolding only — the Silicon parser is now normative. Should the <code>.ohm</code> file be deleted, kept as informal documentation, or rewritten as a reference grammar in a separate doc?</li>
+    <li>Where do compiled <code>main.wasm</code> binaries get produced — embed <code>binaryen</code> in WAT (huge), shell out to <code>wat2wasm</code> from a launcher script (current plan), or finish a pure-Silicon WAT&rarr;binary encoder post-bootstrap?</li>
+    <li>Is the WASIX dependency acceptable for end users on Windows? (Wasmer ships first-class Windows binaries — yes — but verify on CI.)</li>
+    <li>Do we ship a separate <code>sigil-debug.wasm</code> with the TS-stage0 cross-check baked in, or keep that strictly a dev-time tool?</li>
+    <li>Will Stage 1 support the full <code>--strata</code> CLI flag, or is it baked-strata-only until Stage 3?</li>
+  </ol>
+
+</div>
+</body>
+</html>

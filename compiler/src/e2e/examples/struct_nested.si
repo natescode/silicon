@@ -1,0 +1,8 @@
+@struct Point x:Int, y:Int;
+@struct Rect origin:Point, width:Int, height:Int;
+
+@fn main := {
+    @local p:Point := &Point 3, 7;
+    @local r:Rect := &Rect p, 100, 50;
+    r.width
+};

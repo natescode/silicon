@@ -1,0 +1,53 @@
+name: Acceptance gate (10c-9)
+
+# Story 10c-9 — verify the install-to-running-program flow on a clean
+# runner.  Runs automatically after a release tag is pushed, and on
+# manual dispatch.
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'sgl version to install (curl path)'
+        required: false
+        default: ''
+      method:
+        description: 'install method'
+        required: false
+        default: 'curl'
+        type: choice
+        options: [brew, curl, local-build]
+
+jobs:
+  acceptance:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+        method: [curl, brew]
+        exclude:
+          # brew install on a fresh Linux runner takes too long for a
+          # gate; brew Linux is exercised by the macOS-arm64 leg.
+          - os: ubuntu-latest
+            method: brew
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Resolve version
+        id: version
+        run: |
+          if [ "${{ github.event_name }}" = "release" ]; then
+            echo "version=${{ github.event.release.tag_name }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "version=${{ inputs.version }}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Run acceptance script
+        env:
+          ACCEPTANCE_METHOD: ${{ inputs.method || matrix.method }}
+          SGL_VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          bash scripts/acceptance.sh

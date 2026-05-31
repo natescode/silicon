@@ -1,0 +1,186 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+permissions:
+  contents: write
+
+jobs:
+  # ── Build native sgl binaries for each Tier 1 platform ──────────────────
+
+  build-linux-x64:
+    name: Build — Linux x86-64
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with: { bun-version: latest }
+      - run: bun install --frozen-lockfile
+      - name: Build sgl binary
+        run: bun build src/sigil_cli.ts --compile --outfile sgl
+      - name: Smoke test
+        run: |
+          echo '@fn main:Int := 0;' > /tmp/smoke.si
+          ./sgl check /tmp/smoke.si
+      - name: Package tarball
+        run: |
+          VERSION="${GITHUB_REF_NAME}"
+          PLATFORM="linux-x86_64"
+          DIST="sgl-${VERSION}-${PLATFORM}"
+          mkdir -p "${DIST}"
+          cp sgl "${DIST}/"
+          cp README.md LICENSE "${DIST}/" 2>/dev/null || true
+          tar czf "${DIST}.tar.gz" "${DIST}/"
+          sha256sum "${DIST}.tar.gz" > "${DIST}.tar.gz.sha256"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sgl-linux-x86_64
+          path: sgl-*.tar.gz*
+          retention-days: 1
+
+  build-linux-arm64:
+    name: Build — Linux ARM64
+    runs-on: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with: { bun-version: latest }
+      - run: bun install --frozen-lockfile
+      - name: Build sgl binary
+        run: bun build src/sigil_cli.ts --compile --outfile sgl
+      - name: Smoke test
+        run: |
+          echo '@fn main:Int := 0;' > /tmp/smoke.si
+          ./sgl check /tmp/smoke.si
+      - name: Package tarball
+        run: |
+          VERSION="${GITHUB_REF_NAME}"
+          PLATFORM="linux-aarch64"
+          DIST="sgl-${VERSION}-${PLATFORM}"
+          mkdir -p "${DIST}"
+          cp sgl "${DIST}/"
+          cp README.md LICENSE "${DIST}/" 2>/dev/null || true
+          tar czf "${DIST}.tar.gz" "${DIST}/"
+          sha256sum "${DIST}.tar.gz" > "${DIST}.tar.gz.sha256"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sgl-linux-aarch64
+          path: sgl-*.tar.gz*
+          retention-days: 1
+
+  build-macos-arm64:
+    name: Build — macOS ARM64 (Apple Silicon)
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with: { bun-version: latest }
+      - run: bun install --frozen-lockfile
+      - name: Build sgl binary
+        run: bun build src/sigil_cli.ts --compile --outfile sgl
+      - name: Smoke test
+        run: |
+          echo '@fn main:Int := 0;' > /tmp/smoke.si
+          ./sgl check /tmp/smoke.si
+      - name: Package tarball
+        run: |
+          VERSION="${GITHUB_REF_NAME}"
+          PLATFORM="macos-aarch64"
+          DIST="sgl-${VERSION}-${PLATFORM}"
+          mkdir -p "${DIST}"
+          cp sgl "${DIST}/"
+          cp README.md LICENSE "${DIST}/" 2>/dev/null || true
+          tar czf "${DIST}.tar.gz" "${DIST}/"
+          shasum -a 256 "${DIST}.tar.gz" > "${DIST}.tar.gz.sha256"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sgl-macos-aarch64
+          path: sgl-*.tar.gz*
+          retention-days: 1
+
+  build-macos-x64:
+    name: Build — macOS x86-64
+    runs-on: macos-13
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with: { bun-version: latest }
+      - run: bun install --frozen-lockfile
+      - name: Build sgl binary
+        run: bun build src/sigil_cli.ts --compile --outfile sgl
+      - name: Smoke test
+        run: |
+          echo '@fn main:Int := 0;' > /tmp/smoke.si
+          ./sgl check /tmp/smoke.si
+      - name: Package tarball
+        run: |
+          VERSION="${GITHUB_REF_NAME}"
+          PLATFORM="macos-x86_64"
+          DIST="sgl-${VERSION}-${PLATFORM}"
+          mkdir -p "${DIST}"
+          cp sgl "${DIST}/"
+          cp README.md LICENSE "${DIST}/" 2>/dev/null || true
+          tar czf "${DIST}.tar.gz" "${DIST}/"
+          shasum -a 256 "${DIST}.tar.gz" > "${DIST}.tar.gz.sha256"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sgl-macos-x86_64
+          path: sgl-*.tar.gz*
+          retention-days: 1
+
+  # ── Publish GitHub Release with all tarballs ─────────────────────────────
+
+  release:
+    name: Publish GitHub Release
+    needs: [build-linux-x64, build-linux-arm64, build-macos-arm64, build-macos-x64]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist/
+          merge-multiple: true
+
+      - name: List artifacts
+        run: ls -lh dist/
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: "Silicon ${{ github.ref_name }}"
+          body: |
+            ## Silicon ${{ github.ref_name }}
+
+            ### Installation
+
+            **curl | sh (recommended):**
+            ```sh
+            curl -fsSL https://raw.githubusercontent.com/${{ github.repository }}/main/scripts/install.sh | sh
+            ```
+
+            **Manual:** download the tarball for your platform below, extract, and place `sgl` on your PATH.
+
+            ### Tier 1 platforms
+
+            | Platform | Tarball |
+            |---|---|
+            | Linux x86-64 | `sgl-${{ github.ref_name }}-linux-x86_64.tar.gz` |
+            | Linux ARM64 | `sgl-${{ github.ref_name }}-linux-aarch64.tar.gz` |
+            | macOS ARM64 (Apple Silicon) | `sgl-${{ github.ref_name }}-macos-aarch64.tar.gz` |
+            | macOS x86-64 | `sgl-${{ github.ref_name }}-macos-x86_64.tar.gz` |
+
+            ### Checksums
+
+            SHA-256 checksums are in the corresponding `.sha256` files.
+
+            ### Changelog
+
+            See [CHANGELOG.md](https://github.com/${{ github.repository }}/blob/main/CHANGELOG.md) for details.
+          files: dist/*
+          draft: false
+          prerelease: ${{ contains(github.ref_name, '-') }}

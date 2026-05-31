@@ -1,0 +1,91 @@
+# SPDX-License-Identifier: MIT
+# Phase 9c Tier B — single-threaded reference-counting smart pointer.
+#
+# `Rc` wraps any 32-bit value (Int, Bool, String, Array, Sum-typed
+# pointers — anything whose runtime representation fits in i32) with a
+# refcount header so multiple owners can share the same allocation
+# without the "who owns this" debate.
+#
+# Layout (8 bytes, allocated via the prelude's bump allocator):
+#
+#     +-------------+-------------+
+#     | refcount:i32| value:i32   |
+#     +-------------+-------------+
+#      0             4             8
+#
+# Lifecycle:
+#
+#     &rc_new      value → Int   - allocate, refcount = 1
+#     &rc_clone    r     → Int   - bump refcount, return same pointer
+#     &rc_drop     r             - decrement refcount (no physical free;
+#                                  see "Composition with allocators")
+#     &rc_get      r     → Int   - read the boxed value (cast as needed)
+#     &rc_count    r     → Int   - inspect refcount (debugging/tests)
+#     &rc_is_unique r    → Bool  - true if refcount == 1
+#
+# `&rc_drop` decrements the count but does *not* call free — Sigil's
+# v1.0 bump allocator has no free list.  Reaching refcount 0 marks the
+# slot as logically dead but the bytes leak until the enclosing
+# allocator scope resets (an `&@with_arena` exit or a future v1.1 GC
+# pass).  This is fine in practice: Rc shines when you wrap it in an
+# arena, which gives you bulk-free at scope exit regardless of how many
+# `&rc_clone`s slipped through.
+#
+# Type-safety note for v1.0: `&rc_new` / `&rc_get` are untyped over the
+# stored payload (everything is Int at the surface).  Callers carry the
+# logical type via local annotations:
+#
+#     @local r:Int := &rc_new (&str_ptr 'hi');
+#     ;; ... pass r around ...
+#     @local s:Int := &rc_get r;  ;; cast back via str_ptr / etc.
+#
+# A parametric `@type Rc[T] := Int` distinct alias is a 1.x follow-up
+# once the typechecker's parametric type_alias surface lands.
+#
+# ── Composition showcase ──────────────────────────────────────────────
+#
+# Rc + @defer for scope-bound cleanup (LIFO drops at function exit):
+#
+#     @fn share_and_use:Int := {
+#         @local r := &rc_new 42;
+#         &@defer &rc_drop r;        ;; fires on every return path
+#         @local r2 := &rc_clone r;
+#         &@defer &rc_drop r2;
+#         (&rc_get r) + (&rc_get r2)
+#     };
+#
+# Rc + &@with_arena for bounded shared ownership:
+#
+#     &@with_arena {
+#         @local r := &rc_new (&heap_get);   ;; some heap value
+#         @local r2 := &rc_clone r;          ;; r2 outlives r in code,
+#         &use_both r, r2;                   ;;   but both live in arena
+#     };                                     ;; arena exit frees all
+#
+# Three composing strata (@defer, @with_arena, plus Rc-as-stdlib) cover
+# the lifecycle stories Rust expresses as `Rc`, `Box`, and `Drop` — without
+# the compiler having to learn any of them.
+
+@fn rc_new value:Int := {
+    @local p:Int := &alloc 8;
+    &WASM::i32_store p, 1;
+    &WASM::i32_store (p + 4), value;
+    p
+};
+
+@fn rc_clone r:Int := {
+    &WASM::i32_store r, ((&WASM::i32_load r) + 1);
+    r
+};
+
+# Decrement the refcount; the slot is logically dead at refcount 0 but
+# physical free is the enclosing allocator's job (arena exit / GC).
+@fn rc_drop r:Int := {
+    &WASM::i32_store r, ((&WASM::i32_load r) - 1)
+};
+
+@fn rc_get r:Int := &WASM::i32_load (r + 4);
+
+@fn rc_count r:Int := &WASM::i32_load r;
+
+@fn rc_is_unique r:Int := (&rc_count r) == 1;

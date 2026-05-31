@@ -1,0 +1,58 @@
+name: Bench
+
+on:
+  pull_request:
+    paths:
+      - 'src/**'
+      - 'scripts/bench.ts'
+      - 'scripts/bench-gen.ts'
+      - 'tests/bench/**'
+      - '.github/workflows/bench.yml'
+  push:
+    branches: [main]
+
+jobs:
+  baseline:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: oven-sh/setup-bun@v1
+        with:
+          bun-version: latest
+
+      - name: Install
+        run: bun install --frozen-lockfile
+
+      - name: Run bench (current branch)
+        run: |
+          bun run scripts/bench.ts --json > bench-current.json
+          cat bench-current.json
+
+      - name: Run bench (base branch)
+        if: github.event_name == 'pull_request'
+        run: |
+          # Stash current results.
+          mv bench-current.json /tmp/bench-current.json
+          git checkout ${{ github.event.pull_request.base.sha }} -- src scripts tests/bench
+          bun run scripts/bench.ts --json > bench-base.json || true
+          mv /tmp/bench-current.json bench-current.json
+          git checkout ${{ github.sha }} -- src scripts tests/bench
+
+      - name: Compare
+        if: github.event_name == 'pull_request'
+        run: |
+          if [ ! -s bench-base.json ]; then
+            echo "No baseline to compare against — first run on this branch."
+            exit 0
+          fi
+          bun run scripts/bench-compare.ts bench-base.json bench-current.json
+
+      - name: Upload bench results
+        uses: actions/upload-artifact@v4
+        with:
+          name: bench-results
+          path: bench-current.json
+          retention-days: 30

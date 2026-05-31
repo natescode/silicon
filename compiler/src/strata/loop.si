@@ -1,0 +1,19 @@
+# SPDX-License-Identifier: MIT
+# D-D-9: @loop migrated to the new @stratum form.
+# The handler allocates a fresh loop id, pushes it on the stack so nested
+# @break/@continue resolve to this loop, then lowers cond + body and
+# emits IRLoop.  Pop after body lowering so siblings see the right stack.
+@stratum Loop := {
+    &Compiler::register::expression_keyword '@loop';
+    &Compiler::on::lower '@loop', Loop_lower;
+};
+@fn Loop_lower node:Int := {
+    @local condN:Int := &compiler::compiler_arg node, 0;
+    @local bodyN:Int := &compiler::compiler_arg node, 1;
+    @local id:Int    := &compiler::compiler_ctx_nextLoopId;
+    &compiler::compiler_ctx_loopStack_push id;
+    @local cond:Int  := &compiler::compiler_lowerExpr condN;
+    @local body:Int  := &compiler::compiler_lowerExpr bodyN;
+    &compiler::compiler_ctx_loopStack_pop;
+    &compiler::ir_makeLoop id, cond, body
+};

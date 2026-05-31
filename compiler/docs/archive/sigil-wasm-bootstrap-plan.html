@@ -1,0 +1,570 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>sigil.wasm — Path to a 100% Bootstrapped Silicon Compiler</title>
+  <style>
+    :root {
+      --bg: #0f1117;
+      --surface: #1a1d27;
+      --surface2: #222535;
+      --border: #2e3248;
+      --accent: #6c8ef7;
+      --accent2: #b06cf7;
+      --accent3: #3ecf8e;
+      --accent4: #f7a06c;
+      --accent5: #f76c6c;
+      --accent6: #f7e36c;
+      --text: #dde1f0;
+      --muted: #7b82a8;
+      --code-bg: #13151f;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+      padding: 40px 24px;
+    }
+    .page { max-width: 1150px; margin: 0 auto; }
+    h1 { font-size: 2rem; color: var(--accent); margin-bottom: 8px; }
+    h2 { font-size: 1.4rem; color: var(--accent2); margin: 40px 0 16px; border-bottom: 1px solid var(--border); padding-bottom: 8px; }
+    h3 { font-size: 1.1rem; color: var(--accent3); margin: 24px 0 10px; }
+    h4 { font-size: 0.95rem; color: var(--accent4); margin: 16px 0 8px; }
+    p  { margin-bottom: 12px; color: var(--text); }
+    .subtitle { color: var(--muted); font-size: 1rem; margin-bottom: 32px; }
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 20px 24px;
+      margin-bottom: 20px;
+    }
+    .card.warn { border-color: var(--accent5); }
+    .card.ok   { border-color: var(--accent3); }
+    .card.info { border-color: var(--accent);  }
+    .card.note { border-color: var(--accent4); }
+    .card.idea { border-color: var(--accent2); }
+    pre {
+      background: var(--code-bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 16px;
+      overflow-x: auto;
+      font-family: 'Cascadia Code', 'Fira Code', 'Consolas', monospace;
+      font-size: 0.82rem;
+      line-height: 1.55;
+      margin: 12px 0;
+    }
+    code { font-family: 'Cascadia Code', 'Fira Code', 'Consolas', monospace; font-size: 0.85em; background: var(--code-bg); padding: 1px 5px; border-radius: 4px; }
+    .kw  { color: #c792ea; }
+    .fn  { color: #82aaff; }
+    .str { color: #c3e88d; }
+    .cm  { color: #546e7a; }
+    .ty  { color: #ffcb6b; }
+    .op  { color: #89ddff; }
+    .si  { color: var(--accent3); }
+    .ir  { color: var(--accent4); }
+    .api { color: var(--accent2); }
+    table { width: 100%; border-collapse: collapse; margin: 12px 0; font-size: 0.85rem; }
+    th { background: var(--surface2); color: var(--accent); padding: 8px 12px; text-align: left; border: 1px solid var(--border); }
+    td { padding: 8px 12px; border: 1px solid var(--border); vertical-align: top; }
+    tr:nth-child(even) td { background: #141620; }
+    ul, ol { padding-left: 24px; margin: 8px 0 16px; }
+    li { margin-bottom: 4px; }
+    .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin: 16px 0; }
+    @media (max-width: 700px) { .two-col { grid-template-columns: 1fr; } }
+    .tag {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 12px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      margin-right: 4px;
+    }
+    .tag.red    { background: #3a1515; color: var(--accent5); border: 1px solid #5a2020; }
+    .tag.green  { background: #0f2d1f; color: var(--accent3); border: 1px solid #1a4a30; }
+    .tag.blue   { background: #0f1a3a; color: var(--accent);  border: 1px solid #1a2e5a; }
+    .tag.purple { background: #1e1030; color: var(--accent2); border: 1px solid #3a1a50; }
+    .tag.orange { background: #2d1a0f; color: var(--accent4); border: 1px solid #5a3010; }
+    .tag.yellow { background: #2d2a0f; color: var(--accent6); border: 1px solid #5a5510; }
+    .phase-head {
+      display: flex;
+      align-items: baseline;
+      gap: 14px;
+      margin: 36px 0 6px;
+      padding-bottom: 8px;
+      border-bottom: 1px solid var(--border);
+    }
+    .phase-num {
+      font-size: 0.75rem;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--muted);
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 2px 10px;
+    }
+    .phase-name { color: var(--accent3); font-size: 1.25rem; font-weight: 600; }
+    .meta-row { display: grid; grid-template-columns: 110px 1fr; gap: 8px 18px; margin: 12px 0 18px; font-size: 0.88rem; }
+    .meta-row .k { color: var(--muted); }
+    .meta-row .v { color: var(--text); }
+    .gate {
+      background: #131e1a;
+      border: 1px solid var(--accent3);
+      border-radius: 6px;
+      padding: 8px 14px;
+      margin: 12px 0;
+      font-size: 0.86rem;
+    }
+    .nope {
+      background: #1e1313;
+      border: 1px solid var(--accent5);
+      border-radius: 6px;
+      padding: 8px 14px;
+      margin: 12px 0;
+      font-size: 0.86rem;
+    }
+    .mono { font-family: 'Cascadia Code', 'Fira Code', 'Consolas', monospace; font-size: 0.85rem; }
+  </style>
+</head>
+<body>
+<div class="page">
+
+<h1>sigil.wasm</h1>
+<p class="subtitle">
+  The path from today's <code>stage1.wasm</code> &mdash; a self-host test artifact that
+  can compile its own source byte-equal &mdash; to <strong><code>sigil.wasm</code></strong>:
+  a single standalone compiler binary that runs under any WASI host and compiles arbitrary
+  Silicon programs end-to-end, with no Bun, Node, or wat2wasm in the loop.
+</p>
+
+<div class="card info">
+  <p style="margin: 0;">
+    <span class="tag blue">end state</span>
+    <span class="tag green">one binary, one host, zero bun</span>
+    <span class="tag purple">six phases</span>
+    <span class="tag orange">gates the byte-equal self-host on every step</span>
+  </p>
+</div>
+
+<h2>1. The Goal</h2>
+
+<p>
+  A single <code>sigil.wasm</code> file. You install <code>wasmer</code>
+  (or <code>wasmtime</code>, or any WASI Preview 1 host), drop in
+  <code>sigil.wasm</code>, and:
+</p>
+
+<pre>$ wasmer run sigil.wasm <span class="op">--</span> delfina.si <span class="op">--</span>target<span class="op">=</span>wasix <span class="op">--</span>out<span class="op">=</span>delfina.wat
+  <span class="cm"># reads delfina.si from disk via WASI path_open</span>
+  <span class="cm"># resolves @use chain via the same WASI surface</span>
+  <span class="cm"># parses, elaborates, typechecks, lowers, emits</span>
+  <span class="cm"># writes delfina.wat to disk via path_open + fd_write</span>
+
+$ wasmer run delfina.wat
+Delfina</pre>
+
+<p>
+  No <code>bun</code>, no <code>node</code>, no <code>wat2wasm</code>, no <code>npm install</code>.
+  One compiler binary, one runtime host, one source file in, one WAT file out.
+  The same artifact also self-compiles &mdash; running <code>sigil.wasm</code> on
+  the Silicon source of <code>sigil.wasm</code> itself produces byte-equal output.
+</p>
+
+<h2>2. Where We Are Today</h2>
+
+<div class="card ok">
+  <h4 style="margin-top: 0;">Working</h4>
+  <ul style="margin-bottom: 0;">
+    <li><code>stage1.wasm</code> (38,262 bytes) exists and runs under wasmer.</li>
+    <li>Self-host fixed point: Stage 1 == Stage 2 byte-equal on its own source.</li>
+    <li>Reads source from stdin, writes WAT to stdout.</li>
+    <li>Compiles the bootstrap test corpus (<code>boot/tests/*.si</code>).</li>
+    <li>The TS Stage 0 compiler (<code>bun run sgl</code> / <code>scripts/build-boot.ts</code>) produces correct output for arbitrary user programs.</li>
+  </ul>
+</div>
+
+<div class="card warn">
+  <h4 style="margin-top: 0;">Not yet working &mdash; what blocks <code>delfina.si</code>-class user programs</h4>
+  <p>
+    Observed by attempting <code>cat strata/*.si modules/wasi_snapshot_preview1.si boot/std/io.si delfina.si | wasmer run stage1.wasm &gt; delfina.wat &amp;&amp; wasmer run delfina.wat</code>:
+  </p>
+  <ol style="margin-bottom: 0;">
+    <li>
+      <strong>Namespaced extern imports get flattened.</strong> Stage1 emits
+      <code>(import "env" "fd_write" ...)</code> for every <code>@extern</code> regardless of
+      whether it lives in <code>src/strata/modules/wasi_snapshot_preview1.si</code> or elsewhere.
+      But call sites still mangle to <code>$wasi_snapshot_preview1_fd_write</code>, producing
+      an unresolvable reference at link time.
+    </li>
+    <li>
+      <strong>No <code>_start</code> synthesis.</strong> Top-level expressions don't get
+      wrapped in a WASI entry-point function. Even if the imports were correct, wasmer would
+      have no <code>_start</code> to call.
+    </li>
+    <li>
+      <strong>No CLI surface.</strong> Stage1 reads stdin and writes stdout &mdash; there is
+      no argv parsing, no file open, no <code>--out=</code> handling, no <code>@use</code>
+      resolution. The host (currently <code>scripts/run-silicon.ts</code> in Bun) does that work.
+    </li>
+    <li>
+      <strong>Strata bundle is supplied externally.</strong> Stage1's behaviour depends on the
+      caller concatenating <code>src/strata/*.si</code> in front of the user source. The
+      bootstrap doesn't know its own strata; they're injected at runtime by the host.
+    </li>
+  </ol>
+</div>
+
+<p>
+  Each of these is small in isolation. Together they're the difference between
+  "a self-host test that round-trips" and "a compiler you can use".
+</p>
+
+<h2>3. What Stands Between Today and the Goal</h2>
+
+<table>
+<tr><th>Gap</th><th>What's needed</th><th>Phase</th></tr>
+<tr><td>Namespaced extern imports</td><td>Bootstrap emitter tracks the module per <code>@extern</code> and emits <code>(import "&lt;mod&gt;" "&lt;name&gt;" ...)</code> instead of always <code>"env"</code>.</td><td>1</td></tr>
+<tr><td><code>_start</code> synthesis for <code>--target=wasix</code></td><td>Bootstrap wraps top-level non-definition statements into a <code>(func $_start (export "_start") ...)</code>.</td><td>1</td></tr>
+<tr><td><code>@export</code> works</td><td>Bootstrap's emitter honours <code>@export</code> metadata on functions/globals.</td><td>1</td></tr>
+<tr><td>Embedded strata bundle</td><td>Strata source is baked into <code>sigil.wasm</code> at build time so the compiler is self-contained.</td><td>2</td></tr>
+<tr><td>Platform-module surface</td><td><code>wasi_snapshot_preview1.si</code> and friends are embedded too, with module-name preserved.</td><td>2</td></tr>
+<tr><td><code>@use</code> handled by the bootstrap</td><td>Either a bootstrap-side preprocessor pass <em>or</em> the stratum-based design from <code>use-as-stratum-plan.html</code> &mdash; ideally the latter.</td><td>3</td></tr>
+<tr><td>Argv + file I/O CLI</td><td>Bootstrap reads <code>args_get</code>, opens input via <code>path_open</code> + <code>fd_read</code>, writes output via <code>path_open</code> + <code>fd_write</code>.</td><td>4</td></tr>
+<tr><td>Diagnostic rendering</td><td>Structured errors emitted to stderr with file/line/col, matching <code>src/errors/diagnostic.ts</code>'s renderJson / renderPretty shapes.</td><td>4</td></tr>
+<tr><td>Bootstrap typechecker</td><td>The current stage1 is a pure lowering pipeline &mdash; no typecheck pass. Adding one is its own slice; deferred until everything else lands so the byte-equal gate isn't doubly load-bearing.</td><td>5</td></tr>
+<tr><td>End-to-end fixed point</td><td><code>sigil.wasm</code> compiles its own source, and the result byte-equals the previous <code>sigil.wasm</code>.</td><td>6</td></tr>
+</table>
+
+<h2>4. Architecture &mdash; What <code>sigil.wasm</code> Looks Like Inside</h2>
+
+<p>
+  The same compiler pipeline you already have, with the host-side responsibilities folded into the wasm:
+</p>
+
+<pre>┌────────────────────────────────────────────────────────────────────────┐
+│  sigil.wasm  (single artifact, ~80&ndash;120 KB target)                    │
+│                                                                        │
+│  ┌─────────────────────────┐                                           │
+│  │  Embedded source bundle │  &lt;-- baked in at sigil.wasm build time    │
+│  │  - all strata/*.si      │      via a build script (see &sect;6); the     │
+│  │  - all modules/*.si     │      bundle lives as a memory-resident    │
+│  │  - boot/std/*.si        │      length-prefixed UTF-8 blob.          │
+│  └─────────────────────────┘                                           │
+│                ▼                                                       │
+│  ┌────────────┴────────────────────────────────────────────────────┐   │
+│  │  CLI &amp; I/O layer (Silicon source)                               │   │
+│  │  - args_get + args_sizes_get  ──▶  parse flags / paths          │   │
+│  │  - path_open + fd_read         ──▶  read user source            │   │
+│  │  - @use resolver (in Silicon)  ──▶  recurse on imports          │   │
+│  └────────────────┬────────────────────────────────────────────────┘   │
+│                   ▼                                                    │
+│  ┌────────────────┴────────────────────────────────────────────────┐   │
+│  │  Compiler pipeline (existing boot/* &mdash; same code that self-hosts) │   │
+│  │  lex ──▶ parse ──▶ load_strata ──▶ elaborate ──▶ lower ──▶ emit │   │
+│  └────────────────┬────────────────────────────────────────────────┘   │
+│                   ▼                                                    │
+│  ┌────────────────┴────────────────────────────────────────────────┐   │
+│  │  Output                                                         │   │
+│  │  - WAT text written to --out= path via path_open + fd_write     │   │
+│  │  - diagnostics to fd 2 (stderr)                                 │   │
+│  │  - exit code via proc_exit                                      │   │
+│  └─────────────────────────────────────────────────────────────────┘   │
+└────────────────────────────────────────────────────────────────────────┘</pre>
+
+<p>
+  The two genuinely new pieces are the <strong>embedded source bundle</strong> (which makes
+  the binary self-contained) and the <strong>CLI &amp; I/O layer</strong> (which replaces
+  the Bun-side host script).  Everything else is code that already exists in <code>boot/</code>
+  and is exercised by today's self-host.
+</p>
+
+<h2>5. Phased Rollout</h2>
+
+<p>
+  Six phases. Each is independently shippable &mdash; if any phase lands and the next is
+  delayed, the project is in a better, not worse, state.
+</p>
+
+<div class="phase-head">
+  <span class="phase-num">Phase 1</span>
+  <span class="phase-name">Close the WAT-correctness gaps &mdash; <code>stage1</code> can compile WASI user programs</span>
+</div>
+
+<div class="meta-row">
+  <div class="k">Effort</div><div class="v">~3&ndash;5 days</div>
+  <div class="k">Risk</div><div class="v">Medium &mdash; touches the emitter, which is the byte-equal-critical path.</div>
+  <div class="k">Gate</div><div class="v">All existing self-host tests still byte-equal. <code>cat &lt;strata&gt; &lt;modules&gt; boot/std/io.si delfina.si | wasmer run stage1.wasm | wasmer run -</code> prints "Delfina".</div>
+</div>
+
+<ol>
+  <li>Teach <code>boot/elab/elaborator.si</code> to record the module string for each
+    <code>@extern</code> declaration &mdash; today everything inherits the default
+    <code>"env"</code>. Use the namespace prefix in <code>module::name</code> calls
+    to drive the lookup.</li>
+  <li>Update <code>boot/emit/wat.si</code> to emit <code>(import "&lt;module&gt;" "&lt;name&gt;" ...)</code>
+    using the recorded module and to keep the mangled <code>$&lt;module&gt;_&lt;name&gt;</code>
+    in sync between import and call site.</li>
+  <li>Add a <code>--target=wasix</code> flag awareness to <code>boot/ir/lower.si</code> (read
+    from a global until argv lands in phase 4). When set, wrap top-level non-definition
+    statements into a synthesised <code>_start</code> function exported as <code>"_start"</code>.</li>
+  <li>Audit <code>@export</code> handling in <code>boot/emit/wat.si</code>; ensure exported
+    functions and globals reach the WAT export list.</li>
+  <li>Add a fixture: <code>boot/tests/delfina_smoke.si</code> &mdash; the minimal "print a
+    string" program. Compiled by stage1, then run by wasmer, must print the expected line.</li>
+</ol>
+
+<div class="phase-head">
+  <span class="phase-num">Phase 2</span>
+  <span class="phase-name">Embedded source bundle &mdash; strata + modules baked in</span>
+</div>
+
+<div class="meta-row">
+  <div class="k">Effort</div><div class="v">~2&ndash;3 days</div>
+  <div class="k">Risk</div><div class="v">Low &mdash; new code, doesn't touch the emitter.</div>
+  <div class="k">Gate</div><div class="v">No host-side strata concatenation needed. <code>wasmer run sigil.wasm &lt; delfina.si</code> works without prepending strata files.</div>
+</div>
+
+<ol>
+  <li>New build script (one of: <code>scripts/build-sigil.ts</code> for Stage 0 bootstrap;
+    later replaced by a Silicon-side equivalent): reads every <code>src/strata/*.si</code>
+    and <code>src/strata/modules/*.si</code>, concatenates with file headers, emits a
+    length-prefixed UTF-8 blob as a Silicon <code>@let bundle :String := '...'</code>
+    in a generated <code>boot/embedded_bundle.si</code>.</li>
+  <li>Adjust <code>boot/stage1.si</code> (renamed <code>boot/sigil.si</code> at this point)
+    to consume the embedded bundle <em>before</em> reading user source from stdin: parse +
+    register strata from the bundle, then proceed to user input.</li>
+  <li>The bundle is purely additive &mdash; if the user wants to override / extend strata,
+    they can still concatenate their own in front. But for typical use, nothing extra is required.</li>
+  <li>Rename the build artifact: <code>stage1.wasm</code> &rarr; <code>sigil.wasm</code>.
+    Keep <code>stage1.wasm</code> as a build-product alias during migration.</li>
+</ol>
+
+<div class="phase-head">
+  <span class="phase-num">Phase 3</span>
+  <span class="phase-name">Bootstrap-side <code>@use</code> &mdash; via the stratum machine</span>
+</div>
+
+<div class="meta-row">
+  <div class="k">Effort</div><div class="v">~3&ndash;5 days &mdash; companion to <code>use-as-stratum-plan.html</code> Phase B</div>
+  <div class="k">Risk</div><div class="v">Medium &mdash; touches the parser-side AST + a new resolver pass.</div>
+  <div class="k">Gate</div><div class="v">User programs with <code>@use 'path.si';</code> compile without manual concatenation. Cycle + missing-file errors raised with source locations.</div>
+</div>
+
+<ol>
+  <li>Implement the <code>@stratum_keyword Use</code> stratum on the Stage 0 side first
+    (per <code>use-as-stratum-plan.html</code>) so the design is proven.</li>
+  <li>Port the same logic into <code>boot/elab/use.si</code>: the bootstrap-side stratum
+    body uses <code>&amp;Compiler::import</code>, which the bootstrap implements in
+    Silicon (~30 LOC) using <code>path_open</code> + <code>fd_read</code> to load the
+    referenced file, then recurses into the parse / register loop.</li>
+  <li>Cycle detection: a <code>Map&lt;String, Bool&gt;</code> on the resolution stack &mdash;
+    same shape as the Stage 0 resolver, expressed in <code>boot/std/map.si</code>.</li>
+  <li>Error mapping: when an import fails, raise the diagnostic against the
+    <code>@use</code> directive's source location, not the failed file.</li>
+</ol>
+
+<div class="phase-head">
+  <span class="phase-num">Phase 4</span>
+  <span class="phase-name">CLI &amp; file I/O &mdash; <code>sigil.wasm</code> takes argv</span>
+</div>
+
+<div class="meta-row">
+  <div class="k">Effort</div><div class="v">~2&ndash;3 days</div>
+  <div class="k">Risk</div><div class="v">Low &mdash; new layer on top of working compiler.</div>
+  <div class="k">Gate</div><div class="v"><code>wasmer run sigil.wasm -- delfina.si --target=wasix --out=delfina.wat</code> works end-to-end without stdin/stdout indirection.</div>
+</div>
+
+<ol>
+  <li>Wire <code>args_sizes_get</code> + <code>args_get</code> in <code>boot/std/argv.si</code>
+    (new). Return a vec of argument strings.</li>
+  <li>Implement <code>path_open</code> + <code>fd_read</code> based file reads in
+    <code>boot/std/io.si</code> &mdash; today <code>io.si</code> only knows about stdin/stdout.
+    The <code>u64</code> rights-flags issue from the bootstrap plan (Phase 0 note in
+    <code>boot/main.si</code>) needs the i64 surface from <code>docs/bootstrap-plan.html</code>
+    or a workaround using two i32s if it isn't ready.</li>
+  <li>Implement <code>path_open</code> + <code>fd_write</code> based file writes; the
+    output path comes from <code>--out=</code>.</li>
+  <li>Add a tiny CLI dispatcher (Silicon source): parses <code>--target=&lt;t&gt;</code>,
+    <code>--out=&lt;path&gt;</code>, <code>--help</code>, positional source path.
+    Mirrors <code>src/sigil_cli.ts</code>'s surface, minus the flags that only make sense
+    for the TS host.</li>
+  <li>Diagnostic output to <code>fd 2</code> with file/line/col, matching the
+    <code>renderPretty</code> shape from <code>src/errors/diagnostic.ts</code>.
+    Structured JSON (<code>--diagnostics=json</code>) can come later.</li>
+</ol>
+
+<div class="phase-head">
+  <span class="phase-num">Phase 5</span>
+  <span class="phase-name">Typechecker in the bootstrap</span>
+</div>
+
+<div class="meta-row">
+  <div class="k">Effort</div><div class="v">~1&ndash;2 weeks &mdash; the biggest single phase</div>
+  <div class="k">Risk</div><div class="v">High &mdash; type semantics are the most subtle part of the compiler. The byte-equal gate gets stricter, not looser, because typecheck failures change the lowered output.</div>
+  <div class="k">Gate</div><div class="v">Compile-time error parity with Stage 0 on the existing test corpus. Adding a type error to any <code>boot/tests/*.si</code> file is caught by <code>sigil.wasm</code> with the same diagnostic Stage 0 raised.</div>
+</div>
+
+<ol>
+  <li>Today's bootstrap is a pure lowering pipeline &mdash; it trusts that the input
+    typechecks. That's fine for self-host (the bootstrap source is known-good) but means
+    sigil.wasm doesn't catch user type errors. Phase 5 ports
+    <code>src/types/typechecker.ts</code> to Silicon: AST walk, symbol table,
+    <code>SiliconType</code> representation, the diagnostic factories from
+    <code>src/types/errors.ts</code>.</li>
+  <li>Reuse the same error codes (<code>E0001</code>&hellip;<code>E0007</code>) so tooling
+    around diagnostics (LSP, tests) doesn't have to fork.</li>
+  <li>This phase can land <em>after</em> phases 1&ndash;4: the resulting compiler will
+    compile correct programs identically and trap on malformed ones via runtime traps
+    rather than typecheck errors. Phase 5 upgrades that to clean compile-time diagnostics.</li>
+  <li>The lift here is roughly the size of all of phases 1&ndash;4 combined; it deserves
+    its own design pre-read.</li>
+</ol>
+
+<div class="phase-head">
+  <span class="phase-num">Phase 6</span>
+  <span class="phase-name">End-to-end fixed point + Wasmer-registry publish</span>
+</div>
+
+<div class="meta-row">
+  <div class="k">Effort</div><div class="v">~2&ndash;3 days</div>
+  <div class="k">Risk</div><div class="v">Low &mdash; integration / packaging.</div>
+  <div class="k">Gate</div><div class="v"><code>sigil.wasm</code> compiles its own source, output byte-equals the previous <code>sigil.wasm</code>, and a third-party user who installs <code>natescode/sigil</code> from the Wasmer registry can compile <code>delfina.si</code> with zero source-code dependency on this repo.</div>
+</div>
+
+<ol>
+  <li>End-to-end self-host: <code>wasmer run sigil.wasm -- boot/sigil.si --target=wasix --out=sigil.wat</code>
+    &rarr; the <code>sigil.wat</code> assembles to a <code>sigil.wasm</code> that is byte-equal
+    to the input artifact. This is the new "Stage 1 == Stage 2" gate but at the full
+    user-program-compiling level, not just the self-compile level.</li>
+  <li>CI: add a gate that runs the round-trip on every commit. Any drift in the emitter
+    shows up immediately as a non-zero diff of the two <code>sigil.wasm</code>s.</li>
+  <li>Publish to the Wasmer registry as <code>natescode/sigil</code> &mdash; one
+    <code>wasmer install natescode/sigil</code> then <code>wasmer run natescode/sigil delfina.si</code>.
+    This is the externally-visible deliverable that says "100% bootstrapped".</li>
+  <li>Retire the TS Stage 0 compiler as <strong>production path</strong>. Keep it for
+    development tooling (LSP, fast iteration during compiler-internal changes), but the
+    canonical compiler users invoke is <code>sigil.wasm</code>.</li>
+</ol>
+
+<h2>6. The Embedded-Strata Question &mdash; Build-Time vs. Runtime</h2>
+
+<p>
+  Two viable shapes for how built-in strata reach the compiler. The plan above assumes
+  embedded, but the alternative deserves a quick mention because it changes the
+  install story.
+</p>
+
+<div class="two-col">
+  <div class="card ok">
+    <h4 style="margin-top: 0;">Embedded (recommended)</h4>
+    <p>
+      Strata source baked into <code>sigil.wasm</code> at build time as a length-prefixed
+      blob in the data section. Loaded into memory at <code>_start</code>, parsed, registered.
+    </p>
+    <p style="margin-bottom: 0;">
+      <strong>Pros:</strong> Single-file install. Reproducible &mdash; sigil.wasm has its
+      own strata, no version drift. No "where do I put the strata folder?" question.<br>
+      <strong>Cons:</strong> Slightly larger binary (~10&ndash;20 KB of compressed source).
+      Updating strata means rebuilding sigil.wasm.
+    </p>
+  </div>
+  <div class="card note">
+    <h4 style="margin-top: 0;">Disk-loaded</h4>
+    <p>
+      <code>sigil.wasm</code> reads <code>strata/</code> from a directory at runtime
+      (<code>$SIGIL_STRATA</code> env var, or convention path like
+      <code>./strata/</code>).
+    </p>
+    <p style="margin-bottom: 0;">
+      <strong>Pros:</strong> Hack on strata without rebuilding the compiler. Smaller
+      binary. Matches the Stage 0 dev loop.<br>
+      <strong>Cons:</strong> Two-piece install. Implicit dependency on filesystem layout.
+      Failure modes if the strata path is wrong or partial.
+    </p>
+  </div>
+</div>
+
+<p>
+  <strong>Recommendation:</strong> embed by default; expose a
+  <code>--strata-dir=&lt;path&gt;</code> flag that overrides the embedded bundle when
+  developers need to iterate on strata without rebuilding. Best of both.
+</p>
+
+<h2>7. The Load-Bearing Invariant &mdash; Self-Host Byte-Equality</h2>
+
+<div class="card warn">
+  <p style="margin-bottom: 8px;">
+    Today's <code>stage1.wasm</code> &rarr; <code>stage1.wat</code> &rarr;
+    <code>stage1.wasm</code> round-trip produces byte-equal output (38,262 bytes).
+    That invariant is <em>the</em> sign that the compiler is faithfully implementing
+    its own semantics. Every phase above must preserve it.
+  </p>
+  <p style="margin-bottom: 0;">
+    Phases 1, 3, and 5 touch code that affects emitted WAT. Each needs a CI step that
+    rebuilds <code>sigil.wasm</code> twice and diffs the bytes. A non-zero diff fails
+    the phase. Phase 6 extends this invariant to the user-program compile path:
+    <code>sigil.wasm</code> compiling its <em>own</em> source must produce byte-equal
+    output, not just on the self-host but on a separate round-trip after every change.
+  </p>
+</div>
+
+<h2>8. What This Plan Does Not Cover</h2>
+
+<ul>
+  <li><strong>Performance.</strong> The bootstrap is presumed "fast enough" today (the
+    self-host compiles in well under a second). Optimisation can come post-Phase-6.</li>
+  <li><strong>i64 / u64 support.</strong> The WASI <code>path_open</code> rights-flags are
+    u64; today's Silicon i32-only world side-steps them. The bootstrap plan
+    (<code>docs/bootstrap-plan.html</code>) has the i64 work as a separate Phase. Phase 4
+    here may need to gate on it &mdash; or apply the documented workaround
+    (extern signature using two i32 halves).</li>
+  <li><strong>Module system semantics beyond <code>@use</code>.</strong> Selective imports,
+    namespacing, package-manager indirection &mdash; tracked in
+    <code>use-as-stratum-plan.html</code> non-goals, intentionally deferred.</li>
+  <li><strong>Dynamic imports / loading at runtime.</strong> Separate design slice; the
+    static module signatures built here become the type of dynamic handles later.</li>
+  <li><strong>Multiple target backends.</strong> Today's emitter is WAT-only. A second
+    backend (binaryen-style binary, JS, native) is post-bootstrap.</li>
+  <li><strong>Standard library beyond <code>boot/std/*.si</code>.</strong> What lives in the
+    stdlib is its own design conversation &mdash; this plan only commits to the surface
+    needed for the compiler itself plus the I/O primitives the CLI uses.</li>
+</ul>
+
+<h2>9. What Lands First</h2>
+
+<p>
+  <strong>Phase 1.</strong> It is the smallest slice that meaningfully changes what
+  <code>stage1.wasm</code> can do &mdash; from "compiles its own source" to "compiles any
+  WASI user program". Three concrete code changes (extern module tracking, <code>_start</code>
+  synthesis, <code>@export</code> wiring) plus one fixture file
+  (<code>delfina_smoke.si</code>). The byte-equal gate stays at today's 38,262 bytes for
+  the self-host round-trip; the new fixture proves the new behaviour.
+</p>
+
+<p>
+  Phase 1 is a satisfying milestone on its own: the moment it lands, the answer to
+  "can I use the bootstrap to compile <code>delfina.si</code>?" changes from
+  "not quite" to "yes &mdash; <code>cat strata/*.si modules/*.si boot/std/io.si delfina.si | wasmer run stage1.wasm | wasmer run -</code>".
+  Phase 2 then makes that one-liner shorter; Phase 4 makes it a real CLI invocation.
+</p>
+
+<h2>10. Related Docs</h2>
+
+<ul>
+  <li><code>docs/bootstrap-plan.html</code> &mdash; the full multi-stage plan this plan sits inside.</li>
+  <li><code>docs/bootstrap-status.md</code> &mdash; current self-host status; this plan's Phase 6 updates the "Stage N" entries.</li>
+  <li><code>docs/use-as-stratum-plan.html</code> &mdash; Phase 3 here directly depends on the Stage 0 work landing first.</li>
+  <li><code>docs/strata.md</code> &mdash; the stratum surface the embedded bundle (Phase 2) and <code>@use</code> stratum (Phase 3) use.</li>
+  <li><code>docs/compiler-api.md</code> &mdash; the <code>&amp;Compiler::*</code> surface the bootstrap implements in Silicon.</li>
+  <li><code>boot/README.md</code> &mdash; current bootstrap directory layout.</li>
+  <li><code>boot/stage1.si</code> &mdash; the file that becomes <code>boot/sigil.si</code> in Phase 2.</li>
+</ul>
+
+</div>
+</body>
+</html>

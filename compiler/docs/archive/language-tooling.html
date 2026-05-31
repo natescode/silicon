@@ -1,0 +1,640 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Silicon — External Tooling Adoption</title>
+  <style>
+    :root {
+      --bg: #0f1117;
+      --surface: #1a1d27;
+      --surface2: #222535;
+      --border: #2e3248;
+      --accent: #6c8ef7;
+      --accent2: #b06cf7;
+      --accent3: #3ecf8e;
+      --accent4: #f7a06c;
+      --accent5: #f76c6c;
+      --accent6: #f7e36c;
+      --text: #dde1f0;
+      --muted: #7b82a8;
+      --code-bg: #13151f;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.55;
+      padding: 32px 24px;
+    }
+    .page { max-width: 1100px; margin: 0 auto; }
+    h1 { font-size: 1.9rem; color: var(--accent); margin-bottom: 6px; }
+    h2 { font-size: 1.35rem; color: var(--accent2); margin: 40px 0 12px; border-bottom: 1px solid var(--border); padding-bottom: 6px; }
+    h3 { font-size: 1.05rem; color: var(--accent3); margin: 22px 0 8px; }
+    p  { margin-bottom: 10px; color: var(--text); font-size: 0.93rem; }
+    .subtitle { color: var(--muted); font-size: 0.95rem; margin-bottom: 24px; }
+    .legend { background: var(--surface2); border: 1px solid var(--border); border-radius: 8px; padding: 12px 18px; margin: 14px 0 24px; font-size: 0.85rem; }
+    .legend code { background: var(--code-bg); padding: 1px 6px; border-radius: 4px; }
+    pre {
+      background: var(--code-bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 10px 12px;
+      overflow-x: auto;
+      font-family: 'Cascadia Code', 'Fira Code', 'Consolas', monospace;
+      font-size: 0.78rem;
+      line-height: 1.5;
+      margin: 6px 0;
+    }
+    code { font-family: 'Cascadia Code', 'Fira Code', 'Consolas', monospace; font-size: 0.85em; background: var(--code-bg); padding: 1px 5px; border-radius: 4px; }
+    details {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-left: 3px solid var(--accent);
+      border-radius: 6px;
+      padding: 10px 14px;
+      margin: 8px 0;
+    }
+    details[open] { padding-bottom: 14px; }
+    summary {
+      cursor: pointer;
+      font-weight: 600;
+      color: var(--text);
+      font-size: 0.94rem;
+      display: list-item;
+      padding: 2px 0;
+    }
+    summary:hover { color: var(--accent); }
+    summary .id { color: var(--muted); font-family: monospace; font-size: 0.85em; margin-right: 10px; }
+    summary .est { float: right; color: var(--muted); font-size: 0.8em; background: var(--surface2); padding: 1px 8px; border-radius: 10px; }
+    summary .done { color: var(--accent3); font-weight: 700; margin-left: 8px; }
+    summary .partial { color: var(--accent4); font-weight: 700; margin-left: 8px; }
+    summary .blocked { color: var(--accent5); font-weight: 700; margin-left: 8px; }
+    details.complete > summary { color: var(--accent3); }
+    details.complete { border-left-color: var(--accent3) !important; opacity: 0.92; }
+    details.partial > summary { color: var(--accent4); }
+    details.partial { border-left-color: var(--accent4) !important; }
+    details.blocked > summary { color: var(--accent5); }
+    details.blocked { border-left-color: var(--accent5) !important; }
+    .goal { font-size: 0.88rem; color: var(--muted); margin: 8px 0 10px; padding-left: 12px; border-left: 2px solid var(--border); }
+    .accept { margin: 8px 0; font-size: 0.88rem; }
+    .accept strong { color: var(--accent3); }
+    .accept ul { padding-left: 22px; margin: 4px 0; }
+    .accept li { margin-bottom: 2px; }
+    .subtasks { margin: 10px 0 4px; font-size: 0.86rem; }
+    .subtasks strong { color: var(--accent4); }
+    .subtasks ol { padding-left: 22px; margin: 4px 0; }
+    .subtasks li { margin-bottom: 2px; }
+    .deps { font-size: 0.82rem; color: var(--muted); margin-top: 8px; }
+    .deps strong { color: var(--accent5); }
+    .phase-intro { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 12px 18px; margin: 12px 0 18px; font-size: 0.9rem; }
+    details.counter   { border-left-color: var(--accent3); }
+    details.grammar   { border-left-color: var(--accent2); }
+    details.treesit   { border-left-color: var(--accent); }
+    details.highlight { border-left-color: var(--accent6); }
+    details.lsp       { border-left-color: var(--accent4); }
+    details.linguist  { border-left-color: var(--accent5); }
+    .toc { background: var(--surface2); border: 1px solid var(--border); border-radius: 8px; padding: 12px 18px; margin: 14px 0 28px; }
+    .toc h3 { margin-top: 0; color: var(--accent); font-size: 0.82rem; text-transform: uppercase; letter-spacing: 0.08em; }
+    .toc ol { columns: 2; column-gap: 28px; padding-left: 18px; font-size: 0.9rem; }
+    .toc a { color: var(--text); text-decoration: none; border-bottom: 1px dotted var(--muted); }
+    .toc a:hover { color: var(--accent); border-bottom-color: var(--accent); }
+    table { width: 100%; border-collapse: collapse; margin: 8px 0; font-size: 0.85rem; }
+    th { background: var(--surface2); color: var(--accent); padding: 6px 10px; text-align: left; border: 1px solid var(--border); }
+    td { padding: 6px 10px; border: 1px solid var(--border); vertical-align: top; }
+  </style>
+</head>
+<body>
+<div class="page">
+
+<h1>Silicon — External Tooling Adoption</h1>
+<p class="subtitle">
+  Roadmap for getting Silicon (<code>.si</code>) recognized by external
+  developer tooling — line counters, syntax highlighters, editor grammars,
+  language servers, and finally GitHub Linguist.  Each phase is roughly
+  ordered by effort-to-reach ratio.  Date: 2026-05-24.
+</p>
+
+<div class="card info" style="border-left: 4px solid var(--accent4); padding: 12px; margin: 12px 0;">
+  <strong>Status note (post-boot/ removal):</strong> This document was authored
+  when the Silicon-in-Silicon bootstrap lived under <code>boot/</code>. That tree
+  has been removed and the self-hosted compiler is slated for a future rewrite.
+  References to <code>boot/*</code> paths describe the historical layout. The
+  TypeScript compiler in <code>src/</code> is the current production compiler.
+</div>
+
+<div class="legend" style="border-color: var(--accent2);">
+  <strong>Strategy.</strong>  Two grammars do most of the heavy lifting:
+  a <strong>TextMate grammar</strong> (Phase 2) fans out to VS Code,
+  Sublime, shiki, bat, and eventually Linguist; a
+  <strong>tree-sitter grammar</strong> (Phase 3) fans out to Neovim,
+  Helix, Zed, Emacs 29+, and GitHub code search.  Both should land
+  before the long tail of one-off highlighter PRs (Phase 4), because
+  several of those tools (shiki, chroma) can consume one of the two
+  grammars directly.
+  <br/><br/>
+  Phase 5 (LSP) is already on the roadmap as
+  <a href="language-server-plan.html" style="color: var(--accent);">docs/language-server-plan.html</a>;
+  this doc only tracks the editor-integration side of it.
+</div>
+
+<div class="legend">
+  <strong>Sizing.</strong>
+  <code>S</code> = 1–2h focused session ·
+  <code>M</code> = 3–5h session ·
+  <code>L</code> = 1 day ·
+  <code>XL</code> = 2+ days.
+  <br/><br/>
+  <strong>Tracking.</strong>  To mark a task done, add
+  <code>complete</code> to the <code>&lt;details&gt;</code> class list
+  and append <code>&lt;span class="done"&gt;✅&lt;/span&gt;</code> to the
+  summary.  Use <code>partial</code> + <code>🟡</code> for in-progress,
+  <code>blocked</code> + <code>⛔</code> for blocked.
+</div>
+
+<div class="toc">
+  <h3>Contents</h3>
+  <ol>
+    <li><a href="#phase-1">Phase 1 — Line counters</a></li>
+    <li><a href="#phase-2">Phase 2 — TextMate grammar + immediate consumers</a></li>
+    <li><a href="#phase-3">Phase 3 — Tree-sitter</a></li>
+    <li><a href="#phase-4">Phase 4 — Standalone syntax highlighters</a></li>
+    <li><a href="#phase-5">Phase 5 — LSP editor integrations</a></li>
+    <li><a href="#phase-6">Phase 6 — GitHub Linguist</a></li>
+  </ol>
+</div>
+
+<!-- ================================================================== -->
+<h2 id="phase-1">Phase 1 — Line counters</h2>
+
+<div class="phase-intro">
+  Easiest wins.  Each tool needs a single JSON/Go entry describing
+  Silicon's extension (<code>.si</code>), comment markers
+  (<code>#</code> line comments, no block comments based on
+  <code>boot/</code>), and string delimiters.  Target: all four done
+  in one afternoon.
+</div>
+
+<details class="counter">
+  <summary><span class="id">LC-1</span> tokei — submit language entry <span class="est">S, ~1h</span></summary>
+  <p class="goal">Get Silicon recognized by tokei, the Rust-based code counter used by many CI pipelines and the <code>cargo-license</code> ecosystem.</p>
+  <div class="accept"><strong>Acceptance:</strong>
+    <ul>
+      <li>PR opened against <code>XAMPPRocky/tokei</code> adding a <code>Silicon</code> entry to <code>languages.json</code>.</li>
+      <li>Entry fields: <code>name: "Silicon"</code>, <code>line_comment: ["#"]</code>, <code>extensions: ["si"]</code>, <code>quotes: [["\"", "\""]]</code>.</li>
+      <li>Sample <code>.si</code> file committed to <code>tests/data/</code> with expected counts in <code>tests/data/silicon.toml</code>.</li>
+      <li>PR linked from <code>docs/language-tooling.html</code>.</li>
+    </ul>
+  </div>
+  <div class="subtasks"><strong>Subtasks:</strong>
+    <ol>
+      <li>Fork tokei, add the <code>Silicon</code> entry alphabetically in <code>languages.json</code>.</li>
+      <li>Copy a small <code>boot/tests/*_test.si</code> as the fixture.</li>
+      <li>Run <code>cargo test</code> locally to verify the new fixture.</li>
+      <li>Open PR with title <code>Add Silicon language support</code>.</li>
+    </ol>
+  </div>
+</details>
+
+<details class="counter">
+  <summary><span class="id">LC-2</span> scc — submit language entry <span class="est">S, ~1h</span></summary>
+  <p class="goal">scc (Go-based, parallelizes across files) is the fastest counter and used in many enterprise CI setups.</p>
+  <div class="accept"><strong>Acceptance:</strong>
+    <ul>
+      <li>PR opened against <code>boyter/scc</code> adding Silicon to <code>languages.json</code>.</li>
+      <li>Same shape as the tokei entry: <code>#</code> line comments, no block comments, double-quote strings.</li>
+      <li><code>go generate ./...</code> regenerates the language database without errors.</li>
+    </ul>
+  </div>
+  <div class="deps"><strong>Depends on:</strong> none.  Can be done in parallel with LC-1.</div>
+</details>
+
+<details class="counter">
+  <summary><span class="id">LC-3</span> gocloc — submit language entry <span class="est">S, ~1h</span></summary>
+  <p class="goal">gocloc is a popular Go port of cloc, used by gitstats and several reporting tools.</p>
+  <div class="accept"><strong>Acceptance:</strong>
+    <ul>
+      <li>PR opened against <code>hhatto/gocloc</code> adding Silicon to the <code>languages.go</code> map.</li>
+      <li>Test added to <code>gocloc_test.go</code> with a small Silicon fixture.</li>
+    </ul>
+  </div>
+</details>
+
+<details class="counter">
+  <summary><span class="id">LC-4</span> cloc — ship <code>--read-lang-def</code> file in-repo, optional upstream PR <span class="est">S, ~1h</span></summary>
+  <p class="goal">cloc is Perl-based with a single maintainer (AlDanial) and a slow review cycle.  Ship a definition file in the Sigil repo first so users can opt in immediately; upstream PR is a stretch goal.</p>
+  <div class="accept"><strong>Acceptance:</strong>
+    <ul>
+      <li><code>scripts/cloc-silicon.txt</code> committed to the repo.  Format:
+        <pre>Silicon
+    filter remove_matches ^\s*#
+    extension si
+    3rd_gen_scale 1.00</pre>
+      </li>
+      <li>README snippet showing <code>cloc --read-lang-def=scripts/cloc-silicon.txt .</code>.</li>
+      <li>Stretch: PR to <code>AlDanial/cloc</code> with the same definition baked in.</li>
+    </ul>
+  </div>
+</details>
+
+<!-- ================================================================== -->
+<h2 id="phase-2">Phase 2 — TextMate grammar + immediate consumers</h2>
+
+<div class="phase-intro">
+  Writing one <code>silicon.tmLanguage.json</code> unlocks a long tail
+  of downstream tools.  This is the highest-leverage single artifact
+  in the whole roadmap.  Output: <code>silicon.tmLanguage.json</code>
+  + a minimal VS Code extension wrapping it.
+</div>
+
+<details class="grammar">
+  <summary><span class="id">TM-1</span> Author <code>silicon.tmLanguage.json</code> <span class="est">L, ~1 day</span></summary>
+  <p class="goal">Hand-write a TextMate grammar covering Silicon's lexical surface.  Use <code>boot/parser/lex.si</code> as the source of truth for token categories.</p>
+  <div class="accept"><strong>Acceptance:</strong>
+    <ul>
+      <li>Grammar covers: comments (<code>#</code>), strings (<code>"…"</code> with escapes), numeric literals (int + float), keywords (<code>@fn</code>, <code>@if</code>, <code>@loop</code>, <code>@match</code>, <code>@type</code>, <code>@struct</code>, <code>@enum</code>, <code>@var</code>, <code>@defer</code>, …), built-in types (<code>Int</code>, <code>Int32</code>, <code>Int64</code>, <code>Float</code>, <code>Bool</code>, <code>String</code>, <code>u8</code>…<code>u64</code>), operators, the <code>$Variant</code> sigil, the <code>&amp;keyword</code> call prefix, and the <code>::</code> path separator.</li>
+      <li>Tested visually in VS Code via "Developer: Inspect Editor Tokens and Scopes" against every file in <code>boot/tests/</code>.</li>
+      <li>Grammar committed to <code>tooling/textmate/silicon.tmLanguage.json</code> in the Sigil repo (new directory).</li>
+      <li>Accompanying <code>language-configuration.json</code> for VS Code (bracket pairs, comment toggle, auto-closing pairs).</li>
+    </ul>
+  </div>
+  <div class="subtasks"><strong>Subtasks:</strong>
+    <ol>
+      <li>Enumerate keyword set from <code>boot/strata/builtin/*.si</code> and the elaborator.</li>
+      <li>Write the JSON grammar with named scopes following TextMate conventions (<code>keyword.control.silicon</code>, <code>storage.type.silicon</code>, etc.).</li>
+      <li>Manual visual sweep of <code>boot/tests/</code> in VS Code.</li>
+      <li>Commit grammar + language-configuration.</li>
+    </ol>
+  </div>
+</details>
+
+<details class="grammar">
+  <summary><span class="id">TM-2</span> VS Code extension — publish to marketplace <span class="est">M, ~4h</span></summary>
+  <p class="goal">Package TM-1 as a standalone VS Code extension so users can install Silicon support with one click.  This becomes the primary install path until the LSP ships.</p>
+  <div class="accept"><strong>Acceptance:</strong>
+    <ul>
+      <li>Extension scaffold under <code>tooling/vscode-silicon/</code> with <code>package.json</code> declaring the language contribution.</li>
+      <li>Includes TM-1's grammar + language config; no LSP yet.</li>
+      <li>Published to the VS Code Marketplace under publisher <code>natescode</code> (or org).</li>
+      <li>README links to the Sigil repo and shows a screenshot of highlighted code.</li>
+      <li>CI workflow that runs <code>vsce package</code> on tag pushes.</li>
+    </ul>
+  </div>
+  <div class="deps"><strong>Depends on:</strong> TM-1.</div>
+</details>
+
+<details class="grammar">
+  <summary><span class="id">TM-3</span> shiki — submit grammar <span class="est">S, ~2h</span></summary>
+  <p class="goal">shiki uses TextMate grammars directly and ships with VS Code, Astro Starlight, Docusaurus v3, and most modern documentation sites.  One PR, very wide reach.</p>
+  <div class="accept"><strong>Acceptance:</strong>
+    <ul>
+      <li>PR against <code>shikijs/textmate-grammars-themes</code> or <code>shikijs/shiki</code> (check current location) adding <code>silicon</code> to the language list.</li>
+      <li>Grammar file copied from TM-1, scope name <code>source.silicon</code>.</li>
+      <li>Sample snippet in the shiki test fixtures.</li>
+    </ul>
+  </div>
+  <div class="deps"><strong>Depends on:</strong> TM-1.</div>
+</details>
+
+<details class="grammar">
+  <summary><span class="id">TM-4</span> bat — submit sublime-syntax conversion <span class="est">M, ~3h</span></summary>
+  <p class="goal">bat (Rust <code>cat</code> replacement) ships sublime-syntax grammars, which are a close cousin of TextMate.  Convert TM-1 with <code>sublime-syntax-from-tmlanguage</code> or hand-port.</p>
+  <div class="accept"><strong>Acceptance:</strong>
+    <ul>
+      <li>PR against <code>sharkdp/bat</code> adding <code>Silicon.sublime-syntax</code> to its assets.</li>
+      <li><code>bat --list-languages</code> includes Silicon after rebuild.</li>
+      <li>Manual smoke test on a Silicon source file.</li>
+    </ul>
+  </div>
+  <div class="deps"><strong>Depends on:</strong> TM-1.</div>
+</details>
+
+<details class="grammar">
+  <summary><span class="id">TM-5</span> Sublime Text — Package Control submission <span class="est">M, ~3h</span></summary>
+  <p class="goal">Sublime Text users find packages via Package Control.  Submitting registers Silicon as an installable package.</p>
+  <div class="accept"><strong>Acceptance:</strong>
+    <ul>
+      <li>Public repo <code>sigil-lang/sublime-silicon</code> with TM-1's grammar repackaged as a <code>.sublime-package</code>.</li>
+      <li>PR against <code>wbond/package_control_channel</code> adding the package.</li>
+    </ul>
+  </div>
+  <div class="deps"><strong>Depends on:</strong> TM-1.</div>
+</details>
+
+<!-- ================================================================== -->
+<h2 id="phase-3">Phase 3 — Tree-sitter</h2>
+
+<div class="phase-intro">
+  Tree-sitter is the modern path for editor grammars: Neovim, Helix,
+  Zed, Emacs 29+, GitHub code search, and Linguist's symbol indexer
+  all consume tree-sitter parsers.  Bigger lift than TM-1, but
+  Silicon's grammar shape is already settled in
+  <code>boot/parser/parse.si</code>, so this is mostly translation.
+</div>
+
+<details class="treesit">
+  <summary><span class="id">TS-1</span> Scaffold <code>tree-sitter-silicon</code> repo <span class="est">S, ~2h</span></summary>
+  <p class="goal">Create a public repo with the standard tree-sitter layout: <code>grammar.js</code>, <code>queries/</code>, <code>test/corpus/</code>, <code>package.json</code>, GitHub Actions CI.</p>
+  <div class="accept"><strong>Acceptance:</strong>
+    <ul>
+      <li>Repo at <code>github.com/sigil-lang/tree-sitter-silicon</code> (or under <code>natescode/</code>).</li>
+      <li><code>tree-sitter generate &amp;&amp; tree-sitter test</code> runs (even if grammar is a stub).</li>
+      <li>CI green on Linux + macOS.</li>
+    </ul>
+  </div>
+</details>
+
+<details class="treesit">
+  <summary><span class="id">TS-2</span> Author <code>grammar.js</code> mirroring <code>boot/parser/parse.si</code> <span class="est">XL, 2–3 days</span></summary>
+  <p class="goal">Translate the recursive-descent parser into a tree-sitter grammar.  The structure is known — risk is in tree-sitter's LR(1) constraints around the keyword/operator forms.</p>
+  <div class="accept"><strong>Acceptance:</strong>
+    <ul>
+      <li>Grammar parses every file in <code>boot/tests/</code> without errors.</li>
+      <li>Grammar parses <code>boot/</code> itself end-to-end.</li>
+      <li>Conflicts resolved with explicit precedence rather than <code>conflicts:</code> arrays where possible.</li>
+    </ul>
+  </div>
+  <div class="subtasks"><strong>Subtasks:</strong>
+    <ol>
+      <li>Lexer-level rules: identifiers, numbers, strings, keywords, sigils.</li>
+      <li>Expression precedence (binary ops, calls, member access).</li>
+      <li>Definition forms: <code>@fn</code>, <code>@type</code>, <code>@struct</code>, <code>@enum</code>, <code>@stratum</code>.</li>
+      <li><code>@match</code> arms (both flat and arrow forms).</li>
+      <li>Block expressions, <code>@if</code>/<code>@loop</code>/<code>@defer</code>.</li>
+    </ol>
+  </div>
+  <div class="deps"><strong>Depends on:</strong> TS-1.</div>
+</details>
+
+<details class="treesit">
+  <summary><span class="id">TS-3</span> Corpus tests covering <code>boot/tests/</code> <span class="est">M, ~4h</span></summary>
+  <p class="goal">Tree-sitter's corpus format lets us pin the parse tree of representative inputs.  Use this as a regression net.</p>
+  <div class="accept"><strong>Acceptance:</strong>
+    <ul>
+      <li>Corpus file per major feature: expressions, definitions, types, match, strata.</li>
+      <li>Every <code>boot/tests/*_test.si</code> represented in at least one corpus case.</li>
+      <li><code>tree-sitter test</code> green.</li>
+    </ul>
+  </div>
+  <div class="deps"><strong>Depends on:</strong> TS-2.</div>
+</details>
+
+<details class="treesit">
+  <summary><span class="id">TS-4</span> <code>queries/highlights.scm</code> <span class="est">M, ~3h</span></summary>
+  <p class="goal">Syntax highlighting query.  This is what Neovim/Helix/Zed render.</p>
+  <div class="accept"><strong>Acceptance:</strong>
+    <ul>
+      <li><code>queries/highlights.scm</code> covers all token categories used in TM-1.</li>
+      <li>Visual check in Neovim with nvim-treesitter pointed at the local repo.</li>
+    </ul>
+  </div>
+  <div class="deps"><strong>Depends on:</strong> TS-2.</div>
+</details>
+
+<details class="treesit">
+  <summary><span class="id">TS-5</span> <code>locals.scm</code>, <code>indents.scm</code>, <code>injections.scm</code> <span class="est">M, ~3h</span></summary>
+  <p class="goal">Editor-feature queries.  <code>locals</code> drives rename + go-to-def in editors without LSP; <code>indents</code> drives auto-indent; <code>injections</code> lets us embed e.g. WAT inside <code>@asm</code> blocks if those ever land.</p>
+  <div class="accept"><strong>Acceptance:</strong>
+    <ul>
+      <li>All three query files present and validated by <code>tree-sitter query</code>.</li>
+      <li>Auto-indent works correctly in Neovim for definitions and block expressions.</li>
+    </ul>
+  </div>
+  <div class="deps"><strong>Depends on:</strong> TS-4.</div>
+</details>
+
+<details class="treesit">
+  <summary><span class="id">TS-6</span> Publish to npm + submit to nvim-treesitter <span class="est">S, ~2h</span></summary>
+  <p class="goal">npm publish is the canonical distribution channel for tree-sitter grammars.  nvim-treesitter is the largest single downstream consumer.</p>
+  <div class="accept"><strong>Acceptance:</strong>
+    <ul>
+      <li><code>tree-sitter-silicon</code> published to npm.</li>
+      <li>PR against <code>nvim-treesitter/nvim-treesitter</code> adding Silicon to the parser list.</li>
+      <li><code>:TSInstall silicon</code> works after the PR merges.</li>
+    </ul>
+  </div>
+  <div class="deps"><strong>Depends on:</strong> TS-5.</div>
+</details>
+
+<details class="treesit">
+  <summary><span class="id">TS-7</span> Helix — submit language config <span class="est">S, ~1h</span></summary>
+  <p class="goal">Helix bundles tree-sitter grammars directly in its language config.</p>
+  <div class="accept"><strong>Acceptance:</strong>
+    <ul>
+      <li>PR against <code>helix-editor/helix</code> adding a <code>[[language]]</code> entry for Silicon pointing at TS-6's grammar.</li>
+      <li>Language config covers file types, comment token, indent settings.</li>
+    </ul>
+  </div>
+  <div class="deps"><strong>Depends on:</strong> TS-6.</div>
+</details>
+
+<details class="treesit">
+  <summary><span class="id">TS-8</span> Zed extension <span class="est">M, ~3h</span></summary>
+  <p class="goal">Zed extensions are themselves small Rust crates that wrap a tree-sitter grammar.</p>
+  <div class="accept"><strong>Acceptance:</strong>
+    <ul>
+      <li>Extension repo created following the Zed extension template.</li>
+      <li>Submitted to <code>zed-industries/extensions</code>.</li>
+      <li>Installable from Zed's extension picker.</li>
+    </ul>
+  </div>
+  <div class="deps"><strong>Depends on:</strong> TS-6.</div>
+</details>
+
+<!-- ================================================================== -->
+<h2 id="phase-4">Phase 4 — Standalone syntax highlighters</h2>
+
+<div class="phase-intro">
+  These tools don't consume TextMate or tree-sitter grammars directly
+  — each needs its own bespoke lexer.  All are small, independent PRs.
+  Prioritize Pygments since the longest tail of doc tooling depends on
+  it (Sphinx, MkDocs material, Rouge fallback paths).
+</div>
+
+<details class="highlight">
+  <summary><span class="id">SH-1</span> Pygments lexer <span class="est">M, ~4h</span></summary>
+  <p class="goal">Write <code>SiliconLexer</code> in Python, submit to <code>pygments/pygments</code>.  Used by Sphinx, MkDocs, Jupyter, and as a fallback by many other highlighters.</p>
+  <div class="accept"><strong>Acceptance:</strong>
+    <ul>
+      <li><code>pygments/lexers/silicon.py</code> with a <code>SiliconLexer</code> class using <code>RegexLexer</code>.</li>
+      <li>Lexer registered in <code>pygments/lexers/_mapping.py</code>.</li>
+      <li>Example file added to <code>tests/examplefiles/silicon/</code>.</li>
+      <li>PR opened against <code>pygments/pygments</code>.</li>
+    </ul>
+  </div>
+</details>
+
+<details class="highlight">
+  <summary><span class="id">SH-2</span> highlight.js language <span class="est">S, ~2h</span></summary>
+  <p class="goal">highlight.js is the default highlighter for Slack, Discord, many blogs, and Markdown renderers.</p>
+  <div class="accept"><strong>Acceptance:</strong>
+    <ul>
+      <li><code>src/languages/silicon.js</code> contributed to <code>highlightjs/highlight.js</code>.</li>
+      <li>Sample in <code>test/markup/silicon/</code>.</li>
+      <li>PR merged or open.</li>
+    </ul>
+  </div>
+</details>
+
+<details class="highlight">
+  <summary><span class="id">SH-3</span> Prism.js component <span class="est">S, ~2h</span></summary>
+  <p class="goal">Prism is the default highlighter for Docusaurus, Next.js docs, and many MDX setups.</p>
+  <div class="accept"><strong>Acceptance:</strong>
+    <ul>
+      <li><code>components/prism-silicon.js</code> contributed to <code>PrismJS/prism</code>.</li>
+      <li>Test fixtures under <code>tests/languages/silicon/</code>.</li>
+    </ul>
+  </div>
+</details>
+
+<details class="highlight">
+  <summary><span class="id">SH-4</span> Chroma lexer <span class="est">M, ~3h</span></summary>
+  <p class="goal">Chroma is the Go-based highlighter used by Hugo (the dominant Go static-site generator).  Chroma's lexer XML format is close to Pygments and can be partly auto-generated from SH-1.</p>
+  <div class="accept"><strong>Acceptance:</strong>
+    <ul>
+      <li><code>lexers/embedded/silicon.xml</code> contributed to <code>alecthomas/chroma</code>.</li>
+      <li>Tests added under <code>lexers/testdata/silicon/</code>.</li>
+    </ul>
+  </div>
+  <div class="deps"><strong>Depends on:</strong> SH-1 (can adapt Pygments output).</div>
+</details>
+
+<details class="highlight">
+  <summary><span class="id">SH-5</span> Rouge lexer <span class="est">M, ~3h</span></summary>
+  <p class="goal">Rouge is the default highlighter for Jekyll, which powers GitHub Pages.  Needed for any docs site hosted on GitHub Pages.</p>
+  <div class="accept"><strong>Acceptance:</strong>
+    <ul>
+      <li>Ruby lexer at <code>lib/rouge/lexers/silicon.rb</code> contributed to <code>rouge-ruby/rouge</code>.</li>
+      <li>Demo file under <code>lib/rouge/demos/silicon</code>.</li>
+    </ul>
+  </div>
+</details>
+
+<!-- ================================================================== -->
+<h2 id="phase-5">Phase 5 — LSP editor integrations</h2>
+
+<div class="phase-intro">
+  The LSP server itself is tracked under
+  <a href="language-server-plan.html" style="color: var(--accent);">docs/language-server-plan.html</a>
+  and aligns with the
+  <strong>Compiler-as-a-Service</strong> directive (the compiler is a
+  library; the LSP is a thin wrapper).  Tasks here are only the
+  per-editor wiring once a server binary exists.
+</div>
+
+<details class="lsp">
+  <summary><span class="id">LSP-1</span> Wire LSP into VS Code extension (extend TM-2) <span class="est">M, ~4h</span></summary>
+  <p class="goal">Upgrade the VS Code extension from grammar-only to grammar + LSP client.</p>
+  <div class="accept"><strong>Acceptance:</strong>
+    <ul>
+      <li><code>vscode-languageclient</code> added to <code>tooling/vscode-silicon</code>.</li>
+      <li>Extension spawns the Silicon LSP binary on activation.</li>
+      <li>Diagnostics, hover, and go-to-def work in a smoke-test workspace.</li>
+      <li>New version published to the marketplace.</li>
+    </ul>
+  </div>
+  <div class="deps"><strong>Depends on:</strong> TM-2; LSP server binary from <code>language-server-plan.html</code>.</div>
+</details>
+
+<details class="lsp">
+  <summary><span class="id">LSP-2</span> Neovim setup snippet (nvim-lspconfig) <span class="est">S, ~1h</span></summary>
+  <p class="goal">nvim-lspconfig is the canonical place to register a new LSP for Neovim users.</p>
+  <div class="accept"><strong>Acceptance:</strong>
+    <ul>
+      <li>PR against <code>neovim/nvim-lspconfig</code> adding a <code>silicon</code> server config.</li>
+      <li>README in the Sigil repo shows the one-liner Neovim users add to <code>init.lua</code>.</li>
+    </ul>
+  </div>
+  <div class="deps"><strong>Depends on:</strong> LSP server binary.</div>
+</details>
+
+<details class="lsp">
+  <summary><span class="id">LSP-3</span> Helix language config — wire LSP into TS-7 <span class="est">S, ~1h</span></summary>
+  <p class="goal">Extend the Helix language entry to spawn the LSP.</p>
+  <div class="accept"><strong>Acceptance:</strong>
+    <ul>
+      <li>Follow-up PR (or amendment of TS-7) adds <code>language-server</code> config.</li>
+      <li>Diagnostics visible in Helix on Silicon files.</li>
+    </ul>
+  </div>
+  <div class="deps"><strong>Depends on:</strong> TS-7, LSP server binary.</div>
+</details>
+
+<details class="lsp">
+  <summary><span class="id">LSP-4</span> Zed extension — wire LSP into TS-8 <span class="est">S, ~2h</span></summary>
+  <p class="goal">Extend the Zed extension to register the LSP server.</p>
+  <div class="accept"><strong>Acceptance:</strong>
+    <ul>
+      <li>Zed extension declares the LSP and downloads/spawns the binary.</li>
+      <li>Diagnostics + completions visible in Zed.</li>
+    </ul>
+  </div>
+  <div class="deps"><strong>Depends on:</strong> TS-8, LSP server binary.</div>
+</details>
+
+<details class="lsp">
+  <summary><span class="id">LSP-5</span> Emacs <code>eglot</code> / <code>lsp-mode</code> instructions <span class="est">S, ~1h</span></summary>
+  <p class="goal">Emacs users prefer copy-paste config over packages; just ship docs.</p>
+  <div class="accept"><strong>Acceptance:</strong>
+    <ul>
+      <li>README section with eglot + lsp-mode snippets pinned to the released LSP binary path.</li>
+    </ul>
+  </div>
+  <div class="deps"><strong>Depends on:</strong> LSP server binary.</div>
+</details>
+
+<!-- ================================================================== -->
+<h2 id="phase-6">Phase 6 — GitHub Linguist</h2>
+
+<div class="phase-intro">
+  The capstone.  Linguist drives GitHub's language breakdown bar,
+  syntax highlighting in the web UI, and code-search symbol
+  indexing.  Linguist requires <em>evidence of real-world usage</em>
+  before accepting new languages — historically ~200 repos using the
+  extension, now closer to "sustained adoption signal."  Park this
+  phase until the rest of the ecosystem has produced enough adopters.
+</div>
+
+<details class="linguist">
+  <summary><span class="id">GL-1</span> Track public <code>.si</code> usage <span class="est">S, recurring</span></summary>
+  <p class="goal">Linguist looks for breadth of usage.  Maintain a running list of public repos using Silicon as evidence for GL-2.</p>
+  <div class="accept"><strong>Acceptance:</strong>
+    <ul>
+      <li>Living section in this doc (or a separate <code>silicon-usage.md</code>) listing public repos.</li>
+      <li>Quarterly GitHub code-search check: <code>extension:si path:*.si</code>.</li>
+    </ul>
+  </div>
+</details>
+
+<details class="linguist">
+  <summary><span class="id">GL-2</span> Linguist PR — language entry + grammar reference <span class="est">M, ~4h</span></summary>
+  <p class="goal">Open the Linguist PR once usage signal is strong.  Linguist will reference the tree-sitter grammar (TS-6) for syntax highlighting and indexing.</p>
+  <div class="accept"><strong>Acceptance:</strong>
+    <ul>
+      <li>PR against <code>github-linguist/linguist</code> adding Silicon to <code>languages.yml</code>.</li>
+      <li>Submodule pointer to TS-6's grammar repo at a tagged release.</li>
+      <li><code>samples/Silicon/</code> populated from representative <code>boot/tests/</code> fixtures.</li>
+      <li>Evidence of adoption from GL-1 cited in the PR description.</li>
+      <li>Acknowledge in PR that the language is in active development with a stable extension.</li>
+    </ul>
+  </div>
+  <div class="deps"><strong>Depends on:</strong> TS-6 (tree-sitter grammar published); GL-1 (usage signal).</div>
+</details>
+
+<details class="linguist">
+  <summary><span class="id">GL-3</span> Post-merge: verify GitHub web UI rendering <span class="est">S, ~30min</span></summary>
+  <p class="goal">Once Linguist ships in a GitHub deploy, verify Silicon files render with highlighting on github.com and that the repo language bar attributes correctly.</p>
+  <div class="accept"><strong>Acceptance:</strong>
+    <ul>
+      <li>Visual confirmation on a public Sigil repo.</li>
+      <li>Repo language bar shows Silicon at the expected percentage.</li>
+      <li>Code search returns results when searching Silicon-specific keywords.</li>
+    </ul>
+  </div>
+  <div class="deps"><strong>Depends on:</strong> GL-2 merged + deployed.</div>
+</details>
+
+</div>
+</body>
+</html>

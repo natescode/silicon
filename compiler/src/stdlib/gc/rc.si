@@ -1,0 +1,35 @@
+# SPDX-License-Identifier: MIT
+# Phase 9d-6 — Rc identity shim for the wasm-gc target.
+#
+# This file shadows `src/stdlib/rc.si` when the user compiles with
+# `sgl build --target=wasm-gc`.  The @use resolver in
+# `src/modules/useResolver.ts` rewrites `@use '…/src/stdlib/rc.si'`
+# to `@use '…/src/stdlib/gc/rc.si'` automatically — user code is
+# unchanged.
+#
+# Under wasm-gc the engine GC keeps reachable references alive
+# automatically; refcount tracking is redundant.  Each function below
+# is the identity (or a no-op) — the compiler's lowering optimizer
+# collapses identity calls to zero runtime cost.  Same call surface
+# as src/stdlib/rc.si, minus the introspection two (rc_count and
+# rc_is_unique are E0012-rejected at typecheck under wasm-gc; see
+# ADR 0009's two-layer portability split).
+#
+# Lifecycle:
+#
+#     &rc_new      value → Int   - identity: returns value unchanged
+#     &rc_clone    r     → Int   - identity: managed refs are shared
+#     &rc_drop     r             - no-op: GC reclaims when unreachable
+#     &rc_get      r     → Int   - identity: ref IS the value
+#
+# Composition with @defer and &@with_arena still works — both compose
+# down to no-ops under wasm-gc.  Source code using Rc-as-stdlib +
+# @defer + &@with_arena compiles unchanged across both targets.
+
+@fn rc_new value:Int := value;
+
+@fn rc_clone r:Int := r;
+
+@fn rc_drop _r:Int := { };
+
+@fn rc_get r:Int := r;

@@ -1,0 +1,42 @@
+# winget manifest for sgl — Silicon compiler
+# Submit to the winget-pkgs repository:
+#   https://github.com/microsoft/winget-pkgs/tree/master/manifests/n/natescode/sgl
+#
+# Windows support is via WSL2. The sgl binary targets Linux; users install it
+# inside WSL and access it from the Windows terminal.
+
+PackageIdentifier: natescode.sgl
+PackageVersion: 1.0.0
+PackageLocale: en-US
+Publisher: Nate Codes
+PublisherUrl: https://github.com/natescode
+PublisherSupportUrl: https://github.com/natescode/sigil/issues
+PackageName: sgl
+PackageUrl: https://github.com/natescode/sigil
+License: MIT
+LicenseUrl: https://github.com/natescode/sigil/blob/main/LICENSE
+ShortDescription: The Silicon compiler — WebAssembly-targeting language
+Description: |
+  sgl is the command-line interface for the Silicon programming language compiler.
+  Silicon compiles to WebAssembly Text Format (WAT) and binary WASM.
+  The native backend (--native / --release) compiles to native executables via QBE.
+
+  Windows users: install inside WSL2 using the curl|sh installer:
+    curl -fsSL https://raw.githubusercontent.com/natescode/sigil/main/scripts/install.sh | sh
+Tags:
+  - compiler
+  - webassembly
+  - wasm
+  - programming-language
+  - silicon
+ManifestType: defaultLocale
+ManifestVersion: 1.6.0
+
+Installers:
+  - Architecture: x64
+    InstallerType: wsl
+    InstallerUrl: https://raw.githubusercontent.com/natescode/sigil/main/scripts/install.sh
+    InstallerSha256: PLACEHOLDER_SHA256
+    InstallerSwitches:
+      Silent: ""
+      SilentWithProgress: ""

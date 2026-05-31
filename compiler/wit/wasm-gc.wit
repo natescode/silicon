@@ -1,0 +1,298 @@
+// ─────────────────────────────────────────────────────────────────────────────
+// Sigil WasmGC target — single source of truth.
+//
+// This WIT file documents the WebAssembly GC bytecode contract every
+// `--target=wasm-gc` Sigil module conforms to.  Two downstream artifacts
+// must match this surface:
+//
+//   1. src/codegen/wasm-emitter.ts      — the binary emitter for the
+//                                          wasm-gc target (Phase 9d-2/3).
+//   2. src/stdlib/gc/*.si               — the managed-mode stdlib
+//                                          (Phase 9d-6); reads this file
+//                                          to know which GC operations
+//                                          are guaranteed available.
+//
+// Each WasmGC-target program emits the type-section declarations and
+// instruction patterns described below, against the WebAssembly GC
+// proposal (Phase 5, standardized).  Engines that satisfy the proposal
+// (V8 ≥ 11.5, SpiderMonkey ≥ 120, JSC ≥ Safari 18.4, wasmtime ≥ 14.0)
+// run wasm-gc Sigil modules without any host-side polyfill.
+//
+// Reading guide
+// -------------
+// Unlike `wit/allocator.wit` — which describes wasm functions an
+// allocator module *exports* — this file documents the *bytecode
+// patterns* the codegen *emits*.  WIT syntax doesn't natively express
+// instructions, so the functions below model each WasmGC operation as
+// a notional function whose signature mirrors the instruction's
+// stack-machine signature:
+//
+//     struct-new $T fields…   →   func(t: type-id, …fields) -> ref
+//     struct-get $T i ref     →   func(t: type-id, i: u32, ref) -> field-val
+//     array-get-s $A ref idx  →   func(a: type-id, ref, idx: i32) -> elem
+//
+// The wit "interface" is a *contract*: every wasm-gc Sigil module
+// emits exactly these patterns (no more, no less for v1.0), and stdlib
+// authors writing managed-mode code can rely on this surface being
+// available regardless of the underlying engine.
+//
+// What's IN scope for v1.0
+// ------------------------
+// - Struct types: declare via `(type $T (struct (field f0) … (field fN)))`,
+//   construct via `struct.new`, read/write via `struct.get` / `struct.set`.
+//   No subtyping (every struct is `final`).
+// - Array types: declare via `(type $A (array (mut elem-type)))`,
+//   construct via `array.new` / `array.new_default`, read/write via
+//   `array.get_s` (or `array.get_u` for unsigned), `array.set`,
+//   `array.len`, `array.copy`.
+// - Layout conventions for `String`, `Array[T]` (T value), `@struct`,
+//   sum-with-payloads (tagged-struct representation), `Vec[T]` (T value).
+//
+// What's OUT of scope for v1.0
+// ----------------------------
+// - **Subtyping** (`sub`, non-final structs, `ref.test`, `ref.cast`).
+//   Phase 9d-7 emits sum-with-payloads as a single tagged struct
+//   (variant 0/1/2 in field 0, pad-to-max payload in trailing fields).
+//   Subtype-hierarchy representation (variant-as-subclass with
+//   `ref.test` dispatch) is a v1.1 transparent optimization — same
+//   source, different bytecode.  See ADR 0009 §3 (v1.1 runway).
+// - **Ref-typed `Vec[T]`** (Vec[String], Vec[@struct Foo]).  v1.0
+//   ships value-typed Vec only (Vec[Int], Vec[Float], …).  Variance
+//   rules for ref-typed arrays need design; tracked as v1.1.
+// - **Fully generic `@fn vec_push[T] v:Vec[T], x:T`** with
+//   monomorphization through the emitter.  v1.0 ships
+//   per-element-type specialization (vec_push_i32, vec_push_f32),
+//   same shape as today's linear-memory Vec.  v1.1 lifts this.
+// - **Stringref** (separate proposal, currently Phase 3 of the
+//   standardization process).  v1.0 backs `String` with `(array i8)`;
+//   stringref adoption is a v1.1 follow-up.
+// - **Weak refs** and **finalizers** — the GC spec includes them but
+//   v1.0 doesn't expose them.  v1.1 stratum.
+// - **`anyref` / `eqref` / `i31ref` / `extern.convert_any`** — useful
+//   for interop but not needed for the v1.0 stdlib surface.
+//
+// Coexistence with the linear-memory model
+// ----------------------------------------
+// A wasm-gc Sigil module can still declare `(memory 1)` and use
+// linear memory directly via `&WASM::i32_store` / `&WASM::i32_load`,
+// but stdlib types (String, Array, Vec) DO NOT span both worlds.
+// References stored in linear memory aren't GC roots; pointers from
+// linear memory into managed refs aren't followed by the engine.
+// The compiler enforces this at typecheck (Phase 9d-5): wasm-mvp-only
+// primitives (&alloc, &@with_arena, Rc, &heap_*) raise E0012 under
+// the wasm-gc target.
+//
+// See ADR 0009 (WasmGC target: opt-in --target=wasm-gc for v1.0) for
+// the rationale, options-considered, and v1.1 roadmap.
+// ─────────────────────────────────────────────────────────────────────────────
+
+package sigil:wasm-gc@0.1.0;
+
+// ─── Primitive identifiers ────────────────────────────────────────────────────
+// WasmGC type indices are u32; we alias them for documentation.
+
+interface types {
+    /// Index into the wasm module's type section (section 1).  Identifies
+    /// a struct or array type declared earlier in the module.
+    type type-id = u32;
+
+    /// A non-null managed reference to a struct or array of the indicated
+    /// type.  At the wasm bytecode level this is `(ref $T)`; the wit
+    /// surface elides the nominal type parameter (every site that uses
+    /// `ref` carries the corresponding `type-id` separately).
+    type ref = u32;
+
+    /// A nullable managed reference.  At the wasm bytecode level this is
+    /// `(ref null $T)`.  v1.0 uses non-null refs throughout — null is
+    /// reserved for the v1.1 weak-refs stratum.
+    type ref-null = u32;
+
+    /// An unsigned 32-bit integer used for indices, sizes, and tag values.
+    /// (`i32` at the wasm level; the unsigned aspect is convention only.)
+    type u32 = u32;
+}
+
+// ─── Struct operations ────────────────────────────────────────────────────────
+// Declared structs use the WasmGC `struct` type with explicit field types.
+// Every struct emitted by Sigil is `final` (no subtype hierarchy in v1.0).
+
+interface struct-ops {
+    use types.{type-id, ref, u32};
+
+    /// `struct.new $T v0 v1 … vN-1` — allocate a fresh struct of type $T
+    /// with the supplied field values.  Each `vᵢ` is the value for
+    /// `field i` in the struct declaration.  Returns a non-null ref.
+    /// Field values are passed as a heterogeneous list at the wasm level;
+    /// the wit surface elides the per-field types (each site knows its
+    /// own struct layout).
+    struct-new: func(t: type-id);
+
+    /// `struct.get $T i ref` — read field `i` of struct `$T` from `ref`.
+    /// Returns the field's value at its declared type (i32, i64, f32, f64,
+    /// or another managed ref).  Traps on null ref (v1.0 uses non-null
+    /// throughout; the trap is a defensive guard).
+    struct-get: func(t: type-id, field-idx: u32, r: ref);
+
+    /// `struct.set $T i ref value` — write `value` to field `i` of
+    /// struct `$T` at `ref`.  Mutates in place; no return value.  Field
+    /// must be declared `(mut …)` in the struct type or this is a
+    /// validation error.
+    struct-set: func(t: type-id, field-idx: u32, r: ref);
+}
+
+// ─── Array operations ─────────────────────────────────────────────────────────
+// Declared arrays use the WasmGC `array` type with a uniform element type.
+// All array fields are mutable (`(array (mut …))`) so vec-style in-place
+// writes work.
+
+interface array-ops {
+    use types.{type-id, ref, u32};
+
+    /// `array.new $A init size` — allocate an array of type `$A` with
+    /// `size` elements, each initialized to `init`.  `init`'s type must
+    /// match `$A`'s element type.  Returns a non-null ref.
+    array-new: func(a: type-id, size: u32);
+
+    /// `array.new_default $A size` — allocate an array of type `$A` with
+    /// `size` elements, each initialized to the element type's default
+    /// (zero for numeric types).  Cheaper than `array.new` when the
+    /// caller doesn't care about the initial value.
+    array-new-default: func(a: type-id, size: u32);
+
+    /// `array.get_s $A ref idx` — read element `idx` from array `ref`.
+    /// Returns the element's value; for i8 / i16 element types performs
+    /// signed extension to i32.  Use `array.get_u` for unsigned
+    /// extension.  Traps on out-of-bounds.
+    array-get-s: func(a: type-id, r: ref, idx: u32);
+
+    /// `array.get_u $A ref idx` — unsigned-extending variant of
+    /// `array.get_s`.  Used for `String`'s `(array i8)` backing storage
+    /// (UTF-8 bytes are unsigned).
+    array-get-u: func(a: type-id, r: ref, idx: u32);
+
+    /// `array.set $A ref idx value` — write `value` to element `idx` of
+    /// array `ref`.  No return.  Traps on out-of-bounds.
+    array-set: func(a: type-id, r: ref, idx: u32);
+
+    /// `array.len ref` — return the length of `ref` as i32.  No
+    /// type-id needed — every array carries its own length at the
+    /// engine level.  Always cheap; the engine doesn't store length
+    /// alongside payload.
+    array-len: func(r: ref);
+
+    /// `array.copy $Dst $Src dst-ref dst-idx src-ref src-idx n` — copy
+    /// `n` elements from `src-ref` starting at `src-idx` to `dst-ref`
+    /// starting at `dst-idx`.  Source and destination element types
+    /// must match (validated at decoding).  Used by `Vec.grow` and
+    /// `String.concat`.
+    array-copy: func(dst: type-id, src: type-id);
+}
+
+// ─── Sigil-surface layout conventions ─────────────────────────────────────────
+// How each Sigil type maps to a WasmGC type declaration.  The codegen
+// emits one type-section entry per distinct Sigil layout; identical
+// layouts are deduplicated.
+
+interface layouts {
+    /// `String` → `(type $String (array (mut i8)))`.
+    /// Length comes from `array.len`; no separate length field.
+    /// UTF-8 byte sequence.  Read via `array.get_u` (unsigned bytes).
+    string-layout: func();
+
+    /// `Array[T]` for value-typed T → `(type $Array_T (array (mut T)))`.
+    /// One type per element type: `$Array_i32`, `$Array_f32`,
+    /// `$Array_i64`, `$Array_i32` (shared with Int/Bool/UInt8–UInt32),
+    /// `$Array_i64` (shared with Int64/UInt64).
+    /// Length via `array.len`; elements via `array.get_s` / `array.set`.
+    array-layout: func();
+
+    /// `@struct Foo := { x:T0, y:T1 }` →
+    ///   `(type $Foo (struct (field (mut T0)) (field (mut T1))))`.
+    /// Field order matches source declaration order.  Field access uses
+    /// `struct.get $Foo i` where `i` is the source-order field index.
+    /// Every field is mutable for v1.0; immutable-field optimization is
+    /// a v1.1 follow-up.
+    struct-layout: func();
+
+    /// `@type Foo := $A x:T0 | $B y:T1, z:T2` (sum with payloads) →
+    ///   `(type $Foo (struct
+    ///        (field (mut i32))                    ;; tag (0 = $A, 1 = $B, …)
+    ///        (field (mut i32))                    ;; field 0 (pad-to-max)
+    ///        (field (mut i32))                    ;; field 1 (pad-to-max)
+    ///        …                                    ;; up to maxFields total
+    ///    ))`.
+    ///
+    /// Mirrors today's linear-memory pad-to-max layout, just emitted as
+    /// a struct instead of bytes.  Construction:
+    ///   `struct.new $Foo (i32.const tag) field0 field1 … fieldN-1`
+    /// where missing trailing fields are i32.const 0 (zero-fill).
+    /// `@match` reads field 0 via `struct.get $Foo 0` and dispatches
+    /// via the existing tag-compare logic.
+    ///
+    /// Subtype-hierarchy representation (variant-as-subclass with
+    /// `ref.test` dispatch) is a v1.1 optimization — source-level
+    /// identical.
+    sum-tagged-layout: func();
+
+    /// `@type Color := Red | Green | Blue` (payload-free sum) →
+    ///   `(type $Color (struct (field (mut i32))))`.
+    /// Tag only.  Same shape as a sum-with-payloads where maxFields = 0.
+    sum-tagless-layout: func();
+
+    /// `Vec[T]` for value-typed T →
+    ///   `(type $Vec_T (struct
+    ///        (field (mut i32))                    ;; len
+    ///        (field (mut (ref $Array_T)))         ;; data
+    ///    ))`.
+    /// Capacity is `array.len data` (no separate capacity field — the
+    /// backing array's length IS the capacity).  Grow allocates a new
+    /// $Array_T via `array.new_default`, then `array.copy` from old to
+    /// new, then `struct.set $Vec_T 1` to update the data ref.
+    ///
+    /// One $Vec_T per element type: $Vec_i32, $Vec_f32, $Vec_i64.
+    /// Ref-typed `T` (Vec[String], Vec[@struct]) deferred to v1.1
+    /// (variance design needed).
+    vec-layout: func();
+}
+
+// ─── Explicit exclusions (v1.0) ───────────────────────────────────────────────
+// Operations the codegen DOES NOT emit for v1.0.  Listed here so that
+// stdlib authors and downstream tools know not to depend on them, and
+// so the contract is auditable.
+
+interface excluded-v1-0 {
+    /// `ref.test (ref $T) ref` — test whether `ref` is an instance of
+    /// `$T`.  Required for subtype-hierarchy sum dispatch.  NOT emitted
+    /// in v1.0 because Phase 9d-7 uses tagged-struct sums.  v1.1 story
+    /// 9.1-d-1 lifts this.
+    ref-test: func();
+
+    /// `ref.cast (ref $T) ref` — cast `ref` to `(ref $T)`.  Same
+    /// reasoning as `ref-test` — required only for subtype-hierarchy
+    /// dispatch.  v1.1 story 9.1-d-1.
+    ref-cast: func();
+
+    /// `string.new_utf8` / `string.encode_wtf8` / `stringview_*` —
+    /// the stringref proposal.  Currently Phase 3 of standardization;
+    /// not universally available across target engines.  v1.0 backs
+    /// `String` with `(array i8)` (see `string-layout` above).  v1.1
+    /// adopts stringref when ≥ 80% of engines ship it.
+    stringref: func();
+
+    /// `(ref null $T)` weak references and finalizer registration.
+    /// The GC spec includes them; v1.0 doesn't expose them.  v1.1
+    /// stratum.
+    weak-refs: func();
+
+    /// `anyref` / `eqref` / `i31ref` and the conversion ops between
+    /// them.  Useful for interop with engine-level any-typed values;
+    /// not needed for the v1.0 stdlib surface.  v1.1 if a real use case
+    /// surfaces.
+    universal-refs: func();
+}
+
+world wasm-gc {
+    export struct-ops;
+    export array-ops;
+    export layouts;
+}

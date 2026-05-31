@@ -1,0 +1,12 @@
+# SPDX-License-Identifier: MIT
+# D-D-10: @match migrated to the new @stratum form.
+# Handler delegates to compiler_expandMatchChain (host-side helper that
+# implements the variant-tag dispatch, arm bindings, and alternation logic).
+@stratum Match := {
+    &Compiler::register::expression_keyword '@match';
+    &Compiler::on::lower '@match', Match_lower;
+};
+@fn Match_lower node:Int :=
+    &compiler::compiler_expandMatchChain
+        (&compiler::compiler_ast_node_field node, (&compiler::compiler_str_intern 'args', 0)),
+        (&compiler::compiler_ast_node_field node, (&compiler::compiler_str_intern 'inferredType', 0));

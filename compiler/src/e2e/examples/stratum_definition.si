@@ -1,0 +1,6 @@
+## Verifies that the built-in `+` stratum (defined in src/strata/operators.si
+## via the unified `@stratum Plus := { ... }; @fn Plus_lower ...` form) is
+## correctly registered and dispatches `1 + 2` to i32.add at codegen time.
+## The legacy `@stratum_operator Plus ('+', Node) = { ... }` form was retired
+## as part of the Phase 5 grammar revision pass.
+1 + 2;

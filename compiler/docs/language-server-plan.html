@@ -1,0 +1,534 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Silicon Language Server — v1 Alpha Plan</title>
+  <style>
+    :root {
+      --bg: #0f1117;
+      --surface: #1a1d27;
+      --surface2: #222535;
+      --border: #2e3248;
+      --accent: #6c8ef7;
+      --accent2: #b06cf7;
+      --accent3: #3ecf8e;
+      --accent4: #f7a06c;
+      --accent5: #f76c6c;
+      --accent6: #f7e36c;
+      --text: #dde1f0;
+      --muted: #7b82a8;
+      --code-bg: #13151f;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+      padding: 40px 24px;
+    }
+    .page { max-width: 1150px; margin: 0 auto; }
+    h1 { font-size: 2rem; color: var(--accent); margin-bottom: 8px; }
+    h2 { font-size: 1.4rem; color: var(--accent2); margin: 40px 0 16px; border-bottom: 1px solid var(--border); padding-bottom: 8px; }
+    h3 { font-size: 1.1rem; color: var(--accent3); margin: 24px 0 10px; }
+    h4 { font-size: 0.95rem; color: var(--accent4); margin: 16px 0 8px; }
+    p  { margin-bottom: 12px; color: var(--text); }
+    .subtitle { color: var(--muted); font-size: 1rem; margin-bottom: 32px; }
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 20px 24px;
+      margin-bottom: 20px;
+    }
+    .card.warn { border-color: var(--accent5); }
+    .card.ok   { border-color: var(--accent3); }
+    .card.info { border-color: var(--accent);  }
+    .card.note { border-color: var(--accent4); }
+    .card.idea { border-color: var(--accent2); }
+    pre {
+      background: var(--code-bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 16px;
+      overflow-x: auto;
+      font-family: 'Cascadia Code', 'Fira Code', 'Consolas', monospace;
+      font-size: 0.82rem;
+      line-height: 1.55;
+      margin: 12px 0;
+    }
+    code { font-family: 'Cascadia Code', 'Fira Code', 'Consolas', monospace; font-size: 0.85em; background: var(--code-bg); padding: 1px 5px; border-radius: 4px; }
+    .kw  { color: #c792ea; }
+    .fn  { color: #82aaff; }
+    .str { color: #c3e88d; }
+    .cm  { color: #546e7a; }
+    .ty  { color: #ffcb6b; }
+    .op  { color: #89ddff; }
+    .si  { color: var(--accent3); }
+    .ir  { color: var(--accent4); }
+    .api { color: var(--accent2); }
+    table { width: 100%; border-collapse: collapse; margin: 12px 0; font-size: 0.85rem; }
+    th { background: var(--surface2); color: var(--accent); padding: 8px 12px; text-align: left; border: 1px solid var(--border); }
+    td { padding: 8px 12px; border: 1px solid var(--border); vertical-align: top; }
+    tr:nth-child(even) td { background: #141620; }
+    ul, ol { padding-left: 24px; margin: 8px 0 16px; }
+    li { margin-bottom: 4px; }
+    .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin: 16px 0; }
+    @media (max-width: 700px) { .two-col { grid-template-columns: 1fr; } }
+    .tag {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 12px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      margin-right: 4px;
+    }
+    .tag.red    { background: #3a1515; color: var(--accent5); border: 1px solid #5a2020; }
+    .tag.green  { background: #0f2d1f; color: var(--accent3); border: 1px solid #1a4a30; }
+    .tag.blue   { background: #0f1a3a; color: var(--accent);  border: 1px solid #1a2e5a; }
+    .tag.purple { background: #1e1030; color: var(--accent2); border: 1px solid #3a1a50; }
+    .tag.orange { background: #2d1a0f; color: var(--accent4); border: 1px solid #5a3010; }
+    .tag.yellow { background: #2d2a0f; color: var(--accent6); border: 1px solid #5a5510; }
+    .phase-head {
+      display: flex;
+      align-items: baseline;
+      gap: 14px;
+      margin: 36px 0 6px;
+      padding-bottom: 8px;
+      border-bottom: 1px solid var(--border);
+    }
+    .phase-num {
+      font-size: 0.75rem;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--muted);
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 2px 10px;
+    }
+    .phase-name { color: var(--accent3); font-size: 1.25rem; font-weight: 600; }
+    .meta-row { display: grid; grid-template-columns: 110px 1fr; gap: 8px 18px; margin: 12px 0 18px; font-size: 0.88rem; }
+    .meta-row .k { color: var(--muted); }
+    .meta-row .v { color: var(--text); }
+    .gate {
+      background: #131e1a;
+      border: 1px solid var(--accent3);
+      border-radius: 6px;
+      padding: 8px 14px;
+      margin: 12px 0;
+      font-size: 0.88rem;
+    }
+    .gate .lbl {
+      display: inline-block;
+      background: var(--accent3);
+      color: #0f1117;
+      font-weight: 700;
+      font-size: 0.7rem;
+      padding: 1px 8px;
+      border-radius: 4px;
+      margin-right: 8px;
+      letter-spacing: 0.06em;
+    }
+    .arch {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 14px;
+      margin: 16px 0;
+    }
+    .arch-box {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 12px 14px;
+      font-size: 0.85rem;
+    }
+    .arch-box .title {
+      color: var(--accent);
+      font-weight: 600;
+      margin-bottom: 6px;
+    }
+    .arch-box .body { color: var(--muted); font-size: 0.8rem; }
+    @media (max-width: 800px) { .arch { grid-template-columns: 1fr; } }
+    hr.divider { border: none; border-top: 1px solid var(--border); margin: 40px 0; }
+  </style>
+</head>
+<body>
+<div class="page">
+
+  <h1>Silicon Language Server — v1 Alpha Plan</h1>
+  <p class="subtitle">A Language Server Protocol implementation for <code>.si</code> files.  Targets VS Code first via the existing <code>vscode-silicon</code> extension; the server itself speaks plain LSP and runs in any editor that supports it (vim, emacs, helix, neovim, sublime).</p>
+
+  <div class="card info">
+    <strong>Status:</strong> plan only — no code shipped.<br />
+    <strong>Scope:</strong> v1 alpha covers everything an editor needs to feel like it understands Silicon.  Strata-aware semantics and project-config parsing are explicit later goals captured here so the architecture leaves room for them, but neither ships in v1.
+  </div>
+
+  <div class="card info" style="border-left: 4px solid var(--accent4);">
+    <strong>Status note (post-boot/ removal):</strong> This document was authored
+    when the Silicon-in-Silicon bootstrap lived under <code>boot/</code>. That tree
+    has been removed and the self-hosted compiler is slated for a future rewrite.
+    References to <code>boot/*</code> paths describe the historical layout — they
+    need re-scoping when the rewrite begins. The TypeScript compiler in
+    <code>src/</code> is the current production compiler.
+  </div>
+
+  <h2>1. What ships in v1 alpha</h2>
+
+  <p>Four capabilities, in priority order:</p>
+
+  <ol>
+    <li><strong>Diagnostics on save / change</strong> — surface the existing typechecker errors (already structured per <code>docs/diagnostics.md</code>) as <code>textDocument/publishDiagnostics</code>.  Free win: every check the Stage 0 compiler already runs becomes a red squiggle.</li>
+    <li><strong>Document symbols</strong> — outline view + breadcrumb support via <code>textDocument/documentSymbol</code>: every <code>@let</code>, <code>@fn</code>, <code>@var</code>, <code>@extern</code>, <code>@type</code>, <code>@stratum_*</code> in the file.</li>
+    <li><strong>Go-to definition</strong> — <code>textDocument/definition</code> for <code>&amp;name</code> call sites, <code>name</code> identifier references (locals → declaration; globals → top-level def; cross-file via <code>@use</code> resolution).</li>
+    <li><strong>Hover</strong> — <code>textDocument/hover</code> shows the source location and signature of whatever the cursor is on (function name, local, type).</li>
+  </ol>
+
+  <p>Everything else (rename, references, completion, formatting, semantic tokens) is post-alpha.  Capturing them in §6 so the architecture doesn't paint itself into a corner.</p>
+
+  <h2>2. Architecture</h2>
+
+  <div class="arch">
+    <div class="arch-box">
+      <div class="title">Editor (VS Code / vim / …)</div>
+      <div class="body">Spawns the server as a subprocess.  Speaks LSP over stdio.  The <code>vscode-silicon</code> extension grows a thin client wrapper that wires <code>activate()</code> → spawn server → register language client.</div>
+    </div>
+    <div class="arch-box">
+      <div class="title">Language server (Node, TypeScript)</div>
+      <div class="body">Long-running process.  Loads <code>src/parser</code>, <code>src/elaborator</code>, <code>src/types</code>, <code>src/modules/useResolver</code> directly — same compiler frontend the CLI uses.  Maintains an in-memory document store + symbol index.  Speaks LSP via <code>vscode-languageserver/node</code>.</div>
+    </div>
+    <div class="arch-box">
+      <div class="title">Silicon source tree</div>
+      <div class="body">The user's project.  Files are <code>.si</code>.  Multi-file via <code>@use 'path.si'</code>.  Server tracks the full <code>@use</code> graph for the open workspace.</div>
+    </div>
+  </div>
+
+  <div class="card note">
+    <strong>Why TypeScript Stage 0 and not <code>stage1.wasm</code>?</strong>  Two reasons.  First, Stage 0 already has structured diagnostics (<code>src/errors/diagnostic.ts</code>), source-location-tracking AST nodes, and the elaborator/typechecker.  Reusing it is a day-one win.  Second, <code>stage1.wasm</code> emits WAT and exits — it doesn't expose a "give me diagnostics for this buffer without finishing compilation" API.  Once it does, we can swap the backend without touching the LSP protocol layer.  Today's coupling between the server process and the TypeScript frontend is a v1 implementation detail, not a contract.
+  </div>
+
+  <h2>3. Repository layout</h2>
+
+  <pre>lsp-silicon/                          <span class="cm"># new top-level package</span>
+├── package.json                       <span class="cm"># "name": "lsp-silicon", bin: "silicon-lsp"</span>
+├── src/
+│   ├── server.ts                      <span class="cm"># LSP connection + handler registry</span>
+│   ├── document-store.ts              <span class="cm"># open buffers + incremental sync</span>
+│   ├── workspace.ts                   <span class="cm"># @use graph + symbol index</span>
+│   ├── handlers/
+│   │   ├── diagnostics.ts             <span class="cm"># publishDiagnostics on change/save</span>
+│   │   ├── document-symbol.ts         <span class="cm"># outline / breadcrumbs</span>
+│   │   ├── definition.ts              <span class="cm"># go-to definition</span>
+│   │   └── hover.ts                   <span class="cm"># type / source-location pop-ups</span>
+│   └── index.ts                       <span class="cm"># bin entry point — stdio transport</span>
+└── tsconfig.json
+
+vscode-silicon/                        <span class="cm"># existing extension grows a client</span>
+├── client/
+│   ├── extension.ts                   <span class="cm"># activate() spawns silicon-lsp + wires LanguageClient</span>
+│   └── tsconfig.json
+└── package.json                       <span class="cm"># adds "activationEvents", "main": "./client/out/extension"</span>
+                                       <span class="cm"># + dependency on the lsp-silicon binary</span></pre>
+
+  <div class="card idea">
+    <strong>Why a separate package?</strong>  The server runs in vim / emacs / helix / neovim / sublime / Zed with zero VS-Code dependency.  Bundling the LSP into <code>vscode-silicon</code> would lock everyone else out.  Cost: an extra <code>package.json</code> and one more <code>bun install</code> target.
+  </div>
+
+  <hr class="divider" />
+
+  <div class="phase-head"><span class="phase-num">Phase 0</span><span class="phase-name">Skeleton — handshake + document sync</span></div>
+  <div class="meta-row">
+    <div class="k">Goal</div><div class="v">A running LSP server that VS Code connects to, accepts <code>initialize</code>, advertises a tiny <code>ServerCapabilities</code>, and tracks open documents.</div>
+    <div class="k">Deliverable</div><div class="v"><code>lsp-silicon/src/server.ts</code>, <code>document-store.ts</code>, <code>index.ts</code> (~150 LoC total).  <code>vscode-silicon/client/extension.ts</code> that spawns it.</div>
+    <div class="k">Inputs</div><div class="v"><code>vscode-languageserver/node</code> + <code>vscode-languageserver-textdocument</code> npm packages.</div>
+    <div class="k">Outputs</div><div class="v">Editor reports "Silicon" in the status bar; no errors when opening a <code>.si</code> file; no functional features yet.</div>
+  </div>
+
+  <h4>The handshake</h4>
+  <pre><span class="kw">import</span> { createConnection, ProposedFeatures, TextDocuments, TextDocumentSyncKind }
+       <span class="kw">from</span> <span class="str">'vscode-languageserver/node'</span>
+<span class="kw">import</span> { TextDocument } <span class="kw">from</span> <span class="str">'vscode-languageserver-textdocument'</span>
+
+<span class="kw">const</span> connection = <span class="fn">createConnection</span>(ProposedFeatures.all)
+<span class="kw">const</span> documents = <span class="kw">new</span> <span class="ty">TextDocuments</span>(TextDocument)
+
+connection.<span class="fn">onInitialize</span>(() =&gt; ({
+    capabilities: {
+        textDocumentSync: TextDocumentSyncKind.<span class="api">Incremental</span>,
+        <span class="cm">// Phase 1+ adds documentSymbolProvider, definitionProvider, hoverProvider</span>
+    }
+}))
+
+documents.<span class="fn">listen</span>(connection)
+connection.<span class="fn">listen</span>()</pre>
+
+  <h4>VS Code client wrapper</h4>
+  <pre><span class="kw">import</span> { LanguageClient, TransportKind } <span class="kw">from</span> <span class="str">'vscode-languageclient/node'</span>
+
+<span class="kw">export function</span> <span class="fn">activate</span>(ctx: ExtensionContext) {
+    <span class="kw">const</span> server = ctx.<span class="fn">asAbsolutePath</span>(<span class="str">'node_modules/lsp-silicon/dist/index.js'</span>)
+    <span class="kw">const</span> client = <span class="kw">new</span> <span class="ty">LanguageClient</span>(<span class="str">'silicon'</span>, <span class="str">'Silicon'</span>,
+        { run:   { module: server, transport: TransportKind.<span class="api">ipc</span> },
+          debug: { module: server, transport: TransportKind.<span class="api">ipc</span>,
+                   options: { execArgv: [<span class="str">'--inspect=6009'</span>] } } },
+        { documentSelector: [{ scheme: <span class="str">'file'</span>, language: <span class="str">'silicon'</span> }] })
+    client.<span class="fn">start</span>()
+}</pre>
+
+  <div class="gate"><span class="lbl">Gate</span> &nbsp; <code>F1 → Developer: Show Running Extensions</code> shows <code>vscode-silicon</code> as Active, no error log on opening a <code>.si</code> file, and the server process appears in Task Manager / <code>ps</code>.</div>
+
+  <hr class="divider" />
+
+  <div class="phase-head"><span class="phase-num">Phase 1</span><span class="phase-name">Diagnostics — red squiggles for free</span></div>
+  <div class="meta-row">
+    <div class="k">Goal</div><div class="v">Every parser/elaborator/typechecker error the Stage 0 compiler already detects renders as a diagnostic in the editor with correct range, severity, and message.</div>
+    <div class="k">Deliverable</div><div class="v"><code>lsp-silicon/src/handlers/diagnostics.ts</code>.  Hook into <code>documents.onDidChangeContent</code> + <code>onDidSave</code>.  Debounce by 200ms so typing isn't laggy.</div>
+    <div class="k">Inputs</div><div class="v"><code>src/parser</code>, <code>src/elaborator</code>, <code>src/types/typechecker</code>, <code>src/errors/diagnostic</code>.</div>
+    <div class="k">Outputs</div><div class="v">Each <code>.si</code> file in the editor shows red/yellow squiggles on the precise byte ranges the compiler already reports.</div>
+  </div>
+
+  <h4>The flow</h4>
+  <pre>documents.<span class="fn">onDidChangeContent</span>(({ document }) =&gt; {
+    <span class="fn">debouncedRecheck</span>(document)
+})
+
+<span class="kw">async function</span> <span class="fn">recheck</span>(doc: TextDocument): Promise&lt;<span class="kw">void</span>&gt; {
+    <span class="kw">try</span> {
+        <span class="kw">const</span> ast = <span class="fn">parseAndBuildAst</span>(doc.<span class="fn">getText</span>())
+        <span class="kw">const</span> registry = <span class="fn">buildStrataRegistry</span>(ast)
+        <span class="kw">const</span> { errors: elabErrors } = <span class="fn">elaborate</span>(ast, registry)
+        <span class="kw">const</span> { errors: typeErrors } = <span class="fn">typecheck</span>(ast, registry, moduleRegistry)
+        <span class="kw">const</span> diagnostics = [...elabErrors, ...typeErrors]
+            .<span class="fn">map</span>(toLspDiagnostic)
+        connection.<span class="fn">sendDiagnostics</span>({ uri: doc.<span class="api">uri</span>, diagnostics })
+    } <span class="kw">catch</span> (e) {
+        <span class="cm">// Parse-error path — single diagnostic from the lex/parse exception</span>
+        connection.<span class="fn">sendDiagnostics</span>({ uri: doc.<span class="api">uri</span>,
+            diagnostics: [<span class="fn">parseErrorToDiagnostic</span>(e)] })
+    }
+}</pre>
+
+  <h4>Diagnostic mapping</h4>
+  <p>Compiler errors already carry source ranges (<code>{ start: { line, col }, end: ... }</code>) from <code>docs/diagnostics.md</code>'s migration.  LSP expects 0-indexed line/character.  A 10-line adapter converts.</p>
+
+  <table>
+    <tr><th>Compiler error kind</th><th>LSP severity</th><th>Code</th></tr>
+    <tr><td>Parse error (unexpected token)</td><td>Error</td><td><code>silicon.parse</code></td></tr>
+    <tr><td>Elaboration error (unknown keyword, bad arity)</td><td>Error</td><td><code>silicon.elab</code></td></tr>
+    <tr><td>Type mismatch</td><td>Error</td><td><code>silicon.type</code></td></tr>
+    <tr><td>Unused local (future)</td><td>Warning</td><td><code>silicon.unused</code></td></tr>
+  </table>
+
+  <div class="gate"><span class="lbl">Gate</span> &nbsp; Open <code>boot/parser/parse.si</code>, introduce an obvious type error (<code>@let bad := 'string' + 1;</code>) → red squiggle within ~200ms.  Fix it → squiggle disappears on next change.  No false positives on a clean file.</div>
+
+  <hr class="divider" />
+
+  <div class="phase-head"><span class="phase-num">Phase 2</span><span class="phase-name">Document symbols + go-to definition</span></div>
+  <div class="meta-row">
+    <div class="k">Goal</div><div class="v">Outline view lists every top-level definition.  Ctrl-click on <code>&amp;name</code> jumps to its declaration.  Within a function, click on a local goes to its <code>@local</code>.</div>
+    <div class="k">Deliverable</div><div class="v"><code>handlers/document-symbol.ts</code> + <code>handlers/definition.ts</code> + a per-document symbol index in <code>workspace.ts</code>.</div>
+    <div class="k">Inputs</div><div class="v">Elaborated AST + the source-location stamps every AST node already carries.</div>
+    <div class="k">Outputs</div><div class="v">VS Code Outline pane populates; F12 (go-to definition) works for top-level names and locals.</div>
+  </div>
+
+  <h4>The symbol index</h4>
+  <p>Per document, build a flat list of <code>{ name, kind, range, selectionRange }</code>.  Cached and invalidated on edit.</p>
+  <pre><span class="kw">interface</span> <span class="ty">SiliconSymbol</span> {
+    name:           string
+    kind:           <span class="str">'fn'</span> | <span class="str">'let'</span> | <span class="str">'var'</span> | <span class="str">'extern'</span> | <span class="str">'type'</span> | <span class="str">'stratum'</span> | <span class="str">'local'</span>
+    range:          Range  <span class="cm">// the entire definition</span>
+    selectionRange: Range  <span class="cm">// just the name</span>
+    container?:     string <span class="cm">// the enclosing @fn name, if any</span>
+}
+
+<span class="kw">function</span> <span class="fn">buildSymbolIndex</span>(ast: Program): SiliconSymbol[] {
+    <span class="kw">const</span> out: SiliconSymbol[] = []
+    <span class="kw">for</span> (<span class="kw">const</span> el <span class="kw">of</span> ast.<span class="api">elements</span>) {
+        <span class="kw">if</span> (el.type === <span class="str">'Definition'</span>) {
+            out.<span class="fn">push</span>({ name: el.<span class="api">name</span>.name, kind: kindFromKeyword(el.<span class="api">keyword</span>),
+                       range: el.<span class="api">sourceLocation</span>,
+                       selectionRange: el.<span class="api">name</span>.sourceLocation })
+            <span class="cm">// Recurse into the body for @local declarations</span>
+            <span class="fn">collectLocals</span>(el.<span class="api">binding</span>, el.<span class="api">name</span>.name, out)
+        }
+    }
+    <span class="kw">return</span> out
+}</pre>
+
+  <h4>Resolution algorithm for go-to definition</h4>
+  <ol>
+    <li>Find the AST node under the cursor.  Must be a <code>Namespace</code> (identifier reference) or <code>FunctionCall</code>.</li>
+    <li><strong>Single-segment name</strong>: walk outward from the cursor position through enclosing <code>@fn</code>'s scope (params → hoisted <code>@local</code>s → enclosing <code>@let</code>s of same file → other top-level defs of same file → <code>@use</code>'d files).  First match wins.</li>
+    <li><strong>Multi-segment name</strong> (<code>Module::fn</code>): resolve <code>Module</code> against <code>@use 'Module.si'</code>; look up <code>fn</code> in that file's symbol index.</li>
+    <li>Return the symbol's <code>selectionRange</code> as a <code>Location</code> in the original file.</li>
+  </ol>
+
+  <div class="card warn">
+    <strong>The <code>@use</code> graph.</strong>  v1 alpha needs to resolve <code>@use 'path.si'</code> across files in the workspace.  Re-use <code>src/modules/useResolver</code> (already battle-tested in the CLI build path) but call it eagerly when the workspace opens — and re-resolve on file save when <code>@use</code> lines change.  The graph lives in <code>workspace.ts</code> as an in-memory <code>Map&lt;uri, ResolvedUseEntry[]&gt;</code>.
+  </div>
+
+  <h4>Hover</h4>
+  <p>Once the symbol index exists, hover is "find the symbol under the cursor, format it as Markdown."  Show keyword + signature + the first line of the doc comment (<code>##</code>) preceding the definition.</p>
+  <pre><span class="kw">function</span> <span class="fn">hover</span>(uri: string, pos: Position): Hover | <span class="kw">null</span> {
+    <span class="kw">const</span> sym = <span class="fn">resolveAtPosition</span>(uri, pos)
+    <span class="kw">if</span> (!sym) <span class="kw">return null</span>
+    <span class="kw">return</span> {
+        contents: { kind: <span class="str">'markdown'</span>,
+                    value: <span class="str">`\`\`\`silicon\n${sym.signature}\n\`\`\`\n\n${sym.docComment ?? <span class="str">''</span>}`</span> },
+        range: sym.<span class="api">selectionRange</span>,
+    }
+}</pre>
+
+  <div class="gate"><span class="lbl">Gate</span> &nbsp; In <code>boot/parser/parse.si</code>: click on <code>&amp;parse_namespace</code> → jumps to <code>@fn parse_namespace := { ... }</code>.  Click on a local <code>tok</code> inside <code>parse_expression_end</code> → jumps to its <code>@local tok := ...</code>.  Outline pane lists all 50+ <code>@fn</code>s in the file.</div>
+
+  <hr class="divider" />
+
+  <h2>4. Capabilities matrix (v1 alpha vs future)</h2>
+
+  <table>
+    <tr><th>Capability</th><th>v1 alpha</th><th>Notes</th></tr>
+    <tr><td><code>textDocumentSync</code></td><td><span class="tag green">yes</span></td><td>Incremental sync, debounced re-check.</td></tr>
+    <tr><td><code>publishDiagnostics</code></td><td><span class="tag green">yes</span></td><td>Pulls from existing parser / elaborator / typechecker errors.</td></tr>
+    <tr><td><code>documentSymbolProvider</code></td><td><span class="tag green">yes</span></td><td>Top-level defs + hoisted <code>@local</code>s, hierarchical.</td></tr>
+    <tr><td><code>definitionProvider</code></td><td><span class="tag green">yes</span></td><td>Resolves through the <code>@use</code> graph.</td></tr>
+    <tr><td><code>hoverProvider</code></td><td><span class="tag green">yes</span></td><td>Source-location + signature + doc comment.</td></tr>
+    <tr><td><code>completionProvider</code></td><td><span class="tag yellow">post-alpha</span></td><td>Top-level <code>@</code>-keyword completion is easy; full identifier completion needs the symbol index but also a smarter scope walker.</td></tr>
+    <tr><td><code>referencesProvider</code></td><td><span class="tag yellow">post-alpha</span></td><td>Reverse index of every <code>Namespace</code> node; cheap once the symbol index is in place.</td></tr>
+    <tr><td><code>renameProvider</code></td><td><span class="tag yellow">post-alpha</span></td><td>Trivial once references work — emit a <code>WorkspaceEdit</code>.</td></tr>
+    <tr><td><code>documentFormattingProvider</code></td><td><span class="tag orange">v2</span></td><td>Needs a printer pass; punted until a style decision exists.</td></tr>
+    <tr><td><code>semanticTokensProvider</code></td><td><span class="tag orange">v2</span></td><td>The TextMate grammar covers ~99% of what semantic tokens would give us; only worth doing once we want context-sensitive coloring (e.g. unused locals dimmed).</td></tr>
+    <tr><td>Strata-aware completion / hover</td><td><span class="tag purple">strata phase</span></td><td>See §5.</td></tr>
+    <tr><td>Project config awareness</td><td><span class="tag purple">strata phase</span></td><td>See §5.</td></tr>
+  </table>
+
+  <h2>5. Later goals — strata semantics & project config</h2>
+
+  <h3>5.1  Strata-aware editor semantics</h3>
+
+  <div class="card idea">
+    <strong>Why this is hard, and why we punt it from v1.</strong>  Today the LSP can hard-code knowledge of built-in keywords (<code>@if</code>, <code>@loop</code>, <code>@let</code>, …).  To honour user-defined strata, the server has to evaluate each project's <code>@stratum_*</code> declarations and register them dynamically — same job <code>src/elaborator/strataLoader.ts</code> does at compile time.  Doable, but cross-cuts every feature (completion suggests user strata; hover explains them; definition jumps to <code>@stratum_keyword Foo ('@foo', Node) = { ... }</code>; rename rewrites both the declarator and every <code>&amp;@foo</code> call site).
+  </div>
+
+  <p>The mechanism, when it lands:</p>
+
+  <ol>
+    <li>On workspace open, scan for <code>*.si</code> files containing <code>@stratum_keyword</code> or <code>@stratum_operator</code>.</li>
+    <li>Build the same <code>ElaboratorRegistry</code> the compiler builds (<code>buildStrataRegistry</code>).  Cache it per workspace.</li>
+    <li>Invalidate the cache when any file containing a <code>@stratum_*</code> changes.</li>
+    <li>Feed the cached registry to each handler:
+      <ul>
+        <li>Completion: include user keywords / operators alongside built-ins.</li>
+        <li>Hover: show the stratum's first-line doc comment + the intrinsic it lowers to.</li>
+        <li>Definition: jump to the <code>@stratum_*</code> declarator.</li>
+        <li>Diagnostics: a <code>&amp;@unknown</code> call becomes "no stratum registered for keyword <code>@unknown</code>" instead of a generic parse error.</li>
+      </ul>
+    </li>
+  </ol>
+
+  <p>This is roughly a <strong>Phase 5</strong> the day someone wants it.  Architectural pre-condition for v1 alpha: keep the workspace + symbol index as separate concerns from the per-document store, so registry-aware features can layer on without rewriting.</p>
+
+  <h3>5.2  Project configuration file</h3>
+
+  <p>Spec deferred to a sibling doc, but the LSP needs to read it.  Sketch:</p>
+
+  <pre><span class="cm"># silicon.toml — at workspace root</span>
+
+[project]
+name    = <span class="str">"sigil"</span>
+version = <span class="str">"0.1.0"</span>
+entry   = <span class="str">"boot/main.si"</span>
+
+[build]
+target  = <span class="str">"wasix"</span>            <span class="cm"># or "host", "browser", "wasi"</span>
+output  = <span class="str">"dist/"</span>
+
+[strata]
+include = [<span class="str">"src/strata/**/*.si"</span>,
+           <span class="str">"src/strata/modules/*.si"</span>]
+exclude = []
+
+[lsp]
+root_dirs       = [<span class="str">"boot/"</span>, <span class="str">"src/"</span>]
+diagnostic_mode = <span class="str">"on_save"</span>     <span class="cm"># or "on_change"</span></pre>
+
+  <p>v1 alpha assumes the workspace root is the project root and that every <code>.si</code> file under it is in scope.  Once a config exists, the server reads it on initialize, narrows the file watcher to <code>root_dirs</code>, and resolves <code>@use</code> paths relative to the project root rather than the file's own directory.</p>
+
+  <p>This is roughly a <strong>Phase 6</strong> the day there's a config-file spec to read.  Architectural pre-condition for v1 alpha: don't bake any <code>boot/</code>-specific assumptions into <code>workspace.ts</code> — keep the resolution roots overridable.</p>
+
+  <h2>6. Open questions</h2>
+
+  <div class="two-col">
+    <div class="card warn">
+      <h4>How does the server find Stage 0?</h4>
+      <p>v1 spawns the server with <code>node lsp-silicon/dist/index.js</code>; the server imports Stage 0 from a known relative path inside the monorepo.  Once <code>stage1.wasm</code> is the canonical compiler, the server shells out to it.  Until then: how do we ship the TS frontend alongside the LSP binary?  Bundle with esbuild?  Publish as an npm package?  Punt for v1 — assume the LSP lives in this monorepo.</p>
+    </div>
+    <div class="card warn">
+      <h4>Granularity of re-checking</h4>
+      <p>On every keystroke the server has to re-parse + re-elaborate + re-typecheck the changed file.  For a small file (<code>boot/std/io.si</code>: 70 lines) this is sub-millisecond.  For the full bootstrap source (~3500 LoC concatenated) it's tens of milliseconds.  Debounce by 200ms in v1.  Move to incremental re-elaboration (cache per-definition IR) only if it becomes a problem.</p>
+    </div>
+    <div class="card warn">
+      <h4>Cross-file diagnostics</h4>
+      <p>When file A defines <code>@fn foo</code> and file B calls <code>&amp;foo</code>, editing A's signature should invalidate B's typechecking.  In v1: re-check every file in the workspace on every save (cheap because files are small).  Smart invalidation via the <code>@use</code> graph is a v2 optimisation.</p>
+    </div>
+    <div class="card warn">
+      <h4>Workspace folder vs single file</h4>
+      <p>VS Code can open a single <code>.si</code> file outside any workspace.  In that case there's no <code>@use</code> graph and no symbol index across files.  v1 degrades gracefully: diagnostics + intra-file go-to-def still work; cross-file symbols are simply absent.</p>
+    </div>
+  </div>
+
+  <h2>7. Acceptance checklist for v1 alpha</h2>
+
+  <ul>
+    <li><span class="tag green">must</span> &nbsp; <code>F1 → Developer: Show Logs → Silicon LSP</code> shows the server initialising on workspace open with no errors.</li>
+    <li><span class="tag green">must</span> &nbsp; Opening any <code>.si</code> file shows the existing TextMate highlighting <strong>and</strong> activates the LSP (status bar shows the language as "Silicon").</li>
+    <li><span class="tag green">must</span> &nbsp; A deliberate type error in <code>boot/parser/parse.si</code> renders a red squiggle with the exact same message <code>bun run src/sigil_cli.ts</code> would print.</li>
+    <li><span class="tag green">must</span> &nbsp; The Outline pane on <code>boot/parser/parse.si</code> lists every <code>@fn</code> at the top level.</li>
+    <li><span class="tag green">must</span> &nbsp; F12 on any <code>&amp;parse_*</code> call in <code>parse.si</code> jumps to the matching <code>@fn</code> definition.</li>
+    <li><span class="tag green">must</span> &nbsp; F12 on a <code>@local</code>'s usage inside <code>parse_definition</code> jumps to its <code>@local foo := ...</code> declaration.</li>
+    <li><span class="tag green">must</span> &nbsp; Hovering on a function name shows its <code>@fn name:Type ...</code> signature line.</li>
+    <li><span class="tag blue">should</span> &nbsp; Server CPU usage during idle editing is &lt; 5% (debouncing works).</li>
+    <li><span class="tag blue">should</span> &nbsp; Server memory after 30 minutes of editing the full <code>boot/</code> tree is &lt; 200 MB.</li>
+  </ul>
+
+  <h2>8. Build order (in commit-sized slices)</h2>
+
+  <ol>
+    <li><strong>Slice 1</strong> &nbsp; scaffolding: <code>lsp-silicon/package.json</code>, <code>tsconfig.json</code>, <code>src/index.ts</code> stub.  No handlers, just <code>onInitialize</code>.</li>
+    <li><strong>Slice 2</strong> &nbsp; VS Code client wrapper: <code>vscode-silicon/client/extension.ts</code> spawns the server; activation event on <code>.si</code> file open.</li>
+    <li><strong>Slice 3</strong> &nbsp; document store + debounced <code>onDidChangeContent</code> recheck → diagnostics.</li>
+    <li><strong>Slice 4</strong> &nbsp; symbol index per document; <code>documentSymbolProvider</code> implementation.</li>
+    <li><strong>Slice 5</strong> &nbsp; <code>@use</code> graph in <code>workspace.ts</code>; cross-file symbol resolution.</li>
+    <li><strong>Slice 6</strong> &nbsp; <code>definitionProvider</code> for single-segment names (locals + same-file).</li>
+    <li><strong>Slice 7</strong> &nbsp; <code>definitionProvider</code> extended to cross-file via <code>@use</code> graph.</li>
+    <li><strong>Slice 8</strong> &nbsp; <code>hoverProvider</code>: signature + first-line doc comment.</li>
+    <li><strong>Slice 9</strong> &nbsp; published to the <code>vscode-silicon</code> extension as an optional capability (gated by a setting until stable).</li>
+  </ol>
+
+  <p>Each slice should land on a feature branch and get a green run of the existing 30 WASIX smoke tests plus at least one new test exercising the slice's handler against a fixture <code>.si</code> file.</p>
+
+  <h2>9. Non-goals for v1 alpha</h2>
+
+  <ul>
+    <li>No formatter.  Style decisions haven't been made.</li>
+    <li>No code actions / quick fixes.  Real fixes need the elaborator to suggest them; today's diagnostics are reports, not suggestions.</li>
+    <li>No semantic tokens.  TextMate grammar carries the visual load.</li>
+    <li>No inline values / debug adapter.  WASI debugging is upstream-wasmer territory.</li>
+    <li>No live preview / playground integration.  The web playground already exists; embedding it in VS Code is a separate concern.</li>
+    <li>No incremental compilation.  Re-check the whole file on each debounced edit.  Smart invalidation is v2.</li>
+  </ul>
+
+  <h2>10. References</h2>
+
+  <ul>
+    <li>LSP spec: <a href="https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/">3.17</a> (we target 3.17 features only).</li>
+    <li><code>vscode-languageserver</code> Node bindings: <a href="https://github.com/microsoft/vscode-languageserver-node">microsoft/vscode-languageserver-node</a>.</li>
+    <li><code>docs/diagnostics.md</code> — the existing structured-error format the LSP reuses.</li>
+    <li><code>src/modules/useResolver.ts</code> — the multi-file <code>@use</code> resolver the LSP layers on.</li>
+    <li><code>src/elaborator/strataLoader.ts</code> — the registry builder Phase 5 (strata awareness) will re-use.</li>
+    <li><code>vscode-silicon/</code> — the existing extension the LSP client wraps.</li>
+  </ul>
+
+</div>
+</body>
+</html>

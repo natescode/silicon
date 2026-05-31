@@ -1,0 +1,19 @@
+{
+  "$schema": "https://unpkg.com/@changesets/config@3.1.4/schema.json",
+
+  "// changelog": "Default simple changelog. NOT @changesets/changelog-github — we prefer hand-curated entries over auto-pulled PR titles. See docs/release/changesets-workflow.md.",
+  "changelog": "@changesets/cli/changelog",
+
+  "// commit": "false → committing changesets is the author's call; CI doesn't auto-commit.",
+  "commit": false,
+
+  "fixed": [],
+  "linked": [],
+
+  "// access": "public → npm will accept publishes without --access flag. Flip back to restricted before 1.0 if we decide to stay unpublished.",
+  "access": "public",
+
+  "baseBranch": "main",
+  "updateInternalDependencies": "patch",
+  "ignore": []
+}

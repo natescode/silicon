@@ -1,0 +1,4 @@
+; No extern declarations — the game loop runs entirely on the JS host side.
+; Enabling this feature signals the runtime to start a requestAnimationFrame
+; loop that calls the exported tick() function each frame.
+; The compiler will validate that the program exports a function named 'tick'.

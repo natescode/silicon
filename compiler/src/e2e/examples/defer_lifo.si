@@ -1,0 +1,18 @@
+# Phase 4 (@defer) — multiple defers run in LIFO order.
+# After body executes, cleanups fire bottom-up: release_c, release_b, release_a.
+@extern acquire_a:Int;
+@extern acquire_b:Int;
+@extern acquire_c:Int;
+@extern release_a x:Int;
+@extern release_b x:Int;
+@extern release_c x:Int;
+
+@fn chained := {
+    @local a:Int := &acquire_a;
+    &@defer &release_a a;
+    @local b:Int := &acquire_b;
+    &@defer &release_b b;
+    @local c:Int := &acquire_c;
+    &@defer &release_c c;
+    a + b + c
+};

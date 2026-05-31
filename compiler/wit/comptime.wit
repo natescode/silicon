@@ -1,0 +1,449 @@
+// ─────────────────────────────────────────────────────────────────────────────
+// Sigil comptime host imports — single source of truth.
+//
+// This WIT file describes every host import a compiled Strata handler can call
+// during compilation. Two downstream artifacts must match this contract:
+//
+//   1. src/comptime/imports.ts          — TypeScript host that implements
+//                                          the imports inside the bun-hosted
+//                                          comptime engine.
+//   2. boot/strata/<author>/extern.si   — Silicon @extern declarations a
+//                                          handler `.si` file imports to
+//                                          reach the host.
+//
+// Before this file existed the two sides drifted (see ADR 0003 for the
+// "three places to keep in sync" problem). The .wit is now canonical:
+// changes go here first, then ripple to the TypeScript host and the
+// Silicon @extern surface (wit-bindgen integration tracked in story
+// W-1 — until then the propagation is manual but auditable against
+// the single file).
+//
+// ABI conventions
+// ---------------
+// Every interface function lowers to the all-i32-in / i32-out (or void)
+// shape today's compiled handlers expect:
+//
+//   • `string-id` is a u32 index into the per-firing StringPool. The host
+//     interns Silicon string literals on entry and hands the handler ids.
+//     `0` is the empty/null string id.
+//
+//   • `handle` is a u32 index into the per-firing HandleTable (host objects:
+//     AST nodes, type values, state buckets). `0` is the null handle.
+//
+//   • `ir-handle` is a u32 into a separate `irHandles` table that owns IR
+//     nodes built during this firing. Same `0`-is-null convention. Returned
+//     IR handles are drained back into the host's lowering ctx after the
+//     handler returns.
+//
+//   • `array-handle` is just an `ir-handle` whose value is a JS array.
+//     The compiler-arr-* functions push handle/string-id u32s into it; the
+//     IR builders that take an array-handle resolve each u32 back to its
+//     value when assembling the parent node. This is the existing semantics
+//     of compiler_arr_new / push / push_str / len / get.
+//
+// Resources vs newtypes
+// ---------------------
+// We deliberately use `type X = u32` rather than WIT `resource` because:
+//   (a) it preserves the existing all-i32 ABI byte-for-byte, so today's
+//       compiled handlers can keep running unchanged;
+//   (b) resources require canonical-ABI lowering which the bun host doesn't
+//       implement yet (story W-2).
+// When wit-bindgen lands we'll consider promoting handle/ir-handle/string-id
+// to resources — that's an ABI break and will ship in v1.1 with a migration
+// shim. See ADR 0007.
+// ─────────────────────────────────────────────────────────────────────────────
+
+package sigil:comptime@0.1.0;
+
+// ─── Primitive identifier types ──────────────────────────────────────────────
+// All public surface types are declared in one interface so other interfaces
+// can `use` them by name. Keeps the .wit consistent and grep-able.
+
+interface ids {
+    /// Index into the per-firing StringPool. `0` is the empty string id.
+    type string-id = u32;
+
+    /// Generic handle into the per-firing host-object HandleTable.
+    /// `0` is the null handle.
+    type handle = u32;
+
+    /// Handle into the per-firing IR-node table. Disjoint from `handle`
+    /// — IR nodes have a different lifetime (drained after each firing).
+    type ir-handle = u32;
+
+    /// Conventional alias when an `ir-handle` references an array of
+    /// other handles. Same u32; documentation only.
+    type array-handle = u32;
+
+    /// Conventional alias for an AST-node handle (sits in the generic
+    /// HandleTable, not irHandles). Same u32; documentation only.
+    type ast-handle = handle;
+
+    /// Conventional alias for a type-value handle. Same u32.
+    type type-handle = handle;
+}
+
+// ─── Registration imports (one-shot at strata-load time) ─────────────────────
+// A strata body calls these to announce new keywords, operators, and
+// annotation tokens. The compiler's elaborator dispatches to phase handlers
+// keyed by these tokens.
+
+interface registration {
+    use ids.{string-id};
+
+    /// Register a Definition-style keyword (`@count`, `@derive`, …).
+    /// Allows params, binding, and generics by default.
+    register-keyword: func(token: string-id);
+
+    /// Register an expression-style keyword (`@if`, `@loop`, `@match`,
+    /// `@return`). Same as `register-keyword` but does NOT install a
+    /// def-kind, so call sites parse as expressions not definitions.
+    register-expression-keyword: func(token: string-id);
+
+    /// Register a binary or prefix operator token.
+    register-operator: func(token: string-id);
+
+    /// Register an annotation token (e.g. `@@inline`, `@@pure`).
+    register-annotation: func(token: string-id);
+}
+
+// ─── Phase-hook attachment ───────────────────────────────────────────────────
+// Five pipeline phases fire handlers keyed by token. Each `on-*` call wires
+// the named handler (looked up by `handler-name` in the strata module) to
+// the matching phase + token.
+
+interface phases {
+    use ids.{string-id};
+
+    on-decl:            func(token: string-id, handler-name: string-id);
+    on-call-site:       func(token: string-id, handler-name: string-id);
+    on-annotation:      func(token: string-id, handler-name: string-id);
+    on-module-finalize: func(handler-name: string-id);
+    on-comptime:        func(token: string-id, handler-name: string-id);
+}
+
+// ─── State buckets ───────────────────────────────────────────────────────────
+// Strata read/write key-value state at two scopes:
+//   • stratum-scoped: shared across every firing of strata in the same name
+//   • instance-scoped: fresh per call, useful for derive-style accumulators
+// Both return an opaque bucket handle the get/set/has trio operates on.
+
+interface state {
+    use ids.{string-id, handle};
+
+    /// The shared per-stratum bucket (auto-created on first access).
+    stratum: func() -> handle;
+
+    /// A fresh per-firing bucket. Caller owns the handle.
+    instance: func() -> handle;
+
+    has: func(bucket: handle, key: string-id) -> bool;
+
+    /// Returns the stored value coerced to u32. Strings auto-intern back
+    /// to a string-id; numbers cast to i32; objects intern to a handle.
+    /// `0` if missing.
+    get: func(bucket: handle, key: string-id) -> u32;
+
+    /// Stores `value` as the raw u32. The reader is responsible for
+    /// interpreting it (string-id vs handle vs number) consistently.
+    set: func(bucket: handle, key: string-id, value: u32);
+}
+
+// ─── Array builders ──────────────────────────────────────────────────────────
+// Block / Function / Import IR builders need arrays of sub-nodes. A handler
+// builds one with these, then passes the array-handle to the IR builder.
+
+interface arrays {
+    use ids.{ir-handle, array-handle, string-id};
+
+    new:      func() -> array-handle;
+    push:     func(arr: array-handle, value: ir-handle);
+    push-str: func(arr: array-handle, str: string-id);
+    len:      func(arr: array-handle) -> u32;
+    get:      func(arr: array-handle, index: u32) -> ir-handle;
+}
+
+// ─── IR builders ─────────────────────────────────────────────────────────────
+// Each function builds one IR node and returns a fresh `ir-handle`. Strata
+// bodies compose these into the IR they want lowered into the surrounding
+// function.
+
+interface ir {
+    use ids.{ir-handle, array-handle, string-id};
+
+    /// Special "no IR" sentinel. Identical to the literal `0` but named
+    /// for clarity in handler bodies.
+    null: func() -> ir-handle;
+
+    // ── Expressions ──────────────────────────────────────────────────
+    make-const:      func(value: s32, wasm-type: string-id) -> ir-handle;
+    make-local-get:  func(name: string-id, wasm-type: string-id) -> ir-handle;
+    make-local-set:  func(name: string-id, value: ir-handle) -> ir-handle;
+    make-global-get: func(name: string-id, wasm-type: string-id) -> ir-handle;
+    make-global-set: func(name: string-id, value: ir-handle) -> ir-handle;
+
+    /// `instr` is a WAT-style instruction name (`"i32.add"`); the IR
+    /// stores it as the underscore form (`i32_add`) internally.
+    make-bin-op: func(instr: string-id, left: ir-handle, right: ir-handle,
+                     wasm-type: string-id) -> ir-handle;
+
+    /// Block. `stmts` is an array-handle of stmt nodes. `trailing` may be
+    /// `0` for void blocks. `wasm-type` of `0` infers from `trailing` if
+    /// present else `"void"`.
+    make-block: func(stmts: array-handle, trailing: ir-handle,
+                    wasm-type: string-id) -> ir-handle;
+
+    /// `args` is an array-handle of expression nodes. `wasm-type` of `0`
+    /// defaults to `"i32"`. `call-kind` of `0` defaults to `"user"`;
+    /// pass `"instr"` for raw WASM instruction calls.
+    make-call: func(callee: string-id, args: array-handle,
+                   wasm-type: string-id, call-kind: string-id) -> ir-handle;
+
+    // ── Control flow ─────────────────────────────────────────────────
+    /// `else_` of `0` means no else-branch. `wasm-type` of `0` infers
+    /// from `then.wasm-type` if `else_` is present else `"void"`.
+    make-if: func(cond: ir-handle, then: ir-handle, else_: ir-handle,
+                 wasm-type: string-id) -> ir-handle;
+
+    make-loop:     func(id: u32, cond: ir-handle, body: ir-handle) -> ir-handle;
+    make-break:    func(id: u32) -> ir-handle;
+    make-continue: func(id: u32) -> ir-handle;
+
+    /// `value` of `0` means a void return.
+    make-return: func(value: ir-handle) -> ir-handle;
+
+    // ── Module-level definitions ─────────────────────────────────────
+    /// `what` is `"func"` or `"global"`.
+    make-export: func(alias: string-id, internal-name: string-id,
+                     what: string-id) -> ir-handle;
+
+    make-local:  func(name: string-id, wasm-type: string-id) -> ir-handle;
+    make-param:  func(name: string-id, wasm-type: string-id) -> ir-handle;
+
+    /// `mutable` is `0`=false, non-zero=true.
+    make-global: func(name: string-id, wasm-type: string-id,
+                     mutable: u32, init: ir-handle) -> ir-handle;
+
+    /// `params` and `locals` are array-handles. `body` of `0` makes an
+    /// extern-style declaration with no body. `return-type` of `0`
+    /// defaults to `"void"`.
+    make-function: func(name: string-id, params: array-handle,
+                       return-type: string-id, locals: array-handle,
+                       body: ir-handle) -> ir-handle;
+
+    /// `params` holds WasmValType strings (push via `arrays.push-str`).
+    /// `result` of `0` means no return value.
+    make-import: func(env: string-id, field: string-id, name: string-id,
+                     params: array-handle, result: string-id) -> ir-handle;
+}
+
+// ─── Lowering-ctx mutators ───────────────────────────────────────────────────
+// Surfaces of the per-firing LowerCtx (locals/globals/varNames/loopStack
+// pendingLocals). Handlers use these to participate in the running function's
+// preamble, declare globals/locals, and allocate loop label ids.
+
+interface ctx {
+    use ids.{ir-handle, string-id};
+
+    locals-set: func(name: string-id, wasm-type: string-id);
+    locals-get: func(name: string-id) -> string-id;
+
+    globals-set: func(name: string-id, wasm-type: string-id);
+    globals-get: func(name: string-id) -> string-id;
+
+    var-names-add: func(name: string-id);
+    var-names-has: func(name: string-id) -> bool;
+
+    pending-locals-push: func(local: ir-handle);
+
+    loop-stack-push: func(id: u32);
+    loop-stack-pop:  func() -> u32;
+    loop-stack-peek: func() -> u32;
+    next-loop-id:    func() -> u32;
+}
+
+// ─── AST helpers ─────────────────────────────────────────────────────────────
+// Read children, field paths, and templated subtrees of the AST node currently
+// being elaborated. `path` is a dotted string (`"name.name"`, `"args.0"`).
+// `tag` values use the high-nibble tag convention (`tag-kind` = top 4 bits,
+// `tag-value` = bottom 28).
+
+interface ast {
+    use ids.{ast-handle, ir-handle, handle, string-id};
+
+    /// `index`-th child of `node` (positional argument). Returns a tagged
+    /// u32 — interpret with `tag-kind` + `tag-value`.
+    arg: func(node: ast-handle, index: u32) -> u32;
+
+    /// Walk a dotted field path. Returns a tagged u32.
+    field: func(node: ast-handle, path: string-id) -> u32;
+
+    tag-kind:  func(tagged: u32) -> u32;
+    tag-value: func(tagged: u32) -> u32;
+
+    /// Field accessor specialised for string-valued fields. Returns the
+    /// raw string-id directly (no tag).
+    str-field: func(node: ast-handle, path: string-id) -> string-id;
+
+    /// Field accessor specialised for node-valued fields. Returns the raw
+    /// handle directly (no tag).
+    node-field: func(node: ast-handle, path: string-id) -> handle;
+
+    /// Pick `a` if cond non-zero else `b`. Pure utility — does not allocate.
+    choose: func(cond: u32, a: ir-handle, b: ir-handle) -> ir-handle;
+
+    // ── Template manipulation (monomorphization helpers) ────────────────
+    capture-template:  func(node: ast-handle, kind: string-id) -> handle;
+    clone:             func(template: handle) -> handle;
+    with-keyword:      func(template: handle, keyword: string-id) -> handle;
+    with-name:         func(template: handle, name: string-id) -> handle;
+    rewrite-call:      func(call: ast-handle, new-name: string-id) -> ir-handle;
+    patch-types:       func(template: handle, bindings: handle) -> handle;
+}
+
+// ─── Type-value primitives ───────────────────────────────────────────────────
+// Each `type-*` returns a handle to a singleton SiliconType value. Composite
+// types (arrays, sums) are built via `array` / future builders.
+
+interface types {
+    use ids.{type-handle, string-id};
+
+    int:    func() -> type-handle;
+    int64:  func() -> type-handle;
+    float:  func() -> type-handle;
+    bool:   func() -> type-handle;
+    string: func() -> type-handle;
+    void:   func() -> type-handle;
+
+    /// Type variable (`T`, `U`, …). Used inside generic templates.
+    variable: func(name: string-id) -> type-handle;
+
+    array: func(elem: type-handle) -> type-handle;
+
+    equals: func(a: type-handle, b: type-handle) -> bool;
+    format: func(t: type-handle) -> string-id;
+
+    /// Substitute type-variable bindings into a templated type. `bindings`
+    /// is a handle to a Map<name, type-handle>.
+    substitute: func(template: type-handle, bindings: handle) -> type-handle;
+
+    /// Compute a name-mangle suffix from a bindings map. Same convention
+    /// monomorphization uses for synthesised `@fn` names.
+    mangle-suffix: func(bindings: handle) -> string-id;
+}
+
+// ─── Compiler bridge — high-level lowering passes ────────────────────────────
+// These funnel back into the host's existing lowering helpers (lowerExpr,
+// lowerParams, …). A handler uses them when it needs the compiler to do the
+// heavy lifting on a subtree the handler doesn't want to re-implement.
+
+interface compiler {
+    use ids.{ast-handle, ir-handle, array-handle, type-handle, handle, string-id};
+
+    /// Lower an arbitrary expression node. Errors propagate as diagnostics.
+    lower-expr: func(node: ast-handle) -> ir-handle;
+
+    /// Like `lower-expr` but returns `0` (no IR) if the node is missing/null.
+    lower-expr-if-defined: func(node: ast-handle) -> ir-handle;
+
+    /// Register a `@defer` cleanup expression on the enclosing function.
+    register-defer: func(node: ast-handle) -> ir-handle;
+
+    /// Emit a `return` IR node lowering the given argument node.
+    emit-return: func(arg-node: ast-handle) -> ir-handle;
+
+    lower-params:         func(node: ast-handle) -> array-handle;
+    lower-function-body:  func(node: ast-handle, params: array-handle) -> handle;
+    func-result-body:     func(result: handle) -> ir-handle;
+    func-result-locals:   func(result: handle) -> array-handle;
+
+    resolve-function-return-type: func(node: ast-handle, params: array-handle,
+                                       body: ir-handle) -> string-id;
+
+    /// Lower a global initializer. `default-type` is fallback when the
+    /// initializer's type can't be inferred (typically `"i32"`).
+    lower-global-init: func(node: ast-handle, default-type: string-id) -> handle;
+
+    global-init-init:      func(result: handle) -> ir-handle;
+    global-init-wasm-type: func(result: handle) -> string-id;
+
+    lower-extern-params: func(node: ast-handle) -> array-handle;
+    lower-extern-result: func(node: ast-handle) -> string-id;
+
+    expand-sum-type:    func(node: ast-handle) -> array-handle;
+    expand-type-record: func(node: ast-handle) -> array-handle;
+    expand-struct:      func(node: ast-handle) -> array-handle;
+
+    /// Resolve a type-annotation AST node to a type handle.
+    resolve-type: func(annot: ast-handle) -> type-handle;
+
+    /// Lower a `@match` form. `raw-args` is the array of arms; `inferred-type`
+    /// is the expected result type (`0` to infer).
+    expand-match-chain: func(raw-args: array-handle,
+                            inferred-type: type-handle) -> ir-handle;
+
+    // ── Utility ───────────────────────────────────────────────────────
+    /// Intern a UTF-8 byte range from the compiled handler's exported memory.
+    /// `(ptr, 0)` reads the 4-byte length-prefixed Silicon literal form;
+    /// `(ptr, len)` reads a raw range.
+    str-intern: func(ptr: u32, len-or-zero: u32) -> string-id;
+
+    /// Convert an identifier to its WAT-emitted form (`$`-prefixed, etc.).
+    wat-id: func(name: string-id) -> string-id;
+
+    /// Fresh unique identifier prefixed by the given string.
+    fresh-id: func(prefix: string-id) -> string-id;
+}
+
+// ─── Module mutators ─────────────────────────────────────────────────────────
+// Definitions a handler synthesises and wants merged into the program at the
+// top level. The firing wrapper drains these after the handler returns and
+// feeds them into the registry's pending-injection queue.
+
+interface module {
+    use ids.{ir-handle, handle, string-id};
+
+    push-definition: func(def: ir-handle);
+    push-global: func(name: string-id, ty: handle, init: ir-handle);
+}
+
+// ─── Diagnostics ─────────────────────────────────────────────────────────────
+// Never throw — both calls accumulate into the registry's diagnostic vector.
+// `span` may be `0` when the handler doesn't have one (empty span recorded).
+
+interface diag {
+    use ids.{handle, string-id};
+
+    error: func(code: string-id, span: handle, message: string-id, hint: string-id);
+    warn:  func(code: string-id, span: handle, message: string-id, hint: string-id);
+}
+
+// ─── Test observation ────────────────────────────────────────────────────────
+// Test-only: the host buffers each call; tests assert on the order.
+
+interface test {
+    /// Append `value` to the per-firing test log.
+    observe: func(value: u32);
+}
+
+// ─── World: the comptime handler import surface ──────────────────────────────
+// Every compile-then-run Strata handler imports this world. Once wit-bindgen
+// is wired (story W-1) both `src/comptime/imports.ts` and the Silicon
+// `@extern` declarations boot/strata/<author>/extern.si needs will be
+// generated from this world.
+
+world comptime-handler {
+    import ids;
+    import registration;
+    import phases;
+    import state;
+    import arrays;
+    import ir;
+    import ctx;
+    import ast;
+    import types;
+    import compiler;
+    import module;
+    import diag;
+    import test;
+}

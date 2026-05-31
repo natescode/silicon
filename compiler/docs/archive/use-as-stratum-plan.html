@@ -1,0 +1,657 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>@use as a Proper Language Construct — Stratum-Based Module System</title>
+  <style>
+    :root {
+      --bg: #0f1117;
+      --surface: #1a1d27;
+      --surface2: #222535;
+      --border: #2e3248;
+      --accent: #6c8ef7;
+      --accent2: #b06cf7;
+      --accent3: #3ecf8e;
+      --accent4: #f7a06c;
+      --accent5: #f76c6c;
+      --accent6: #f7e36c;
+      --text: #dde1f0;
+      --muted: #7b82a8;
+      --code-bg: #13151f;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+      padding: 40px 24px;
+    }
+    .page { max-width: 1150px; margin: 0 auto; }
+    h1 { font-size: 2rem; color: var(--accent); margin-bottom: 8px; }
+    h2 { font-size: 1.4rem; color: var(--accent2); margin: 40px 0 16px; border-bottom: 1px solid var(--border); padding-bottom: 8px; }
+    h3 { font-size: 1.1rem; color: var(--accent3); margin: 24px 0 10px; }
+    h4 { font-size: 0.95rem; color: var(--accent4); margin: 16px 0 8px; }
+    p  { margin-bottom: 12px; color: var(--text); }
+    .subtitle { color: var(--muted); font-size: 1rem; margin-bottom: 32px; }
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 20px 24px;
+      margin-bottom: 20px;
+    }
+    .card.warn { border-color: var(--accent5); }
+    .card.ok   { border-color: var(--accent3); }
+    .card.info { border-color: var(--accent);  }
+    .card.note { border-color: var(--accent4); }
+    .card.idea { border-color: var(--accent2); }
+    pre {
+      background: var(--code-bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 16px;
+      overflow-x: auto;
+      font-family: 'Cascadia Code', 'Fira Code', 'Consolas', monospace;
+      font-size: 0.82rem;
+      line-height: 1.55;
+      margin: 12px 0;
+    }
+    code { font-family: 'Cascadia Code', 'Fira Code', 'Consolas', monospace; font-size: 0.85em; background: var(--code-bg); padding: 1px 5px; border-radius: 4px; }
+    .kw  { color: #c792ea; }
+    .fn  { color: #82aaff; }
+    .str { color: #c3e88d; }
+    .cm  { color: #546e7a; }
+    .ty  { color: #ffcb6b; }
+    .op  { color: #89ddff; }
+    .si  { color: var(--accent3); }
+    .ir  { color: var(--accent4); }
+    .api { color: var(--accent2); }
+    table { width: 100%; border-collapse: collapse; margin: 12px 0; font-size: 0.85rem; }
+    th { background: var(--surface2); color: var(--accent); padding: 8px 12px; text-align: left; border: 1px solid var(--border); }
+    td { padding: 8px 12px; border: 1px solid var(--border); vertical-align: top; }
+    tr:nth-child(even) td { background: #141620; }
+    ul, ol { padding-left: 24px; margin: 8px 0 16px; }
+    li { margin-bottom: 4px; }
+    .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin: 16px 0; }
+    @media (max-width: 700px) { .two-col { grid-template-columns: 1fr; } }
+    .tag {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 12px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      margin-right: 4px;
+    }
+    .tag.red    { background: #3a1515; color: var(--accent5); border: 1px solid #5a2020; }
+    .tag.green  { background: #0f2d1f; color: var(--accent3); border: 1px solid #1a4a30; }
+    .tag.blue   { background: #0f1a3a; color: var(--accent);  border: 1px solid #1a2e5a; }
+    .tag.purple { background: #1e1030; color: var(--accent2); border: 1px solid #3a1a50; }
+    .tag.orange { background: #2d1a0f; color: var(--accent4); border: 1px solid #5a3010; }
+    .tag.yellow { background: #2d2a0f; color: var(--accent6); border: 1px solid #5a5510; }
+    .phase-head {
+      display: flex;
+      align-items: baseline;
+      gap: 14px;
+      margin: 36px 0 6px;
+      padding-bottom: 8px;
+      border-bottom: 1px solid var(--border);
+    }
+    .phase-num {
+      font-size: 0.75rem;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--muted);
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 2px 10px;
+    }
+    .phase-name { color: var(--accent3); font-size: 1.25rem; font-weight: 600; }
+    .meta-row { display: grid; grid-template-columns: 110px 1fr; gap: 8px 18px; margin: 12px 0 18px; font-size: 0.88rem; }
+    .meta-row .k { color: var(--muted); }
+    .meta-row .v { color: var(--text); }
+    .gate {
+      background: #131e1a;
+      border: 1px solid var(--accent3);
+      border-radius: 6px;
+      padding: 8px 14px;
+      margin: 12px 0;
+      font-size: 0.86rem;
+    }
+    .nope {
+      background: #1e1313;
+      border: 1px solid var(--accent5);
+      border-radius: 6px;
+      padding: 8px 14px;
+      margin: 12px 0;
+      font-size: 0.86rem;
+    }
+    .mono { font-family: 'Cascadia Code', 'Fira Code', 'Consolas', monospace; font-size: 0.85rem; }
+  </style>
+</head>
+<body>
+<div class="page">
+
+<h1>@use as a Proper Language Construct</h1>
+<p class="subtitle">
+  Promoting <code>@use</code> from a textual preprocessor pass into a first-class stratum-driven
+  module system. Foundation for cross-file typechecking, real <code>@export</code> visibility,
+  and a clean on-ramp for dynamic imports later.
+</p>
+
+<div class="card info" style="border-left: 4px solid var(--accent4); padding: 12px; margin: 12px 0;">
+  <strong>Status note (post-boot/ removal):</strong> This document was authored
+  when the Silicon-in-Silicon bootstrap lived under <code>boot/</code>. That tree
+  has been removed. References to <code>boot/*</code> paths describe the
+  historical layout; the design is still applicable to the TypeScript compiler
+  in <code>src/</code> and to the future self-hosted rewrite.
+</div>
+
+<div class="card info">
+  <p style="margin: 0;">
+    <span class="tag blue">scope</span>
+    <span class="tag green">stratum-driven</span>
+    <span class="tag purple">stage-0 → stage-1</span>
+    <span class="tag orange">requires one new CompilerAPI primitive</span>
+    <span class="tag yellow">grammar unchanged</span>
+  </p>
+</div>
+
+<h2>1. Motivation</h2>
+
+<p>
+  Today <code>@use 'path.si';</code> is resolved by <code>src/modules/useResolver.ts</code>
+  &mdash; a pre-parse string preprocessor that concatenates included files into one big source
+  text. By the time the parser, elaborator, or typechecker runs, <em>every <code>@use</code>
+  directive has been erased</em>. This was the right call for getting the bootstrap unstuck
+  (<code>docs/bootstrap-plan.html</code> Phase &minus;1.C), but it leaks in several places:
+</p>
+
+<ul>
+  <li>
+    <strong>The LSP has to fake it.</strong> <code>lsp-silicon/src/workspace.ts</code>
+    contains a hand-written <code>stripUseDirectives</code> regex plus two diagnostic-suppression
+    filters (one for <code>E0004</code>, one for <code>E0002 &lt;unknown&gt;</code> mismatches).
+    These suppressions hide false positives at the cost of also hiding real bugs.
+  </li>
+  <li>
+    <strong><code>@export</code> is a no-op.</strong> Because everything ends up in one
+    global namespace post-inline, marking something exported or not has no effect.
+    The metadata stratum exists (<code>src/strata/metadata.si</code>) but the typechecker
+    never consults it for visibility.
+  </li>
+  <li>
+    <strong>Diagnostics point at the wrong file.</strong> Errors raised against inlined
+    content of <code>std/vec.si</code> appear with offsets in the concatenated buffer,
+    not the source file the user is editing.
+  </li>
+  <li>
+    <strong>Incremental compilation has no hook.</strong> Each compile re-reads and
+    re-inlines every transitive dependency from disk; there is no per-module cache the
+    LSP or future build tooling can target.
+  </li>
+  <li>
+    <strong>The grammar already pretends <code>@use</code> exists.</strong> The directive
+    looks like a Definition form, but the parser never actually sees one &mdash; it sees
+    whitespace where the preprocessor stripped it. That mismatch costs us every time we
+    reach for the AST.
+  </li>
+</ul>
+
+<p>
+  The fix is to make <code>@use</code> a real construct, processed via the same data-driven
+  stratum machinery that already handles <code>@let</code>, <code>@fn</code>,
+  <code>@if</code>, <code>@loop</code>, and the rest.
+</p>
+
+<h2>2. Goals &amp; Non-Goals</h2>
+
+<div class="two-col">
+  <div class="card ok">
+    <h4 style="margin-top: 0;">In Scope</h4>
+    <ul style="margin-bottom: 0;">
+      <li><code>@use</code> parses to a real AST node visible to elaborator / typechecker / LSP.</li>
+      <li>One new CompilerAPI primitive: <code>&amp;Compiler::import</code>.</li>
+      <li>A <code>@stratum_keyword Use</code> body that is sugar over that primitive.</li>
+      <li>Per-file module signatures (what each file exports).</li>
+      <li>Per-file typecheck that consults imported signatures &mdash; the LSP suppressions go away.</li>
+      <li>Cycle detection and dedup, preserved from the existing resolver.</li>
+      <li><code>@export</code> finally gating visibility.</li>
+      <li>Migration path that keeps <code>boot/</code> and existing tests green throughout.</li>
+    </ul>
+  </div>
+  <div class="card warn">
+    <h4 style="margin-top: 0;">Out of Scope (this doc)</h4>
+    <ul style="margin-bottom: 0;">
+      <li><strong>Dynamic imports</strong> &mdash; tracked separately. The static module signatures we build here become the type of dynamic handles later, but the runtime side is its own design.</li>
+      <li>Selective imports (<code>@use 'std/vec.si' { vec_new, vec_push };</code>).</li>
+      <li>Renamed imports / namespaces (<code>@use 'std/vec.si' as V;</code>).</li>
+      <li>Package-manager-style indirection (<code>@use 'natescode/foo';</code>).</li>
+      <li>Conditional / platform-gated imports.</li>
+      <li>Grammar changes &mdash; the existing <code>@use 'path';</code> shape stays exactly as-is.</li>
+    </ul>
+  </div>
+</div>
+
+<h2>3. Design Overview</h2>
+
+<h3>3.1 What the user writes &mdash; unchanged</h3>
+
+<pre><span class="cm"># lex.si</span>
+<span class="kw">@use</span> <span class="str">'../std/vec.si'</span>;
+<span class="kw">@use</span> <span class="str">'tokens.si'</span>;
+
+<span class="kw">@fn</span> lex<span class="op">:</span><span class="ty">Int</span> ptr<span class="op">:</span><span class="ty">Int</span>, len<span class="op">:</span><span class="ty">Int</span> <span class="op">:=</span> { <span class="cm">...</span> };
+</pre>
+
+<p>
+  Syntax does not change. The grammar already accepts <code>@use 'path';</code> as a
+  Definition-like form &mdash; we just stop deleting it before the parser sees it.
+</p>
+
+<h3>3.2 What the stratum looks like</h3>
+
+<pre><span class="cm"># src/strata/use.si  (new)</span>
+<span class="kw">@stratum_keyword</span> <span class="ty">Use</span> (<span class="str">'@use'</span>, <span class="ty">Node</span>) <span class="op">=</span> {
+  <span class="ir">&amp;IR::def_import</span>;                                  <span class="cm"># dispatch marker</span>
+  <span class="kw">@local</span> path <span class="op">:=</span> <span class="api">&amp;Compiler::arg</span> <span class="ty">Node</span>, <span class="op">0</span>;
+  <span class="api">&amp;Compiler::import</span> path;                          <span class="cm"># sugar &rarr; the primitive</span>
+};
+</pre>
+
+<p>
+  The body is one line of real work. Everything else &mdash; locating the file, parsing,
+  building its signature, registering the symbols in scope &mdash; lives behind the new
+  <code>&amp;Compiler::import</code> primitive. Same pattern as every other definition
+  kind: the stratum is a tiny adapter; the primitive does the heavy lifting.
+</p>
+
+<h3>3.3 The new CompilerAPI primitive</h3>
+
+<p>
+  Add one method to the <code>CompilerAPI</code> interface in
+  <code>src/compiler-api/index.ts</code>:
+</p>
+
+<pre><span class="cm">/**
+ * Resolve and load a module by path. The path is relative to the current
+ * file, absolute, or a module-registry key (e.g. 'std/vec.si').
+ *
+ * Side effects:
+ *   - Reads + parses the target file if not already cached.
+ *   - Recursively resolves its @use graph.
+ *   - Adds an entry to the current file's import list.
+ *   - Publishes the target's exported signatures into the current
+ *     elaboration scope so the typechecker can see them.
+ *
+ * Returns the module handle so future surface (selective imports, renames)
+ * can chain off it.
+ */</span>
+<span class="kw">import</span>(path: <span class="ty">string</span>): <span class="ty">ModuleHandle</span>;
+</pre>
+
+<p>
+  The TS-side field name is <code>$compiler.import</code> (consistent with
+  <code>$compiler</code> being the internal handle the body interpreter dispatches into).
+  The Silicon-side call site is <code>&amp;Compiler::import</code> &mdash; the existing
+  naming convention used by every stratum in <code>src/strata/*.si</code>.
+</p>
+
+<h3>3.4 The pipeline reshape</h3>
+
+<p>
+  This is the structurally interesting part. Today's pipeline:
+</p>
+
+<pre>source <span class="op">&rarr;</span> useResolver <span class="op">&rarr;</span> parser <span class="op">&rarr;</span> AST <span class="op">&rarr;</span> elaborate <span class="op">&rarr;</span> typecheck <span class="op">&rarr;</span> IR lower <span class="op">&rarr;</span> emit</pre>
+
+<p>The reshape introduces an explicit module-resolution pass instead of the textual one:</p>
+
+<pre>source <span class="op">&rarr;</span> parser <span class="op">&rarr;</span> AST <span class="op">&rarr;</span> <span class="api">resolveImports</span> <span class="op">&rarr;</span> elaborate <span class="op">&rarr;</span> typecheck <span class="op">&rarr;</span> IR lower <span class="op">&rarr;</span> emit
+                              <span class="cm">&uarr;</span>
+                              <span class="cm">runs the @use stratum bodies via the body interpreter;</span>
+                              <span class="cm">primes the per-file module-symbol table the typechecker reads from</span></pre>
+
+<p>The new pass is data-driven by the registry: it walks top-level Definitions, finds those
+  whose keyword is registered as an import kind in the strata registry, evaluates each
+  body via the body interpreter, and collects the resulting <code>ModuleHandle</code>s
+  into the current file's import list.
+</p>
+
+<div class="card note">
+  <h4 style="margin-top: 0;">Why a new pass and not "during IR lower"</h4>
+  <p style="margin-bottom: 0;">
+    Today's rich-body interpreter (<code>compileBodyToExpanderFn</code> /
+    <code>compileBodyToDefExpander</code>) runs during IR lowering. That is far too late
+    for <code>@use</code> &mdash; by then the typechecker has already raised every
+    cross-file diagnostic. The body interpreter itself is reusable; we just invoke it
+    earlier in the pipeline for the subset of stratum keywords flagged as
+    <em>import-kind</em>. No new evaluator, no new language for the body &mdash; same
+    machine, called earlier.
+  </p>
+</div>
+
+<h3>3.5 Module signatures</h3>
+
+<p>What each file exports, gathered after parse + a minimal "declaration pass" on the imported file:</p>
+
+<table>
+<tr><th>Definition kind</th><th>Goes into module signature?</th><th>Notes</th></tr>
+<tr><td><code>@fn name:T params := body</code></td><td>Yes &mdash; as <code>FunctionSig { name, params: T[], result: T }</code></td><td>Already in <code>src/types/typechecker.ts</code>.</td></tr>
+<tr><td><code>@let name := expr</code></td><td>Yes &mdash; as <code>{ name, type, mutable: false }</code></td><td>Type from initialiser inference.</td></tr>
+<tr><td><code>@var name:T := expr</code></td><td>Yes &mdash; as <code>{ name, type, mutable: true }</code></td><td>&nbsp;</td></tr>
+<tr><td><code>@extern</code></td><td>Yes</td><td>External signatures are inherently exported.</td></tr>
+<tr><td><code>@enum</code> / <code>@type</code> / <code>@type_alias</code> / <code>@type_distinct</code></td><td>Yes &mdash; as type declarations</td><td>Types and constructors both go into scope.</td></tr>
+<tr><td><code>@stratum_keyword</code> / <code>@stratum_operator</code></td><td>Yes &mdash; as registry entries</td><td>Imported strata extend the importer's elaborator registry.</td></tr>
+<tr><td><code>@local</code></td><td>No</td><td>Function-scoped &mdash; not even visible at file scope.</td></tr>
+<tr><td>Top-level expressions / <code>@use</code> directives</td><td>No</td><td>Side-effect content, not a signature.</td></tr>
+</table>
+
+<h3>3.6 Visibility &mdash; <code>@export</code> stops being a lie</h3>
+
+<p>Once module signatures are real, two simple rules:</p>
+
+<ul>
+  <li>If a file contains <strong>at least one</strong> <code>@export name</code> declaration,
+    its module signature contains <em>only</em> the explicitly-exported names. Implicit visibility off.</li>
+  <li>If a file contains <strong>no</strong> <code>@export</code> declarations,
+    everything top-level is exported (back-compat &mdash; matches today's accidental behaviour).</li>
+</ul>
+
+<p>
+  This is the same rule TypeScript modules use ("file has at least one <code>export</code> &rArr;
+  ES module") and avoids forcing a one-shot migration where every existing
+  <code>boot/</code> file suddenly needs <code>@export</code> stamped on everything.
+</p>
+
+<h3>3.7 Cycles, dedup, error mapping</h3>
+
+<ul>
+  <li><strong>Cycles:</strong> same rule as today's resolver &mdash; track the resolution
+    stack, raise <code>E0XXX ImportCycle</code> with the cycle path.</li>
+  <li><strong>Dedup:</strong> first-sighting wins; subsequent <code>@use</code>s of the
+    same absolute path are a no-op (the signature is already in scope).</li>
+  <li><strong>Error mapping:</strong> errors raised against imported file content carry
+    that file's URI in the <code>SourceSpan</code> &mdash; no inlined-buffer offsets.
+    Diagnostics show up on the correct file in the editor.</li>
+</ul>
+
+<h2>4. Is the Bootstrapped Compiler Capable of This?</h2>
+
+<p>
+  Two distinct questions: can <strong>Stage 0</strong> (the TS compiler) host this design today?
+  Can <strong>Stage 1+</strong> (the Silicon self-hosted compiler in <code>boot/</code>)
+  express this in its own source code?
+</p>
+
+<h3>4.1 Stage 0 &mdash; Yes, with a small, surgical change</h3>
+
+<div class="card ok">
+  <p style="margin-bottom: 8px;"><strong>Capability check:</strong> the architecture already supports every piece this needs.</p>
+  <ul style="margin-bottom: 0;">
+    <li><span class="tag green">have it</span> Data-driven stratum registry (<code>buildStrataRegistry</code>) &mdash; new keyword slots in.</li>
+    <li><span class="tag green">have it</span> Body interpreter that dispatches <code>&amp;Compiler::*</code> calls (<code>strataBody.ts</code>) &mdash; reuse as-is.</li>
+    <li><span class="tag green">have it</span> Per-file module loader (<code>src/modules/loader.ts</code>) &mdash; we already read + cache files by absolute path.</li>
+    <li><span class="tag green">have it</span> Typechecker that consumes a pre-populated symbol map (<code>typecheck(program, registry, modules)</code>) &mdash; the seam already exists; today's <code>ModuleRegistry</code> is just used for a different purpose.</li>
+    <li><span class="tag yellow">need it</span> One new <code>CompilerAPI</code> method (<code>import</code>) and its <code>LowerFns</code> backing.</li>
+    <li><span class="tag yellow">need it</span> A new pre-elaborate pass (<code>resolveImports</code>) that runs the body interpreter on import-kind strata. ~150&ndash;250 LOC.</li>
+    <li><span class="tag yellow">need it</span> An "is this stratum keyword an import?" flag on registry entries &mdash; one boolean.</li>
+    <li><span class="tag red">retire</span> <code>src/modules/useResolver.ts</code> (kept as a back-compat shim during migration; deleted at the end of Phase C).</li>
+  </ul>
+</div>
+
+<h3>4.2 Stage 1+ self-host &mdash; Yes, with the existing primitive surface</h3>
+
+<p>
+  The Silicon self-hosted compiler in <code>boot/</code> needs to be able to:
+</p>
+
+<ol>
+  <li>Read a source file from disk &mdash; <em>already there</em>, via WASIX <code>fd_read</code>
+    in <code>boot/std/io.si</code>.</li>
+  <li>Walk a parsed AST looking for <code>@use</code> definitions &mdash;
+    <em>already there</em>, the AST traversal in <code>boot/parser/parse.si</code> handles
+    Definition forms generically.</li>
+  <li>Maintain a cache of "already-resolved modules" keyed by absolute path &mdash;
+    <em>already there</em>, the bootstrap <code>boot/std/map.si</code> works for this.</li>
+  <li>Re-invoke the parser on a new buffer &mdash; <em>already there</em>, the parser
+    is just a Silicon function.</li>
+  <li>Mutate the current elaboration context to add symbols &mdash; this is the only
+    place the self-host needs to follow the same architecture as Stage 0: the symbol
+    table in the bootstrap elaborator needs an <code>import_symbols</code> entry point.
+    Adding it is mechanical (~30 LOC of Silicon).</li>
+</ol>
+
+<div class="card ok">
+  <p style="margin: 0;">
+    <strong>Verdict:</strong> the bootstrapped compiler is capable today. The Silicon-side
+    work is "implement <code>&amp;Compiler::import</code> in Silicon" &mdash; one function
+    that uses the same module-loader primitives the rest of the runtime already exposes.
+    No new bootstrap-blocking dependency, no new WASIX surface needed, no grammar churn.
+  </p>
+</div>
+
+<h3>4.3 The bootstrap chicken-and-egg, addressed</h3>
+
+<div class="card note">
+  <h4 style="margin-top: 0;">Can the <code>@use</code> stratum itself be imported via <code>@use</code>?</h4>
+  <p>
+    No &mdash; and it doesn't need to be. Built-in strata are loaded by the elaborator
+    eagerly from <code>src/strata/*.si</code> via <code>strataLoader.ts</code> (Stage 0)
+    and from a hardcoded path in the bootstrap (<code>boot/strata/</code>) at Stage 1+.
+    They are <em>infrastructure</em> &mdash; they predate the first user file and are
+    available before <code>@use</code> resolution starts. Same as how today's
+    <code>operators.si</code> isn't pulled in via <code>@use</code>.
+  </p>
+  <p style="margin-bottom: 0;">
+    The bootstrap order is: <em>load built-in strata &rarr; parse entry file &rarr;
+    resolve imports (using the now-loaded @use stratum) &rarr; elaborate &rarr; typecheck &rarr; ...</em>.
+    No cycle.
+  </p>
+</div>
+
+<h2>5. Phased Rollout</h2>
+
+<p>
+  Three phases, each independently shippable. Phase A unlocks the LSP wins; Phase B unlocks
+  cross-file typechecking; Phase C retires the preprocessor.
+</p>
+
+<div class="phase-head">
+  <span class="phase-num">Phase A</span>
+  <span class="phase-name">Thin slice &mdash; <code>@use</code> reaches the AST</span>
+</div>
+
+<div class="meta-row">
+  <div class="k">Effort</div><div class="v">~1 day</div>
+  <div class="k">Risk</div><div class="v">Low &mdash; preprocessor stays in place; we add an AST node alongside.</div>
+  <div class="k">Wins</div><div class="v">LSP gets a real <code>Use</code> AST node; go-to-definition over imports; the <code>stripUseDirectives</code> hack in the LSP can be deleted.</div>
+</div>
+
+<ul>
+  <li>Teach <code>toAst.ts</code> to recognise the <code>@use</code> Definition form and emit a <code>UseDirective</code> AST node (path string + sourceLocation).</li>
+  <li>Have <code>useResolver</code> tag the inlined source with a comment band that survives parse and is recovered into the same node &mdash; OR simpler: keep <code>@use</code> in the source untouched, teach the grammar (one regex-level fix in <code>toAst</code>'s elaborator) to accept it, and have the resolver run on the AST instead of the raw text.</li>
+  <li>Add a <code>UseDirective</code> handling stub in the elaborator that records imports on the program but does nothing else.</li>
+  <li>LSP starts consuming <code>UseDirective</code> nodes for symbol-graph traversal &mdash; the existing <code>extractUsesFromText</code> regex can stay as a fallback or be removed.</li>
+</ul>
+
+<div class="gate">
+  <strong>Gate:</strong> existing tests stay green (Stage 0 CLI + bootstrap WASIX suite +
+  LSP smoke). <code>boot/parser/lex.si</code>, <code>parse.si</code>, <code>json.si</code>
+  still report 0 diagnostics in the LSP.
+</div>
+
+<div class="phase-head">
+  <span class="phase-num">Phase B</span>
+  <span class="phase-name">Real cross-file typechecking via <code>&amp;Compiler::import</code></span>
+</div>
+
+<div class="meta-row">
+  <div class="k">Effort</div><div class="v">~3&ndash;5 days</div>
+  <div class="k">Risk</div><div class="v">Medium &mdash; introduces a new pipeline pass; needs careful test coverage to ensure parity with today's textual inline.</div>
+  <div class="k">Wins</div><div class="v">LSP suppressions deleted. Cross-file errors raised with correct file URIs. Foundation for <code>@export</code>.</div>
+</div>
+
+<ul>
+  <li>Add <code>$compiler.import</code> / <code>&amp;Compiler::import</code> to the API surface.</li>
+  <li>Add <code>src/strata/use.si</code> with the <code>@stratum_keyword Use</code> body shown in &sect;3.2.</li>
+  <li>Add the <code>resolveImports</code> pass (post-parse, pre-elaborate). Walks Definitions,
+    runs import-kind strata bodies via the body interpreter, builds the module-signature graph.</li>
+  <li>Extend <code>typecheck()</code> to accept a <code>ImportedSignatures</code> map and consult it
+    on identifier lookup. Today's "single global symbol table" becomes "local table + imported tables".</li>
+  <li>Adapt the LSP to call <code>resolveImports</code> per-document and pass the resulting
+    signatures into <code>typecheck</code>. Delete <code>stripUseDirectives</code> and the two
+    E0004 / E0002 suppression filters.</li>
+  <li>Migrate <code>boot/</code> to the new path &mdash; nothing should change in the source
+    files; only the compiler internals shift.</li>
+</ul>
+
+<div class="gate">
+  <strong>Gate:</strong> Stage 0 CLI byte-equal output for every <code>boot/</code> file
+  vs. pre-change. Self-host fixed point (Stage 1 == Stage 2) preserved at 38,262 bytes.
+  LSP smoke green with suppressions deleted.
+</div>
+
+<div class="phase-head">
+  <span class="phase-num">Phase C</span>
+  <span class="phase-name">Retire <code>useResolver</code>; turn on <code>@export</code></span>
+</div>
+
+<div class="meta-row">
+  <div class="k">Effort</div><div class="v">~2 days</div>
+  <div class="k">Risk</div><div class="v">Low &mdash; <code>useResolver</code> is a back-compat shim by this point.</div>
+  <div class="k">Wins</div><div class="v">One less preprocessor. <code>@export</code> means something. Cleaner mental model.</div>
+</div>
+
+<ul>
+  <li>Delete <code>src/modules/useResolver.ts</code> and its two test files; the new pass replaces it entirely.</li>
+  <li>Stage 0 CLI calls <code>resolveImports</code> directly instead of running the text inliner.</li>
+  <li>Activate <code>@export</code> visibility rule from &sect;3.6.</li>
+  <li>Update <code>docs/use-includes.md</code> to describe the new model and link to this doc.</li>
+  <li>Add fixtures: explicit <code>@export</code> tests, cycle tests, dedup tests, "imported type used in signature" tests.</li>
+</ul>
+
+<div class="gate">
+  <strong>Gate:</strong> all tests pass. <code>useResolver.ts</code> gone. Self-host
+  byte-equal. Adding <code>@export</code> to a <code>boot/</code> file and removing it
+  from another produces the expected visibility change.
+</div>
+
+<h2>6. Concretely &mdash; The Files That Change</h2>
+
+<table>
+<tr><th>File</th><th>Change</th><th>Phase</th></tr>
+<tr><td><code>src/ast/astNodes.ts</code></td><td>Add <code>UseDirective</code> AST node type.</td><td>A</td></tr>
+<tr><td><code>src/ast/toAst.ts</code></td><td>Emit <code>UseDirective</code> nodes from the parsed <code>@use</code> form.</td><td>A</td></tr>
+<tr><td><code>src/strata/use.si</code> <em>(new)</em></td><td>The <code>@stratum_keyword Use</code> body.</td><td>B</td></tr>
+<tr><td><code>src/compiler-api/index.ts</code></td><td>Add <code>import(path)</code> to <code>CompilerAPI</code> and <code>LowerFns</code>.</td><td>B</td></tr>
+<tr><td><code>src/elaborator/strataLoader.ts</code></td><td>Flag import-kind keywords.</td><td>B</td></tr>
+<tr><td><code>src/elaborator/resolveImports.ts</code> <em>(new)</em></td><td>The new pass &mdash; walks Definitions, runs import bodies, returns the import graph.</td><td>B</td></tr>
+<tr><td><code>src/types/typechecker.ts</code></td><td>Accept <code>ImportedSignatures</code>; consult on lookup; map errors to the right file.</td><td>B</td></tr>
+<tr><td><code>src/index.ts</code> (CLI entry)</td><td>Swap <code>useResolver</code> for <code>resolveImports</code>.</td><td>C</td></tr>
+<tr><td><code>src/modules/useResolver.ts</code></td><td><strong>Delete.</strong></td><td>C</td></tr>
+<tr><td><code>lsp-silicon/src/workspace.ts</code></td><td>Drop <code>stripUseDirectives</code>, E0004 + E0002 suppression filters; call <code>resolveImports</code>.</td><td>B</td></tr>
+<tr><td><code>boot/parser/*.si</code></td><td>No source change. The bootstrap parser already understands the syntactic form &mdash; only its <em>handling</em> moves from preprocessor to stratum.</td><td>B</td></tr>
+<tr><td><code>docs/use-includes.md</code></td><td>Updated to describe stratum-based resolution.</td><td>C</td></tr>
+</table>
+
+<h2>7. Risks &amp; Open Questions</h2>
+
+<div class="card warn">
+  <h4 style="margin-top: 0;">Open: signature inference for <code>@let</code> initialisers</h4>
+  <p style="margin-bottom: 0;">
+    Building a module signature requires knowing the type of every exported <code>@let</code>.
+    Today inference happens during typecheck, after elaborate. We need a lighter
+    "signature inference" pass during <code>resolveImports</code> &mdash; or, simpler,
+    allow forward references and only resolve <code>@let</code> types lazily on lookup.
+    The simpler path adds latency to LSP hover/definition but avoids a duplicate pass.
+    Decision deferred to Phase B kickoff.
+  </p>
+</div>
+
+<div class="card warn">
+  <h4 style="margin-top: 0;">Open: import-time vs. lower-time strata</h4>
+  <p style="margin-bottom: 0;">
+    Today every stratum body runs at IR lower time. <code>@use</code> needs to run earlier.
+    The cleanest distinction is a metadata field on the <code>@stratum_keyword</code>
+    registration: <code>phase: 'import' | 'lower'</code> (default <code>'lower'</code>).
+    User code can't currently set that &mdash; it's only meaningful for built-ins. Decision:
+    leave it un-surfaced to user strata in Phase B; revisit when (if) a third-party
+    stratum legitimately needs to run pre-elaborate.
+  </p>
+</div>
+
+<div class="card warn">
+  <h4 style="margin-top: 0;">Risk: byte-identical self-host</h4>
+  <p style="margin-bottom: 0;">
+    The Stage 1 == Stage 2 byte-equality (38,262 bytes today) is the load-bearing
+    invariant of the whole bootstrap. Switching from textual inline to AST-level module
+    resolution must not change the emitted WAT. Two ways this could break: top-level
+    expression ordering (today's resolver concatenates in dependency order; the new pass
+    must preserve that for the entry file's <code>$__start</code>) and synthetic name
+    collisions (today's concat puts everything in one namespace; the new pass must still
+    produce the same WAT identifiers). Phase B gate is byte-equal output on every
+    <code>boot/</code> file &mdash; any drift fails the phase.
+  </p>
+</div>
+
+<div class="card warn">
+  <h4 style="margin-top: 0;">Risk: strata-imports-strata ordering</h4>
+  <p style="margin-bottom: 0;">
+    If a <code>@use</code>'d file contains <code>@stratum_keyword</code> definitions, the
+    importer's elaborator registry needs to be extended <em>before</em> the importer's
+    other code is elaborated. That's the same ordering problem strata loading already
+    handles; the resolution pass needs to do registry extension as it walks. Tested via a
+    Phase B fixture: file A imports file B which defines an operator stratum; file A uses
+    that operator.
+  </p>
+</div>
+
+<div class="card warn">
+  <h4 style="margin-top: 0;">Risk: WASIX in-memory loader</h4>
+  <p style="margin-bottom: 0;">
+    The bootstrap WASIX tests use an in-memory file loader (see
+    <code>UseResolverOptions.readFile</code>). The new <code>resolveImports</code> pass
+    needs the same injection seam &mdash; cleanly typed, ideally on the
+    <code>ModuleRegistry</code> rather than on individual primitives.
+  </p>
+</div>
+
+<h2>8. What Lands First</h2>
+
+<p>
+  Phase A &mdash; the thin slice &mdash; is the right next move. It removes the LSP's
+  <code>stripUseDirectives</code> hack and gives go-to-definition a real AST node to hang
+  off, without touching any of the typechecker / module-resolution semantics. The user
+  sees an immediate quality bump in editor experience; the compiler internals stay
+  unchanged. Risk is low because <code>useResolver</code> is still doing the actual work
+  &mdash; the AST node is informational.
+</p>
+
+<p>
+  Phase B is where the design pays off: the LSP suppressions go away, errors point at
+  the right files, and the foundation for <code>@export</code> and selective imports
+  is in place. Worth doing in a dedicated session with its own design pre-read because
+  the byte-identical-self-host gate is unforgiving.
+</p>
+
+<p>
+  Phase C is mostly clean-up &mdash; once Phase B is in, the preprocessor is dead weight.
+</p>
+
+<h2>9. Related Docs</h2>
+
+<ul>
+  <li><code>docs/bootstrap-plan.html</code> &mdash; Phase &minus;1.C, original <code>@use</code> introduction.</li>
+  <li><code>docs/use-includes.md</code> &mdash; current preprocessor semantics (to be rewritten in Phase C).</li>
+  <li><code>docs/strata.md</code> &mdash; stratum types and the data-driven extension model.</li>
+  <li><code>docs/compiler-api.md</code> &mdash; the <code>&amp;Compiler::*</code> surface that <code>&amp;Compiler::import</code> joins.</li>
+  <li><code>docs/language-server-plan.html</code> &mdash; describes the LSP whose suppressions this design retires.</li>
+  <li><code>docs/stage0-cleanup-plan.html</code> &mdash; sits alongside this; this is one slice of "make Stage 0 honest about what it does".</li>
+</ul>
+
+</div>
+</body>
+</html>

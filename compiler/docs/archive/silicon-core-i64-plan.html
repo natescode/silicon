@@ -1,0 +1,808 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Silicon-Core i64 Support — Design Plan</title>
+  <style>
+    :root {
+      --bg: #0f1117;
+      --surface: #1a1d27;
+      --surface2: #222535;
+      --border: #2e3248;
+      --accent: #6c8ef7;
+      --accent2: #b06cf7;
+      --accent3: #3ecf8e;
+      --accent4: #f7a06c;
+      --accent5: #f76c6c;
+      --accent6: #f7e36c;
+      --text: #dde1f0;
+      --muted: #7b82a8;
+      --code-bg: #13151f;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+      padding: 40px 24px;
+    }
+    .page { max-width: 1150px; margin: 0 auto; }
+    h1 { font-size: 2rem; color: var(--accent); margin-bottom: 8px; }
+    h2 { font-size: 1.4rem; color: var(--accent2); margin: 40px 0 16px; border-bottom: 1px solid var(--border); padding-bottom: 8px; }
+    h3 { font-size: 1.1rem; color: var(--accent3); margin: 24px 0 10px; }
+    h4 { font-size: 0.95rem; color: var(--accent4); margin: 16px 0 8px; }
+    p  { margin-bottom: 12px; color: var(--text); }
+    .subtitle { color: var(--muted); font-size: 1rem; margin-bottom: 32px; }
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 20px 24px;
+      margin-bottom: 20px;
+    }
+    .card.warn { border-color: var(--accent5); }
+    .card.ok   { border-color: var(--accent3); }
+    .card.info { border-color: var(--accent);  }
+    .card.note { border-color: var(--accent4); }
+    .card.idea { border-color: var(--accent2); }
+    pre {
+      background: var(--code-bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 16px;
+      overflow-x: auto;
+      font-family: 'Cascadia Code', 'Fira Code', 'Consolas', monospace;
+      font-size: 0.82rem;
+      line-height: 1.55;
+      margin: 12px 0;
+    }
+    code { font-family: 'Cascadia Code', 'Fira Code', 'Consolas', monospace; font-size: 0.85em; background: var(--code-bg); padding: 1px 5px; border-radius: 4px; }
+    .kw  { color: #c792ea; }
+    .fn  { color: #82aaff; }
+    .str { color: #c3e88d; }
+    .cm  { color: #546e7a; }
+    .ty  { color: #ffcb6b; }
+    .op  { color: #89ddff; }
+    .si  { color: var(--accent3); }
+    .ir  { color: var(--accent4); }
+    .api { color: var(--accent2); }
+    table { width: 100%; border-collapse: collapse; margin: 12px 0; font-size: 0.85rem; }
+    th { background: var(--surface2); color: var(--accent); padding: 8px 12px; text-align: left; border: 1px solid var(--border); }
+    td { padding: 8px 12px; border: 1px solid var(--border); vertical-align: top; }
+    tr:nth-child(even) td { background: #141620; }
+    ul, ol { padding-left: 24px; margin: 8px 0 16px; }
+    li { margin-bottom: 4px; }
+    .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin: 16px 0; }
+    @media (max-width: 700px) { .two-col { grid-template-columns: 1fr; } }
+    .tag {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 12px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      margin-right: 4px;
+    }
+    .tag.red    { background: #3a1515; color: var(--accent5); border: 1px solid #5a2020; }
+    .tag.green  { background: #0f2d1f; color: var(--accent3); border: 1px solid #1a4a30; }
+    .tag.blue   { background: #0f1a3a; color: var(--accent);  border: 1px solid #1a2e5a; }
+    .tag.purple { background: #1e1030; color: var(--accent2); border: 1px solid #3a1a50; }
+    .tag.orange { background: #2d1a0f; color: var(--accent4); border: 1px solid #5a3010; }
+    .tag.yellow { background: #2d2a0f; color: var(--accent6); border: 1px solid #5a5510; }
+    .phase-head {
+      display: flex;
+      align-items: baseline;
+      gap: 14px;
+      margin: 36px 0 6px;
+      padding-bottom: 8px;
+      border-bottom: 1px solid var(--border);
+    }
+    .phase-num {
+      font-size: 0.75rem;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--muted);
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 2px 10px;
+    }
+    .phase-name { color: var(--accent3); font-size: 1.25rem; font-weight: 600; }
+    .meta-row { display: grid; grid-template-columns: 110px 1fr; gap: 8px 18px; margin: 12px 0 18px; font-size: 0.88rem; }
+    .meta-row .k { color: var(--muted); }
+    .meta-row .v { color: var(--text); }
+    .gate {
+      background: #131e1a;
+      border: 1px solid var(--accent3);
+      border-radius: 6px;
+      padding: 8px 14px;
+      margin: 12px 0;
+      font-size: 0.86rem;
+    }
+    .nope {
+      background: #1e1313;
+      border: 1px solid var(--accent5);
+      border-radius: 6px;
+      padding: 8px 14px;
+      margin: 12px 0;
+      font-size: 0.86rem;
+    }
+    .mono { font-family: 'Cascadia Code', 'Fira Code', 'Consolas', monospace; font-size: 0.85rem; }
+  </style>
+</head>
+<body>
+<div class="page">
+
+<h1>Silicon-Core i64 Support</h1>
+<p class="subtitle">
+  Adding 64-bit integers as a first-class type in Silicon &mdash; just enough to
+  declare and call WASI surfaces that use them (notably <code>path_open</code>'s
+  rights flags), without trying to model every conceivable i64 operation in one
+  go.
+</p>
+
+<div class="card info" style="border-left: 4px solid var(--accent4); padding: 12px; margin: 12px 0;">
+  <strong>Status note (post-boot/ removal):</strong> This document was authored
+  when the Silicon-in-Silicon bootstrap lived under <code>boot/</code>. That tree
+  has been removed; the work described below shipped against the historical
+  bootstrap layout. The Int/Int32/Int64 surface it defines is current; the file
+  paths under <code>boot/*</code> referenced below describe the prior structure.
+</div>
+
+<div class="card info">
+  <p style="margin: 0;">
+    <span class="tag blue">scope</span>
+    <span class="tag green">unblocks Phase 4b</span>
+    <span class="tag purple">four phases (A&ndash;D)</span>
+    <span class="tag orange">no grammar changes</span>
+    <span class="tag yellow">byte-equal self-host preserved at every phase</span>
+  </p>
+</div>
+
+<h2>1. Motivation</h2>
+
+<p>
+  Today Silicon-Core has exactly two value types: <code>Int</code> (i32) and
+  <code>Float</code> (f32).  This works for every Silicon program written so
+  far, but it fences off a real chunk of the WASI surface where the world
+  speaks i64:
+</p>
+
+<ul>
+  <li><strong><code>path_open</code></strong> &mdash; both rights-flag parameters
+    (<code>fs_rights_base</code>, <code>fs_rights_inheriting</code>) are
+    <code>u64</code>.  Without i64, stage1 cannot open files by path.  This is
+    the gating blocker for Phase 4b of
+    <code>docs/sigil-wasm-bootstrap-plan.html</code>.</li>
+  <li><strong><code>fd_filestat_get</code></strong>, <strong><code>fd_seek</code></strong>,
+    <strong><code>fd_tell</code></strong>, <strong><code>clock_time_get</code></strong>
+    &mdash; sizes, offsets, and timestamps all use i64.</li>
+  <li><strong>Process-id / signal numbers</strong> on richer Unix-style
+    runtimes (Wasmer-WASIX) often expose i64 fields.</li>
+</ul>
+
+<p>
+  Over the last few sessions we've twice resisted the temptation to add a
+  &ldquo;WAT-prelude wrapper&rdquo; hack that hardcodes
+  <code>i64.const&nbsp;-1</code> for the rights bits and exposes only i32 args
+  to Silicon.  It would have unblocked Phase 4b in a day, but it would have
+  buried a permanent vestigial wart in <code>emit_std_prelude</code> &mdash;
+  every program the compiler ever emits would carry an unused
+  <code>(import "wasi_snapshot_preview1" "path_open" ...)</code> with i64 in
+  its signature.  And it wouldn't help the next i64 caller, or the one after
+  that.  The right time to do this properly is now.
+</p>
+
+<div class="card note">
+  <h4 style="margin-top: 0;">An honest assessment of what we already have wrong</h4>
+  <p style="margin-bottom: 0;">
+    <code>src/strata/modules/wasi_snapshot_preview1.si</code> currently declares
+    <code>path_open</code> with seven <code>Int</code> parameters.  The two
+    rights-flag positions are typed as i32 in Silicon but are actually i64 in
+    the underlying WASI ABI.  Stage 0 calls today either avoid this function
+    entirely or pass <code>0</code> and rely on lucky alignment of i32-vs-i64
+    arg encoding (which only happens to work because we don't actually call it).
+    Phase A of this plan is what makes those declarations honest.
+  </p>
+</div>
+
+<h2>2. Goals &amp; Non-Goals</h2>
+
+<div class="two-col">
+  <div class="card ok">
+    <h4 style="margin-top: 0;">In Scope</h4>
+    <ul style="margin-bottom: 0;">
+      <li><code>Int64</code> recognised as a type by parser, typechecker, lowerer, emitter.</li>
+      <li>Integer literal suffix <code>i64</code> &mdash; <code>0i64</code>, <code>1234i64</code>, <code>0xFFi64</code>.</li>
+      <li><code>@extern foo:Int64 a:Int64;</code> emits correct WAT i64 import.</li>
+      <li>Call-site argument passing: <code>&amp;foo 0i64</code> emits <code>(i64.const 0)</code>.</li>
+      <li>i64 binops: <code>+</code>, <code>-</code>, <code>*</code>, <code>/</code>, <code>%</code>, <code>==</code>, <code>!=</code>, <code>&lt;</code>, <code>&gt;</code>, <code>&lt;=</code>, <code>&gt;=</code> for two i64 operands.</li>
+      <li>Explicit casts: <code>@toInt64 x</code> (Int &rarr; Int64, signed extend), <code>@toInt x</code> (Int64 &rarr; Int, truncate).</li>
+      <li>Strata-driven dispatch for arithmetic operators by operand type.</li>
+      <li>Migration of existing bare <code>@extern</code> declarations in <code>src/strata/modules/*.si</code> to use <code>Int64</code> where the WASI ABI does.</li>
+      <li>TS Stage 0 and bootstrap stay in sync at every phase.</li>
+    </ul>
+  </div>
+  <div class="card warn">
+    <h4 style="margin-top: 0;">Out of Scope</h4>
+    <ul style="margin-bottom: 0;">
+      <li>Unsigned types (no <code>UInt64</code>).  WASI uses u64 but Silicon treats it as signed i64 at the type level &mdash; the bit pattern is what matters at the WASM call boundary, and i64 vs u64 only differ in how comparisons interpret the high bit.</li>
+      <li>i64 bitwise ops (<code>|</code>, <code>&amp;</code>, <code>^</code>, <code>&lt;&lt;</code>, <code>&gt;&gt;</code>) &mdash; deferrable; add when a caller needs them.</li>
+      <li>i64 &harr; Float casts &mdash; deferrable.</li>
+      <li>Implicit Int &harr; Int64 conversion &mdash; explicit casts only, no surprises.</li>
+      <li>Function overloading by operand type &mdash; strata-driven dispatch handles operators; user functions stay strict-signature.</li>
+      <li>i128 or arbitrary-precision &mdash; out, indefinitely.</li>
+      <li>WebAssembly extended <code>v128</code> SIMD types &mdash; out.</li>
+    </ul>
+  </div>
+</div>
+
+<h2>3. Design Decisions</h2>
+
+<h3>3.1 Type name &mdash; <code>Int64</code></h3>
+
+<p>
+  Matches the existing <code>Int</code> / <code>Float</code> naming pattern.
+  Explicit about width.  Reads cleanly in declarations: <code>@let x:Int64</code>,
+  <code>@extern fd_seek a:Int, b:Int64, c:Int</code>.  Alternatives considered
+  and rejected:
+</p>
+
+<table>
+<tr><th>Name</th><th>Verdict</th></tr>
+<tr><td><code>Int64</code></td><td><strong>Pick.</strong> Consistent with <code>Int</code>; explicit width.</td></tr>
+<tr><td><code>Long</code></td><td>Reject &mdash; C-style ambiguity; size varies across platforms in everyday usage.</td></tr>
+<tr><td><code>I64</code></td><td>Reject &mdash; breaks PascalCase type convention (Int, Float, String, Bool).</td></tr>
+<tr><td><code>i64</code></td><td>Reject &mdash; lowercase type names already exist as low-level escape hatch (see <code>parseTypeName</code>'s <code>case 'i32':</code> / <code>case 'f32':</code>); reserving <code>i64</code> for that escape hatch is OK, but <em>using</em> it as the user-facing type would mix conventions.</td></tr>
+</table>
+
+<p>
+  The low-level escape hatch <code>i64</code> in <code>parseTypeName</code>
+  also gets added in Phase A &mdash; symmetrical with the existing <code>i32</code>
+  and <code>f32</code> aliases.
+</p>
+
+<h3>3.2 Literal suffix &mdash; <code>i64</code></h3>
+
+<pre><span class="cm"># Decimal</span>
+<span class="kw">@let</span> a:<span class="ty">Int64</span> <span class="op">:=</span> <span class="op">0</span><span class="ty">i64</span>;
+<span class="kw">@let</span> b:<span class="ty">Int64</span> <span class="op">:=</span> <span class="op">1234</span><span class="ty">i64</span>;
+
+<span class="cm"># Hex / binary / octal</span>
+<span class="kw">@let</span> mask:<span class="ty">Int64</span> <span class="op">:=</span> <span class="op">0xFFFFFFFFFFFFFFFF</span><span class="ty">i64</span>;
+<span class="kw">@let</span> flags:<span class="ty">Int64</span> <span class="op">:=</span> <span class="op">0b1010</span><span class="ty">i64</span>;
+<span class="kw">@let</span> perm:<span class="ty">Int64</span> <span class="op">:=</span> <span class="op">0c755</span><span class="ty">i64</span>;
+
+<span class="cm"># Negative</span>
+<span class="kw">@let</span> neg:<span class="ty">Int64</span> <span class="op">:=</span> <span class="op">0</span><span class="ty">i64</span> <span class="op">-</span> <span class="op">1</span><span class="ty">i64</span>;     <span class="cm"># reliable</span>
+<span class="kw">@let</span> neg2:<span class="ty">Int64</span> <span class="op">:=</span> <span class="op">-1</span><span class="ty">i64</span>;          <span class="cm"># IF unary-minus syntax lands</span>
+</pre>
+
+<p>
+  Suffix sits where the alphabet would otherwise be expected to start, which
+  is exactly where the existing number lexer stops &mdash; tokenisation is a
+  small surgical change, not a rewrite.  No conflict with the
+  <code>e</code>-style float exponent.
+</p>
+
+<p>
+  Plain integer literals without suffix keep their existing meaning
+  (<code>Int</code> = i32).  This means <code>@let x := 5;</code> is <em>still</em>
+  i32 even if assigned to an <code>Int64</code> variable &mdash; the typechecker
+  raises a mismatch error.  Explicit suffix required: <code>@let x:Int64 := 5i64;</code>.
+</p>
+
+<h3>3.3 Casts &mdash; <code>@toInt64</code> and <code>@toInt</code></h3>
+
+<pre><span class="kw">@let</span> a:<span class="ty">Int</span>   <span class="op">:=</span> <span class="op">42</span>;
+<span class="kw">@let</span> b:<span class="ty">Int64</span> <span class="op">:=</span> <span class="kw">@toInt64</span> a;       <span class="cm"># signed extend i32 -> i64</span>
+<span class="kw">@let</span> c:<span class="ty">Int</span>   <span class="op">:=</span> <span class="kw">@toInt</span>   b;       <span class="cm"># truncate i64 -> i32 (wrap)</span>
+</pre>
+
+<p>
+  Implemented as strata keywords (per <code>docs/strata.md</code>
+  &mdash; the same machine that powers <code>@toInt</code> / <code>@toFloat</code>
+  today).  WAT mapping: <code>i64.extend_i32_s</code> and <code>i32.wrap_i64</code>.
+</p>
+
+<h3>3.4 Mixed-type rules &mdash; strict, no implicit promotion</h3>
+
+<table>
+<tr><th>Expression</th><th>Result</th></tr>
+<tr><td><code>5 + 3</code></td><td>Int (existing)</td></tr>
+<tr><td><code>5i64 + 3i64</code></td><td>Int64 (new in Phase C)</td></tr>
+<tr><td><code>5 + 3i64</code></td><td><strong>Type error.</strong>  Must <code>@toInt64 5</code>.</td></tr>
+<tr><td><code>&amp;f 5</code> where <code>f</code> declares <code>:Int64</code></td><td><strong>Type error.</strong>  Must pass <code>5i64</code>.</td></tr>
+<tr><td><code>@let x:Int64 := 5;</code></td><td><strong>Type error.</strong>  Initializer is Int.</td></tr>
+</table>
+
+<p>
+  The rule: <strong>Int64 doesn't fall out of any arithmetic / call /
+  initialisation unless every contributing operand is explicitly Int64.</strong>
+  Mirrors the existing Int &harr; Float strictness in the typechecker &mdash;
+  the language doesn't auto-coerce, and that's a feature.
+</p>
+
+<h2>4. Where i64 Lives in the Stack</h2>
+
+<pre>┌──────────────────────────────────────────────────────────────────────────┐
+│                                                                          │
+│  USER SOURCE                                                             │
+│    @extern path_open:Int  fd:Int, ... ,                                  │
+│              fs_rights_base:<span class="api">Int64</span>, fs_rights_inheriting:<span class="api">Int64</span>, ... │
+│    &amp;path_open 3, 0, ptr, len, 0, <span class="api">0i64</span>, <span class="api">0i64</span>, 0, out_fd                  │
+│                          │                                               │
+│                          ▼                                               │
+│  ── PARSER  ─────────────────────────────────────────────────────────────│
+│    lex.si: number lexer accepts trailing <span class="api">i64</span> after digit run        │
+│      → new token kind  <span class="ir">TOK_NUM_I64</span>                                   │
+│    parse.si: parses <span class="ir">TOK_NUM_I64</span> → <span class="ir">AST_INT64_LIT</span>                     │
+│    parse.si: typedIdentifier accepts <span class="api">Int64</span> as a type name           │
+│    grammar.ohm (TS): intLiteral rule learns <span class="api">i64</span> suffix              │
+│                          │                                               │
+│                          ▼                                               │
+│  ── TYPECHECK  ──────────────────────────────────────────────────────────│
+│    types.ts: SiliconType gets new kind  { kind: '<span class="api">Int64</span>' }              │
+│    parseTypeName: '<span class="api">Int64</span>' → TypeInt64;  '<span class="api">i64</span>' → TypeInt64 alias      │
+│    typechecker: i64 vs i32 mismatches raise <span class="ir">Mismatch</span> errors           │
+│                          │                                               │
+│                          ▼                                               │
+│  ── IR LOWER  ───────────────────────────────────────────────────────────│
+│    nodes.si / ir/nodes.ts: <span class="ir">IR_OP_I64_CONST</span>, <span class="ir">IR_OP_I64_ADD</span>, etc.     │
+│    lower.si / lower.ts: <span class="ir">AST_INT64_LIT</span> → ir_i64_const                  │
+│                         dispatched binops emit i64.* variants            │
+│                          │                                               │
+│                          ▼                                               │
+│  ── EMIT  ───────────────────────────────────────────────────────────────│
+│    wat.si / codegen: emit <span class="op">(param i64)</span>, <span class="op">(result i64)</span>,                │
+│                     <span class="op">(i64.const N)</span>, <span class="op">i64.add</span>, …                          │
+│                                                                          │
+└──────────────────────────────────────────────────────────────────────────┘</pre>
+
+<p>
+  Every line above is a real, small, surgical change.  The biggest single
+  change is the lexer surgery to accept the <code>i64</code> suffix; everything
+  else is &ldquo;duplicate the existing i32 path with an i64 variant.&rdquo;
+</p>
+
+<h2>5. Phased Rollout</h2>
+
+<p>
+  Four phases, each independently shippable.  Phases A and B (TS &amp;
+  bootstrap parity for declarations + literals) carry the bulk of the lift;
+  Phase C lets users do actual arithmetic; Phase D is the payoff &mdash;
+  Phase 4b of the bootstrap plan finally lands.
+</p>
+
+<div class="phase-head">
+  <span class="phase-num">Phase A</span>
+  <span class="phase-name">TS Stage 0 minimum &mdash; Int64 declarations + literals + calls compile</span>
+</div>
+
+<div class="meta-row">
+  <div class="k">Effort</div><div class="v">~2&ndash;3 days</div>
+  <div class="k">Risk</div><div class="v">Low &mdash; new code path, parallel to existing i32.</div>
+  <div class="k">Gate</div><div class="v">A Silicon program with <code>@extern foo:Int64 x:Int64;</code> and <code>&amp;foo 42i64</code> compiles via TS Stage 0 and the emitted WAT validates with <code>wat2wasm</code>.</div>
+</div>
+
+<ul>
+  <li><strong>Grammar:</strong> the Ohm grammar's <code>intLiteral</code> rule
+    needs an optional trailing <code>i64</code> suffix.  Minimal change in
+    <code>src/grammar/silicon-official.ohm</code>; same shape as how
+    <code>floatLiteral</code> handles <code>e</code> exponents today.
+    <strong>This is the one place that touches the grammar &mdash; CLAUDE.md
+    says ask first.</strong></li>
+  <li><strong>AST node:</strong> add an <code>Int64Lit</code> AST node
+    (<code>src/ast/astNodes.ts</code>), or extend <code>IntLit</code> with a
+    <code>width: 32 | 64</code> field.  Latter is fewer files touched; former
+    is cleaner downstream.  Pick: extend.</li>
+  <li><strong>Types:</strong>
+    <ul>
+      <li><code>src/types/types.ts</code>: add <code>TypeInt64: SiliconType = { kind: 'Int64' }</code>.</li>
+      <li><code>parseTypeName</code>: <code>case 'Int64': return TypeInt64</code> + <code>case 'i64': return TypeInt64</code>.</li>
+      <li><code>wasmTypeOf</code>: <code>case 'Int64': return 'i64'</code>.</li>
+      <li><code>WasmValType</code>: add <code>'i64'</code> to the union (<code>src/ir/nodes.ts</code>).</li>
+    </ul>
+  </li>
+  <li><strong>Typechecker:</strong> Int64 literals get <code>TypeInt64</code>;
+    Int + Int64 raises <code>Mismatch</code>; <code>@extern</code>'s param
+    types resolve correctly.</li>
+  <li><strong>Lowerer:</strong> <code>IntLit</code> with <code>width: 64</code>
+    emits an <code>IR_CONST</code> with <code>wasmType: 'i64'</code> instead of
+    <code>'i32'</code>.  <code>siliconTypeNameToWasm</code> grows an
+    <code>Int64 → 'i64'</code> case.</li>
+  <li><strong>Emitter:</strong> the <code>WasmValType → string</code>
+    mapping (<code>(param i64)</code>, <code>(result i64)</code>) and the
+    const printer (<code>(i64.const N)</code>) need the i64 path.</li>
+  <li><strong>Fixture:</strong> a tiny <code>tests/i64-decl-call.si</code>
+    that declares an i64 extern, calls it with an i64 literal, and confirms
+    the WAT output has the right signature + constant.</li>
+</ul>
+
+<div class="gate">
+  <strong>Gate:</strong> existing tests stay green.  TS-side compilation of a
+  Silicon program using <code>Int64</code> produces wat2wasm-valid WAT with
+  correct <code>(i64.const)</code> emission.  No bootstrap changes yet.
+</div>
+
+<div class="phase-head">
+  <span class="phase-num">Phase B</span>
+  <span class="phase-name">Bootstrap mirror &mdash; same surface in <code>boot/*</code></span>
+</div>
+
+<div class="meta-row">
+  <div class="k">Effort</div><div class="v">~3&ndash;5 days</div>
+  <div class="k">Risk</div><div class="v">Medium &mdash; lexer surgery is the most byte-equal-sensitive change.</div>
+  <div class="k">Gate</div><div class="v">Stage1 self-host byte-equal at the new size.  The Phase A fixture compiles via stage1 too and produces byte-identical WAT to the TS-side output.</div>
+</div>
+
+<ul>
+  <li><strong>Lexer:</strong> in <code>boot/parser/lex.si</code>, after the
+    number-digit run, peek for the bytes <code>i</code>, <code>6</code>,
+    <code>4</code>.  On match, advance and emit <code>TOK_NUM_I64</code>;
+    otherwise the existing behaviour (emit <code>TOK_NUM_DEC</code>) is
+    unchanged.  Define new constant <code>TOK_NUM_I64</code> in
+    <code>boot/parser/tokens.si</code>.</li>
+  <li><strong>Parser:</strong> <code>parse.si</code> learns to lower
+    <code>TOK_NUM_I64</code> into an <code>AST_INT64_LIT</code> node
+    (new kind in <code>boot/parser/ast.si</code> &mdash; pick the next free
+    AST tag).  Also: <code>parse_type</code> (or wherever Int/Float type
+    names are recognised) accepts the literal byte sequence
+    <code>Int64</code>.</li>
+  <li><strong>Lower:</strong> in <code>boot/ir/lower.si</code>'s
+    <code>lower_expr</code>, add a clause for <code>AST_INT64_LIT</code> that
+    pushes an <code>ir_i64_const</code> handle.  Define
+    <code>ir_i64_const</code> alongside <code>ir_i32_const</code> in
+    <code>boot/ir/nodes.si</code>.</li>
+  <li><strong>Emit:</strong> in <code>boot/emit/wat.si</code>, the function
+    that prints param/result types learns <code>i64</code> in addition to
+    <code>i32</code>/<code>f32</code>; the call printer routes
+    <code>IR_OP_I64_CONST</code> to <code>i64.const &lt;N&gt;</code>; the
+    integer printer needs to support 64-bit values
+    (today it prints i32 only &mdash; for i64 we need either string
+    formatting of 64-bit integers or, for the constants we actually emit
+    in Phase D, restrict to values representable as a Silicon expression).</li>
+  <li><strong>Extern lowering:</strong> the existing <code>@extern</code>
+    machinery in <code>boot/ir/lower.si</code> already iterates parameters
+    and picks WAT types; it just needs to honour <code>Int64</code> as
+    <code>i64</code>.</li>
+</ul>
+
+<div class="card warn">
+  <h4 style="margin-top: 0;">Big-int constant emission</h4>
+  <p style="margin-bottom: 0;">
+    The bootstrap's current <code>ew_write_int</code> formats an i32 as a
+    decimal string.  For an i64 literal that fits in i32 (e.g.
+    <code>0i64</code>, <code>1i64</code>, <code>42i64</code>), the same routine
+    works.  For the rights-flag constants we actually need in Phase D
+    (<code>-1i64</code> = <code>0xFFFFFFFFFFFFFFFF</code>), we need either:
+    (a) a Silicon-side big-int print helper, or (b) emit a multi-instruction
+    sequence like
+    <code>(i64.const&nbsp;0)&nbsp;(i64.const&nbsp;1)&nbsp;(i64.sub)</code>
+    that the WAT parser folds.  Option (b) avoids needing 64-bit arithmetic
+    in <code>ew_write_int</code> at the cost of slightly uglier emitted WAT.
+    Decision deferred to Phase B kickoff.
+  </p>
+</div>
+
+<div class="gate">
+  <strong>Gate:</strong> STAGE 2 == STAGE 1 byte-equal at the new size.
+  Phase A's <code>tests/i64-decl-call.si</code> compiles via stage1 and
+  produces byte-identical WAT to the TS-side output.  Existing
+  <code>boot/tests/*.si</code> all still pass &mdash; no current
+  bootstrap source uses Int64, so the new code paths are exercised only
+  by the new fixture.
+</div>
+
+<div class="phase-head">
+  <span class="phase-num">Phase C</span>
+  <span class="phase-name">i64 arithmetic + comparison via strata</span>
+</div>
+
+<div class="meta-row">
+  <div class="k">Effort</div><div class="v">~2&ndash;3 days</div>
+  <div class="k">Risk</div><div class="v">Medium &mdash; needs strata-side operator dispatch on operand type.</div>
+  <div class="k">Gate</div><div class="v">A program using <code>5i64 + 3i64</code>, <code>x &lt; y</code> for Int64 values compiles, validates, and runs.  Int arithmetic is unchanged.</div>
+</div>
+
+<ul>
+  <li><strong>Strata dispatch:</strong> existing strata in
+    <code>src/strata/operators.si</code> map the bare names
+    <code>+</code>, <code>-</code>, <code>*</code>, etc. to <code>i32.add</code>
+    etc.  There's already a separate <code>+Float</code> stratum
+    (<code>PlusFloat</code>, etc.) that handles Float operands.  We add a third
+    set &mdash; <code>PlusInt64</code>, <code>MinusInt64</code>, &hellip; &mdash;
+    mapped to <code>i64.add</code>, <code>i64.sub</code>, etc.</li>
+  <li><strong>Operator selection:</strong> the elaborator picks which
+    <code>Plus</code> stratum to run based on operand type.  Today's
+    dispatch handles Int-vs-Float by walking operand types.  Add Int64 to
+    that lookup.</li>
+  <li><strong>Comparison:</strong> i64 comparisons return i32 (true / false
+    flags).  Wire <code>i64.eq</code>, <code>i64.ne</code>,
+    <code>i64.lt_s</code>, <code>i64.gt_s</code>, etc.</li>
+  <li><strong>Casts:</strong> add <code>@stratum_keyword ToInt64</code>
+    (i32 &rarr; i64, signed extend) and <code>@stratum_keyword ToInt</code>
+    (i64 &rarr; i32, truncate / wrap).  WAT mapping:
+    <code>i64.extend_i32_s</code> and <code>i32.wrap_i64</code>.</li>
+  <li><strong>Fixture:</strong> a Silicon program that does i64 arithmetic,
+    cast back to Int, prints to stdout via existing
+    <code>write_str</code> &mdash; confirms end-to-end functionality.</li>
+</ul>
+
+<div class="gate">
+  <strong>Gate:</strong> all existing tests pass.  New i64-arith fixture
+  computes the right answer and prints it.  Byte-equal self-host preserved
+  at the new size.
+</div>
+
+<div class="phase-head">
+  <span class="phase-num">Phase D</span>
+  <span class="phase-name">Phase 4b on top &mdash; stage1 reads files via path_open</span>
+</div>
+
+<div class="meta-row">
+  <div class="k">Effort</div><div class="v">~2 days</div>
+  <div class="k">Risk</div><div class="v">Low &mdash; mostly Silicon-side plumbing on top of the now-working i64.</div>
+  <div class="k">Gate</div><div class="v"><code>wasmer run --mapdir tests:./tests stage1.wasm -- tests/hello.si</code> reads hello.si from disk and prints WAT to stdout.</div>
+</div>
+
+<ul>
+  <li><strong>Update <code>src/strata/modules/wasi_snapshot_preview1.si</code>:</strong>
+    change <code>path_open</code>'s rights-flag positions from <code>Int</code>
+    to <code>Int64</code>.  Same for any other declaration where the WASI ABI
+    uses i64 (<code>fd_seek</code>, <code>fd_tell</code>, etc.).  Update
+    <code>WASI_STUB</code> in <code>scripts/build-stage1.ts</code> accordingly.</li>
+  <li><strong>Silicon-side wrapper</strong> in <code>boot/std/io.si</code>:
+    <code>open_file_for_read(dir_fd, path_ptr, path_len)</code> that calls
+    <code>path_open</code> with the appropriate flags + rights, returns the
+    opened file descriptor (or errno).</li>
+  <li><strong>CLI hook:</strong> <code>boot/cli.si</code> recognises a
+    positional source-path argument (today it just walks flags).  When
+    present, the dispatcher uses <code>fd_prestat_get</code> +
+    <code>fd_prestat_dir_name</code> to find a preopened directory, then
+    <code>open_file_for_read</code> on the path within it.</li>
+  <li><strong>Read into the source buffer:</strong> same <code>read_bytes</code>
+    loop that exists today for stdin, but operating on the file-opened fd
+    instead.</li>
+  <li><strong>Fixture:</strong>
+    <code>tests/wasix-smoke.test.ts PHASE 4b</code> &mdash; preopen a
+    directory, invoke stage1 with a file-path arg, assert the emitted WAT
+    matches the stdin-mode output.</li>
+</ul>
+
+<div class="gate">
+  <strong>Gate:</strong>
+  <code>wasmer run --mapdir tests:./tests stage1.wasm -- tests/hello.si &gt; tests/hello.wat</code>
+  works.  The emitted <code>hello.wat</code> is byte-identical to the result
+  of <code>wasmer run stage1.wasm &lt; tests/hello.si</code>.  STAGE 2 == STAGE
+  1 byte-equal self-host preserved.
+</div>
+
+<h2>6. Bootstrap Capability Check</h2>
+
+<p>
+  Two questions to settle before committing: can Stage 0 host this design
+  today?  Can the self-hosted compiler express the same semantics?
+</p>
+
+<h3>6.1 Stage 0 (TS host) &mdash; yes, with one grammar concession</h3>
+
+<div class="card ok">
+  <ul style="margin-bottom: 0;">
+    <li><span class="tag green">have it</span> Type system parameterised by <code>SiliconType.kind</code> &mdash; new kind <code>'Int64'</code> drops in.</li>
+    <li><span class="tag green">have it</span> WasmValType union (<code>'i32' | 'f32'</code>) &mdash; widen to include <code>'i64'</code>.</li>
+    <li><span class="tag green">have it</span> Strata-driven operator dispatch &mdash; the same machine that picks <code>+Float</code> over <code>+</code> picks <code>+Int64</code>.</li>
+    <li><span class="tag yellow">need it</span> Grammar change for the literal suffix.  Touches <code>src/grammar/silicon-official.ohm</code>'s <code>intLiteral</code> rule.  This is the one place CLAUDE.md says &ldquo;ask first&rdquo; &mdash; the change itself is one optional terminal.</li>
+    <li><span class="tag yellow">need it</span> <code>parseTypeName</code> case for <code>'Int64'</code> + <code>'i64'</code>.</li>
+    <li><span class="tag yellow">need it</span> Lower / emit small additions (handful of switch arms).</li>
+  </ul>
+</div>
+
+<h3>6.2 Bootstrap (Stage 1+) &mdash; yes, with the existing primitives</h3>
+
+<div class="card ok">
+  <ul style="margin-bottom: 0;">
+    <li><span class="tag green">have it</span> Hand-written lexer in <code>boot/parser/lex.si</code> &mdash; no parser-generator dependency, so the suffix change is a few extra peek-bytes after the digit run.</li>
+    <li><span class="tag green">have it</span> AST tag space in <code>boot/parser/ast.si</code> &mdash; next free integer constant slot.</li>
+    <li><span class="tag green">have it</span> IR record machinery (<code>boot/ir/nodes.si</code>) &mdash; <code>ir_i64_const</code> is a near-copy of <code>ir_i32_const</code>.</li>
+    <li><span class="tag green">have it</span> Strata loader / registry &mdash; <code>PlusInt64</code> registers via the same path that <code>PlusFloat</code> does today.</li>
+    <li><span class="tag yellow">need it</span> Big-int decimal printer (<code>ew_write_i64</code>) &mdash; or use the multi-instruction emission workaround in the design note above.</li>
+  </ul>
+</div>
+
+<h3>6.3 The bootstrap chicken-and-egg</h3>
+
+<div class="card note">
+  <p style="margin-bottom: 0;">
+    Phase B modifies <code>boot/*</code> to support Int64.  Stage 1
+    (<code>stage1.wasm</code>) is compiled FROM that modified
+    <code>boot/*</code>.  But the OLD <code>stage1.wasm</code> &mdash; the one
+    doing the compiling &mdash; doesn't yet know about Int64.  Can the old
+    compiler handle the new source?  Yes &mdash; as long as the modified
+    <code>boot/*</code> source <em>itself doesn't use Int64</em>.  All of
+    Phase B's changes are additive (new lexer branch, new AST tag, new IR
+    constructor) that the existing bootstrap can parse + lower without
+    invoking the new behaviour.  The first source file that actually uses
+    Int64 in <code>boot/*</code> lands in Phase D (the
+    <code>open_file_for_read</code> wrapper).  By then, stage1 itself
+    understands Int64.
+  </p>
+</div>
+
+<h2>7. Migration of Existing Bare Externs</h2>
+
+<p>
+  After Phase D, the existing declarations need an honest pass:
+</p>
+
+<table>
+<tr><th>File</th><th>Today</th><th>After</th></tr>
+<tr><td><code>src/strata/modules/wasi_snapshot_preview1.si</code></td><td><code>@extern path_open:Int fd:Int, dirflags:Int, path_ptr:Int, path_len:Int, oflags:Int, fs_rights_base:Int, fs_rights_inheriting:Int, fdflags:Int, fd_out:Int;</code></td><td>Two <code>:Int</code> become <code>:Int64</code></td></tr>
+<tr><td>same</td><td><code>@extern fd_seek</code> uses <code>Int</code> for offset</td><td>Becomes <code>Int64</code> &mdash; WASI offset is i64</td></tr>
+<tr><td>same</td><td><code>@extern fd_tell:Int fd:Int, offset_out:Int;</code> &mdash; out-pointer is i32 (correct), pointed-at value is i64 (caller's responsibility)</td><td>No declaration change; documentation note that the i32 out-pointer addresses an i64 storage slot.</td></tr>
+<tr><td><code>scripts/build-stage1.ts WASI_STUB</code></td><td>Same as above with bare names</td><td>Mirror the same Int64 changes &mdash; the bootstrap-side declarations stay in sync.</td></tr>
+<tr><td><code>tests/wasix-smoke.test.ts wasiStub</code></td><td>Several copies, all with bare <code>Int</code></td><td>Same Int64 update &mdash; 7 instances.</td></tr>
+</table>
+
+<h2>8. Risks &amp; Open Questions</h2>
+
+<div class="card warn">
+  <h4 style="margin-top: 0;">Risk: lexer surgery on a hot path</h4>
+  <p style="margin-bottom: 0;">
+    The number lexer in <code>boot/parser/lex.si</code> is exercised by every
+    integer literal in every source file ever parsed.  A bug in the suffix
+    detection (e.g. accidentally consuming <code>i</code> from an identifier
+    that immediately follows a number) would break a vast range of programs
+    in subtle ways.  Mitigation: tight test for &ldquo;number followed by
+    identifier&rdquo; cases (<code>5i</code>, <code>5i6</code>, <code>5i64x</code>,
+    <code>5if</code>, <code>5 + foo</code>); never advance past <code>i</code>
+    unless the next two bytes are exactly <code>6</code> and <code>4</code> and
+    the byte after is non-alphanumeric.
+  </p>
+</div>
+
+<div class="card warn">
+  <h4 style="margin-top: 0;">Risk: byte-equal self-host at each phase</h4>
+  <p style="margin-bottom: 0;">
+    Phases A and B are pure additions to existing code paths; no source in
+    <code>boot/*</code> uses Int64 until Phase D.  This means stage1
+    compiling itself should produce byte-identical WAT before and after the
+    additions &mdash; the new code is reachable but never reached.  Phase C
+    adds strata for new operators; same property &mdash; new strata are
+    registered but unused.  Phase D is the first phase that actually exercises
+    the new paths in <code>boot/*</code>, and that's where the byte-equal gate
+    moves to a new (larger) size.
+  </p>
+</div>
+
+<div class="card warn">
+  <h4 style="margin-top: 0;">Risk: mixed-type semantics surprise</h4>
+  <p style="margin-bottom: 0;">
+    The decision &ldquo;no implicit Int &harr; Int64 conversion&rdquo; is the
+    right one but means every existing call site that touches a now-Int64
+    extern parameter <em>will</em> error.  The migration in &sect;7 catches
+    the WASI declarations themselves, but any third-party user program that
+    was relying on Stage 0's lax i32 acceptance of i64 args will start
+    failing.  Mitigation: the existing test corpus exercises every WASI
+    surface used in the bootstrap; no third-party programs use these yet.
+  </p>
+</div>
+
+<div class="card warn">
+  <h4 style="margin-top: 0;">Risk: grammar change touches the &ldquo;ask first&rdquo; surface</h4>
+  <p style="margin-bottom: 0;">
+    The intLiteral suffix is a real grammar addition.  CLAUDE.md explicitly
+    flags grammar changes as last-resort.  The argument for: integer literal
+    suffixes are a tiny, additive, non-ambiguous extension that other
+    Silicon-shaped languages (Rust, Zig) also use; there's no alternative
+    that doesn't introduce a different language surface (a magic identifier
+    or call syntax).  Bring this to the user before landing Phase A.
+  </p>
+</div>
+
+<div class="card warn">
+  <h4 style="margin-top: 0;">Open question: integer printing for i64 in the emitter</h4>
+  <p style="margin-bottom: 0;">
+    Decision needed in Phase B kickoff: real big-int printer in
+    <code>ew_write_i64</code>, or the multi-instruction
+    <code>(i64.const 0) (i64.const 1) (i64.sub)</code> workaround for
+    values that don't fit in i32.  The workaround is simpler but uglier;
+    the big-int printer is a self-contained 30&ndash;50 lines of Silicon.
+    Both work.
+  </p>
+</div>
+
+<div class="card warn">
+  <h4 style="margin-top: 0;">Open question: unary-minus syntax</h4>
+  <p style="margin-bottom: 0;">
+    Today there is no unary minus &mdash; <code>-1</code> is &ldquo;subtract 1
+    from missing operand,&rdquo; a parse error.  The convention is
+    <code>0 - 1</code>.  Phase A could either inherit this constraint
+    (<code>0i64 - 1i64</code>) or add unary minus.  Unary minus is its own
+    design slice &mdash; recommended: defer it; the <code>0i64 - 1i64</code>
+    form works for everything Phase D needs.
+  </p>
+</div>
+
+<h2>9. What Lands First</h2>
+
+<p>
+  <strong>Phase A is the right next move.</strong>  Smallest slice that
+  meaningfully changes what the language can express &mdash; once it lands,
+  Silicon code can declare and pass i64 values, even if it can't yet add
+  them or read them from disk.  Phase A is also the only phase that touches
+  the grammar; getting that out of the way early means Phases B&ndash;D are
+  pure code surgery.
+</p>
+
+<p>
+  Recommended kickoff for the new session:
+</p>
+
+<ol>
+  <li>Open this doc plus <code>docs/sigil-wasm-bootstrap-plan.html</code> (Phase 4).</li>
+  <li>Ask the user about the grammar change in &sect;6.1 &mdash; explicit go-ahead before touching <code>silicon-official.ohm</code>.</li>
+  <li>Branch <code>silicon-core/i64-support</code> off <code>main</code>.</li>
+  <li>Decide the open questions in &sect;8 (big-int printer vs workaround; unary minus deferral).</li>
+  <li>Execute Phase A.  Self-host must stay byte-equal at 49,134 bytes (the post-Phase-4a size on <code>main</code> as of this writing).</li>
+</ol>
+
+<h2>10. What Phase 4b Looks Like After i64 Lands</h2>
+
+<p>
+  Once Phase D of this plan completes, Phase 4b of the bootstrap plan is no
+  longer blocked.  The shape:
+</p>
+
+<pre><span class="cm"># boot/std/io.si</span>
+<span class="kw">@fn</span> open_file_for_read:<span class="ty">Int</span> dir_fd:<span class="ty">Int</span>, path_ptr:<span class="ty">Int</span>, path_len:<span class="ty">Int</span> <span class="op">:=</span> {
+  <span class="kw">@local</span> fd_out <span class="op">:=</span> <span class="api">&amp;scratch_alloc</span> <span class="op">4</span>;
+  <span class="kw">@local</span> rc <span class="op">:=</span> <span class="api">&amp;wasi_snapshot_preview1::path_open</span>
+    dir_fd, <span class="op">0</span>, path_ptr, path_len, <span class="op">0</span>,
+    <span class="op">0</span><span class="ty">i64</span>, <span class="op">0</span><span class="ty">i64</span>,                        <span class="cm"># rights flags; 0 = inherit preopen rights</span>
+    <span class="op">0</span>, fd_out;
+  <span class="api">&amp;@if</span> (rc <span class="op">==</span> <span class="op">0</span>),
+    { <span class="api">&amp;WASM::i32_load</span> fd_out },
+    { <span class="op">0</span> <span class="op">-</span> <span class="op">1</span> }
+};
+
+<span class="cm"># boot/cli.si — extended dispatch</span>
+<span class="kw">@fn</span> cli_dispatch <span class="op">:=</span> {
+  <span class="cm">... existing argv walk ...</span>
+  <span class="cm"># When a positional arg is seen, treat it as a source file path.</span>
+  <span class="api">&amp;@if</span> (positional_path <span class="op">!=</span> <span class="op">0</span>), {
+    <span class="kw">@local</span> dir_fd <span class="op">:=</span> <span class="api">&amp;find_preopen_dir</span>;
+    <span class="kw">@local</span> fd      <span class="op">:=</span> <span class="api">&amp;open_file_for_read</span> dir_fd, positional_path, positional_path_len;
+    <span class="api">&amp;@if</span> (fd <span class="op">&lt;</span> <span class="op">0</span>), { <span class="api">&amp;panic_stderr</span> <span class="str">'sigil: cannot open source file'</span>, <span class="op">3</span>; };
+    SOURCE_FD <span class="op">=</span> fd;                <span class="cm"># global picked up by _start's read loop</span>
+  };
+};
+</pre>
+
+<p>
+  No exotic mechanism, no WAT prelude hack, no special-case bootstrap rule.
+  Just normal Silicon code calling normal Silicon-typed externs.  The
+  language did the work.
+</p>
+
+<h2>11. Related Docs</h2>
+
+<ul>
+  <li><code>docs/sigil-wasm-bootstrap-plan.html</code> &mdash; Phase 4b is the
+    immediate consumer of this work.</li>
+  <li><code>docs/bootstrap-plan.html</code> &mdash; long-arc bootstrap
+    plan that this slice fits into.</li>
+  <li><code>docs/bootstrap-status.md</code> &mdash; record of where stage1
+    currently stands; updated by Phase D.</li>
+  <li><code>docs/strata.md</code> &mdash; strata model that Phase C extends
+    with i64-operand variants.</li>
+  <li><code>docs/compiler-api.md</code> &mdash; <code>&amp;Compiler::*</code>
+    surface that Phase C uses for the new operator strata bodies.</li>
+  <li><code>CLAUDE.md</code> &mdash; the &ldquo;grammar changes are
+    last-resort&rdquo; guidance that Phase A needs explicit go-ahead against.</li>
+</ul>
+
+</div>
+</body>
+</html>
