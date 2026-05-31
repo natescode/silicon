@@ -82,7 +82,8 @@ Silicon {
   // empty/tuple domain.  The arrow is an OPTIONAL SUFFIX on a type atom: every
   // TypeExpr starts by parsing a TypeAtom, then one-token lookahead on "->"
   // decides function-vs-value (keeps the grammar LL(1)).
-  TypeExpr = TypeAtom ("->" TypeExpr)?
+  TypeExpr  = TypeAtom TypeArrow?
+  TypeArrow = "->" TypeExpr
   TypeAtom =
     | identifier typeArgs?            -- simple
     | "(" ListOf<TypeExpr, ","> ")"   -- group

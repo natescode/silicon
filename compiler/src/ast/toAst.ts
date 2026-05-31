@@ -24,7 +24,7 @@
  */
 
 import * as ohm from 'ohm-js'
-import { ASTFactory, type TypedIdentifier, type SourceLocation } from './astNodes'
+import { ASTFactory, type TypedIdentifier, type TypeAnnotation, type SourceLocation } from './astNodes'
 
 /** Extract a SourceLocation from an Ohm CST node's source interval. */
 function locFrom(ohmNode: any): SourceLocation | undefined {
@@ -53,8 +53,17 @@ function locFrom(ohmNode: any): SourceLocation | undefined {
 export default function addToAstSemantics(siliconGrammar: ohm.Grammar): ohm.Semantics {
     const semantics = siliconGrammar.createSemantics().addOperation('toAst', {
         Program(elements) {
-            const elementList = elements.children.map((el: any) => el.toAst())
+            // A BlockDef (@extern/@interface) expands to an array of definitions,
+            // so flatten one level here.
+            const elementList = elements.children.flatMap((el: any) => {
+                const r = el.toAst()
+                return Array.isArray(r) ? r : [r]
+            })
             return ASTFactory.program(elementList)
+        },
+
+        Element_blockDef(blockDef) {
+            return blockDef.toAst()   // Definition[]
         },
 
         Element_item(item, _semi) {
@@ -100,28 +109,76 @@ export default function addToAstSemantics(siliconGrammar: ohm.Grammar): ohm.Sema
             return ASTFactory.assignment(target, value)
         },
 
-        Definition(kw, typedId, generics, params, binding) {
+        // Definition = AttachedSig? defKw identifier GenericParams? Params Binding?
+        // The optional attached signature carries the function type; we
+        // distribute its domain onto the (bare) params by position and its
+        // range onto the name's return-type slot — producing exactly the AST
+        // the old inline-type grammar produced, so nothing downstream changes.
+        Definition(attachedSigOpt, kw, ident, generics, params, binding) {
             const keyword = kw.toAst()
-            const name = typedId.toAst()
-            const genericParams = generics.children.length > 0
+            let genericParams = generics.children.length > 0
                 ? generics.children[0].toAst()
                 : undefined
-            const paramList = params.toAst() as any[]
+            let paramList = params.toAst() as any[]
+            let returnAnnotation: TypeAnnotation | undefined
+
+            if (attachedSigOpt.children.length > 0) {
+                const sig = attachedSigOpt.children[0].toAst() as { name: string; generics?: any; type: any }
+                const fnType = sig.type
+                if (fnType && Array.isArray(fnType.fnParams)) {
+                    // Function signature: zip domain types onto params, range → return.
+                    paramList = paramList.map((p: any, i: number) => {
+                        const slot = fnType.fnParams[i]
+                        return slot
+                            ? ASTFactory.parameter(p.name, slot.typeAnnotation, p.isLiteral, p.value)
+                            : p
+                    })
+                    returnAnnotation = fnType.fnReturn?.typeAnnotation
+                } else if (fnType) {
+                    // Non-function (value) signature → the binding's type.
+                    returnAnnotation = fnType
+                }
+                if (sig.generics) genericParams = sig.generics
+            }
+
+            const name = ASTFactory.typedIdentifier(ident.sourceString, returnAnnotation)
             const bindingAst = binding.children.length > 0 ? binding.children[0].toAst() : undefined
             const node = ASTFactory.definition(keyword, name, paramList, genericParams, bindingAst)
-            // Stamp just the identifier's span (typedId.children[0] = identifier, children[1] = type?).
-            node.sourceLocation = locFrom(typedId.children[0])
+            node.sourceLocation = locFrom(ident)
             return node
         },
 
-        // Phase 5 parens-optional-grouping: both alternatives flatten to the
-        // same ParamLiteral[] shape so Definition / sigilFnType / future
-        // consumers don't need to know which form the user wrote.
-        Params_paren(_lp, list, _rp) {
-            return list.asIteration().children.map((p: any) => p.toAst())
+        // \\ name [generics] <TypeExpr>   (attached signature; no ":")
+        // `name` is kept as the raw text so namespaced extern symbols
+        // (e.g. wasi_snapshot_preview1::fd_write) survive intact.
+        AttachedSig(_sigil, namespace, genericsOpt, typeExpr) {
+            const name = namespace.sourceString
+            const generics = genericsOpt.children.length > 0 ? genericsOpt.children[0].toAst() : undefined
+            const type = typeExpr.toAst()
+            return { name, generics, type }
         },
 
-        Params_bare(list) {
+        // @extern { \\ … } / @interface Name[T] { \\ … }  →  array of definitions.
+        BlockDef(kw, identOpt, _generics, sigBlock) {
+            const keyword = kw.toAst()
+            // @interface is a declaration-only stub for now (dispatch deferred):
+            // emit no definitions.  @extern expands each signature to an extern def.
+            if (keyword === '@interface') return [] as any[]
+            const sigs = sigBlock.toAst() as Array<{ name: string; generics?: any; type: any }>
+            return sigs.map((sig) => {
+                const fnType = sig.type
+                const params = (fnType?.fnParams ?? []).map((slot: any, i: number) =>
+                    ASTFactory.parameter('_arg' + i, slot.typeAnnotation))
+                const name = ASTFactory.typedIdentifier(sig.name, fnType?.fnReturn?.typeAnnotation)
+                return ASTFactory.definition(keyword, name, params, sig.generics, undefined)
+            })
+        },
+
+        SignatureBlock(_lb, sigs, _rb) {
+            return sigs.children.map((s: any) => s.toAst())
+        },
+
+        Params(list) {
             return list.asIteration().children.map((p: any) => p.toAst())
         },
 
@@ -203,6 +260,18 @@ export default function addToAstSemantics(siliconGrammar: ohm.Grammar): ohm.Sema
             return lit.toAst()
         },
 
+        ExpressionEnd_ascribe(asc) {
+            return asc.toAst()
+        },
+
+        // &@as Type, expr  — compile-time type ascription.  For now the type
+        // hint is dropped and the inner expression is used directly (the
+        // codemod only emits this where the old @let type was redundant or for
+        // the rare ambiguous case; enforcing the hint is a later refinement).
+        AscribeExpr(_kw, _typeExpr, _comma, expr) {
+            return expr.toAst()
+        },
+
         ExpressionEnd_namespace(ns) {
             return ns.toAst()
         },
@@ -271,8 +340,10 @@ export default function addToAstSemantics(siliconGrammar: ohm.Grammar): ohm.Sema
             return ASTFactory.tupleLiteral(elementList)
         },
 
-        KeyValuePair(typedId, _eq, exp) {
-            const key = typedId.toAst()
+        KeyValuePair(ident, _eq, exp) {
+            // Grammar now uses a bare identifier key (no ":"); keep the old
+            // TypedIdentifier key shape so downstream object-literal code is unchanged.
+            const key = ASTFactory.typedIdentifier(ident.sourceString)
             const value = exp.toAst()
             return ASTFactory.keyValuePair(key, value)
         },
@@ -338,67 +409,42 @@ export default function addToAstSemantics(siliconGrammar: ohm.Grammar): ohm.Sema
             return ASTFactory.booleanLiteral(value)
         },
 
-        typedIdentifier(ident, type) {
-            const name = ident.sourceString
-            // `type` here is the iteration node for `type?`. Ohm v16 has no
-            // default `_iter` action, so we must descend into its children
-            // explicitly rather than calling `.toAst()` on the iter wrapper.
-            const typeAnnotation = type.children.length > 0
-                ? type.children[0].toAst()
-                : undefined
-            return ASTFactory.typedIdentifier(name, typeAnnotation)
+        // TypeExpr = TypeAtom TypeArrow?  —  an arrow makes it a function type
+        // (built as fnTypeAnnotation, identical to the old $fn shape so the
+        // typechecker needs no changes); no arrow ⇒ the atom's type (a
+        // parenthesised single type is just grouping).
+        TypeExpr(atom, arrowOpt) {
+            const a = atom.toAst() as any
+            const isGroup = a && a.__domain === true
+            if (arrowOpt.children.length === 0) {
+                if (isGroup) return a.types[0]   // grouping: (T) → T
+                return a
+            }
+            const range = arrowOpt.children[0].toAst() as TypeAnnotation
+            const domain: TypeAnnotation[] = isGroup ? a.types : [a]
+            const fnReturn = ASTFactory.typedIdentifier('_', range)
+            const fnParams = domain.map((t) => ASTFactory.typedIdentifier('_', t))
+            const ann = ASTFactory.fnTypeAnnotation(fnReturn, fnParams)
+            ann.typename = '$fn'
+            return ann
         },
 
-        type_simple(_colon, ident, typeArgsOpt) {
-            // typeArgsOpt is the iter for `typeArgs?`. Descend into the single
-            // child if present (Ohm v16 has no default `_iter` action).
+        TypeArrow(_arrow, range) {
+            return range.toAst()
+        },
+
+        TypeAtom_simple(ident, typeArgsOpt) {
             const typeArgs = typeArgsOpt.children.length > 0
                 ? typeArgsOpt.children[0].toAst()
                 : undefined
             return ASTFactory.typeAnnotation(ident.sourceString, typeArgs)
         },
 
-        type_fn(_colon, sigil) {
-            return sigil.toAst()
-        },
-
-        // Phase 5 — sigil function-type `$fn _:R _:T1, _:T2`.  The structure
-        // mirrors a function definition exactly: a return-type slot
-        // (typedIdentifier) plus an optional comma-separated param list.
-        // Left-factored shape (LL(1)-friendly): a common prefix
-        // ("$" name retSlot) followed by an optional tail that branches
-        // into paren-form (empty or with params) or bare params.  All
-        // four surface forms produce the same TypeAnnotation shape so
-        // downstream code is form-agnostic.
-        sigilFnType(_dollar, ident, _ws1, retSlot, tailOpt) {
-            const fnReturn = retSlot.toAst() as TypedIdentifier
-            const fnParams = tailOpt.children.length > 0
-                ? tailOpt.children[0].toAst() as TypedIdentifier[]
-                : []
-            const ann = ASTFactory.fnTypeAnnotation(fnReturn, fnParams)
-            ann.typename = `$${ident.sourceString}`
-            return ann
-        },
-        sigilFnTail(_ws, body) {
-            return body.toAst()
-        },
-        sigilFnTailBody_paren(parenForm) {
-            return parenForm.toAst()
-        },
-        sigilFnTailBody_bare(params) {
-            return params.toAst()
-        },
-        sigilFnParenForm_empty(_lp, _ws, _rp) {
-            return [] as TypedIdentifier[]
-        },
-        sigilFnParenForm_params(_lp, params, _rp) {
-            return params.toAst()
-        },
-
-        sigilFnParams(first, _ws1, _commas, _ws2, rest) {
-            const items: TypedIdentifier[] = [first.toAst()]
-            for (const r of rest.children) items.push(r.toAst())
-            return items
+        // A parenthesised group (function domain or grouping).  Marked __domain
+        // so TypeExpr can tell a domain tuple from a grouped single type.
+        TypeAtom_group(_lp, list, _rp) {
+            const types = list.asIteration().children.map((t: any) => t.toAst())
+            return { __domain: true, types }
         },
 
         typeArgs(_lb, _ws1, first, _ws2, _commas, _ws3, rest, _ws4, _rb) {
@@ -414,9 +460,13 @@ export default function addToAstSemantics(siliconGrammar: ohm.Grammar): ohm.Sema
             return { type: 'TypeArg', name: ident.sourceString, args }
         },
 
-        ParamLiteral_typedId(typedId) {
-            const ti = typedId.toAst()
-            return ASTFactory.parameter(ti.name, ti.typeAnnotation)
+        // ParamLiteral = identifier TypeExpr?  (juxtaposition, no ":").
+        // Bare for @fn params (no TypeExpr); typed for @struct/@type fields.
+        ParamLiteral_field(ident, typeExprOpt) {
+            const typeAnnotation = typeExprOpt.children.length > 0
+                ? typeExprOpt.children[0].toAst()
+                : undefined
+            return ASTFactory.parameter(ident.sourceString, typeAnnotation)
         },
 
         ParamLiteral_literal(lit) {
