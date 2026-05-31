@@ -20,20 +20,20 @@ import * as fsp from 'node:fs/promises'
 import * as path from 'node:path'
 import * as os from 'node:os'
 import { spawnSync } from 'node:child_process'
-// Public CaaS API — the only entry point for the compile pipeline.
-import { parse, buildRegistry, elaborate, typecheck, lower } from './caas/index'
-import type { Diagnostic } from './errors/diagnostic'
-
-// Legitimately internal: not yet in the CaaS API surface.
-import { compileToWasm, type LowerTarget } from './codegen'
+// Compiler public API — the CLI is a thin consumer of @silicon/compiler.
 import {
-    lowerToQbe, findQbe, invokeQbe, hostQbeArch, downloadAndBuildQbe, QBE_INSTALL_HINT,
-    findCc, link, injectMainWrapper, defaultExePath, CC_INSTALL_HINT,
-} from './codegen/qbe'
-import { resolveUses } from './modules/useResolver'
-import { loadModules } from './modules'
-import { renderJson, renderPretty } from './errors/diagnostic'
-import { formatProgram } from './fmt/formatter'
+    parse, buildRegistry, elaborate, typecheck, lower,
+    compileToWasm, type LowerTarget,
+    resolveUses, loadModules,
+    renderJson, renderPretty, formatProgram,
+    type Diagnostic,
+} from '@silicon/compiler'
+// Native backend (drives the qbe / cc toolchain).
+import {
+    lowerToQbe, injectMainWrapper, defaultExePath,
+    findQbe, invokeQbe, hostQbeArch, downloadAndBuildQbe, QBE_INSTALL_HINT,
+    findCc, link, CC_INSTALL_HINT,
+} from '@silicon/compiler/native'
 
 // ---------------------------------------------------------------------------
 // Help text

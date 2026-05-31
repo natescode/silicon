@@ -55,3 +55,24 @@ export {
     type SourceRange,
     type SiliconType,
 } from './caas/index'
+
+// ---------------------------------------------------------------------------
+// Build / codegen surface consumed by the CLI and other tools.
+// (Promoted to the public API as part of the standalone-CLI extraction.)
+// ---------------------------------------------------------------------------
+
+export {
+    // Wasm binary emit + the lowering target type.
+    compileToWasm,
+    type LowerTarget,
+} from './codegen'
+
+// Module-graph resolution (front-end: `@use` includes + module registry).
+export { resolveUses } from './modules/useResolver'
+export { loadModules } from './modules'
+
+// Diagnostic rendering.
+export { renderJson, renderPretty } from './errors/diagnostic'
+
+// Source formatter.
+export { formatProgram } from './fmt/formatter'
