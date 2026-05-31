@@ -22,15 +22,14 @@ import * as os from 'node:os'
 import { spawnSync } from 'node:child_process'
 // Compiler public API — the CLI is a thin consumer of @silicon/compiler.
 import {
-    parse, buildRegistry, elaborate, typecheck, lower,
-    compileToWasm, type LowerTarget,
+    parse, compile, check,
     resolveUses, loadModules,
     renderJson, renderPretty, formatProgram,
-    type Diagnostic,
+    type LowerTarget, type Diagnostic,
 } from '@silicon/compiler'
-// Native backend (drives the qbe / cc toolchain).
+// Native backend: one-call front-end+QBE IR (compileToQbe) + the cc/qbe drivers.
 import {
-    lowerToQbe, injectMainWrapper, defaultExePath,
+    compileToQbe, defaultExePath,
     findQbe, invokeQbe, hostQbeArch, downloadAndBuildQbe, QBE_INSTALL_HINT,
     findCc, link, CC_INSTALL_HINT,
 } from '@silicon/compiler/native'
@@ -237,27 +236,12 @@ async function compileFile(
     )
     const moduleReg = loadModules(path.dirname(entryAbs))
 
-    // ── CaaS pipeline ──────────────────────────────────────────────────────
-    const { tree, diagnostics: parseErrs } = parse(source, { file: entryAbs })
-    if (parseErrs.length) emitDiagnostics(parseErrs, opts)
-
-    const registry = buildRegistry(tree, extraSources)
-    const { tree: elab, registry: reg, diagnostics: elabErrs } = elaborate(tree, registry)
-    if (elabErrs.length) emitDiagnostics(elabErrs, opts)
-
-    const { tree: checked, model, _functions, diagnostics: typeErrs } =
-        typecheck(elab, reg, { moduleRegistry: moduleReg, target: opts.target })
-    if (typeErrs.length) emitDiagnostics(typeErrs, opts)
-
-    const { wat, diagnostics: lowerErrs } =
-        lower(checked, reg, model, { target: opts.target, moduleRegistry: moduleReg, _functions, maxHeapPages: opts.maxHeapPages })
-    if (lowerErrs.length) emitDiagnostics(lowerErrs, opts)
-
-    // Binary emit is not yet in the CaaS API — use the internal path.
-    const binary = compileToWasm(
-        checked.program, reg, _functions, moduleReg, { target: opts.target, maxHeapPages: opts.maxHeapPages },
-    )
-    return { wat, binary }
+    const result = compile(source, {
+        file: entryAbs, extraSources, moduleRegistry: moduleReg,
+        target: opts.target, maxHeapPages: opts.maxHeapPages, emitBinary: true,
+    })
+    if (result.diagnostics.length) emitDiagnostics(result.diagnostics, opts)
+    return { wat: result.wat, binary: result.binary! }
 }
 
 // ---------------------------------------------------------------------------
@@ -379,20 +363,11 @@ async function compileToQbeIr(entry: string, opts: CompileOptions): Promise<stri
     )
     const moduleReg = loadModules(path.dirname(entryAbs))
 
-    // ── CaaS pipeline ──────────────────────────────────────────────────────
-    const { tree, diagnostics: parseErrs } = parse(source, { file: entryAbs })
-    if (parseErrs.length) emitDiagnostics(parseErrs, opts)
-
-    const registry = buildRegistry(tree, extraSources)
-    const { tree: elab, registry: reg, diagnostics: elabErrs } = elaborate(tree, registry)
-    if (elabErrs.length) emitDiagnostics(elabErrs, opts)
-
-    const { tree: checked, _functions, diagnostics: typeErrs } =
-        typecheck(elab, reg, { moduleRegistry: moduleReg, target: opts.target })
-    if (typeErrs.length) emitDiagnostics(typeErrs, opts)
-
-    // QBE lowering is not yet in the CaaS API — use the internal path.
-    return injectMainWrapper(lowerToQbe(checked.program, reg, _functions))
+    const result = compileToQbe(source, {
+        file: entryAbs, extraSources, moduleRegistry: moduleReg, target: opts.target,
+    })
+    if (result.diagnostics.length) emitDiagnostics(result.diagnostics, opts)
+    return result.qbeIr
 }
 
 /**
@@ -529,16 +504,10 @@ async function cmdCheck(positional: string | undefined, opts: CompileOptions): P
     )
     const moduleReg = loadModules(path.dirname(entryAbs))
 
-    // ── CaaS pipeline ──────────────────────────────────────────────────────
-    const { tree, diagnostics: parseErrs } = parse(source, { file: entryAbs })
-    if (parseErrs.length) emitDiagnostics(parseErrs, opts)
-
-    const registry = buildRegistry(tree, extraSources)
-    const { tree: elab, registry: reg, diagnostics: elabErrs } = elaborate(tree, registry)
-    if (elabErrs.length) emitDiagnostics(elabErrs, opts)
-
-    const { diagnostics: typeErrs } = typecheck(elab, reg, { moduleRegistry: moduleReg, target: opts.target })
-    if (typeErrs.length) emitDiagnostics(typeErrs, opts)
+    const { diagnostics } = check(source, {
+        file: entryAbs, extraSources, moduleRegistry: moduleReg, target: opts.target,
+    })
+    if (diagnostics.length) emitDiagnostics(diagnostics, opts)
 
     console.log(`${entry}: OK`)
 }

@@ -16,6 +16,7 @@ export {
     typecheck,
     lower,
     compile,
+    check,
     buildRegistry,
 
     // SyntaxTree class (has .withText() for incremental reparse)

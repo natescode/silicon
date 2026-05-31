@@ -30,7 +30,7 @@ import { siliconGrammar } from '../grammar'
 import elaborateInternal from '../elaborator/elaborator'
 import { buildStrataRegistry } from '../elaborator/strataLoader'
 import typecheckInternal, { type FunctionSig } from '../types/typechecker'
-import { compileToWat } from '../codegen'
+import { compileToWat, compileToWasm } from '../codegen'
 import { toDiagnostic } from '../errors/diagnostic'
 import type { Program, ASTNode } from '../ast/astNodes'
 import type { ElaboratorRegistry } from '../elaborator/registry'
@@ -169,6 +169,12 @@ export interface LowerOptions2 extends LowerOptions {
      * When provided, `lower()` skips its internal re-typecheck pass.
      */
     _functions?: Map<string, FunctionSig>
+    /**
+     * When true, `compile()` also assembles the `.wasm` binary (via
+     * `compileToWasm`) and returns it as `CompileResult.binary`.  Off by
+     * default so callers that only want WAT don't pay the assembly cost.
+     */
+    emitBinary?: boolean
 }
 
 // ---------------------------------------------------------------------------
@@ -317,15 +323,18 @@ export function lower(
 
 export interface CompileResult {
     readonly wat: string
+    /** Assembled `.wasm` binary — present only when `options.emitBinary` is set. */
+    readonly binary?: Uint8Array
     readonly model: import('../ast/semanticModel').SemanticModel | undefined
     readonly diagnostics: readonly Diagnostic[]
 }
 
 /**
- * Full pipeline: parse → elaborate → typecheck → lower.
+ * Full pipeline: parse → elaborate → typecheck → lower (→ optional wasm binary).
  *
  * Returns at the first phase that produces diagnostics (errors).
- * On success, `wat` holds the emitted WAT text.
+ * On success, `wat` holds the emitted WAT text; when `options.emitBinary` is
+ * set, `binary` additionally holds the assembled `.wasm`.
  */
 export function compile(source: string, options: ParseOptions & ElabOptions & LowerOptions2 = {}): CompileResult {
     const parseResult = parse(source, options)
@@ -344,10 +353,53 @@ export function compile(source: string, options: ParseOptions & ElabOptions & Lo
         return { wat: '', model: checkResult.model, diagnostics: checkResult.diagnostics }
     }
 
-    const lowerResult = lower(checkResult.tree, elabResult.registry, checkResult.model, options)
-    return {
-        wat: lowerResult.wat,
-        model: checkResult.model,
-        diagnostics: lowerResult.diagnostics,
+    const lowerResult = lower(checkResult.tree, elabResult.registry, checkResult.model, {
+        ...options,
+        _functions: checkResult._functions,
+    })
+    if (lowerResult.diagnostics.length > 0 || !options.emitBinary) {
+        return { wat: lowerResult.wat, model: checkResult.model, diagnostics: lowerResult.diagnostics }
     }
+
+    // emitBinary: assemble the .wasm from the same checked program.
+    try {
+        const binary = compileToWasm(
+            checkResult.tree.program, elabResult.registry, checkResult._functions,
+            options.moduleRegistry, options,
+        )
+        return { wat: lowerResult.wat, binary, model: checkResult.model, diagnostics: [] }
+    } catch (err) {
+        const diag: Diagnostic = {
+            phase: 'lower', code: 'E0010',
+            span: { file: options.file ?? '<input>', line: 1, col: 1, length: 0 },
+            message: err instanceof Error ? err.message : String(err),
+        }
+        return { wat: lowerResult.wat, model: checkResult.model, diagnostics: [diag] }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// check() — front-end only (parse → elaborate → typecheck), no lowering
+// ---------------------------------------------------------------------------
+
+export interface CheckOnlyResult {
+    readonly model: import('../ast/semanticModel').SemanticModel | undefined
+    readonly diagnostics: readonly Diagnostic[]
+}
+
+/**
+ * Front-end only: parse → elaborate → typecheck.  Returns at the first phase
+ * that produces diagnostics.  Use this for `sgl check` / editor diagnostics
+ * where no output artifact is needed.
+ */
+export function check(source: string, options: ParseOptions & ElabOptions & CheckOptions = {}): CheckOnlyResult {
+    const parseResult = parse(source, options)
+    if (parseResult.diagnostics.length > 0) return { model: undefined, diagnostics: parseResult.diagnostics }
+
+    const registry = buildRegistry(parseResult.tree, options.extraSources)
+    const elabResult = elaborate(parseResult.tree, registry, options)
+    if (elabResult.diagnostics.length > 0) return { model: undefined, diagnostics: elabResult.diagnostics }
+
+    const checkResult = typecheck(elabResult.tree, elabResult.registry, options)
+    return { model: checkResult.model, diagnostics: checkResult.diagnostics }
 }

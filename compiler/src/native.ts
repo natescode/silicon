@@ -8,6 +8,9 @@
  * plus the host drivers that locate/invoke/link them.
  */
 
+// Front-end + QBE IR lowering as one call (mirrors compile() for native).
+export { compileToQbe, type QbeResult } from './codegen/qbe/compileToQbe'
+
 export {
     // QBE IR generation (pure transforms).
     lowerToQbe,
