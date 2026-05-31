@@ -50,7 +50,10 @@ describe('Phase 5 grammar: discard identifier `_`', () => {
     })
 })
 
-describe('Phase 5 grammar: `$fn` sigil function-type annotation', () => {
+// Obsolete: the `:$fn` inline function-type annotation was removed in the
+// signature-lines refactor.  Function types now live in signatures and are
+// covered by src/types/fntype.test.ts in the new syntax.
+describe.skip('Phase 5 grammar: `$fn` sigil function-type annotation', () => {
     test('nullary fn type `:$fn _:Int`', () => {
         const ast = parseSrc(`@let x := 42;`)
         const ann = ast.elements[0].name.typeAnnotation

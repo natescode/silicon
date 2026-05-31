@@ -46,7 +46,7 @@ describe('resolveUses', () => {
         const { source, visited } = resolveUses(fs.files[P('main.si')]!, P('main.si'), fs)
         expect(visited).toEqual([P('helper.si'), P('main.si')])
         // helper.si content appears before main.si content.
-        const helperIdx = source.indexOf('help v:Int')
+        const helperIdx = source.indexOf('@fn help v')
         const mainIdx = source.indexOf('m := &help')
         expect(helperIdx).toBeGreaterThan(-1)
         expect(mainIdx).toBeGreaterThan(helperIdx)

@@ -145,6 +145,9 @@ export default function addToAstSemantics(siliconGrammar: ohm.Grammar): ohm.Sema
                     // Simple (value) signature → the binding's type.
                     returnAnnotation = fnType
                 }
+                // `Void` is the no-value type — model it as "no return annotation"
+                // (the body/extern produces no result), matching the old void form.
+                if (returnAnnotation?.typename === 'Void') returnAnnotation = undefined
                 if (sig.generics) genericParams = sig.generics
             }
 
@@ -174,9 +177,14 @@ export default function addToAstSemantics(siliconGrammar: ohm.Grammar): ohm.Sema
             const sigs = sigBlock.toAst() as Array<{ name: string; generics?: any; type: any }>
             return sigs.map((sig) => {
                 const fnType = sig.type
-                const params = (fnType?.fnParams ?? []).map((slot: any, i: number) =>
+                // Domain-only sig (no arrow) → __domain.types; arrow sig → fnParams.
+                const slots = Array.isArray(fnType?.fnParams) ? fnType.fnParams
+                    : (fnType?.__domain ? fnType.types.map((t: any) => ({ typeAnnotation: t })) : [])
+                const params = slots.map((slot: any, i: number) =>
                     ASTFactory.parameter('_arg' + i, slot.typeAnnotation))
-                const name = ASTFactory.typedIdentifier(sig.name, fnType?.fnReturn?.typeAnnotation)
+                let ret = fnType?.fnReturn?.typeAnnotation
+                if (ret?.typename === 'Void') ret = undefined   // void import → no result
+                const name = ASTFactory.typedIdentifier(sig.name, ret)
                 return ASTFactory.definition(keyword, name, params, sig.generics, undefined)
             })
         },

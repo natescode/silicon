@@ -43,7 +43,7 @@ describe('useResolver: wasm-gc stdlib shadow', () => {
         expect(visited).not.toContain(P('project/src/stdlib/rc.si'))
         // The gc body (`value;`) appears in the merged source; the mvp
         // body (`value + 1`) does not.
-        expect(source).toContain('rc_new value:Int := value;')
+        expect(source).toContain('rc_new value := value;')
         expect(source).not.toContain('value + 1')
     })
 
@@ -59,7 +59,7 @@ describe('useResolver: wasm-gc stdlib shadow', () => {
             { ...fs, target: 'wasm-gc' },
         )
         expect(visited).toContain(P('project/src/stdlib/option.si'))
-        expect(source).toContain('opt_marker:Int := 7')
+        expect(source).toContain('@fn opt_marker')
     })
 
     test('target=host (default) always uses X.si even when gc shadow exists', () => {

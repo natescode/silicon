@@ -38,9 +38,9 @@ describe('signature-lines toAst — signature distributes onto params + return',
         expect(fn.name.typeAnnotation).toBeUndefined()
     })
 
-    test('higher-order param → fnTypeAnnotation; Void return', () => {
+    test('higher-order param → fnTypeAnnotation; Void return (no result)', () => {
         const [fn] = defs(L(`${BS} run ((Int) -> Bool, Int) -> Void`, '@fn run cb, x := 0;'))
-        expect(fn.name.typeAnnotation?.typename).toBe('Void')
+        expect(fn.name.typeAnnotation).toBeUndefined()   // Void → no return annotation
         const cb = fn.params[0]
         expect(cb.typeAnnotation?.typename).toBe('$fn')
         expect(cb.typeAnnotation?.fnReturn?.typeAnnotation?.typename).toBe('Bool')
@@ -66,7 +66,7 @@ describe('signature-lines toAst — signature distributes onto params + return',
         expect(ds[0].keyword).toBe('@extern')
         expect(ds[0].name.name).toBe('InitWindow')
         expect(ds[0].params.map((p: any) => p.typeAnnotation?.typename)).toEqual(['Int', 'Int', 'String'])
-        expect(ds[0].name.typeAnnotation?.typename).toBe('Void')
+        expect(ds[0].name.typeAnnotation).toBeUndefined()   // Void → no result
         expect(ds[1].name.name).toBe('IsKeyDown')
         expect(ds[1].params.map((p: any) => p.typeAnnotation?.typename)).toEqual(['Int'])
         expect(ds[1].name.typeAnnotation?.typename).toBe('Bool')
