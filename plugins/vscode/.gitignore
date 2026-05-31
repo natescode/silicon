@@ -1,0 +1,8 @@
+node_modules/
+client/dist/
+lsp/dist/
+*.vsix
+*.log
+*.err
+.vscode/
+.DS_Store

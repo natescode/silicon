@@ -1,0 +1,175 @@
+{
+  "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+  "scopeName": "source.silicon",
+  "name": "Silicon",
+  "fileTypes": ["si"],
+  "patterns": [
+    { "include": "#comments" },
+    { "include": "#strings" },
+    { "include": "#numbers" },
+    { "include": "#keywords" },
+    { "include": "#function-call" },
+    { "include": "#types" },
+    { "include": "#booleans" },
+    { "include": "#operators" },
+    { "include": "#identifiers" }
+  ],
+  "repository": {
+    "comments": {
+      "patterns": [
+        {
+          "name": "comment.block.documentation.silicon",
+          "match": "##.*$"
+        },
+        {
+          "name": "comment.line.number-sign.silicon",
+          "match": "#.*$"
+        }
+      ]
+    },
+
+    "strings": {
+      "name": "string.quoted.single.silicon",
+      "begin": "'",
+      "end": "'",
+      "patterns": [
+        {
+          "name": "constant.character.escape.silicon",
+          "match": "\\\\([ntr\\\\'0]|x[0-9a-fA-F]{2})"
+        }
+      ]
+    },
+
+    "numbers": {
+      "patterns": [
+        {
+          "name": "constant.numeric.float.silicon",
+          "match": "\\b\\d+\\.\\d+\\b"
+        },
+        {
+          "name": "constant.numeric.hex.silicon",
+          "match": "\\b0x[0-9a-fA-F_]+\\b"
+        },
+        {
+          "name": "constant.numeric.binary.silicon",
+          "match": "\\b0b[01_]+\\b"
+        },
+        {
+          "name": "constant.numeric.octal.silicon",
+          "match": "\\b0c[0-7_]+\\b"
+        },
+        {
+          "name": "constant.numeric.integer.silicon",
+          "match": "\\b\\d[\\d_]*\\b"
+        }
+      ]
+    },
+
+    "booleans": {
+      "name": "constant.language.boolean.silicon",
+      "match": "@(?:true|false)\\b"
+    },
+
+    "keywords": {
+      "patterns": [
+        {
+          "comment": "Definition keywords — @let, @fn, @var, @type, @extern, @platform, @export, @local, @enum, @type_alias, @type_distinct, @type_sum",
+          "name": "storage.type.silicon",
+          "match": "@(?:let|fn|var|type|extern|platform|export|local|enum|type_alias|type_distinct|type_sum)\\b"
+        },
+        {
+          "comment": "Strata definers — @stratum_keyword, @stratum_operator",
+          "name": "keyword.declaration.stratum.silicon",
+          "match": "@stratum_(?:keyword|operator)\\b"
+        },
+        {
+          "comment": "Control flow — @if, @loop, @match, @return, @break, @continue",
+          "name": "keyword.control.silicon",
+          "match": "@(?:if|loop|match|return|break|continue|and|or|not)\\b"
+        },
+        {
+          "comment": "Type-cast / conversion keywords — @toInt, @toFloat",
+          "name": "keyword.other.cast.silicon",
+          "match": "@(?:toInt|toFloat)\\b"
+        },
+        {
+          "comment": "Use / module — @use",
+          "name": "keyword.control.import.silicon",
+          "match": "@use\\b"
+        },
+        {
+          "comment": "Catch-all: any other @identifier (annotations, future keywords)",
+          "name": "keyword.other.silicon",
+          "match": "@[A-Za-z_][A-Za-z0-9_]*"
+        }
+      ]
+    },
+
+    "function-call": {
+      "patterns": [
+        {
+          "comment": "Built-in call — &@keyword (e.g. &@if, &@loop)",
+          "name": "meta.function-call.builtin.silicon",
+          "match": "(&)(@[A-Za-z_][A-Za-z0-9_]*)",
+          "captures": {
+            "1": { "name": "punctuation.definition.function-call.silicon" },
+            "2": { "name": "keyword.control.silicon" }
+          }
+        },
+        {
+          "comment": "User / namespace call — &name, &mod::fn, &a::b::c",
+          "name": "meta.function-call.silicon",
+          "match": "(&)([A-Za-z_][A-Za-z0-9_]*(?:::[A-Za-z_][A-Za-z0-9_]*)*)",
+          "captures": {
+            "1": { "name": "punctuation.definition.function-call.silicon" },
+            "2": { "name": "entity.name.function.silicon" }
+          }
+        }
+      ]
+    },
+
+    "types": {
+      "patterns": [
+        {
+          "comment": "Built-in primitive types — Int, Float, Bool, String, Void",
+          "name": "entity.name.type.primitive.silicon",
+          "match": "\\b(?:Int|Float|Bool|String|Void)\\b"
+        },
+        {
+          "comment": "User-defined types — PascalCase identifiers",
+          "name": "entity.name.type.silicon",
+          "match": "\\b[A-Z][A-Za-z0-9_]*\\b"
+        }
+      ]
+    },
+
+    "operators": {
+      "patterns": [
+        {
+          "comment": "Sigil prefixes the lexer treats as discrete tokens",
+          "name": "keyword.operator.sigil.silicon",
+          "match": "\\$"
+        },
+        {
+          "comment": "Multi-char operators — :=, ::, ++, ->, ==, !=, <=, >=, <<, >>, ||, &&",
+          "name": "keyword.operator.silicon",
+          "match": ":=|::|\\+\\+|->|==|!=|<=|>=|<<|>>|\\|\\||&&"
+        },
+        {
+          "comment": "Single-char operators / punctuation",
+          "name": "keyword.operator.silicon",
+          "match": "[+\\-*/%<>=!|^~?]"
+        },
+        {
+          "name": "punctuation.silicon",
+          "match": "[,;:.()\\[\\]{}]"
+        }
+      ]
+    },
+
+    "identifiers": {
+      "name": "variable.silicon",
+      "match": "\\b[A-Za-z_][A-Za-z0-9_]*\\b"
+    }
+  }
+}

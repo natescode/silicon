@@ -1,0 +1,36 @@
+# VSIX packaging — only the bundled artifacts + runtime assets ship.
+#
+# What stays IN the VSIX:
+#   - client/dist/extension.js          (bundled VS Code client)
+#   - lsp/dist/                         (bundled language server +
+#                                        std.wat + silicon-official.ohm
+#                                        runtime assets the server reads)
+#   - boot/strata/builtin/**            (strata source the server reads
+#                                        at compile time on each request)
+#   - syntaxes/, themes/                (TextMate grammar + color theme)
+#   - language-configuration.json
+#   - package.json, README.md, icon.png, LICENSE
+
+# Source we never ship — the bundle includes everything it needs.
+client/src/**
+lsp/src/**
+src/**
+scripts/**
+
+# Tooling configs
+.vscode/**
+.vscode-test/**
+.gitignore
+.gitattributes
+**/.gitignore
+**/.eslintrc.*
+**/tsconfig.json
+**/*.map
+
+# Dev artifacts
+node_modules/**
+bun.lock
+*.log
+*.err
+*.vsix
+.DS_Store

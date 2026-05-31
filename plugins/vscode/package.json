@@ -1,0 +1,95 @@
+{
+  "name": "silicon-vscode",
+  "displayName": "Silicon",
+  "description": "Syntax highlighting, Sigil Dark theme, and Language Server for the Silicon programming language.",
+  "version": "0.2.0",
+  "publisher": "natescode",
+  "license": "MIT",
+  "engines": {
+    "vscode": "^1.70.0"
+  },
+  "categories": [
+    "Programming Languages",
+    "Themes"
+  ],
+  "keywords": [
+    "silicon",
+    "sigil",
+    "wasm",
+    "wasi"
+  ],
+  "main": "./client/dist/extension.js",
+  "icon": "icon.png",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/natescode/silicon-vscode"
+  },
+  "activationEvents": [
+    "onLanguage:silicon"
+  ],
+  "contributes": {
+    "languages": [
+      {
+        "id": "silicon",
+        "aliases": [
+          "Silicon",
+          "silicon"
+        ],
+        "extensions": [
+          ".si"
+        ],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "silicon",
+        "scopeName": "source.silicon",
+        "path": "./syntaxes/silicon.tmLanguage.json"
+      }
+    ],
+    "themes": [
+      {
+        "label": "Sigil Dark",
+        "uiTheme": "vs-dark",
+        "path": "./themes/sigil-dark-color-theme.json"
+      }
+    ],
+    "configuration": {
+      "title": "Silicon",
+      "properties": {
+        "silicon.lsp.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable the Silicon language server (diagnostics, go-to-definition, document symbols, hover)."
+        }
+      }
+    },
+    "commands": [
+      {
+        "command": "silicon.lsp.restart",
+        "title": "Silicon: Restart LSP"
+      }
+    ]
+  },
+  "scripts": {
+    "vscode:prepublish": "bun run build",
+    "build": "bun run build:client && bun run build:server",
+    "build:client": "bun build ./client/src/extension.ts --outdir ./client/dist --target node --external vscode",
+    "build:server": "bun build ./lsp/src/index.ts --outdir ./lsp/dist --target node --format esm && cp ./src/codegen/std.wat ./lsp/dist/std.wat && cp ./src/grammar/silicon-official.ohm ./lsp/dist/silicon-official.ohm",
+    "test:server": "bun test lsp/src/smoke.test.ts"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "@types/node": "^20.14.2",
+    "@types/vscode": "^1.70.0",
+    "@vscode/vsce": "^3.9.1",
+    "ohm-js": "^17.1.0",
+    "vscode-languageclient": "^9.0.1",
+    "vscode-languageserver": "^9.0.1",
+    "vscode-languageserver-textdocument": "^1.0.12"
+  },
+  "peerDependencies": {
+    "typescript": "^5.0.0"
+  }
+}
