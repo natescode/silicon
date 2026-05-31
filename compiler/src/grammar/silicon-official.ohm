@@ -1,6 +1,7 @@
 Silicon {
   Program = Element*
   Element =
+    | BlockDef -- blockDef
     | Item ";" -- item
     | DocComment -- docComment
   Item = 
@@ -15,12 +16,13 @@ Silicon {
   ExpressionStart = ExpressionEnd (BinOp ExpressionEnd)* -- binChain
   ExpressionEnd =
     | Literal -- literal
+    | AscribeExpr -- ascribe
     | FunctionCall -- functionCall
     | VariantDecl -- variantDecl
     | namespace -- namespace
     | Block -- block
     | "(" ExpressionStart ")" -- paren
-  VariantDecl = "$" identifier ListOf<typedIdentifier, ",">  -- declaration
+  VariantDecl = "$" identifier ListOf<ParamLiteral, ",">  -- declaration
   Block = "{" (Item ";")* ExpressionStart? "}"
   BinOp = operatorToken
   operatorToken = operatorChar+  -- op
@@ -43,7 +45,7 @@ Silicon {
   ArrayLiteral = "$[" ListOf<ExpressionStart, ","> "]"
   ObjectLiteral = "${" ListOf<KeyValuePair, ","> "}"
   TupleLiteral = "$(" ListOf<ExpressionStart, ","> ")"
-  KeyValuePair = typedIdentifier "=" ExpressionStart
+  KeyValuePair = identifier "=" ExpressionStart
   stringLiteral = "'" stringChar* "'"
   stringChar = ~("'" | "\\" | lineTerminator) any
   intLiteral =
@@ -59,32 +61,32 @@ Silicon {
   octLiteral = "0c" octDigit+ ("_" octDigit+)*
   octDigit = "0".."7"
   booleanLiteral = "@true" | "@false"
-  Definition = defKw typedIdentifier GenericParams? Params Binding?
-  Params =
-    | "(" ListOf<ParamLiteral, ","> ")"     -- paren
-    | ListOf<ParamLiteral, ",">             -- bare
+  // A definition is either an attached-signature + body (`\\ sig` then `@fn …`),
+  // or a brace block of detached signatures (`@extern { … }` / `@interface …`),
+  // which is `;`-free and handled at Element level (BlockDef).
+  Definition  = AttachedSig? defKw identifier GenericParams? Params Binding?
+  BlockDef       = defKw identifier? GenericParams? SignatureBlock
+  AttachedSig    = "\\\\" namespace GenericParams? TypeExpr
+  SignatureBlock = "{" AttachedSig* "}"
+  Params = ListOf<ParamLiteral, ",">
   defKw = "@" ~reservedId identifier
   reservedId = ("true" | "false") ~identTail
   Binding = ":=" ExpressionStart
   GenericParams = "[" ListOf<identifier, ","> "]"
   ParamLiteral =
-    | typedIdentifier -- typedId
+    | identifier TypeExpr? -- field
     | Literal -- literal
   keyword = "@" identifier
 
-  typedIdentifier = identifier type?
-  type =
-    | ":" sigilFnType                       -- fn
-    | ":" identifier typeArgs?              -- simple
-  sigilFnType = "$" identifier space+ typedIdentifier sigilFnTail?
-  sigilFnTail = space+ sigilFnTailBody
-  sigilFnTailBody =
-    | sigilFnParenForm                                                        -- paren
-    | sigilFnParams                                                           -- bare
-  sigilFnParenForm =
-    | "(" space* ")"                                                          -- empty
-    | "(" sigilFnParams ")"                                                   -- params
-  sigilFnParams = typedIdentifier (space* "," space* typedIdentifier)*
+  // Types use juxtaposition (no ":") + an arrow with a parenthesised, possibly
+  // empty/tuple domain.  The arrow is an OPTIONAL SUFFIX on a type atom: every
+  // TypeExpr starts by parsing a TypeAtom, then one-token lookahead on "->"
+  // decides function-vs-value (keeps the grammar LL(1)).
+  TypeExpr = TypeAtom ("->" TypeExpr)?
+  TypeAtom =
+    | identifier typeArgs?            -- simple
+    | "(" ListOf<TypeExpr, ","> ")"   -- group
+  AscribeExpr = "&@as" TypeExpr "," ExpressionStart
   typeArgs = "[" space* typeArg (space* "," space* typeArg)* space* "]"
   typeArg = identifier typeArgs?
   identifier =
