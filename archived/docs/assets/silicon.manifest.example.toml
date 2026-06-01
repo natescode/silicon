@@ -1,0 +1,63 @@
+# silicon.manifest.toml
+
+[package]
+name = "acme/imagekit"
+description = "Tiny image helpers"
+license = "MIT"
+# Primary compilation target(s)
+targets = ["wasm32-unknown-unknown", "wasm32-wasi-component"]
+
+[manifest]
+# Flat graph rules
+require_flat = true          # Enforce a single layer of direct deps
+allow_transitive = false     # Disallow using anything you didn't import
+dedupe_by = "api_hash"       # Content/API-addressed, not semver
+# Reproducibility without a lockfile:
+pin_resolution = "api_hash"  # Build is defined by these hashes alone
+
+# --- Direct dependencies only (no hidden transitives) ---
+# name: logical import name used in code (e.g., `gfx::Image`)
+# api_hash: canonical hash of the public API surface (not the binary)
+# source: where to fetch (registry URL, git commit, or file path)
+# reexport: optionally re-expose a subset to your users
+[[imports]]
+name = "std"
+api_hash = "api:sha256:75f1f3…c9b1"
+source = "registry:sil/std@75f1f3…c9b1"
+reexport = ["mem::Arena", "io::print"]  # explicit, shallow reexports
+
+[[imports]]
+name = "gfx"
+api_hash = "api:sha256:8a2c4e…11ab"
+source = "git:https://code.example.com/sil/gfx.git#8f3a12c"
+reexport = []  # default none
+
+[[imports]]
+name = "mathx"
+api_hash = "api:sha256:1c9d0b…77e0"
+source = "path:./vendor/mathx"  # local vendored copy
+reexport = ["vec2", "vec3"]
+
+# --- Capabilities this package REQUIRES (no sneaky deps for side effects) ---
+# These are compile-time constraints; they DON’T pull code.
+[capabilities.required]
+IO = ["print"]       # needs the ability to print
+Time = []            # needs a clock but no specific ops
+Allocator = ["Arena"]# must be provided by the host or caller
+
+# --- Capabilities this package PROVIDES (for dependents) ---
+[capabilities.provided]
+ImageDecode = ["png", "jpeg"]
+
+# --- Upgrade policy: single API at a time, compiler-assisted shims optional ---
+# Mapping old->new public API hashes. The compiler can generate shims if asked.
+# This is metadata for tooling; it doesn’t fetch anything by itself.
+[upgrades."registry:sil/std"]
+from = "api:sha256:75f1f3…c9b1"
+to   = "api:sha256:90a0de…42aa"
+strategy = "migrate"          # or "block", "manual"
+shim = true                   # allow auto-reexported adapters if safe
+
+# --- Integrity for your own exported API (what your users depend on) ---
+[exports]
+api_hash = "api:sha256:4f01a8…0d33"  # computed from canonical public AST

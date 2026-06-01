@@ -1,0 +1,7 @@
+## @main is a special main function where the program starts
+@main = {
+    @let greeting = "Hello";
+    @let target = " world!";
+
+    &@print greeting ++ target;
+};
