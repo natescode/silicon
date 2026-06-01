@@ -24,8 +24,8 @@ features:
     details: Declared polymorphism on `@fn[T]` and `@type[T]`. No let-generalisation. Call sites infer `T` automatically. Roc-style trajectory.
   - title: Library-first compiler
     details: 'Compiler-as-a-Service: `parse`, `elaborate`, `typecheck`, `lower` are the public API. The `sgl` CLI is a thin consumer. LSP/tooling is a wrapper.'
-  - title: Honest 1.0
-    details: No LSP, no package registry, no incremental compile — all v1.1 work, all called out explicitly in the changelog.
+  - title: Honest 0.1
+    details: No package registry, no incremental compile — all later work, all called out explicitly in the changelog.
 ---
 
 ## A five-line example

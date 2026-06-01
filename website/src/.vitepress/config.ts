@@ -61,7 +61,7 @@ export default defineConfig({
             { text: 'Blog', link: '/blog/' },
             { text: 'Stability', link: '/stability/' },
             {
-                text: 'v1.0',
+                text: 'v0.1',
                 items: [
                     { text: 'Changelog', link: 'https://github.com/NatesCode/silicon/blob/main/CHANGELOG.md' },
                     { text: 'Security', link: '/stability/security' },
