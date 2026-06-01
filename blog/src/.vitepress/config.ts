@@ -21,7 +21,8 @@ export default defineConfig({
         siteTitle: 'Silicon Blog',
         nav: [
             { text: 'Posts', link: '/' },
-            { text: 'Docs', link: 'https://github.com/NatesCode/silicon#readme' },
+            { text: 'Docs', link: 'https://si14.dev' },
+            { text: 'Playground', link: 'https://playground.si14.dev' },
             { text: 'GitHub', link: 'https://github.com/NatesCode/silicon' },
         ],
         sidebar: [

@@ -57,6 +57,8 @@ export default defineConfig({
             { text: 'Get started', link: '/guide/getting-started' },
             { text: 'Reference', link: '/reference/' },
             { text: 'Examples', link: '/examples/' },
+            { text: 'Playground', link: 'https://playground.si14.dev' },
+            { text: 'Blog', link: 'https://blog.si14.dev' },
             { text: 'Stability', link: '/stability/' },
             {
                 text: 'v1.0',
