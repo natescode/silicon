@@ -57,8 +57,8 @@ export default defineConfig({
             { text: 'Get started', link: '/guide/getting-started' },
             { text: 'Reference', link: '/reference/' },
             { text: 'Examples', link: '/examples/' },
-            { text: 'Playground', link: 'https://playground.si14.dev' },
-            { text: 'Blog', link: 'https://blog.si14.dev' },
+            { text: 'Playground', link: '/playground' },
+            { text: 'Blog', link: '/blog/' },
             { text: 'Stability', link: '/stability/' },
             {
                 text: 'v1.0',
@@ -72,6 +72,15 @@ export default defineConfig({
         ],
 
         sidebar: {
+            '/blog/': [
+                {
+                    text: 'Blog',
+                    items: [
+                        { text: 'All posts', link: '/blog/' },
+                        { text: "Silicon's Publicly Released!", link: '/blog/silicon-alpha-1-release' },
+                    ],
+                },
+            ],
             '/guide/': [
                 {
                     text: 'Guide',

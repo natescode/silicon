@@ -1,5 +1,5 @@
 {
   "name": "silicon",
   "private": true,
-  "workspaces": ["compiler", "cli", "lsp", "playground", "website", "blog", "plugins/vscode"]
+  "workspaces": ["compiler", "cli", "lsp", "playground", "website", "plugins/vscode"]
 }

@@ -3,3 +3,6 @@ src/.vitepress/dist/
 src/.vitepress/cache/
 .DS_Store
 *.log
+
+# Playground app copied in by build:playground
+src/public/play/

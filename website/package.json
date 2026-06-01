@@ -6,7 +6,8 @@
   "type": "module",
   "scripts": {
     "dev": "vitepress dev src",
-    "build": "vitepress build src",
+    "build:playground": "bun run --cwd ../playground build && rm -rf src/public/play && mkdir -p src/public/play && cp ../playground/dist/index.html src/public/play/index.html",
+    "build": "bun run build:playground && vitepress build src",
     "preview": "vitepress preview src",
     "sync": "bun run scripts/sync-docs.ts"
   },
