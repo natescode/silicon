@@ -163,7 +163,7 @@ describe('Strata 2.0 §2: on::decl phase handler', () => {
             };
         };`
         const prog = parseSource(`
-            \\ my_func (Int)
+            \\\\ my_func (Int)
             @watched_fn my_func x := x;
         `)
         const registry = buildStrataRegistry(prog, [extra])

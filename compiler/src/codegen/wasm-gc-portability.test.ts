@@ -74,7 +74,7 @@ describe('Phase 9d-5a: E0012 — introspection primitives under wasm-gc', () => 
 
     test('rc_count and rc_is_unique raise E0012 when called', () => {
         const src = `${rcSrc}
-            \\ probe () -> Int
+            \\\\ probe () -> Int
             @fn probe := {
                 @local r := &rc_new 1;
                 &rc_count r

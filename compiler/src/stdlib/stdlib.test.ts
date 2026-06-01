@@ -56,7 +56,7 @@ describe('Phase 5a-1: Option stdlib', () => {
         // Negative test: passing a Float Some to a function expecting Option[Int]
         // should produce a type error.
         const { errors } = await compile(`${optionSrc}
-            \\ want_int (Option[Int])
+            \\\\ want_int (Option[Int])
             @fn want_int x := &option_unwrap_or x, 0;
             @fn wrong := &want_int (&Some 1.5);
         `)

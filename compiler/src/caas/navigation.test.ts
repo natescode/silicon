@@ -141,11 +141,10 @@ describe('SemanticModel.symbolAtPosition()', () => {
     })
 
     test('finds symbol at a reference site', () => {
-        const src = '@fn f  := { 1 };\n@let r := &f;'
+        const src = '@fn f := { 1 };\n@let r := &f;'
         const model = modelFor(src)
-        // line 2: '@let r := &f;'
-        //                         ^ 'f' is at some column on line 2
-        const sym = model.symbolAtPosition(2, 16)
+        // line 2: '@let r := &f;'  → '&f' reference, 'f' at col 12.
+        const sym = model.symbolAtPosition(2, 12)
         expect(sym).toBeDefined()
         expect(sym!.name).toBe('f')
     })

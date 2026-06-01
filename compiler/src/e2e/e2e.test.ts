@@ -1494,7 +1494,9 @@ test("Phase 4: defer_with_return.si — early @return runs cleanup before return
 test("Phase 4: @defer site itself produces no inline IR", () => {
     // A function whose only statement is @defer should not call any function
     // at the defer site — the cleanup is only materialised at function exit.
-    const src = `@extern { \\\\ cleanup () -> Void }`
+    const src = `@extern { \\\\ cleanup () -> Void }
+\\\\ f () -> Void
+@fn f := { &@defer &cleanup };`
     const result = compileSource(src);
     expect(result.success).toBe(true);
     const uw = userWat(result.wat!)
