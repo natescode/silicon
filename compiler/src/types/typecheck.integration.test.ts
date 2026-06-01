@@ -110,13 +110,13 @@ test('type annotation Int matches int literal', () => {
 })
 
 test('type annotation Float on int binding is an error', () => {
-    const { errors } = check('@let x := 5;')
+    const { errors } = check('@let x := &@as Float, 5;')
     expect(errors.length).toBeGreaterThan(0)
     expect(errors[0].kind).toBe('Annotation')
 })
 
 test('unknown type annotation errors', () => {
-    const { errors } = check('@let x := 5;')
+    const { errors } = check('@let x := &@as Bogus, 5;')
     expect(errors.length).toBeGreaterThan(0)
     expect(errors[0].kind).toBe('UnknownType')
 })
@@ -196,7 +196,7 @@ test('wrong arity at user function call site errors', () => {
 test('forward reference: wrong arg type caught before definition', () => {
     // &add appears before @let add — pre-pass seeds the signature so the
     // call site is type-checked even though the definition comes later.
-    const { errors } = check('\\\\ add (Int, Int)\n@let add x, y := x + y;')
+    const { errors } = check('&add 1.0, 2.0;\n\\\\ add (Int, Int)\n@let add x, y := x + y;')
     expect(errors.length).toBeGreaterThan(0)
     expect(errors[0].kind).toBe('Mismatch')
 })
@@ -300,7 +300,7 @@ test('@type_distinct: registered as Distinct kind in typeAliases', () => {
 })
 
 test('@type_distinct: assigning Int to distinct-typed binding is a type error', () => {
-    const { errors } = check('@type_distinct UserId := Int;\n@let id := 42;')
+    const { errors } = check('@type_distinct UserId := Int;\n@let id := &@as UserId, 42;')
     // 42 is Int; UserId is Distinct — they are not equal, so this is a type error.
     expect(errors.length).toBeGreaterThan(0)
     expect(errors[0].kind).toBe('Annotation')
@@ -412,7 +412,7 @@ test('@local: declaration with matching annotation has no errors', () => {
 })
 
 test('@local: wrong annotation type is a type error', () => {
-    const { errors } = check('\\\\ f (Int)\n@let f x := { @local tmp := x + 1; tmp };')
+    const { errors } = check('\\\\ f (Int)\n@let f x := { @local tmp := &@as Float, x + 1; tmp };')
     expect(errors.length).toBeGreaterThan(0)
     expect(errors[0].kind).toBe('Annotation')
 })

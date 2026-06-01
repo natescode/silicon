@@ -279,12 +279,10 @@ export default function addToAstSemantics(siliconGrammar: ohm.Grammar): ohm.Sema
             return asc.toAst()
         },
 
-        // &@as Type, expr  — compile-time type ascription.  For now the type
-        // hint is dropped and the inner expression is used directly (the
-        // codemod only emits this where the old @let type was redundant or for
-        // the rare ambiguous case; enforcing the hint is a later refinement).
-        AscribeExpr(_kw, _typeExpr, _comma, expr) {
-            return expr.toAst()
+        // &@as Type, expr  — compile-time type ascription.  Pins expr's type to
+        // Type (errors on mismatch); transparent at runtime.
+        AscribeExpr(_kw, typeExpr, _comma, expr) {
+            return ASTFactory.ascription(expr.toAst(), typeExpr.toAst())
         },
 
         ExpressionEnd_namespace(ns) {

@@ -879,6 +879,26 @@ function checkNode(node: any, ctx: Ctx): SiliconType {
         case 'Namespace': t = typeOfNamespace(node, ctx); break
         case 'Block': t = typeOfBlock(node, ctx); break
         case 'Binding': t = checkNode(node.expression, ctx); break
+        case 'Ascription': {
+            // `&@as T, e` — pin e's type to T; error on mismatch.  The result
+            // type is T (so a binding to an ascription is typed T).
+            const annT = resolveTypeAnnotation(node.typeAnnotation, ctx)
+            const exprT = checkNode(node.expression, ctx)
+            if (!annT) {
+                ctx.errors.push(unknownType(node.typeAnnotation?.typename ?? '<unknown>', node.sourceLocation))
+                t = TypeUnknown
+                break
+            }
+            if (exprT.kind !== 'Unknown') {
+                try { unify(annT, exprT) }
+                catch (e) {
+                    if (e instanceof UnifyError) ctx.errors.push(annotationMismatch('ascription', annT, exprT, node.sourceLocation))
+                    else throw e
+                }
+            }
+            t = annT
+            break
+        }
 
         // Anything we don't model (DocComment, Elaboration, TypedIdentifier
         // when reached out of a Definition context, etc.) is benign — we just

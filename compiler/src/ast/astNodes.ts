@@ -197,6 +197,18 @@ export interface Block {
     sourceLocation?: SourceLocation
 }
 
+/** `&@as Type, expr` — compile-time type ascription.  Transparent at runtime
+ *  (lowers to `expr`); pins the expression's type to `typeAnnotation` and
+ *  errors on mismatch.  The escape hatch for the rare expression inference
+ *  can't pin (e.g. `&None`, raw `&alloc` pointers). */
+export interface Ascription {
+    type: 'Ascription'
+    expression: ASTNode
+    typeAnnotation: TypeAnnotation
+    sourceLocation?: SourceLocation
+    inferredType?: any
+}
+
 export interface Binding {
     type: 'Binding'
     expression: ASTNode
@@ -381,6 +393,10 @@ export const ASTFactory = {
 
     binding(expression: ASTNode): Binding {
         return { type: 'Binding', expression }
+    },
+
+    ascription(expression: ASTNode, typeAnnotation: TypeAnnotation): Ascription {
+        return { type: 'Ascription', expression, typeAnnotation }
     },
 
     namespace(path: string[]): Namespace {

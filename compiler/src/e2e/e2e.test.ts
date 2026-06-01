@@ -1594,8 +1594,8 @@ test("Round 28: Float + Float compiles successfully", () => {
     expect(result.wat).toContain("f32.add");
 });
 
-test("Round 28: annotation mismatch — @let x := 3.14 is a type error", () => {
-    const result = compileSource("@let x := 3.14;");
+test("Round 28: annotation mismatch — @let x := &@as Int, 3.14 is a type error", () => {
+    const result = compileSource("@let x := &@as Int, 3.14;");
     expect(result.success).toBe(false);
     expect(result.error).toMatch(/mismatch|annotation|Int|Float/i);
 });

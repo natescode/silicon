@@ -858,6 +858,10 @@ function lowerExpr(node: any, ctx: LowerCtx): IRExpr {
         case 'Binding':
             return lowerExpr(n.expression, ctx)
 
+        // Ascription (`&@as T, e`) is transparent at runtime — lower inner expr.
+        case 'Ascription':
+            return lowerExpr(n.expression, ctx)
+
         // Definition inside a block body (e.g. @local).
         case 'Definition':
             return lowerDefinitionAsExpr(n, ctx)
