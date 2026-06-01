@@ -11,11 +11,17 @@ import { fileURLToPath } from 'node:url'
 import { defineConfig } from 'vitepress'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
-// Grammar is vendored alongside this config so the website is
+// Grammars are vendored alongside this config so the website is
 // self-contained — no dependency on sibling repos / packages.
-// Re-sync from plugins/vscode/syntaxes/ when the grammar changes.
+// Re-sync silicon.tmLanguage.json from plugins/vscode/syntaxes/ when
+// the grammar changes. ebnf.tmLanguage.json is hand-maintained here:
+// Shiki ships no EBNF grammar, so the synced docs/grammar.ebnf page
+// would fall back to plain txt (with a build warning) without it.
 const siliconGrammar = JSON.parse(
     readFileSync(resolve(__dirname, 'silicon.tmLanguage.json'), 'utf8')
+)
+const ebnfGrammar = JSON.parse(
+    readFileSync(resolve(__dirname, 'ebnf.tmLanguage.json'), 'utf8')
 )
 
 export default defineConfig({
@@ -27,7 +33,10 @@ export default defineConfig({
     lastUpdated: true,
 
     markdown: {
-        languages: [{ ...siliconGrammar, name: 'silicon', aliases: ['si'] }],
+        languages: [
+            { ...siliconGrammar, name: 'silicon', aliases: ['si'] },
+            { ...ebnfGrammar, name: 'ebnf' },
+        ],
     },
     // Synced docs (from repo docs/) carry relative links that point at
     // sibling repo files (ADRs, .wit, user-stories HTML) which don't
@@ -52,12 +61,12 @@ export default defineConfig({
             {
                 text: 'v1.0',
                 items: [
-                    { text: 'Changelog', link: 'https://github.com/NatesCode/sigil/blob/main/CHANGELOG.md' },
+                    { text: 'Changelog', link: 'https://github.com/NatesCode/silicon/blob/main/CHANGELOG.md' },
                     { text: 'Security', link: '/stability/security' },
                     { text: 'Performance', link: '/stability/performance' },
                 ],
             },
-            { text: 'GitHub', link: 'https://github.com/NatesCode/sigil' },
+            { text: 'GitHub', link: 'https://github.com/NatesCode/silicon' },
         ],
 
         sidebar: {
@@ -138,11 +147,11 @@ export default defineConfig({
         },
 
         socialLinks: [
-            { icon: 'github', link: 'https://github.com/NatesCode/sigil' },
+            { icon: 'github', link: 'https://github.com/NatesCode/silicon' },
         ],
 
         editLink: {
-            pattern: 'https://github.com/NatesCode/sigil/edit/main/site/src/:path',
+            pattern: 'https://github.com/NatesCode/silicon/edit/main/website/src/:path',
             text: 'Edit this page on GitHub',
         },
 
@@ -157,7 +166,7 @@ export default defineConfig({
 
         footer: {
             message: 'MIT-licensed. © 2024–2026 NatesCode LLC, Nathan Hedglin.',
-            copyright: '<a href="https://github.com/NatesCode/sigil/issues/new">Report an issue</a>',
+            copyright: '<a href="https://github.com/NatesCode/silicon/issues/new">Report an issue</a>',
         },
     },
 })

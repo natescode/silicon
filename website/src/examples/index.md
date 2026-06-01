@@ -35,6 +35,6 @@ at the top — `sgl init` already wires `io.si` in for you.
 ## Want more?
 
 These ten cover the surface; the full test suite under
-[`src/`](https://github.com/NatesCode/sigil/tree/main/src) is the
+[`src/`](https://github.com/NatesCode/silicon/tree/main/src) is the
 biggest corpus of real Silicon. Look at any `*.test.ts` — most embed
 representative programs as backtick-delimited strings.

@@ -36,4 +36,4 @@ shape of every other Silicon definition is unchanged.
 This is the most under-marketed thing about Silicon. Most "I wish my
 language had X" wishes turn into strata.
 
-[Pattern reference: strata-as-design-solvent (memory entry) →](https://github.com/NatesCode/sigil/blob/main/CLAUDE.md)
+[Pattern reference: strata-as-design-solvent (memory entry) →](https://github.com/NatesCode/silicon/blob/main/CLAUDE.md)

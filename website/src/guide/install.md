@@ -7,7 +7,7 @@ title: Install
 ## curl | sh (fastest)
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/NatesCode/sigil/main/scripts/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/NatesCode/silicon/main/scripts/install.sh | sh
 ```
 
 The installer auto-detects Linux x86_64 / aarch64 and macOS arm64 / x64,
@@ -18,7 +18,7 @@ installs to `~/.sgl/bin`, and updates your shell rc. Override with
 ## Homebrew (macOS, Linux)
 
 ```sh
-brew tap NatesCode/sigil
+brew tap NatesCode/silicon
 brew install sgl
 ```
 
@@ -53,7 +53,7 @@ You need:
   (`scripts/install-wat2wasm.sh`)
 
 ```sh
-git clone https://github.com/NatesCode/sigil
+git clone https://github.com/NatesCode/silicon
 cd sigil
 bun install
 bun run build:sigilc      # dist/sigilc

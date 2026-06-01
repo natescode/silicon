@@ -11,7 +11,7 @@ hero:
       link: /guide/getting-started
     - theme: alt
       text: View on GitHub
-      link: https://github.com/NatesCode/sigil
+      link: https://github.com/NatesCode/silicon
 
 features:
   - title: Strata 2.0
@@ -46,7 +46,7 @@ a native binary via the QBE backend.
 ## Install in 60 seconds
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/NatesCode/sigil/main/scripts/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/NatesCode/silicon/main/scripts/install.sh | sh
 sgl init hello
 cd hello
 sgl run

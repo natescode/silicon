@@ -11,7 +11,7 @@ obviously bad" pass that backs the 1.0 stability contract (see
 **Do not file security reports as public GitHub issues.**
 
 - Open a private advisory at
-  https://github.com/NatesCode/sigil/security/advisories/new, or
+  https://github.com/NatesCode/silicon/security/advisories/new, or
 - Email `nate@natescode.com` with the subject line beginning
   `[SECURITY] Sigil`.
 

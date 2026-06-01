@@ -23,7 +23,7 @@ with options, recommendation, and resolution status.
 | 0011 | Borrow checker design: arenas + rcaps + actor isolation | Proposed |
 
 Read individual ADRs in the repo at
-[`docs/adr/`](https://github.com/NatesCode/sigil/tree/main/docs/adr).
+[`docs/adr/`](https://github.com/NatesCode/silicon/tree/main/docs/adr).
 They are the canonical record of "why is X this way and what did we
 consider instead." When a 1.0 design feels surprising, the ADR usually
 explains the surprise.

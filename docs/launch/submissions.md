@@ -89,7 +89,7 @@ release page.
 > Blog post (with runnable examples and the "why not Zig/Rust/Roc"
 > section): [LINK]
 >
-> Repo: https://github.com/NatesCode/sigil
+> Repo: https://github.com/NatesCode/silicon
 > 15-min tutorial: docs/getting-started.md
 
 ## Reddit — r/programming
@@ -143,12 +143,12 @@ CHANGELOG.
 **8/8.**  Install in 60s:
 
 ```
-curl -fsSL https://raw.githubusercontent.com/NatesCode/sigil/main/scripts/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/NatesCode/silicon/main/scripts/install.sh | sh
 sgl init hello && cd hello && sgl run
 ```
 
 Blog post with the full design rationale: [LINK]
-Repo: https://github.com/NatesCode/sigil
+Repo: https://github.com/NatesCode/silicon
 
 ## Follow-up posts (drafted but not necessarily published)
 
