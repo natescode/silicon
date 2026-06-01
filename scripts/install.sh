@@ -1,5 +1,5 @@
 #!/usr/bin/env sh
-# Silicon installer — curl -fsSL https://raw.githubusercontent.com/natescode/sigil/main/scripts/install.sh | sh
+# Silicon installer — curl -fsSL https://raw.githubusercontent.com/natescode/silicon/main/scripts/install.sh | sh
 #
 # Downloads the latest sgl binary for the current platform and installs it to
 # $SGL_INSTALL_DIR (default: ~/.sgl/bin), then adds it to PATH via the shell
@@ -9,11 +9,11 @@
 #   SGL_INSTALL_DIR   Override install directory   (default: ~/.sgl/bin)
 #   SGL_VERSION       Pin a specific version tag    (default: latest)
 #   SGL_NO_MODIFY_PATH  Set to any value to skip PATH modification
-#   SGL_REPO          Override GitHub repo          (default: natescode/sigil)
+#   SGL_REPO          Override GitHub repo          (default: natescode/silicon)
 
 set -eu
 
-REPO="${SGL_REPO:-natescode/sigil}"
+REPO="${SGL_REPO:-natescode/silicon}"
 INSTALL_DIR="${SGL_INSTALL_DIR:-$HOME/.sgl/bin}"
 VERSION="${SGL_VERSION:-}"
 
