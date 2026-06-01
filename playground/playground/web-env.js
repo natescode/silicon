@@ -31,23 +31,23 @@
         var wasmMemory = null
         var wasmAlloc  = null
 
+        // Silicon strings are UTF-8 with a 4-byte little-endian byte-length
+        // header (see compiler std.wat / docs).  Read and write them as UTF-8.
         function readLenString(ptr) {
             if (!wasmMemory) return '[memory not bound]'
             var view = new DataView(wasmMemory.buffer)
             var byteLen = view.getInt32(ptr, true)
             var bytes = new Uint8Array(wasmMemory.buffer, ptr + 4, byteLen)
-            try { return new TextDecoder('utf-16le').decode(bytes) } catch (_) { return '[decode error]' }
+            try { return new TextDecoder('utf-8').decode(bytes) } catch (_) { return '[decode error]' }
         }
 
         function writeLenString(str) {
             if (!wasmMemory || !wasmAlloc) return 0
-            var byteLen = str.length * 2
-            var ptr = wasmAlloc(4 + byteLen)
+            var bytes = new TextEncoder().encode(str)   // UTF-8
+            var ptr = wasmAlloc(4 + bytes.length)
             var view = new DataView(wasmMemory.buffer)
-            view.setInt32(ptr, byteLen, true)
-            for (var i = 0; i < str.length; i++) {
-                view.setUint16(ptr + 4 + i * 2, str.charCodeAt(i), true)
-            }
+            view.setInt32(ptr, bytes.length, true)
+            new Uint8Array(wasmMemory.buffer, ptr + 4, bytes.length).set(bytes)
             return ptr
         }
 

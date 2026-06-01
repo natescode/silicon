@@ -86,6 +86,27 @@ try {
             else { pass++; console.log(`✓ ${name}`) }
         }
         console.log(`\n${pass} example(s) compiled in Chromium, ${failed} failed.`)
+
+        // Run a program end-to-end and check console output decodes correctly
+        // (guards the UTF-8 string encoding — a UTF-16 mismatch garbles output).
+        const printed = await page.evaluate(async () => {
+            const src = "@fn run := { &web::console_log_str 'Hello, Silicon!' };\n@export run;"
+            const data = await (window as any).SiliconCompiler.compile({ source: src, platform: 'web', features: [] })
+            if (!data.success) return { error: data.error }
+            const bytes = Uint8Array.from(atob(data.wasm), (c: string) => c.charCodeAt(0))
+            const out: string[] = []
+            const env = (window as any).createWebEnv({ onPrint: (m: string) => out.push(m) }, [])
+            const { instance } = await WebAssembly.instantiate(bytes, env.imports)
+            env.bindInstance(instance)
+            ;(instance.exports as any).run()
+            return { out }
+        })
+        if ((printed as any).error || (printed as any).out?.[0] !== 'Hello, Silicon!') {
+            failed++
+            console.error(`✗ console output (encoding): expected "Hello, Silicon!", got ${JSON.stringify(printed)}`)
+        } else {
+            console.log(`✓ console output decodes as UTF-8: "${(printed as any).out[0]}"`)
+        }
     }
 } finally {
     await browser.close()
