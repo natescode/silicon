@@ -1,3 +1,0 @@
-@var count:Int := 0;
-count = 10;
-count = count + 5;

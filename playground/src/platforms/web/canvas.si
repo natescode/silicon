@@ -1,9 +1,0 @@
-@extern canvas_set_fill    r:Int, g:Int, b:Int;
-@extern canvas_set_stroke  r:Int, g:Int, b:Int;
-@extern canvas_fill_rect   x:Float, y:Float, w:Float, h:Float;
-@extern canvas_stroke_rect x:Float, y:Float, w:Float, h:Float;
-@extern canvas_clear_rect  x:Float, y:Float, w:Float, h:Float;
-@extern canvas_fill_text   ptr:String, x:Float, y:Float;
-@extern canvas_set_font    ptr:String;
-@extern canvas_width:Int;
-@extern canvas_height:Int;

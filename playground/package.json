@@ -10,12 +10,10 @@
   },
   "devDependencies": {
     "@types/bun": "latest",
-    "@types/node": "^20.14.2",
-    "ohm-js": "^17.1.0"
+    "@types/node": "^20.14.2"
   },
   "dependencies": {
-    "binaryen": "^117.0.0",
-    "wabt": "^1.0.39"
+    "@silicon/compiler": "workspace:*"
   },
   "peerDependencies": {
     "typescript": "^5.0.0"

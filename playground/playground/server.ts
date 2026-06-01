@@ -11,16 +11,17 @@
 
 import { join, dirname } from 'path'
 import { fileURLToPath } from 'url'
-import parse from '../src/parser'
-import { addToAstSemantics, type ASTNode, type Program } from '../src/ast'
-import { compileToWat } from '../src/codegen'
-import { watToWasm } from '../src/codegen/toWasm'
-import { elaborate, buildStrataRegistry } from '../src/elaborator'
-import { typecheck, formatTypeError, formatType, wasmTypeOf } from '../src/types'
-import { siliconGrammar } from '../src/grammar'
-import { loadModules } from '../src/modules'
-import { loadPlatform, getRequiredExports, type PlatformConfig } from '../src/platforms'
-import type { FunctionSig } from '../src/types/typechecker'
+import {
+    parse,
+    addToAstSemantics, type ASTNode, type Program,
+    compileToWat,
+    watToWasm,
+    elaborate, buildStrataRegistry,
+    typecheck, formatTypeError, formatType, wasmTypeOf, type FunctionSig,
+    siliconGrammar,
+    loadModules,
+    loadPlatform, getRequiredExports, type PlatformConfig,
+} from '@silicon/compiler/pipeline'
 
 const __dir = dirname(fileURLToPath(import.meta.url))
 const HTML_PATH = join(__dir, 'index.html')

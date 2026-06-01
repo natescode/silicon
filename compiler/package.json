@@ -5,7 +5,8 @@
   "types": "etc/sigil.d.ts",
   "exports": {
     ".": "./src/api.ts",
-    "./native": "./src/native.ts"
+    "./native": "./src/native.ts",
+    "./pipeline": "./src/pipeline.ts"
   },
   "scripts": {
     "types:emit": "tsc -p tsconfig.types.json || true",

@@ -58,13 +58,11 @@
       "name": "silicon-playground",
       "version": "0.1.0",
       "dependencies": {
-        "binaryen": "^117.0.0",
-        "wabt": "^1.0.39",
+        "@silicon/compiler": "workspace:*",
       },
       "devDependencies": {
         "@types/bun": "latest",
         "@types/node": "^20.14.2",
-        "ohm-js": "^17.1.0",
       },
       "peerDependencies": {
         "typescript": "^5.0.0",

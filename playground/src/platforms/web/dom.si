@@ -1,2 +1,0 @@
-@extern set_html   ptr:String;
-@extern clear_html;
