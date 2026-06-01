@@ -212,7 +212,8 @@ describe('native — variables', () => {
         const tmpDir = await fsp.mkdtemp(path.join(os.tmpdir(), 'sgl-e2e-'))
         try {
             const src = [
-                '@fn main:Int := {',
+                '\\\\ main () -> Int',
+                '@fn main := {',
                 '  @local x := 42;',
                 '  x',
                 '};',
@@ -227,7 +228,8 @@ describe('native — variables', () => {
         const tmpDir = await fsp.mkdtemp(path.join(os.tmpdir(), 'sgl-e2e-'))
         try {
             const src = [
-                '@fn main:Int := {',
+                '\\\\ main () -> Int',
+                '@fn main := {',
                 '  @local x := 0;',
                 '  x = x + 42;',
                 '  x',
