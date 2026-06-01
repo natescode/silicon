@@ -85,7 +85,8 @@ download() {
     URL="https://github.com/${REPO}/releases/download/${VERSION}/${TARBALL}"
     SHA_URL="${URL}.sha256"
 
-    TMP_DIR="$(mktemp -d)"
+    # TMP_DIR is created by main() (so its EXIT trap can clean it up — this
+    # function runs in a $(...) subshell and couldn't propagate it back).
     TARBALL_PATH="${TMP_DIR}/${TARBALL}"
 
     # Must go to stderr: download() echoes the extracted binary path on stdout,
@@ -122,8 +123,6 @@ download() {
     tar xzf "${TARBALL_PATH}" -C "${TMP_DIR}"
     EXTRACTED_BIN="${TMP_DIR}/sgl-${VERSION}-${PLATFORM}/sgl"
     echo "${EXTRACTED_BIN}"
-    # Caller uses this; TMP_DIR cleanup happens via EXIT trap.
-    SGL_TMP_DIR="${TMP_DIR}"
 }
 
 # ── Install ──────────────────────────────────────────────────────────────────
@@ -172,10 +171,13 @@ main() {
     echo "  Install:  ${INSTALL_DIR}/sgl"
     echo ""
 
+    # Create the temp dir here so the EXIT trap cleans it up regardless of how
+    # we exit (download() runs in a subshell and can't own this).
+    TMP_DIR="$(mktemp -d)"
+    trap 'rm -rf "${TMP_DIR}"' EXIT INT TERM
+
     BIN_SRC="$(download)"
     install_binary "${BIN_SRC}"
-    # shellcheck disable=SC2030
-    rm -rf "${SGL_TMP_DIR:-}"
 
     add_to_path
 

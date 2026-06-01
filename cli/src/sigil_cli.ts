@@ -53,6 +53,7 @@ Commands:
   resolve         Generate sgl.lock from sgl.toml (stub at 1.0)
   fmt   [file]    Format Silicon source files (normalises whitespace + style)
   help            Show this help
+  version         Print the sgl version (also --version, -v)
 
 Global flags:
   --pretty        Human-readable diagnostics instead of JSON
@@ -732,7 +733,14 @@ function parseTarget(value: string, source: '--target' | 'sgl.toml [build] targe
     process.exit(1)
 }
 
+const SGL_VERSION = '0.1.0'
+
 const argv = process.argv.slice(2)
+
+if (argv[0] === '--version' || argv[0] === '-v' || argv[0] === 'version') {
+    process.stdout.write(`sgl ${SGL_VERSION}\n`)
+    process.exit(0)
+}
 
 if (argv.length === 0 || argv[0] === 'help' || argv[0] === '--help' || argv[0] === '-h') {
     process.stdout.write(HELP)
