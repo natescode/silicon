@@ -648,7 +648,8 @@ const EXAMPLES = {
 `# Concatenate a greeting string and print it to the console.
 # Call greet("World") in the exports panel below.
 
-@fn greet msg:String := {
+\\\\ greet (String)
+@fn greet msg := {
     @local result := ('Hello, ' ++ msg);
     &web::console_log_str result;
     result
@@ -660,7 +661,8 @@ const EXAMPLES = {
 `# Pythagorean theorem using web math APIs.
 # c = sqrt(a² + b²)
 
-@fn hypotenuse a:Float, b:Float := {
+\\\\ hypotenuse (Float, Float)
+@fn hypotenuse a, b := {
     &web::math_sqrt ((&web::math_pow a, 2.0) + (&web::math_pow b, 2.0))
 };
 
@@ -673,7 +675,8 @@ const EXAMPLES = {
 `# Recursive Fibonacci sequence.
 # Try: fib(10) = 55, fib(20) = 6765
 
-@fn fib n:Int := {
+\\\\ fib (Int)
+@fn fib n := {
     &@if n <= 1, { &@return n };
     (&fib (n - 1)) + (&fib (n - 2))
 };
@@ -684,7 +687,8 @@ const EXAMPLES = {
 `# Recursive factorial.
 # Try: factorial(10) = 3628800
 
-@fn factorial n:Int := {
+\\\\ factorial (Int)
+@fn factorial n := {
     &@if n <= 1, { &@return 1 };
     n * (&factorial (n - 1))
 };
@@ -695,7 +699,8 @@ const EXAMPLES = {
 `# Integer division guarded against divide-by-zero.
 # Returns 0 when y = 0.
 
-@fn safeDivide x:Int, y:Int := {
+\\\\ safeDivide (Int, Int)
+@fn safeDivide x, y := {
     &@if y == 0, { &@return 0 };
     x / y
 };
@@ -706,8 +711,9 @@ const EXAMPLES = {
 `# Count iterations using a mutable loop variable.
 # Returns the final counter value (should equal n).
 
-@fn countTo n:Int := {
-    @var i:Int := 0;
+\\\\ countTo (Int)
+@fn countTo n := {
+    @var i := 0;
     &@loop i < n, { i = i + 1; };
     i
 };
@@ -719,7 +725,8 @@ const EXAMPLES = {
 
 @type_sum Color := Red | Green | Blue;
 
-@fn colorCode c:Color := {
+\\\\ colorCode (Color)
+@fn colorCode c := {
     &@match c,
         Color::Red,   { 1 },
         Color::Green, { 2 },
@@ -731,10 +738,14 @@ const EXAMPLES = {
     bitwise:
 `# Bitwise operations on integers.
 
-@fn mask   a:Int, b:Int := { a | b };
-@fn toggle a:Int, b:Int := { a ^ b };
-@fn doubled a:Int := { a << 1 };
-@fn halved  a:Int := { a >> 1 };
+\\\\ mask (Int, Int)
+@fn mask a, b := { a | b };
+\\\\ toggle (Int, Int)
+@fn toggle a, b := { a ^ b };
+\\\\ doubled (Int)
+@fn doubled a := { a << 1 };
+\\\\ halved (Int)
+@fn halved a := { a >> 1 };
 
 @export mask;
 @export toggle;
@@ -744,10 +755,13 @@ const EXAMPLES = {
     math_sampler:
 `# Web math API sampler — trig, log, and random.
 
-@fn roll    := { &web::math_random };
-@fn sinWave x:Float := { &web::math_sin x };
-@fn cosWave x:Float := { &web::math_cos x };
-@fn logNat  x:Float := { &web::math_log x };
+@fn roll := { &web::math_random };
+\\\\ sinWave (Float)
+@fn sinWave x := { &web::math_sin x };
+\\\\ cosWave (Float)
+@fn cosWave x := { &web::math_cos x };
+\\\\ logNat (Float)
+@fn logNat x := { &web::math_log x };
 
 @export roll;
 @export sinWave;
@@ -758,9 +772,11 @@ const EXAMPLES = {
 `# Entry point example — call helpers from main and print results.
 # Enable "run main" and compile.
 
-@fn add a:Int, b:Int := { a + b };
+\\\\ add (Int, Int)
+@fn add a, b := { a + b };
 
-@fn factorial n:Int := {
+\\\\ factorial (Int)
+@fn factorial n := {
     &@if n <= 1, { &@return 1 };
     n * (&factorial (n - 1))
 };
@@ -778,13 +794,15 @@ const EXAMPLES = {
 `# TODO list rendered into the HTML panel via web::set_html.
 # Enable "run main" and compile.
 
-@fn done_item label:String := {
+\\\\ done_item (String)
+@fn done_item label := {
     '<li style="padding:8px 12px;margin:4px 0;border-radius:6px;'
     ++ 'background:#21262d;color:#3fb950;text-decoration:line-through">'
     ++ label ++ '</li>'
 };
 
-@fn todo_item label:String := {
+\\\\ todo_item (String)
+@fn todo_item label := {
     '<li style="padding:8px 12px;margin:4px 0;border-radius:6px;'
     ++ 'background:#21262d;color:#e6edf3">'
     ++ label ++ '</li>'
@@ -827,7 +845,8 @@ const EXAMPLES = {
 @var draw_i     := 0;
 @var draw_bi    := 0;
 
-@fn cell x:Int, y:Int, r:Int, g:Int, b:Int := {
+\\\\ cell (Int, Int, Int, Int, Int)
+@fn cell x, y, r, g, b := {
     &web::canvas_set_fill r, g, b;
     &web::canvas_fill_rect
         (&@toFloat (x * CELL)), (&@toFloat (y * CELL)),
@@ -890,7 +909,8 @@ const EXAMPLES = {
     0
 };
 
-@fn handle_key key:Int := {
+\\\\ handle_key (Int)
+@fn handle_key key := {
     &@if key == 37, { dir = 2; };
     &@if key == 38, { dir = 3; };
     &@if key == 39, { dir = 0; };
