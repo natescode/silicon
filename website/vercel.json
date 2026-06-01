@@ -1,5 +1,5 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "buildCommand": "SILICON_DOCS_BASE=/ bun run build",
+  "buildCommand": "bun run build",
   "outputDirectory": "src/.vitepress/dist"
 }

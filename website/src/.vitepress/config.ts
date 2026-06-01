@@ -27,7 +27,7 @@ const ebnfGrammar = JSON.parse(
 export default defineConfig({
     title: 'Silicon',
     description: 'A WebAssembly-targeting systems language where features are data.',
-    base: process.env.SILICON_DOCS_BASE ?? '/sigil/',
+    base: '/',
     lang: 'en-US',
     cleanUrls: true,
     lastUpdated: true,
