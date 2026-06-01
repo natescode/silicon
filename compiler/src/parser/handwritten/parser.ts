@@ -23,7 +23,7 @@ import {
     type TypedIdentifier, type Parameter, type GenericParams, type Binding,
     type ExpressionStart, type SourceLocation, type ASTNode,
 } from '../../ast/astNodes'
-import { Lexer, lineColumn, type Token } from './lexer'
+import { Lexer, computeLineStarts, lineColumnAt, type Token } from './lexer'
 
 /** Internal shape produced by AttachedSig (mirrors toAst's anonymous object). */
 interface SigInfo { name: string; generics?: GenericParams; type: any }
@@ -48,10 +48,12 @@ function ohmFloatValue(text: string): string {
 
 class Parser {
     private readonly toks: Token[]
+    private readonly lineStarts: number[]
     private pos = 0
 
     constructor(private readonly src: string) {
         this.toks = new Lexer(src).tokenize()
+        this.lineStarts = computeLineStarts(src)
     }
 
     // ── token cursor ────────────────────────────────────────────────────────
@@ -65,13 +67,13 @@ class Parser {
         return this.next()
     }
     private fail(msg: string, t = this.peek()): never {
-        const { line, column } = lineColumn(this.src, t.start)
+        const { line, column } = lineColumnAt(this.lineStarts, this.src, t.start)
         throw new Error(`Parse error: ${msg} (line ${line}, col ${column})`)
     }
 
     private loc(start: number, end: number): SourceLocation {
-        const a = lineColumn(this.src, start)
-        const b = lineColumn(this.src, end)
+        const a = lineColumnAt(this.lineStarts, this.src, start)
+        const b = lineColumnAt(this.lineStarts, this.src, end)
         return { startLine: a.line, startColumn: a.column, endLine: b.line, endColumn: b.column }
     }
 

