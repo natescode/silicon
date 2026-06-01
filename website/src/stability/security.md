@@ -3,9 +3,9 @@ title: "Security"
 ---
 # Security
 
-This document is Silicon / Sigil's 1.0 security posture. It is **not** a
+This document is Silicon / Sigil's 0.1 security posture. It is **not** a
 third-party penetration-test report; it's the "did we ship anything
-obviously bad" pass that backs the 1.0 stability contract (see
+obviously bad" pass that backs the (pre-1.0) stability intent (see
 [`stability.md`](./stability.md), story 10b-4 in
 [`v1-user-stories.html`](./v1-user-stories.html)).
 
@@ -48,16 +48,16 @@ source** processed by a trusted developer on their own machine:
 - A malicious Silicon program run as a compiled WebAssembly module.
   Sandboxing is the runtime's job (wasmtime), not Sigil's.
 
-## 1.0 audit checklist
+## 0.1 audit checklist
 
-These checks were performed before the 1.0 tag. Each item is reproducible
+These checks were performed for the 0.1 release. Each item is reproducible
 from a fresh clone.
 
 ### 1. Path traversal — `@use 'path'`
 
 **Code:** `src/modules/useResolver.ts`
 
-**Resolution rule** (file:line accurate as of 1.0):
+**Resolution rule** (file:line accurate as of 0.1):
 
 ```
 let abs = isAbsolute(raw) ? raw : resolve(baseDir, raw)
@@ -80,7 +80,7 @@ than the compiler reading it.
 - Unreadable / missing paths produce a structured error pointing at the
   resolved absolute path, not a stack trace.
 
-**Not in scope for 1.0:** an explicit project-root sandbox (`@use`
+**Not in scope for 0.1:** an explicit project-root sandbox (`@use`
 denied outside the directory containing `sgl.toml`). This is a future
 hardening pass — tracked as a v1.x story if there's demand.
 
@@ -172,7 +172,7 @@ beyond:
 - The single `(import "env" "memory" (memory $mem 1))` exposed by
   `std.wat` for the bump allocator.
 
-**Verification:** for the v1.0 reference programs
+**Verification:** for the v0.1 reference programs
 (`examples/hello.si`, the stdlib tests, the WasmGC cross-target suite),
 the emitted `(import …)` list was manually diffed against the
 `@extern` declarations in each source. No discrepancies. Future
@@ -204,7 +204,7 @@ parser. There is no longer any grammar-regeneration step.
 - The release workflow runs on GitHub-hosted runners; no third-party
   signing infrastructure today.
 
-**Not in scope for 1.0:**
+**Not in scope for 0.1:**
 
 - Sigstore signatures on the release artefacts.
 - SBOM generation.
@@ -214,20 +214,20 @@ These are v1.x hardening items; tracked once there's demand.
 
 ## Out of scope
 
-Explicitly excluded from the 1.0 security pass:
+Explicitly excluded from the 0.1 security pass:
 
 - **Third-party pentest.** Will commission one if Sigil reaches the
   user base that justifies it. Until then, the audit checklist above is
   the contract.
-- **Formal verification of the typechecker.** Academic work, not 1.0
+- **Formal verification of the typechecker.** Academic work, not 0.1
   scope.
 - **Codegen fuzzing.** The parser is fuzzed; the codegen is
   golden-tested. Property-based codegen fuzzing is a v1.x story.
 - **Supply-chain hardening beyond checksums.** No Sigstore, no SLSA
-  level claims at 1.0.
+  level claims at 0.1.
 
 ## Change log
 
 | Date | Change |
 |------|--------|
-| 2026-05-28 | Initial document — 1.0 security pass (10b-4). |
+| 2026-05-28 | Initial document — 0.1 security pass (10b-4). |

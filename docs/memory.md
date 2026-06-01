@@ -1,8 +1,8 @@
 # Memory Management
 
-Silicon's v1.0 memory model is **explicit arenas on top of a bump allocator**.
+Silicon's v0.1 memory model is **explicit arenas on top of a bump allocator**.
 This page covers when to reach for the tools, the rules they impose, and the
-v1.1+ roadmap.
+post-0.1 roadmap.
 
 > **TL;DR for one-shot CLI programs** — you don't need to do anything.
 > The default heap is fine; the OS reclaims it when your program exits.
@@ -135,7 +135,7 @@ What happens at the call site:
 3. The block evaluates to that new pointer — a `String` that survives
    the arena reset.
 
-### v1.0 rules
+### v0.1 rules
 
 Two restrictions, both enforced at compile time:
 
@@ -148,7 +148,7 @@ this and surfaces:
 If you need promotion mid-block, restructure so the work after the
 promotion lives in an outer scope.
 
-**2. Flat heap types.** v1.0 supports:
+**2. Flat heap types.** v0.1 supports:
 
 - Value types (`Int`, `Float`, `Bool`, `Int64`, `UInt8`–`UInt64`,
   payload-free enums) — no copy needed; just unwind.
@@ -157,7 +157,7 @@ promotion lives in an outer scope.
 - `Distinct` wrappers over any of the above.
 
 Nested heap (`Array[String]`, `Vec[Vec[Int]]`, sum types with heap-typed
-payloads) is **rejected** with a structured error. v1.1's
+payloads) is **rejected** with a structured error. A later release's
 trace-and-copy extension will lift this.
 
 ### Why explicit?
@@ -224,14 +224,14 @@ existing strata to cover the full lifecycle:
   physically reclaimed at arena exit regardless of refcount.
 
 Together they cover Rust's `Rc` / `Box` / `Drop` story without
-teaching the compiler any of them. That's the v1.0 stratum power
+teaching the compiler any of them. That's the v0.1 stratum power
 demo: ergonomic memory management as a library, not a language
 extension.
 
 **Caveat — physical free.** `&rc_drop` decrements the count but
-doesn't reclaim memory (the v1.0 bump allocator has no free list).
+doesn't reclaim memory (the v0.1 bump allocator has no free list).
 The slot is logically dead at refcount 0; the bytes leak until the
-enclosing arena resets or the v1.1 GC runs. In practice this is
+enclosing arena resets or a later GC runs. In practice this is
 fine — wrap `Rc`-using work in `&@with_arena` and the leak window
 collapses to one iteration's allocations.
 
@@ -296,10 +296,10 @@ size will catch any regression that leaks per-iteration allocations.
 
 ---
 
-## v1.1 outlook
+## Post-0.1 outlook
 
-Phase 9c ships the v1.0 instantiation of [ADR 0008](adr/0008-memory-management-arenas.md).
-v1.1 extends the same surface without changing v1.0 program semantics:
+Phase 9c ships the v0.1 instantiation of [ADR 0008](adr/0008-memory-management-arenas.md).
+A later release extends the same surface without changing 0.1 program semantics:
 
 - **Mark-sweep GC stratum.** Implements the same `wit/allocator.wit`
   ABI as the bump allocator. Programs opt in via a compile flag; the

@@ -1,5 +1,5 @@
 (*
-  Silicon 1.0 — Formal Grammar (EBNF)
+  Silicon 0.1 — Formal Grammar (EBNF)
 
   Notation follows ISO/IEC 14977 with these extensions:
     [ … ]   optional
@@ -214,7 +214,7 @@ doc-comment   = "##" { (* any char except line-end *) } line-end ;
   - "#" starts a line comment; "##" starts a doc comment attached to the
     next definition.  Both are consumed as whitespace during parsing.
   - String literals use "'" (single quote).  There are no escape sequences
-    in 1.0 — use raw bytes or unicode code points via WASM intrinsics.
+    in 0.1 — use raw bytes or unicode code points via WASM intrinsics.
 *)
 
 (* ── LL(1) form ──────────────────────────────────────────────────────────── *)

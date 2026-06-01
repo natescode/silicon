@@ -3,7 +3,7 @@ title: "Performance"
 ---
 # Performance
 
-This document is Silicon / Sigil's 1.0 performance baseline. The numbers
+This document is Silicon / Sigil's 0.1 performance baseline. The numbers
 below are the floor we promise not to regress past; they are **not** a
 benchmark contest against Zig, Rust, or Go. Those are different
 languages with different design points; comparison is misleading.
@@ -41,7 +41,7 @@ Three sizes, all live under `tests/bench/fixtures/`:
 re-run that script if you change the generator shape; the resulting
 files are committed so CI sees a stable corpus.
 
-## Headline baseline (1.0)
+## Headline baseline (0.1)
 
 Recorded on the CI reference platform — Linux x86_64, Bun 1.3.x. Eleven
 runs, two warmups, median reported.
@@ -100,7 +100,7 @@ a perf signal.
 time bun test                  # the full suite
 ```
 
-At 1.0 the full `bun test` runs in roughly the time of `large compile`
+At 0.1 the full `bun test` runs in roughly the time of `large compile`
 × a few hundred — the property and fuzz suites dominate. The headline
 fast suite (`bun test src` excluding `tests/`) runs in seconds and is
 what CI gates on for every PR.
@@ -133,11 +133,11 @@ accordingly.
   (intentional or otherwise) is itself a bench-result change.
 - **No native-compile bench yet.** The QBE backend is in place
   (Phase 9), but the bench harness measures the WAT pipeline only at
-  1.0. Adding `compile --native` is a v1.x bench extension; the
+  0.1. Adding `compile --native` is a later bench extension; the
   current numbers are the WAT compile floor.
 
 ## Change log
 
 | Date | Change |
 |------|--------|
-| 2026-05-28 | Initial document — 1.0 perf baseline (10b-5). |
+| 2026-05-28 | Initial document — 0.1 perf baseline (10b-5). |

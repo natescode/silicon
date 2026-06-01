@@ -1,6 +1,6 @@
 # Strata Authoring Guide
 
-> Sigil 1.0 — Phase 3, story 3-24.
+> Sigil 0.1 — Phase 3, story 3-24.
 
 A **stratum** is the Silicon mechanism for adding a keyword, operator, or
 annotation-driven code transformation to the compiler **as data**, not as a
@@ -137,12 +137,12 @@ wherever a comptime-foldable expression appears.
 
 ---
 
-## The comptime engine in Sigil 1.0
+## The comptime engine in Sigil 0.1
 
-**TL;DR**: the 1.0 comptime engine is the **AST interpreter** in
+**TL;DR**: the 0.1 comptime engine is the **AST interpreter** in
 `src/elaborator/`.  Handler bodies are not compiled to wasm and run
 inside an embedded runtime — they're walked node-by-node by the
-TypeScript host. The full WASM-in-WASM dissolution arrives in 1.x via
+TypeScript host. The full WASM-in-WASM dissolution arrives in a later release via
 Phase 8 + 8-9 once native compilation lets us link wasmtime as a
 C library.
 
@@ -197,7 +197,7 @@ Most production strata don't actually need the missing pieces:
   surface (see `docs/hm-lite.md`).  The strata-authored `@generic`
   pattern is an *advanced Strata 2.0 capability proof* — it shows the
   Strata system is powerful enough to implement monomorphization from
-  scratch.  End-to-end shipping of the `@generic` keyword is a v1.1
+  scratch.  End-to-end shipping of the `@generic` keyword is a post-0.1
   follow-up; see `docs/adr/0001-generic-monomorphization-scope.md` story G-1.
 
 The pattern: **anything that needs iteration runs as a host primitive,
@@ -368,7 +368,9 @@ keep their state isolated.
 
 ## CompilerAPI stability contract
 
-The `Compiler::*` surface is **stable across Sigil 1.x**. Specifically:
+The `Compiler::*` surface is the **intended-stable** strata API; the promise
+takes effect at 1.0 and is meant to hold across Sigil 1.x (Silicon is currently
+at 0.1 / pre-1.0). Specifically:
 
 - `register::keyword` / `register::operator` — stable contract.
 - `on::decl` / `on::callSite` / `on::annotation` / `on::module_finalize` /
@@ -383,11 +385,11 @@ The `Compiler::*` surface is **stable across Sigil 1.x**. Specifically:
 The **comptime engine implementation** is *not* part of the stable surface
 — what works inside a handler body grows over time:
 
-- **1.0**: AST interpreter; `Compiler::*` + scalar arithmetic + `@if` +
-  `@local` (see "The comptime engine in Sigil 1.0" above).
-- **1.x (after Phase 8 + 8-9)**: wasmtime-backed; full Silicon surface in
+- **0.1 (today)**: AST interpreter; `Compiler::*` + scalar arithmetic + `@if` +
+  `@local` (see "The comptime engine in Sigil 0.1" above).
+- **Later (after Phase 8 + 8-9)**: wasmtime-backed; full Silicon surface in
   handler bodies — `@loop`, `@match`, recursion, user-defined `@fn` calls.
-  Existing handlers written against the 1.0 limits will continue to work
+  Existing handlers written against the 0.1 limits will continue to work
   unchanged; the API signatures don't change.
 
 Anything beyond the stable surface (the `Compiler::ir::*` builders, the

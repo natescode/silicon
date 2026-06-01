@@ -35,7 +35,7 @@ Sigil (the compiler) actually only understands a language called Silicon Core. T
 
 Silicon has dozens of Strata already defined. For example, Silicon Core doesn't even have the concept of addition. Silicon Core defines patters (regex) of operators and keywords but nothing specific. Keywords are just @ plus a valid identifier. Operators are symbols groups of one or more symbols like ^%#*~.  
 
-Now Starta may be like superpowered Macros but they still have they downside of making the language too big. The geal isn't for everyone to make Strata like people make npm packages. The goal is to allow groups of Strata, called Profiles that make Silicon flavored like your favorite language. 
+Now Starta may be like superpowered Macros but they still have they downside of making the language too big. The goal isn't for everyone to make Strata like people make npm packages. The goal is to allow groups of Strata, called Profiles that make Silicon flavored like your favorite language. 
 
 ## The Right Tools
 
@@ -55,9 +55,15 @@ On top of that, I've tried to make Silicon lean on the shoulder's of giants. The
 ## Resources
 
 [Playground](play.si14.dev)
+
 [Website](si14.dev)
+
 [Blog](blog.si14.dev)
+
 [VScode extension](https://marketplace.visualstudio.com/items?itemName=natescode.silicon-vscode)
+
+[Intellij extension] Coming soon! You can install from the source code for now.
+
 [repo](https://github.com/natescode/silicon)
 
 
@@ -66,16 +72,21 @@ On top of that, I've tried to make Silicon lean on the shoulder's of giants. The
 I will post updates to
 
 [Silicon's official blog](blog.si14.dev)
+
 [Medium](https://medium.com/@natescode)
+
 [Substack](https://substack.com/@natescode)
+
 [NatesCode blog](natescode.com)
+
 [Dev.to](https://dev.to/natescode)
+
 [YouTube vlogs](https://www.youtube.com/@natescode)
 
 
 ## Contact Me
 
-I'm NatesCode literally everywhere: Reddit, Twitch, YouTube, Medium, Snapchat etc. 
+I'm NatesCode literally everywhere: Twitch, YouTube, Medium, etc. 
 
 For Silicon specifically you can email me: nate at natescode.com. I'll eventually setup a Silicon discord. I do have a Zulip but that'll be for when I'm ready for more contributors. 
 

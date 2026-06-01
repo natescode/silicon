@@ -311,12 +311,15 @@ return new objects — they never mutate existing ones.
 
 ## Stability contract
 
-The CaaS API is part of the Silicon 1.0 stability promise.  The authoritative
-policy is in [`docs/stability.md`](stability.md); this section is a summary.
+The CaaS API is part of the surface Silicon intends to stabilize; the 1.0
+stability promise takes effect at the first `1.0.0` tag (Silicon is currently
+at 0.1 / pre-1.0).  The authoritative policy is in
+[`docs/stability.md`](stability.md); this section is a summary.
 
 ### What is stable
 
-Every name exported from `src/api.ts` is covered by the 1.0 promise:
+Every name exported from `src/api.ts` is the intended-stable surface; the
+promise takes effect at 1.0:
 
 ```
 parse()   buildRegistry()   elaborate()   typecheck()   lower()   compile()

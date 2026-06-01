@@ -1,12 +1,15 @@
 ---
 title: "Stability"
 ---
-# Silicon 1.0 — Stability Policy
+# Silicon 0.1 — Stability Policy (pre-1.0)
 
-This document is the authoritative reference for what is and is not stable across
-Silicon 1.0 releases.  It covers three surfaces: the **language**, the **CaaS
-compiler API**, and the **strata authoring API**.  Each surface has its own
-contract because they have different consumers and different rates of change.
+Silicon is at **0.1 — an alpha / pre-release**.  This document is the authoritative
+reference for the surfaces the project *intends* to stabilize and the shape the
+eventual 1.0 stability promise will cover.  **0.1 makes no stability guarantees
+yet — expect breaking changes on any surface until 1.0.**  It covers three
+surfaces: the **language**, the **CaaS compiler API**, and the **strata authoring
+API**.  Each surface has its own contract because they have different consumers
+and different rates of change.
 
 ---
 
@@ -20,14 +23,15 @@ Silicon follows semantic versioning — `MAJOR.MINOR.PATCH`:
 - **MAJOR** — breaking changes: removed syntax, changed API signatures, retired
   diagnostic codes.  Migration notes shipped with the release.
 
-The 1.0 stability promise begins on the first `1.0.0` tag.  Pre-1.0 tags
-(`0.x.y`) are developmental — any release may break any surface.
+The 1.0 stability promise has **not** begun yet — 0.1 is pre-1.0.  It will begin
+on the first `1.0.0` tag.  Pre-1.0 tags (`0.x.y`, including 0.1) are developmental
+— any release may break any surface.
 
 ---
 
 ## 1. Language stability
 
-### Stable in 1.0
+### Intended stable (target for 1.0)
 
 | Feature | Notes |
 |---|---|
@@ -88,7 +92,8 @@ The full API reference is in `docs/compiler-as-a-service.md`.
 ### Stable public surface (`src/api.ts`)
 
 Import only from `src/api.ts` (or the published package root once distributed).
-Every name exported from that file is covered by the 1.0 stability promise.
+Every name exported from that file is the intended-stable surface; the promise
+takes effect at 1.0.
 
 ```
 parse()          buildRegistry()     elaborate()
@@ -141,7 +146,7 @@ not part of the public API.  They may be renamed or removed in a minor release.
 The strata API is the set of `&Compiler::*` calls available inside a stratum
 body.  Full reference in `docs/strata-authoring-guide.md`.
 
-### Stable calls (1.0)
+### Intended-stable calls (target for 1.0)
 
 | Call | Purpose |
 |---|---|
@@ -185,7 +190,7 @@ toolchains.
 
 ## Summary table
 
-| Surface | Stable in 1.0 | Breaking change policy |
+| Surface | Intended stable (target for 1.0) | Breaking change policy |
 |---|---|---|
 | Silicon language syntax | Yes (see §1) | Major version |
 | CaaS public API (`src/api.ts`) | Yes (see §2) | Major version |
@@ -197,4 +202,4 @@ toolchains.
 
 ---
 
-*Last updated: Silicon 1.0.  Owned by the Sigil compiler team.*
+*Last updated: Silicon 0.1.  Owned by the Sigil compiler team.*
