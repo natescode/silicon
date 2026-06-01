@@ -91,7 +91,7 @@ if (!fetchBlock.test(out)) {
     throw new Error('Could not find the fetch(\'/compile\') block to replace')
 }
 out = out.replace(fetchBlock,
-    () => `data = await window.SiliconCompiler.compile({ source, platform: 'web', features: activeFeatures })`)
+    () => `data = await window.SiliconCompiler.compile({ source, platform: 'web', features: activeFeatures, target: activeTarget })`)
 
 // Guard against inlining corruption (e.g. a `$`-substitution splicing document
 // fragments into the bundle): there must be exactly two module scripts (bundle

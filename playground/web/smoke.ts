@@ -43,6 +43,9 @@ const EXAMPLES: Record<string, string> = extractObject('const EXAMPLES = {')
 const FEATURES: Record<string, string[]> = (() => {
     try { return extractObject('const EXAMPLE_FEATURES = {') } catch { return {} }
 })()
+const TARGETS: Record<string, string> = (() => {
+    try { return extractObject('const EXAMPLE_TARGETS = {') } catch { return {} }
+})()
 
 let browser
 try {
@@ -74,16 +77,18 @@ try {
         for (const [name, src] of Object.entries(EXAMPLES)) {
             if (!src || !src.trim()) continue
             const features = FEATURES[name] ?? []
-            const r = await page.evaluate(async ({ src, features }) => {
+            const target = TARGETS[name] ?? 'host'
+            const r = await page.evaluate(async ({ src, features, target }) => {
                 try {
-                    const x = await (window as any).SiliconCompiler.compile({ source: src, platform: 'web', features })
+                    const x = await (window as any).SiliconCompiler.compile({ source: src, platform: 'web', features, target })
                     return x.success ? null : (x.error?.split('\n')[0] ?? 'compile failed')
                 } catch (e) {
                     return e instanceof Error ? e.message : String(e)
                 }
-            }, { src, features })
-            if (r) { failed++; console.error(`✗ ${name}: ${r}`) }
-            else { pass++; console.log(`✓ ${name}`) }
+            }, { src, features, target })
+            const label = target !== 'host' ? `${name} [${target}]` : name
+            if (r) { failed++; console.error(`✗ ${label}: ${r}`) }
+            else { pass++; console.log(`✓ ${label}`) }
         }
         console.log(`\n${pass} example(s) compiled in Chromium, ${failed} failed.`)
 

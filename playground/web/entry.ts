@@ -34,6 +34,8 @@ interface CompileRequest {
     source: string
     platform?: string
     features?: string[]
+    /** Compilation target: 'host' (default, linear memory) | 'wasm-gc'. */
+    target?: string
 }
 
 // Built-in modules only (no project dir in the browser).
@@ -139,8 +141,9 @@ async function compile(req: CompileRequest) {
         // WAT for the display panel (pure string emission, no wabt); the
         // executable bytes come from the compiler's own direct binary emitter
         // (no wabt/binaryen), so the bundle stays pure-MIT.
-        const wat = compileToWat(typed, registry, functions as Map<string, FunctionSig>, moduleRegistry)
-        const wasmBytes = compileToWasm(typed, registry, functions as Map<string, FunctionSig>, moduleRegistry)
+        const options = req.target && req.target !== 'host' ? { target: req.target as any } : undefined
+        const wat = compileToWat(typed, registry, functions as Map<string, FunctionSig>, moduleRegistry, options)
+        const wasmBytes = compileToWasm(typed, registry, functions as Map<string, FunctionSig>, moduleRegistry, options)
         return {
             success: true,
             wat,

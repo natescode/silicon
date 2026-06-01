@@ -14,7 +14,7 @@ import { fileURLToPath } from 'url'
 import {
     parse, type Program,
     compileToWat,
-    watToWasm,
+    compileToWasm,
     elaborate, buildStrataRegistry,
     typecheck, formatTypeError, formatType, wasmTypeOf, type FunctionSig,
     loadModules,
@@ -103,10 +103,11 @@ function collectExports(program: Program, _functions: Map<string, FunctionSig>):
 
 const fallbackModuleRegistry = loadModules(__dir)
 
-async function compileSilicon(source: string, platformConfig?: PlatformConfig) {
+async function compileSilicon(source: string, platformConfig?: PlatformConfig, target?: string) {
     const moduleRegistry = platformConfig
         ? loadPlatform(platformConfig)
         : fallbackModuleRegistry
+    const options = target && target !== 'host' ? { target: target as any } : undefined
 
     const ast = parse(source)
     const registry = buildStrataRegistry(ast as Program)
@@ -141,8 +142,8 @@ async function compileSilicon(source: string, platformConfig?: PlatformConfig) {
         }
     }
 
-    const wat = compileToWat(typed, registry, functions, moduleRegistry)
-    const wasmBytes = await watToWasm(wat)
+    const wat = compileToWat(typed, registry, functions, moduleRegistry, options)
+    const wasmBytes = compileToWasm(typed, registry, functions, moduleRegistry, options)
     const wasm = Buffer.from(wasmBytes).toString('base64')
     const exports = collectExports(typed, functions as Map<string, FunctionSig>)
 
@@ -191,9 +192,11 @@ const server = Bun.serve({
         if (req.method === 'POST' && url.pathname === '/compile') {
             let source: string
             let platformConfig: PlatformConfig | undefined
+            let target: string | undefined
             try {
-                const body = await req.json() as { source: string; platform?: string; features?: string[] }
+                const body = await req.json() as { source: string; platform?: string; features?: string[]; target?: string }
                 source = body.source ?? ''
+                target = body.target
                 if (body.platform) {
                     platformConfig = {
                         platform: body.platform as PlatformConfig['platform'],
@@ -205,7 +208,7 @@ const server = Bun.serve({
             }
 
             try {
-                const result = await compileSilicon(source, platformConfig)
+                const result = await compileSilicon(source, platformConfig, target)
                 return json(result)
             } catch (e) {
                 return json({ success: false, error: String(e) })

@@ -334,6 +334,7 @@ button:disabled { opacity: 0.4; cursor: not-allowed; }
     <option value="simple_main">Simple Main</option>
     <option value="html_todo">HTML TODO</option>
     <option value="snake">Snake</option>
+    <option value="wasm_gc">WasmGC Sum Type</option>
   </select>
   <select id="theme-select">
     <option value="sigil-dark" selected>Sigil Dark</option>
@@ -912,6 +913,20 @@ const EXAMPLES = {
 @export main;
 @export tick;
 @export handle_key;`,
+
+    wasm_gc:
+`# WasmGC target — sum types lower to GC structs, not linear-memory layout.
+# Compiled with --target=wasm-gc. Call demo() in the exports panel (→ 42).
+
+@type Opt := $Some v Int | $None;
+
+\\\\ unwrap_or (Opt, Int)
+@fn unwrap_or o, dflt := &@match o, $Some v => v, $None => dflt;
+
+\\\\ demo () -> Int
+@fn demo := &unwrap_or (&Some 42), 0;
+
+@export demo;`,
 }
 
 const EXAMPLE_FEATURES = {
@@ -921,12 +936,18 @@ const EXAMPLE_FEATURES = {
     // examples that use web:: math/console APIs only — core is always on
 }
 
+// Examples that compile with a non-default target (--target=wasm-gc, etc.).
+const EXAMPLE_TARGETS = {
+    wasm_gc: 'wasm-gc',
+}
+
 document.getElementById('example-select').addEventListener('change', e => {
     const key = e.target.value
     const src = EXAMPLES[key] ?? ''
     editorView.dispatch({
         changes: { from: 0, to: editorView.state.doc.length, insert: src },
     })
+    activeTarget = EXAMPLE_TARGETS[key] ?? 'host'
     if (key in EXAMPLE_FEATURES) {
         setFeatures(EXAMPLE_FEATURES[key])
     } else if (key !== 'empty') {
@@ -966,6 +987,7 @@ let cancelGameLoop = null
 let keydownListener = null
 let renderPanelOpen = false
 let activeFeatures = ['canvas', 'game', 'dom']
+let activeTarget = 'host'   // compilation target; set per-example (e.g. wasm-gc)
 
 // ── DOM refs ──────────────────────────────────────────────────────────────
 const btnCompile      = document.getElementById('btn-compile')
@@ -1150,7 +1172,7 @@ async function compile() {
     const res = await fetch('/compile', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ source, platform: 'web', features: activeFeatures }),
+      body: JSON.stringify({ source, platform: 'web', features: activeFeatures, target: activeTarget }),
     })
     data = await res.json()
   } catch (e) {
