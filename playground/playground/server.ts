@@ -117,7 +117,7 @@ async function compileSilicon(source: string, platformConfig?: PlatformConfig, t
         return { success: false, error: elabErrors.map(e => e.message).join('\n') }
     }
 
-    const { program: typed, errors: typeErrors, functions } = typecheck(elaborated, registry, moduleRegistry)
+    const { program: typed, errors: typeErrors, functions } = typecheck(elaborated, registry, moduleRegistry, (target && target !== 'host' ? target : undefined) as any)
 
     if (typeErrors.length > 0) {
         return { success: false, error: typeErrors.map(formatTypeError).join('\n') }

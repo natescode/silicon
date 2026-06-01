@@ -105,6 +105,7 @@ function toBase64(bytes: Uint8Array): string {
 
 async function compile(req: CompileRequest) {
     const source = req.source ?? ''
+    const target = req.target && req.target !== 'host' ? req.target : undefined
     const platformConfig: PlatformConfig | undefined = req.platform
         ? { platform: req.platform as PlatformConfig['platform'], features: req.features ?? [] }
         : undefined
@@ -119,7 +120,9 @@ async function compile(req: CompileRequest) {
             return { success: false, error: elabErrors.map(e => e.message).join('\n') }
         }
 
-        const { program: typed, errors: typeErrors, functions } = typecheck(elaborated, registry, moduleRegistry)
+        // Target reaches the typechecker too: gc collections (Vec[Int] under
+        // wasm-gc) register their signatures based on it.
+        const { program: typed, errors: typeErrors, functions } = typecheck(elaborated, registry, moduleRegistry, target as any)
         if (typeErrors.length > 0) {
             return { success: false, error: typeErrors.map(formatTypeError).join('\n') }
         }
@@ -141,7 +144,7 @@ async function compile(req: CompileRequest) {
         // WAT for the display panel (pure string emission, no wabt); the
         // executable bytes come from the compiler's own direct binary emitter
         // (no wabt/binaryen), so the bundle stays pure-MIT.
-        const options = req.target && req.target !== 'host' ? { target: req.target as any } : undefined
+        const options = target ? { target: target as any } : undefined
         const wat = compileToWat(typed, registry, functions as Map<string, FunctionSig>, moduleRegistry, options)
         const wasmBytes = compileToWasm(typed, registry, functions as Map<string, FunctionSig>, moduleRegistry, options)
         return {

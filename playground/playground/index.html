@@ -335,6 +335,7 @@ button:disabled { opacity: 0.4; cursor: not-allowed; }
     <option value="html_todo">HTML TODO</option>
     <option value="snake">Snake</option>
     <option value="wasm_gc">WasmGC Sum Type</option>
+    <option value="gc_vec">WasmGC Vec (array)</option>
   </select>
   <select id="theme-select">
     <option value="sigil-dark" selected>Sigil Dark</option>
@@ -927,6 +928,33 @@ const EXAMPLES = {
 @fn demo := &unwrap_or (&Some 42), 0;
 
 @export demo;`,
+
+    gc_vec:
+`# WasmGC Vec[Int] — a growable, garbage-collected array (no manual alloc/free).
+# Compiled with --target=wasm-gc. Call sum_squares() in the exports panel (→ 55).
+
+\\\\ sum_squares () -> Int
+@fn sum_squares := {
+    @local v := &@as Vec[Int], &vec_new 4;
+
+    # Push 1², 2², … 5² into the GC-managed vector.
+    @local i := 1;
+    &@loop i <= 5, {
+        &vec_push_i32 v, (i * i);
+        i = i + 1;
+    };
+
+    # Read them back and sum.
+    @local total := 0;
+    @local j := 0;
+    &@loop j < (&vec_len v), {
+        total = total + (&vec_get_i32 v, j);
+        j = j + 1;
+    };
+    total
+};
+
+@export sum_squares;`,
 }
 
 const EXAMPLE_FEATURES = {
@@ -939,6 +967,7 @@ const EXAMPLE_FEATURES = {
 // Examples that compile with a non-default target (--target=wasm-gc, etc.).
 const EXAMPLE_TARGETS = {
     wasm_gc: 'wasm-gc',
+    gc_vec:  'wasm-gc',
 }
 
 document.getElementById('example-select').addEventListener('change', e => {
