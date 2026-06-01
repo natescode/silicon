@@ -90,7 +90,6 @@ lsp/                    Language Server Protocol implementation
   dist/                 Bundled output (.vsix)
     index.js
     std.wat             runtime asset (read by the bundled compiler)
-    silicon-official.ohm
 src/                    Vendored snapshot of the Sigil compiler frontend
                         (parser, AST, elaborator, typechecker, IR,
                         codegen, modules, platforms).  Frozen at
@@ -199,8 +198,9 @@ Scope sketch:
   cannot provide.
 - The VS Code extension itself will not consume this; tree-sitter
   is for editors outside VS Code. The grammar source can crib from
-  the Ohm grammar at `lsp/dist/silicon-official.ohm`, but the two
-  will need to be kept in rough sync as the language evolves.
+  the grammar spec at `docs/grammar.ebnf` (implemented by the
+  hand-written recursive-descent parser), but the two will need to be
+  kept in rough sync as the language evolves.
 
 ### How they layer
 

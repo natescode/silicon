@@ -53,7 +53,7 @@ the top-level `&add 1, 2` call inside `$__start`.
 ## Implementation
 
 `src/modules/useResolver.ts` is a pre-parse text preprocessor.  It runs
-before Ohm sees the source so the grammar stays unchanged (per `CLAUDE.md`).
+before the parser sees the source so the grammar stays unchanged (per `CLAUDE.md`).
 The CLI (`src/sigil_cli.ts`) calls it before parsing.
 
 Tested by `src/modules/useResolver.test.ts` (unit) and

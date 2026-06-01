@@ -155,11 +155,11 @@ interface Symbol {
     readonly kind:           'function' | 'variable' | 'type' | 'parameter' | 'stratum'
     readonly definitionNode: object          // AST Definition node
     readonly type:           SiliconType | undefined
-    readonly definitionSpan?: SourceSpan    // span of the name identifier; undefined for pre-Ohm ASTs
+    readonly definitionSpan?: SourceSpan    // span of the name identifier
 }
 ```
 
-`definitionSpan` is populated by the parser (via Ohm's `getLineAndColumn`). All coordinates are 1-based.
+`definitionSpan` is populated by the parser, which computes source line/column itself. All coordinates are 1-based.
 
 ### `Diagnostic`
 

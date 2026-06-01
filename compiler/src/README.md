@@ -8,9 +8,10 @@ This directory contains the source code for the Silicon compiler.
 src/
 ├── index.ts              # Entry point - orchestrates the compilation pipeline
 │
-├── parser/               # Stage 1: Parsing (source code → parse tree)
+├── parser/               # Stage 1: Parsing (source code → typed AST)
 │   ├── index.ts          # Module exports
-│   └── parser.ts         # Parse implementation
+│   ├── parser.ts         # Parse entry point — calls parseToAst()
+│   └── handwritten/      # Hand-written recursive-descent parser (lexer.ts + parser.ts)
 │
 ├── ast/                  # Stage 2: AST Construction (parse tree → AST)
 │   ├── index.ts          # Module exports
@@ -22,11 +23,14 @@ src/
 │   ├── compile.ts        # Code generation
 │   └── std.wat           # Standard library
 │
-└── grammar/              # Grammar Definitions
+└── grammar/              # Legacy compatibility shims
     ├── index.ts          # Module exports
-    ├── SiliconGrammar.ts # Grammar loader
-    └── silicon-official.ohm # Grammar rules
+    └── SiliconGrammar.ts # Inert sentinel kept so old call sites resolve
 ```
+
+The grammar is implemented directly in the hand-written parser under
+`parser/handwritten/`. The human-readable grammar spec lives in
+`docs/grammar.ebnf`; there is no separate grammar file.
 
 ## Quick Reference
 
@@ -38,14 +42,14 @@ src/
 
 1. **Parser** (`parser/parser.ts`)
    - Input: Source code (string)
-   - Output: Parse tree (Ohm Match object)
-   - Uses grammar rules from `grammar/silicon-official.ohm`
+   - Output: The typed AST `Program` directly
+   - `parse()` calls `parseToAst(src)` in the hand-written recursive-descent
+     parser under `parser/handwritten/`
 
 2. **AST** (`ast/`)
-   - Input: Parse tree
-   - Output: Strongly-typed AST
+   - Strongly-typed AST node definitions
    - `astNodes.ts`: Type definitions
-   - `toAst.ts`: Transformation logic
+   - `toAst.ts`: thin identity shim (the parser builds the AST directly)
 
 3. **Codegen** (`codegen/compile.ts`)
    - Input: AST
@@ -54,8 +58,9 @@ src/
 
 ### Grammar
 
-- **silicon-official.ohm** - Formal grammar specification
-- **SiliconGrammar.ts** - Loads and compiles the grammar
+- **docs/grammar.ebnf** - Formal grammar specification (human-readable)
+- **parser/handwritten/** - The hand-written parser that implements it
+- **SiliconGrammar.ts** - Inert sentinel, kept only so old call sites resolve
 
 ## Making Changes
 

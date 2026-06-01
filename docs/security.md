@@ -180,24 +180,13 @@ new implicit import requires updating those goldens.
 
 ```
 npm audit --omit=dev    →  0 vulnerabilities
-bun audit               →  3 dev-only vulnerabilities (1 high, 2 moderate)
-                          all in @ohm-js/cli → fast-glob → micromatch → picomatch
-                          and braces.  These transitive dev-deps are only
-                          loaded by `bunx ohm generateBundles` during
-                          grammar regeneration; they never enter the
-                          compiled `sgl` binary or the runtime path.
+bun audit               →  0 vulnerabilities
 ```
 
-**Accepted dev-only advisories** (revisit at each minor release):
-
-- `braces` ReDoS via deeply nested ranges (moderate).
-- `micromatch` ReDoS via braces (moderate).
-- `picomatch` POSIX class injection / extglob ReDoS (one moderate, one
-  high).
-
-These are upstream issues in `@ohm-js/cli`'s transitive graph; they
-will resolve when ohm publishes a release that bumps fast-glob. None
-reach the production `sgl` binary.
+The `ohm-js` / `@ohm-js/cli` toolchain — and its transitive advisory
+graph (`fast-glob → micromatch → picomatch`, `braces`) — was removed
+when the parser became a hand-written, dependency-free recursive-descent
+parser. There is no longer any grammar-regeneration step.
 
 **Production deps** (`binaryen`, `wabt`): clean.
 

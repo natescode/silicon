@@ -39,7 +39,7 @@ The TypeScript compiler walks source through these passes:
 Source → Parser → AST → Strata loader → Elaborator → Typecheck → IR/Codegen → WAT/WASM (or QBE → native)
 ```
 
-1. **Parser** (`src/parser/`, grammar in `src/grammar/`) — Ohm-based grammar producing a parse tree, then `addToAstSemantics` converts that to the typed AST in `src/ast/`.
+1. **Parser** (`src/parser/`) — a hand-written, dependency-free recursive-descent parser in `src/parser/handwritten/` (`lexer.ts` + `parser.ts`) producing the typed AST in `src/ast/` directly. There is no separate grammar file; the human-readable grammar spec lives in `docs/grammar.ebnf`.
 2. **Strata loader** (`src/elaborator/strataLoader.ts`) — loads built-in `@stratum_*` declarations from `src/strata/*.si` and merges them with user-defined strata.
 3. **Elaborator** (`src/elaborator/elaborator.ts`) — resolves operators and definition keywords via the strata registry; rich strata bodies execute through the body interpreter.
 4. **Typecheck** (`src/types/typechecker.ts`, `src/types/unify.ts`) — HM-lite inference; pushes structured diagnostics via `src/errors/diagnostic.ts`.
@@ -73,7 +73,7 @@ Grammar changes are last-resort and need a discussion first.
 - **Type-driven codegen:** every IR expression carries an `inferredType` and a `wasmType`; lowering and emission pick instructions from those, not from substring sniffing of WAT.
 - **Strings are UTF-8** with a 4-byte little-endian length header. `$str_concat` in `src/codegen/std.wat` is byte-based.
 - **`std.wat`** is embedded into the compiler at build time (no separate linking step). Heap starts at offset 1024.
-- **The grammar is hand-coded** in `src/grammar/`. **DO NOT change the grammar** without discussion — Silicon is meant to be simple and bootstrappable; new language features should be added via Stratum.
+- **The grammar is hand-coded** in the recursive-descent parser at `src/parser/handwritten/`. **DO NOT change the grammar** without discussion — Silicon is meant to be simple and bootstrappable; new language features should be added via Stratum.
 - **ALWAYS consult the docs** (`docs/strata.md`, `docs/compiler-api.md`, `docs/compiler-as-a-service.md`, `docs/hm-lite.md`) for architectural direction.
 
 ## Integer Type Hierarchy

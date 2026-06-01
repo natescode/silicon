@@ -63,9 +63,10 @@ Notes on shape:
   This is the "small program" floor — you cannot do a real Silicon
   compile faster than this on a cold call.
 - `medium` compile shows the per-LOC cost: ~0.4 ms / LOC at this size.
-- `large` compile is dominated by **parser** time (88% of the budget).
-  The Ohm-based grammar is the long pole; backend lowering scales
-  linearly and stays below 200 ms even on the 3,382-LOC fixture.
+- The hand-written recursive-descent parser is fast (~30 MiB/s) and is
+  no longer the long pole; parsing is now cheap relative to elaboration
+  and lowering. Backend lowering scales linearly and stays below 200 ms
+  even on the 3,382-LOC fixture.
 
 ## Binary size
 
@@ -124,7 +125,7 @@ accordingly.
   V8/Bun reach steady state on hot paths, then are discarded.
 - **Source bytes vs LOC** are both reported because LOC is the user's
   mental model and bytes is what the parser actually pays for.
-- **`parse` stage** isolates the Ohm grammar from elaboration /
+- **`parse` stage** isolates the hand-written parser from elaboration /
   typecheck / lowering, so a regression in either layer surfaces in
   the right column.
 - **Deterministic fixtures** — `bench-gen.ts` produces the same output

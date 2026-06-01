@@ -3,7 +3,13 @@
 - **Status:** Accepted
 - **Date:** 2026-05-27
 - **Deciders:** NatesCode
-- **Related:** `docs/grammar.ebnf` §LL(1) · `src/grammar/silicon-official.ohm` · [[silicon-ll1-target]] memory · [[silicon-no-postfix]] memory · commit `c4dfb99` (left-factor sigilFnType)
+- **Related:** `docs/grammar.ebnf` §LL(1) · [[silicon-ll1-target]] memory · [[silicon-no-postfix]] memory · commit `c4dfb99` (left-factor sigilFnType)
+
+> **Update (ohm removed):** The grammar is now implemented by the hand-written
+> LL(1) recursive-descent parser in `src/parser/handwritten/`. The
+> `src/grammar/silicon-official.ohm` file referenced below no longer exists.
+> `docs/grammar.ebnf` §LL(1) remains the canonical contract. The body below is
+> retained as the historical decision record.
 
 ## Context
 

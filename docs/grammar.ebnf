@@ -9,9 +9,10 @@
     " … "   terminal string
     (* … *) comment
 
-  This grammar is derived from src/grammar/silicon-official.ohm — the Ohm.js
-  source of truth used by the TypeScript compiler in src/.  The Ohm file is
-  the reference implementation; this EBNF is the human-readable specification.
+  This EBNF is the human-readable grammar specification for Silicon.  It is
+  implemented by the hand-written, dependency-free recursive-descent parser in
+  src/parser/handwritten/ (lexer.ts + parser.ts); there is no separate grammar
+  file.  This EBNF is the canonical contract the parser implements.
 
   See §LL(1) below for the parser-shaped (left-factored) presentation of the
   two productions that look non-LL(1) in their natural form.
@@ -302,10 +303,9 @@ doc-comment   = "##" { (* any char except line-end *) } line-end ;
       is LL(1): the reserved boolean tokens never appear where a defKw
       is expected.
 
-  The current Ohm grammar in src/grammar/silicon-official.ohm relies on
-  Ohm's ordered-alternative (PEG) semantics to disambiguate these spots,
-  which is equivalent in practice but stricter LL(1) than what a hand-
-  written recursive-descent parser needs.
+  The hand-written LL(1) recursive-descent parser in src/parser/handwritten/
+  disambiguates these spots directly, following the left-factored forms
+  documented above — there are no PEG-style ordered alternatives.
 
   ──────────────────────────────────────────────────────────────────────
   What this is NOT

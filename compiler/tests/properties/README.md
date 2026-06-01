@@ -44,7 +44,7 @@ Three forms: two runs in the same process, two fresh `bun run` processes, and a 
 
 > Every interesting AST node carries a `sourceLocation`.
 
-Scaffolded for WS 4 (Structured Errors + Source Spans). Today `toAst.ts` doesn't yet populate the field, so the test runs in coverage-report mode: it tallies which node types currently expose `sourceLocation`. Flip `PROMOTE_TO_STRICT` to `true` once WS 4 wires Ohm source intervals through every factory call — from that point on, any new node type that forgets to attach a span will fail the day it lands.
+Scaffolded for WS 4 (Structured Errors + Source Spans). Today `toAst.ts` doesn't yet populate the field, so the test runs in coverage-report mode: it tallies which node types currently expose `sourceLocation`. Flip `PROMOTE_TO_STRICT` to `true` once WS 4 wires parser source spans through every factory call — from that point on, any new node type that forgets to attach a span will fail the day it lands.
 
 **Defends against:** new AST node kinds added later that silently lose source-location coverage, causing the diagnostics pipeline to produce errors with no span.
 

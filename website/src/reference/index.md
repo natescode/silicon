@@ -9,7 +9,7 @@ The reference docs are organised around what you're looking up:
 ## Language
 
 - [Grammar (EBNF)](/reference/grammar) — every production in
-  ISO/IEC 14977 EBNF, derived from `silicon-official.ohm`.
+  ISO/IEC 14977 EBNF, the spec implemented by the hand-written parser.
 - [Types](/reference/types) — the integer / float / bool / string /
   slice / function-type hierarchy.
 - [Type inference (HM-lite)](/reference/hm-lite) — Hindley-Milner

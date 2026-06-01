@@ -31,8 +31,8 @@ bun test src/e2e/
 
 Each test validates:
 
-1. **PARSE** - Source code → Parse tree using Ohm grammar
-2. **AST** - Parse tree → Typed Abstract Syntax Tree
+1. **PARSE** - Source code → typed AST via the hand-written parser
+2. **AST** - Typed Abstract Syntax Tree (built directly by the parser)
 3. **ELABORATE** - Semantic information attachment and stratum registration
 4. **CODEGEN** - AST → WebAssembly text format (WAT)
 
@@ -48,23 +48,6 @@ The `compileSource()` helper function orchestrates these stages and captures any
 - ✅ AST construction and validation
 - ✅ WAT code generation
 - ✅ Error handling for invalid syntax
-
-### Grammar Fix Status
-
-**✅ FIXED**: The `Elaboration` rule in [silicon-official.ohm](../grammar/silicon-official.ohm) no longer throws "Cannot apply syntactic rule" errors.
-
-The fix was to change the `strataBody` rule from:
-```
-strataBody = "{" (Item ";")* "}"  // Error: Item is syntactic in lexical context
-```
-
-To:
-```
-strataBody = "{" strataBodyContent* "}"  // Lexical rule that accepts any content
-strataBodyContent = ~"}" any
-```
-
-This change avoids mixing syntactic and lexical rules in a way that Ohm rejects.
 
 ### Known Pre-Existing Issues
 

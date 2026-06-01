@@ -152,6 +152,62 @@ Or use the stdlib which wraps this:
 
 ---
 
+## Linking against C libraries
+
+libc is linked automatically.  To call any **other** C library (raylib, SDL,
+SQLite, …), declare its functions with `@extern` and tell the linker which
+library provides them.  `@extern` only declares "this symbol exists; resolve it
+at link time" — it emits no import, just a `call`; the linker binds it against
+the libraries you name.
+
+### Pass linker flags on the command line
+
+`sgl build --native` and `sgl run --release` forward cc-style linker flags:
+
+```sh
+sgl build --native game.si -lraylib -lm        # link libraylib + libm
+sgl build --native game.si -L/opt/lib -lfoo    # add a search directory
+sgl run   --release game.si -lraylib -lm       # build + run
+```
+
+- `-l<name>` links `lib<name>.so` (or `.a`); the `lib` prefix and `.so` suffix are implied.
+- `-L<dir>` adds a library search directory (e.g. Homebrew's `/opt/homebrew/lib`).
+- `--link <arg>` passes an arbitrary argument straight to the linker, e.g. `--link -Wl,-rpath,/opt/lib`.
+
+If a library ships a pkg-config file, let it supply the flags:
+
+```sh
+sgl build --native game.si $(pkg-config --libs raylib) -lm
+```
+
+### Declare default libraries in sgl.toml
+
+For a project, list the libraries once under `[native]` rather than repeating
+them on every build:
+
+```toml
+[native]
+libs      = ["raylib", "m"]     # → -lraylib -lm
+link-args = ["-L/opt/lib"]      # raw cc/ld arguments
+```
+
+CLI `-l`/`-L`/`--link` flags are appended on top of the toml defaults.
+
+### Inspecting the native pipeline
+
+```sh
+sgl build --emit-qbe game.si                          # write game.qbe (QBE IR), then stop
+sgl build --native --save-temps game.si -lraylib -lm  # keep game.qbe + game.s
+```
+
+`--emit-qbe` runs only the front-end and QBE lowering, so it needs neither the
+`qbe` binary nor the C libraries — handy for inspecting codegen.
+
+See [`examples/cube.si`](../examples/cube.si) for a complete program (a rotating
+raylib cube) that links this way.
+
+---
+
 ## Choosing a target
 
 | Use WASM when… | Use Native when… |

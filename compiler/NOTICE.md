@@ -19,8 +19,6 @@ attributions required by those licenses.
 
 | Package | Version | License | Source |
 |---------|---------|---------|--------|
-| ohm-js | ^17.1.0 | MIT | https://github.com/ohmjs/ohm |
-| @ohm-js/cli | ^2.0.0 | MIT | https://github.com/ohmjs/ohm |
 | fast-check | ^4.8.0 | MIT | https://github.com/dubzzz/fast-check |
 | @changesets/cli | ^2.31.0 | MIT | https://github.com/changesets/changesets |
 | @microsoft/api-extractor | ^7.58.7 | MIT | https://github.com/microsoft/rushstack |
