@@ -14,13 +14,11 @@
  */
 
 import {
-    parse,
-    addToAstSemantics, type ASTNode, type Program,
+    parse, type Program,
     compileToWat,
     compileToWasm,
     elaborate, buildStrataRegistry,
     typecheck, formatTypeError, formatType, wasmTypeOf, type FunctionSig,
-    siliconGrammar,
     loadModules,
     loadPlatform, getRequiredExports, type PlatformConfig,
 } from '@silicon/compiler/pipeline'
@@ -112,8 +110,7 @@ async function compile(req: CompileRequest) {
     try {
         const moduleRegistry = platformConfig ? loadPlatform(platformConfig) : fallbackModuleRegistry
 
-        const match = parse(source)
-        const ast: ASTNode = addToAstSemantics(siliconGrammar)(match).toAst()
+        const ast = parse(source)
         const registry = buildStrataRegistry(ast as Program)
         const { program: elaborated, errors: elabErrors } = elaborate(ast as Program, registry)
         if (elabErrors.length > 0) {

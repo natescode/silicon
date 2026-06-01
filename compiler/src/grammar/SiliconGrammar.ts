@@ -1,23 +1,12 @@
 // SPDX-License-Identifier: MIT
 /**
- * Silicon Grammar Loader
+ * Sentinel `siliconGrammar` export.
  *
- * Loads and parses the Ohm grammar definition for Silicon.
- *
- * The grammar (silicon-official.ohm) defines the syntax rules for the Silicon
- * programming language. This module loads the grammar file and compiles it into
- * an Ohm Grammar object that can be used for parsing.
- *
- * @see silicon-official.ohm - Grammar rule definitions
+ * ohm has been removed; the hand-written parser (parser/handwritten/) needs no
+ * grammar object. Call sites that still pass `siliconGrammar` into the
+ * `addToAstSemantics` shim (see ../ast/toAst.ts) get this inert sentinel, which
+ * the shim ignores. Kept only so those import paths still resolve.
  */
-
-import * as ohm from 'ohm-js'
-import { loadGrammarSource } from './grammarSource'
-
-// The grammar source is read synchronously through grammarSource.ts so this
-// module has no top-level await and no Bun-/Node-specific API on its surface.
-// Browser builds alias grammarSource → grammarSource.browser (inlined string);
-// the Bun/Node toolchain reads silicon-official.ohm from disk.
-const siliconGrammar = ohm.grammar(loadGrammarSource())
+const siliconGrammar = { __handwritten: true as const }
 
 export default siliconGrammar

@@ -1,15 +1,10 @@
 # Benchmarks
 
-## Parser: ohm vs. the hand-written parser
+## Parser throughput
 
-`parse-bench.ts` compares the two parsers — ohm (`parse` → `addToAstSemantics`
-→ `toAst`) vs. the dependency-free hand-written recursive-descent parser
-(`parseToAst`, in `src/parser/handwritten/`) — over generated Silicon programs.
-Programs are produced from a seeded PRNG (so runs are comparable) and each size
-is **gated on AST-equality** between the two parsers before timing, so we only
-ever benchmark inputs that produce identical output.
-
-### Run
+`parse-bench.ts` measures the hand-written parser (`parse` → `parseToAst`, in
+`src/parser/handwritten/`) over generated Silicon programs of increasing size.
+Programs come from a seeded PRNG so runs are comparable.
 
 ```sh
 bun run --cwd compiler bench:parser
@@ -17,34 +12,28 @@ bun run --cwd compiler bench:parser
 bun run bench:parser            # → bun run bench/parse-bench.ts
 ```
 
-### Results
+Typical throughput is ~30–36 MiB/s with linear scaling (one dev machine;
+absolute numbers are hardware-dependent).
 
-Illustrative numbers (one dev machine; absolute ms are hardware-dependent, the
-ratios are the point). AST is byte-identical at every size.
+### History: it used to be ohm
 
-| tier   | source   | ohm        | hand-written | speedup  | throughput |
-|--------|----------|------------|--------------|----------|------------|
-| small  | 30.5 KiB | 274.7 ms   | 0.9 ms       | **292×** | 31.7 MiB/s |
-| medium | 153.5 KiB| 4,706.8 ms | 5.0 ms       | **932×** | 29.7 MiB/s |
-| large  | 454.0 KiB| 37,636.6 ms| 12.2 ms      | **3085×**| 36.3 MiB/s |
+The parser was originally PEG-based (ohm-js). The hand-written recursive-descent
+parser replaced it and is now the only parser (`parse()` calls it directly; ohm
+is removed). Before the swap, the hand-written parser benchmarked **292–3085×
+faster than ohm** across 30–454 KiB — that comparison lives in git history
+(see the `perf(parser):` and `feat(parser):` commits).
 
-The hand-written parser is ~30–36 MiB/s with linear scaling.
+The big win was fixing an accidental **O(n²)**: `lineColumn` rescanned the
+source from offset 0 on every call, and it's invoked per `Namespace`/`Definition`
+node, so cost grew as *nodes × offset*. On a 206 KiB program it scanned 4.9
+billion characters (23,000× the source). Two fixes:
 
-### How it got there
+1. **Precompute line starts once**, binary-search per lookup → O(log n).
+   454 KiB: 10,335 ms → 17.3 ms.
+2. **Lexer ASCII lookup tables + `charCodeAt`** in the hot per-char loops:
+   17.3 ms → 12.2 ms.
 
-The first cut of the hand-written parser was accidentally **O(n²)**: `lineColumn`
-rescanned the source from offset 0 on every call, and it's invoked per
-`Namespace`/`Definition` node, so cost grew as *nodes × offset*. On a 206 KiB
-program it scanned **4.9 billion characters** (23,000× the source).
-
-Two fixes (both preserve byte-identical AST — see the equivalence test below):
-
-1. **Precompute line starts once**, then binary-search per lookup → O(log n).
-   On the 454 KiB program: **10,335 ms → 17.3 ms**.
-2. **Lexer ASCII lookup tables + `charCodeAt`** in the hot per-char scan loops
-   instead of string compares / `Set.has`: **17.3 ms → 12.2 ms**.
-
-Net vs. the original hand-written parser: **~850× faster** (10,335 → 12.2 ms).
+Net: ~850× faster than the first (unoptimized) cut of the hand-written parser.
 
 ### Profile
 
@@ -55,12 +44,13 @@ parse+AST and reports throughput — useful for spotting the next hotspot:
 bun run compiler/bench/profile-parser.ts
 ```
 
-## Equivalence test
+## Correctness
 
-The hand-written parser is verified node-for-node against ohm over the whole
-`.si` corpus + inline programs (the contract that lets the benchmark compare
-apples to apples):
+The hand-written parser was developed against an AST-equivalence test that
+deep-compared it to ohm over the whole `.si` corpus (removed when ohm was
+deleted — there's no longer a second parser to diff against). Correctness is
+now covered by the full compiler suite, which parses Silicon on every test:
 
 ```sh
-bun test compiler/src/parser/handwritten/equivalence.test.ts
+bun test            # from the compiler/ directory
 ```

@@ -1,10 +1,8 @@
 // SPDX-License-Identifier: MIT
-import siliconGrammar from "./grammar/SiliconGrammar"
+// Parses Silicon source to the typed AST via the hand-written parser.
+// (ohm removed; see parser/parser.ts and parser/handwritten/.)
+import { parseToAst } from './parser/handwritten/parser'
 
 export default function parse(sourceCode: string) {
-  const match = siliconGrammar.match(sourceCode)
-  if (!match.succeeded()) {
-    throw new Error(`Parse error: ${match.message}`)
-  }
-  return match
+    return parseToAst(sourceCode)
 }

@@ -12,13 +12,11 @@
 import { join, dirname } from 'path'
 import { fileURLToPath } from 'url'
 import {
-    parse,
-    addToAstSemantics, type ASTNode, type Program,
+    parse, type Program,
     compileToWat,
     watToWasm,
     elaborate, buildStrataRegistry,
     typecheck, formatTypeError, formatType, wasmTypeOf, type FunctionSig,
-    siliconGrammar,
     loadModules,
     loadPlatform, getRequiredExports, type PlatformConfig,
 } from '@silicon/compiler/pipeline'
@@ -110,8 +108,7 @@ async function compileSilicon(source: string, platformConfig?: PlatformConfig) {
         ? loadPlatform(platformConfig)
         : fallbackModuleRegistry
 
-    const match = parse(source)
-    const ast: ASTNode = addToAstSemantics(siliconGrammar)(match).toAst()
+    const ast = parse(source)
     const registry = buildStrataRegistry(ast as Program)
     const { program: elaborated, errors: elabErrors } = elaborate(ast as Program, registry)
 

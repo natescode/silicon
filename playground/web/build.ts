@@ -24,7 +24,7 @@ const UI = join(WEB, '..', 'playground')                    // playground/playgr
 const OUT = join(WEB, '..', 'dist')
 
 // Modules with a `.browser.ts` twin that the browser build must use instead.
-const BROWSER_SOURCES = /[\\/](grammarSource|strataSource|stdWatSource|moduleSources|platformSource)$/
+const BROWSER_SOURCES = /[\\/](strataSource|stdWatSource|moduleSources|platformSource)$/
 // Disallowed on the browser graph: Node builtins and binaryen. `wabt` is
 // marked external below (the compiler emits WASM directly from IR and never
 // calls the WAT→WASM assembler in the browser), so it's intentionally not

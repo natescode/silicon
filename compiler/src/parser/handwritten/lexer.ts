@@ -116,6 +116,13 @@ export class Lexer {
         return { kind, text: this.src.slice(start, this.i), start, end: this.i, ...extra }
     }
 
+    /** Throw a structured parse error (same shape as the parser's) so callers —
+     *  and the fuzz harness — see a single "Parse error: …" surface. */
+    private lexFail(msg: string, offset: number): never {
+        const { line, column } = lineColumn(this.src, offset)
+        throw new Error(`Parse error: Line ${line}, col ${column}: ${msg}`)
+    }
+
     private next(): Token {
         this.skipTrivia()
         const s = this.src
@@ -172,7 +179,7 @@ export class Lexer {
                 if (k === QUOTE || k === BACKSLASH || isLineEnd(k)) break
                 this.i++
             }
-            if (s[this.i] !== "'") throw new Error(`Lex error: unterminated string at offset ${start}`)
+            if (s[this.i] !== "'") this.lexFail('unterminated string', start)
             this.i++
             return this.tok('string', start)
         }
@@ -195,7 +202,7 @@ export class Lexer {
             return this.tok('ident', start)
         }
 
-        throw new Error(`Lex error: unexpected character ${JSON.stringify(c)} at offset ${start}`)
+        this.lexFail(`unexpected character ${JSON.stringify(c)}`, start)
     }
 
     private lexNumber(start: number): Token {

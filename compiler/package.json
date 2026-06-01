@@ -22,18 +22,15 @@
     "test:backends": "bun test --timeout 60000 src/e2e/backends.test.ts",
     "bench:parser": "bun run bench/parse-bench.ts",
     "compile": "bun run src/index.ts",
-    "build-types": "bunx ohm generateBundles --withTypes src/silicon-simple.ohm",
     "opt-wasm": "bun run ./binaryen-version_117/wasm-opt.js ../dist/bin.wasm",
     "loc": "bunx cloc . --exclude-dir node_modules,dist,build --exclude-ext json,lock,md,yml"
   },
   "devDependencies": {
     "@changesets/cli": "^2.31.0",
     "@microsoft/api-extractor": "^7.58.7",
-    "@ohm-js/cli": "^2.0.0",
     "@types/bun": "latest",
     "@types/node": "^20.14.2",
     "fast-check": "^4.8.0",
-    "ohm-js": "^17.1.0",
     "vscode-oniguruma": "^2.0.1",
     "vscode-textmate": "^9.3.2"
   },

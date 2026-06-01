@@ -68,7 +68,8 @@ class Parser {
     }
     private fail(msg: string, t = this.peek()): never {
         const { line, column } = lineColumnAt(this.lineStarts, this.src, t.start)
-        throw new Error(`Parse error: ${msg} (line ${line}, col ${column})`)
+        // Format matches the old ohm parser so errors/diagnostic.ts extracts the span.
+        throw new Error(`Parse error: Line ${line}, col ${column}: ${msg}`)
     }
 
     private loc(start: number, end: number): SourceLocation {

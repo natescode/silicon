@@ -1,20 +1,18 @@
 // SPDX-License-Identifier: MIT
 /**
- * B1 grammar fixtures for the signature-lines refactor (docs/signature-lines.md).
+ * Grammar fixtures for the signature-lines surface (docs/signature-lines.md).
  *
- * Parse-level only: loads the .ohm directly via ohm-js and checks raw matching,
- * independent of toAst (wired in a later B1 slice).  Asserts the NEW syntax
- * parses and the OLD inline-type / $fn / return-type-on-name forms are rejected.
+ * Parse-level: asserts the NEW syntax parses and the OLD inline-type / $fn /
+ * return-type-on-name forms are rejected. Exercises the hand-written parser
+ * directly (ohm removed) — `matches` means "parses without error".
  */
 
 import { describe, test, expect } from 'bun:test'
-import { readFileSync } from 'node:fs'
-import * as ohm from 'ohm-js'
+import { parseToAst } from '../parser/handwritten/parser'
 
-const g = ohm.grammar(
-    readFileSync(new URL('./silicon-official.ohm', import.meta.url), 'utf-8'),
-)
-const matches = (src: string) => g.match(src).succeeded()
+const matches = (src: string): boolean => {
+    try { parseToAst(src); return true } catch { return false }
+}
 const L = (...lines: string[]) => lines.join('\n')
 const BS = '\\\\' // two backslashes — the signature sigil
 

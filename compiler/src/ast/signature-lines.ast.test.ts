@@ -9,15 +9,9 @@
  */
 
 import { describe, test, expect } from 'bun:test'
-import siliconGrammar from '../grammar/SiliconGrammar'
-import addToAstSemantics from './toAst'
+import { parseToAst } from '../parser/handwritten/parser'
 
-const sem = addToAstSemantics(siliconGrammar)
-function toAst(src: string): any {
-    const m = siliconGrammar.match(src)
-    if (m.failed()) throw new Error(`parse failed:\n${m.message}`)
-    return sem(m).toAst()
-}
+const toAst = (src: string): any => parseToAst(src)
 const defs = (src: string) => toAst(src).elements.filter((e: any) => e.type === 'Definition')
 const L = (...lines: string[]) => lines.join('\n')
 const BS = '\\\\'

@@ -14,7 +14,7 @@ import { tmpdir } from 'os'
 import type { BunPlugin } from 'bun'
 
 const WEB = dirname(fileURLToPath(import.meta.url))
-const BROWSER_SOURCES = /[\\/](grammarSource|strataSource|stdWatSource|moduleSources|platformSource)$/
+const BROWSER_SOURCES = /[\\/](strataSource|stdWatSource|moduleSources|platformSource)$/
 const DISALLOWED = /^(node:)?(fs|path|url|os|child_process|crypto)$|^binaryen$/
 
 const browserSwap: BunPlugin = {
