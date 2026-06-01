@@ -1,0 +1,56 @@
+<idea-plugin>
+    <!-- id, name, version, vendor, description and idea-version are injected
+         at build time by the IntelliJ Platform Gradle plugin from
+         build.gradle.kts (intellijPlatform { pluginConfiguration { … } }). -->
+
+    <depends>com.intellij.modules.platform</depends>
+    <!-- LSP4IJ provides the Language Server Protocol runtime + extension points. -->
+    <depends>com.redhat.devtools.lsp4ij</depends>
+
+    <extensions defaultExtensionNs="com.intellij">
+        <!-- The .si file type, bound to the Silicon language. -->
+        <fileType
+            name="Silicon"
+            implementationClass="com.natescode.silicon.SiliconFileType"
+            fieldName="INSTANCE"
+            language="Silicon"
+            extensions="si"/>
+
+        <!-- Lexer-based syntax highlighting. -->
+        <lang.syntaxHighlighterFactory
+            language="Silicon"
+            implementationClass="com.natescode.silicon.highlight.SiliconSyntaxHighlighterFactory"/>
+
+        <!-- Ctrl+/ line-comment toggling. -->
+        <lang.commenter
+            language="Silicon"
+            implementationClass="com.natescode.silicon.SiliconCommenter"/>
+
+        <!-- Settings | Editor | Color Scheme | Silicon. -->
+        <colorSettingsPage
+            implementation="com.natescode.silicon.highlight.SiliconColorSettingsPage"/>
+
+        <!-- Settings | Languages & Frameworks | Silicon (LSP launch config). -->
+        <applicationConfigurable
+            parentId="language"
+            id="com.natescode.silicon.lsp.settings"
+            displayName="Silicon"
+            instance="com.natescode.silicon.lsp.SiliconLspConfigurable"/>
+    </extensions>
+
+    <!-- LSP4IJ: register the Silicon language server and map it to the language. -->
+    <extensions defaultExtensionNs="com.redhat.devtools.lsp4ij">
+        <server
+            id="siliconLanguageServer"
+            name="Silicon Language Server"
+            factoryClass="com.natescode.silicon.lsp.SiliconLanguageServerFactory">
+            <description>
+                Silicon language server — diagnostics, hover, go-to-definition
+                and document symbols, powered by @silicon/lsp.
+            </description>
+        </server>
+        <languageMapping
+            language="Silicon"
+            serverId="siliconLanguageServer"/>
+    </extensions>
+</idea-plugin>

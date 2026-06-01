@@ -4,3 +4,6 @@ dist/
 *.wat
 *.vsix
 .DS_Store
+
+# JetBrains IDE project metadata
+.idea/
