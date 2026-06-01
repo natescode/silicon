@@ -88,7 +88,8 @@ export function parseModuleDecls(source: string): Map<string, FnSig> {
 /**
  * Build the ModuleRegistry for a compilation.
  *
- * @param projectDir  Root of the user's project (default: process.cwd()).
+ * @param projectDir  Root of the user's project (default: the process cwd, or
+ *                    `''` in the browser where there is no `process`).
  *                    The loader looks for a `modules/` subdirectory here.
  *
  * Module .si discovery (built-in + user) lives in moduleSources.ts so the
@@ -96,7 +97,13 @@ export function parseModuleDecls(source: string): Map<string, FnSig> {
  * order keeps the downstream WAT emit order filesystem-independent; env
  * modules win over same-named user modules.
  */
-export function loadModules(projectDir: string = process.cwd()): ModuleRegistry {
+// `process` is undefined in the browser; fall back to '' (the browser's
+// listUserModules ignores it). Must not reference `process` unguarded — doing
+// so throws ReferenceError and breaks comptime handler compilation in-browser.
+const defaultProjectDir = (): string =>
+    (typeof process !== 'undefined' && typeof process.cwd === 'function') ? process.cwd() : ''
+
+export function loadModules(projectDir: string = defaultProjectDir()): ModuleRegistry {
     const registry: ModuleRegistry = new Map()
 
     for (const m of listBuiltinModules()) {
