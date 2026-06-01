@@ -113,7 +113,7 @@ describe('useResolver: wasm-gc stdlib shadow', () => {
         // so it passes through unchanged.
         expect(visited).toContain(P('project/lib/helper.si'))
         expect(visited).not.toContain(P('project/lib/gc/helper.si'))
-        expect(source).toContain('helper:Int := 0')
+        expect(source).toContain('@fn helper')
     })
 
     test('nested stdlib paths (already under gc/) are not double-rewritten', () => {
@@ -133,6 +133,6 @@ describe('useResolver: wasm-gc stdlib shadow', () => {
             { ...fs, target: 'wasm-gc' },
         )
         expect(visited).toContain(P('project/src/stdlib/gc/string.si'))
-        expect(source).toContain('gc_string_marker:Int := 1')
+        expect(source).toContain('@fn gc_string_marker')
     })
 })

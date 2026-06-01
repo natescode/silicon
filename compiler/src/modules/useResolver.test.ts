@@ -71,7 +71,7 @@ describe('resolveUses', () => {
         })
         const { source, visited } = resolveUses(fs.files[P('main.si')]!, P('main.si'), fs)
         expect(visited).toEqual([P('a.si'), P('main.si')])
-        const matches = source.match(/@fn a :=/g) ?? []
+        const matches = source.match(/@fn a\b/g) ?? []
         expect(matches.length).toBe(1)
     })
 

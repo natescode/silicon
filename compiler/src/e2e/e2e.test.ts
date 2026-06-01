@@ -1114,7 +1114,7 @@ test("Round 23: float global resolves to f32 in expressions", () => {
 
 test("Round 23: float call return type drives arithmetic (f32.add in caller)", () => {
     // &double takes a Float and returns Float; two calls added together should use f32.add
-    const src = "\\\\ double (Float)\n@let double x := { x + x }; @let quad y:Float := { &double y + &double y };";
+    const src = "\\\\ double (Float)\n@let double x := { x + x };\n\\\\ quad (Float)\n@let quad y := { &double y + &double y };";
     const result = compileSource(src);
     expect(result.success).toBe(true);
     const uw = userWat(result.wat!)

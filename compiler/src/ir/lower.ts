@@ -1878,9 +1878,16 @@ function lowerAsStmt(node: any, ctx: LowerCtx): IRStmt | null {
             wasmType = siliconTypeNameToWasm(rawTypeName)
         }
         // Track struct locals so field-access lowering can find the layout.
-        if (rawTypeName && ctx.registry?.structTypes?.has(rawTypeName)) {
-            ctx.structLocals.set(name, rawTypeName)
+        // Inline local annotations were removed (signature-lines), so a struct
+        // local is recognised from its declared type OR the binding's inferred
+        // type (e.g. `@local p := &Point 3, 4` infers Point from the ctor).
+        let localStructName = (rawTypeName && ctx.registry?.structTypes?.has(rawTypeName)) ? rawTypeName : undefined
+        if (!localStructName) {
+            const b0 = Array.isArray(node.binding) ? node.binding[0] : node.binding
+            const inferredName = ((b0?.expression ?? b0) as any)?.inferredType?.name
+            if (inferredName && ctx.registry?.structTypes?.has(inferredName)) localStructName = inferredName
         }
+        if (localStructName) ctx.structLocals.set(name, localStructName)
         // Hoist by name: multiple `@local x := ...` in different branches
         // (lexer / parser dispatch loops do this heavily) collapse to a
         // single `(local $x i32)` declaration in the function preamble.
