@@ -70,14 +70,20 @@ const webEnv = readFileSync(join(UI, 'web-env.js'), 'utf-8')
 
 let out = html
 
+// NOTE: all replacements below use a *function* replacer. The inserted content
+// (minified JS, web-env.js) is full of `$` characters, and String.replace
+// treats `$&`, `$'`, `` $` ``, `$n` specially in a *string* replacement —
+// which would splice chunks of the document into the bundle and corrupt it.
+// A function replacer inserts the value verbatim.
+
 // Inline web-env.js (a classic global IIFE script).
 if (!out.includes('<script src="/web-env.js"></script>')) {
     throw new Error('Could not find the web-env.js script tag to inline')
 }
-out = out.replace('<script src="/web-env.js"></script>', `<script>\n${webEnv}\n</script>`)
+out = out.replace('<script src="/web-env.js"></script>', () => `<script>\n${webEnv}\n</script>`)
 
 // Inject the compiler bundle as its own module before the app's module script.
-out = out.replace('<script type="module">', `<script type="module">\n${bundleJs}\n</script>\n<script type="module">`)
+out = out.replace('<script type="module">', () => `<script type="module">\n${bundleJs}\n</script>\n<script type="module">`)
 
 // Replace the network round-trip with the in-browser compiler.
 const fetchBlock = /const res = await fetch\('\/compile',[\s\S]*?data = await res\.json\(\)/
@@ -85,7 +91,19 @@ if (!fetchBlock.test(out)) {
     throw new Error('Could not find the fetch(\'/compile\') block to replace')
 }
 out = out.replace(fetchBlock,
-    `data = await window.SiliconCompiler.compile({ source, platform: 'web', features: activeFeatures })`)
+    () => `data = await window.SiliconCompiler.compile({ source, platform: 'web', features: activeFeatures })`)
+
+// Guard against inlining corruption (e.g. a `$`-substitution splicing document
+// fragments into the bundle): there must be exactly two module scripts (bundle
+// + app) and the bundle's global must survive intact.
+const moduleOpens = out.split('<script type="module">').length - 1
+if (moduleOpens !== 2) {
+    throw new Error(`Inlining corrupted: expected 2 module scripts, found ${moduleOpens} ` +
+        `(a $-replacement likely spliced HTML into the bundle).`)
+}
+if (!out.includes('globalThis.SiliconCompiler')) {
+    throw new Error('Inlining corrupted: the bundle no longer sets globalThis.SiliconCompiler.')
+}
 
 rmSync(OUT, { recursive: true, force: true })
 mkdirSync(OUT, { recursive: true })
