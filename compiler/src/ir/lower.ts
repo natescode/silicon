@@ -1743,7 +1743,7 @@ function lowerWithArena(rawArgs: any[], ctx: LowerCtx): IRExpr {
             const tname = promotedType ? promotedType.kind : '<unknown>'
             throw new IRLowerError(
                 `@move_to_parent_arena: byte-size computation for type '${tname}' is not implemented yet. ` +
-                `v1.0 supports value types and String; arrays / sum-with-payloads / nested heap are Phase 9c follow-up stories.`,
+                `0.1 supports value types and String; arrays / sum-with-payloads / nested heap are Phase 9c follow-up stories.`,
             )
         }
 
