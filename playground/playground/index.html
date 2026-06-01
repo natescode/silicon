@@ -334,6 +334,7 @@ button:disabled { opacity: 0.4; cursor: not-allowed; }
     <option value="simple_main">Simple Main</option>
     <option value="html_todo">HTML TODO</option>
     <option value="snake">Snake</option>
+    <option value="structs">Structs</option>
     <option value="wasm_gc">WasmGC Sum Type</option>
     <option value="gc_vec">WasmGC Vec (array)</option>
   </select>
@@ -914,6 +915,24 @@ const EXAMPLES = {
 @export main;
 @export tick;
 @export handle_key;`,
+
+    structs:
+`# @struct — a product type. Construct with &Point x, y; read fields with p.x.
+# Call demo() in the exports panel (→ 40).
+
+@struct Point x Int, y Int;
+
+\\\\ sum_coords (Point) -> Int
+@fn sum_coords p := (p.x) + (p.y);
+
+\\\\ demo () -> Int
+@fn demo := {
+    @local a := &Point 3, 7;
+    @local b := &Point 10, 20;
+    (&sum_coords a) + (&sum_coords b)
+};
+
+@export demo;`,
 
     wasm_gc:
 `# WasmGC target — sum types lower to GC structs, not linear-memory layout.
