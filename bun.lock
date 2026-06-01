@@ -5,6 +5,13 @@
     "": {
       "name": "silicon",
     },
+    "blog": {
+      "name": "@silicon/blog",
+      "version": "0.1.0",
+      "devDependencies": {
+        "vitepress": "^1.6.4",
+      },
+    },
     "cli": {
       "name": "@silicon/cli",
       "bin": {
@@ -383,6 +390,8 @@
     "@shikijs/types": ["@shikijs/types@2.5.0", "", { "dependencies": { "@shikijs/vscode-textmate": "^10.0.2", "@types/hast": "^3.0.4" } }, "sha512-ygl5yhxki9ZLNuNpPitBWvcy9fsSKKaRuO4BAlMyagszQidxcpLAr0qiW/q43DtSIDxO6hEbtYLiFZNXO/hdGw=="],
 
     "@shikijs/vscode-textmate": ["@shikijs/vscode-textmate@10.0.2", "", {}, "sha512-83yeghZ2xxin3Nj8z1NMd/NCuca+gsYXswywDy5bHvwlWL8tpTQmzGeUuHd9FC3E/SBEMvzJRwWEOz5gGes9Qg=="],
+
+    "@silicon/blog": ["@silicon/blog@workspace:blog"],
 
     "@silicon/cli": ["@silicon/cli@workspace:cli"],
 

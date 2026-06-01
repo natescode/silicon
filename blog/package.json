@@ -1,0 +1,14 @@
+{
+  "name": "@silicon/blog",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vitepress dev src",
+    "build": "vitepress build src",
+    "preview": "vitepress preview src"
+  },
+  "devDependencies": {
+    "vitepress": "^1.6.4"
+  }
+}
