@@ -16,18 +16,12 @@
  * The folder or file name (minus .si extension) IS the module name — no @module header needed.
  */
 
-import { readFileSync, readdirSync, statSync, existsSync } from 'fs'
-import { join, basename, extname, dirname } from 'path'
-import { fileURLToPath } from 'url'
 import parse from '../parser'
 import addToAstSemantics from '../ast/toAst'
 import siliconGrammar from '../grammar/SiliconGrammar'
 import type { WasmValType } from '../ir/nodes'
 import type { FnSig, ModuleEntry, ModuleRegistry } from './registry'
-
-const __filename = fileURLToPath(import.meta.url)
-const __dir = dirname(__filename)
-const BUILTIN_MODULES_DIR = join(__dir, '../strata/modules')
+import { listBuiltinModules, listUserModules } from './moduleSources'
 
 // ---------------------------------------------------------------------------
 // Internal helpers
@@ -86,10 +80,6 @@ export function parseModuleDecls(source: string): Map<string, FnSig> {
     return functions
 }
 
-function loadModuleFile(filePath: string, name: string, kind: 'env' | 'user'): ModuleEntry {
-    const source = readFileSync(filePath, 'utf-8')
-    return { name, kind, functions: parseModuleDecls(source) }
-}
 
 // ---------------------------------------------------------------------------
 // Public API
@@ -100,45 +90,22 @@ function loadModuleFile(filePath: string, name: string, kind: 'env' | 'user'): M
  *
  * @param projectDir  Root of the user's project (default: process.cwd()).
  *                    The loader looks for a `modules/` subdirectory here.
+ *
+ * Module .si discovery (built-in + user) lives in moduleSources.ts so the
+ * browser build can swap it for an fs-free, inlined copy. Sorted insertion
+ * order keeps the downstream WAT emit order filesystem-independent; env
+ * modules win over same-named user modules.
  */
 export function loadModules(projectDir: string = process.cwd()): ModuleRegistry {
     const registry: ModuleRegistry = new Map()
 
-    // Phase A: built-in env modules. Sorted so registry insertion order
-    // (and therefore WAT emit order downstream) is filesystem-independent.
-    if (existsSync(BUILTIN_MODULES_DIR)) {
-        for (const filename of readdirSync(BUILTIN_MODULES_DIR).sort()) {
-            // Only Silicon source files — skip .wat, .json, etc.
-            if (extname(filename) !== '.si') continue
-            const modName = basename(filename, '.si')
-            const entry = loadModuleFile(join(BUILTIN_MODULES_DIR, filename), modName, 'env')
-            registry.set(modName, entry)
-        }
+    for (const m of listBuiltinModules()) {
+        registry.set(m.name, { name: m.name, kind: 'env', functions: parseModuleDecls(m.source) })
     }
 
-    // Phase B: user modules (env modules take priority — skip duplicates).
-    // Sorted for the same reason.
-    const userModulesDir = join(projectDir, 'modules')
-    if (existsSync(userModulesDir)) {
-        for (const name of readdirSync(userModulesDir).sort()) {
-            if (registry.has(name.replace(/\.si$/, ''))) continue  // env wins
-
-            const entryPath = join(userModulesDir, name)
-            const stat = statSync(entryPath)
-
-            if (stat.isFile() && extname(name) === '.si') {
-                // Single-file: modules/Draw.si
-                const modName = basename(name, '.si')
-                registry.set(modName, loadModuleFile(entryPath, modName, 'user'))
-            } else if (stat.isDirectory()) {
-                // Folder: modules/Draw/Draw.si
-                const modName = name
-                const siFile = join(entryPath, `${modName}.si`)
-                if (existsSync(siFile)) {
-                    registry.set(modName, loadModuleFile(siFile, modName, 'user'))
-                }
-            }
-        }
+    for (const m of listUserModules(projectDir)) {
+        if (registry.has(m.name)) continue  // env wins
+        registry.set(m.name, { name: m.name, kind: 'user', functions: parseModuleDecls(m.source) })
     }
 
     return registry

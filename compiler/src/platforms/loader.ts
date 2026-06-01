@@ -13,16 +13,10 @@
  * Downstream typechecker and codegen are unchanged.
  */
 
-import { readFileSync, existsSync } from 'fs'
-import { join, dirname } from 'path'
-import { fileURLToPath } from 'url'
 import type { ModuleRegistry, ModuleEntry, FnSig } from '../modules/registry'
 import { parseModuleDecls } from '../modules/loader'
 import type { PlatformConfig } from './config'
-
-const __filename = fileURLToPath(import.meta.url)
-const __dir = dirname(__filename)
-const PLATFORMS_DIR = join(__dir)  // src/platforms/
+import { loadPlatformMetaRaw, loadPlatformFileRaw } from './platformSource'
 
 export interface FeatureMeta {
     name: string
@@ -38,10 +32,10 @@ export interface PlatformMeta {
 }
 
 export function loadPlatformMeta(platformName: string): PlatformMeta | undefined {
-    const metaPath = join(PLATFORMS_DIR, platformName, 'platform.json')
-    if (!existsSync(metaPath)) return undefined
+    const raw = loadPlatformMetaRaw(platformName)
+    if (raw === undefined) return undefined
     try {
-        return JSON.parse(readFileSync(metaPath, 'utf-8')) as PlatformMeta
+        return JSON.parse(raw) as PlatformMeta
     } catch {
         return undefined
     }
@@ -53,13 +47,12 @@ export function loadPlatformMeta(platformName: string): PlatformMeta | undefined
  */
 export function loadPlatform(config: PlatformConfig): ModuleRegistry {
     const { platform, features } = config
-    const platformDir = join(PLATFORMS_DIR, platform)
     const functions = new Map<string, FnSig>()
 
     // Always load core
-    const corePath = join(platformDir, 'core.si')
-    if (existsSync(corePath)) {
-        for (const [name, sig] of parseModuleDecls(readFileSync(corePath, 'utf-8'))) {
+    const coreSrc = loadPlatformFileRaw(platform, 'core.si')
+    if (coreSrc !== undefined) {
+        for (const [name, sig] of parseModuleDecls(coreSrc)) {
             functions.set(name, sig)
         }
     }
@@ -69,9 +62,9 @@ export function loadPlatform(config: PlatformConfig): ModuleRegistry {
     for (const featureName of features) {
         const featureMeta = meta?.features.find(f => f.name === featureName)
         const featureFile = featureMeta?.file ?? `${featureName}.si`
-        const featurePath = join(platformDir, featureFile)
-        if (existsSync(featurePath)) {
-            for (const [name, sig] of parseModuleDecls(readFileSync(featurePath, 'utf-8'))) {
+        const featureSrc = loadPlatformFileRaw(platform, featureFile)
+        if (featureSrc !== undefined) {
+            for (const [name, sig] of parseModuleDecls(featureSrc)) {
                 functions.set(name, sig)
             }
         }

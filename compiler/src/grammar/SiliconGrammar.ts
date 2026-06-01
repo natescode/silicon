@@ -12,11 +12,12 @@
  */
 
 import * as ohm from 'ohm-js'
+import { loadGrammarSource } from './grammarSource'
 
-// Resolve the .ohm path relative to this module rather than process.cwd
-// so `sgl` works when invoked from any directory (the CLI runs from the
-// user's project, not the compiler repo).
-const grammarSource = Bun.file(`${import.meta.dir}/silicon-official.ohm`)
-const siliconGrammar = ohm.grammar(await grammarSource.text())
+// The grammar source is read synchronously through grammarSource.ts so this
+// module has no top-level await and no Bun-/Node-specific API on its surface.
+// Browser builds alias grammarSource → grammarSource.browser (inlined string);
+// the Bun/Node toolchain reads silicon-official.ohm from disk.
+const siliconGrammar = ohm.grammar(loadGrammarSource())
 
 export default siliconGrammar

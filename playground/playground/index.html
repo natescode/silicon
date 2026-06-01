@@ -597,13 +597,15 @@ const themeCompartment = new Compartment()
 const INITIAL_SOURCE = `# Modules are auto-resolved from their namespace prefix.
 # web:: maps to the built-in web environment module.
 
-@fn greet msg:String := {
+\\\\ greet (String)
+@fn greet msg := {
     @local result := ('Hello, ' ++ msg);
     &web::console_log_str result;
     result
 };
 
-@fn hypotenuse a:Float, b:Float := {
+\\\\ hypotenuse (Float, Float)
+@fn hypotenuse a, b := {
     &web::math_sqrt ((&web::math_pow a, 2.0) + (&web::math_pow b, 2.0))
 };
 

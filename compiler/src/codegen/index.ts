@@ -9,9 +9,7 @@
  * @see std.wat - Silicon runtime (alloc, print helpers, memory layout)
  */
 
-import { readFileSync } from 'fs'
-import { join, dirname } from 'path'
-import { fileURLToPath } from 'url'
+import { loadStdWatRaw } from './stdWatSource'
 import { lowerProgram, emitModule } from '../ir'
 import type { LowerOptions } from '../ir/lower'
 import type { IRModule } from '../ir/nodes'
@@ -26,16 +24,12 @@ import { watToWasmSync } from './toWasm'
 
 export type { LowerTarget, LowerOptions } from '../ir/lower'
 
-const __filename = fileURLToPath(import.meta.url)
-const __dirname = dirname(__filename)
-const STD_WAT_PATH = join(__dirname, 'std.wat')
-
 let cachedStdWat: string | null = null
 
 /** Load the Silicon runtime (std.wat) once per process. */
 export function loadStdWat(): string {
     if (!cachedStdWat) {
-        cachedStdWat = readFileSync(STD_WAT_PATH, 'utf-8')
+        cachedStdWat = loadStdWatRaw()
     }
     return cachedStdWat
 }

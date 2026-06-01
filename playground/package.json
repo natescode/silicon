@@ -1,10 +1,13 @@
 {
   "name": "silicon-playground",
   "version": "0.1.0",
-  "description": "Browser playground for the Silicon programming language. Bun HTTP server that compiles Silicon source to WAT + WASM and serves the interactive UI.",
+  "description": "Browser playground for the Silicon programming language. The compiler runs fully client-side (no server); the static build inlines it into a single self-contained index.html.",
   "type": "module",
   "private": true,
   "scripts": {
+    "gen-assets": "bun run ../compiler/scripts/gen-web-assets.ts",
+    "build": "bun run gen-assets && bun run web/build.ts",
+    "verify": "bun run gen-assets && bun run web/verify.ts",
     "start": "bun run playground/server.ts",
     "dev": "bun run --watch playground/server.ts"
   },
