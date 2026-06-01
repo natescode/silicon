@@ -4,8 +4,10 @@ Browser playground for the **Silicon** programming language. The Silicon
 compiler (the TypeScript pipeline under `../compiler`) runs **fully
 client-side** — the static build inlines it into a single self-contained
 `index.html`, so there is no server and no `/compile` API. The page parses,
-type-checks, lowers to WAT and assembles to WASM (via `wabt`) entirely in the
-browser, then instantiates and runs the module.
+type-checks and assembles WASM directly from IR (the compiler's own binary
+emitter — no `wabt`/`binaryen`, so the bundle is pure-MIT) entirely in the
+browser, then instantiates and runs the module. The WAT panel is rendered
+straight from the emitter for display.
 
 ## Build (static, for deployment)
 

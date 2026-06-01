@@ -15,7 +15,7 @@
  */
 
 import { readFileSync, writeFileSync, mkdirSync, rmSync } from 'fs'
-import { join, dirname, basename } from 'path'
+import { join, dirname } from 'path'
 import { fileURLToPath } from 'url'
 import type { BunPlugin } from 'bun'
 
@@ -23,20 +23,26 @@ const WEB = dirname(fileURLToPath(import.meta.url))          // playground/web
 const UI = join(WEB, '..', 'playground')                    // playground/playground (UI source)
 const OUT = join(WEB, '..', 'dist')
 
+// Modules with a `.browser.ts` twin that the browser build must use instead.
 const BROWSER_SOURCES = /[\\/](grammarSource|strataSource|stdWatSource|moduleSources|platformSource)$/
+// Disallowed on the browser graph: Node builtins and binaryen. `wabt` is
+// marked external below (the compiler emits WASM directly from IR and never
+// calls the WAT→WASM assembler in the browser), so it's intentionally not
+// bundled and not listed here.
+const DISALLOWED = /^(node:)?(fs|path|url|os|child_process|crypto)$|^binaryen$/
 
 const browserSwap: BunPlugin = {
     name: 'browser-source-swap',
     setup(build) {
-        // ./xSource  →  ./xSource.browser.ts  (sibling of the importing module)
+        // ./x  →  ./x.browser.ts  (resolved relative to the importer, handles
+        // nested specifiers like '../codegen/toWasm').
         build.onResolve({ filter: BROWSER_SOURCES }, args => ({
-            path: join(dirname(args.importer), basename(args.path) + '.browser.ts'),
+            path: join(dirname(args.importer), args.path + '.browser.ts'),
         }))
-        // Tripwire: nothing on the browser graph may import a Node builtin.
-        build.onResolve({ filter: /^(node:)?(fs|path|url|os|child_process|crypto)$/ }, args => ({
+        build.onResolve({ filter: DISALLOWED }, args => ({
             errors: [{
-                text: `Node builtin "${args.path}" reached the browser bundle (via ${args.importer}). ` +
-                    `Isolate its use behind a *Source module with a .browser variant.`,
+                text: `Disallowed dependency "${args.path}" reached the browser bundle (via ${args.importer}). ` +
+                    `Isolate it behind a *Source/.browser module.`,
             }],
         }))
     },
@@ -46,6 +52,7 @@ const result = await Bun.build({
     entrypoints: [join(WEB, 'entry.ts')],
     target: 'browser',
     minify: true,
+    external: ['wabt'],   // WAT→WASM assembler; never called in-browser
     plugins: [browserSwap],
 })
 
@@ -84,5 +91,8 @@ rmSync(OUT, { recursive: true, force: true })
 mkdirSync(OUT, { recursive: true })
 writeFileSync(join(OUT, 'index.html'), out)
 
+// Ship the open-source attribution alongside the deployed page.
+writeFileSync(join(OUT, 'THIRD-PARTY-NOTICES.md'), readFileSync(join(WEB, '..', 'THIRD-PARTY-NOTICES.md'), 'utf-8'))
+
 console.log(`Built ${join(OUT, 'index.html')} — bundle ${(bundleJs.length / 1024).toFixed(0)} KiB, ` +
-    `page ${(out.length / 1024).toFixed(0)} KiB`)
+    `page ${(out.length / 1024).toFixed(0)} KiB (+ THIRD-PARTY-NOTICES.md)`)

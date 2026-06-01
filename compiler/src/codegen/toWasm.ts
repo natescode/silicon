@@ -2,37 +2,34 @@
 /**
  * WAT → WASM binary conversion using the wabt npm package.
  *
- * wabt is the reference WebAssembly Binary Toolkit compiled to JS/WASM.
- * It uses the same parser as wat2wasm and handles the mixed folded/unfolded
- * WAT syntax that Sigil's emitter produces.
+ * This is a Node/Bun convenience for callers that have a WAT *string* and want
+ * a binary (e.g. tooling, the legacy playground server). The compiler's own
+ * codegen no longer needs it — compileToWasm/irModuleToWasm assemble binaries
+ * directly from IR (including funcref/call_indirect), so the browser bundle
+ * never pulls wabt in.
  *
- * Initialised once at module load via top-level await so subsequent calls
- * can be synchronous (D-E prerequisite — the comptime engine needs sync
- * compilation to pre-compile strata handlers during buildStrataRegistry).
+ * wabt is initialised lazily on first use (no top-level await) so that merely
+ * importing this module has no side effect and bundlers can tree-shake it away
+ * when `watToWasm` is unused.
  */
 
-import WabtFactory from 'wabt'
+type WabtModule = Awaited<ReturnType<typeof import('wabt')['default']>>
 
-type WabtModule = Awaited<ReturnType<typeof WabtFactory>>
-
-// Top-level await — Bun supports this in ESM.  Module evaluation blocks
-// until wabt is ready, so any caller that imports from this module gets
-// a fully-initialised wabt.
-const _wabt: WabtModule = await WabtFactory()
+let _wabt: WabtModule | null = null
 
 /**
- * Convert a WAT text string to a WASM binary.
- * Throws a descriptive error if the WAT is invalid.
+ * Convert a WAT text string to a WASM binary. Throws on invalid WAT.
+ *
+ * wabt is loaded via a lazy dynamic import so it's pulled in only when this
+ * function is actually called. The browser playground marks `wabt` external
+ * and never calls this (it assembles binaries directly from IR), so wabt
+ * stays out of the bundle entirely.
  */
 export async function watToWasm(wat: string): Promise<Uint8Array> {
-    return watToWasmSync(wat)
-}
-
-/**
- * Synchronous WAT → WASM.  Safe to call from anywhere in this module's
- * dependency tree because wabt was initialised at module load.
- */
-export function watToWasmSync(wat: string): Uint8Array {
+    if (!_wabt) {
+        const { default: WabtFactory } = await import('wabt')
+        _wabt = await WabtFactory()
+    }
     const m = _wabt.parseWat('module.wat', wat, { mutableGlobals: true })
     const { buffer } = m.toBinary({})
     m.destroy()

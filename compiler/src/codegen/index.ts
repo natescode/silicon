@@ -20,7 +20,6 @@ import type { ModuleRegistry } from '../modules/registry'
 import type { SemanticModel } from '../ast/semanticModel'
 import { buildPrelude } from './prelude-ir'
 import { emitWasmBinary } from './wasm-emitter'
-import { watToWasmSync } from './toWasm'
 
 export type { LowerTarget, LowerOptions } from '../ir/lower'
 
@@ -156,16 +155,18 @@ export function compileToWasm(
     options: LowerOptions = {},
 ): Uint8Array {
     const irModule = lowerProgram(program, registry, functionSigs, moduleRegistry, options)
-    // Phase 5 Workstream B — funcref-using modules currently route
-    // through the WAT path because the direct binary emitter doesn't
-    // yet support (type), (table funcref), (elem), or call_indirect
-    // sections.  Non-funcref modules use the direct path unchanged,
-    // preserving the byte-equal-to-WAT codegen-test contract.  Direct
-    // emitter parity is tracked as a follow-up.
-    if (irModule.funcrefTable) {
-        const wat = compileToWat(program, registry, functionSigs, moduleRegistry, options)
-        return watToWasmSync(wat)
-    }
+    return irModuleToWasm(irModule, options)
+}
+
+/**
+ * Assemble an already-lowered IRModule to a WASM binary using the in-house
+ * direct binary emitter — no `wabt`. Handles funcref/call_indirect too (the
+ * emitter emits the type/table/element sections), so there is no WAT detour.
+ *
+ * Shared by compileToWasm and the comptime engine, which is what lets the
+ * browser playground compile everything without shipping `wabt`.
+ */
+export function irModuleToWasm(irModule: IRModule, options: LowerOptions = {}): Uint8Array {
     const heapBase = computeHeapBase(irModule)
     const prelude = buildPrelude(heapBase, options.target !== 'wasix', options.maxHeapPages)
     return emitWasmBinary(prelude, irModule)

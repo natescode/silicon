@@ -28,9 +28,8 @@ import type { ElaboratorRegistry } from '../elaborator/registry'
 import elaborate from '../elaborator/elaborator'
 import { translateLegacyBlock } from '../elaborator/legacyBlockTranslator'
 import { lowerProgram } from '../ir/lower'
-import { emitModule } from '../ir/emit'
-import { loadStdWat } from '../codegen'
-import { watToWasm, watToWasmSync } from '../codegen/toWasm'
+import type { IRModule } from '../ir/nodes'
+import { irModuleToWasm } from '../codegen'
 import { loadModules } from '../modules/loader'
 import type { ModuleRegistry } from '../modules/registry'
 import { createComptimeEnv, createComptimeImports, type ComptimeEnv } from './imports'
@@ -229,7 +228,7 @@ function _compileHandlerToModule(
     // pass (when the user's full program runs) still skips it.
     const wasClaimed = registry.strataHandlerFnNames.has(handlerName)
     registry.strataHandlerFnNames.delete(handlerName)
-    let wat: string
+    let mod!: IRModule
     // Set a "compiling handler" flag on the registry so lower.ts knows to
     // skip on::lower dispatch for migrated keywords inside this handler's
     // body — breaks the chicken-and-egg where compiling LocalDef_lower
@@ -238,7 +237,7 @@ function _compileHandlerToModule(
     try {
         // Elaborate first so the @fn gets its `hook: 'function'` stamp.
         const elaborated = elaborate(syntheticProg as any, registry)
-        const mod = lowerProgram(
+        mod = lowerProgram(
             elaborated.program, registry, new Map(),
             getBuiltinModuleRegistry(),
         )
@@ -251,19 +250,17 @@ function _compileHandlerToModule(
             internalName: handlerName,
             what: 'func',
         })
-        // Wrap with std.wat so memory + alloc helpers are present.
-        // Handlers that use string literals need the data segment + memory
-        // declaration — same shape that compileToWat in src/codegen/ uses.
-        wat = emitModule(mod, loadStdWat())
     } finally {
         if (wasClaimed) registry.strataHandlerFnNames.add(handlerName)
         ;(registry as any).__compilingHandler = false
     }
 
-    // Assemble — sync path (wabt was pre-init'd at module load).
-    // Returns the compiled module; instantiation happens in compileHandlerToWasm
-    // so each call gets a fresh instance bound to its own registry.
-    const wasm = watToWasmSync(wat)
+    // Assemble via the shared direct binary emitter (no wabt for the common,
+    // non-funcref case) — this is what lets the browser playground compile
+    // strata handlers without shipping wabt. Returns the compiled module;
+    // instantiation happens in compileHandlerToWasm so each call gets a fresh
+    // instance bound to its own registry.
+    const wasm = irModuleToWasm(mod)
     return new WebAssembly.Module(wasm)
 }
 

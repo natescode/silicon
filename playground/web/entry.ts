@@ -17,7 +17,7 @@ import {
     parse,
     addToAstSemantics, type ASTNode, type Program,
     compileToWat,
-    watToWasm,
+    compileToWasm,
     elaborate, buildStrataRegistry,
     typecheck, formatTypeError, formatType, wasmTypeOf, type FunctionSig,
     siliconGrammar,
@@ -139,8 +139,11 @@ async function compile(req: CompileRequest) {
             }
         }
 
+        // WAT for the display panel (pure string emission, no wabt); the
+        // executable bytes come from the compiler's own direct binary emitter
+        // (no wabt/binaryen), so the bundle stays pure-MIT.
         const wat = compileToWat(typed, registry, functions as Map<string, FunctionSig>, moduleRegistry)
-        const wasmBytes = await watToWasm(wat)
+        const wasmBytes = compileToWasm(typed, registry, functions as Map<string, FunctionSig>, moduleRegistry)
         return {
             success: true,
             wat,

@@ -198,6 +198,9 @@ interface EmitCtx {
     typeIdxOf: (sig: FuncSig) => number
     funcIdxOf: (name: string) => number
     globalIdxOf: (name: string) => number
+    /** Absolute type-section index for a call_indirect's funcref signature,
+     *  keyed by the IRModule.funcrefTable signature `key` (e.g. '__fn_i_i'). */
+    callIndirectTypeIdxOf: (sigKey: string) => number
     /** Depth stack for structured control flow: 0=block, 1=loop, 2=if */
     depthStack: number[]
     /** Phase 9d-7 fix: WasmGC type-section entries follow function
@@ -269,6 +272,16 @@ function emitExpr(e: IRExpr, buf: WasmBuffer, ctx: EmitCtx, isUser: boolean,
             }
             for (const arg of e.args) emitExpr(arg, buf, ctx, isUser, localIdxOf)
             buf.u8(0x10); buf.u32(ctx.funcIdxOf(e.callee))
+            return
+        }
+        case 'CallIndirect': {
+            // Args in source order, then the table index, then
+            //   0x11 <typeidx> <tableidx=0>
+            for (const arg of e.args) emitExpr(arg, buf, ctx, isUser, localIdxOf)
+            emitExpr(e.tableIndex, buf, ctx, isUser, localIdxOf)
+            buf.u8(0x11)
+            buf.u32(ctx.callIndirectTypeIdxOf(e.sigKey))
+            buf.u8(0x00)
             return
         }
         case 'Block': {
@@ -657,6 +670,30 @@ function buildMemorySection(pages: number, maxPages?: number): WasmBuffer {
     return body
 }
 
+// Table section (4): a single funcref table holding the module's @fnref
+// entries. Emitted only for funcref-using modules, so non-funcref programs
+// produce identical bytes as before.
+function buildTableSection(tableSize: number): WasmBuffer {
+    const body = new WasmBuffer()
+    body.u32(1)         // one table
+    body.u8(0x70)       // elemtype: funcref
+    body.u8(0x00)       // limits flag: no max
+    body.u32(tableSize) // min
+    return body
+}
+
+// Element section (9): one active segment filling table 0 from slot 0 with
+// the funcref entries' function indices.
+function buildElementSection(entries: string[], funcIdxOf: (name: string) => number): WasmBuffer {
+    const body = new WasmBuffer()
+    body.u32(1)                                  // one element segment
+    body.u8(0x00)                                // flags: active, table 0, funcidx vec
+    body.u8(0x41); body.i32(0); body.u8(0x0B)    // offset expr: i32.const 0; end
+    body.u32(entries.length)
+    for (const name of entries) body.u32(funcIdxOf(name))
+    return body
+}
+
 function buildGlobalSection(globals: IRGlobal[], ctx: EmitCtx): WasmBuffer {
     const body = new WasmBuffer()
     body.u32(globals.length)
@@ -796,6 +833,16 @@ export function emitWasmBinary(prelude: PreludeSpec, userMod: IRModule): Uint8Ar
     for (const imp of allImports) internSig(importSig(imp))
     for (const f of allFunctions) internSig(funcSig(f))
 
+    // funcref call_indirect signatures share the same type section. Map each
+    // funcrefTable signature key → its local type index for call_indirect.
+    const funcrefTypeIdxLocal = new Map<string, number>()
+    if (userMod.funcrefTable) {
+        for (const s of userMod.funcrefTable.signatures) {
+            const fsig: FuncSig = { params: s.params.map(valSlot), result: valSlot(s.result) }
+            funcrefTypeIdxLocal.set(s.key, internSig(fsig))
+        }
+    }
+
     // ── 3. Function index space ───────────────────────────────────────────
     const funcNameToIdx = new Map<string, number>()
     for (let i = 0; i < allImports.length; i++) {
@@ -837,6 +884,11 @@ export function emitWasmBinary(prelude: PreludeSpec, userMod: IRModule): Uint8Ar
             if (idx === undefined) throw new Error(`Unknown global: ${name}`)
             return idx
         },
+        callIndirectTypeIdxOf: (key) => {
+            const idx = funcrefTypeIdxLocal.get(key)
+            if (idx === undefined) throw new Error(`Missing funcref signature: ${key}`)
+            return idx + gcCount
+        },
         depthStack: [],
         // GC types at indices [0, gcCount); their wasmGcTypes-local index
         // IS the absolute type-section index.  No offset needed.
@@ -860,6 +912,11 @@ export function emitWasmBinary(prelude: PreludeSpec, userMod: IRModule): Uint8Ar
     // Section 3: Function
     out.section(3, buildFunctionSection(allFunctions, ctx.typeIdxOf))
 
+    // Section 4: Table (funcref) — only for funcref-using modules
+    if (userMod.funcrefTable) {
+        out.section(4, buildTableSection(userMod.funcrefTable.entries.length))
+    }
+
     // Section 5: Memory
     out.section(5, buildMemorySection(prelude.memoryPages, prelude.memoryMaxPages))
 
@@ -871,6 +928,11 @@ export function emitWasmBinary(prelude: PreludeSpec, userMod: IRModule): Uint8Ar
     // Section 7: Export
     const allFuncExports = [...prelude.funcExports, ...userMod.exports.filter(e => e.what === 'func')]
     out.section(7, buildExportSection(true, allFuncExports, [], ctx.funcIdxOf))
+
+    // Section 9: Element (populate the funcref table) — only when non-empty
+    if (userMod.funcrefTable && userMod.funcrefTable.entries.length > 0) {
+        out.section(9, buildElementSection(userMod.funcrefTable.entries, ctx.funcIdxOf))
+    }
 
     // Section 10: Code
     out.section(10, buildCodeSection(allFunctions, prelFunctions.length, ctx))

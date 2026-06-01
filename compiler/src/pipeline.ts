@@ -14,7 +14,7 @@
 
 export { parse } from './parser/index'
 export { addToAstSemantics, type ASTNode, type Program } from './ast'
-export { compileToWat } from './codegen'
+export { compileToWat, compileToWasm } from './codegen'
 export { watToWasm } from './codegen/toWasm'
 export { elaborate, buildStrataRegistry } from './elaborator'
 export {
