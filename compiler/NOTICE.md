@@ -47,13 +47,26 @@ not redistributed by this project:
 - **QBE** — MIT — https://c9x.me/compile/
 - **wat2wasm** (WABT) — Apache-2.0 — https://github.com/WebAssembly/wabt
 
-## Bun runtime
+## Bun runtime (embedded in the `sgl` binary)
 
-The `sgl` binary may be compiled with `bun build --compile`, which embeds the
-Bun runtime. Bun is licensed under the MIT License. See
-https://github.com/oven-sh/bun/blob/main/LICENSE.md for the canonical text.
+The standalone `sgl` binaries are built with `bun build --compile`, which embeds
+the **Bun** runtime. Bun's own code is MIT-licensed, but Bun **statically links
+JavaScriptCore/WebKit (LGPL-2)** plus a number of other libraries (boringssl,
+libarchive, mimalloc, brotli, c-ares, …) under MIT / BSD / Apache-2.0 / zlib.
+
+Per LGPL-2, the binary is distributed in object form so the LGPL'd library can
+be modified and relinked; Bun's patched WebKit source and relink instructions
+are at <https://github.com/oven-sh/webkit>.
+
+The full set of these attributions ships **with each binary** as
+`THIRD-PARTY-LICENSES.md` inside the release tarball (a verbatim copy of Bun's
+`LICENSE.md`). Canonical text: <https://github.com/oven-sh/bun/blob/main/LICENSE.md>.
+
+The `sgl` binary does **not** bundle `binaryen` or `wabt` — they are Node-side
+build/test tooling only (the compiler assembles WebAssembly with its own
+emitter), so they are not redistributed in the binary or the playground bundle.
 
 ## Reporting
 
 If you find a missing attribution, please open an issue at
-https://github.com/NatesCode/sigil/issues.
+https://github.com/NatesCode/silicon/issues.

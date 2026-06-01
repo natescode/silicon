@@ -129,9 +129,15 @@ download() {
 
 install_binary() {
     BIN_SRC="$1"
+    SRC_DIR="$(dirname "${BIN_SRC}")"
     mkdir -p "${INSTALL_DIR}"
     cp "${BIN_SRC}" "${INSTALL_DIR}/sgl"
     chmod +x "${INSTALL_DIR}/sgl"
+    # Keep the licenses next to the installed binary (they ship in the tarball:
+    # Silicon's MIT LICENSE + the embedded Bun runtime's THIRD-PARTY-LICENSES.md).
+    [ -f "${SRC_DIR}/LICENSE" ] && cp "${SRC_DIR}/LICENSE" "${INSTALL_DIR}/LICENSE"
+    [ -f "${SRC_DIR}/THIRD-PARTY-LICENSES.md" ] && cp "${SRC_DIR}/THIRD-PARTY-LICENSES.md" "${INSTALL_DIR}/THIRD-PARTY-LICENSES.md"
+    return 0
 }
 
 # ── PATH setup ───────────────────────────────────────────────────────────────
