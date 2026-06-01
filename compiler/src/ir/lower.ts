@@ -502,7 +502,15 @@ function walkLocalsForRefs(
     if (!node || typeof node !== 'object') return
     if (node.type === 'Definition' && (node.keyword === '@local' || node.keyword === '@var')) {
         const localName: string | undefined = node.name?.name
-        const annot = node.name?.typeAnnotation
+        let annot = node.name?.typeAnnotation
+        // New-design: locals carry no declared `:Type` annotation any more.
+        // The ref type now rides on an ascription binding —
+        // `@local v := &@as Vec[Int], &vec_new 4` — so when the slot has no
+        // declared annotation, pick it up from an Ascription binding.
+        if (!annot) {
+            const be = node.binding?.expression ?? node.binding
+            if (be && be.type === 'Ascription') annot = be.typeAnnotation
+        }
         if (localName && annot) {
             const refIdx = refIdxFromAnnotation(annot, wasmGcTypes)
             if (refIdx !== undefined) {
