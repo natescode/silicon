@@ -91,10 +91,10 @@
 @fn drawFace ax, ay, az, bx, by, bz, cx, cy, cz, dx, dy, dz, r, g, b := {
     @var nz := &normalZ ax, ay, az, bx, by, bz, cx, cy, cz;
     &@if nz > 0.0, {
-        @var ax2 := &sx ax, ay, az;  @var ay2:Float := &sy ax, ay, az;
-        @var bx2 := &sx bx, by, bz;  @var by2:Float := &sy bx, by, bz;
-        @var cx2 := &sx cx, cy, cz;  @var cy2:Float := &sy cx, cy, cz;
-        @var dx2 := &sx dx, dy, dz;  @var dy2:Float := &sy dx, dy, dz;
+        @var ax2 := &sx ax, ay, az;  @var ay2 := &sy ax, ay, az;
+        @var bx2 := &sx bx, by, bz;  @var by2 := &sy bx, by, bz;
+        @var cx2 := &sx cx, cy, cz;  @var cy2 := &sy cx, cy, cz;
+        @var dx2 := &sx dx, dy, dz;  @var dy2 := &sy dx, dy, dz;
         &rlBegin 4;
         &rlColor4ub r, g, b, 255;
         &rlVertex2f ax2, ay2; &rlVertex2f bx2, by2; &rlVertex2f cx2, cy2;
