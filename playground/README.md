@@ -19,12 +19,33 @@ bun run --cwd playground build
 This regenerates the inlined compiler assets and emits `playground/dist/index.html`
 — the whole playground in one file (CodeMirror still loads from its CDN).
 
-Verify the in-browser compiler end-to-end (headless: compiles a program and
-instantiates the emitted WASM):
+## Testing
+
+Two layers, because Bun ≠ a browser:
 
 ```sh
-bun run --cwd playground verify
+bun run --cwd playground verify   # fast: compiles a program in Bun, runs the WASM
 ```
+
+`verify` bundles the compiler and runs it under **Bun** — quick, but Bun has
+`process`/`Buffer` as globals and no sync-WASM size limit, so it can't catch
+browser-only failures.
+
+```sh
+bun run --cwd playground smoke:install   # one-time: download headless Chromium
+bun run --cwd playground smoke           # builds, then loads dist in real Chromium
+```
+
+`smoke` builds `dist/index.html` and loads it in **headless Chromium**,
+compiling every example in the dropdown. This is the layer that catches:
+
+- the bundle failing to load (e.g. `String.replace` `$&` inlining corruption →
+  `SiliconCompiler` undefined),
+- `process is not defined` / other browser-only `ReferenceError`s in the
+  compiler path,
+- examples that don't match the current grammar.
+
+Run `smoke` before deploying.
 
 ## Local dev (optional server)
 
@@ -62,7 +83,7 @@ features }` (or `{ success: false, error }`) — the same shape the old
 
 ```
 playground/        UI (index.html, web-env.js) + legacy dev server (server.ts)
-web/               entry.ts (browser compile API), build.ts, verify.ts
+web/               entry.ts (browser compile API), build.ts, verify.ts, smoke.ts
 dist/              static build output (git-ignored)
 ../compiler        the Silicon compiler pipeline this bundles
 ```

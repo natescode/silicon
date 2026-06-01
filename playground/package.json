@@ -8,12 +8,15 @@
     "gen-assets": "bun run ../compiler/scripts/gen-web-assets.ts",
     "build": "bun run gen-assets && bun run web/build.ts",
     "verify": "bun run gen-assets && bun run web/verify.ts",
+    "smoke": "bun run build && bun run web/smoke.ts",
+    "smoke:install": "bunx playwright install chromium",
     "start": "bun run playground/server.ts",
     "dev": "bun run --watch playground/server.ts"
   },
   "devDependencies": {
     "@types/bun": "latest",
-    "@types/node": "^20.14.2"
+    "@types/node": "^20.14.2",
+    "playwright": "^1.60.0"
   },
   "dependencies": {
     "@silicon/compiler": "workspace:*"
