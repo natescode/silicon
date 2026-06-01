@@ -88,7 +88,9 @@ download() {
     TMP_DIR="$(mktemp -d)"
     TARBALL_PATH="${TMP_DIR}/${TARBALL}"
 
-    echo "  Downloading sgl ${VERSION} for ${PLATFORM}..."
+    # Must go to stderr: download() echoes the extracted binary path on stdout,
+    # which the caller captures via `$(download)`.
+    echo "  Downloading sgl ${VERSION} for ${PLATFORM}..." >&2
 
     if command -v curl >/dev/null 2>&1; then
         curl -fsSL --progress-bar -o "${TARBALL_PATH}" "${URL}"
