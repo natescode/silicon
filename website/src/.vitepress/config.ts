@@ -11,11 +11,11 @@ import { fileURLToPath } from 'node:url'
 import { defineConfig } from 'vitepress'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
+// Grammar is vendored alongside this config so the website is
+// self-contained — no dependency on sibling repos / packages.
+// Re-sync from plugins/vscode/syntaxes/ when the grammar changes.
 const siliconGrammar = JSON.parse(
-    readFileSync(
-        resolve(__dirname, '../../../../silicon-vscode/syntaxes/silicon.tmLanguage.json'),
-        'utf8'
-    )
+    readFileSync(resolve(__dirname, 'silicon.tmLanguage.json'), 'utf8')
 )
 
 export default defineConfig({
