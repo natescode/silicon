@@ -40,6 +40,42 @@ export interface TextChange {
 }
 
 // ---------------------------------------------------------------------------
+// Offset helpers
+// ---------------------------------------------------------------------------
+
+/**
+ * Build a line-start offset table for `source` (0-indexed array; entry `i` is
+ * the byte offset of the first character on 1-based line `i + 1`).
+ */
+function lineStartOffsets(source: string): number[] {
+    const offsets: number[] = [0]
+    for (let i = 0; i < source.length; i++) {
+        if (source[i] === '\n') offsets.push(i + 1)
+    }
+    return offsets
+}
+
+/**
+ * Convert a 1-based `SourceRange` to a half-open `[start, end)` byte-offset pair
+ * into `source`.  `endCol` is exclusive (matching `SourceRange` convention), so
+ * the result maps directly to a `String.slice` boundary.
+ *
+ * Shared with the incremental parser (`incremental.ts`) so that text edits and
+ * damage-region computation agree on coordinates.
+ *
+ * @public
+ */
+export function rangeToOffsets(source: string, range: SourceRange): { start: number; end: number } {
+    const lineOffsets = lineStartOffsets(source)
+    const toOffset = (line: number, col: number): number =>
+        (lineOffsets[line - 1] ?? source.length) + (col - 1)
+    return {
+        start: toOffset(range.startLine, range.startCol),
+        end:   toOffset(range.endLine,   range.endCol),
+    }
+}
+
+// ---------------------------------------------------------------------------
 // applyTextChanges
 // ---------------------------------------------------------------------------
 
@@ -57,29 +93,11 @@ export interface TextChange {
 export function applyTextChanges(source: string, changes: readonly TextChange[]): string {
     if (changes.length === 0) return source
 
-    // Build line-start offsets (0-indexed array; entry i is the byte offset
-    // of the first character on 1-based line i+1).
-    const lineOffsets: number[] = [0]
-    for (let i = 0; i < source.length; i++) {
-        if (source[i] === '\n') lineOffsets.push(i + 1)
-    }
-
-    // 1-based line + 1-based col → 0-based byte offset.
-    // endCol is exclusive (first char NOT in range), so this maps directly
-    // to the correct slice boundary.
-    function toOffset(line: number, col: number): number {
-        const lineStart = lineOffsets[line - 1] ?? source.length
-        return lineStart + (col - 1)
-    }
-
     // Flatten to (start, end, newText) where both ends are byte offsets.
-    const flat = changes.map((c, i) => ({
-        start: toOffset(c.range.startLine, c.range.startCol),
-        end:   toOffset(c.range.endLine,   c.range.endCol),
-        text:  c.newText,
-        // Keep the original index for error messages.
-        idx: i,
-    }))
+    const flat = changes.map((c, i) => {
+        const { start, end } = rangeToOffsets(source, c.range)
+        return { start, end, text: c.newText, idx: i }   // idx kept for error messages
+    })
 
     // Sort descending by start so applying one edit doesn't shift the rest.
     flat.sort((a, b) => b.start - a.start || b.end - a.end)

@@ -21,6 +21,7 @@
     "test:qbe": "bun test --timeout 60000 src/codegen/qbe",
     "test:backends": "bun test --timeout 60000 src/e2e/backends.test.ts",
     "bench:parser": "bun run bench/parse-bench.ts",
+    "bench:incremental": "bun run bench/incremental-bench.ts",
     "compile": "bun run src/index.ts",
     "opt-wasm": "bun run ./binaryen-version_117/wasm-opt.js ../dist/bin.wasm",
     "loc": "bunx cloc . --exclude-dir node_modules,dist,build --exclude-ext json,lock,md,yml"

@@ -18,3 +18,11 @@ import { parseToAst } from './handwritten/parser'
 export default function parse(sourceCode: string) {
     return parseToAst(sourceCode)
 }
+
+// Incremental-parsing entry points (CaaS tracker 3b).
+export {
+    parseProgramWithExtents,
+    parseProgramFragment,
+    type ElementExtent,
+    type FragmentResult,
+} from './handwritten/parser'

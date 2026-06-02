@@ -24,11 +24,13 @@
  * Stability contract: docs/stability.md §2.
  */
 
-import parseInternal from '../parser/parser'
-import { addToAstSemantics } from '../ast'
-import { siliconGrammar } from '../grammar'
+import { parseProgramWithExtents } from '../parser/parser'
 import { SyntaxNode } from './syntaxNode'
 export { SyntaxNode }
+import {
+    incrementalReparse, damageFromText, damageFromChanges, stableStringify,
+    type GreenIndex,
+} from './incremental'
 import elaborateInternal from '../elaborator/elaborator'
 import { buildStrataRegistry } from '../elaborator/strataLoader'
 import typecheckInternal, { type FunctionSig } from '../types/typechecker'
@@ -86,13 +88,21 @@ export class SyntaxTree {
     /** File name used for diagnostic spans. */
     readonly file: string
 
-    constructor(program: Program, source: string, file = '<input>') {
+    constructor(program: Program, source: string, file = '<input>', greenIndex?: GreenIndex) {
         this.program = program
         this.source = source
         this.file = file
+        this.#greenIndex = greenIndex
     }
 
     #root?: SyntaxNode
+
+    /**
+     * Per-top-level-element byte extents, present only on trees built by a clean
+     * `parse()` (CaaS tracker 3b).  Enables `withText`/`withChanges` to reuse
+     * unchanged elements instead of full-reparsing.  `@internal`.
+     */
+    readonly #greenIndex?: GreenIndex
 
     /**
      * The root of the syntax tree.
@@ -121,7 +131,7 @@ export class SyntaxTree {
      * don't change.
      */
     withText(newSource: string, options: ParseOptions = {}): ParseResult {
-        return parse(newSource, { file: this.file, ...options })
+        return this.#reparse(newSource, () => damageFromText(this.source, newSource), options)
     }
 
     /**
@@ -143,8 +153,49 @@ export class SyntaxTree {
      */
     withChanges(changes: readonly import('./textChange').TextChange[], options: ParseOptions = {}): ParseResult {
         const newSource = applyTextChanges(this.source, changes)
-        return parse(newSource, { file: this.file, ...options })
+        return this.#reparse(newSource, () => damageFromChanges(this.source, changes), options)
     }
+
+    /**
+     * Shared incremental-reparse path for `withText`/`withChanges` (CaaS 3b).
+     *
+     * Tries to reuse unchanged top-level elements via `incrementalReparse`; on
+     * any miss (no green index, no computable damage match, fragment boundary
+     * change, or a parse error in the window) it falls back to a full `parse()`
+     * so the result is always identical to a non-incremental reparse.
+     *
+     * When `SIGIL_INCREMENTAL_VERIFY=1`, the incremental tree is compared
+     * node-for-node against a full reparse and discarded on any mismatch.
+     */
+    #reparse(newSource: string, computeDamage: () => ReturnType<typeof damageFromText>, options: ParseOptions): ParseResult {
+        const file = options.file ?? this.file
+        if (this.#greenIndex !== undefined) {
+            const damage = computeDamage()
+            if (damage === null) {
+                // Identical source — reuse the existing program + index verbatim.
+                return { tree: new SyntaxTree(this.program, newSource, file, this.#greenIndex), diagnostics: [] }
+            }
+            const result = incrementalReparse(this.source, this.#greenIndex, newSource, damage)
+            if (result !== null) {
+                let { program, extents } = result
+                if (incrementalVerifyEnabled()) {
+                    const fullParsed = parseProgramWithExtents(newSource)
+                    if (stableStringify(program) !== stableStringify(fullParsed.program)) {
+                        program = fullParsed.program
+                        extents = fullParsed.extents
+                    }
+                }
+                return { tree: new SyntaxTree(program, newSource, file, extents), diagnostics: [] }
+            }
+        }
+        // Fallback: full reparse (also produces proper diagnostics on syntax errors).
+        return parse(newSource, { file, ...options })
+    }
+}
+
+/** Whether the `SIGIL_INCREMENTAL_VERIFY` correctness tripwire is enabled. */
+function incrementalVerifyEnabled(): boolean {
+    return typeof process !== 'undefined' && process.env?.SIGIL_INCREMENTAL_VERIFY === '1'
 }
 
 // ---------------------------------------------------------------------------
@@ -257,9 +308,10 @@ export interface LowerOptions extends InternalLowerOptions {
 export function parse(source: string, options: ParseOptions = {}): ParseResult {
     const file = options.file ?? '<input>'
     try {
-        const match = parseInternal(source)
-        const ast = addToAstSemantics(siliconGrammar)(match).toAst()
-        const tree = new SyntaxTree(ast as Program, source, file)
+        // Parse with per-element byte extents so the resulting tree can drive
+        // incremental reparses (CaaS tracker 3b).
+        const { program, extents } = parseProgramWithExtents(source)
+        const tree = new SyntaxTree(program, source, file, extents)
         return { tree, diagnostics: [] }
     } catch (err) {
         const msg = err instanceof Error ? err.message : String(err)

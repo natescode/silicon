@@ -89,6 +89,59 @@ class Parser {
         return ASTFactory.program(elements)
     }
 
+    /**
+     * Like `parseProgram`, but also records the byte span `[start, end)` of each
+     * top-level element group's token range (an element group is normally one
+     * node; a BlockDef expands to several nodes sharing one span).  The CaaS
+     * incremental parser uses these extents to reuse unchanged elements.
+     */
+    parseProgramWithExtents(): { program: Program; extents: ElementExtent[] } {
+        const elements: any[] = []
+        const extents: ElementExtent[] = []
+        while (!this.atEof()) {
+            const start = this.peek().start
+            const r = this.parseElement()
+            const end = this.toks[this.pos - 1].end
+            const nodes = Array.isArray(r) ? r : [r]
+            elements.push(...nodes)
+            extents.push({ nodes, start, end })
+        }
+        return { program: ASTFactory.program(elements), extents }
+    }
+
+    /**
+     * Parse only the top-level elements whose tokens fall in the byte window
+     * `[startByte, endByte)`, against the FULL source (so positions come out
+     * absolute and correct).  `startByte`/`endByte` must be element boundaries.
+     *
+     * Returns `null` (caller should full-reparse) when the window cannot be
+     * parsed as a clean run of complete elements — i.e. the parse throws, or an
+     * element straddles `endByte` (a merge/split changed the boundary).
+     */
+    parseFragment(startByte: number, endByte: number): FragmentResult | null {
+        // Seek to the first token at or after the window start.
+        this.pos = 0
+        while (this.pos < this.toks.length && this.toks[this.pos].start < startByte) this.pos++
+
+        const nodes: any[] = []
+        const extents: ElementExtent[] = []
+        try {
+            while (!this.atEof() && this.peek().start < endByte) {
+                const start = this.peek().start
+                const r = this.parseElement()
+                const end = this.toks[this.pos - 1].end
+                if (end > endByte) return null   // element crossed the suffix boundary
+                const groupNodes = Array.isArray(r) ? r : [r]
+                nodes.push(...groupNodes)
+                extents.push({ nodes: groupNodes, start, end })
+            }
+        } catch {
+            return null
+        }
+        const consumedEnd = extents.length > 0 ? extents[extents.length - 1].end : startByte
+        return { nodes, extents, consumedEnd }
+    }
+
     // Element = BlockDef | Item ";" | (DocComment — dead: '##' is a comment)
     private parseElement(): ASTNode | Definition[] {
         const t = this.peek()
@@ -570,6 +623,40 @@ class Parser {
 /** Parse Silicon source into the AST (identical to the ohm path's toAst). */
 export function parseToAst(sourceCode: string): Program {
     return new Parser(sourceCode).parseProgram()
+}
+
+// ── Incremental-parsing support (CaaS tracker 3b) ──────────────────────────
+
+/** Byte span `[start, end)` of one top-level element group's token range. */
+export interface ElementExtent {
+    /** The AST node(s) this element produced (>1 only for a BlockDef). */
+    readonly nodes: ASTNode[]
+    /** Byte offset of the group's first token (inclusive). */
+    readonly start: number
+    /** Byte offset just past the group's last token (exclusive). */
+    readonly end: number
+}
+
+/** Result of a windowed fragment parse. */
+export interface FragmentResult {
+    readonly nodes: ASTNode[]
+    readonly extents: ElementExtent[]
+    /** Byte offset just past the last element consumed in the window. */
+    readonly consumedEnd: number
+}
+
+/** Parse `src` to an AST plus per-top-level-element byte extents. */
+export function parseProgramWithExtents(src: string): { program: Program; extents: ElementExtent[] } {
+    return new Parser(src).parseProgramWithExtents()
+}
+
+/**
+ * Parse only the elements in byte window `[startByte, endByte)` of `src`, with
+ * absolute positions.  Returns `null` when the window isn't a clean element run
+ * (caller should full-reparse).
+ */
+export function parseProgramFragment(src: string, startByte: number, endByte: number): FragmentResult | null {
+    return new Parser(src).parseFragment(startByte, endByte)
 }
 
 export default parseToAst

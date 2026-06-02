@@ -21,6 +21,8 @@ import { readdirSync, readFileSync } from 'fs'
 import { join } from 'path'
 import fc from 'fast-check'
 import { parse } from '../../src/parser/index.ts'
+import { parse as caasParse } from '../../src/caas/index.ts'
+import { stableStringify } from '../../src/caas/incremental.ts'
 
 const CORPUS_DIR = join(import.meta.dirname, 'corpus')
 const LOCAL_BUDGET_MS = Number(process.env.SIGIL_FUZZ_BUDGET_MS ?? 60_000)
@@ -194,6 +196,42 @@ describe('parser fuzz: generative round-trip', () => {
 // it did when it was committed (either succeed, or fail with a structured
 // error — the parser must not throw an unstructured exception).
 // ---------------------------------------------------------------------------
+
+// ---------------------------------------------------------------------------
+// Incremental-parse equivalence (CaaS tracker 3b): for a generated program and
+// a random edit, `SyntaxTree.withText(edited)` must yield a tree node-for-node
+// identical to a full reparse of `edited` — fast path or fallback alike.
+// ---------------------------------------------------------------------------
+
+describe('parser fuzz: incremental ≡ full reparse', () => {
+    test('random edits on generated programs stay equivalent', () => {
+        const editArb = fc.tuple(
+            programArb,
+            fc.nat(),
+            fc.constantFrom('insert', 'delete', 'replace'),
+            fc.constantFrom(' ', '1', 'x', 'q', ';', '\n', ')', '+'),
+        )
+        fc.assert(
+            fc.property(editArb, ([src, n, op, ch]) => {
+                const at = src.length === 0 ? 0 : n % src.length
+                const edited =
+                    op === 'insert'  ? src.slice(0, at) + ch + src.slice(at) :
+                    op === 'delete'  ? src.slice(0, at) + src.slice(at + 1) :
+                                       src.slice(0, at) + ch + src.slice(at + 1)
+                const inc  = caasParse(src).tree.withText(edited)
+                const full = caasParse(edited)
+                if (stableStringify(inc.tree.program) !== stableStringify(full.tree.program)) {
+                    throw new Error(`incremental ≠ full for edit ${op}@${at} '${ch}' on ${JSON.stringify(src)}`)
+                }
+                if (stableStringify(inc.diagnostics) !== stableStringify(full.diagnostics)) {
+                    throw new Error(`diagnostics differ for edit ${op}@${at} '${ch}' on ${JSON.stringify(src)}`)
+                }
+                return true
+            }),
+            { numRuns: ROUNDTRIP_RUNS, interruptAfterTimeLimit: TARGET_BUDGET_MS },
+        )
+    })
+})
 
 describe('parser fuzz: corpus regressions', () => {
     const fixtures = corpusFiles()
