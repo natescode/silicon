@@ -58,6 +58,15 @@ export {
     type WorkspaceEdit,
 } from './caas/workspace'
 
+export {
+    // Metadata references — precompiled library symbol surfaces (CaaS tracker 3c)
+    MetadataReference,
+    type SymbolManifest,
+    type ManifestSymbol,
+    serializeManifest,
+    parseManifest,
+} from './caas/metadataReference'
+
 export { typeDisplayString, symbolDisplayString } from './ast/semanticModel'
 
 export {

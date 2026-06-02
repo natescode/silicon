@@ -50,6 +50,7 @@ import type { SiliconType } from '../types/types'
 import type { Diagnostic, SourceSpan } from '../errors/diagnostic'
 import type { TextEdit } from './codeAction'
 import type { LowerTarget } from '../ir/lower'
+import { MetadataReference, type SymbolManifest } from './metadataReference'
 
 // ---------------------------------------------------------------------------
 // Tier 1 LSP return types
@@ -175,6 +176,9 @@ export class Workspace {
     /** Reverse index: document URI → owning project (unassigned URIs are absent). */
     readonly #docToProject = new Map<string, Project>()
 
+    /** Workspace-global metadata references (CaaS tracker 3c), keyed by name. */
+    readonly #references = new Map<string, MetadataReference>()
+
     constructor(options: WorkspaceOptions = {}) {
         this.#registry = options.registry
     }
@@ -226,6 +230,43 @@ export class Workspace {
     /** The project a document belongs to, or undefined if it is unassigned. */
     projectOf(uri: string): Project | undefined {
         return this.#docToProject.get(uri)
+    }
+
+    // ── metadata references (CaaS tracker 3c) ──────────────────────────────────
+
+    /**
+     * Add a **workspace-global** metadata reference — a precompiled library's
+     * public symbol surface (no source).  Its symbols become available to
+     * **every** document for cross-document type checking, hover, and
+     * completion, exactly as if they were defined in another open document.
+     *
+     * For a reference visible only to one project (and its dependents), use
+     * {@link Project.addReference} instead.
+     *
+     * Replacing a reference of the same name updates it.  Returns the loaded
+     * {@link MetadataReference}.
+     */
+    addReference(manifest: SymbolManifest): MetadataReference {
+        const ref = new MetadataReference(manifest)
+        if (this.#references.has(ref.name)) this.#removeReferenceFromIndex(ref.name)
+        this.#references.set(ref.name, ref)
+        this.#addReferenceToIndex(ref)
+        return ref
+    }
+
+    /** Retrieve a workspace-global reference by name. */
+    getReference(name: string): MetadataReference | undefined {
+        return this.#references.get(name)
+    }
+
+    /** All workspace-global references, keyed by name. */
+    get references(): ReadonlyMap<string, MetadataReference> {
+        return this.#references
+    }
+
+    /** @internal Index a reference's symbols for navigation (called by Project too). */
+    _indexReference(ref: MetadataReference): void {
+        this.#addReferenceToIndex(ref)
     }
 
     // ── document map ──────────────────────────────────────────────────────────
@@ -684,7 +725,40 @@ export class Workspace {
                 }
             }
         }
+        // CaaS tracker 3c — metadata references.  Open-document symbols take
+        // precedence (added first), so a local definition shadows a library one.
+        const addRef = (ref: MetadataReference): void => {
+            for (const ms of ref.symbols.values()) {
+                if (!ext.has(ms.name)) ext.set(ms.name, ms.type)
+            }
+        }
+        for (const ref of this.#references.values()) addRef(ref)          // global
+        const owner = this.#docToProject.get(currentUri)                  // project-scoped
+        if (owner) {
+            for (const project of owner._depClosure()) {
+                for (const ref of project.references) addRef(ref)
+            }
+        }
         return ext
+    }
+
+    /** Add a reference's synthesized symbols to the (global) navigation index. */
+    #addReferenceToIndex(ref: MetadataReference): void {
+        for (const sym of ref.caasSymbols()) {
+            const existing = this.#symbolIndex.get(sym.name)
+            if (existing) existing.push({ uri: ref.uri, symbol: sym })
+            else this.#symbolIndex.set(sym.name, [{ uri: ref.uri, symbol: sym }])
+        }
+    }
+
+    /** Drop a reference's symbols from the navigation index (by its synthetic URI). */
+    #removeReferenceFromIndex(name: string): void {
+        const uri = `metadata:${name}`
+        for (const [n, entries] of this.#symbolIndex) {
+            const filtered = entries.filter(e => e.uri !== uri)
+            if (filtered.length === 0) this.#symbolIndex.delete(n)
+            else if (filtered.length !== entries.length) this.#symbolIndex.set(n, filtered)
+        }
     }
 
     /**
@@ -789,6 +863,7 @@ export class Project {
     readonly #ws: Workspace
     readonly #uris = new Set<string>()
     readonly #deps = new Set<Project>()
+    readonly #references = new Map<string, MetadataReference>()
 
     /** @internal Use {@link Workspace.addProject}, not this constructor. */
     constructor(ws: Workspace, name: string, target: LowerTarget) {
@@ -827,6 +902,25 @@ export class Project {
     /** The direct dependency edges added via {@link addDependency}. */
     get dependencies(): readonly Project[] {
         return [...this.#deps]
+    }
+
+    /**
+     * Add a metadata reference scoped to this project (CaaS tracker 3c) — a
+     * precompiled library's symbols become available to this project's documents
+     * and to any project that depends on it, but not workspace-wide.  Its symbols
+     * are also added to the global navigation index (hover / completion /
+     * go-to-definition are workspace-global).  Returns the loaded reference.
+     */
+    addReference(manifest: SymbolManifest): MetadataReference {
+        const ref = new MetadataReference(manifest)
+        this.#references.set(ref.name, ref)
+        this.#ws._indexReference(ref)
+        return ref
+    }
+
+    /** The metadata references attached to this project. */
+    get references(): readonly MetadataReference[] {
+        return [...this.#references.values()]
     }
 
     /** URIs of every document currently in this project. */

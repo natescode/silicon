@@ -486,6 +486,41 @@ edit a consumer to pick up newly-visible symbols. Navigation and completion
 (`findDefinition`, `getCompletions`, …) remain workspace-global — they ride the
 shared symbol index; per-project filtering of those is a planned follow-up.
 
+### Metadata references (tracker 3c)
+
+A `MetadataReference` exposes a **precompiled library's symbols** — its public
+surface without source — for type checking, hover, and completion. A
+`SymbolManifest` is plain JSON-serializable data (a `SiliconType` is a plain
+union), so a package ships its manifest beside its `.wasm`.
+
+```typescript
+const ws = new Workspace()
+
+const manifest: SymbolManifest = {
+    name: 'mathlib',
+    symbols: [{ name: 'add', kind: 'function',
+                type: { kind: 'Function', params: [INT, INT], result: INT } }],
+}
+
+ws.addReference(manifest)                       // global — visible to every document
+ws.openDocument('main.si', '@let r := &add 1, 2;')
+// `add` resolves through the reference; no "unbound identifier" error.
+
+// or scope it to a project (+ its dependents):
+const app = ws.addProject('app')
+app.addReference(manifest)
+```
+
+- `Workspace.addReference(manifest)` → global; `Project.addReference(manifest)` →
+  scoped to that project plus the projects that depend on it (same dependency
+  closure as cross-document symbols).
+- Open-document symbols **shadow** library symbols of the same name (source wins).
+- Reference symbols appear in hover / completion / `findDefinition`;
+  `findDefinition` returns the symbol with **no `definitionSpan`** (there is no
+  source to jump to).
+- `serializeManifest` / `parseManifest` are the JSON on-disk form. (Actual `.wasm`
+  linking is a codegen concern, outside the CaaS symbol surface.)
+
 ### Registry lifecycle in Workspace
 
 The Workspace builds the shared registry from the **first** document opened (unless
