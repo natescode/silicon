@@ -18,12 +18,20 @@
 
 import { readFileSync, existsSync } from 'fs'
 import { dirname, resolve, isAbsolute } from 'path'
+import { readStdlibModule, hasStdlibModule } from '../stdlib/stdlibSource'
 
 /**
  * Match `@use 'path';` (with optional whitespace) at start-of-line or after
  * whitespace, NOT inside a `#` line comment.  Group 1 is the path string.
  */
 const USE_RE = /^[ \t]*@use[ \t]+'([^'\n\r]+)'[ \t]*;[ \t]*(?:#[^\n\r]*)?$/gm
+
+/**
+ * A bare-name `@use 'io';` (a plain identifier — no `/`, no `.si` extension)
+ * resolves to a bundled standard-library module rather than a filesystem path.
+ * Anything path-like (`./x.si`, `../y/z.si`, `/abs/p.si`) keeps fs resolution.
+ */
+const BARE_RE = /^[A-Za-z_][A-Za-z0-9_-]*$/
 
 /** Phase 9d-6 — given a resolved stdlib path like
  *  `…/src/stdlib/rc.si`, return the wasm-gc shadow candidate
@@ -56,11 +64,23 @@ export interface ResolvedSource {
     visited: string[]
 }
 
+/** Resolves bundled standard-library modules for bare-name `@use`s. */
+export interface StdlibHook {
+    /** Source of stdlib module `rel` ('io.si' | 'gc/rc.si'), or undefined. */
+    read(rel: string): string | undefined
+    /** Whether stdlib module `rel` exists in the bundle. */
+    has(rel: string): boolean
+}
+
 export interface UseResolverOptions {
     /** Override file reads — used by tests and the WASIX in-memory loader. */
     readFile?: (absPath: string) => string | undefined
     /** Override file existence checks. */
     fileExists?: (absPath: string) => boolean
+    /** Override bundled-stdlib lookup (bare-name `@use`s).  Defaults to the
+     *  swappable stdlibSource module (filesystem in dev, inlined in the
+     *  browser / compiled binary).  Injected by tests. */
+    stdlib?: StdlibHook
     /** Phase 9d-6 — compile target.  When `'wasm-gc'`, `@use` paths
      *  ending in `…/stdlib/<name>.si` are first checked for a sibling
      *  `…/stdlib/gc/<name>.si`; if it exists, the gc variant is used
@@ -86,22 +106,38 @@ export function resolveUses(
 ): ResolvedSource {
     const readFile = options.readFile ?? ((p: string) => existsSync(p) ? readFileSync(p, 'utf-8') : undefined)
     const fileExists = options.fileExists ?? existsSync
+    const stdlib: StdlibHook = options.stdlib ?? { read: readStdlibModule, has: hasStdlibModule }
 
     const visited = new Set<string>()
     const visitOrder: string[] = []
-    /** Path of files currently on the resolution stack — for cycle detection. */
+    /** Keys of units currently on the resolution stack — for cycle detection. */
     const stack = new Set<string>()
     const parts: string[] = []
 
-    function visit(absPath: string, source: string) {
-        if (visited.has(absPath)) return
-        if (stack.has(absPath)) {
-            throw new Error(`@use cycle detected: ${[...stack, absPath].join(' -> ')}`)
-        }
-        stack.add(absPath)
+    /** A resolved `@use` target: a filesystem file, or a bundled stdlib module.
+     *  `key` is the dedup/cycle identity — an absolute path, or a synthetic
+     *  `std:<rel>` for stdlib modules. */
+    type Unit =
+        | { kind: 'fs', key: string, raw: string, abs: string }
+        | { kind: 'std', key: string, raw: string, rel: string }
 
-        const baseDir = dirname(absPath)
-        const uses: { abs: string, raw: string }[] = []
+    /** Map a bare module name to its bundled relative path, honouring the
+     *  wasm-gc shadow (`rc` -> `gc/rc.si` under --target=wasm-gc).  Returns
+     *  null when no such bundled module exists. */
+    function resolveStdlibRel(name: string): string | null {
+        if (options.target === 'wasm-gc' && stdlib.has(`gc/${name}.si`)) return `gc/${name}.si`
+        const rel = `${name}.si`
+        return stdlib.has(rel) ? rel : null
+    }
+
+    function visit(key: string, source: string, baseDir: string) {
+        if (visited.has(key)) return
+        if (stack.has(key)) {
+            throw new Error(`@use cycle detected: ${[...stack, key].join(' -> ')}`)
+        }
+        stack.add(key)
+
+        const uses: Unit[] = []
         USE_RE.lastIndex = 0
         let match: RegExpExecArray | null
         while ((match = USE_RE.exec(source)) !== null) {
@@ -111,6 +147,18 @@ export function resolveUses(
             const line = source.slice(lineStart, lineEnd < 0 ? source.length : lineEnd)
             if (isCommentedOut(line)) continue
             const raw = match[1]
+
+            // Bare name (`@use 'io';`) — resolve from the bundled stdlib.
+            if (BARE_RE.test(raw)) {
+                const rel = resolveStdlibRel(raw)
+                if (rel === null) {
+                    throw new Error(`@use: unknown stdlib module '${raw}' (no bundled std/${raw}.si) from ${key}`)
+                }
+                uses.push({ kind: 'std', key: `std:${rel}`, raw, rel })
+                continue
+            }
+
+            // Path form (`@use './x.si';`) — resolve against the filesystem.
             let abs = isAbsolute(raw) ? raw : resolve(baseDir, raw)
             // Phase 9d-6 — wasm-gc stdlib shadow.
             if (options.target === 'wasm-gc') {
@@ -118,32 +166,42 @@ export function resolveUses(
                 if (shadow && fileExists(shadow)) abs = shadow
             }
             if (!fileExists(abs)) {
-                throw new Error(`@use cannot resolve '${raw}' (looked for ${abs}) from ${absPath}`)
+                throw new Error(`@use cannot resolve '${raw}' (looked for ${abs}) from ${key}`)
             }
-            uses.push({ abs, raw })
+            uses.push({ kind: 'fs', key: abs, raw, abs })
         }
 
         for (const u of uses) {
-            const child = readFile(u.abs)
-            if (child === undefined) {
-                throw new Error(`@use cannot read '${u.raw}' (resolved to ${u.abs}) from ${absPath}`)
+            if (u.kind === 'std') {
+                const child = stdlib.read(u.rel)
+                if (child === undefined) {
+                    throw new Error(`@use cannot read stdlib module '${u.raw}' (std/${u.rel}) from ${key}`)
+                }
+                // stdlib modules reference siblings by bare name, so their
+                // baseDir is irrelevant — pass an empty base.
+                visit(u.key, child, '')
+            } else {
+                const child = readFile(u.abs)
+                if (child === undefined) {
+                    throw new Error(`@use cannot read '${u.raw}' (resolved to ${u.abs}) from ${key}`)
+                }
+                visit(u.key, child, dirname(u.abs))
             }
-            visit(u.abs, child)
         }
 
-        stack.delete(absPath)
-        visited.add(absPath)
-        visitOrder.push(absPath)
+        stack.delete(key)
+        visited.add(key)
+        visitOrder.push(key)
         // Strip the @use directives from the contributed source so the
         // parser never sees them.
-        const stripped = source.replace(USE_RE, (line) => {
+        const stripped = source.replace(USE_RE, () => {
             // Preserve the line break so source locations stay close-ish.
             return ''
         })
-        parts.push(`# region @use ${absPath}\n${stripped}\n# endregion ${absPath}`)
+        parts.push(`# region @use ${key}\n${stripped}\n# endregion ${key}`)
     }
 
-    visit(entryPath, entrySource)
+    visit(entryPath, entrySource, dirname(entryPath))
 
     return {
         source: parts.join('\n'),

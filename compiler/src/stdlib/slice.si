@@ -21,7 +21,7 @@
 # 4-byte elements; slice_get_byte assumes 1-byte) so the same slice
 # can be addressed at the right width without runtime type machinery.
 #
-#   @use '/path/to/sigil/src/stdlib/slice.si';
+#   @use 'slice';
 #   @local buf:Int := &alloc 16;
 #   @local s:Slice[Int] := &Slice buf, 4;
 #   @local v:Int := &slice_get_i32 s, 2;
@@ -79,8 +79,8 @@
 # header constrains `i`); use the `slice_at_*` form at trust boundaries
 # where the index could be anything.
 #
-# Prerequisite: `@use src/stdlib/option.si;` before this file so the
-# `Option[T]` type and the Some / None constructors are in scope.
+# Prerequisite: `@use 'option';` before this file so the `Option[T]` type and
+# the Some / None constructors are in scope.
 
 # 0 ≤ i < s.len  →  the canonical in-range predicate.  Silicon's `&`
 # isn't a binary operator, so we nest `&@if` instead of `cond1 && cond2`.

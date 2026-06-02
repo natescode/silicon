@@ -4,7 +4,7 @@
 # Result models a computation that may succeed with a T or fail with an E.
 # Implemented as a parametric sum type with two type parameters.
 #
-#   @use '/path/to/sigil/src/stdlib/result.si';
+#   @use 'result';
 #   @local ok  := &Ok 42;        ;; inferred Result[Int, ?E]
 #   @local err := &Err 'oops';   ;; inferred Result[?T, String]
 #   @local x   := &result_unwrap_or ok, 0;

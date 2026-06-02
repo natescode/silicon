@@ -7,7 +7,7 @@
 # produced by the src/ compiler.
 #
 # Usage from user code:
-#   @use 'path/to/src/stdlib/io.si';
+#   @use 'io';
 #   &write_str 1, 'Hello, world!';
 #   &write_nl  1;
 

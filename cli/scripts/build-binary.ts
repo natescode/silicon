@@ -46,7 +46,7 @@ const targets = requested.length ? requested : [hostPlatform()]
 const inlineAssets: BunPlugin = {
     name: 'inline-builtin-assets',
     setup(build) {
-        build.onResolve({ filter: /[\\/](strataSource|stdWatSource|platformSource|moduleSources)$/ }, args => {
+        build.onResolve({ filter: /[\\/](strataSource|stdWatSource|platformSource|moduleSources|stdlibSource)$/ }, args => {
             const suffix = args.path.endsWith('moduleSources') ? '.native.ts' : '.browser.ts'
             return { path: join(dirname(args.importer), args.path + suffix) }
         })

@@ -18,7 +18,7 @@
 # stable across grow operations — only `data_ptr` changes on realloc.
 # Callers don't have to rebind the variable after a push.
 #
-#   @use '/path/to/sigil/src/stdlib/vec.si';
+#   @use 'vec';
 #   @local v := &vec_new 4;          ;; initial capacity 4
 #   &vec_push_i32 v, 42;
 #   &vec_push_i32 v, 99;

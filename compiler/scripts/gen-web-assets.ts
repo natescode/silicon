@@ -2,7 +2,7 @@
 /**
  * Generate src/assets.generated.ts — the inlined, filesystem-free copy of
  * every compiler asset the pipeline reads at runtime (grammar, strata,
- * built-in modules, std.wat, web platform).
+ * built-in modules, std.wat, stdlib, web platform).
  *
  * This exists so the compiler can run in a browser, where there is no
  * filesystem. The Bun/Node toolchain still reads these files from disk via
@@ -32,9 +32,22 @@ function readSiDir(rel: string): Record<string, string> {
     return out
 }
 
+/** Read the stdlib into a { relpath: contents } map: top-level `*.si` plus the
+ *  `gc/` shadow subdir (keyed `gc/<name>.si`).  Drives bare-name `@use 'io';`
+ *  resolution from the inlined copy in the browser / compiled-binary builds. */
+function readStdlib(): Record<string, string> {
+    const out: Record<string, string> = readSiDir('stdlib')
+    const gcDir = join(SRC, 'stdlib', 'gc')
+    for (const f of readdirSync(gcDir).filter(f => f.endsWith('.si')).sort()) {
+        out[`gc/${f}`] = readFileSync(join(gcDir, f), 'utf-8')
+    }
+    return out
+}
+
 const stdWat = read('codegen/std.wat')
 const strata = readSiDir('strata')
 const builtinModules = readSiDir('strata/modules')
+const stdlib = readStdlib()
 
 // Web platform: metadata + every .si file in the directory.
 const platformWebMeta = JSON.parse(read('platforms/web/platform.json'))
@@ -54,6 +67,8 @@ export const STRATA: Record<string, string> = ${recordLit(strata)}
 
 export const BUILTIN_MODULES: Record<string, string> = ${recordLit(builtinModules)}
 
+export const STDLIB: Record<string, string> = ${recordLit(stdlib)}
+
 export const PLATFORM_WEB: { meta: unknown; files: Record<string, string> } = {
     meta: ${JSON.stringify(platformWebMeta)},
     files: ${recordLit(platformWebFiles)},
@@ -64,4 +79,5 @@ const dest = join(SRC, 'assets.generated.ts')
 writeFileSync(dest, out)
 console.log(`Wrote ${dest} (${(out.length / 1024).toFixed(1)} KiB) — ` +
     `${Object.keys(strata).length} strata, ${Object.keys(builtinModules).length} modules, ` +
+    `${Object.keys(stdlib).length} stdlib, ` +
     `${Object.keys(platformWebFiles).length} web platform files`)
