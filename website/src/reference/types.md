@@ -59,26 +59,26 @@ A `Slice[T]` is `{ ptr:Int, len:Int }` — bounds-checked at runtime by
 
 ## Structs
 
-`@struct Point x:Int, y:Int;` lays out fields contiguously. The
+`@struct Point x Int, y Int;` lays out fields contiguously. The
 constructor function `$Point` returns a pointer to the heap-allocated
 struct. Nested structs compute their size at compile time
 (`size_of(T)` is a comptime constant).
 
 ## Sum types
 
-`@type Shape := $Circle r:Int | $Rect w:Int, h:Int;` pads each variant
+`@type Shape := $Circle r Int | $Rect w Int, h Int;` pads each variant
 to the max payload width. Layout: `[tag:i32, field0:i32, …,
 field<max-1>:i32]` with zero-init in unused slots.
 
-Parametric sum types: `@type Option[T] := $Some value:T | $None;`.
-`:Option[Int]` and `:Option[Float]` are nominally distinct.
+Parametric sum types: `@type Option[T] := $Some value T | $None;`.
+`Option[Int]` and `Option[Float]` are nominally distinct.
 
 ## Function types
 
-`:$fn _:Int _:Int _:Int` is the annotation for a function taking
-`(Int, Int)` and returning `Int`. Function values are indexes into the
-WebAssembly function reference table; calls go through
-`call_indirect`.
+`(Int, Int) -> Int` is a function type — a function taking two `Int`
+arguments and returning `Int`. In a signature line: `\\ apply ((Int, Int) -> Int, Int) -> Int`.
+Function values are indexes into the WebAssembly function reference
+table; calls go through `call_indirect`.
 
 ## Type aliases / distinct types
 

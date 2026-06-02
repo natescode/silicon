@@ -10,9 +10,11 @@ reference page for the long version.
 ## Functions
 
 ```silicon
-@fn add a:Int, b:Int := { a + b };
+\\ add (Int, Int) -> Int
+@fn add a, b := { a + b };
 
-@fn square n:Int := { n * n };
+\\ square (Int) -> Int
+@fn square n := { n * n };
 
 @fn main := {
     &add (&square 3), 1
@@ -21,8 +23,8 @@ reference page for the long version.
 @export main;
 ```
 
-Calls are prefix with `&`: `&add 1, 2`. Definitions use `:=`. Type
-annotations follow the colon: `a:Int`.
+Calls are prefix with `&`: `&add 1, 2`. Definitions use `:=`. Types go on
+a preceding signature line: `\\ add (Int, Int) -> Int`.
 
 ## Types
 
@@ -42,9 +44,10 @@ Conversions are explicit — `&@toInt64 x`, `&@toInt x` (also handles
 ## Sum types
 
 ```silicon
-@type Shape := $Circle r:Int | $Rect w:Int, h:Int;
+@type Shape := $Circle r Int | $Rect w Int, h Int;
 
-@fn area s:Shape := {
+\\ area (Shape) -> Int
+@fn area s := {
     &@match s,
         $Circle r => r * r * 3,
         $Rect w h => w * h
@@ -57,13 +60,15 @@ Parametric sum types use `@type T[X] := …`. See
 ## Generics + HM-lite inference
 
 ```silicon
-@fn id[T] x:T := x;
+\\ id[T] T -> T
+@fn id x := x;
 
-@fn pair[T] a:T, b:T := { … };
+\\ pair[T] (T, T)
+@fn pair a, b := { … };
 
 @fn main := {
-    @let n:Int := &id 42;        # T = Int
-    @let s:Str := &id "hello";   # T = Str
+    @let n := &id 42;        # T = Int
+    @let s := &id "hello";   # T = Str
     0
 };
 ```
@@ -74,10 +79,10 @@ No explicit `[Int]` at the call site. See
 ## Structs
 
 ```silicon
-@struct Point x:Int, y:Int;
+@struct Point x Int, y Int;
 
 @fn main := {
-    @local p:Point := &Point 3, 4;
+    @local p := &Point 3, 4;
     p.x + p.y
 };
 ```
@@ -88,15 +93,17 @@ contiguously.
 ## Control flow
 
 ```silicon
-@fn classify n:Int := {
+\\ classify (Int) -> Int
+@fn classify n := {
     &@if n < 0, { &@return -1 };
     &@if n == 0, { &@return 0  };
     1
 };
 
-@fn sum_to n:Int := {
-    @var total:Int := 0;
-    @var i:Int := 1;
+\\ sum_to (Int) -> Int
+@fn sum_to n := {
+    @var total := 0;
+    @var i := 1;
     &@loop i <= n, {
         total = total + i;
         i = i + 1;
@@ -119,7 +126,8 @@ every exit:
 ## Error handling
 
 ```silicon
-@fn parse_user line:Str := &Result[User, Str] {
+\\ parse_user (Str) -> Result[User, Str]
+@fn parse_user line := {
     &@try (&parse_name line),     # propagates Err
     &@try (&parse_age line),
     &Ok (&User name age)
@@ -134,9 +142,10 @@ prefix-keyword (Silicon bans postfix operators).
 Default allocation is bump from the heap. Scoped allocation:
 
 ```silicon
-@fn process data:Slice[u8] := {
+\\ process (Slice[u8])
+@fn process data := {
     &@with_arena {
-        @local tmp:Vec[Int] := &Vec::new;
+        @local tmp := &Vec::new;
         # … all allocations here go in the arena;
         # heap reset on scope exit
         &compute &tmp
@@ -155,7 +164,8 @@ To keep a value past the scope, `&move_to_parent_arena value`. See
     &Compiler::on::lower '@my_keyword', MyKeyword_lower;
 };
 
-@fn MyKeyword_lower node:Int := {
+\\ MyKeyword_lower (Int)
+@fn MyKeyword_lower node := {
     # … build IR with &Compiler::ir::* calls
 };
 ```

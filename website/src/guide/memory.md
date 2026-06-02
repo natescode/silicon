@@ -39,10 +39,11 @@ answer:
 For programs that **loop**, this is a one-way ratchet:
 
 ```silicon
-@fn server_loop:Int := {
-    @var i:Int := 0;
+\\ server_loop () -> Int
+@fn server_loop := {
+    @var i := 0;
     &@loop i < 1000000, {
-        @local response:String := &str_concat 'reply: ', (&handle_request i);
+        @local response := &str_concat 'reply: ', (&handle_request i);
         &send response;
         i = i + 1;
     };
@@ -74,11 +75,12 @@ break the ratchet.
 Rewriting the server loop with an arena:
 
 ```silicon
-@fn server_loop:Int := {
-    @var i:Int := 0;
+\\ server_loop () -> Int
+@fn server_loop := {
+    @var i := 0;
     &@loop i < 1000000, {
         &@with_arena {
-            @local response:String := &str_concat 'reply: ', (&handle_request i);
+            @local response := &str_concat 'reply: ', (&handle_request i);
             &send response;
         };
         i = i + 1;
@@ -96,13 +98,13 @@ the heap pointer to the inner entry; the outer arena's exit further
 restores to the outer entry.
 
 ```silicon
-&@with_arena {                      # heap = H0
-    @local a:String := 'outer';     # heap = H1
+&@with_arena {                    # heap = H0
+    @local a := 'outer';          # heap = H1
     &@with_arena {
-        @local b:String := 'inner'; # heap = H2
-    };                              # heap restored to H1
-    @local c:String := 'more';      # heap = H1' > H1
-};                                  # heap restored to H0
+        @local b := 'inner';      # heap = H2
+    };                            # heap restored to H1
+    @local c := 'more';           # heap = H1' > H1
+};                                # heap restored to H0
 ```
 
 ---
@@ -115,9 +117,10 @@ error: the inner pointer would dangle. The fix is to **promote** the
 value to the parent arena before the reset:
 
 ```silicon
-@fn greet:String name:String := &@with_arena {
-    @local hello:String := &str_concat 'hello, ', name;
-    @local with_punct:String := &str_concat hello, '!';
+\\ greet (String) -> String
+@fn greet name := &@with_arena {
+    @local hello := &str_concat 'hello, ', name;
+    @local with_punct := &str_concat hello, '!';
     # ... work that allocates scratch strings ...
     &@move_to_parent_arena with_punct
 };
@@ -186,9 +189,9 @@ observe the bump pointer:
 
 ```silicon
 &@with_arena {
-    @local saved:Int := &heap_get;
+    @local saved := &heap_get;
     # ... do work ...
-    @local cost:Int := &arena_used saved;
+    @local cost := &arena_used saved;
     &@if cost > 1000000, { &log_warn cost }, {};
 };
 ```
@@ -208,7 +211,8 @@ pointers.
 ```silicon
 @use '/path/to/sigil/src/stdlib/rc.si';
 
-@fn share:Int := {
+\\ share () -> Int
+@fn share := {
     @local r := &rc_new 42;
     &@defer &rc_drop r;          # auto-decrement on every return path
     @local r2 := &rc_clone r;     # bumps count to 2

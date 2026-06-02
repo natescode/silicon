@@ -14,7 +14,8 @@ its registered for. Three lines in a `.si` file:
     &Compiler::on::module_finalize CountDecls_on_finalize;
 };
 
-@fn CountDecls_on_decl _node:Int := {
+\\ CountDecls_on_decl (Int)
+@fn CountDecls_on_decl _node := {
     &state::stratum::set 'seen', (&state::stratum::get 'seen') + 1
 };
 
@@ -27,8 +28,11 @@ its registered for. Three lines in a `.si` file:
 Now anywhere in user code:
 
 ```silicon
-@count add a:Int, b:Int := { a + b };
-@count square n:Int := { n * n };
+\\ add (Int, Int) -> Int
+@count add a, b := { a + b };
+
+\\ square (Int) -> Int
+@count square n := { n * n };
 ```
 
 …compiles cleanly and emits one warning at module-finalize time:
