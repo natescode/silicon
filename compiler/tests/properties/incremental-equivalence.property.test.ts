@@ -213,6 +213,33 @@ describe('incremental parse via withChanges (3b/M1)', () => {
     })
 })
 
+describe('M3: zero-copy suffix reuse across newline edits', () => {
+    test('a newline-inserting edit reuses suffix descendants by reference', () => {
+        const src = '@let a := 1;\n@let b := 2;\n@let c := 3;'
+        const { extents } = parseProgramWithExtents(src)
+        const oldB = (extents[1].nodes[0] as any)        // old `@let b` Definition
+        const edited = '@let a := 1;\n\n@let b := 2;\n@let c := 3;'   // blank line inserted (ΔLines=1)
+
+        const dmg = damageFromText(src, edited)!
+        const res = incrementalReparse(src, extents, edited, dmg)
+        expect(res).not.toBeNull()
+
+        // Byte-identical to a full reparse — the M1 path could NOT do this for a
+        // newline edit (stale absolute spans); M3 can.
+        expect(stableStringify(res!.program))
+            .toBe(stableStringify(parseProgramWithExtents(edited).program))
+
+        const newB = (res!.program as any).elements.find((e: any) => e?.name?.name === 'b')
+        expect(newB).toBeDefined()
+        // The element root is a shallow clone (its elemBase shifted by the edit)…
+        expect(newB).not.toBe(oldB)
+        expect(newB.elemBase).toBe(oldB.elemBase + (edited.length - src.length))
+        // …but its descendants are the SAME objects — zero-copy reuse.
+        expect(newB.name).toBe(oldB.name)
+        expect(newB.binding).toBe(oldB.binding)
+    })
+})
+
 describe('incremental fast path is actually exercised', () => {
     test('a real fraction of eligible edits reused work', () => {
         // fastEligible is accumulated by the equivalence tests above; require the

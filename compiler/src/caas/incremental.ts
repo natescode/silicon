@@ -28,7 +28,6 @@
 
 import type { Program } from '../ast/astNodes'
 import { ASTFactory } from '../ast/astNodes'
-import { computeLineStarts, lineColumnAt } from '../parser/handwritten/lexer'
 import { parseProgramFragment, type ElementExtent } from '../parser/parser'
 import { rangeToOffsets } from './textChange'
 import type { TextChange } from './textChange'
@@ -40,6 +39,8 @@ export type GreenIndex = readonly ElementExtent[]
 export interface IncrementalResult {
     readonly program: Program
     readonly extents: ElementExtent[]
+    /** Top-level elements reused (prefix + suffix) rather than reparsed. */
+    readonly reusedElements: number
 }
 
 /** The byte region an edit damaged, in OLD-source coordinates. */
@@ -125,18 +126,13 @@ export function incrementalReparse(
 
     const windowStartByte = prefix.length > 0 ? prefix[prefix.length - 1].end : 0
 
-    // Decide whether the suffix can be reused verbatim: its stored absolute
-    // positions are unchanged only when the edit added/removed no newlines AND
-    // no suffix element shares the edit's end line (a same-line column shift).
+    // M3: the suffix can be reused for ANY edit (including newline-changing ones).
+    // Its descendants' `relSpan` is element-relative (position-independent); only
+    // each element root's `elemBase` shifts by `delta`.  No stale absolute span,
+    // because caas trees carry none.  (The boundary guard below still rejects a
+    // suffix whose leading `;` the edit merged away.)
     const firstSuffix = suffix[0]
-    let reuseSuffix = false
-    if (firstSuffix !== undefined && countNewlines(newSource) === countNewlines(oldSource)) {
-        const oldLineStarts = computeLineStarts(oldSource)
-        const damageEndLine = lineColumnAt(oldLineStarts, oldSource, damage.endOld).line
-        const firstSuffixLine = lineColumnAt(oldLineStarts, oldSource, firstSuffix.start).line
-        reuseSuffix = firstSuffixLine > damageEndLine
-    }
-
+    const reuseSuffix = firstSuffix !== undefined
     const windowEndByteNew = reuseSuffix ? firstSuffix.start + delta : newSource.length
 
     // No reuse possible (window is the whole file) → let the caller full-reparse.
@@ -158,7 +154,11 @@ export function incrementalReparse(
 
     const elements = [...prefixNodes, ...frag.nodes, ...suffixNodes]
     const extents = [...prefix, ...frag.extents, ...suffixExtents]
-    return { program: ASTFactory.program(elements as any), extents }
+    return {
+        program: ASTFactory.program(elements as any),
+        extents,
+        reusedElements: prefix.length + suffixExtents.length,
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -193,10 +193,4 @@ function shiftElemBase<T extends object>(nodes: readonly T[], delta: number): T[
         const base = (root as { elemBase?: number }).elemBase
         return base === undefined ? root : { ...root, elemBase: base + delta }
     })
-}
-
-function countNewlines(s: string): number {
-    let n = 0
-    for (let i = 0; i < s.length; i++) if (s.charCodeAt(i) === 10) n++
-    return n
 }

@@ -651,7 +651,13 @@ function relativizeElement(nodes: ASTNode[], base: number): void {
 
 function relativizeSpans(node: any, base: number): void {
     if (node === null || typeof node !== 'object') return
-    if (node.relSpan) node.relSpan = { start: node.relSpan.start - base, end: node.relSpan.end - base }
+    if (node.relSpan) {
+        node.relSpan = { start: node.relSpan.start - base, end: node.relSpan.end - base }
+        // M3 Stage C: caas trees carry positions only as relSpan (+ element
+        // elemBase), so reused suffix nodes never hold a stale absolute span.
+        // The typechecker re-derives sourceLocation via the PositionTable.
+        delete node.sourceLocation
+    }
     for (const child of astChildren(node)) relativizeSpans(child, base)
 }
 

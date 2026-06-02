@@ -52,12 +52,21 @@ function bumpDigitFrom(src: string, from: number): string {
     return src.slice(0, i) + src[i] + src.slice(i)
 }
 
+/** Insert a blank line near the middle — a newline-changing edit (M3 reuses the
+ *  suffix across it; M1 fell back to reparsing it). */
+function insertLineMid(src: string): string {
+    let i = src.indexOf('\n', Math.floor(src.length / 2))
+    if (i < 0) i = src.length
+    return src.slice(0, i) + '\n' + src.slice(i)
+}
+
 function makeEdits(src: string): { label: string; edited: string }[] {
     return [
-        { label: 'edit-first', edited: bumpDigitFrom(src, 0) },
-        { label: 'edit-mid',   edited: bumpDigitFrom(src, Math.floor(src.length / 2)) },
-        { label: 'edit-last',  edited: bumpDigitFrom(src, src.length - 120) },
-        { label: 'append',     edited: src + '\\\\ extra () -> Int\n@fn extra := { 1 };\n' },
+        { label: 'edit-first',  edited: bumpDigitFrom(src, 0) },
+        { label: 'edit-mid',    edited: bumpDigitFrom(src, Math.floor(src.length / 2)) },
+        { label: 'edit-last',   edited: bumpDigitFrom(src, src.length - 120) },
+        { label: 'insert-line', edited: insertLineMid(src) },
+        { label: 'append',      edited: src + '\\\\ extra () -> Int\n@fn extra := { 1 };\n' },
     ]
 }
 
@@ -76,10 +85,7 @@ function reuseFraction(src: string, edited: string): number {
     const res = incrementalReparse(src, extents, edited, dmg)
     if (res === null) return 0
     const total = res.extents.length
-    // Reparsed groups are those whose node identity is NOT shared with the old tree.
-    const oldNodes = new Set(extents.map(e => e.nodes[0]))
-    const reused = res.extents.filter(e => oldNodes.has(e.nodes[0])).length
-    return total === 0 ? 1 : reused / total
+    return total === 0 ? 1 : res.reusedElements / total
 }
 
 interface Tier { name: string; fns: number; stmts: number }
