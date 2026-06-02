@@ -35,6 +35,8 @@ If you're new, start with [`getting-started.md`](getting-started.md).
 | [use-includes.md](use-includes.md) | `@use 'path.si';` resolution semantics |
 | [comptime-via-compilation.md](comptime-via-compilation.md) | The Zig-style comptime engine design |
 | [lockfile-format.md](lockfile-format.md) | `sgl.lock` format spec (story 6b-13) |
+| [qbe-self-host-plan.md](qbe-self-host-plan.md) | The chosen long-term plan: self-host Silicon to native via QBE, retiring Bun (proposal) |
+| [replacing-bun.md](replacing-bun.md) | Cheap interim: drop Bun from the shipped binary via Deno `compile` (proposal) |
 
 ## Stability — what's promised, what isn't
 
