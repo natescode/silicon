@@ -60,7 +60,7 @@ describe('Symbol.definitionSpan', () => {
         const { tree: elab, registry } = elaborate(tree, reg)
         const { model } = typecheck(elab, registry)
         const sym = model.symbolNamed('foo')!
-        expect(sym.definitionSpan!.file).toBe('')  // spanFromLocation uses empty file by default
+        expect(sym.definitionSpan!.file).toBe('my.si')
     })
 
     test('multi-line: definitionSpan.line reflects actual line number', () => {

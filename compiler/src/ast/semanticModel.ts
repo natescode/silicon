@@ -16,6 +16,55 @@ import { spanFromLocation } from '../errors/diagnostic'
 import type { SourceLocation } from './astNodes'
 
 // ---------------------------------------------------------------------------
+// Type display
+// ---------------------------------------------------------------------------
+
+/** Format a SiliconType for human display (e.g. in hover tooltips). */
+export function typeDisplayString(type: SiliconType | undefined): string {
+    if (!type) return '?'
+    switch (type.kind) {
+        case 'Int':       return 'Int'
+        case 'Int64':     return 'Int64'
+        case 'Float':     return 'Float'
+        case 'String':    return 'String'
+        case 'Bool':      return 'Bool'
+        case 'UInt8':     return 'UInt8'
+        case 'UInt16':    return 'UInt16'
+        case 'UInt32':    return 'UInt32'
+        case 'UInt64':    return 'UInt64'
+        case 'Void':      return 'Void'
+        case 'Unknown':   return '?'
+        case 'Variable':  return type.name
+        case 'Distinct':  return type.name
+        case 'Sum':       return type.name
+        case 'Array':     return `Array[${typeDisplayString(type.element)}]`
+        case 'Vec':       return `Vec[${typeDisplayString(type.element)}]`
+        case 'Function': {
+            const params = type.params.map(typeDisplayString).join(', ')
+            return `${params} → ${typeDisplayString(type.result)}`
+        }
+    }
+}
+
+/** Format a Symbol for hover/completion display. */
+export function symbolDisplayString(sym: Symbol): string {
+    const t = sym.type
+    switch (sym.kind) {
+        case 'function': {
+            if (t?.kind === 'Function') {
+                const params = t.params.map(typeDisplayString).join(', ')
+                return `(fn ${sym.name}) ${params} → ${typeDisplayString(t.result)}`
+            }
+            return `(fn ${sym.name})`
+        }
+        case 'variable':  return `(let ${sym.name}) ${typeDisplayString(t)}`
+        case 'parameter': return `(param ${sym.name}) ${typeDisplayString(t)}`
+        case 'type':      return `(type ${sym.name})`
+        case 'stratum':   return `(stratum ${sym.name})`
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Public types
 // ---------------------------------------------------------------------------
 
@@ -29,6 +78,24 @@ export interface Symbol {
     readonly type: SiliconType | undefined
     /** Source span of the definition's name identifier, if location info is available. */
     readonly definitionSpan?: SourceSpan
+    /**
+     * All declaration sites for this symbol (Roslyn 2d parity).
+     *
+     * Currently equivalent to `definitionSpan ? [definitionSpan] : []`.
+     * Will grow to include multiple sites when partial definitions are
+     * supported (not yet in Silicon).
+     */
+    readonly locations: readonly SourceSpan[]
+    /**
+     * The enclosing symbol, if any (Roslyn 2c parity).
+     *
+     * `undefined` for top-level definitions.  Will point to the enclosing
+     * function for parameter symbols once parameters are added to the symbol
+     * table (a planned typechecker enhancement).
+     */
+    readonly containingSymbol?: Symbol
+    /** Human-readable type signature, e.g. "(fn add) Int, Int → Int". */
+    readonly displayString: string
 }
 
 /** A half-open [start, end) line/col range for diagnostic queries. */
@@ -62,9 +129,15 @@ export class SemanticModel {
 
     // ── type queries ─────────────────────────────────────────────────────────
 
-    /** Inferred SiliconType for `node`, or undefined if none was recorded. */
+    /**
+     * Inferred SiliconType for `node`, or undefined if none was recorded.
+     *
+     * Accepts either a raw AST node or a `SyntaxNode` (which wraps the raw
+     * node in `._node`).  Passing a `SyntaxNode` from `SyntaxTree.root` is
+     * the recommended pattern for CaaS consumers.
+     */
     typeOf(node: object): SiliconType | undefined {
-        return this.#types.get(node)
+        return this.#types.get(unwrap(node))
     }
 
     // ── symbol queries ────────────────────────────────────────────────────────
@@ -72,9 +145,11 @@ export class SemanticModel {
     /**
      * The Symbol that `node` resolves to, if `node` is a Namespace reference
      * or any node whose identity was recorded during typechecking.
+     *
+     * Accepts either a raw AST node or a `SyntaxNode`.
      */
     symbolAt(node: object): Symbol | undefined {
-        const name = this.#nodeToSymbolName.get(node)
+        const name = this.#nodeToSymbolName.get(unwrap(node))
         if (!name) return undefined
         return this.#symbols.get(name)
     }
@@ -103,6 +178,17 @@ export class SemanticModel {
      */
     referenceSpans(symbol: Symbol): readonly SourceSpan[] {
         return this.#symbolToSpans.get(symbol.name) ?? []
+    }
+
+    /**
+     * All source spans where any symbol named `name` is referenced.
+     *
+     * Equivalent to `referenceSpans(symbolNamed(name)!)` but works without
+     * having a Symbol object in hand — useful for cross-document aggregation
+     * where the defining document is different from the queried one.
+     */
+    referenceSpansForName(name: string): readonly SourceSpan[] {
+        return this.#symbolToSpans.get(name) ?? []
     }
 
     /**
@@ -147,6 +233,14 @@ export class SemanticModel {
 // ---------------------------------------------------------------------------
 // Internal helpers
 // ---------------------------------------------------------------------------
+
+/**
+ * Unwrap a SyntaxNode to its raw AST node, or return the node unchanged.
+ * Avoids a circular import between ast/ and caas/ by duck-typing on `_node`.
+ */
+function unwrap(node: object): object {
+    return '_node' in node ? (node as { _node: object })._node : node
+}
 
 /** True when the 1-based `(line, col)` cursor falls inside `span`. */
 function spanContainsPos(span: SourceSpan, line: number, col: number): boolean {

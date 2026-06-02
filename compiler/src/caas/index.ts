@@ -27,6 +27,8 @@
 import parseInternal from '../parser/parser'
 import { addToAstSemantics } from '../ast'
 import { siliconGrammar } from '../grammar'
+import { SyntaxNode } from './syntaxNode'
+export { SyntaxNode }
 import elaborateInternal from '../elaborator/elaborator'
 import { buildStrataRegistry } from '../elaborator/strataLoader'
 import typecheckInternal, { type FunctionSig } from '../types/typechecker'
@@ -35,7 +37,7 @@ import { toDiagnostic } from '../errors/diagnostic'
 import type { Program, ASTNode } from '../ast/astNodes'
 import type { ElaboratorRegistry } from '../elaborator/registry'
 import type { ModuleRegistry } from '../modules/registry'
-import type { LowerOptions } from '../ir/lower'
+import type { LowerOptions as InternalLowerOptions } from '../ir/lower'
 
 export type { ModuleRegistry }
 
@@ -47,7 +49,18 @@ export type { ElaboratorRegistry }
 
 // CaaS-11 — CodeAction surface.  Re-exported as part of the 1.0 stable API.
 export type { CodeAction, CodeActionProvider, TextEdit } from './codeAction'
-export { registerCodeAction, getCodeActions, clearCodeActions, applyEdits } from './codeAction'
+export { registerCodeAction, getCodeActions, clearCodeActions, applyEdits, listCodeActionCodes } from './codeAction'
+
+// CaaS-2f — SyntaxWalker / SyntaxRewriter.
+export { SyntaxWalker, SyntaxRewriter } from './syntaxWalker'
+
+// CaaS-2e — Trivia.
+export type { TriviaItem } from './syntaxNode'
+
+// Incremental text changes — range-based edits that can span line boundaries.
+export type { TextChange } from './textChange'
+export { applyTextChanges } from './textChange'
+import { applyTextChanges } from './textChange'
 
 // ---------------------------------------------------------------------------
 // SyntaxTree — thin wrapper around Program that carries the source text.
@@ -79,6 +92,25 @@ export class SyntaxTree {
         this.file = file
     }
 
+    #root?: SyntaxNode
+
+    /**
+     * The root of the syntax tree.
+     *
+     * Use this to walk or query nodes without accessing the unstable `program`
+     * field directly.  The root `SyntaxNode` is built lazily and cached.
+     *
+     *   for (const node of tree.root.descendantsOfKind('Definition')) {
+     *       console.log(node.kind, node.span)
+     *   }
+     */
+    get root(): SyntaxNode {
+        if (!this.#root) {
+            this.#root = new SyntaxNode(this.program as object)
+        }
+        return this.#root
+    }
+
     /**
      * Re-parse `newSource` and return a fresh `ParseResult`.
      *
@@ -89,6 +121,28 @@ export class SyntaxTree {
      * don't change.
      */
     withText(newSource: string, options: ParseOptions = {}): ParseResult {
+        return parse(newSource, { file: this.file, ...options })
+    }
+
+    /**
+     * Apply a set of range-based `TextChange`s to this tree's source and
+     * return a fresh `ParseResult` for the rewritten text.
+     *
+     * Changes are applied bottom-up so they don't shift each other's offsets.
+     * The file name is preserved; the strata registry is not rebuilt.
+     *
+     * This is the incremental-edit primitive for LSP `textDocument/didChange`
+     * integration:
+     *
+     *   ws.onDidChange(({ document }) => {
+     *       const { tree } = document.tree.withChanges(lspChanges)
+     *       // ... re-elaborate with the existing registry ...
+     *   })
+     *
+     * Throws if any two changes have overlapping ranges.
+     */
+    withChanges(changes: readonly import('./textChange').TextChange[], options: ParseOptions = {}): ParseResult {
+        const newSource = applyTextChanges(this.source, changes)
         return parse(newSource, { file: this.file, ...options })
     }
 }
@@ -156,9 +210,22 @@ export interface CheckOptions {
      * Defaults to `'host'` (no rejection — programs compile as today).
      */
     target?: import('../ir/lower').LowerTarget
+
+    /**
+     * CaaS-2g — cross-document typechecking.
+     *
+     * A map of `name → SiliconType` for symbols defined in other open
+     * documents.  When the typechecker cannot resolve a name locally, it
+     * falls back to this map before emitting an "unbound identifier" error.
+     *
+     * The `Workspace` populates this automatically from its symbol index
+     * before calling `typecheck()` on each document.  Single-document
+     * callers can ignore this option.
+     */
+    externalSymbols?: ReadonlyMap<string, import('../types/types').SiliconType>
 }
 
-export interface LowerOptions2 extends LowerOptions {
+export interface LowerOptions extends InternalLowerOptions {
     /**
      * Module registry — required for programs that use WASI or other
      * registered module APIs.  Build with `loadModules(dir)` in the CLI.
@@ -270,7 +337,7 @@ export function typecheck(
     registry: ElaboratorRegistry,
     options: CheckOptions = {},
 ): CheckResult {
-    const result = typecheckInternal(tree.program, registry, options.moduleRegistry, options.target)
+    const result = typecheckInternal(tree.program, registry, options.moduleRegistry, options.target, tree.file, options.externalSymbols)
     const typedTree = new SyntaxTree(result.program, tree.source, tree.file)
     const diagnostics: Diagnostic[] = result.errors.map(e => toDiagnostic(e))
     return { tree: typedTree, model: result.semanticModel, diagnostics, _functions: result.functions }
@@ -290,7 +357,7 @@ export function lower(
     tree: SyntaxTree,
     registry: ElaboratorRegistry,
     model: import('../ast/semanticModel').SemanticModel,
-    options: LowerOptions2 = {},
+    options: LowerOptions = {},
 ): LowerResult {
     try {
         // Use pre-computed functions when available (avoids a second typecheck pass).
@@ -336,7 +403,7 @@ export interface CompileResult {
  * On success, `wat` holds the emitted WAT text; when `options.emitBinary` is
  * set, `binary` additionally holds the assembled `.wasm`.
  */
-export function compile(source: string, options: ParseOptions & ElabOptions & LowerOptions2 = {}): CompileResult {
+export function compile(source: string, options: ParseOptions & ElabOptions & LowerOptions = {}): CompileResult {
     const parseResult = parse(source, options)
     if (parseResult.diagnostics.length > 0) {
         return { wat: '', model: undefined, diagnostics: parseResult.diagnostics }

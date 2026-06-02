@@ -19,8 +19,25 @@ export {
     check,
     buildRegistry,
 
-    // SyntaxTree class (has .withText() for incremental reparse)
+    // SyntaxTree class (has .withText() for incremental reparse, .root for tree walking)
     SyntaxTree,
+
+    // SyntaxNode — walkable wrapper around any AST node (CaaS tree walking)
+    SyntaxNode,
+
+    // Incremental text changes
+    type TextChange,
+    applyTextChanges,
+
+    // CaaS-2e trivia
+    type TriviaItem,
+
+    // CaaS-2f tree visitors
+    SyntaxWalker,
+    SyntaxRewriter,
+
+    // CaaS-2b code action codes
+    listCodeActionCodes,
 } from './caas/index'
 
 export {
@@ -30,7 +47,15 @@ export {
     type DocumentChangeEvent,
     type ChangeListener,
     type WorkspaceOptions,
+    // LSP Tier 1 return types
+    type HoverInfo,
+    type CompletionItem,
+    type ParameterInfo,
+    type SignatureHelp,
+    type WorkspaceEdit,
 } from './caas/workspace'
+
+export { typeDisplayString, symbolDisplayString } from './ast/semanticModel'
 
 export {
     // Result types
@@ -44,6 +69,7 @@ export {
     type ParseOptions,
     type ElabOptions,
     type CheckOptions,
+    type LowerOptions,
 
     // Shared types
     type ElaboratorRegistry,

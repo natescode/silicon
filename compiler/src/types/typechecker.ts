@@ -51,7 +51,7 @@
  */
 
 import type { Program } from '../ast/astNodes'
-import { SemanticModel, type Symbol as CaaSSymbol, type SymbolKind } from '../ast/semanticModel'
+import { SemanticModel, type Symbol as CaaSSymbol, type SymbolKind, symbolDisplayString } from '../ast/semanticModel'
 import { toDiagnostic, spanFromLocation, type SourceSpan } from '../errors/diagnostic'
 import {
     type SiliconType,
@@ -124,6 +124,8 @@ import { normalizeMatchArgs } from '../ast/matchArms'
  * accumulation and symbol bookkeeping stay in one place.
  */
 interface Ctx {
+    /** Source file name, threaded from SyntaxTree.file; used to populate SourceSpan.file. */
+    file: string
     errors: TypeError[]
     // Flat symbol table. Keyed by the joined namespace path (e.g. "module::x").
     symbols: Map<string, SiliconType>
@@ -169,6 +171,10 @@ interface Ctx {
     // calls raise E0012 / E0013 per ADR 0009's two-layer portability
     // split.  Undefined / 'host' / 'wasix' = no rejection (existing behavior).
     target?: import('../ir/lower').LowerTarget
+    // CaaS-2g: cross-document symbol types.  Checked as a last resort when a
+    // name is not found in the local symbol table.  Suppresses "unbound
+    // identifier" errors for names defined in other open Workspace documents.
+    externalSymbols?: ReadonlyMap<string, SiliconType>
 }
 
 export interface FunctionSig {
@@ -322,6 +328,8 @@ export default function typecheck(
     registry?: ElaboratorRegistry,
     moduleRegistry?: ModuleRegistry,
     target?: import('../ir/lower').LowerTarget,
+    file = '',
+    externalSymbols?: ReadonlyMap<string, SiliconType>,
 ): TypeCheckResult {
     const typeMap = new WeakMap<object, SiliconType>()
     const nodeToSymbolName = new WeakMap<object, string>()
@@ -329,6 +337,7 @@ export default function typecheck(
     const symbolToSpans = new Map<string, SourceSpan[]>()
     const definitionNodes = new Map<string, object>()
     const ctx: Ctx = {
+        file,
         errors: [],
         symbols: new Map(),
         functions: new Map(),
@@ -345,6 +354,7 @@ export default function typecheck(
         symbolToSpans,
         definitionNodes,
         target,
+        externalSymbols,
     }
     // Pre-registration pass: seed module function signatures first so that
     // user-defined functions whose bodies call module functions can resolve
@@ -1278,7 +1288,14 @@ function checkFunctionCall(call: any, ctx: Ctx): SiliconType {
     }
 
     // User-defined function: look up its registered signature.
-    const sig = ctx.functions.get(name)
+    let sig = ctx.functions.get(name)
+    // CaaS-2g: fall back to external symbols when no local sig exists.
+    if (!sig && ctx.externalSymbols) {
+        const extType = ctx.externalSymbols.get(name)
+        if (extType?.kind === 'Function') {
+            sig = { params: extType.params, result: extType.result }
+        }
+    }
     if (sig) {
         if (argTypes.length !== sig.params.length) {
             ctx.errors.push(arityMismatch(name, sig.params.length, argTypes.length, call.sourceLocation))
@@ -1501,6 +1518,15 @@ function typeOfNamespace(ns: any, ctx: Ctx): SiliconType {
             }
         }
     }
+    // CaaS-2g: cross-document fallback — check external symbols before erroring.
+    if (ctx.externalSymbols) {
+        const ext = ctx.externalSymbols.get(key)
+            ?? (path.length === 1 ? ctx.externalSymbols.get(path[0]) : undefined)
+        if (ext) {
+            recordSymbolRef(ns, path.length === 1 ? path[0] : key, ctx)
+            return ext
+        }
+    }
     const candidates = [...ctx.symbols.keys(), ...ctx.functions.keys()]
     const suggestion = closest(key, candidates)
     const err = unbound(key, ns.sourceLocation)
@@ -1517,7 +1543,7 @@ function recordSymbolRef(node: object, name: string, ctx: Ctx): void {
     // CaaS-5: record the source span for this reference so symbolAtPosition works.
     const loc = (node as any).sourceLocation
     if (loc) {
-        const span = spanFromLocation(loc)
+        const span = spanFromLocation(loc, ctx.file)
         const spans = ctx.symbolToSpans.get(name)
         if (spans) spans.push(span)
         else ctx.symbolToSpans.set(name, [span])
@@ -1645,8 +1671,11 @@ function buildSymbolTable(ctx: Ctx): Map<string, CaaSSymbol> {
         const paramCount = (def.params || []).filter((p: any) => !p.isLiteral).length
         const kind = symbolKindFromKeyword(kw, paramCount)
         const type = ctx.symbols.get(name)
-        const definitionSpan = def.sourceLocation ? spanFromLocation(def.sourceLocation) : undefined
-        table.set(name, { name, kind, definitionNode: defNode, type, definitionSpan })
+        const definitionSpan = def.sourceLocation ? spanFromLocation(def.sourceLocation, ctx.file) : undefined
+        const locations: import('../errors/diagnostic').SourceSpan[] = definitionSpan ? [definitionSpan] : []
+        const partial = { name, kind, definitionNode: defNode, type, definitionSpan, locations, containingSymbol: undefined }
+        const displayString = symbolDisplayString(partial as CaaSSymbol)
+        table.set(name, { ...partial, displayString })
     }
     return table
 }

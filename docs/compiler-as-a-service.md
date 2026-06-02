@@ -194,6 +194,139 @@ interface CompileResult { wat: string;       model: SemanticModel | undefined; d
 
 ---
 
+## Tree walking — `SyntaxNode`
+
+`SyntaxTree.root` returns the root `SyntaxNode`, a stable public wrapper around
+every AST node.  Use it to traverse or query the tree without touching the
+unstable `program` field.
+
+```typescript
+class SyntaxNode {
+    /** Node type discriminant — 'Definition', 'FunctionCall', 'IntLiteral', … */
+    readonly kind: string
+
+    /** Source span (1-based), if the parser recorded location info. */
+    readonly span: SourceRange | undefined
+
+    /** Parent node, or undefined for the root. */
+    readonly parent: SyntaxNode | undefined
+
+    /** True when this node has no child nodes (leaf). */
+    readonly isLeaf: boolean
+
+    /** Direct child nodes.  Lazily built and cached. */
+    children(): readonly SyntaxNode[]
+
+    /** All descendants in depth-first pre-order. */
+    descendants(): Generator<SyntaxNode>
+
+    /** Ancestor chain from immediate parent to root. */
+    ancestors(): Generator<SyntaxNode>
+
+    /** All descendants whose `kind` equals the given string. */
+    descendantsOfKind(kind: string): Generator<SyntaxNode>
+
+    /** First descendant whose `kind` equals the given string, or undefined. */
+    firstDescendantOfKind(kind: string): SyntaxNode | undefined
+
+    /** @internal — raw AST node.  Not stable. */
+    readonly _node: object
+}
+```
+
+### Tree walking example
+
+```typescript
+import { parse } from './src/api'
+
+const { tree } = parse('@fn add x, y := { x + y };\n@let result := &add 1, 2;')
+
+// All definitions in the file:
+for (const node of tree.root.descendantsOfKind('Definition')) {
+    console.log(node.kind, node.span)
+}
+
+// The first binary operator:
+const binop = tree.root.firstDescendantOfKind('BinaryOp')
+
+// Walk ancestor chain:
+if (binop) {
+    const kinds = [...binop.ancestors()].map(n => n.kind)
+    console.log(kinds)  // e.g. ['Block', 'Binding', 'Definition', 'Program']
+}
+```
+
+---
+
+## Incremental text changes
+
+`SyntaxTree.withChanges(changes)` applies a list of range-based edits and
+reparses.  Use this for LSP `textDocument/didChange` integration where the
+editor sends only the changed ranges, not the full file.
+
+```typescript
+interface TextChange {
+    readonly range: SourceRange   // 1-based; endLine/endCol are exclusive
+    readonly newText: string
+}
+
+// Apply changes and reparse — returns a fresh ParseResult.
+// Throws if any two changes have overlapping ranges.
+// The file name and strata registry are preserved.
+tree.withChanges(changes: readonly TextChange[], options?: ParseOptions): ParseResult
+
+// Apply changes to a string without reparsing.
+applyTextChanges(source: string, changes: readonly TextChange[]): string
+```
+
+`TextChange` differs from `TextEdit` (used by code actions):
+
+| | `TextEdit` | `TextChange` |
+|---|---|---|
+| Span type | `SourceSpan` (`line/col/length`) | `SourceRange` (`startLine/startCol/endLine/endCol`) |
+| Multi-line | No | Yes |
+| Use case | Code action fix-its | LSP incremental sync |
+
+### Incremental example — LSP didChange handler
+
+```typescript
+import { parse, buildRegistry, elaborate } from './src/api'
+
+let tree = parse(initialSource).tree
+const registry = buildRegistry(tree)
+
+function onDidChange(lspChanges: LspTextChange[]) {
+    // Map LSP changes to TextChange (LSP uses 0-based lines; Silicon uses 1-based)
+    const changes = lspChanges.map(c => ({
+        range: {
+            startLine: c.range.start.line + 1,
+            startCol:  c.range.start.character + 1,
+            endLine:   c.range.end.line + 1,
+            endCol:    c.range.end.character + 1,
+        },
+        newText: c.text,
+    }))
+    const { tree: newTree } = tree.withChanges(changes)
+    tree = newTree
+    // Re-elaborate with the existing registry (no rebuild needed for
+    // edits that don't touch stratum declarations).
+    const { tree: elab } = elaborate(newTree, registry)
+    // ... typecheck, update diagnostics ...
+}
+```
+
+---
+
+### Silicon vs Roslyn
+
+Silicon has no separate `SyntaxToken` type.  Silicon's lexical leaves are already
+typed AST nodes (`IntLiteral`, `FloatLiteral`, `StringLiteral`, `BooleanLiteral`,
+`Namespace`, `GenericParams`, `DocComment`).  Leaf nodes simply return an empty
+`children()` array.  The trivia layer (whitespace/comments attached to tokens) does
+not exist yet.
+
+---
+
 ## Workspace — multi-document project state (CaaS-4)
 
 `Workspace` owns a shared registry and a set of open `Document`s. It is the entry

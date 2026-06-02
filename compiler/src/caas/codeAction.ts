@@ -70,6 +70,11 @@ export interface CodeAction {
     readonly edits: readonly TextEdit[]
     /** The diagnostic this action resolves (or empty for source actions). */
     readonly diagnostics: readonly Diagnostic[]
+    /**
+     * The diagnostic code this action is registered under (e.g. `'E0004'`).
+     * Stamped automatically by `getCodeActions` — callers do not need to set it.
+     */
+    readonly diagnosticCode?: string
     /** True if this action should be offered as the default when the user
      *  invokes the action menu and only this action is offered. */
     readonly isPreferred?: boolean
@@ -125,10 +130,22 @@ export function getCodeActions(diagnostic: Diagnostic, source: string): CodeActi
             const key = `${a.kind}:${a.title}`
             if (seen.has(key)) continue
             seen.add(key)
-            out.push(a)
+            // Stamp the diagnostic code so callers can correlate actions to codes.
+            out.push({ ...a, diagnosticCode: diagnostic.code })
         }
     }
     return out
+}
+
+/**
+ * Return all diagnostic codes that have at least one registered provider.
+ * Useful for advertising "this language server can fix E0004, E0007, …" in
+ * LSP `ServerCapabilities.codeActionProvider.resolveProvider`.
+ *
+ * @public
+ */
+export function listCodeActionCodes(): string[] {
+    return [...REGISTRY.keys()]
 }
 
 /**
