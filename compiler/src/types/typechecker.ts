@@ -405,6 +405,7 @@ function preRegisterModules(moduleRegistry: ModuleRegistry, ctx: Ctx): void {
 function preRegisterStdFunctions(ctx: Ctx): void {
     const defs: Array<{ name: string; params: SiliconType[]; result: SiliconType }> = [
         { name: 'alloc',          params: [TypeInt],                     result: TypeInt },
+        { name: 'alloc_string',   params: [TypeInt],                     result: TypeString },
         { name: 'alloc_array',    params: [TypeInt, TypeInt],            result: TypeInt },
         { name: 'arr_len',        params: [TypeInt],                     result: TypeInt },
         { name: 'arr_load_i32',   params: [TypeInt, TypeInt],            result: TypeInt },

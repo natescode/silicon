@@ -126,6 +126,16 @@ test('WASM::i32_add intrinsic type-checks', () => {
     expect(errors).toHaveLength(0)
 })
 
+test('alloc_string returns a String buffer', () => {
+    const { errors } = check(`\\\\ one () -> String
+@fn one := {
+    @local out := &alloc_string 1;
+    &WASM::i32_store8 ((&str_ptr out) + 4), 65;
+    out
+};`)
+    expect(errors).toHaveLength(0)
+})
+
 test('WASM::i32_add with float operand fails', () => {
     const { errors } = check('&WASM::i32_add 1, 2.5;')
     expect(errors.length).toBeGreaterThan(0)
