@@ -110,9 +110,11 @@ relative to its element's `elemBase`), so unchanged suffix elements are reused
 shifts. This is a transparent internal optimization: the returned tree is
 **byte-identical** to a full reparse (guaranteed by a full-reparse fallback and a
 `SIGIL_INCREMENTAL_VERIFY=1` correctness tripwire), and the public API is
-unchanged. ~2–2.6× faster on localized edits. See `src/caas/incremental.ts` and
-`src/ast/positionTable.ts`; benchmark with `bun run bench:incremental`. (Only the
-parse phase is incremental; elaborate + typecheck still run fully per edit.)
+unchanged. Only the damaged byte window is re-lexed and reparsed, so an edit is
+**O(window), not O(file)** — 17–51× faster than a full reparse on medium/large
+files. See `src/caas/incremental.ts` and `src/ast/positionTable.ts`; benchmark
+with `bun run bench:incremental`. (Only the parse phase is incremental; elaborate
++ typecheck still run fully per edit.)
 
 ### `ElaboratorRegistry`
 
