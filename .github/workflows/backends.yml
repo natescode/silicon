@@ -10,18 +10,18 @@ on:
   push:
     branches: [main]
     paths:
-      - 'src/codegen/**'
-      - 'src/ir/**'
-      - 'src/e2e/backends.test.ts'
-      - 'src/e2e/examples/**'
+      - 'compiler/src/codegen/**'
+      - 'compiler/src/ir/**'
+      - 'compiler/src/e2e/backends.test.ts'
+      - 'compiler/src/e2e/examples/**'
       - '.github/workflows/backends.yml'
   pull_request:
     branches: [main]
     paths:
-      - 'src/codegen/**'
-      - 'src/ir/**'
-      - 'src/e2e/backends.test.ts'
-      - 'src/e2e/examples/**'
+      - 'compiler/src/codegen/**'
+      - 'compiler/src/ir/**'
+      - 'compiler/src/e2e/backends.test.ts'
+      - 'compiler/src/e2e/examples/**'
       - '.github/workflows/backends.yml'
 
 jobs:
@@ -57,4 +57,5 @@ jobs:
 
       # No qbe/cc install needed — all tests are textual.
       - name: Run backend consistency tests
+        working-directory: compiler
         run: bun run test:backends

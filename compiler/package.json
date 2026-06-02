@@ -23,6 +23,7 @@
     "bench:parser": "bun run bench/parse-bench.ts",
     "bench:incremental": "bun run bench/incremental-bench.ts",
     "compile": "bun run src/index.ts",
+    "build:sigilc": "bash scripts/build-sigilc.sh",
     "opt-wasm": "bun run ./binaryen-version_117/wasm-opt.js ../dist/bin.wasm",
     "loc": "bunx cloc . --exclude-dir node_modules,dist,build --exclude-ext json,lock,md,yml"
   },

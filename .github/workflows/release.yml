@@ -20,10 +20,17 @@ jobs:
         with: { bun-version: latest }
       - run: bun install --frozen-lockfile
       - name: Build sgl binary
-        run: bun build src/sigil_cli.ts --compile --outfile sgl
+        run: |
+          # build-binary.ts inlines the compiler's built-in assets (strata /
+          # std.wat / modules) and tracks the CLI entry point under cli/.
+          # A naive `bun build --compile` traps at runtime on /$bunfs/root.
+          # It emits cli/dist/sgl-<host-platform>; each release job runs on
+          # its target's native runner, so the host build is the target build.
+          bun run cli/scripts/build-binary.ts
+          cp cli/dist/sgl-* sgl
       - name: Smoke test
         run: |
-          echo '@fn main:Int := 0;' > /tmp/smoke.si
+          echo '@fn main := 0;' > /tmp/smoke.si
           ./sgl check /tmp/smoke.si
       - name: Package tarball
         run: |
@@ -50,10 +57,17 @@ jobs:
         with: { bun-version: latest }
       - run: bun install --frozen-lockfile
       - name: Build sgl binary
-        run: bun build src/sigil_cli.ts --compile --outfile sgl
+        run: |
+          # build-binary.ts inlines the compiler's built-in assets (strata /
+          # std.wat / modules) and tracks the CLI entry point under cli/.
+          # A naive `bun build --compile` traps at runtime on /$bunfs/root.
+          # It emits cli/dist/sgl-<host-platform>; each release job runs on
+          # its target's native runner, so the host build is the target build.
+          bun run cli/scripts/build-binary.ts
+          cp cli/dist/sgl-* sgl
       - name: Smoke test
         run: |
-          echo '@fn main:Int := 0;' > /tmp/smoke.si
+          echo '@fn main := 0;' > /tmp/smoke.si
           ./sgl check /tmp/smoke.si
       - name: Package tarball
         run: |
@@ -80,10 +94,17 @@ jobs:
         with: { bun-version: latest }
       - run: bun install --frozen-lockfile
       - name: Build sgl binary
-        run: bun build src/sigil_cli.ts --compile --outfile sgl
+        run: |
+          # build-binary.ts inlines the compiler's built-in assets (strata /
+          # std.wat / modules) and tracks the CLI entry point under cli/.
+          # A naive `bun build --compile` traps at runtime on /$bunfs/root.
+          # It emits cli/dist/sgl-<host-platform>; each release job runs on
+          # its target's native runner, so the host build is the target build.
+          bun run cli/scripts/build-binary.ts
+          cp cli/dist/sgl-* sgl
       - name: Smoke test
         run: |
-          echo '@fn main:Int := 0;' > /tmp/smoke.si
+          echo '@fn main := 0;' > /tmp/smoke.si
           ./sgl check /tmp/smoke.si
       - name: Package tarball
         run: |
@@ -110,10 +131,17 @@ jobs:
         with: { bun-version: latest }
       - run: bun install --frozen-lockfile
       - name: Build sgl binary
-        run: bun build src/sigil_cli.ts --compile --outfile sgl
+        run: |
+          # build-binary.ts inlines the compiler's built-in assets (strata /
+          # std.wat / modules) and tracks the CLI entry point under cli/.
+          # A naive `bun build --compile` traps at runtime on /$bunfs/root.
+          # It emits cli/dist/sgl-<host-platform>; each release job runs on
+          # its target's native runner, so the host build is the target build.
+          bun run cli/scripts/build-binary.ts
+          cp cli/dist/sgl-* sgl
       - name: Smoke test
         run: |
-          echo '@fn main:Int := 0;' > /tmp/smoke.si
+          echo '@fn main := 0;' > /tmp/smoke.si
           ./sgl check /tmp/smoke.si
       - name: Package tarball
         run: |

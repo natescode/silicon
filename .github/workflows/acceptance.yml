@@ -50,4 +50,4 @@ jobs:
           ACCEPTANCE_METHOD: ${{ inputs.method || matrix.method }}
           SGL_VERSION: ${{ steps.version.outputs.version }}
         run: |
-          bash scripts/acceptance.sh
+          bash compiler/scripts/acceptance.sh

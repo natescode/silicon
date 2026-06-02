@@ -5,8 +5,8 @@ on:
     branches: [main]
     paths:
       - 'docs/**'
-      - 'etc/sigil.api.md'
-      - 'site/**'
+      - 'compiler/etc/sigil.api.md'
+      - 'website/**'
       - '.github/workflows/docs.yml'
   workflow_dispatch:
 
@@ -24,7 +24,7 @@ jobs:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: site
+        working-directory: website
     steps:
       - uses: actions/checkout@v4
 
@@ -47,7 +47,8 @@ jobs:
 
       - uses: actions/upload-pages-artifact@v3
         with:
-          path: site/src/.vitepress/dist
+          # Artifact paths are relative to the repo root, not the job cwd.
+          path: website/src/.vitepress/dist
 
   deploy:
     needs: build

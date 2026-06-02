@@ -28,10 +28,12 @@ jobs:
 
       - name: Run fuzz suite (PR / push — 60s per target)
         if: github.event_name != 'schedule'
+        working-directory: compiler
         run: bun run test:fuzz
 
       - name: Run fuzz suite (nightly — 30 min per target)
         if: github.event_name == 'schedule'
+        working-directory: compiler
         env:
           SIGIL_FUZZ_BUDGET_MS: '5400000'  # 90 min total ÷ 3 targets = 30 min each
           SIGIL_FUZZ_BYTES_RUNS: '1000000'

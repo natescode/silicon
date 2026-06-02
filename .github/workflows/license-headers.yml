@@ -3,9 +3,9 @@ name: License headers
 on:
   pull_request:
     paths:
-      - 'src/**/*.ts'
-      - 'src/strata/**/*.si'
-      - 'src/stdlib/**/*.si'
+      - 'compiler/src/**/*.ts'
+      - 'compiler/src/strata/**/*.si'
+      - 'compiler/src/stdlib/**/*.si'
   push:
     branches: [main]
 
@@ -17,6 +17,7 @@ jobs:
 
       - name: Check SPDX headers
         shell: bash
+        working-directory: compiler
         run: |
           set -euo pipefail
           missing=()

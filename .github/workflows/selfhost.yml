@@ -10,16 +10,16 @@ on:
   push:
     branches: [main]
     paths:
-      - 'src/codegen/qbe/**'
-      - 'src/e2e/**'
-      - 'src/sigil_cli.ts'
+      - 'compiler/src/codegen/qbe/**'
+      - 'compiler/src/e2e/**'
+      - 'cli/src/sigil_cli.ts'
       - '.github/workflows/selfhost.yml'
   pull_request:
     branches: [main]
     paths:
-      - 'src/codegen/qbe/**'
-      - 'src/e2e/**'
-      - 'src/sigil_cli.ts'
+      - 'compiler/src/codegen/qbe/**'
+      - 'compiler/src/e2e/**'
+      - 'cli/src/sigil_cli.ts'
       - '.github/workflows/selfhost.yml'
 
 jobs:
@@ -70,15 +70,18 @@ jobs:
       # 1. Library-level self-host suite
       # -----------------------------------------------------------------------
       - name: Run self-host example suite
+        working-directory: cli
         run: bun run test:selfhost
 
       # -----------------------------------------------------------------------
       # 2. Build standalone sigilc binary
       # -----------------------------------------------------------------------
       - name: Build sigilc standalone binary
+        working-directory: compiler
         run: bun run build:sigilc
 
       - name: Verify sigilc binary exists and is executable
+        working-directory: compiler
         run: |
           ls -lh dist/sigilc
           file dist/sigilc
@@ -87,20 +90,25 @@ jobs:
       # 3. Smoke-test the compiled sigilc binary end-to-end
       # -----------------------------------------------------------------------
       - name: sigilc run --native (exit 0)
+        working-directory: compiler
         run: |
-          echo '@fn main:Int := 0;' > /tmp/zero.si
+          echo '@fn main := 0;' > /tmp/zero.si
           dist/sigilc run --native /tmp/zero.si
 
       - name: sigilc run --native (exit 42 captured)
+        working-directory: compiler
         run: |
-          echo '@fn main:Int := 42;' > /tmp/forty_two.si
+          echo '@fn main := 42;' > /tmp/forty_two.si
           dist/sigilc run --native /tmp/forty_two.si || code=$?
           [ "${code:-0}" -eq 42 ] && echo "PASS: exit 42 confirmed"
 
       - name: sigilc build --native + run compiled binary
+        working-directory: compiler
         run: |
-          echo '@fn main:Int := 6 * 7;' > /tmp/mul.si
-          dist/sigilc build --native /tmp/mul.si || code=$?
+          echo '@fn main := 6 * 7;' > /tmp/mul.si
+          dist/sigilc build --native /tmp/mul.si
+          # `build` only compiles; run the produced binary to capture its exit code.
+          /tmp/mul || code=$?
           [ "${code:-0}" -eq 42 ] && echo "PASS: 6*7=42 confirmed"
 
       # -----------------------------------------------------------------------
@@ -110,5 +118,6 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: sigilc-${{ matrix.label }}
-          path: dist/sigilc
+          # Artifact paths are relative to the repo root, not the step cwd.
+          path: compiler/dist/sigilc
           retention-days: 7

@@ -51,9 +51,13 @@ case "$METHOD" in
     local-build)
         # Smoke path for testing the acceptance script itself without a
         # published release.  Builds sgl from the current repo.
-        bun run build:sigilc
         SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-        export PATH="$SCRIPT_DIR/../dist:$PATH"
+        COMPILER_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+        ( cd "$COMPILER_DIR" && bun run build:sigilc )
+        # build:sigilc emits compiler/dist/sigilc; the gates below invoke the
+        # user-facing `sgl` command, so expose the same binary under that name.
+        cp "$COMPILER_DIR/dist/sigilc" "$COMPILER_DIR/dist/sgl"
+        export PATH="$COMPILER_DIR/dist:$PATH"
         ;;
     *)
         fail "unknown ACCEPTANCE_METHOD: $METHOD (expected brew | curl | local-build)"
@@ -93,7 +97,8 @@ sgl check || fail "sgl check failed"
 
 log "sgl build"
 sgl build
-test -f bin/main.wasm || fail "sgl build did not produce bin/main.wasm"
+# `sgl build` writes <entry>.wasm into the current directory.
+test -f main.wasm || fail "sgl build did not produce main.wasm"
 
 # --- 6. summary -------------------------------------------------------
 

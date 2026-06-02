@@ -28,4 +28,5 @@ jobs:
       # safety net for the whole suite (parser load + lockfile resolution
       # dominate, so 10 minutes is plenty).
       - name: Run property tests
+        working-directory: compiler
         run: bun run test:properties
