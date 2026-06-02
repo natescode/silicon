@@ -92,6 +92,8 @@ export interface Definition {
     params: Parameter[]
     binding?: Binding
     sourceLocation?: SourceLocation,
+    /** Element-relative byte span (CaaS 3b/M3); see {@link RelSpan}. */
+    relSpan?: RelSpan,
     // Set once during elaboration (on a fresh cloned node), never mutated after.
     readonly hook?: string | false // Resolved elaboration hook name (e.g. 'functionDefinition')
 }
@@ -219,6 +221,8 @@ export interface Namespace {
     type: 'Namespace'
     path: string[] // ['module', 'submodule', 'identifier']
     sourceLocation?: SourceLocation
+    /** Element-relative byte span (CaaS 3b/M3); see {@link RelSpan}. */
+    relSpan?: RelSpan
 }
 
 export interface TypedIdentifier {
@@ -293,6 +297,18 @@ export interface SourceLocation {
     startColumn: number
     endLine: number
     endColumn: number
+}
+
+/**
+ * Byte offsets of a node's span, **relative to the start of its containing
+ * top-level element** (CaaS tracker 3b/M3).  Position-independent: invariant
+ * under edits outside the element, so a reused element's descendants need no
+ * fix-up.  Absolute line/col is reconstructed on demand by `PositionTable`
+ * (`src/ast/positionTable.ts`) from the element's base offset.
+ */
+export interface RelSpan {
+    start: number
+    end: number
 }
 
 // Factory functions for creating AST nodes
