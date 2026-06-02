@@ -1,33 +1,16 @@
 # Show my beautiful girlfriend my language.
 #
 # wasmtime is a WASI runtime — there is no console_log.  Instead we write to
-# stdout (fd 1) via the WASI fd_write surface.  The wasi_snapshot_preview1
-# imports are auto-registered by the module loader, so no @extern declaration
-# is needed — we just call &wasi_snapshot_preview1::fd_write directly.
+# stdout (fd 1).  Rather than hand-rolling the fd_write iovec dance, this
+# leans on the bundled standard library: `@use 'io';` pulls in `print`
+# (write a string + newline to stdout) straight from the compiler — no source
+# tree or path needed, so it runs anywhere the `sgl` binary is installed.
+#
+#   sgl run examples/delfina.si
 
-\\ write_bytes (Int, Int, Int) -> Int
-@fn write_bytes fd, ptr, len := {
-    @local iovs := &scratch_alloc 8;
-    &WASM::i32_store iovs, ptr;
-    &WASM::i32_store (iovs + 4), len;
-    @local nwritten := &scratch_alloc 4;
-    &wasi_snapshot_preview1::fd_write fd, iovs, 1, nwritten
-};
-
-\\ write_str (Int, String) -> Int
-@fn write_str fd, s := {
-    &write_bytes fd, ((&str_ptr s) + 4), (&str_len s)
-};
-
-\\ write_nl (Int) -> Int
-@fn write_nl fd := {
-    @local buf := &scratch_alloc 4;
-    &WASM::i32_store8 buf, 10;
-    &write_bytes fd, buf, 1
-};
+@use 'io';
 
 @let name := 'Delfina';
 
 ## Print Delfina's name + newline to stdout.
-&write_str 1, name;
-&write_nl  1;
+&print name;

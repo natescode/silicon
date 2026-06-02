@@ -1,0 +1,48 @@
+# examples/web_letters_cli.si — log each letter of a word to stdout (WASI).
+#
+# CLI/wasmtime twin of web_letters.si.  wasmtime is a WASI runtime with no
+# browser `web::` console surface, so this writes each letter to stdout (fd 1)
+# instead of web::console_log_str.
+#
+# It leans on the standard library's portable I/O wrappers — src/stdlib/io.si
+# provides write_bytes / write_nl (and print / eprint / exit) over the WASI
+# fd_write surface — so there's no hand-rolled iovec dance here; the program
+# is just the letter-walk loop.
+#
+# Run it:
+#
+#   sgl run examples/web_letters_cli.si          # prints S i l i c o n
+#
+# `sgl run` compiles with the `wasix` target so wasmtime can invoke `_start`.
+# To drive wasmtime by hand, build with that same target:
+#
+#   sgl build --target=wasix examples/web_letters_cli.si
+#   wasmtime web_letters_cli.wasm
+#
+# A plain `sgl build` uses the default `host` target, whose module imports
+# `env::print` / `env::read`; running THAT .wasm directly in wasmtime fails
+# with `unknown import: env::print`.  Use `sgl run` or `--target=wasix`.
+
+@use 'io';
+
+# log_letters(word) — write each letter of `word` to stdout, one per line.
+# Walks the UTF-8 payload (past the 4-byte length header) and writes each byte
+# straight from its address with the stdlib `write_bytes`, then a newline.
+# Returns the number of letters written.
+\\ log_letters (String) -> Int
+@fn log_letters word := {
+    @local ptr := (&str_ptr word) + 4;
+    @local len := &str_len word;
+    @var i := 0;
+
+    &@loop i < len, {
+        &write_bytes 1, (ptr + i), 1;
+        &write_nl 1;
+        i = i + 1;
+    };
+
+    len
+};
+
+# Entry point: wasmtime runs the top-level statements as the program body.
+&log_letters 'Silicon';
