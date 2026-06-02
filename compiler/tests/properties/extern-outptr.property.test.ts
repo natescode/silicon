@@ -26,10 +26,11 @@ describe('extern out-pointer convention', () => {
     test('extern accepting an out-pointer compiles, reads result via i32_load', () => {
         // void-returning extern: host writes through the `scratch` address.
         const src = [
-            "@extern host_write_fd value:Int, scratch:Int;",
-            "@let openIt scratch:Int := {",
+            "@extern { \\\\ host_write_fd (Int, Int) -> Void }",
+            "\\\\ openIt (Int) -> Int",
+            "@fn openIt scratch := {",
             "  &host_write_fd 42, scratch;",
-            "  &WASM::i32_load scratch;",
+            "  &WASM::i32_load scratch",
             "};",
         ].join('\n')
         const wat = compileToWatString(src)
@@ -41,11 +42,11 @@ describe('extern out-pointer convention', () => {
         // Silicon callers reference the helper by the dollar-stripped name —
         // the call lowers to (call $scratch_alloc) at WAT level.
         const src = [
-            "@extern host_fill addr:Int, len:Int;",
+            "@extern { \\\\ host_fill (Int, Int) -> Void }",
             "@let go := {",
             "  @local buf := &scratch_alloc 16;",
             "  &host_fill buf, 16;",
-            "  &WASM::i32_load buf;",
+            "  &WASM::i32_load buf",
             "};",
         ].join('\n')
         const wat = compileToWatString(src)

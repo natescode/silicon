@@ -1,5 +1,5 @@
 /**
- * Payload sum types (`@type X := $Variant field:Type | ...`) — Phase −1.A
+ * Payload sum types (`@type X := $Variant field Type | ...`) — Phase −1.A
  * of the bootstrap plan; the WS 3 acceptance gate from
  * docs/stage0-cleanup-plan.html §3.4.
  *
@@ -35,14 +35,14 @@ async function instantiate(wat: string, imports: Record<string, any> = {}): Prom
 
 describe('@type payload sum types', () => {
     test('declaration emits one tag global per variant (auto-numbered)', () => {
-        const wat = compile('@type Shape := $Circle r:Int | $Rectangle w:Int, h:Int;')
+        const wat = compile('@type Shape := $Circle r Int | $Rectangle w Int, h Int;')
         expect(wat).toContain('(global $Shape__Circle_tag i32 (i32.const 0))')
         expect(wat).toContain('(global $Shape__Rectangle_tag i32 (i32.const 1))')
     })
 
     test('constructor function uses pad-to-max layout', () => {
         // max_fields = 2 → record bytes = 4 + 4*2 = 12.
-        const wat = compile('@type Shape := $Circle r:Int | $Rectangle w:Int, h:Int;')
+        const wat = compile('@type Shape := $Circle r Int | $Rectangle w Int, h Int;')
         // Circle has 1 field — record allocates 12 bytes, stores tag, field, zero pad.
         expect(wat).toContain('(local.set $__rec (call $alloc (i32.const 12)))')
         expect(wat).toMatch(/\(i32\.store \(local\.get \$__rec\) \(i32\.const 0\)\)/)
@@ -52,14 +52,15 @@ describe('@type payload sum types', () => {
 
     test('single-variant @type allocates 4 + 4*max bytes correctly', () => {
         // Only one variant with 3 fields → max_fields=3 → 16 bytes.
-        const wat = compile('@type Triple := $T x:Int, y:Int, z:Int;')
+        const wat = compile('@type Triple := $T x Int, y Int, z Int;')
         expect(wat).toContain('(local.set $__rec (call $alloc (i32.const 16)))')
     })
 
     test('@match destructure binds each field via i32.load at (idx+1)*4', () => {
         const src = [
-            '@type Shape := $Circle r:Int | $Rectangle w:Int, h:Int;',
-            '@fn area:Int s:Shape := {',
+            '@type Shape := $Circle r Int | $Rectangle w Int, h Int;',
+            '\\\\ area (Shape) -> Int',
+            '@fn area s := {',
             '  &@match s,',
             '    $Circle r,       { r * r * 3 },',
             '    $Rectangle w, h, { w * h }',
@@ -79,13 +80,15 @@ describe('@type payload sum types', () => {
 
     test('Shape example from cleanup-plan §3.4 runs end-to-end and returns 99', async () => {
         const src = [
-            '@type Shape := $Circle r:Int | $Rectangle w:Int, h:Int;',
-            '@fn area:Int s:Shape := {',
+            '@type Shape := $Circle r Int | $Rectangle w Int, h Int;',
+            '\\\\ area (Shape) -> Int',
+            '@fn area s := {',
             '  &@match s,',
             '    $Circle r,       { r * r * 3 },',
             '    $Rectangle w, h, { w * h }',
             '};',
-            '@let main:Int := {',
+            '\\\\ main () -> Int',
+            '@let main := {',
             '  @local c := &Circle 5;',
             '  @local r := &Rectangle 4, 6;',
             '  (&area c) + (&area r)',
@@ -101,7 +104,7 @@ describe('@type payload sum types', () => {
         let err = ''
         try {
             compile([
-                '@type Shape := $Circle r:Int | $Rectangle w:Int, h:Int;',
+                '@type Shape := $Circle r Int | $Rectangle w Int, h Int;',
                 '@let bad := { &Circle 1, 2 };',     // Circle takes 1 arg, not 2
             ].join('\n'))
         } catch (e) { err = String(e) }
@@ -111,9 +114,11 @@ describe('@type payload sum types', () => {
     test('constructor returns the sum type (callable from functions typed Shape)', () => {
         // If the constructor didn't return Shape, this would fail type-check.
         const wat = compile([
-            '@type Shape := $Circle r:Int | $Rectangle w:Int, h:Int;',
-            '@fn area:Int s:Shape := { &@match s, $Circle r, { r }, $Rectangle w, h, { w } };',
-            '@let go:Int := { &area (&Circle 7) };',
+            '@type Shape := $Circle r Int | $Rectangle w Int, h Int;',
+            '\\\\ area (Shape) -> Int',
+            '@fn area s := { &@match s, $Circle r, { r }, $Rectangle w, h, { w } };',
+            '\\\\ go () -> Int',
+            '@let go := { &area (&Circle 7) };',
         ].join('\n'))
         expect(wat).toContain('(call $area (call $Circle (i32.const 7)))')
     })
