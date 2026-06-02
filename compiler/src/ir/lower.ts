@@ -372,7 +372,7 @@ export function lowerProgram(
         })
     }
     if (target === 'wasix') {
-        irExports.push({ kind: 'Export', what: 'function', internalName: '__start', alias: '_start' })
+        irExports.push({ kind: 'Export', what: 'func', internalName: '__start', alias: '_start' })
     }
 
     // Append auto-generated imports from module calls (web::*, Draw::*, …).

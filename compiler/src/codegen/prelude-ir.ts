@@ -354,17 +354,17 @@ function buildArrLoadF32(): IRFunction {
 
 function buildPrintInt(): IRFunction {
     return fn('print_int', [['v', i32]], void_, [],
-        vblock(stmtExpr(ucall('print', void_, lg('v')))))
+        vblock(stmtExpr(ucall(ENV_PRINT, void_, lg('v')))))
 }
 
 function buildPrintBool(): IRFunction {
     return fn('print_bool', [['v', i32]], void_, [],
-        vblock(stmtExpr(ucall('print', void_, lg('v')))))
+        vblock(stmtExpr(ucall(ENV_PRINT, void_, lg('v')))))
 }
 
 function buildPrintFloat(): IRFunction {
     return fn('print_float', [['v', f32]], void_, [],
-        vblock(stmtExpr(ucall('print', void_,
+        vblock(stmtExpr(ucall(ENV_PRINT, void_,
             instr1('i32.trunc_f32_s', i32, lg('v', f32))))))
 }
 
@@ -382,7 +382,7 @@ function buildPrintString(): IRFunction {
         stmtExpr(loop(LOOP_ID,
             binop('i32_lt_s', lg('i'), lg('len')),
             vblock(
-                stmtExpr(ucall('print', void_,
+                stmtExpr(ucall(ENV_PRINT, void_,
                     instr1('i32.load8_u', i32,
                         binop('i32_add', lg('ptr'), binop('i32_add', c(4), lg('i')))))),
                 ls('i', binop('i32_add', lg('i'), c(1))),
@@ -452,11 +452,18 @@ export interface PreludeSpec {
     memoryMaxPages?: number
 }
 
+// Private internal names for env.print / env.read imports.
+// These must not collide with any user-defined Silicon function name.
+// The binary emitter resolves calls by these names; the WAT emitter uses
+// std.wat directly ($print / $read) and is unaffected by this change.
+const ENV_PRINT = '__env_print' as const
+const ENV_READ  = '__env_read'  as const
+
 export function buildPrelude(heapBase: number, includeHostIO: boolean, maxPages?: number): PreludeSpec {
     const imports: IRImport[] = []
     if (includeHostIO) {
-        imports.push({ kind: 'Import', env: 'env', field: 'print', name: 'print', params: [i32], result: undefined })
-        imports.push({ kind: 'Import', env: 'env', field: 'read',  name: 'read',  params: [],   result: i32 })
+        imports.push({ kind: 'Import', env: 'env', field: 'print', name: ENV_PRINT, params: [i32], result: undefined })
+        imports.push({ kind: 'Import', env: 'env', field: 'read',  name: ENV_READ,  params: [],   result: i32 })
     }
 
     const globals: IRGlobal[] = [
