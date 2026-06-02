@@ -101,14 +101,18 @@ const { tree: newTree } = initialTree.withText(editedSource)
 const { tree: elab }    = elaborate(newTree, reg)   // registry reused — no rebuild
 ```
 
-**Incremental reparse (tracker 3b, M1).** `withText` / `withChanges` reuse the
+**Incremental reparse (tracker 3b).** `withText` / `withChanges` reuse the
 top-level elements an edit didn't touch and reparse only the damaged window —
 exploiting the parser's Zig-like property that top-level declarations parse
-independently. This is a transparent internal optimization: the returned tree is
+independently. Positions use a relative encoding (each node's `relSpan` is
+relative to its element's `elemBase`), so unchanged suffix elements are reused
+**by reference** even across newline-changing edits — only the element-level base
+shifts. This is a transparent internal optimization: the returned tree is
 **byte-identical** to a full reparse (guaranteed by a full-reparse fallback and a
 `SIGIL_INCREMENTAL_VERIFY=1` correctness tripwire), and the public API is
-unchanged. Localized edits on large files reparse only one element. See
-`src/caas/incremental.ts`; benchmark with `bun run bench:incremental`.
+unchanged. ~2–2.6× faster on localized edits. See `src/caas/incremental.ts` and
+`src/ast/positionTable.ts`; benchmark with `bun run bench:incremental`. (Only the
+parse phase is incremental; elaborate + typecheck still run fully per edit.)
 
 ### `ElaboratorRegistry`
 
