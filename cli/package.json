@@ -1,13 +1,13 @@
 {
   "name": "@silicon/cli",
-  "version": "0.1",
+  "version": "0.1.0",
   "type": "module",
   "bin": {
     "sgl": "./src/sigil_cli.ts"
   },
   "scripts": {
     "sgl": "bun run src/sigil_cli.ts",
-    "build:sigilc": "bun run scripts/build-binary.ts",
+    "build:sgl": "bun run scripts/build-binary.ts",
     "build:binaries": "bun run scripts/build-binary.ts linux-x86_64 linux-aarch64 macos-x86_64 macos-aarch64",
     "package:release": "bun run scripts/package-release.ts",
     "test": "bun test",

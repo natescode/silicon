@@ -10,11 +10,11 @@ PackageVersion: 1.0.0
 PackageLocale: en-US
 Publisher: Nate Codes
 PublisherUrl: https://github.com/natescode
-PublisherSupportUrl: https://github.com/natescode/sigil/issues
+PublisherSupportUrl: https://github.com/natescode/silicon/issues
 PackageName: sgl
-PackageUrl: https://github.com/natescode/sigil
+PackageUrl: https://github.com/natescode/silicon
 License: MIT
-LicenseUrl: https://github.com/natescode/sigil/blob/main/LICENSE
+LicenseUrl: https://github.com/natescode/silicon/blob/main/LICENSE
 ShortDescription: The Silicon compiler — WebAssembly-targeting language
 Description: |
   sgl is the command-line interface for the Silicon programming language compiler.
@@ -22,7 +22,7 @@ Description: |
   The native backend (--native / --release) compiles to native executables via QBE.
 
   Windows users: install inside WSL2 using the curl|sh installer:
-    curl -fsSL https://raw.githubusercontent.com/natescode/sigil/main/scripts/install.sh | sh
+    curl -fsSL https://raw.githubusercontent.com/natescode/silicon/main/scripts/install.sh | sh
 Tags:
   - compiler
   - webassembly
@@ -35,7 +35,7 @@ ManifestVersion: 1.6.0
 Installers:
   - Architecture: x64
     InstallerType: wsl
-    InstallerUrl: https://raw.githubusercontent.com/natescode/sigil/main/scripts/install.sh
+    InstallerUrl: https://raw.githubusercontent.com/natescode/silicon/main/scripts/install.sh
     InstallerSha256: PLACEHOLDER_SHA256
     InstallerSwitches:
       Silent: ""

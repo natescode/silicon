@@ -109,8 +109,8 @@ For real project work, build a standalone `sgl` binary and put it on your
 `PATH` — then `init`/`build`/`run`/`check` operate on the current project:
 
 ```sh
-bun --filter '@silicon/cli' build:sigilc      # → cli/dist/sigilc
-./cli/dist/sigilc init my-project
+bun --filter '@silicon/cli' build:binaries    # → cli/dist/sgl-<platform>
+./cli/dist/sgl-linux-x86_64 init my-project   # use the binary for your platform
 cd my-project
 sgl run                                        # compile + execute via wasmtime
 ```

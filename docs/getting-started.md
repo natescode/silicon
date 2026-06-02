@@ -10,7 +10,7 @@ in about 15 minutes.
 **macOS / Linux (curl | sh):**
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/natescode/sigil/main/scripts/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/natescode/silicon/main/scripts/install.sh | sh
 ```
 
 After installation, restart your shell (or run `export PATH="$PATH:~/.sgl/bin"`) and
@@ -23,12 +23,12 @@ sgl --version
 **macOS (Homebrew):**
 
 ```sh
-brew tap natescode/sigil
+brew tap natescode/silicon
 brew install sgl
 ```
 
 **Windows:** Use the curl | sh command inside WSL2, or download a tarball from
-the [GitHub Releases](https://github.com/natescode/sigil/releases) page.
+the [GitHub Releases](https://github.com/natescode/silicon/releases) page.
 
 ---
 
@@ -205,4 +205,4 @@ the v1.1 roadmap.
   for IDE integrations, linters, and other tooling.
 - **Strata authoring:** `docs/strata-authoring-guide.md` — add your own keywords
   and operators without modifying the grammar.
-- **Issues / feedback:** https://github.com/natescode/sigil/issues
+- **Issues / feedback:** https://github.com/natescode/silicon/issues

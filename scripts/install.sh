@@ -95,29 +95,27 @@ download() {
 
     if command -v curl >/dev/null 2>&1; then
         curl -fsSL --progress-bar -o "${TARBALL_PATH}" "${URL}"
-        curl -fsSL -o "${TARBALL_PATH}.sha256" "${SHA_URL}" 2>/dev/null || true
+        curl -fsSL -o "${TARBALL_PATH}.sha256" "${SHA_URL}"
     elif command -v wget >/dev/null 2>&1; then
         wget -q --show-progress -O "${TARBALL_PATH}" "${URL}"
-        wget -q -O "${TARBALL_PATH}.sha256" "${SHA_URL}" 2>/dev/null || true
+        wget -q -O "${TARBALL_PATH}.sha256" "${SHA_URL}"
     fi
 
-    # Verify checksum if the .sha256 file was downloaded successfully.
-    if [ -f "${TARBALL_PATH}.sha256" ]; then
-        EXPECTED="$(awk '{print $1}' "${TARBALL_PATH}.sha256")"
-        if command -v sha256sum >/dev/null 2>&1; then
-            ACTUAL="$(sha256sum "${TARBALL_PATH}" | awk '{print $1}')"
-        elif command -v shasum >/dev/null 2>&1; then
-            ACTUAL="$(shasum -a 256 "${TARBALL_PATH}" | awk '{print $1}')"
-        else
-            ACTUAL=""
-        fi
-        if [ -n "${ACTUAL}" ] && [ "${ACTUAL}" != "${EXPECTED}" ]; then
-            echo "sgl: checksum mismatch — download may be corrupted" >&2
-            echo "  Expected: ${EXPECTED}" >&2
-            echo "  Got:      ${ACTUAL}" >&2
-            rm -rf "${TMP_DIR}"
-            exit 1
-        fi
+    EXPECTED="$(awk '{print $1}' "${TARBALL_PATH}.sha256")"
+    if command -v sha256sum >/dev/null 2>&1; then
+        ACTUAL="$(sha256sum "${TARBALL_PATH}" | awk '{print $1}')"
+    elif command -v shasum >/dev/null 2>&1; then
+        ACTUAL="$(shasum -a 256 "${TARBALL_PATH}" | awk '{print $1}')"
+    else
+        echo "sgl: sha256sum or shasum is required to verify the release" >&2
+        exit 1
+    fi
+    if [ -z "${EXPECTED}" ] || [ "${ACTUAL}" != "${EXPECTED}" ]; then
+        echo "sgl: checksum mismatch — download may be corrupted" >&2
+        echo "  Expected: ${EXPECTED}" >&2
+        echo "  Got:      ${ACTUAL}" >&2
+        rm -rf "${TMP_DIR}"
+        exit 1
     fi
 
     tar xzf "${TARBALL_PATH}" -C "${TMP_DIR}"

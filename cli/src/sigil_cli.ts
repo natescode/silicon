@@ -8,6 +8,7 @@
  *   sgl build [flags] [file] compile to .wasm/.wat
  *   sgl run   [flags] [file] compile and execute
  *   sgl check [flags] [file] typecheck only (no output)
+ *   sgl update [flags]      update the curl-installed sgl binary
  *   sgl test  [file]         run @@test-annotated functions (Phase 7)
  *   sgl eval                 interactive REPL (Phase 7)
  *   sgl add   <pkg>          add a dependency (Phase 7)
@@ -32,6 +33,8 @@ import {
 import { compileToQbe } from '@silicon/compiler/native'
 import { findQbe, invokeQbe, hostQbeArch, downloadAndBuildQbe, QBE_INSTALL_HINT } from './native/backend'
 import { findCc, link, defaultExePath, CC_INSTALL_HINT } from './native/linker'
+import { cmdUpdate } from './update'
+import cliPackage from '../package.json' with { type: 'json' }
 
 // ---------------------------------------------------------------------------
 // Help text
@@ -47,6 +50,7 @@ Commands:
   run   [file]    Compile and execute via wasmtime
   check [file]    Typecheck only; print diagnostics, no output file
   setup           Download and install the QBE native backend toolchain
+  update          Update the curl-installed sgl binary from GitHub Releases
   test  [file]    Run @@test-annotated functions (requires Phase 7)
   eval            Interactive REPL (requires Phase 7)
   add   <pkg>     Add a dependency (1.0: --path <local> only; registry pending)
@@ -80,6 +84,11 @@ Build / run flags:
 Format flags (sgl fmt only):
   --check         Exit 1 if formatted output differs from the input file
   --stdout        Print formatted output to stdout; do not modify the file
+
+Update flags (sgl update only):
+  --check         Report whether a newer stable release exists; do not install
+  --force         Reinstall even when the current version equals latest
+  --version <v>   Install a specific release tag, e.g. v1.0.0
 
 File resolution:
   If no file is given, sgl reads sgl.toml in the current directory and uses
@@ -733,7 +742,7 @@ function parseTarget(value: string, source: '--target' | 'sgl.toml [build] targe
     process.exit(1)
 }
 
-const SGL_VERSION = '0.1.0'
+const SGL_VERSION = cliPackage.version
 
 const argv = process.argv.slice(2)
 
@@ -749,6 +758,16 @@ if (argv.length === 0 || argv[0] === 'help' || argv[0] === '--help' || argv[0] =
 
 const subcommand = argv[0]
 const rest = argv.slice(1)
+
+if (subcommand === 'update') {
+    try {
+        await cmdUpdate({ currentVersion: SGL_VERSION, args: rest })
+        process.exit(0)
+    } catch (e) {
+        console.error(`\x1b[31mError: ${e}\x1b[39m`)
+        process.exit(1)
+    }
+}
 
 // Parse flags from the rest of the args
 const strataFiles: string[] = []
