@@ -80,7 +80,7 @@ for multi-project workspaces and production editor performance.
 
 | # | Feature | Status | Notes |
 |---|---------|--------|-------|
-| 3a | **`Project` layer** | 🔲 | `Workspace` is flat today. A `Project` groups `Document`s with a shared name, output target, and dependency edges to other `Project`s. Needed for monorepos and library-consumer builds. Rough shape: `workspace.addProject(name, opts)`, `project.addDocument(uri, source)`. |
+| 3a | **`Project` layer** | ✅ | Implemented 2026-06-02. `Workspace.addProject(name, { target? })` → `Project`; `project.addDocument(uri, source)`, `project.addDependency(other)`. Cross-document typechecking is now **scoped per project** — a document sees only symbols from its own project plus the transitive (cycle-safe) closure of that project's dependencies. The project's compile `target` is threaded into the typechecker. With no projects created the workspace stays flat (every doc sees every other) — fully backward-compatible. Documents opened through the flat API stay unassigned and, once any project exists, see only other unassigned docs. `Document.projectName` records membership. Navigation / completion remain workspace-global (they ride the global symbol index); per-project filtering of those is a follow-up. |
 | 3b | **Incremental parsing** | 🔲 | `SyntaxTree.withChanges()` applies text edits then full-reparses. Roslyn reuses unchanged subtrees. This is a significant perf win for large files. Requires a stable node-identity scheme in the parser. No public API change needed — it's an internal optimization. |
 | 3c | **`MetadataReference`** | 🔲 | Consuming a pre-compiled Silicon library (`.wasm` + symbol manifest) without its source. Required for package-registry integration. Shape mirrors Roslyn: `workspace.addReference(path)` loads the manifest into the symbol index. Blocked on the package format being finalized. |
 | 3d | **Control-flow graph API** | ❌ | `GetControlFlowGraph` on Roslyn. Useful for linters and analyzers. Out of scope until Silicon has more complex control flow constructs (exceptions, exhaustive match, etc.). Revisit post-1.1. |
@@ -138,6 +138,7 @@ Small additions that round out the surface. None are blocking.
 | `Workspace.findDefinitions` | (no exact equivalent; Roslyn assumes unique names in scope) | `src/caas/workspace.ts` |
 | `Workspace.findReferences` | `SymbolFinder.FindReferencesAsync` (cross-doc) | `src/caas/workspace.ts` |
 | `Workspace.onDidChange` | `Workspace.WorkspaceChanged` event | `src/caas/workspace.ts` |
+| `Workspace.addProject` / `Project` | `AdhocWorkspace.AddProject`, `Project`, `ProjectReference` | `src/caas/workspace.ts` |
 | `TextChange` / `withChanges` | `VersionedTextDocumentIdentifier` + incremental sync | `src/caas/textChange.ts` |
 | `CodeAction` / `applyEdits` | `CodeAction`, `Workspace.TryApplyChanges` | `src/caas/codeAction.ts` |
 | Symbol index (cross-doc name lookup) | `SymbolFinder` + compilation-wide symbol table | `src/caas/workspace.ts` (in-memory, name-keyed) |

@@ -342,6 +342,12 @@ class Workspace {
     closeDocument(uri: string): void
     getDocument(uri: string): Document | undefined
 
+    // Projects (tracker 3a) — named, dependency-scoped document groups
+    addProject(name: string, options?: ProjectOptions): Project   // { target? }
+    getProject(name: string): Project | undefined
+    projectOf(uri: string): Project | undefined
+    readonly projects: ReadonlyMap<string, Project>
+
     // Inspection
     readonly documents: ReadonlyMap<string, Document>
     readonly registry:  ElaboratorRegistry | undefined
@@ -351,7 +357,16 @@ class Workspace {
 
     // Navigation (CaaS-5) — 1-based line/col matching editor conventions
     findDefinition(uri: string, line: number, col: number): Symbol | undefined
+    findDefinitions(uri: string, line: number, col: number): Symbol[]
     findReferences(uri: string, line: number, col: number): readonly SourceSpan[]
+
+    // LSP Tier 1 — 1-based line/col
+    hoverInfo(uri: string, line: number, col: number): HoverInfo | undefined
+    getCompletions(uri: string, line: number, col: number, prefix?: string): CompletionItem[]
+    signatureHelp(uri: string, line: number, col: number): SignatureHelp | undefined
+    rename(uri: string, line: number, col: number, newName: string): WorkspaceEdit
+    formatDocument(uri: string): TextEdit[]
+    formatRange(uri: string, range: SourceRange): TextEdit[]
 }
 ```
 
@@ -362,6 +377,7 @@ interface Document {
     readonly uri:         string
     readonly source:      string
     readonly version:     number              // increments on each edit
+    readonly projectName?: string             // owning project, if any (tracker 3a)
     readonly tree:        SyntaxTree          // parse output
     readonly elabTree:    SyntaxTree          // elaborate output
     readonly model:       SemanticModel       // typecheck output
@@ -403,6 +419,58 @@ ws.closeDocument('src/lib.si')   // fires 'closed' event
 unsub()                          // stop listening
 ```
 
+### Project layer (tracker 3a)
+
+By default a `Workspace` is **flat** — every open document can resolve symbols
+defined in every other open document. A `Project` partitions the workspace into
+named groups, each with its own compile `target` and dependency edges to other
+projects. Cross-document type checking is then **scoped**: a document sees only
+symbols from its own project plus the transitive closure of that project's
+dependencies.
+
+```typescript
+class Project {
+    readonly name:   string
+    readonly target: LowerTarget               // 'host' | 'wasix' | 'wasm-gc'
+
+    addDocument(uri: string, source: string): Document
+    addDependency(other: Project): void        // idempotent; cycle-safe
+
+    readonly dependencies: readonly Project[]   // direct edges
+    readonly documentUris: readonly string[]
+    readonly documents:    Document[]
+}
+```
+
+```typescript
+const ws = new Workspace()
+
+const core = ws.addProject('core')
+const app  = ws.addProject('app', { target: 'wasm-gc' })
+app.addDependency(core)                         // app → core
+
+core.addDocument('core/math.si', '\\ add (Int, Int)\n@fn add x, y := { x + y };')
+const main = app.addDocument('app/main.si', '@let r := &add 1, 2;')
+
+main.projectName                                // 'app'
+main.model.symbolNamed('r')?.type?.kind         // 'Int' — resolved across the edge
+```
+
+Scoping rules:
+
+- **No projects created** → flat workspace, every document sees every other
+  (fully backward-compatible).
+- **Document in project P** → sees P plus P's transitive (cycle-safe) dependency
+  closure. Visibility follows dependency direction: if B depends on A, B sees A's
+  symbols but not vice versa.
+- **Unassigned document** (opened via `openDocument` while projects exist) → sees
+  only other unassigned documents.
+
+Adding a dependency does not retroactively re-check already-compiled documents;
+edit a consumer to pick up newly-visible symbols. Navigation and completion
+(`findDefinition`, `getCompletions`, …) remain workspace-global — they ride the
+shared symbol index; per-project filtering of those is a planned follow-up.
+
 ### Registry lifecycle in Workspace
 
 The Workspace builds the shared registry from the **first** document opened (unless
@@ -418,7 +486,9 @@ ws.openDocument('strata/core.si', strataSource)  // registry built here
 ws.openDocument('src/main.si',    mainSource)     // uses the strata registry
 ```
 
-Cross-document symbol resolution is tracked as CaaS-5 (not yet implemented).
+Cross-document symbol resolution (CaaS-5) is implemented — see `findDefinition` /
+`findReferences` above. Cross-document **type checking** is scoped per project
+(tracker 3a); see [Project layer](#project-layer-tracker-3a).
 
 ---
 
@@ -429,6 +499,7 @@ ElaboratorRegistry  — built once per project; reused across all elaborations
 SyntaxTree          — one per source version; cheap to recreate via withText()
 SemanticModel       — one per (SyntaxTree, registry) pair; built by typecheck()
 Workspace           — owns the registry + all open Documents
+Project             — named group of Documents with a target + dependency edges
 Document            — snapshot of one file's compiled state at a given version
 ```
 
@@ -457,7 +528,7 @@ promise takes effect at 1.0:
 ```
 parse()   buildRegistry()   elaborate()   typecheck()   lower()   compile()
 SyntaxTree   SemanticModel   Symbol   Diagnostic   SourceSpan
-Workspace   Document
+Workspace   Project   Document
 ParseResult   ElabResult   CheckResult   LowerResult   CompileResult
 ```
 

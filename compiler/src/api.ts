@@ -43,6 +43,9 @@ export {
 export {
     // Workspace — multi-document project state (CaaS-4)
     Workspace,
+    // Project layer — named, dependency-scoped document groups (CaaS tracker 3a)
+    Project,
+    type ProjectOptions,
     type Document,
     type DocumentChangeEvent,
     type ChangeListener,

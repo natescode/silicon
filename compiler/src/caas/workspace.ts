@@ -6,6 +6,17 @@
  * Each Document holds its current source, parsed SyntaxTree, elaborated tree,
  * SemanticModel, and the union of all per-phase diagnostics.
  *
+ * Project layer (CaaS tracker 3a):
+ *   - Documents can be grouped into named `Project`s via `addProject` /
+ *     `Project.addDocument`.  Each project has a compile target and dependency
+ *     edges to other projects.
+ *   - Cross-document type checking is scoped per-project: a document sees only
+ *     symbols from its own project plus the transitive closure of that
+ *     project's dependencies.  Documents opened through the flat API stay
+ *     unassigned and (once any project exists) see only other unassigned docs.
+ *   - With no projects created, the workspace is flat and every document sees
+ *     every other — fully backward-compatible.
+ *
  * Cross-document symbol resolution (CaaS-5):
  *   - A workspace-level symbol index is maintained as documents are opened,
  *     edited, and closed.
@@ -38,6 +49,7 @@ import { typeDisplayString } from '../ast/semanticModel'
 import type { SiliconType } from '../types/types'
 import type { Diagnostic, SourceSpan } from '../errors/diagnostic'
 import type { TextEdit } from './codeAction'
+import type { LowerTarget } from '../ir/lower'
 
 // ---------------------------------------------------------------------------
 // Tier 1 LSP return types
@@ -91,6 +103,8 @@ export interface Document {
     readonly source: string
     /** Monotonically increasing edit counter. Starts at 1. */
     readonly version: number
+    /** Name of the project this document belongs to, or undefined if unassigned (CaaS tracker 3a). */
+    readonly projectName?: string
     /** Parse-phase output. */
     readonly tree: SyntaxTree
     /** Elaborate-phase output. */
@@ -123,6 +137,16 @@ export interface WorkspaceOptions {
     registry?: ElaboratorRegistry
 }
 
+/** Options for a Project created via {@link Workspace.addProject} (CaaS tracker 3a). */
+export interface ProjectOptions {
+    /**
+     * Compile target for every document in this project.  Threaded into the
+     * typechecker so portability diagnostics (E0012 / E0013) fire for
+     * `'wasm-gc'` projects.  Defaults to `'host'`.
+     */
+    target?: LowerTarget
+}
+
 /** One entry in the workspace symbol index. */
 interface IndexEntry {
     readonly uri: string
@@ -145,6 +169,12 @@ export class Workspace {
      */
     readonly #symbolIndex = new Map<string, IndexEntry[]>()
 
+    /** Named projects (CaaS tracker 3a), keyed by project name. */
+    readonly #projects = new Map<string, Project>()
+
+    /** Reverse index: document URI → owning project (unassigned URIs are absent). */
+    readonly #docToProject = new Map<string, Project>()
+
     constructor(options: WorkspaceOptions = {}) {
         this.#registry = options.registry
     }
@@ -158,6 +188,44 @@ export class Workspace {
      */
     get registry(): ElaboratorRegistry | undefined {
         return this.#registry
+    }
+
+    // ── projects (CaaS tracker 3a) ─────────────────────────────────────────────
+
+    /**
+     * Create a new named project.  Documents added via
+     * {@link Project.addDocument} are scoped to it for cross-document type
+     * checking — a document only sees symbols defined in its own project plus
+     * the transitive closure of that project's dependencies.
+     *
+     * Documents opened through the flat {@link openDocument} API remain
+     * unassigned; while at least one project exists they see only other
+     * unassigned documents.
+     *
+     * Throws if a project named `name` already exists.
+     */
+    addProject(name: string, options: ProjectOptions = {}): Project {
+        if (this.#projects.has(name)) {
+            throw new Error(`Project already exists: ${name}`)
+        }
+        const project = new Project(this, name, options.target ?? 'host')
+        this.#projects.set(name, project)
+        return project
+    }
+
+    /** Retrieve a project by name, or undefined if none exists. */
+    getProject(name: string): Project | undefined {
+        return this.#projects.get(name)
+    }
+
+    /** All projects in this workspace, keyed by name. */
+    get projects(): ReadonlyMap<string, Project> {
+        return this.#projects
+    }
+
+    /** The project a document belongs to, or undefined if it is unassigned. */
+    projectOf(uri: string): Project | undefined {
+        return this.#docToProject.get(uri)
     }
 
     // ── document map ──────────────────────────────────────────────────────────
@@ -184,8 +252,26 @@ export class Workspace {
      * versions.
      */
     openDocument(uri: string, source: string): Document {
+        return this.#open(uri, source, undefined)
+    }
+
+    /**
+     * @internal Open a document and associate it with `project`.  Called by
+     * {@link Project.addDocument}; not part of the stable public API.
+     */
+    _openInProject(uri: string, source: string, project: Project): Document {
+        return this.#open(uri, source, project)
+    }
+
+    #open(uri: string, source: string, project: Project | undefined): Document {
         if (this.#docs.has(uri)) {
             throw new Error(`Document already open: ${uri}. Use editDocument() to update it.`)
+        }
+        // Record project membership *before* compiling so cross-document scoping
+        // is correct on the first pass.
+        if (project) {
+            this.#docToProject.set(uri, project)
+            project._trackUri(uri)
         }
         const doc = this.#compile(uri, source, 1)
         this.#docs.set(uri, doc)
@@ -222,6 +308,11 @@ export class Workspace {
     closeDocument(uri: string): void {
         if (!this.#docs.has(uri)) return
         this.#docs.delete(uri)
+        const project = this.#docToProject.get(uri)
+        if (project) {
+            project._untrackUri(uri)
+            this.#docToProject.delete(uri)
+        }
         this.#removeFromSymbolIndex(uri)
         this.#emit({ kind: 'closed', uri, document: undefined })
     }
@@ -545,15 +636,23 @@ export class Workspace {
 
         // 4. Typecheck — pass cross-document symbols so references to definitions
         //    in other open Workspace documents don't produce "unbound identifier"
-        //    errors and resolve to their correct types (CaaS-2g).
+        //    errors and resolve to their correct types (CaaS-2g).  External
+        //    symbols are scoped to this document's project + dependency closure
+        //    (CaaS tracker 3a); the project's compile target is threaded through
+        //    so portability diagnostics fire for `wasm-gc` projects.
+        const project = this.#docToProject.get(uri)
         const externalSymbols = this.#buildExternalSymbols(uri)
-        const checkResult = typecheck(elabResult.tree, elabResult.registry, { externalSymbols })
+        const checkResult = typecheck(elabResult.tree, elabResult.registry, {
+            externalSymbols,
+            target: project?.target,
+        })
         allDiags.push(...checkResult.diagnostics)
 
         return {
             uri,
             source,
             version,
+            projectName: project?.name,
             tree: parseResult.tree,
             elabTree: elabResult.tree,
             model: checkResult.model,
@@ -568,14 +667,17 @@ export class Workspace {
     }
 
     /**
-     * Build a map of `name → SiliconType` from all open documents *except*
-     * `currentUri`.  Passed to the typechecker as `externalSymbols` so
-     * cross-document references resolve correctly (CaaS-2g).
+     * Build a map of `name → SiliconType` from the documents *visible* to
+     * `currentUri` (excluding itself).  Passed to the typechecker as
+     * `externalSymbols` so cross-document references resolve correctly
+     * (CaaS-2g), scoped per-project (CaaS tracker 3a).
      */
     #buildExternalSymbols(currentUri: string): ReadonlyMap<string, SiliconType> {
+        const visible = this.#visibleUris(currentUri)
         const ext = new Map<string, SiliconType>()
         for (const [uri, doc] of this.#docs) {
             if (uri === currentUri) continue
+            if (visible && !visible.has(uri)) continue
             for (const sym of doc.model.allSymbols) {
                 if (sym.type && !ext.has(sym.name)) {
                     ext.set(sym.name, sym.type)
@@ -583,6 +685,40 @@ export class Workspace {
             }
         }
         return ext
+    }
+
+    /**
+     * The set of document URIs whose symbols are visible to `currentUri` for
+     * cross-document type checking, or `undefined` when no projects exist — the
+     * legacy flat behavior where every document sees every other.
+     *
+     * With at least one project:
+     *   - A document in project P sees P plus P's transitive dependency closure.
+     *   - An unassigned document sees only other unassigned documents.
+     *
+     * Visibility follows dependency direction: if B depends on A, B's documents
+     * see A's symbols but not vice versa.
+     */
+    #visibleUris(currentUri: string): Set<string> | undefined {
+        if (this.#projects.size === 0) return undefined
+
+        const owner = this.#docToProject.get(currentUri)
+        const set = new Set<string>()
+
+        // Unassigned document — only other unassigned documents are visible.
+        if (!owner) {
+            for (const uri of this.#docs.keys()) {
+                if (!this.#docToProject.has(uri)) set.add(uri)
+            }
+            return set
+        }
+
+        // Assigned document — its project plus the transitive dependency closure.
+        const closure = owner._depClosure()
+        for (const [uri, project] of this.#docToProject) {
+            if (closure.has(project)) set.add(uri)
+        }
+        return set
     }
 
     /** Rebuild index entries for one document after a compile. */
@@ -617,6 +753,122 @@ export class Workspace {
                 this.#symbolIndex.set(name, filtered)
             }
         }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Project (CaaS tracker 3a)
+// ---------------------------------------------------------------------------
+
+/**
+ * A named group of documents within a {@link Workspace}.
+ *
+ * Projects partition an otherwise-flat workspace into independently-scoped
+ * units, each with its own compile target and a set of dependency edges to
+ * other projects.  Cross-document type checking is scoped to a document's own
+ * project plus the transitive closure of that project's dependencies: a symbol
+ * defined in project A is visible to project B only if B depends — directly or
+ * transitively — on A.
+ *
+ * Obtain one via {@link Workspace.addProject}; never construct it directly.
+ *
+ *   const core = ws.addProject('core')
+ *   const app  = ws.addProject('app')
+ *   app.addDependency(core)
+ *   core.addDocument('core/math.si', '@fn add x, y := { x + y };')
+ *   app.addDocument('app/main.si',  '@let r := &add 1, 2;')  // resolves `add`
+ *
+ * @public — Silicon 1.0 stable.
+ */
+export class Project {
+    /** The project name — unique within its Workspace. */
+    readonly name: string
+    /** Compile target applied to every document in this project. */
+    readonly target: LowerTarget
+
+    readonly #ws: Workspace
+    readonly #uris = new Set<string>()
+    readonly #deps = new Set<Project>()
+
+    /** @internal Use {@link Workspace.addProject}, not this constructor. */
+    constructor(ws: Workspace, name: string, target: LowerTarget) {
+        this.#ws = ws
+        this.name = name
+        this.target = target
+    }
+
+    /**
+     * Open `source` as a new document and add it to this project.
+     *
+     * Delegates to the parent {@link Workspace} — all compilation phases run,
+     * the workspace symbol index updates, and an `'opened'` change event fires.
+     * Project membership is recorded before compilation so cross-document
+     * scoping is correct on the first pass.
+     *
+     * Throws if a document with `uri` is already open anywhere in the workspace.
+     */
+    addDocument(uri: string, source: string): Document {
+        return this.#ws._openInProject(uri, source, this)
+    }
+
+    /**
+     * Add a dependency edge to `other`, making every symbol defined in `other`
+     * (and `other`'s own transitive dependencies) visible to this project's
+     * documents during cross-document type checking.
+     *
+     * Idempotent.  Cycles and self-dependencies are tolerated — the visibility
+     * closure walk is cycle-safe.  Note that already-compiled documents are not
+     * automatically re-checked; edit a document to pick up newly-visible symbols.
+     */
+    addDependency(other: Project): void {
+        this.#deps.add(other)
+    }
+
+    /** The direct dependency edges added via {@link addDependency}. */
+    get dependencies(): readonly Project[] {
+        return [...this.#deps]
+    }
+
+    /** URIs of every document currently in this project. */
+    get documentUris(): readonly string[] {
+        return [...this.#uris]
+    }
+
+    /** The compiled documents currently in this project. */
+    get documents(): Document[] {
+        const out: Document[] = []
+        for (const uri of this.#uris) {
+            const doc = this.#ws.getDocument(uri)
+            if (doc) out.push(doc)
+        }
+        return out
+    }
+
+    /** @internal Track `uri` as a member of this project. */
+    _trackUri(uri: string): void {
+        this.#uris.add(uri)
+    }
+
+    /** @internal Stop tracking `uri` (the document was closed). */
+    _untrackUri(uri: string): void {
+        this.#uris.delete(uri)
+    }
+
+    /**
+     * @internal The transitive dependency closure including `this`.  Cycle-safe
+     * via a visited set.  Used by the Workspace to compute cross-document
+     * symbol visibility.
+     */
+    _depClosure(): Set<Project> {
+        const result = new Set<Project>()
+        const stack: Project[] = [this]
+        while (stack.length > 0) {
+            const project = stack.pop()!
+            if (result.has(project)) continue
+            result.add(project)
+            for (const dep of project.#deps) stack.push(dep)
+        }
+        return result
     }
 }
 
