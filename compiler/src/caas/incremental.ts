@@ -147,9 +147,12 @@ export function incrementalReparse(
     if (frag === null) return null
 
     // Assemble: reused prefix + freshly parsed window + reused (delta-shifted) suffix.
+    // The suffix shifted by `delta` bytes: shallow-clone each element root with its
+    // `elemBase` bumped (M3); descendants are shared by reference (their `relSpan`
+    // is element-relative, so unchanged).  Prefix never moved → reused verbatim.
     const prefixNodes = prefix.flatMap(e => e.nodes)
     const suffixExtents: ElementExtent[] = reuseSuffix
-        ? suffix.map(e => ({ nodes: e.nodes, start: e.start + delta, end: e.end + delta }))
+        ? suffix.map(e => ({ nodes: shiftElemBase(e.nodes, delta), start: e.start + delta, end: e.end + delta }))
         : []
     const suffixNodes = suffixExtents.flatMap(e => e.nodes)
 
@@ -177,6 +180,19 @@ function canonical(value: any): any {
     const out: Record<string, any> = {}
     for (const k of Object.keys(value).sort()) out[k] = canonical(value[k])
     return out
+}
+
+/**
+ * Shallow-clone each top-level element root with its `elemBase` shifted by
+ * `delta` byte (M3 suffix reuse); descendants are shared by reference.  Returns
+ * the originals unchanged when `delta === 0`.  The old tree is never mutated.
+ */
+function shiftElemBase<T extends object>(nodes: readonly T[], delta: number): T[] {
+    if (delta === 0) return nodes as T[]
+    return nodes.map(root => {
+        const base = (root as { elemBase?: number }).elemBase
+        return base === undefined ? root : { ...root, elemBase: base + delta }
+    })
 }
 
 function countNewlines(s: string): number {

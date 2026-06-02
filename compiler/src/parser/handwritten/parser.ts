@@ -24,6 +24,7 @@ import {
     type ExpressionStart, type SourceLocation, type ASTNode,
 } from '../../ast/astNodes'
 import { Lexer, computeLineStarts, lineColumnAt, type Token } from './lexer'
+import { astChildren } from '../../ast/astChildren'
 
 /** Internal shape produced by AttachedSig (mirrors toAst's anonymous object). */
 interface SigInfo { name: string; generics?: GenericParams; type: any }
@@ -103,6 +104,7 @@ class Parser {
             const r = this.parseElement()
             const end = this.toks[this.pos - 1].end
             const nodes = Array.isArray(r) ? r : [r]
+            relativizeElement(nodes, start)
             elements.push(...nodes)
             extents.push({ nodes, start, end })
         }
@@ -132,6 +134,7 @@ class Parser {
                 const end = this.toks[this.pos - 1].end
                 if (end > endByte) return null   // element crossed the suffix boundary
                 const groupNodes = Array.isArray(r) ? r : [r]
+                relativizeElement(groupNodes, start)
                 nodes.push(...groupNodes)
                 extents.push({ nodes: groupNodes, start, end })
             }
@@ -263,6 +266,7 @@ class Parser {
         const name = ASTFactory.typedIdentifier(identTok.text, returnAnnotation)
         const node = ASTFactory.definition(kw, name, paramList, genericParams, binding)
         node.sourceLocation = this.loc(identTok.start, identTok.end)
+        node.relSpan = { start: identTok.start, end: identTok.end }   // absolute now; relativized per element (M3)
         return node
     }
 
@@ -471,6 +475,7 @@ class Parser {
         }
         const node = ASTFactory.namespace(parts)
         node.sourceLocation = this.loc(startTok.start, endOff)
+        node.relSpan = { start: startTok.start, end: endOff }   // absolute now; relativized per element (M3)
         return node
     }
 
@@ -626,6 +631,30 @@ export function parseToAst(sourceCode: string): Program {
 }
 
 // ── Incremental-parsing support (CaaS tracker 3b) ──────────────────────────
+
+/**
+ * Re-base one top-level element's positions for the M3 relative-position model:
+ *   - stamp the absolute element `base` on each root node (`elemBase`), and
+ *   - make every positioned descendant's `relSpan` relative to `base`.
+ *
+ * `elemBase` lives only on the element root (so incremental reuse shifts O(elements)
+ * bases, not O(nodes)); `relSpan` becomes position-independent (survives reuse and
+ * elaboration's spread-cloning by reference).  Absolute line/col is reconstructed
+ * later by `PositionTable` from `elemBase + relSpan`.
+ */
+function relativizeElement(nodes: ASTNode[], base: number): void {
+    for (const root of nodes) {
+        (root as any).elemBase = base
+        relativizeSpans(root, base)
+    }
+}
+
+function relativizeSpans(node: any, base: number): void {
+    if (node === null || typeof node !== 'object') return
+    if (node.relSpan) node.relSpan = { start: node.relSpan.start - base, end: node.relSpan.end - base }
+    for (const child of astChildren(node)) relativizeSpans(child, base)
+}
+
 
 /** Byte span `[start, end)` of one top-level element group's token range. */
 export interface ElementExtent {
