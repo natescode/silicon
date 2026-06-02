@@ -47,14 +47,32 @@ function ohmFloatValue(text: string): string {
     return ohmDecValue(text.slice(0, dot)) + '.' + text.slice(dot + 1)
 }
 
+const ZERO_LOC: SourceLocation = { startLine: 0, startColumn: 0, endLine: 0, endColumn: 0 }
+
 class Parser {
     private readonly toks: Token[]
     private readonly lineStarts: number[]
+    /** True when only a byte window was lexed (incremental reparse, M4): absolute
+     *  line/col is not computed here — caas trees drop `sourceLocation` and resolve
+     *  positions via `PositionTable` from `relSpan` + `elemBase`. */
+    private readonly windowed: boolean
     private pos = 0
 
-    constructor(private readonly src: string) {
-        this.toks = new Lexer(src).tokenize()
-        this.lineStarts = computeLineStarts(src)
+    constructor(private readonly src: string, lexRange?: readonly [number, number]) {
+        if (lexRange) {
+            // Incremental lexing (M4): tokenize only the damaged window, then
+            // rebase token offsets to absolute (`src` stays the full source so
+            // text slices remain correct).  O(window) instead of O(whole file).
+            const [start, end] = lexRange
+            this.toks = new Lexer(src.slice(start, end)).tokenize()
+            if (start !== 0) for (const t of this.toks) { t.start += start; t.end += start }
+            this.lineStarts = []
+            this.windowed = true
+        } else {
+            this.toks = new Lexer(src).tokenize()
+            this.lineStarts = computeLineStarts(src)
+            this.windowed = false
+        }
     }
 
     // ── token cursor ────────────────────────────────────────────────────────
@@ -68,12 +86,19 @@ class Parser {
         return this.next()
     }
     private fail(msg: string, t = this.peek()): never {
-        const { line, column } = lineColumnAt(this.lineStarts, this.src, t.start)
+        // Windowed parses are speculative — any failure routes to a full reparse
+        // (which reproduces the real diagnostic), so the line/col here is unused.
+        const { line, column } = this.windowed
+            ? { line: 0, column: 0 }
+            : lineColumnAt(this.lineStarts, this.src, t.start)
         // Format matches the old ohm parser so errors/diagnostic.ts extracts the span.
         throw new Error(`Parse error: Line ${line}, col ${column}: ${msg}`)
     }
 
     private loc(start: number, end: number): SourceLocation {
+        // Windowed (M4): no lineStarts; sourceLocation is dropped on the caas path
+        // and positions come from relSpan + elemBase via PositionTable.
+        if (this.windowed) return ZERO_LOC
         const a = lineColumnAt(this.lineStarts, this.src, start)
         const b = lineColumnAt(this.lineStarts, this.src, end)
         return { startLine: a.line, startColumn: a.column, endLine: b.line, endColumn: b.column }
@@ -692,11 +717,11 @@ export function parseProgramWithExtents(src: string): { program: Program; extent
  */
 export function parseProgramFragment(src: string, startByte: number, endByte: number): FragmentResult | null {
     try {
-        // `new Parser` tokenizes the whole source, which can throw a lex error
-        // when the edit made the file un-lexable outside the window; treat that
-        // like any other window-parse failure so the caller full-reparses (and
-        // surfaces the proper diagnostic).
-        return new Parser(src).parseFragment(startByte, endByte)
+        // M4 incremental lexing: tokenize ONLY the damaged window, not the whole
+        // source.  A lex/parse error (e.g. the edit made the window un-parseable,
+        // or merged an element across the boundary) throws → null → the caller
+        // full-reparses and surfaces the proper diagnostic.
+        return new Parser(src, [startByte, endByte]).parseFragment(startByte, endByte)
     } catch {
         return null
     }
