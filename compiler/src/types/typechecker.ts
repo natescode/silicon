@@ -51,6 +51,8 @@
  */
 
 import type { Program } from '../ast/astNodes'
+import { astChildren } from '../ast/astChildren'
+import type { PositionTable } from '../ast/positionTable'
 import { SemanticModel, type Symbol as CaaSSymbol, type SymbolKind, symbolDisplayString } from '../ast/semanticModel'
 import { toDiagnostic, spanFromLocation, type SourceSpan } from '../errors/diagnostic'
 import {
@@ -330,7 +332,13 @@ export default function typecheck(
     target?: import('../ir/lower').LowerTarget,
     file = '',
     externalSymbols?: ReadonlyMap<string, SiliconType>,
+    positions?: PositionTable,
 ): TypeCheckResult {
+    // M3: positions live in an element-relative `relSpan` + element-root
+    // `elemBase`; resolve them into absolute `sourceLocation` on this (ephemeral)
+    // tree once, up front, so the rest of the checker reads `node.sourceLocation`
+    // unchanged.  Idempotent while the parser still also writes `sourceLocation`.
+    if (positions) stampSourceLocations(program, positions)
     const typeMap = new WeakMap<object, SiliconType>()
     const nodeToSymbolName = new WeakMap<object, string>()
     const symbolToNodes = new Map<string, object[]>()
@@ -1534,6 +1542,21 @@ function typeOfNamespace(ns: any, ctx: Ctx): SiliconType {
     if (suggestion) err.hint = `did you mean '${suggestion}'?`
     ctx.errors.push(err)
     return TypeUnknown
+}
+
+/**
+ * Resolve the M3 relative-position encoding (`relSpan` + element `elemBase`) into
+ * absolute `node.sourceLocation` for every positioned node, in one walk.  Run on
+ * the ephemeral elaborated tree at the start of `typecheck` so the rest of the
+ * checker reads `sourceLocation` exactly as before (output-preserving).
+ */
+function stampSourceLocations(node: any, positions: PositionTable): void {
+    if (node === null || typeof node !== 'object') return
+    if (node.relSpan) {
+        const loc = positions.loc(node)
+        if (loc) node.sourceLocation = loc
+    }
+    for (const child of astChildren(node)) stampSourceLocations(child, positions)
 }
 
 function recordSymbolRef(node: object, name: string, ctx: Ctx): void {

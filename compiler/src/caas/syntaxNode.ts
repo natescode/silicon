@@ -15,6 +15,7 @@
 
 import type { SourceRange } from '../ast/semanticModel'
 import { astChildren } from '../ast/astChildren'
+import type { PositionTable } from '../ast/positionTable'
 
 // ---------------------------------------------------------------------------
 // Trivia (2e)
@@ -111,12 +112,18 @@ export class SyntaxNode {
 
     #children?: readonly SyntaxNode[]
 
-    constructor(node: object, parent?: SyntaxNode) {
+    /** Resolves element-relative positions (M3); propagated to children. */
+    readonly #positions?: PositionTable
+
+    constructor(node: object, parent?: SyntaxNode, positions?: PositionTable) {
         this._node = node
         this.parent = parent
+        this.#positions = positions
         const n = node as any
         this.kind = typeof n.type === 'string' ? n.type : '(unknown)'
-        this.span = locationToRange(n.sourceLocation)
+        // M3: prefer the position table (relSpan + elemBase); fall back to any
+        // absolute sourceLocation still on the node.
+        this.span = locationToRange(positions?.loc(node) ?? n.sourceLocation)
     }
 
     // ── child navigation ──────────────────────────────────────────────────────
@@ -124,7 +131,7 @@ export class SyntaxNode {
     /** Direct child nodes.  Empty for leaf nodes. */
     children(): readonly SyntaxNode[] {
         if (!this.#children) {
-            this.#children = childAstObjects(this._node).map(ch => new SyntaxNode(ch, this))
+            this.#children = childAstObjects(this._node).map(ch => new SyntaxNode(ch, this, this.#positions))
         }
         return this.#children
     }

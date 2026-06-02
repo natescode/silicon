@@ -25,6 +25,7 @@
  */
 
 import { parseProgramWithExtents } from '../parser/parser'
+import { buildPositionTable } from '../ast/positionTable'
 import { SyntaxNode } from './syntaxNode'
 export { SyntaxNode }
 import {
@@ -116,7 +117,10 @@ export class SyntaxTree {
      */
     get root(): SyntaxNode {
         if (!this.#root) {
-            this.#root = new SyntaxNode(this.program as object)
+            // M3: a PositionTable resolves element-relative spans (relSpan +
+            // elemBase) for the wrapper nodes' `.span`.
+            const positions = buildPositionTable(this.program, this.source)
+            this.#root = new SyntaxNode(this.program as object, undefined, positions)
         }
         return this.#root
     }
@@ -389,7 +393,10 @@ export function typecheck(
     registry: ElaboratorRegistry,
     options: CheckOptions = {},
 ): CheckResult {
-    const result = typecheckInternal(tree.program, registry, options.moduleRegistry, options.target, tree.file, options.externalSymbols)
+    // M3: resolve element-relative positions (relSpan + elemBase) into absolute
+    // spans for the checker via a PositionTable built from this tree.
+    const positions = buildPositionTable(tree.program, tree.source)
+    const result = typecheckInternal(tree.program, registry, options.moduleRegistry, options.target, tree.file, options.externalSymbols, positions)
     const typedTree = new SyntaxTree(result.program, tree.source, tree.file)
     const diagnostics: Diagnostic[] = result.errors.map(e => toDiagnostic(e))
     return { tree: typedTree, model: result.semanticModel, diagnostics, _functions: result.functions }
