@@ -194,6 +194,23 @@ describe('incremental parse via withChanges (3b/M1)', () => {
         expect(stableStringify(tree.withChanges([]).tree.program))
             .toBe(stableStringify(parse(src).tree.program))
     })
+
+    test('an edit that makes the file un-lexable falls back without throwing', () => {
+        // The incremental path lexes the whole new source up front (to parse the
+        // window with absolute positions).  An edit that introduces a lex error
+        // — even outside the window — must fall back to a full reparse and
+        // surface the diagnostic, never throw.  Regression for the
+        // parseProgramFragment construction-time lex error.
+        const src = '@let a := 1;\n@let b := 2;\n@let c := 3;'
+        const tree = parse(src).tree
+        const edited = '@let a := 1;\n@let b := `;\n@let c := 3;'   // backtick is not a token
+        let inc!: ReturnType<typeof tree.withText>
+        expect(() => { inc = tree.withText(edited) }).not.toThrow()
+        const full = parse(edited)
+        expect(stableStringify(inc.tree.program)).toBe(stableStringify(full.tree.program))
+        expect(stableStringify(inc.diagnostics)).toBe(stableStringify(full.diagnostics))
+        expect(full.diagnostics.length).toBeGreaterThan(0)   // it really is a parse error
+    })
 })
 
 describe('incremental fast path is actually exercised', () => {

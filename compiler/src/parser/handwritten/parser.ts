@@ -656,7 +656,15 @@ export function parseProgramWithExtents(src: string): { program: Program; extent
  * (caller should full-reparse).
  */
 export function parseProgramFragment(src: string, startByte: number, endByte: number): FragmentResult | null {
-    return new Parser(src).parseFragment(startByte, endByte)
+    try {
+        // `new Parser` tokenizes the whole source, which can throw a lex error
+        // when the edit made the file un-lexable outside the window; treat that
+        // like any other window-parse failure so the caller full-reparses (and
+        // surfaces the proper diagnostic).
+        return new Parser(src).parseFragment(startByte, endByte)
+    } catch {
+        return null
+    }
 }
 
 export default parseToAst
