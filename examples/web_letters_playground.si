@@ -1,0 +1,52 @@
+# examples/web_letters_playground.si — log each letter of a word to the
+# browser console.  Self-contained twin of web_letters.si.
+#
+# Same behaviour as web_letters.si, but written to run in the Silicon
+# *playground* as well as the CLI.  The playground compiles source straight
+# through parse → typecheck → wasm and does NOT run the `@use` include
+# resolver, so it cannot pull in the stdlib (`@use '…/slice.si'` is a parse
+# error there, and the browser has no filesystem to read includes from).
+#
+# So this version takes no `@use`: it leans only on prelude builtins the
+# typechecker knows natively (alloc_string / str_ptr / str_len), the WASM::
+# byte intrinsics, and the web:: console surface.  web_letters.si is the
+# stdlib-flavoured CLI version that views the String as a Slice[u8] instead.
+#
+# Paste into the playground (web platform) and call the exported run(), or
+# build it with the CLI:  sgl build examples/web_letters_playground.si
+
+# char_string(b) — wrap one byte in a fresh 1-char Silicon string so it can
+# cross the web:: boundary as a String.  alloc_string sets the 4-byte length
+# header; we write the single payload byte just past it.
+\\ char_string (Int) -> String
+@fn char_string b := {
+    @local s := &alloc_string 1;
+    &WASM::i32_store8 ((&str_ptr s) + 4), b;
+    s
+};
+
+# log_letters(word) — log each letter of `word` to the console, one per call.
+# Walks the UTF-8 payload (past the length header) one byte at a time.
+# Returns the number of letters logged.
+\\ log_letters (String) -> Int
+@fn log_letters word := {
+    @local ptr := (&str_ptr word) + 4;
+    @local len := &str_len word;
+    @var i := 0;
+
+    &@loop i < len, {
+        @local b := &WASM::i32_load8_u (ptr + i);
+        &web::console_log_str (&char_string b);
+        i = i + 1;
+    };
+
+    len
+};
+
+# run() — entry point the web host calls; logs the letters of 'Silicon'.
+\\ run () -> Int
+@fn run := {
+    &log_letters 'Silicon'
+};
+
+@export run;

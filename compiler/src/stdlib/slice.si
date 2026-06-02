@@ -99,6 +99,7 @@
 # to ground T.
 \\ slice_at_i32[T] (Slice[T], Int) -> Option[Int]
 @fn slice_at_i32 s, i := {
+    \\ none_val Option[Int]
     @local none_val := &None;
     &@if (&slice_in_bounds s, i),
         { &Some (&slice_get_i32 s, i) },
@@ -107,6 +108,7 @@
 
 \\ slice_at_byte[T] (Slice[T], Int) -> Option[Int]
 @fn slice_at_byte s, i := {
+    \\ none_val Option[Int]
     @local none_val := &None;
     &@if (&slice_in_bounds s, i),
         { &Some (&slice_get_byte s, i) },
