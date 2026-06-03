@@ -482,9 +482,10 @@ Scoping rules:
   only other unassigned documents.
 
 Adding a dependency does not retroactively re-check already-compiled documents;
-edit a consumer to pick up newly-visible symbols. Navigation and completion
-(`findDefinition`, `getCompletions`, …) remain workspace-global — they ride the
-shared symbol index; per-project filtering of those is a planned follow-up.
+edit a consumer to pick up newly-visible symbols. `getCompletions` is
+project-scoped — it offers only symbols visible to the document's project
+(dependency closure + in-scope references). `findDefinition` / `findReferences`
+remain workspace-global by design (jump-anywhere is the useful behavior there).
 
 ### Metadata references (tracker 3c)
 

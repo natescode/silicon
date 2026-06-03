@@ -524,9 +524,12 @@ export class Workspace {
         // Local symbols first (highest priority).
         for (const sym of doc.model.allSymbols) add(sym, doc)
 
-        // Cross-document symbols from the workspace index.
+        // Cross-document symbols from the workspace index, scoped to what this
+        // document's project can actually see (CaaS tracker 3a) — don't suggest
+        // symbols from unrelated projects or out-of-scope references.
         for (const [, entries] of this.#symbolIndex) {
             for (const entry of entries) {
+                if (!this.#isEntryVisible(entry.uri, uri)) continue
                 const entryDoc = this.#docs.get(entry.uri)
                 add(entry.symbol, entryDoc)
             }
@@ -740,6 +743,26 @@ export class Workspace {
             }
         }
         return ext
+    }
+
+    /**
+     * Whether a symbol-index entry (by its source URI — a document URI or a
+     * `metadata:<ref>` URI) is visible to `currentUri` given project scoping
+     * (CaaS tracker 3a/3c).  With no projects, everything is visible.
+     */
+    #isEntryVisible(entryUri: string, currentUri: string): boolean {
+        if (entryUri.startsWith('metadata:')) {
+            const refName = entryUri.slice('metadata:'.length)
+            if (this.#references.has(refName)) return true   // workspace-global reference
+            const owner = this.#docToProject.get(currentUri)
+            if (!owner) return false
+            for (const project of owner._depClosure()) {
+                if (project.references.some(r => r.name === refName)) return true
+            }
+            return false
+        }
+        const visible = this.#visibleUris(currentUri)
+        return visible === undefined || visible.has(entryUri)
     }
 
     /** Add a reference's synthesized symbols to the (global) navigation index. */

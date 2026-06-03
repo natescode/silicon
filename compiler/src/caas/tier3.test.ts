@@ -194,6 +194,25 @@ describe('Project — unassigned documents (3a)', () => {
     })
 })
 
+describe('Project — completion is scoped to project visibility (3a)', () => {
+    test('a project-scoped symbol completes only in dependent projects', () => {
+        const ws = new Workspace()
+        const core  = ws.addProject('core')
+        const app   = ws.addProject('app')
+        const other = ws.addProject('other')
+        app.addDependency(core)
+
+        core.addDocument('core/math.si', ADD_LIB)        // defines `add`
+        app.addDocument('app/main.si', '@let x := 1;')
+        other.addDocument('other/c.si', '@let y := 1;')
+
+        // app depends on core → `add` is offered.
+        expect(ws.getCompletions('app/main.si', 1, 1).map(c => c.label)).toContain('add')
+        // other is unrelated → `add` is NOT offered.
+        expect(ws.getCompletions('other/c.si', 1, 1).map(c => c.label)).not.toContain('add')
+    })
+})
+
 // ---------------------------------------------------------------------------
 // Lifecycle
 // ---------------------------------------------------------------------------
