@@ -30,8 +30,9 @@ import { SyntaxNode } from './syntaxNode'
 export { SyntaxNode }
 import {
     incrementalReparse, damageFromText, damageFromChanges, stableStringify,
-    type GreenIndex,
+    type GreenIndex, type ElementReuse,
 } from './incremental'
+export type { GreenIndex, ElementReuse }
 import elaborateInternal from '../elaborator/elaborator'
 import { buildStrataRegistry } from '../elaborator/strataLoader'
 import typecheckInternal, { type FunctionSig } from '../types/typechecker'
@@ -105,6 +106,11 @@ export class SyntaxTree {
      */
     readonly #greenIndex?: GreenIndex
 
+    /** @internal Per-element byte extents (the GreenIndex), for incremental semantics. */
+    get _extents(): GreenIndex | undefined {
+        return this.#greenIndex
+    }
+
     /**
      * The root of the syntax tree.
      *
@@ -176,20 +182,22 @@ export class SyntaxTree {
         if (this.#greenIndex !== undefined) {
             const damage = computeDamage()
             if (damage === null) {
-                // Identical source — reuse the existing program + index verbatim.
-                return { tree: new SyntaxTree(this.program, newSource, file, this.#greenIndex), diagnostics: [] }
+                // Identical source — reuse the existing program + index verbatim
+                // (every element group is reused, unshifted).
+                const reuse: ElementReuse[] = this.#greenIndex.map((_, i) => ({ kind: 'reused', oldGroupIndex: i, delta: 0 }))
+                return { tree: new SyntaxTree(this.program, newSource, file, this.#greenIndex), diagnostics: [], _elementReuse: reuse }
             }
             const result = incrementalReparse(this.source, this.#greenIndex, newSource, damage)
             if (result !== null) {
-                let { program, extents } = result
+                let { program, extents, reuse } = result
                 if (incrementalVerifyEnabled()) {
                     const fullParsed = parseProgramWithExtents(newSource)
                     if (stableStringify(program) !== stableStringify(fullParsed.program)) {
-                        program = fullParsed.program
-                        extents = fullParsed.extents
+                        // Discarded — the reuse diff no longer describes the tree.
+                        return { tree: new SyntaxTree(fullParsed.program, newSource, file, fullParsed.extents), diagnostics: [] }
                     }
                 }
-                return { tree: new SyntaxTree(program, newSource, file, extents), diagnostics: [] }
+                return { tree: new SyntaxTree(program, newSource, file, extents), diagnostics: [], _elementReuse: reuse }
             }
         }
         // Fallback: full reparse (also produces proper diagnostics on syntax errors).
@@ -211,6 +219,13 @@ import type { Diagnostic } from '../errors/diagnostic'
 export interface ParseResult {
     readonly tree: SyntaxTree
     readonly diagnostics: readonly Diagnostic[]
+    /**
+     * @internal Per-element reuse classification when this tree came from an
+     * incremental reparse (`withText`/`withChanges`), aligned with
+     * `tree._extents`.  Undefined for full parses / fallbacks — drives
+     * incremental elaboration + typecheck in the Workspace.
+     */
+    readonly _elementReuse?: readonly ElementReuse[]
 }
 
 export interface ElabResult {

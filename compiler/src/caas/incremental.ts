@@ -35,12 +35,24 @@ import type { TextChange } from './textChange'
 /** Per-top-level-element byte extents recorded for an existing `SyntaxTree`. */
 export type GreenIndex = readonly ElementExtent[]
 
+/**
+ * Per-top-level-element-group reuse classification, aligned 1:1 with the result
+ * `extents`.  Drives incremental elaboration (E1b) and incremental typecheck (E2):
+ * a `reused` group's parse (and elaboration/check) can be taken from the prior
+ * compile's group `oldGroupIndex`, shifting its root `elemBase` by `delta`.
+ */
+export type ElementReuse =
+    | { readonly kind: 'reused'; readonly oldGroupIndex: number; readonly delta: number }
+    | { readonly kind: 'fresh' }
+
 /** A successful incremental reparse: the new program plus its fresh extents. */
 export interface IncrementalResult {
     readonly program: Program
     readonly extents: ElementExtent[]
     /** Top-level elements reused (prefix + suffix) rather than reparsed. */
     readonly reusedElements: number
+    /** Reuse classification per result element group (aligned with `extents`). */
+    readonly reuse: ElementReuse[]
 }
 
 /** The byte region an edit damaged, in OLD-source coordinates. */
@@ -154,10 +166,21 @@ export function incrementalReparse(
 
     const elements = [...prefixNodes, ...frag.nodes, ...suffixNodes]
     const extents = [...prefix, ...frag.extents, ...suffixExtents]
+
+    // Reuse diff aligned with `extents`: prefix groups are reused verbatim
+    // (delta 0, old index == new index); window groups are fresh; suffix groups
+    // are reused from the old tail with `elemBase` shifted by `delta`.
+    const reuse: ElementReuse[] = []
+    for (let i = 0; i < prefix.length; i++) reuse.push({ kind: 'reused', oldGroupIndex: i, delta: 0 })
+    for (let i = 0; i < frag.extents.length; i++) reuse.push({ kind: 'fresh' })
+    const suffixOldStart = oldIndex.length - suffix.length
+    for (let k = 0; k < suffixExtents.length; k++) reuse.push({ kind: 'reused', oldGroupIndex: suffixOldStart + k, delta })
+
     return {
         program: ASTFactory.program(elements as any),
         extents,
         reusedElements: prefix.length + suffixExtents.length,
+        reuse,
     }
 }
 
@@ -187,7 +210,7 @@ function canonical(value: any): any {
  * `delta` byte (M3 suffix reuse); descendants are shared by reference.  Returns
  * the originals unchanged when `delta === 0`.  The old tree is never mutated.
  */
-function shiftElemBase<T extends object>(nodes: readonly T[], delta: number): T[] {
+export function shiftElemBase<T extends object>(nodes: readonly T[], delta: number): T[] {
     if (delta === 0) return nodes as T[]
     return nodes.map(root => {
         const base = (root as { elemBase?: number }).elemBase

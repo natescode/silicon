@@ -43,6 +43,10 @@
  */
 
 import { parse, elaborate, typecheck, buildRegistry, SyntaxTree } from './index'
+import {
+    incrementalElaborate, elaborateGroupsFull, elabErrorsToDiagnostics, stratumSignature,
+    type ElabGroup,
+} from './incrementalElaborate'
 import type { ElaboratorRegistry } from '../elaborator/registry'
 import type { SemanticModel, Symbol as CaaSSymbol, SourceRange } from '../ast/semanticModel'
 import { typeDisplayString } from '../ast/semanticModel'
@@ -227,6 +231,13 @@ export class Workspace {
     /** Workspace-global metadata references (CaaS tracker 3c), keyed by name. */
     readonly #references = new Map<string, MetadataReference>()
 
+    /**
+     * Per-document incremental-elaboration cache (incremental semantics E1b):
+     * the prior compile's per-element-group elaboration + a strata signature to
+     * detect a stale registry.  Lets an edit re-elaborate only changed elements.
+     */
+    readonly #elabState = new Map<string, { strataSig: string; groups: ElabGroup[] }>()
+
     constructor(options: WorkspaceOptions = {}) {
         this.#registry = options.registry
     }
@@ -397,6 +408,7 @@ export class Workspace {
     closeDocument(uri: string): void {
         if (!this.#docs.has(uri)) return
         this.#docs.delete(uri)
+        this.#elabState.delete(uri)
         const project = this.#docToProject.get(uri)
         if (project) {
             project._untrackUri(uri)
@@ -723,14 +735,41 @@ export class Workspace {
         const parseResult = priorTree ? priorTree.withText(source, { file: uri }) : parse(source, { file: uri })
         allDiags.push(...parseResult.diagnostics)
 
-        // 2. Build or reuse registry
-        if (!this.#registry) {
+        // 2. Build or reuse registry.  Rebuild when this document's `@stratum`
+        //    definitions changed — the registry is otherwise frozen, so a strata
+        //    edit would make incremental results diverge from a fresh compile.
+        const prior = this.#elabState.get(uri)
+        const strataSig = stratumSignature(parseResult.tree.program)
+        if (!this.#registry || (prior !== undefined && prior.strataSig !== strataSig)) {
             this.#registry = buildRegistry(parseResult.tree)
         }
+        const registry = this.#registry
 
-        // 3. Elaborate
-        const elabResult = elaborate(parseResult.tree, this.#registry)
-        allDiags.push(...elabResult.diagnostics)
+        // 3. Elaborate — reuse the prior compile's per-element elaboration for
+        //    unchanged elements when the parse was incremental and the registry is
+        //    unchanged (incremental semantics E1b); otherwise elaborate fresh.
+        //    Elaboration is element-local, so the spliced result is byte-identical
+        //    to a full elaborate().
+        const extents = parseResult.tree._extents
+        let elabTree: SyntaxTree
+        let elabGroups: ElabGroup[] | undefined
+        if (extents !== undefined) {
+            const canReuse = parseResult._elementReuse !== undefined
+                && prior !== undefined && prior.strataSig === strataSig
+            const elab = canReuse
+                ? incrementalElaborate(extents, parseResult._elementReuse!, prior!.groups, registry)
+                : elaborateGroupsFull(extents, registry)
+            allDiags.push(...elabErrorsToDiagnostics(elab.errors))
+            elabTree = new SyntaxTree(elab.program, source, uri)
+            elabGroups = elab.groups
+        } else {
+            // No extents (e.g. a parse error produced a minimal tree) — full
+            // elaborate, no per-element cache.
+            const elabResult = elaborate(parseResult.tree, registry)
+            allDiags.push(...elabResult.diagnostics)
+            elabTree = elabResult.tree
+            elabGroups = undefined
+        }
 
         // 4. Typecheck — pass cross-document symbols so references to definitions
         //    in other open Workspace documents don't produce "unbound identifier"
@@ -740,11 +779,15 @@ export class Workspace {
         //    so portability diagnostics fire for `wasm-gc` projects.
         const project = this.#docToProject.get(uri)
         const externalSymbols = this.#buildExternalSymbols(uri)
-        const checkResult = typecheck(elabResult.tree, elabResult.registry, {
+        const checkResult = typecheck(elabTree, registry, {
             externalSymbols,
             target: project?.target,
         })
         allDiags.push(...checkResult.diagnostics)
+
+        // Cache (or clear) this document's per-element elaboration for the next edit.
+        if (elabGroups !== undefined) this.#elabState.set(uri, { strataSig, groups: elabGroups })
+        else this.#elabState.delete(uri)
 
         return {
             uri,
@@ -752,7 +795,7 @@ export class Workspace {
             version,
             projectName: project?.name,
             tree: parseResult.tree,
-            elabTree: elabResult.tree,
+            elabTree,
             model: checkResult.model,
             diagnostics: allDiags,
         }

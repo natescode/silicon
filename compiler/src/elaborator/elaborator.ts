@@ -60,6 +60,22 @@ export default function elaborate(
   return { program, registry: reg, errors }
 }
 
+/**
+ * Elaborate a SINGLE top-level element in isolation against a fixed registry
+ * (CaaS incremental semantics E1b).  Elaboration is element-local — each element
+ * is mapped independently by {@link elaborateAST} with no cross-element state but
+ * a shared `errors` array — so elaborating one element here and concatenating its
+ * errors in source order is byte-identical to a full `elaborate()`.
+ */
+export function elaborateElement(
+  node: unknown,
+  registry: ElaboratorRegistry,
+): { node: any; errors: ElaborationError[] } {
+  const errors: ElaborationError[] = []
+  const elaborated = elaborateNode(node, registry, errors)
+  return { node: elaborated, errors }
+}
+
 // ---------------------------------------------------------------------------
 // AST walk
 // ---------------------------------------------------------------------------
