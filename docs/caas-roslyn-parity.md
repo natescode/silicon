@@ -62,10 +62,20 @@ elaborate+typecheck dominate end-to-end edit latency; M3 is its substrate):
     `tests/properties/incremental-{boundary,typeflip,multidoc}.property.test.ts`
     (the surviving adversarial suites) plus a comment-insertion edit added to the
     parse- and compile-equivalence fuzzers. The other four categories were clean.
-- **E2 🔲 (designed):** incremental *type-checking* — demand-driven re-check of
-  only the elements an edit's symbol-signature changes affect (dependency edges
-  already exist via the typechecker's per-element reference recording), reusing
-  cached per-element results. The large, higher-value milestone.
+- **E2 🔲 (designed — `docs/incremental-typecheck-design.md`):** incremental
+  *type-checking*. A design-investigation workflow (5 agents probing the real
+  typechecker) produced a soundness-first design with a **conditional go**: the
+  shared fresh-type-variable counter (`ctx.fresh`) leaks order-dependent `?Tn`
+  into `model.typeOf` (e.g. `@let x := &None` stores `Option[?T1]`; a preceding
+  `&None` shifts it to `?T3`), and unannotated forward references make a caller's
+  inferred types depend on check **order**. So byte-identical incremental
+  type-checking must be **"reuse the unaffected prefix + replay the suffix in
+  source order"**, *not* node-level reuse of only the edited element. Staged A–E
+  (smallest-safe-first) with the full `typecheck()` kept untouched as the oracle
+  and a `SIGIL_INCREMENTAL_VERIFY` discard-on-mismatch tripwire. **Implementation
+  deferred:** full typecheck is already sub-millisecond on the current corpus
+  (~0.6 ms/100 fns), so the prefix-reuse win only materializes at file scales
+  Silicon doesn't yet hit — the design is the durable artifact for when it does.
 
 ---
 
