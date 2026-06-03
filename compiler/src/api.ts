@@ -55,7 +55,8 @@ export {
     type CompletionItem,
     type ParameterInfo,
     type SignatureHelp,
-    type WorkspaceEdit,
+    WorkspaceEdit,
+    type CancellableOptions,
 } from './caas/workspace'
 
 export {

@@ -96,6 +96,13 @@ export interface Symbol {
     readonly containingSymbol?: Symbol
     /** Human-readable type signature, e.g. "(fn add) Int, Int → Int". */
     readonly displayString: string
+    /**
+     * True for compiler-synthesized symbols with no user-written declaration —
+     * e.g. the constructor functions generated for `@type` sum variants
+     * (Roslyn `ISymbol.IsImplicitlyDeclared`, CaaS tracker 4a).  `false` for
+     * everything the user wrote.
+     */
+    readonly isImplicitlyDeclared: boolean
 }
 
 /** A half-open [start, end) line/col range for diagnostic queries. */

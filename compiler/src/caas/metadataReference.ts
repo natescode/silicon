@@ -92,6 +92,7 @@ export class MetadataReference {
                 definitionSpan: undefined,
                 locations: [] as const,
                 containingSymbol: undefined,
+                isImplicitlyDeclared: false,   // a real (external) declaration, not synthesized
             }
             return { ...partial, displayString: symbolDisplayString(partial as CaaSSymbol) }
         })

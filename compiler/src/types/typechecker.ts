@@ -167,6 +167,9 @@ interface Ctx {
     nodeToSymbolName: WeakMap<object, string>   // Namespace node → resolved name
     symbolToNodes: Map<string, object[]>         // name → all reference nodes
     definitionNodes: Map<string, object>         // name → Definition AST node
+    // 4a: names of compiler-synthesized @type variant constructors (no user
+    // declaration) — surfaced as implicitly-declared symbols in the model.
+    variantConstructors: Set<string>
     // CaaS-5: source spans for each reference site (for referenceSpans / symbolAtPosition).
     symbolToSpans: Map<string, SourceSpan[]>
     // Phase 9d-5: compile target.  When `'wasm-gc'`, mvp-only primitive
@@ -344,6 +347,7 @@ export default function typecheck(
     const symbolToNodes = new Map<string, object[]>()
     const symbolToSpans = new Map<string, SourceSpan[]>()
     const definitionNodes = new Map<string, object>()
+    const variantConstructors = new Set<string>()
     const ctx: Ctx = {
         file,
         errors: [],
@@ -361,6 +365,7 @@ export default function typecheck(
         symbolToNodes,
         symbolToSpans,
         definitionNodes,
+        variantConstructors,
         target,
         externalSymbols,
     }
@@ -723,6 +728,7 @@ function preRegisterRecordSumType(def: any, ctx: Ctx): void {
         ctx.functions.set(v.name, { params: paramTypes, result: sumTypeAsResult })
         ctx.symbols.set(v.name, FunctionOf(paramTypes, sumTypeAsResult))
         ctx.immutable.add(v.name)
+        ctx.variantConstructors.add(v.name)   // 4a: synthesized constructor symbol
 
         // Also register the qualified `Name::Variant` path so explicit
         // namespace references (`Color::Red`, used in @match patterns or as
@@ -1697,9 +1703,21 @@ function buildSymbolTable(ctx: Ctx): Map<string, CaaSSymbol> {
         const type = ctx.symbols.get(name)
         const definitionSpan = def.sourceLocation ? spanFromLocation(def.sourceLocation, ctx.file) : undefined
         const locations: import('../errors/diagnostic').SourceSpan[] = definitionSpan ? [definitionSpan] : []
-        const partial = { name, kind, definitionNode: defNode, type, definitionSpan, locations, containingSymbol: undefined }
+        const partial = { name, kind, definitionNode: defNode, type, definitionSpan, locations, containingSymbol: undefined, isImplicitlyDeclared: false }
         const displayString = symbolDisplayString(partial as CaaSSymbol)
         table.set(name, { ...partial, displayString })
+    }
+    // 4a: surface compiler-synthesized @type variant constructors as
+    // implicitly-declared symbols (no user declaration → no definitionNode/span).
+    for (const name of ctx.variantConstructors) {
+        if (table.has(name)) continue
+        const type = ctx.symbols.get(name)
+        const partial = {
+            name, kind: 'function' as SymbolKind, definitionNode: { type: 'SyntheticConstructor', name },
+            type, definitionSpan: undefined, locations: [] as import('../errors/diagnostic').SourceSpan[],
+            containingSymbol: undefined, isImplicitlyDeclared: true,
+        }
+        table.set(name, { ...partial, displayString: symbolDisplayString(partial as CaaSSymbol) })
     }
     return table
 }

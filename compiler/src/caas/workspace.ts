@@ -49,6 +49,7 @@ import { typeDisplayString } from '../ast/semanticModel'
 import type { SiliconType } from '../types/types'
 import type { Diagnostic, SourceSpan } from '../errors/diagnostic'
 import type { TextEdit } from './codeAction'
+import { applyEdits } from './codeAction'
 import type { LowerTarget } from '../ir/lower'
 import { MetadataReference, type SymbolManifest } from './metadataReference'
 
@@ -81,6 +82,16 @@ export interface ParameterInfo {
     readonly type?: string
 }
 
+/**
+ * Options for cancellable workspace queries (CaaS tracker 4e).  Silicon's
+ * pipeline is synchronous, so cancellation is cooperative: the query throws
+ * (`AbortError`) at its checkpoints if the signal is already aborted.  This is
+ * the minimal surface for an async LSP front end to abort superseded requests.
+ */
+export interface CancellableOptions {
+    readonly cancel?: AbortSignal
+}
+
 /** Result of a signature-help query (cursor is inside a function call argument list). */
 export interface SignatureHelp {
     readonly name: string
@@ -89,8 +100,45 @@ export interface SignatureHelp {
     readonly activeParameter: number
 }
 
-/** Multi-file set of text edits — result of a rename operation. */
-export type WorkspaceEdit = Map<string, TextEdit[]>
+/**
+ * A multi-file set of text edits — the result of a rename (CaaS tracker 4d).
+ *
+ * Extends `Map<uri, TextEdit[]>` (so existing `.get`/`.set`/iteration keep
+ * working) and adds `applyTo` for applying the whole edit to a `Workspace` as
+ * one operation, plus `changeCount` / `uris` conveniences.
+ *
+ * @public — Silicon 1.0 stable.
+ */
+export class WorkspaceEdit extends Map<string, TextEdit[]> {
+    /** Total number of individual text edits across all files. */
+    get changeCount(): number {
+        let n = 0
+        for (const edits of this.values()) n += edits.length
+        return n
+    }
+
+    /** The document URIs this edit touches. */
+    get uris(): string[] {
+        return [...this.keys()]
+    }
+
+    /**
+     * Apply every edit to its document in `workspace` (via `editDocument`).
+     * Per-file edits are applied together (`applyEdits` sorts them bottom-up so
+     * offsets don't shift).  Documents not open in the workspace are skipped.
+     * Returns the URIs that were changed.
+     */
+    applyTo(workspace: Workspace): string[] {
+        const changed: string[] = []
+        for (const [uri, edits] of this) {
+            const doc = workspace.getDocument(uri)
+            if (!doc || edits.length === 0) continue
+            workspace.editDocument(uri, applyEdits(doc.source, edits))
+            changed.push(uri)
+        }
+        return changed
+    }
+}
 
 // ---------------------------------------------------------------------------
 // Document
@@ -436,7 +484,8 @@ export class Workspace {
      * Returns an empty array if the document is not open, the position covers
      * no symbol, or location info was not recorded.
      */
-    findReferences(uri: string, line: number, col: number): readonly SourceSpan[] {
+    findReferences(uri: string, line: number, col: number, options: CancellableOptions = {}): readonly SourceSpan[] {
+        options.cancel?.throwIfAborted()
         const doc = this.#docs.get(uri)
         if (!doc) return []
 
@@ -457,6 +506,7 @@ export class Workspace {
         }
 
         for (const d of this.#docs.values()) {
+            options.cancel?.throwIfAborted()
             // Typechecker-resolved references (accurate for same-doc, and for
             // any doc compiled with the symbol in scope).
             for (const span of d.model.referenceSpansForName(name)) add(span)
@@ -503,7 +553,8 @@ export class Workspace {
      *
      * Returns an empty array when the document is not open.
      */
-    getCompletions(uri: string, _line: number, _col: number, prefix?: string): CompletionItem[] {
+    getCompletions(uri: string, _line: number, _col: number, prefix?: string, options: CancellableOptions = {}): CompletionItem[] {
+        options.cancel?.throwIfAborted()
         const doc = this.#docs.get(uri)
         if (!doc) return []
 
@@ -528,6 +579,7 @@ export class Workspace {
         // document's project can actually see (CaaS tracker 3a) — don't suggest
         // symbols from unrelated projects or out-of-scope references.
         for (const [, entries] of this.#symbolIndex) {
+            options.cancel?.throwIfAborted()
             for (const entry of entries) {
                 if (!this.#isEntryVisible(entry.uri, uri)) continue
                 const entryDoc = this.#docs.get(entry.uri)
@@ -590,7 +642,7 @@ export class Workspace {
      * empty map when no symbol covers the position or the document is not open.
      */
     rename(uri: string, line: number, col: number, newName: string): WorkspaceEdit {
-        const result: WorkspaceEdit = new Map()
+        const result = new WorkspaceEdit()
 
         function addEdit(span: SourceSpan) {
             const edits = result.get(span.file)

@@ -94,11 +94,11 @@ Small additions that round out the surface. None are blocking.
 
 | # | Feature | Status | Notes |
 |---|---------|--------|-------|
-| 4a | **`Symbol.isImplicitlyDeclared`** | 🔲 | Marks synthetic symbols (e.g. generated constructors for `@type` sum variants). |
-| 4b | **`Workspace.findDefinitions` in public doc** | ✅ | Added 2026-06-01 (multi-definition collision fix). Update `compiler-as-a-service.md` to document the method. |
-| 4c | **Richer `CompilationOptions`** | 🔲 | Optimization level, debug-info flag, target triple — currently only `ParseOptions` and per-phase options exist. |
-| 4d | **`WorkspaceEdit`** | 🔲 | A tracked set of `Map<uri, TextEdit[]>` changes that can be applied atomically. Rename (1d) should return this rather than a raw `Map`. |
-| 4e | **Async / cancellable API** | 🔲 | Roslyn is fully async. Silicon is synchronous — fine until files get large. A `cancel?: AbortSignal` option on long-running calls (`getCompletions`, `findReferences`) is the minimal step. |
+| 4a | **`Symbol.isImplicitlyDeclared`** | ✅ | Implemented 2026-06-02. `readonly isImplicitlyDeclared: boolean` on `Symbol`; `false` for user-written definitions, `true` for compiler-synthesized symbols. `@type` sum-variant constructors (`Circle`, `Rectangle`, …) — previously registered only in `ctx.functions`/`ctx.symbols`, not the public table — are now surfaced as implicit symbols (so they're navigable in hover/completion), with no `definitionSpan` (no source declaration). |
+| 4b | **`Workspace.findDefinitions` in public doc** | ✅ | Added 2026-06-01 (multi-definition collision fix); documented in `compiler-as-a-service.md` (Workspace surface) 2026-06-02. |
+| 4c | **Richer `CompilationOptions`** | ⏸️ | **Deferred — blocked on codegen.** Optimization level, debug-info flag, and target triple have **no consumer** in the pipeline today (`lower()` runs no optimization passes, emits no debug info, and the CaaS path produces WAT/wasm, not native — `LowerOptions` is just `target` + `maxHeapPages`). Adding these as options now would be no-op knobs that silently do nothing — misleading. Revisit when codegen implements opt-levels / debug-info emission (mirrors 3c having been blocked on the package format). |
+| 4d | **`WorkspaceEdit`** | ✅ | Implemented 2026-06-02. `class WorkspaceEdit extends Map<string, TextEdit[]>` (so `.get`/`.set`/iteration stay backward-compatible) + `changeCount`, `uris`, and `applyTo(workspace): string[]` for applying the whole edit via `editDocument` (per-file edits applied bottom-up). `rename` now returns it. |
+| 4e | **Async / cancellable API** | ✅ | Implemented 2026-06-02 (the minimal step). `CancellableOptions { cancel?: AbortSignal }` on `getCompletions` / `findReferences`; the query calls `signal.throwIfAborted()` at its checkpoints. Cooperative — Silicon's pipeline is synchronous, so this lets an async LSP front end abort a superseded request, not preempt a running one. |
 
 ---
 

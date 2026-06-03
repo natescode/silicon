@@ -372,14 +372,14 @@ class Workspace {
 
     // Navigation (CaaS-5) — 1-based line/col matching editor conventions
     findDefinition(uri: string, line: number, col: number): Symbol | undefined
-    findDefinitions(uri: string, line: number, col: number): Symbol[]
-    findReferences(uri: string, line: number, col: number): readonly SourceSpan[]
+    findDefinitions(uri: string, line: number, col: number): Symbol[]   // all candidates (same-named cross-file)
+    findReferences(uri: string, line: number, col: number, opts?: CancellableOptions): readonly SourceSpan[]
 
     // LSP Tier 1 — 1-based line/col
     hoverInfo(uri: string, line: number, col: number): HoverInfo | undefined
-    getCompletions(uri: string, line: number, col: number, prefix?: string): CompletionItem[]
+    getCompletions(uri: string, line: number, col: number, prefix?: string, opts?: CancellableOptions): CompletionItem[]
     signatureHelp(uri: string, line: number, col: number): SignatureHelp | undefined
-    rename(uri: string, line: number, col: number, newName: string): WorkspaceEdit
+    rename(uri: string, line: number, col: number, newName: string): WorkspaceEdit  // applyTo(ws) to apply
     formatDocument(uri: string): TextEdit[]
     formatRange(uri: string, range: SourceRange): TextEdit[]
 }
