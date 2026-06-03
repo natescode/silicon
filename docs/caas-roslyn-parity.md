@@ -47,6 +47,21 @@ elaborate+typecheck dominate end-to-end edit latency; M3 is its substrate):
   rebuilds the frozen registry on a `@stratum` edit. Verified by an equivalence
   property suite (random edit chains over the corpus: structure + authoritative
   `model.typeOf` + diagnostics + symbols) and a reuse-by-reference proof.
+  - **Adversarial verification (2026-06-02):** a 5-agent hunt (≈9 000 edit/compare
+    cases across `@stratum` edits, `@extern` BlockDef blocks, element
+    merge/split/delete, type-flip chains, and multi-document workspaces) found
+    **one real defect in the parse layer** — `damageFromText` is a byte diff and
+    is lexically blind to a *line-comment / `\\` signature marker* inserted before
+    an element: the element's bytes stay byte-identical-but-shifted, so the damage
+    region is a zero-width insertion that misses it, and the now-commented element
+    was reused verbatim as a suffix (leaking its symbol + elaboration). **Fixed**
+    (`incremental.ts` `suffixThreshold`): a reused suffix must begin on a line the
+    edit did not bleed a marker into — checked in NEW coordinates, so a `## `
+    prepended to an element forces it into the reparse window while a clean
+    blank-line insertion still reuses it (M3 zero-copy preserved). Guarded by
+    `tests/properties/incremental-{boundary,typeflip,multidoc}.property.test.ts`
+    (the surviving adversarial suites) plus a comment-insertion edit added to the
+    parse- and compile-equivalence fuzzers. The other four categories were clean.
 - **E2 🔲 (designed):** incremental *type-checking* — demand-driven re-check of
   only the elements an edit's symbol-signature changes affect (dependency edges
   already exist via the typechecker's per-element reference recording), reusing

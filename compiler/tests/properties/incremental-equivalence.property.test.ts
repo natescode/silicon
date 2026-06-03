@@ -90,6 +90,22 @@ function deleteSemi(src: string): string | null {
     return src.slice(0, i) + src.slice(i + 1)
 }
 
+/**
+ * Insert a `## ` line-comment marker at the start of the LAST line that begins
+ * a top-level element.  The element's bytes stay byte-identical-but-shifted, so
+ * a naive byte diff yields a zero-width damage that misses it — but a fresh lex
+ * now folds it into the comment.  Regression guard for the lexically-blind-diff
+ * bug (damage must expand to whole lines).
+ */
+function commentOutLastLine(src: string): string | null {
+    const nl = src.lastIndexOf('\n')
+    if (nl < 0 || nl === src.length - 1) return null
+    const lineStart = nl + 1
+    // Only meaningful if the trailing line actually holds an element start.
+    if (!/^\s*@/.test(src.slice(lineStart))) return null
+    return src.slice(0, lineStart) + '## ' + src.slice(lineStart)
+}
+
 /** Prepend a definition (damage at offset 0 → fallback path). */
 function prepend(src: string): string {
     return '@let __pre := 0;\n' + src
@@ -142,6 +158,10 @@ describe('incremental parse ≡ full reparse (3b/M1)', () => {
             const nl = insertNewline(source); if (nl) assertEquivalentText(source, nl, false)
             const del = deleteSemi(source); if (del) assertEquivalentText(source, del, false)
             assertEquivalentText(source, prepend(source), false)
+            // Comment out a trailing element: a byte diff sees a zero-width
+            // insertion, but a fresh lex drops the element. The damage must
+            // expand to whole lines so the incremental tree matches.
+            const cmt = commentOutLastLine(source); if (cmt) assertEquivalentText(source, cmt, false)
         })
 
         test(`${name}: chained edits stay equivalent`, () => {

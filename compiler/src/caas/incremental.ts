@@ -106,6 +106,34 @@ export function damageFromText(oldSource: string, newSource: string): Damage | n
     return { start: p, endOld: oldLen - s }
 }
 
+/**
+ * The lowest OLD-coordinate position a reused suffix element may start at.
+ *
+ * A byte diff is lexically blind: inserting a line-comment marker (`#` / `##`)
+ * or a `\\` signature marker leaves the rest of its line byte-identical, so the
+ * raw damage region is a zero-width insertion that would let the now-commented
+ * element be reused verbatim as a suffix.  Comment/signature markers are
+ * line-scoped, so a reused suffix is only safe if it begins on a line the edit
+ * did NOT bleed a marker into.
+ *
+ * We work in NEW coordinates (where the inserted text lives): the changed region
+ * ends at `newEnd = endOld + delta`.  If that boundary is NOT at a line start
+ * (the edit left text mid-line — e.g. `## ` prepended to an element), a marker
+ * could run to end-of-line, so we push the safe boundary to the next newline and
+ * force every element up to there into the reparse window.  If the edit ended
+ * cleanly at a line boundary (e.g. a blank-line insertion before an element),
+ * the following line is untouched and stays reusable — preserving M3 zero-copy.
+ */
+function suffixThreshold(newSource: string, damage: Damage, delta: number): number {
+    const newEnd = damage.endOld + delta
+    // Clean break at a line start → the next line is unaffected; reuse it.
+    if (newEnd === 0 || newSource.charCodeAt(newEnd - 1) === 10 /* \n */) return damage.endOld
+    let safeEnd = newEnd
+    while (safeEnd < newSource.length && newSource.charCodeAt(safeEnd) !== 10 /* \n */) safeEnd++
+    // Map the new-coordinate safe boundary back to old coordinates.
+    return Math.max(damage.endOld, safeEnd - delta)
+}
+
 // ---------------------------------------------------------------------------
 // Incremental reparse
 // ---------------------------------------------------------------------------
@@ -123,9 +151,13 @@ export function incrementalReparse(
 ): IncrementalResult | null {
     const delta = newSource.length - oldSource.length
 
+    // A reused suffix must begin on a line the edit didn't bleed a comment /
+    // signature marker into (a byte diff can't see that on its own).
+    const sfxStart = suffixThreshold(newSource, damage, delta)
+
     // Partition old elements: prefix (entirely before the edit) and suffix
-    // candidates (entirely after the edit).  Anything else is "touched" and
-    // lives inside the reparse window.
+    // candidates (entirely after the edit, past the marker-safe threshold).
+    // Anything else is "touched" and lives inside the reparse window.
     const prefix: ElementExtent[] = []
     for (const e of oldIndex) {
         if (e.end <= damage.start) prefix.push(e)
@@ -133,7 +165,7 @@ export function incrementalReparse(
     }
     const suffix: ElementExtent[] = []
     for (const e of oldIndex) {
-        if (e.start >= damage.endOld) suffix.push(e)
+        if (e.start >= sfxStart) suffix.push(e)
     }
 
     const windowStartByte = prefix.length > 0 ? prefix[prefix.length - 1].end : 0

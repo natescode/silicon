@@ -73,7 +73,7 @@ function typeKey(doc: Document): string {
     return out.join(',')
 }
 
-const EDIT_CHARS = [' ', '1', 'x', 'q', ';', '\n', ')', '+', '@', 'r']
+const EDIT_CHARS = [' ', '1', 'x', 'q', ';', '\n', ')', '+', '@', 'r', '#']
 
 /** Apply one pseudo-random edit (insert / delete / replace) to `src`. */
 function mutate(src: string, rand: () => number): string {
