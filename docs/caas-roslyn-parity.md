@@ -1,14 +1,105 @@
 # CaaS Roslyn-Parity Tracker
 
-Sigil is designed Roslyn-style (see [`compiler-as-a-service.md`](compiler-as-a-service.md)),
-but a number of features present in Roslyn's public surface are not yet implemented.
-This document tracks them as actionable work items, organized by tier.
+Sigil is designed Roslyn-style (see [`compiler-as-a-service.md`](compiler-as-a-service.md)).
+This document tracks the gaps against Roslyn's public surface as actionable work
+items, organized by tier.
 
 **Scope:** IDE / tooling infrastructure only — language features, Strata, and codegen
 are tracked separately.  Cross-document type checking is listed here because it is a
 CaaS correctness issue, not a language issue.
 
-**Status legend:** ✅ done · 🔄 in progress · 🔲 planned · ❌ out of scope
+**Status legend:** ✅ done · 🔄 in progress · 🔲 planned · ⏸️ deferred (blocked) · ❌ out of scope
+
+---
+
+## Status at a glance (2026-06-02)
+
+**Tiers 1–4 are complete.** Every remaining item is *deliberately* deferred, each
+with a recorded rationale below — none are half-built.
+
+| Tier | What | Status |
+|------|------|--------|
+| **1** | LSP features — hover, completion, signature help, rename, format doc/range | ✅ all done |
+| **2** | Semantic infra — `displayString`, CodeAction↔Diagnostic, `containingSymbol`, `locations`, trivia, SyntaxWalker/Rewriter, cross-doc typecheck | ✅ all done |
+| **3** | Architecture — 3a Project layer · 3b incremental parsing (M1+M3+M4) · 3c MetadataReference | ✅ in-scope done |
+| **4** | Polish — 4a `isImplicitlyDeclared` · 4b doc · 4d `WorkspaceEdit` · 4e cancellable | ✅ done |
+
+**Deferred (with reason):**
+
+| Item | Why deferred |
+|------|--------------|
+| 3b-**M5** sub-element (statement-level) sharing | After M4 a single element reparses in O(element·tokens) — microseconds; ~2× for a major recursive-descent rewrite |
+| 3d / 3e **CFG / data-flow** APIs | Their graph shape is defined by control-flow constructs Silicon lacks (exceptions, exhaustive match); building now means building the wrong thing. Revisit post-1.1 |
+| 4c **opt-level / debug-info / target-triple** options | No codegen consumer (`lower()` runs no passes, emits no debug info, CaaS emits wasm not native) — would be no-op options |
+| **M2** copy-on-write line fix-up | *Tried and reverted* — the suffix line-shift walk cost ≈ reparsing; M3's reference-sharing is the real win |
+
+**Beyond the tracker:** the next high-value frontier is **incremental
+elaboration / type-checking** — the Workspace still re-runs those fully per edit,
+so they (not parsing) dominate end-to-end editor latency. M3's relative-position
+model (stable node identity + position-independent subtrees) is the substrate
+that work would build on.
+
+---
+
+## Roslyn parity diagram
+
+```
+ LAYER            ROSLYN (.NET)                       SILICON CaaS (src/caas, src/ast)         PARITY
+══════════════════════════════════════════════════════════════════════════════════════════════════
+ SYNTAX           CSharpSyntaxTree.ParseText          parse()                                    ✅
+                  SyntaxNode / SyntaxToken            SyntaxNode  (leaves are typed nodes,       ✅
+                                                        no separate token type)
+                  SyntaxWalker / SyntaxRewriter       SyntaxWalker / SyntaxRewriter              ✅
+                  SyntaxTrivia (leading/trailing)     TriviaItem  (leading/trailingTrivia)       ✅
+                  ── Incremental parse ──             ── Incremental parse ──
+                  WithChangedText: green/red tree,    withText / withChanges:                    ✅
+                  reuse unchanged green subtrees        green/red via relSpan+elemBase           M1+M3+M4
+                                                        (PositionTable), O(window) re-lex+parse,
+                                                        zero-copy suffix reuse  (2–51×)
+──────────────────────────────────────────────────────────────────────────────────────────────────
+ COMPILATION      Compilation.Create / .Emit          buildRegistry+elaborate+typecheck+compile ✅
+                  SemanticModel.GetSymbolInfo         model.symbolAtPosition                     ✅
+                  SemanticModel.GetTypeInfo           model.typeOf                               ✅
+                  Cross-file binding (Compilation)    cross-document typecheck (2g),             ✅
+                                                        project-scoped (3a)
+                  ISymbol:                            Symbol:
+                    ToDisplayString()                   displayString                            ✅
+                    ContainingSymbol                    containingSymbol  (fwd-compat)           🟡
+                    Locations                           locations                                ✅
+                    IsImplicitlyDeclared                isImplicitlyDeclared (4a)                ✅
+                  CompilationOptions                  (opt/debug/triple)                         ⏸️ no codegen
+                  GetControlFlowGraph                 —                                          ❌ deferred
+                  GetDataFlowAnalysis                 —                                          ❌ deferred
+──────────────────────────────────────────────────────────────────────────────────────────────────
+ WORKSPACES       AdhocWorkspace                      Workspace                                  ✅
+                  Solution / Project                  Project (+ dependency edges)               ✅ (3a)
+                  ProjectReference                    Project.addDependency                      ✅
+                  Document / WorkspaceChanged         Document / onDidChange                      ✅
+                  MetadataReference                   MetadataReference (+ SymbolManifest)       ✅ (3c)
+                  Workspace.TryApplyChanges           WorkspaceEdit.applyTo                       ✅ (4d)
+──────────────────────────────────────────────────────────────────────────────────────────────────
+ SERVICES         CompletionService                   getCompletions  (project-scoped)           ✅
+                  QuickInfoService                    hoverInfo                                  ✅
+                  SignatureHelpService                signatureHelp                              ✅
+                  Renamer + WorkspaceEdit             rename → WorkspaceEdit                      ✅
+                  Formatter                           formatDocument / formatRange               🟡 lossy¹
+                  SymbolFinder.FindReferencesAsync    findReferences                             ✅
+                  SymbolFinder.FindDefinition         findDefinition / findDefinitions           ✅
+                  CodeAction / CodeFix                CodeAction / registerCodeAction            ✅
+──────────────────────────────────────────────────────────────────────────────────────────────────
+ ASYNC            CancellationToken (everywhere)      CancellableOptions { cancel?: AbortSignal }🟡 minimal²
+                  Fully async (Task<T>)               synchronous pipeline                       — by design
+══════════════════════════════════════════════════════════════════════════════════════════════════
+ LEGEND   ✅ at parity   🟡 partial / minimal   ⏸️ deferred (blocked)   ❌ out of scope   — N/A
+
+ ¹ formatter is whitespace-normalizing (lossy) until a parser trivia channel exists (2e reserves the kind).
+ ² cooperative only — the pipeline is synchronous, so cancel aborts a *superseded* request, not a running one.
+```
+
+Silicon's CaaS is at functional Roslyn parity for the **syntax, compilation,
+workspaces, and services** layers; the incremental parser's relative-position
+green tree gives an O(window) re-lex+reparse. The remaining gaps are the
+**analysis layer** (CFG / data-flow) and **deep async**, both deferred above.
 
 ---
 
@@ -102,25 +193,24 @@ Small additions that round out the surface. None are blocking.
 
 ---
 
-## Recommended implementation order
+## Delivery history (2026-06-01 → 06-02)
+
+All of the above shipped in dependency order; recorded here for traceability.
 
 ```
-2a  Symbol.ToDisplayString()          — unblocks 1a; pure SemanticModel change
-1a  hoverInfo                         — immediate LSP value; depends on 2a
-2b  CodeAction ↔ Diagnostic link      — small, high value for the linter workflow
-1c  signatureHelp                     — depends on SyntaxNode walk, no new infra
-2c  Symbol.containingSymbol           — enables accurate scoping
-1b  getCompletions                    — depends on 2c
-1d  rename                            — findReferences already works; map to TextEdit
-4d  WorkspaceEdit                     — clean up 1d's return type
-2f  SyntaxRewriter                    — needed for non-trivial refactoring
-2e  Trivia                            — largest piece; unlock 1e/1f
-1e  formatDocument                    — depends on 2e
-1f  formatRange                       — depends on 2e
-2g  Cross-document typechecking       — correctness; post-formatting
-3a  Project layer                     — multi-project workspaces
-3b  Incremental parsing               — perf; transparent to callers
-3c  MetadataReference                 — package registry integration
+2a displayString → 1a hover → 2b CodeAction↔Diagnostic → 1c sigHelp
+2c containingSymbol → 1b completion → 1d rename → 2f SyntaxRewriter
+2e trivia → 1e/1f format → 2g cross-doc typecheck            [Tier 1+2: 67b9af5]
+3a Project layer                                              [4da3d99, +completion scoping ea7aff5]
+3b incremental parsing:
+   M1 element reuse                                           [7d80f40, fix 013e80c]
+   M2 line fix-up  → REVERTED (walk ≈ reparse)
+   M3 relative-position model (relSpan+elemBase+PositionTable)[4614b5d, c1e2b1c, b0de587]
+   M4 incremental lexing — O(window) reparse, up to 51×       [4953e16]
+   M5 sub-element sharing → DECLINED                          [62f138a]
+3c MetadataReference                                          [6a814ac]
+4a isImplicitlyDeclared · 4d WorkspaceEdit · 4e cancellable   [537801b]
+4c CompilationOptions → DEFERRED (no codegen consumer)
 ```
 
 ---
@@ -139,6 +229,10 @@ Small additions that round out the surface. None are blocking.
 | `Workspace.findReferences` | `SymbolFinder.FindReferencesAsync` (cross-doc) | `src/caas/workspace.ts` |
 | `Workspace.onDidChange` | `Workspace.WorkspaceChanged` event | `src/caas/workspace.ts` |
 | `Workspace.addProject` / `Project` | `AdhocWorkspace.AddProject`, `Project`, `ProjectReference` | `src/caas/workspace.ts` |
+| `Workspace.addReference` / `MetadataReference` | `Compilation.AddReferences`, `MetadataReference` | `src/caas/metadataReference.ts` |
+| `WorkspaceEdit.applyTo` | `Workspace.TryApplyChanges` | `src/caas/workspace.ts` |
+| Incremental reparse (`PositionTable`, relative spans) | green/red tree, `WithChangedText` | `src/ast/positionTable.ts`, `src/caas/incremental.ts` |
+| `SyntaxWalker` / `SyntaxRewriter` / trivia | `SyntaxWalker`, `SyntaxRewriter`, `SyntaxTrivia` | `src/caas/syntaxWalker.ts`, `src/caas/syntaxNode.ts` |
 | `TextChange` / `withChanges` | `VersionedTextDocumentIdentifier` + incremental sync | `src/caas/textChange.ts` |
 | `CodeAction` / `applyEdits` | `CodeAction`, `Workspace.TryApplyChanges` | `src/caas/codeAction.ts` |
 | Symbol index (cross-doc name lookup) | `SymbolFinder` + compilation-wide symbol table | `src/caas/workspace.ts` (in-memory, name-keyed) |
