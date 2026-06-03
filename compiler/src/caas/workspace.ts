@@ -383,7 +383,7 @@ export class Workspace {
         if (!existing) {
             throw new Error(`Document not open: ${uri}. Use openDocument() first.`)
         }
-        const doc = this.#compile(uri, newSource, existing.version + 1)
+        const doc = this.#compile(uri, newSource, existing.version + 1, existing.tree)
         this.#docs.set(uri, doc)
         this.#updateSymbolIndex(uri, doc)
         this.#emit({ kind: 'changed', uri, document: doc })
@@ -714,11 +714,13 @@ export class Workspace {
 
     // ── internal ──────────────────────────────────────────────────────────────
 
-    #compile(uri: string, source: string, version: number): Document {
+    #compile(uri: string, source: string, version: number, priorTree?: SyntaxTree): Document {
         const allDiags: Diagnostic[] = []
 
-        // 1. Parse
-        const parseResult = parse(source, { file: uri })
+        // 1. Parse — incrementally from the prior tree when this is an edit
+        //    (reparses only the damaged window; byte-identical to a full parse),
+        //    or a fresh full parse on first open.
+        const parseResult = priorTree ? priorTree.withText(source, { file: uri }) : parse(source, { file: uri })
         allDiags.push(...parseResult.diagnostics)
 
         // 2. Build or reuse registry
