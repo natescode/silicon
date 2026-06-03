@@ -1,0 +1,15 @@
+# Normalize line endings: store everything with LF in git, check out LF.
+# Prevents CRLF creeping into tracked files (which broke the license-headers
+# CI grep: `// SPDX… MIT\r` didn't match `…MIT$`).  Run `git add --renormalize .`
+# once to convert the existing CRLF files already in history.
+* text=auto eol=lf
+
+# Keep Windows-only scripts as CRLF.
+*.ps1 text eol=crlf
+
+# Treat known binaries as binary (no normalization).
+*.wasm binary
+*.png binary
+*.jpg binary
+*.gif binary
+*.ico binary

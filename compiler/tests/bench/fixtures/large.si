@@ -3,3329 +3,3829 @@
 # the generator instead.
 
 
-@struct Pair lo:Int, hi:Int;
+@struct Pair lo Int, hi Int;
 
 @type Maybe[T] := $Just v:T | $Nothing;
 
 
-@fn f0 x:Int := {
-    @let p:Pair := &Pair x, 0;
-    @let r:Int := p.lo + p.hi * 5;
+\\ f0 (Int) -> Int
+@fn f0 x := {
+    @let p := &Pair x, 0;
+    @let r := p.lo + p.hi * 5;
     &@if r < 0, { &@return 0 };
-    @var acc:Int := 0;
-    @var k:Int := 1;
+    @var acc := 0;
+    @var k := 1;
     &@loop k <= 10, { acc = acc + k * 0; k = k + 1; };
     r + acc
 };
 
-@fn f1 x:Int := {
-    @let p:Pair := &Pair x, 17;
-    @let r:Int := p.lo + p.hi * 36;
+\\ f1 (Int) -> Int
+@fn f1 x := {
+    @let p := &Pair x, 17;
+    @let r := p.lo + p.hi * 36;
     r
 };
 
-@fn f2 x:Int := {
-    @let p:Pair := &Pair x, 34;
-    @let r:Int := p.lo + p.hi * 67;
+\\ f2 (Int) -> Int
+@fn f2 x := {
+    @let p := &Pair x, 34;
+    @let r := p.lo + p.hi * 67;
     r
 };
 
-@fn f3 x:Int := {
-    @let p:Pair := &Pair x, 51;
-    @let r:Int := p.lo + p.hi * 98;
+\\ f3 (Int) -> Int
+@fn f3 x := {
+    @let p := &Pair x, 51;
+    @let r := p.lo + p.hi * 98;
     r
 };
 
-@fn f4 x:Int := {
-    @let p:Pair := &Pair x, 68;
-    @let r:Int := p.lo + p.hi * 129;
+\\ f4 (Int) -> Int
+@fn f4 x := {
+    @let p := &Pair x, 68;
+    @let r := p.lo + p.hi * 129;
     r
 };
 
-@fn f5 x:Int := {
-    @let p:Pair := &Pair x, 85;
-    @let r:Int := p.lo + p.hi * 160;
+\\ f5 (Int) -> Int
+@fn f5 x := {
+    @let p := &Pair x, 85;
+    @let r := p.lo + p.hi * 160;
     &@if r < 0, { &@return 0 };
     r
 };
 
-@fn f6 x:Int := {
-    @let p:Pair := &Pair x, 102;
-    @let r:Int := p.lo + p.hi * 191;
+\\ f6 (Int) -> Int
+@fn f6 x := {
+    @let p := &Pair x, 102;
+    @let r := p.lo + p.hi * 191;
     r
 };
 
-@fn f7 x:Int := {
-    @let p:Pair := &Pair x, 119;
-    @let r:Int := p.lo + p.hi * 222;
-    @var acc:Int := 0;
-    @var k:Int := 1;
+\\ f7 (Int) -> Int
+@fn f7 x := {
+    @let p := &Pair x, 119;
+    @let r := p.lo + p.hi * 222;
+    @var acc := 0;
+    @var k := 1;
     &@loop k <= 10, { acc = acc + k * 119; k = k + 1; };
     r + acc
 };
 
-@fn f8 x:Int := {
-    @let p:Pair := &Pair x, 136;
-    @let r:Int := p.lo + p.hi * 253;
+\\ f8 (Int) -> Int
+@fn f8 x := {
+    @let p := &Pair x, 136;
+    @let r := p.lo + p.hi * 253;
     r
 };
 
-@fn f9 x:Int := {
-    @let p:Pair := &Pair x, 153;
-    @let r:Int := p.lo + p.hi * 27;
+\\ f9 (Int) -> Int
+@fn f9 x := {
+    @let p := &Pair x, 153;
+    @let r := p.lo + p.hi * 27;
     r
 };
 
-@fn f10 x:Int := {
-    @let p:Pair := &Pair x, 170;
-    @let r:Int := p.lo + p.hi * 58;
+\\ f10 (Int) -> Int
+@fn f10 x := {
+    @let p := &Pair x, 170;
+    @let r := p.lo + p.hi * 58;
     &@if r < 0, { &@return 0 };
     r
 };
 
-@fn f11 x:Int := {
-    @let p:Pair := &Pair x, 187;
-    @let r:Int := p.lo + p.hi * 89;
+\\ f11 (Int) -> Int
+@fn f11 x := {
+    @let p := &Pair x, 187;
+    @let r := p.lo + p.hi * 89;
     r
 };
 
-@fn f12 x:Int := {
-    @let p:Pair := &Pair x, 204;
-    @let r:Int := p.lo + p.hi * 120;
+\\ f12 (Int) -> Int
+@fn f12 x := {
+    @let p := &Pair x, 204;
+    @let r := p.lo + p.hi * 120;
     r
 };
 
-@fn f13 x:Int := {
-    @let p:Pair := &Pair x, 221;
-    @let r:Int := p.lo + p.hi * 151;
+\\ f13 (Int) -> Int
+@fn f13 x := {
+    @let p := &Pair x, 221;
+    @let r := p.lo + p.hi * 151;
     r
 };
 
-@fn f14 x:Int := {
-    @let p:Pair := &Pair x, 238;
-    @let r:Int := p.lo + p.hi * 182;
-    @var acc:Int := 0;
-    @var k:Int := 1;
+\\ f14 (Int) -> Int
+@fn f14 x := {
+    @let p := &Pair x, 238;
+    @let r := p.lo + p.hi * 182;
+    @var acc := 0;
+    @var k := 1;
     &@loop k <= 10, { acc = acc + k * 238; k = k + 1; };
     r + acc
 };
 
-@fn f15 x:Int := {
-    @let p:Pair := &Pair x, 255;
-    @let r:Int := p.lo + p.hi * 213;
+\\ f15 (Int) -> Int
+@fn f15 x := {
+    @let p := &Pair x, 255;
+    @let r := p.lo + p.hi * 213;
     &@if r < 0, { &@return 0 };
     r
 };
 
-@fn f16 x:Int := {
-    @let p:Pair := &Pair x, 15;
-    @let r:Int := p.lo + p.hi * 244;
+\\ f16 (Int) -> Int
+@fn f16 x := {
+    @let p := &Pair x, 15;
+    @let r := p.lo + p.hi * 244;
     r
 };
 
-@fn f17 x:Int := {
-    @let p:Pair := &Pair x, 32;
-    @let r:Int := p.lo + p.hi * 18;
+\\ f17 (Int) -> Int
+@fn f17 x := {
+    @let p := &Pair x, 32;
+    @let r := p.lo + p.hi * 18;
     r
 };
 
-@fn f18 x:Int := {
-    @let p:Pair := &Pair x, 49;
-    @let r:Int := p.lo + p.hi * 49;
+\\ f18 (Int) -> Int
+@fn f18 x := {
+    @let p := &Pair x, 49;
+    @let r := p.lo + p.hi * 49;
     r
 };
 
-@fn f19 x:Int := {
-    @let p:Pair := &Pair x, 66;
-    @let r:Int := p.lo + p.hi * 80;
+\\ f19 (Int) -> Int
+@fn f19 x := {
+    @let p := &Pair x, 66;
+    @let r := p.lo + p.hi * 80;
     r
 };
 
-@fn f20 x:Int := {
-    @let p:Pair := &Pair x, 83;
-    @let r:Int := p.lo + p.hi * 111;
+\\ f20 (Int) -> Int
+@fn f20 x := {
+    @let p := &Pair x, 83;
+    @let r := p.lo + p.hi * 111;
     &@if r < 0, { &@return 0 };
     r
 };
 
-@fn f21 x:Int := {
-    @let p:Pair := &Pair x, 100;
-    @let r:Int := p.lo + p.hi * 142;
-    @var acc:Int := 0;
-    @var k:Int := 1;
+\\ f21 (Int) -> Int
+@fn f21 x := {
+    @let p := &Pair x, 100;
+    @let r := p.lo + p.hi * 142;
+    @var acc := 0;
+    @var k := 1;
     &@loop k <= 10, { acc = acc + k * 100; k = k + 1; };
     r + acc
 };
 
-@fn f22 x:Int := {
-    @let p:Pair := &Pair x, 117;
-    @let r:Int := p.lo + p.hi * 173;
+\\ f22 (Int) -> Int
+@fn f22 x := {
+    @let p := &Pair x, 117;
+    @let r := p.lo + p.hi * 173;
     r
 };
 
-@fn f23 x:Int := {
-    @let p:Pair := &Pair x, 134;
-    @let r:Int := p.lo + p.hi * 204;
+\\ f23 (Int) -> Int
+@fn f23 x := {
+    @let p := &Pair x, 134;
+    @let r := p.lo + p.hi * 204;
     r
 };
 
-@fn f24 x:Int := {
-    @let p:Pair := &Pair x, 151;
-    @let r:Int := p.lo + p.hi * 235;
+\\ f24 (Int) -> Int
+@fn f24 x := {
+    @let p := &Pair x, 151;
+    @let r := p.lo + p.hi * 235;
     r
 };
 
-@fn f25 x:Int := {
-    @let p:Pair := &Pair x, 168;
-    @let r:Int := p.lo + p.hi * 9;
+\\ f25 (Int) -> Int
+@fn f25 x := {
+    @let p := &Pair x, 168;
+    @let r := p.lo + p.hi * 9;
     &@if r < 0, { &@return 0 };
     r
 };
 
-@fn f26 x:Int := {
-    @let p:Pair := &Pair x, 185;
-    @let r:Int := p.lo + p.hi * 40;
+\\ f26 (Int) -> Int
+@fn f26 x := {
+    @let p := &Pair x, 185;
+    @let r := p.lo + p.hi * 40;
     r
 };
 
-@fn f27 x:Int := {
-    @let p:Pair := &Pair x, 202;
-    @let r:Int := p.lo + p.hi * 71;
+\\ f27 (Int) -> Int
+@fn f27 x := {
+    @let p := &Pair x, 202;
+    @let r := p.lo + p.hi * 71;
     r
 };
 
-@fn f28 x:Int := {
-    @let p:Pair := &Pair x, 219;
-    @let r:Int := p.lo + p.hi * 102;
-    @var acc:Int := 0;
-    @var k:Int := 1;
+\\ f28 (Int) -> Int
+@fn f28 x := {
+    @let p := &Pair x, 219;
+    @let r := p.lo + p.hi * 102;
+    @var acc := 0;
+    @var k := 1;
     &@loop k <= 10, { acc = acc + k * 219; k = k + 1; };
     r + acc
 };
 
-@fn f29 x:Int := {
-    @let p:Pair := &Pair x, 236;
-    @let r:Int := p.lo + p.hi * 133;
+\\ f29 (Int) -> Int
+@fn f29 x := {
+    @let p := &Pair x, 236;
+    @let r := p.lo + p.hi * 133;
     r
 };
 
-@fn f30 x:Int := {
-    @let p:Pair := &Pair x, 253;
-    @let r:Int := p.lo + p.hi * 164;
+\\ f30 (Int) -> Int
+@fn f30 x := {
+    @let p := &Pair x, 253;
+    @let r := p.lo + p.hi * 164;
     &@if r < 0, { &@return 0 };
     r
 };
 
-@fn f31 x:Int := {
-    @let p:Pair := &Pair x, 13;
-    @let r:Int := p.lo + p.hi * 195;
+\\ f31 (Int) -> Int
+@fn f31 x := {
+    @let p := &Pair x, 13;
+    @let r := p.lo + p.hi * 195;
     r
 };
 
-@fn f32 x:Int := {
-    @let p:Pair := &Pair x, 30;
-    @let r:Int := p.lo + p.hi * 226;
+\\ f32 (Int) -> Int
+@fn f32 x := {
+    @let p := &Pair x, 30;
+    @let r := p.lo + p.hi * 226;
     r
 };
 
-@fn f33 x:Int := {
-    @let p:Pair := &Pair x, 47;
-    @let r:Int := p.lo + p.hi * 0;
+\\ f33 (Int) -> Int
+@fn f33 x := {
+    @let p := &Pair x, 47;
+    @let r := p.lo + p.hi * 0;
     r
 };
 
-@fn f34 x:Int := {
-    @let p:Pair := &Pair x, 64;
-    @let r:Int := p.lo + p.hi * 31;
+\\ f34 (Int) -> Int
+@fn f34 x := {
+    @let p := &Pair x, 64;
+    @let r := p.lo + p.hi * 31;
     r
 };
 
-@fn f35 x:Int := {
-    @let p:Pair := &Pair x, 81;
-    @let r:Int := p.lo + p.hi * 62;
+\\ f35 (Int) -> Int
+@fn f35 x := {
+    @let p := &Pair x, 81;
+    @let r := p.lo + p.hi * 62;
     &@if r < 0, { &@return 0 };
-    @var acc:Int := 0;
-    @var k:Int := 1;
+    @var acc := 0;
+    @var k := 1;
     &@loop k <= 10, { acc = acc + k * 81; k = k + 1; };
     r + acc
 };
 
-@fn f36 x:Int := {
-    @let p:Pair := &Pair x, 98;
-    @let r:Int := p.lo + p.hi * 93;
+\\ f36 (Int) -> Int
+@fn f36 x := {
+    @let p := &Pair x, 98;
+    @let r := p.lo + p.hi * 93;
     r
 };
 
-@fn f37 x:Int := {
-    @let p:Pair := &Pair x, 115;
-    @let r:Int := p.lo + p.hi * 124;
+\\ f37 (Int) -> Int
+@fn f37 x := {
+    @let p := &Pair x, 115;
+    @let r := p.lo + p.hi * 124;
     r
 };
 
-@fn f38 x:Int := {
-    @let p:Pair := &Pair x, 132;
-    @let r:Int := p.lo + p.hi * 155;
+\\ f38 (Int) -> Int
+@fn f38 x := {
+    @let p := &Pair x, 132;
+    @let r := p.lo + p.hi * 155;
     r
 };
 
-@fn f39 x:Int := {
-    @let p:Pair := &Pair x, 149;
-    @let r:Int := p.lo + p.hi * 186;
+\\ f39 (Int) -> Int
+@fn f39 x := {
+    @let p := &Pair x, 149;
+    @let r := p.lo + p.hi * 186;
     r
 };
 
-@fn f40 x:Int := {
-    @let p:Pair := &Pair x, 166;
-    @let r:Int := p.lo + p.hi * 217;
+\\ f40 (Int) -> Int
+@fn f40 x := {
+    @let p := &Pair x, 166;
+    @let r := p.lo + p.hi * 217;
     &@if r < 0, { &@return 0 };
     r
 };
 
-@fn f41 x:Int := {
-    @let p:Pair := &Pair x, 183;
-    @let r:Int := p.lo + p.hi * 248;
+\\ f41 (Int) -> Int
+@fn f41 x := {
+    @let p := &Pair x, 183;
+    @let r := p.lo + p.hi * 248;
     r
 };
 
-@fn f42 x:Int := {
-    @let p:Pair := &Pair x, 200;
-    @let r:Int := p.lo + p.hi * 22;
-    @var acc:Int := 0;
-    @var k:Int := 1;
+\\ f42 (Int) -> Int
+@fn f42 x := {
+    @let p := &Pair x, 200;
+    @let r := p.lo + p.hi * 22;
+    @var acc := 0;
+    @var k := 1;
     &@loop k <= 10, { acc = acc + k * 200; k = k + 1; };
     r + acc
 };
 
-@fn f43 x:Int := {
-    @let p:Pair := &Pair x, 217;
-    @let r:Int := p.lo + p.hi * 53;
+\\ f43 (Int) -> Int
+@fn f43 x := {
+    @let p := &Pair x, 217;
+    @let r := p.lo + p.hi * 53;
     r
 };
 
-@fn f44 x:Int := {
-    @let p:Pair := &Pair x, 234;
-    @let r:Int := p.lo + p.hi * 84;
+\\ f44 (Int) -> Int
+@fn f44 x := {
+    @let p := &Pair x, 234;
+    @let r := p.lo + p.hi * 84;
     r
 };
 
-@fn f45 x:Int := {
-    @let p:Pair := &Pair x, 251;
-    @let r:Int := p.lo + p.hi * 115;
+\\ f45 (Int) -> Int
+@fn f45 x := {
+    @let p := &Pair x, 251;
+    @let r := p.lo + p.hi * 115;
     &@if r < 0, { &@return 0 };
     r
 };
 
-@fn f46 x:Int := {
-    @let p:Pair := &Pair x, 11;
-    @let r:Int := p.lo + p.hi * 146;
+\\ f46 (Int) -> Int
+@fn f46 x := {
+    @let p := &Pair x, 11;
+    @let r := p.lo + p.hi * 146;
     r
 };
 
-@fn f47 x:Int := {
-    @let p:Pair := &Pair x, 28;
-    @let r:Int := p.lo + p.hi * 177;
+\\ f47 (Int) -> Int
+@fn f47 x := {
+    @let p := &Pair x, 28;
+    @let r := p.lo + p.hi * 177;
     r
 };
 
-@fn f48 x:Int := {
-    @let p:Pair := &Pair x, 45;
-    @let r:Int := p.lo + p.hi * 208;
+\\ f48 (Int) -> Int
+@fn f48 x := {
+    @let p := &Pair x, 45;
+    @let r := p.lo + p.hi * 208;
     r
 };
 
-@fn f49 x:Int := {
-    @let p:Pair := &Pair x, 62;
-    @let r:Int := p.lo + p.hi * 239;
-    @var acc:Int := 0;
-    @var k:Int := 1;
+\\ f49 (Int) -> Int
+@fn f49 x := {
+    @let p := &Pair x, 62;
+    @let r := p.lo + p.hi * 239;
+    @var acc := 0;
+    @var k := 1;
     &@loop k <= 10, { acc = acc + k * 62; k = k + 1; };
     r + acc
 };
 
-@fn f50 x:Int := {
-    @let p:Pair := &Pair x, 79;
-    @let r:Int := p.lo + p.hi * 13;
+\\ f50 (Int) -> Int
+@fn f50 x := {
+    @let p := &Pair x, 79;
+    @let r := p.lo + p.hi * 13;
     &@if r < 0, { &@return 0 };
     r
 };
 
-@fn f51 x:Int := {
-    @let p:Pair := &Pair x, 96;
-    @let r:Int := p.lo + p.hi * 44;
+\\ f51 (Int) -> Int
+@fn f51 x := {
+    @let p := &Pair x, 96;
+    @let r := p.lo + p.hi * 44;
     r
 };
 
-@fn f52 x:Int := {
-    @let p:Pair := &Pair x, 113;
-    @let r:Int := p.lo + p.hi * 75;
+\\ f52 (Int) -> Int
+@fn f52 x := {
+    @let p := &Pair x, 113;
+    @let r := p.lo + p.hi * 75;
     r
 };
 
-@fn f53 x:Int := {
-    @let p:Pair := &Pair x, 130;
-    @let r:Int := p.lo + p.hi * 106;
+\\ f53 (Int) -> Int
+@fn f53 x := {
+    @let p := &Pair x, 130;
+    @let r := p.lo + p.hi * 106;
     r
 };
 
-@fn f54 x:Int := {
-    @let p:Pair := &Pair x, 147;
-    @let r:Int := p.lo + p.hi * 137;
+\\ f54 (Int) -> Int
+@fn f54 x := {
+    @let p := &Pair x, 147;
+    @let r := p.lo + p.hi * 137;
     r
 };
 
-@fn f55 x:Int := {
-    @let p:Pair := &Pair x, 164;
-    @let r:Int := p.lo + p.hi * 168;
+\\ f55 (Int) -> Int
+@fn f55 x := {
+    @let p := &Pair x, 164;
+    @let r := p.lo + p.hi * 168;
     &@if r < 0, { &@return 0 };
     r
 };
 
-@fn f56 x:Int := {
-    @let p:Pair := &Pair x, 181;
-    @let r:Int := p.lo + p.hi * 199;
-    @var acc:Int := 0;
-    @var k:Int := 1;
+\\ f56 (Int) -> Int
+@fn f56 x := {
+    @let p := &Pair x, 181;
+    @let r := p.lo + p.hi * 199;
+    @var acc := 0;
+    @var k := 1;
     &@loop k <= 10, { acc = acc + k * 181; k = k + 1; };
     r + acc
 };
 
-@fn f57 x:Int := {
-    @let p:Pair := &Pair x, 198;
-    @let r:Int := p.lo + p.hi * 230;
+\\ f57 (Int) -> Int
+@fn f57 x := {
+    @let p := &Pair x, 198;
+    @let r := p.lo + p.hi * 230;
     r
 };
 
-@fn f58 x:Int := {
-    @let p:Pair := &Pair x, 215;
-    @let r:Int := p.lo + p.hi * 4;
+\\ f58 (Int) -> Int
+@fn f58 x := {
+    @let p := &Pair x, 215;
+    @let r := p.lo + p.hi * 4;
     r
 };
 
-@fn f59 x:Int := {
-    @let p:Pair := &Pair x, 232;
-    @let r:Int := p.lo + p.hi * 35;
+\\ f59 (Int) -> Int
+@fn f59 x := {
+    @let p := &Pair x, 232;
+    @let r := p.lo + p.hi * 35;
     r
 };
 
-@fn f60 x:Int := {
-    @let p:Pair := &Pair x, 249;
-    @let r:Int := p.lo + p.hi * 66;
+\\ f60 (Int) -> Int
+@fn f60 x := {
+    @let p := &Pair x, 249;
+    @let r := p.lo + p.hi * 66;
     &@if r < 0, { &@return 0 };
     r
 };
 
-@fn f61 x:Int := {
-    @let p:Pair := &Pair x, 9;
-    @let r:Int := p.lo + p.hi * 97;
+\\ f61 (Int) -> Int
+@fn f61 x := {
+    @let p := &Pair x, 9;
+    @let r := p.lo + p.hi * 97;
     r
 };
 
-@fn f62 x:Int := {
-    @let p:Pair := &Pair x, 26;
-    @let r:Int := p.lo + p.hi * 128;
+\\ f62 (Int) -> Int
+@fn f62 x := {
+    @let p := &Pair x, 26;
+    @let r := p.lo + p.hi * 128;
     r
 };
 
-@fn f63 x:Int := {
-    @let p:Pair := &Pair x, 43;
-    @let r:Int := p.lo + p.hi * 159;
-    @var acc:Int := 0;
-    @var k:Int := 1;
+\\ f63 (Int) -> Int
+@fn f63 x := {
+    @let p := &Pair x, 43;
+    @let r := p.lo + p.hi * 159;
+    @var acc := 0;
+    @var k := 1;
     &@loop k <= 10, { acc = acc + k * 43; k = k + 1; };
     r + acc
 };
 
-@fn f64 x:Int := {
-    @let p:Pair := &Pair x, 60;
-    @let r:Int := p.lo + p.hi * 190;
+\\ f64 (Int) -> Int
+@fn f64 x := {
+    @let p := &Pair x, 60;
+    @let r := p.lo + p.hi * 190;
     r
 };
 
-@fn f65 x:Int := {
-    @let p:Pair := &Pair x, 77;
-    @let r:Int := p.lo + p.hi * 221;
+\\ f65 (Int) -> Int
+@fn f65 x := {
+    @let p := &Pair x, 77;
+    @let r := p.lo + p.hi * 221;
     &@if r < 0, { &@return 0 };
     r
 };
 
-@fn f66 x:Int := {
-    @let p:Pair := &Pair x, 94;
-    @let r:Int := p.lo + p.hi * 252;
+\\ f66 (Int) -> Int
+@fn f66 x := {
+    @let p := &Pair x, 94;
+    @let r := p.lo + p.hi * 252;
     r
 };
 
-@fn f67 x:Int := {
-    @let p:Pair := &Pair x, 111;
-    @let r:Int := p.lo + p.hi * 26;
+\\ f67 (Int) -> Int
+@fn f67 x := {
+    @let p := &Pair x, 111;
+    @let r := p.lo + p.hi * 26;
     r
 };
 
-@fn f68 x:Int := {
-    @let p:Pair := &Pair x, 128;
-    @let r:Int := p.lo + p.hi * 57;
+\\ f68 (Int) -> Int
+@fn f68 x := {
+    @let p := &Pair x, 128;
+    @let r := p.lo + p.hi * 57;
     r
 };
 
-@fn f69 x:Int := {
-    @let p:Pair := &Pair x, 145;
-    @let r:Int := p.lo + p.hi * 88;
+\\ f69 (Int) -> Int
+@fn f69 x := {
+    @let p := &Pair x, 145;
+    @let r := p.lo + p.hi * 88;
     r
 };
 
-@fn f70 x:Int := {
-    @let p:Pair := &Pair x, 162;
-    @let r:Int := p.lo + p.hi * 119;
+\\ f70 (Int) -> Int
+@fn f70 x := {
+    @let p := &Pair x, 162;
+    @let r := p.lo + p.hi * 119;
     &@if r < 0, { &@return 0 };
-    @var acc:Int := 0;
-    @var k:Int := 1;
+    @var acc := 0;
+    @var k := 1;
     &@loop k <= 10, { acc = acc + k * 162; k = k + 1; };
     r + acc
 };
 
-@fn f71 x:Int := {
-    @let p:Pair := &Pair x, 179;
-    @let r:Int := p.lo + p.hi * 150;
+\\ f71 (Int) -> Int
+@fn f71 x := {
+    @let p := &Pair x, 179;
+    @let r := p.lo + p.hi * 150;
     r
 };
 
-@fn f72 x:Int := {
-    @let p:Pair := &Pair x, 196;
-    @let r:Int := p.lo + p.hi * 181;
+\\ f72 (Int) -> Int
+@fn f72 x := {
+    @let p := &Pair x, 196;
+    @let r := p.lo + p.hi * 181;
     r
 };
 
-@fn f73 x:Int := {
-    @let p:Pair := &Pair x, 213;
-    @let r:Int := p.lo + p.hi * 212;
+\\ f73 (Int) -> Int
+@fn f73 x := {
+    @let p := &Pair x, 213;
+    @let r := p.lo + p.hi * 212;
     r
 };
 
-@fn f74 x:Int := {
-    @let p:Pair := &Pair x, 230;
-    @let r:Int := p.lo + p.hi * 243;
+\\ f74 (Int) -> Int
+@fn f74 x := {
+    @let p := &Pair x, 230;
+    @let r := p.lo + p.hi * 243;
     r
 };
 
-@fn f75 x:Int := {
-    @let p:Pair := &Pair x, 247;
-    @let r:Int := p.lo + p.hi * 17;
+\\ f75 (Int) -> Int
+@fn f75 x := {
+    @let p := &Pair x, 247;
+    @let r := p.lo + p.hi * 17;
     &@if r < 0, { &@return 0 };
     r
 };
 
-@fn f76 x:Int := {
-    @let p:Pair := &Pair x, 7;
-    @let r:Int := p.lo + p.hi * 48;
+\\ f76 (Int) -> Int
+@fn f76 x := {
+    @let p := &Pair x, 7;
+    @let r := p.lo + p.hi * 48;
     r
 };
 
-@fn f77 x:Int := {
-    @let p:Pair := &Pair x, 24;
-    @let r:Int := p.lo + p.hi * 79;
-    @var acc:Int := 0;
-    @var k:Int := 1;
+\\ f77 (Int) -> Int
+@fn f77 x := {
+    @let p := &Pair x, 24;
+    @let r := p.lo + p.hi * 79;
+    @var acc := 0;
+    @var k := 1;
     &@loop k <= 10, { acc = acc + k * 24; k = k + 1; };
     r + acc
 };
 
-@fn f78 x:Int := {
-    @let p:Pair := &Pair x, 41;
-    @let r:Int := p.lo + p.hi * 110;
+\\ f78 (Int) -> Int
+@fn f78 x := {
+    @let p := &Pair x, 41;
+    @let r := p.lo + p.hi * 110;
     r
 };
 
-@fn f79 x:Int := {
-    @let p:Pair := &Pair x, 58;
-    @let r:Int := p.lo + p.hi * 141;
+\\ f79 (Int) -> Int
+@fn f79 x := {
+    @let p := &Pair x, 58;
+    @let r := p.lo + p.hi * 141;
     r
 };
 
-@fn f80 x:Int := {
-    @let p:Pair := &Pair x, 75;
-    @let r:Int := p.lo + p.hi * 172;
+\\ f80 (Int) -> Int
+@fn f80 x := {
+    @let p := &Pair x, 75;
+    @let r := p.lo + p.hi * 172;
     &@if r < 0, { &@return 0 };
     r
 };
 
-@fn f81 x:Int := {
-    @let p:Pair := &Pair x, 92;
-    @let r:Int := p.lo + p.hi * 203;
+\\ f81 (Int) -> Int
+@fn f81 x := {
+    @let p := &Pair x, 92;
+    @let r := p.lo + p.hi * 203;
     r
 };
 
-@fn f82 x:Int := {
-    @let p:Pair := &Pair x, 109;
-    @let r:Int := p.lo + p.hi * 234;
+\\ f82 (Int) -> Int
+@fn f82 x := {
+    @let p := &Pair x, 109;
+    @let r := p.lo + p.hi * 234;
     r
 };
 
-@fn f83 x:Int := {
-    @let p:Pair := &Pair x, 126;
-    @let r:Int := p.lo + p.hi * 8;
+\\ f83 (Int) -> Int
+@fn f83 x := {
+    @let p := &Pair x, 126;
+    @let r := p.lo + p.hi * 8;
     r
 };
 
-@fn f84 x:Int := {
-    @let p:Pair := &Pair x, 143;
-    @let r:Int := p.lo + p.hi * 39;
-    @var acc:Int := 0;
-    @var k:Int := 1;
+\\ f84 (Int) -> Int
+@fn f84 x := {
+    @let p := &Pair x, 143;
+    @let r := p.lo + p.hi * 39;
+    @var acc := 0;
+    @var k := 1;
     &@loop k <= 10, { acc = acc + k * 143; k = k + 1; };
     r + acc
 };
 
-@fn f85 x:Int := {
-    @let p:Pair := &Pair x, 160;
-    @let r:Int := p.lo + p.hi * 70;
+\\ f85 (Int) -> Int
+@fn f85 x := {
+    @let p := &Pair x, 160;
+    @let r := p.lo + p.hi * 70;
     &@if r < 0, { &@return 0 };
     r
 };
 
-@fn f86 x:Int := {
-    @let p:Pair := &Pair x, 177;
-    @let r:Int := p.lo + p.hi * 101;
+\\ f86 (Int) -> Int
+@fn f86 x := {
+    @let p := &Pair x, 177;
+    @let r := p.lo + p.hi * 101;
     r
 };
 
-@fn f87 x:Int := {
-    @let p:Pair := &Pair x, 194;
-    @let r:Int := p.lo + p.hi * 132;
+\\ f87 (Int) -> Int
+@fn f87 x := {
+    @let p := &Pair x, 194;
+    @let r := p.lo + p.hi * 132;
     r
 };
 
-@fn f88 x:Int := {
-    @let p:Pair := &Pair x, 211;
-    @let r:Int := p.lo + p.hi * 163;
+\\ f88 (Int) -> Int
+@fn f88 x := {
+    @let p := &Pair x, 211;
+    @let r := p.lo + p.hi * 163;
     r
 };
 
-@fn f89 x:Int := {
-    @let p:Pair := &Pair x, 228;
-    @let r:Int := p.lo + p.hi * 194;
+\\ f89 (Int) -> Int
+@fn f89 x := {
+    @let p := &Pair x, 228;
+    @let r := p.lo + p.hi * 194;
     r
 };
 
-@fn f90 x:Int := {
-    @let p:Pair := &Pair x, 245;
-    @let r:Int := p.lo + p.hi * 225;
+\\ f90 (Int) -> Int
+@fn f90 x := {
+    @let p := &Pair x, 245;
+    @let r := p.lo + p.hi * 225;
     &@if r < 0, { &@return 0 };
     r
 };
 
-@fn f91 x:Int := {
-    @let p:Pair := &Pair x, 5;
-    @let r:Int := p.lo + p.hi * 256;
-    @var acc:Int := 0;
-    @var k:Int := 1;
+\\ f91 (Int) -> Int
+@fn f91 x := {
+    @let p := &Pair x, 5;
+    @let r := p.lo + p.hi * 256;
+    @var acc := 0;
+    @var k := 1;
     &@loop k <= 10, { acc = acc + k * 5; k = k + 1; };
     r + acc
 };
 
-@fn f92 x:Int := {
-    @let p:Pair := &Pair x, 22;
-    @let r:Int := p.lo + p.hi * 30;
+\\ f92 (Int) -> Int
+@fn f92 x := {
+    @let p := &Pair x, 22;
+    @let r := p.lo + p.hi * 30;
     r
 };
 
-@fn f93 x:Int := {
-    @let p:Pair := &Pair x, 39;
-    @let r:Int := p.lo + p.hi * 61;
+\\ f93 (Int) -> Int
+@fn f93 x := {
+    @let p := &Pair x, 39;
+    @let r := p.lo + p.hi * 61;
     r
 };
 
-@fn f94 x:Int := {
-    @let p:Pair := &Pair x, 56;
-    @let r:Int := p.lo + p.hi * 92;
+\\ f94 (Int) -> Int
+@fn f94 x := {
+    @let p := &Pair x, 56;
+    @let r := p.lo + p.hi * 92;
     r
 };
 
-@fn f95 x:Int := {
-    @let p:Pair := &Pair x, 73;
-    @let r:Int := p.lo + p.hi * 123;
+\\ f95 (Int) -> Int
+@fn f95 x := {
+    @let p := &Pair x, 73;
+    @let r := p.lo + p.hi * 123;
     &@if r < 0, { &@return 0 };
     r
 };
 
-@fn f96 x:Int := {
-    @let p:Pair := &Pair x, 90;
-    @let r:Int := p.lo + p.hi * 154;
+\\ f96 (Int) -> Int
+@fn f96 x := {
+    @let p := &Pair x, 90;
+    @let r := p.lo + p.hi * 154;
     r
 };
 
-@fn f97 x:Int := {
-    @let p:Pair := &Pair x, 107;
-    @let r:Int := p.lo + p.hi * 185;
+\\ f97 (Int) -> Int
+@fn f97 x := {
+    @let p := &Pair x, 107;
+    @let r := p.lo + p.hi * 185;
     r
 };
 
-@fn f98 x:Int := {
-    @let p:Pair := &Pair x, 124;
-    @let r:Int := p.lo + p.hi * 216;
-    @var acc:Int := 0;
-    @var k:Int := 1;
+\\ f98 (Int) -> Int
+@fn f98 x := {
+    @let p := &Pair x, 124;
+    @let r := p.lo + p.hi * 216;
+    @var acc := 0;
+    @var k := 1;
     &@loop k <= 10, { acc = acc + k * 124; k = k + 1; };
     r + acc
 };
 
-@fn f99 x:Int := {
-    @let p:Pair := &Pair x, 141;
-    @let r:Int := p.lo + p.hi * 247;
+\\ f99 (Int) -> Int
+@fn f99 x := {
+    @let p := &Pair x, 141;
+    @let r := p.lo + p.hi * 247;
     r
 };
 
-@fn f100 x:Int := {
-    @let p:Pair := &Pair x, 158;
-    @let r:Int := p.lo + p.hi * 21;
+\\ f100 (Int) -> Int
+@fn f100 x := {
+    @let p := &Pair x, 158;
+    @let r := p.lo + p.hi * 21;
     &@if r < 0, { &@return 0 };
     r
 };
 
-@fn f101 x:Int := {
-    @let p:Pair := &Pair x, 175;
-    @let r:Int := p.lo + p.hi * 52;
+\\ f101 (Int) -> Int
+@fn f101 x := {
+    @let p := &Pair x, 175;
+    @let r := p.lo + p.hi * 52;
     r
 };
 
-@fn f102 x:Int := {
-    @let p:Pair := &Pair x, 192;
-    @let r:Int := p.lo + p.hi * 83;
+\\ f102 (Int) -> Int
+@fn f102 x := {
+    @let p := &Pair x, 192;
+    @let r := p.lo + p.hi * 83;
     r
 };
 
-@fn f103 x:Int := {
-    @let p:Pair := &Pair x, 209;
-    @let r:Int := p.lo + p.hi * 114;
+\\ f103 (Int) -> Int
+@fn f103 x := {
+    @let p := &Pair x, 209;
+    @let r := p.lo + p.hi * 114;
     r
 };
 
-@fn f104 x:Int := {
-    @let p:Pair := &Pair x, 226;
-    @let r:Int := p.lo + p.hi * 145;
+\\ f104 (Int) -> Int
+@fn f104 x := {
+    @let p := &Pair x, 226;
+    @let r := p.lo + p.hi * 145;
     r
 };
 
-@fn f105 x:Int := {
-    @let p:Pair := &Pair x, 243;
-    @let r:Int := p.lo + p.hi * 176;
+\\ f105 (Int) -> Int
+@fn f105 x := {
+    @let p := &Pair x, 243;
+    @let r := p.lo + p.hi * 176;
     &@if r < 0, { &@return 0 };
-    @var acc:Int := 0;
-    @var k:Int := 1;
+    @var acc := 0;
+    @var k := 1;
     &@loop k <= 10, { acc = acc + k * 243; k = k + 1; };
     r + acc
 };
 
-@fn f106 x:Int := {
-    @let p:Pair := &Pair x, 3;
-    @let r:Int := p.lo + p.hi * 207;
+\\ f106 (Int) -> Int
+@fn f106 x := {
+    @let p := &Pair x, 3;
+    @let r := p.lo + p.hi * 207;
     r
 };
 
-@fn f107 x:Int := {
-    @let p:Pair := &Pair x, 20;
-    @let r:Int := p.lo + p.hi * 238;
+\\ f107 (Int) -> Int
+@fn f107 x := {
+    @let p := &Pair x, 20;
+    @let r := p.lo + p.hi * 238;
     r
 };
 
-@fn f108 x:Int := {
-    @let p:Pair := &Pair x, 37;
-    @let r:Int := p.lo + p.hi * 12;
+\\ f108 (Int) -> Int
+@fn f108 x := {
+    @let p := &Pair x, 37;
+    @let r := p.lo + p.hi * 12;
     r
 };
 
-@fn f109 x:Int := {
-    @let p:Pair := &Pair x, 54;
-    @let r:Int := p.lo + p.hi * 43;
+\\ f109 (Int) -> Int
+@fn f109 x := {
+    @let p := &Pair x, 54;
+    @let r := p.lo + p.hi * 43;
     r
 };
 
-@fn f110 x:Int := {
-    @let p:Pair := &Pair x, 71;
-    @let r:Int := p.lo + p.hi * 74;
+\\ f110 (Int) -> Int
+@fn f110 x := {
+    @let p := &Pair x, 71;
+    @let r := p.lo + p.hi * 74;
     &@if r < 0, { &@return 0 };
     r
 };
 
-@fn f111 x:Int := {
-    @let p:Pair := &Pair x, 88;
-    @let r:Int := p.lo + p.hi * 105;
+\\ f111 (Int) -> Int
+@fn f111 x := {
+    @let p := &Pair x, 88;
+    @let r := p.lo + p.hi * 105;
     r
 };
 
-@fn f112 x:Int := {
-    @let p:Pair := &Pair x, 105;
-    @let r:Int := p.lo + p.hi * 136;
-    @var acc:Int := 0;
-    @var k:Int := 1;
+\\ f112 (Int) -> Int
+@fn f112 x := {
+    @let p := &Pair x, 105;
+    @let r := p.lo + p.hi * 136;
+    @var acc := 0;
+    @var k := 1;
     &@loop k <= 10, { acc = acc + k * 105; k = k + 1; };
     r + acc
 };
 
-@fn f113 x:Int := {
-    @let p:Pair := &Pair x, 122;
-    @let r:Int := p.lo + p.hi * 167;
+\\ f113 (Int) -> Int
+@fn f113 x := {
+    @let p := &Pair x, 122;
+    @let r := p.lo + p.hi * 167;
     r
 };
 
-@fn f114 x:Int := {
-    @let p:Pair := &Pair x, 139;
-    @let r:Int := p.lo + p.hi * 198;
+\\ f114 (Int) -> Int
+@fn f114 x := {
+    @let p := &Pair x, 139;
+    @let r := p.lo + p.hi * 198;
     r
 };
 
-@fn f115 x:Int := {
-    @let p:Pair := &Pair x, 156;
-    @let r:Int := p.lo + p.hi * 229;
+\\ f115 (Int) -> Int
+@fn f115 x := {
+    @let p := &Pair x, 156;
+    @let r := p.lo + p.hi * 229;
     &@if r < 0, { &@return 0 };
     r
 };
 
-@fn f116 x:Int := {
-    @let p:Pair := &Pair x, 173;
-    @let r:Int := p.lo + p.hi * 3;
+\\ f116 (Int) -> Int
+@fn f116 x := {
+    @let p := &Pair x, 173;
+    @let r := p.lo + p.hi * 3;
     r
 };
 
-@fn f117 x:Int := {
-    @let p:Pair := &Pair x, 190;
-    @let r:Int := p.lo + p.hi * 34;
+\\ f117 (Int) -> Int
+@fn f117 x := {
+    @let p := &Pair x, 190;
+    @let r := p.lo + p.hi * 34;
     r
 };
 
-@fn f118 x:Int := {
-    @let p:Pair := &Pair x, 207;
-    @let r:Int := p.lo + p.hi * 65;
+\\ f118 (Int) -> Int
+@fn f118 x := {
+    @let p := &Pair x, 207;
+    @let r := p.lo + p.hi * 65;
     r
 };
 
-@fn f119 x:Int := {
-    @let p:Pair := &Pair x, 224;
-    @let r:Int := p.lo + p.hi * 96;
-    @var acc:Int := 0;
-    @var k:Int := 1;
+\\ f119 (Int) -> Int
+@fn f119 x := {
+    @let p := &Pair x, 224;
+    @let r := p.lo + p.hi * 96;
+    @var acc := 0;
+    @var k := 1;
     &@loop k <= 10, { acc = acc + k * 224; k = k + 1; };
     r + acc
 };
 
-@fn f120 x:Int := {
-    @let p:Pair := &Pair x, 241;
-    @let r:Int := p.lo + p.hi * 127;
+\\ f120 (Int) -> Int
+@fn f120 x := {
+    @let p := &Pair x, 241;
+    @let r := p.lo + p.hi * 127;
     &@if r < 0, { &@return 0 };
     r
 };
 
-@fn f121 x:Int := {
-    @let p:Pair := &Pair x, 1;
-    @let r:Int := p.lo + p.hi * 158;
+\\ f121 (Int) -> Int
+@fn f121 x := {
+    @let p := &Pair x, 1;
+    @let r := p.lo + p.hi * 158;
     r
 };
 
-@fn f122 x:Int := {
-    @let p:Pair := &Pair x, 18;
-    @let r:Int := p.lo + p.hi * 189;
+\\ f122 (Int) -> Int
+@fn f122 x := {
+    @let p := &Pair x, 18;
+    @let r := p.lo + p.hi * 189;
     r
 };
 
-@fn f123 x:Int := {
-    @let p:Pair := &Pair x, 35;
-    @let r:Int := p.lo + p.hi * 220;
+\\ f123 (Int) -> Int
+@fn f123 x := {
+    @let p := &Pair x, 35;
+    @let r := p.lo + p.hi * 220;
     r
 };
 
-@fn f124 x:Int := {
-    @let p:Pair := &Pair x, 52;
-    @let r:Int := p.lo + p.hi * 251;
+\\ f124 (Int) -> Int
+@fn f124 x := {
+    @let p := &Pair x, 52;
+    @let r := p.lo + p.hi * 251;
     r
 };
 
-@fn f125 x:Int := {
-    @let p:Pair := &Pair x, 69;
-    @let r:Int := p.lo + p.hi * 25;
+\\ f125 (Int) -> Int
+@fn f125 x := {
+    @let p := &Pair x, 69;
+    @let r := p.lo + p.hi * 25;
     &@if r < 0, { &@return 0 };
     r
 };
 
-@fn f126 x:Int := {
-    @let p:Pair := &Pair x, 86;
-    @let r:Int := p.lo + p.hi * 56;
-    @var acc:Int := 0;
-    @var k:Int := 1;
+\\ f126 (Int) -> Int
+@fn f126 x := {
+    @let p := &Pair x, 86;
+    @let r := p.lo + p.hi * 56;
+    @var acc := 0;
+    @var k := 1;
     &@loop k <= 10, { acc = acc + k * 86; k = k + 1; };
     r + acc
 };
 
-@fn f127 x:Int := {
-    @let p:Pair := &Pair x, 103;
-    @let r:Int := p.lo + p.hi * 87;
+\\ f127 (Int) -> Int
+@fn f127 x := {
+    @let p := &Pair x, 103;
+    @let r := p.lo + p.hi * 87;
     r
 };
 
-@fn f128 x:Int := {
-    @let p:Pair := &Pair x, 120;
-    @let r:Int := p.lo + p.hi * 118;
+\\ f128 (Int) -> Int
+@fn f128 x := {
+    @let p := &Pair x, 120;
+    @let r := p.lo + p.hi * 118;
     r
 };
 
-@fn f129 x:Int := {
-    @let p:Pair := &Pair x, 137;
-    @let r:Int := p.lo + p.hi * 149;
+\\ f129 (Int) -> Int
+@fn f129 x := {
+    @let p := &Pair x, 137;
+    @let r := p.lo + p.hi * 149;
     r
 };
 
-@fn f130 x:Int := {
-    @let p:Pair := &Pair x, 154;
-    @let r:Int := p.lo + p.hi * 180;
+\\ f130 (Int) -> Int
+@fn f130 x := {
+    @let p := &Pair x, 154;
+    @let r := p.lo + p.hi * 180;
     &@if r < 0, { &@return 0 };
     r
 };
 
-@fn f131 x:Int := {
-    @let p:Pair := &Pair x, 171;
-    @let r:Int := p.lo + p.hi * 211;
+\\ f131 (Int) -> Int
+@fn f131 x := {
+    @let p := &Pair x, 171;
+    @let r := p.lo + p.hi * 211;
     r
 };
 
-@fn f132 x:Int := {
-    @let p:Pair := &Pair x, 188;
-    @let r:Int := p.lo + p.hi * 242;
+\\ f132 (Int) -> Int
+@fn f132 x := {
+    @let p := &Pair x, 188;
+    @let r := p.lo + p.hi * 242;
     r
 };
 
-@fn f133 x:Int := {
-    @let p:Pair := &Pair x, 205;
-    @let r:Int := p.lo + p.hi * 16;
-    @var acc:Int := 0;
-    @var k:Int := 1;
+\\ f133 (Int) -> Int
+@fn f133 x := {
+    @let p := &Pair x, 205;
+    @let r := p.lo + p.hi * 16;
+    @var acc := 0;
+    @var k := 1;
     &@loop k <= 10, { acc = acc + k * 205; k = k + 1; };
     r + acc
 };
 
-@fn f134 x:Int := {
-    @let p:Pair := &Pair x, 222;
-    @let r:Int := p.lo + p.hi * 47;
+\\ f134 (Int) -> Int
+@fn f134 x := {
+    @let p := &Pair x, 222;
+    @let r := p.lo + p.hi * 47;
     r
 };
 
-@fn f135 x:Int := {
-    @let p:Pair := &Pair x, 239;
-    @let r:Int := p.lo + p.hi * 78;
+\\ f135 (Int) -> Int
+@fn f135 x := {
+    @let p := &Pair x, 239;
+    @let r := p.lo + p.hi * 78;
     &@if r < 0, { &@return 0 };
     r
 };
 
-@fn f136 x:Int := {
-    @let p:Pair := &Pair x, 256;
-    @let r:Int := p.lo + p.hi * 109;
+\\ f136 (Int) -> Int
+@fn f136 x := {
+    @let p := &Pair x, 256;
+    @let r := p.lo + p.hi * 109;
     r
 };
 
-@fn f137 x:Int := {
-    @let p:Pair := &Pair x, 16;
-    @let r:Int := p.lo + p.hi * 140;
+\\ f137 (Int) -> Int
+@fn f137 x := {
+    @let p := &Pair x, 16;
+    @let r := p.lo + p.hi * 140;
     r
 };
 
-@fn f138 x:Int := {
-    @let p:Pair := &Pair x, 33;
-    @let r:Int := p.lo + p.hi * 171;
+\\ f138 (Int) -> Int
+@fn f138 x := {
+    @let p := &Pair x, 33;
+    @let r := p.lo + p.hi * 171;
     r
 };
 
-@fn f139 x:Int := {
-    @let p:Pair := &Pair x, 50;
-    @let r:Int := p.lo + p.hi * 202;
+\\ f139 (Int) -> Int
+@fn f139 x := {
+    @let p := &Pair x, 50;
+    @let r := p.lo + p.hi * 202;
     r
 };
 
-@fn f140 x:Int := {
-    @let p:Pair := &Pair x, 67;
-    @let r:Int := p.lo + p.hi * 233;
+\\ f140 (Int) -> Int
+@fn f140 x := {
+    @let p := &Pair x, 67;
+    @let r := p.lo + p.hi * 233;
     &@if r < 0, { &@return 0 };
-    @var acc:Int := 0;
-    @var k:Int := 1;
+    @var acc := 0;
+    @var k := 1;
     &@loop k <= 10, { acc = acc + k * 67; k = k + 1; };
     r + acc
 };
 
-@fn f141 x:Int := {
-    @let p:Pair := &Pair x, 84;
-    @let r:Int := p.lo + p.hi * 7;
+\\ f141 (Int) -> Int
+@fn f141 x := {
+    @let p := &Pair x, 84;
+    @let r := p.lo + p.hi * 7;
     r
 };
 
-@fn f142 x:Int := {
-    @let p:Pair := &Pair x, 101;
-    @let r:Int := p.lo + p.hi * 38;
+\\ f142 (Int) -> Int
+@fn f142 x := {
+    @let p := &Pair x, 101;
+    @let r := p.lo + p.hi * 38;
     r
 };
 
-@fn f143 x:Int := {
-    @let p:Pair := &Pair x, 118;
-    @let r:Int := p.lo + p.hi * 69;
+\\ f143 (Int) -> Int
+@fn f143 x := {
+    @let p := &Pair x, 118;
+    @let r := p.lo + p.hi * 69;
     r
 };
 
-@fn f144 x:Int := {
-    @let p:Pair := &Pair x, 135;
-    @let r:Int := p.lo + p.hi * 100;
+\\ f144 (Int) -> Int
+@fn f144 x := {
+    @let p := &Pair x, 135;
+    @let r := p.lo + p.hi * 100;
     r
 };
 
-@fn f145 x:Int := {
-    @let p:Pair := &Pair x, 152;
-    @let r:Int := p.lo + p.hi * 131;
+\\ f145 (Int) -> Int
+@fn f145 x := {
+    @let p := &Pair x, 152;
+    @let r := p.lo + p.hi * 131;
     &@if r < 0, { &@return 0 };
     r
 };
 
-@fn f146 x:Int := {
-    @let p:Pair := &Pair x, 169;
-    @let r:Int := p.lo + p.hi * 162;
+\\ f146 (Int) -> Int
+@fn f146 x := {
+    @let p := &Pair x, 169;
+    @let r := p.lo + p.hi * 162;
     r
 };
 
-@fn f147 x:Int := {
-    @let p:Pair := &Pair x, 186;
-    @let r:Int := p.lo + p.hi * 193;
-    @var acc:Int := 0;
-    @var k:Int := 1;
+\\ f147 (Int) -> Int
+@fn f147 x := {
+    @let p := &Pair x, 186;
+    @let r := p.lo + p.hi * 193;
+    @var acc := 0;
+    @var k := 1;
     &@loop k <= 10, { acc = acc + k * 186; k = k + 1; };
     r + acc
 };
 
-@fn f148 x:Int := {
-    @let p:Pair := &Pair x, 203;
-    @let r:Int := p.lo + p.hi * 224;
+\\ f148 (Int) -> Int
+@fn f148 x := {
+    @let p := &Pair x, 203;
+    @let r := p.lo + p.hi * 224;
     r
 };
 
-@fn f149 x:Int := {
-    @let p:Pair := &Pair x, 220;
-    @let r:Int := p.lo + p.hi * 255;
+\\ f149 (Int) -> Int
+@fn f149 x := {
+    @let p := &Pair x, 220;
+    @let r := p.lo + p.hi * 255;
     r
 };
 
-@fn f150 x:Int := {
-    @let p:Pair := &Pair x, 237;
-    @let r:Int := p.lo + p.hi * 29;
+\\ f150 (Int) -> Int
+@fn f150 x := {
+    @let p := &Pair x, 237;
+    @let r := p.lo + p.hi * 29;
     &@if r < 0, { &@return 0 };
     r
 };
 
-@fn f151 x:Int := {
-    @let p:Pair := &Pair x, 254;
-    @let r:Int := p.lo + p.hi * 60;
+\\ f151 (Int) -> Int
+@fn f151 x := {
+    @let p := &Pair x, 254;
+    @let r := p.lo + p.hi * 60;
     r
 };
 
-@fn f152 x:Int := {
-    @let p:Pair := &Pair x, 14;
-    @let r:Int := p.lo + p.hi * 91;
+\\ f152 (Int) -> Int
+@fn f152 x := {
+    @let p := &Pair x, 14;
+    @let r := p.lo + p.hi * 91;
     r
 };
 
-@fn f153 x:Int := {
-    @let p:Pair := &Pair x, 31;
-    @let r:Int := p.lo + p.hi * 122;
+\\ f153 (Int) -> Int
+@fn f153 x := {
+    @let p := &Pair x, 31;
+    @let r := p.lo + p.hi * 122;
     r
 };
 
-@fn f154 x:Int := {
-    @let p:Pair := &Pair x, 48;
-    @let r:Int := p.lo + p.hi * 153;
-    @var acc:Int := 0;
-    @var k:Int := 1;
+\\ f154 (Int) -> Int
+@fn f154 x := {
+    @let p := &Pair x, 48;
+    @let r := p.lo + p.hi * 153;
+    @var acc := 0;
+    @var k := 1;
     &@loop k <= 10, { acc = acc + k * 48; k = k + 1; };
     r + acc
 };
 
-@fn f155 x:Int := {
-    @let p:Pair := &Pair x, 65;
-    @let r:Int := p.lo + p.hi * 184;
+\\ f155 (Int) -> Int
+@fn f155 x := {
+    @let p := &Pair x, 65;
+    @let r := p.lo + p.hi * 184;
     &@if r < 0, { &@return 0 };
     r
 };
 
-@fn f156 x:Int := {
-    @let p:Pair := &Pair x, 82;
-    @let r:Int := p.lo + p.hi * 215;
+\\ f156 (Int) -> Int
+@fn f156 x := {
+    @let p := &Pair x, 82;
+    @let r := p.lo + p.hi * 215;
     r
 };
 
-@fn f157 x:Int := {
-    @let p:Pair := &Pair x, 99;
-    @let r:Int := p.lo + p.hi * 246;
+\\ f157 (Int) -> Int
+@fn f157 x := {
+    @let p := &Pair x, 99;
+    @let r := p.lo + p.hi * 246;
     r
 };
 
-@fn f158 x:Int := {
-    @let p:Pair := &Pair x, 116;
-    @let r:Int := p.lo + p.hi * 20;
+\\ f158 (Int) -> Int
+@fn f158 x := {
+    @let p := &Pair x, 116;
+    @let r := p.lo + p.hi * 20;
     r
 };
 
-@fn f159 x:Int := {
-    @let p:Pair := &Pair x, 133;
-    @let r:Int := p.lo + p.hi * 51;
+\\ f159 (Int) -> Int
+@fn f159 x := {
+    @let p := &Pair x, 133;
+    @let r := p.lo + p.hi * 51;
     r
 };
 
-@fn f160 x:Int := {
-    @let p:Pair := &Pair x, 150;
-    @let r:Int := p.lo + p.hi * 82;
+\\ f160 (Int) -> Int
+@fn f160 x := {
+    @let p := &Pair x, 150;
+    @let r := p.lo + p.hi * 82;
     &@if r < 0, { &@return 0 };
     r
 };
 
-@fn f161 x:Int := {
-    @let p:Pair := &Pair x, 167;
-    @let r:Int := p.lo + p.hi * 113;
-    @var acc:Int := 0;
-    @var k:Int := 1;
+\\ f161 (Int) -> Int
+@fn f161 x := {
+    @let p := &Pair x, 167;
+    @let r := p.lo + p.hi * 113;
+    @var acc := 0;
+    @var k := 1;
     &@loop k <= 10, { acc = acc + k * 167; k = k + 1; };
     r + acc
 };
 
-@fn f162 x:Int := {
-    @let p:Pair := &Pair x, 184;
-    @let r:Int := p.lo + p.hi * 144;
+\\ f162 (Int) -> Int
+@fn f162 x := {
+    @let p := &Pair x, 184;
+    @let r := p.lo + p.hi * 144;
     r
 };
 
-@fn f163 x:Int := {
-    @let p:Pair := &Pair x, 201;
-    @let r:Int := p.lo + p.hi * 175;
+\\ f163 (Int) -> Int
+@fn f163 x := {
+    @let p := &Pair x, 201;
+    @let r := p.lo + p.hi * 175;
     r
 };
 
-@fn f164 x:Int := {
-    @let p:Pair := &Pair x, 218;
-    @let r:Int := p.lo + p.hi * 206;
+\\ f164 (Int) -> Int
+@fn f164 x := {
+    @let p := &Pair x, 218;
+    @let r := p.lo + p.hi * 206;
     r
 };
 
-@fn f165 x:Int := {
-    @let p:Pair := &Pair x, 235;
-    @let r:Int := p.lo + p.hi * 237;
+\\ f165 (Int) -> Int
+@fn f165 x := {
+    @let p := &Pair x, 235;
+    @let r := p.lo + p.hi * 237;
     &@if r < 0, { &@return 0 };
     r
 };
 
-@fn f166 x:Int := {
-    @let p:Pair := &Pair x, 252;
-    @let r:Int := p.lo + p.hi * 11;
+\\ f166 (Int) -> Int
+@fn f166 x := {
+    @let p := &Pair x, 252;
+    @let r := p.lo + p.hi * 11;
     r
 };
 
-@fn f167 x:Int := {
-    @let p:Pair := &Pair x, 12;
-    @let r:Int := p.lo + p.hi * 42;
+\\ f167 (Int) -> Int
+@fn f167 x := {
+    @let p := &Pair x, 12;
+    @let r := p.lo + p.hi * 42;
     r
 };
 
-@fn f168 x:Int := {
-    @let p:Pair := &Pair x, 29;
-    @let r:Int := p.lo + p.hi * 73;
-    @var acc:Int := 0;
-    @var k:Int := 1;
+\\ f168 (Int) -> Int
+@fn f168 x := {
+    @let p := &Pair x, 29;
+    @let r := p.lo + p.hi * 73;
+    @var acc := 0;
+    @var k := 1;
     &@loop k <= 10, { acc = acc + k * 29; k = k + 1; };
     r + acc
 };
 
-@fn f169 x:Int := {
-    @let p:Pair := &Pair x, 46;
-    @let r:Int := p.lo + p.hi * 104;
+\\ f169 (Int) -> Int
+@fn f169 x := {
+    @let p := &Pair x, 46;
+    @let r := p.lo + p.hi * 104;
     r
 };
 
-@fn f170 x:Int := {
-    @let p:Pair := &Pair x, 63;
-    @let r:Int := p.lo + p.hi * 135;
+\\ f170 (Int) -> Int
+@fn f170 x := {
+    @let p := &Pair x, 63;
+    @let r := p.lo + p.hi * 135;
     &@if r < 0, { &@return 0 };
     r
 };
 
-@fn f171 x:Int := {
-    @let p:Pair := &Pair x, 80;
-    @let r:Int := p.lo + p.hi * 166;
+\\ f171 (Int) -> Int
+@fn f171 x := {
+    @let p := &Pair x, 80;
+    @let r := p.lo + p.hi * 166;
     r
 };
 
-@fn f172 x:Int := {
-    @let p:Pair := &Pair x, 97;
-    @let r:Int := p.lo + p.hi * 197;
+\\ f172 (Int) -> Int
+@fn f172 x := {
+    @let p := &Pair x, 97;
+    @let r := p.lo + p.hi * 197;
     r
 };
 
-@fn f173 x:Int := {
-    @let p:Pair := &Pair x, 114;
-    @let r:Int := p.lo + p.hi * 228;
+\\ f173 (Int) -> Int
+@fn f173 x := {
+    @let p := &Pair x, 114;
+    @let r := p.lo + p.hi * 228;
     r
 };
 
-@fn f174 x:Int := {
-    @let p:Pair := &Pair x, 131;
-    @let r:Int := p.lo + p.hi * 2;
+\\ f174 (Int) -> Int
+@fn f174 x := {
+    @let p := &Pair x, 131;
+    @let r := p.lo + p.hi * 2;
     r
 };
 
-@fn f175 x:Int := {
-    @let p:Pair := &Pair x, 148;
-    @let r:Int := p.lo + p.hi * 33;
+\\ f175 (Int) -> Int
+@fn f175 x := {
+    @let p := &Pair x, 148;
+    @let r := p.lo + p.hi * 33;
     &@if r < 0, { &@return 0 };
-    @var acc:Int := 0;
-    @var k:Int := 1;
+    @var acc := 0;
+    @var k := 1;
     &@loop k <= 10, { acc = acc + k * 148; k = k + 1; };
     r + acc
 };
 
-@fn f176 x:Int := {
-    @let p:Pair := &Pair x, 165;
-    @let r:Int := p.lo + p.hi * 64;
+\\ f176 (Int) -> Int
+@fn f176 x := {
+    @let p := &Pair x, 165;
+    @let r := p.lo + p.hi * 64;
     r
 };
 
-@fn f177 x:Int := {
-    @let p:Pair := &Pair x, 182;
-    @let r:Int := p.lo + p.hi * 95;
+\\ f177 (Int) -> Int
+@fn f177 x := {
+    @let p := &Pair x, 182;
+    @let r := p.lo + p.hi * 95;
     r
 };
 
-@fn f178 x:Int := {
-    @let p:Pair := &Pair x, 199;
-    @let r:Int := p.lo + p.hi * 126;
+\\ f178 (Int) -> Int
+@fn f178 x := {
+    @let p := &Pair x, 199;
+    @let r := p.lo + p.hi * 126;
     r
 };
 
-@fn f179 x:Int := {
-    @let p:Pair := &Pair x, 216;
-    @let r:Int := p.lo + p.hi * 157;
+\\ f179 (Int) -> Int
+@fn f179 x := {
+    @let p := &Pair x, 216;
+    @let r := p.lo + p.hi * 157;
     r
 };
 
-@fn f180 x:Int := {
-    @let p:Pair := &Pair x, 233;
-    @let r:Int := p.lo + p.hi * 188;
+\\ f180 (Int) -> Int
+@fn f180 x := {
+    @let p := &Pair x, 233;
+    @let r := p.lo + p.hi * 188;
     &@if r < 0, { &@return 0 };
     r
 };
 
-@fn f181 x:Int := {
-    @let p:Pair := &Pair x, 250;
-    @let r:Int := p.lo + p.hi * 219;
+\\ f181 (Int) -> Int
+@fn f181 x := {
+    @let p := &Pair x, 250;
+    @let r := p.lo + p.hi * 219;
     r
 };
 
-@fn f182 x:Int := {
-    @let p:Pair := &Pair x, 10;
-    @let r:Int := p.lo + p.hi * 250;
-    @var acc:Int := 0;
-    @var k:Int := 1;
+\\ f182 (Int) -> Int
+@fn f182 x := {
+    @let p := &Pair x, 10;
+    @let r := p.lo + p.hi * 250;
+    @var acc := 0;
+    @var k := 1;
     &@loop k <= 10, { acc = acc + k * 10; k = k + 1; };
     r + acc
 };
 
-@fn f183 x:Int := {
-    @let p:Pair := &Pair x, 27;
-    @let r:Int := p.lo + p.hi * 24;
+\\ f183 (Int) -> Int
+@fn f183 x := {
+    @let p := &Pair x, 27;
+    @let r := p.lo + p.hi * 24;
     r
 };
 
-@fn f184 x:Int := {
-    @let p:Pair := &Pair x, 44;
-    @let r:Int := p.lo + p.hi * 55;
+\\ f184 (Int) -> Int
+@fn f184 x := {
+    @let p := &Pair x, 44;
+    @let r := p.lo + p.hi * 55;
     r
 };
 
-@fn f185 x:Int := {
-    @let p:Pair := &Pair x, 61;
-    @let r:Int := p.lo + p.hi * 86;
+\\ f185 (Int) -> Int
+@fn f185 x := {
+    @let p := &Pair x, 61;
+    @let r := p.lo + p.hi * 86;
     &@if r < 0, { &@return 0 };
     r
 };
 
-@fn f186 x:Int := {
-    @let p:Pair := &Pair x, 78;
-    @let r:Int := p.lo + p.hi * 117;
+\\ f186 (Int) -> Int
+@fn f186 x := {
+    @let p := &Pair x, 78;
+    @let r := p.lo + p.hi * 117;
     r
 };
 
-@fn f187 x:Int := {
-    @let p:Pair := &Pair x, 95;
-    @let r:Int := p.lo + p.hi * 148;
+\\ f187 (Int) -> Int
+@fn f187 x := {
+    @let p := &Pair x, 95;
+    @let r := p.lo + p.hi * 148;
     r
 };
 
-@fn f188 x:Int := {
-    @let p:Pair := &Pair x, 112;
-    @let r:Int := p.lo + p.hi * 179;
+\\ f188 (Int) -> Int
+@fn f188 x := {
+    @let p := &Pair x, 112;
+    @let r := p.lo + p.hi * 179;
     r
 };
 
-@fn f189 x:Int := {
-    @let p:Pair := &Pair x, 129;
-    @let r:Int := p.lo + p.hi * 210;
-    @var acc:Int := 0;
-    @var k:Int := 1;
+\\ f189 (Int) -> Int
+@fn f189 x := {
+    @let p := &Pair x, 129;
+    @let r := p.lo + p.hi * 210;
+    @var acc := 0;
+    @var k := 1;
     &@loop k <= 10, { acc = acc + k * 129; k = k + 1; };
     r + acc
 };
 
-@fn f190 x:Int := {
-    @let p:Pair := &Pair x, 146;
-    @let r:Int := p.lo + p.hi * 241;
+\\ f190 (Int) -> Int
+@fn f190 x := {
+    @let p := &Pair x, 146;
+    @let r := p.lo + p.hi * 241;
     &@if r < 0, { &@return 0 };
     r
 };
 
-@fn f191 x:Int := {
-    @let p:Pair := &Pair x, 163;
-    @let r:Int := p.lo + p.hi * 15;
+\\ f191 (Int) -> Int
+@fn f191 x := {
+    @let p := &Pair x, 163;
+    @let r := p.lo + p.hi * 15;
     r
 };
 
-@fn f192 x:Int := {
-    @let p:Pair := &Pair x, 180;
-    @let r:Int := p.lo + p.hi * 46;
+\\ f192 (Int) -> Int
+@fn f192 x := {
+    @let p := &Pair x, 180;
+    @let r := p.lo + p.hi * 46;
     r
 };
 
-@fn f193 x:Int := {
-    @let p:Pair := &Pair x, 197;
-    @let r:Int := p.lo + p.hi * 77;
+\\ f193 (Int) -> Int
+@fn f193 x := {
+    @let p := &Pair x, 197;
+    @let r := p.lo + p.hi * 77;
     r
 };
 
-@fn f194 x:Int := {
-    @let p:Pair := &Pair x, 214;
-    @let r:Int := p.lo + p.hi * 108;
+\\ f194 (Int) -> Int
+@fn f194 x := {
+    @let p := &Pair x, 214;
+    @let r := p.lo + p.hi * 108;
     r
 };
 
-@fn f195 x:Int := {
-    @let p:Pair := &Pair x, 231;
-    @let r:Int := p.lo + p.hi * 139;
+\\ f195 (Int) -> Int
+@fn f195 x := {
+    @let p := &Pair x, 231;
+    @let r := p.lo + p.hi * 139;
     &@if r < 0, { &@return 0 };
     r
 };
 
-@fn f196 x:Int := {
-    @let p:Pair := &Pair x, 248;
-    @let r:Int := p.lo + p.hi * 170;
-    @var acc:Int := 0;
-    @var k:Int := 1;
+\\ f196 (Int) -> Int
+@fn f196 x := {
+    @let p := &Pair x, 248;
+    @let r := p.lo + p.hi * 170;
+    @var acc := 0;
+    @var k := 1;
     &@loop k <= 10, { acc = acc + k * 248; k = k + 1; };
     r + acc
 };
 
-@fn f197 x:Int := {
-    @let p:Pair := &Pair x, 8;
-    @let r:Int := p.lo + p.hi * 201;
+\\ f197 (Int) -> Int
+@fn f197 x := {
+    @let p := &Pair x, 8;
+    @let r := p.lo + p.hi * 201;
     r
 };
 
-@fn f198 x:Int := {
-    @let p:Pair := &Pair x, 25;
-    @let r:Int := p.lo + p.hi * 232;
+\\ f198 (Int) -> Int
+@fn f198 x := {
+    @let p := &Pair x, 25;
+    @let r := p.lo + p.hi * 232;
     r
 };
 
-@fn f199 x:Int := {
-    @let p:Pair := &Pair x, 42;
-    @let r:Int := p.lo + p.hi * 6;
+\\ f199 (Int) -> Int
+@fn f199 x := {
+    @let p := &Pair x, 42;
+    @let r := p.lo + p.hi * 6;
     r
 };
 
-@fn f200 x:Int := {
-    @let p:Pair := &Pair x, 59;
-    @let r:Int := p.lo + p.hi * 37;
+\\ f200 (Int) -> Int
+@fn f200 x := {
+    @let p := &Pair x, 59;
+    @let r := p.lo + p.hi * 37;
     &@if r < 0, { &@return 0 };
     r
 };
 
-@fn f201 x:Int := {
-    @let p:Pair := &Pair x, 76;
-    @let r:Int := p.lo + p.hi * 68;
+\\ f201 (Int) -> Int
+@fn f201 x := {
+    @let p := &Pair x, 76;
+    @let r := p.lo + p.hi * 68;
     r
 };
 
-@fn f202 x:Int := {
-    @let p:Pair := &Pair x, 93;
-    @let r:Int := p.lo + p.hi * 99;
+\\ f202 (Int) -> Int
+@fn f202 x := {
+    @let p := &Pair x, 93;
+    @let r := p.lo + p.hi * 99;
     r
 };
 
-@fn f203 x:Int := {
-    @let p:Pair := &Pair x, 110;
-    @let r:Int := p.lo + p.hi * 130;
-    @var acc:Int := 0;
-    @var k:Int := 1;
+\\ f203 (Int) -> Int
+@fn f203 x := {
+    @let p := &Pair x, 110;
+    @let r := p.lo + p.hi * 130;
+    @var acc := 0;
+    @var k := 1;
     &@loop k <= 10, { acc = acc + k * 110; k = k + 1; };
     r + acc
 };
 
-@fn f204 x:Int := {
-    @let p:Pair := &Pair x, 127;
-    @let r:Int := p.lo + p.hi * 161;
+\\ f204 (Int) -> Int
+@fn f204 x := {
+    @let p := &Pair x, 127;
+    @let r := p.lo + p.hi * 161;
     r
 };
 
-@fn f205 x:Int := {
-    @let p:Pair := &Pair x, 144;
-    @let r:Int := p.lo + p.hi * 192;
+\\ f205 (Int) -> Int
+@fn f205 x := {
+    @let p := &Pair x, 144;
+    @let r := p.lo + p.hi * 192;
     &@if r < 0, { &@return 0 };
     r
 };
 
-@fn f206 x:Int := {
-    @let p:Pair := &Pair x, 161;
-    @let r:Int := p.lo + p.hi * 223;
+\\ f206 (Int) -> Int
+@fn f206 x := {
+    @let p := &Pair x, 161;
+    @let r := p.lo + p.hi * 223;
     r
 };
 
-@fn f207 x:Int := {
-    @let p:Pair := &Pair x, 178;
-    @let r:Int := p.lo + p.hi * 254;
+\\ f207 (Int) -> Int
+@fn f207 x := {
+    @let p := &Pair x, 178;
+    @let r := p.lo + p.hi * 254;
     r
 };
 
-@fn f208 x:Int := {
-    @let p:Pair := &Pair x, 195;
-    @let r:Int := p.lo + p.hi * 28;
+\\ f208 (Int) -> Int
+@fn f208 x := {
+    @let p := &Pair x, 195;
+    @let r := p.lo + p.hi * 28;
     r
 };
 
-@fn f209 x:Int := {
-    @let p:Pair := &Pair x, 212;
-    @let r:Int := p.lo + p.hi * 59;
+\\ f209 (Int) -> Int
+@fn f209 x := {
+    @let p := &Pair x, 212;
+    @let r := p.lo + p.hi * 59;
     r
 };
 
-@fn f210 x:Int := {
-    @let p:Pair := &Pair x, 229;
-    @let r:Int := p.lo + p.hi * 90;
+\\ f210 (Int) -> Int
+@fn f210 x := {
+    @let p := &Pair x, 229;
+    @let r := p.lo + p.hi * 90;
     &@if r < 0, { &@return 0 };
-    @var acc:Int := 0;
-    @var k:Int := 1;
+    @var acc := 0;
+    @var k := 1;
     &@loop k <= 10, { acc = acc + k * 229; k = k + 1; };
     r + acc
 };
 
-@fn f211 x:Int := {
-    @let p:Pair := &Pair x, 246;
-    @let r:Int := p.lo + p.hi * 121;
+\\ f211 (Int) -> Int
+@fn f211 x := {
+    @let p := &Pair x, 246;
+    @let r := p.lo + p.hi * 121;
     r
 };
 
-@fn f212 x:Int := {
-    @let p:Pair := &Pair x, 6;
-    @let r:Int := p.lo + p.hi * 152;
+\\ f212 (Int) -> Int
+@fn f212 x := {
+    @let p := &Pair x, 6;
+    @let r := p.lo + p.hi * 152;
     r
 };
 
-@fn f213 x:Int := {
-    @let p:Pair := &Pair x, 23;
-    @let r:Int := p.lo + p.hi * 183;
+\\ f213 (Int) -> Int
+@fn f213 x := {
+    @let p := &Pair x, 23;
+    @let r := p.lo + p.hi * 183;
     r
 };
 
-@fn f214 x:Int := {
-    @let p:Pair := &Pair x, 40;
-    @let r:Int := p.lo + p.hi * 214;
+\\ f214 (Int) -> Int
+@fn f214 x := {
+    @let p := &Pair x, 40;
+    @let r := p.lo + p.hi * 214;
     r
 };
 
-@fn f215 x:Int := {
-    @let p:Pair := &Pair x, 57;
-    @let r:Int := p.lo + p.hi * 245;
+\\ f215 (Int) -> Int
+@fn f215 x := {
+    @let p := &Pair x, 57;
+    @let r := p.lo + p.hi * 245;
     &@if r < 0, { &@return 0 };
     r
 };
 
-@fn f216 x:Int := {
-    @let p:Pair := &Pair x, 74;
-    @let r:Int := p.lo + p.hi * 19;
+\\ f216 (Int) -> Int
+@fn f216 x := {
+    @let p := &Pair x, 74;
+    @let r := p.lo + p.hi * 19;
     r
 };
 
-@fn f217 x:Int := {
-    @let p:Pair := &Pair x, 91;
-    @let r:Int := p.lo + p.hi * 50;
-    @var acc:Int := 0;
-    @var k:Int := 1;
+\\ f217 (Int) -> Int
+@fn f217 x := {
+    @let p := &Pair x, 91;
+    @let r := p.lo + p.hi * 50;
+    @var acc := 0;
+    @var k := 1;
     &@loop k <= 10, { acc = acc + k * 91; k = k + 1; };
     r + acc
 };
 
-@fn f218 x:Int := {
-    @let p:Pair := &Pair x, 108;
-    @let r:Int := p.lo + p.hi * 81;
+\\ f218 (Int) -> Int
+@fn f218 x := {
+    @let p := &Pair x, 108;
+    @let r := p.lo + p.hi * 81;
     r
 };
 
-@fn f219 x:Int := {
-    @let p:Pair := &Pair x, 125;
-    @let r:Int := p.lo + p.hi * 112;
+\\ f219 (Int) -> Int
+@fn f219 x := {
+    @let p := &Pair x, 125;
+    @let r := p.lo + p.hi * 112;
     r
 };
 
-@fn f220 x:Int := {
-    @let p:Pair := &Pair x, 142;
-    @let r:Int := p.lo + p.hi * 143;
+\\ f220 (Int) -> Int
+@fn f220 x := {
+    @let p := &Pair x, 142;
+    @let r := p.lo + p.hi * 143;
     &@if r < 0, { &@return 0 };
     r
 };
 
-@fn f221 x:Int := {
-    @let p:Pair := &Pair x, 159;
-    @let r:Int := p.lo + p.hi * 174;
+\\ f221 (Int) -> Int
+@fn f221 x := {
+    @let p := &Pair x, 159;
+    @let r := p.lo + p.hi * 174;
     r
 };
 
-@fn f222 x:Int := {
-    @let p:Pair := &Pair x, 176;
-    @let r:Int := p.lo + p.hi * 205;
+\\ f222 (Int) -> Int
+@fn f222 x := {
+    @let p := &Pair x, 176;
+    @let r := p.lo + p.hi * 205;
     r
 };
 
-@fn f223 x:Int := {
-    @let p:Pair := &Pair x, 193;
-    @let r:Int := p.lo + p.hi * 236;
+\\ f223 (Int) -> Int
+@fn f223 x := {
+    @let p := &Pair x, 193;
+    @let r := p.lo + p.hi * 236;
     r
 };
 
-@fn f224 x:Int := {
-    @let p:Pair := &Pair x, 210;
-    @let r:Int := p.lo + p.hi * 10;
-    @var acc:Int := 0;
-    @var k:Int := 1;
+\\ f224 (Int) -> Int
+@fn f224 x := {
+    @let p := &Pair x, 210;
+    @let r := p.lo + p.hi * 10;
+    @var acc := 0;
+    @var k := 1;
     &@loop k <= 10, { acc = acc + k * 210; k = k + 1; };
     r + acc
 };
 
-@fn f225 x:Int := {
-    @let p:Pair := &Pair x, 227;
-    @let r:Int := p.lo + p.hi * 41;
+\\ f225 (Int) -> Int
+@fn f225 x := {
+    @let p := &Pair x, 227;
+    @let r := p.lo + p.hi * 41;
     &@if r < 0, { &@return 0 };
     r
 };
 
-@fn f226 x:Int := {
-    @let p:Pair := &Pair x, 244;
-    @let r:Int := p.lo + p.hi * 72;
+\\ f226 (Int) -> Int
+@fn f226 x := {
+    @let p := &Pair x, 244;
+    @let r := p.lo + p.hi * 72;
     r
 };
 
-@fn f227 x:Int := {
-    @let p:Pair := &Pair x, 4;
-    @let r:Int := p.lo + p.hi * 103;
+\\ f227 (Int) -> Int
+@fn f227 x := {
+    @let p := &Pair x, 4;
+    @let r := p.lo + p.hi * 103;
     r
 };
 
-@fn f228 x:Int := {
-    @let p:Pair := &Pair x, 21;
-    @let r:Int := p.lo + p.hi * 134;
+\\ f228 (Int) -> Int
+@fn f228 x := {
+    @let p := &Pair x, 21;
+    @let r := p.lo + p.hi * 134;
     r
 };
 
-@fn f229 x:Int := {
-    @let p:Pair := &Pair x, 38;
-    @let r:Int := p.lo + p.hi * 165;
+\\ f229 (Int) -> Int
+@fn f229 x := {
+    @let p := &Pair x, 38;
+    @let r := p.lo + p.hi * 165;
     r
 };
 
-@fn f230 x:Int := {
-    @let p:Pair := &Pair x, 55;
-    @let r:Int := p.lo + p.hi * 196;
+\\ f230 (Int) -> Int
+@fn f230 x := {
+    @let p := &Pair x, 55;
+    @let r := p.lo + p.hi * 196;
     &@if r < 0, { &@return 0 };
     r
 };
 
-@fn f231 x:Int := {
-    @let p:Pair := &Pair x, 72;
-    @let r:Int := p.lo + p.hi * 227;
-    @var acc:Int := 0;
-    @var k:Int := 1;
+\\ f231 (Int) -> Int
+@fn f231 x := {
+    @let p := &Pair x, 72;
+    @let r := p.lo + p.hi * 227;
+    @var acc := 0;
+    @var k := 1;
     &@loop k <= 10, { acc = acc + k * 72; k = k + 1; };
     r + acc
 };
 
-@fn f232 x:Int := {
-    @let p:Pair := &Pair x, 89;
-    @let r:Int := p.lo + p.hi * 1;
+\\ f232 (Int) -> Int
+@fn f232 x := {
+    @let p := &Pair x, 89;
+    @let r := p.lo + p.hi * 1;
     r
 };
 
-@fn f233 x:Int := {
-    @let p:Pair := &Pair x, 106;
-    @let r:Int := p.lo + p.hi * 32;
+\\ f233 (Int) -> Int
+@fn f233 x := {
+    @let p := &Pair x, 106;
+    @let r := p.lo + p.hi * 32;
     r
 };
 
-@fn f234 x:Int := {
-    @let p:Pair := &Pair x, 123;
-    @let r:Int := p.lo + p.hi * 63;
+\\ f234 (Int) -> Int
+@fn f234 x := {
+    @let p := &Pair x, 123;
+    @let r := p.lo + p.hi * 63;
     r
 };
 
-@fn f235 x:Int := {
-    @let p:Pair := &Pair x, 140;
-    @let r:Int := p.lo + p.hi * 94;
+\\ f235 (Int) -> Int
+@fn f235 x := {
+    @let p := &Pair x, 140;
+    @let r := p.lo + p.hi * 94;
     &@if r < 0, { &@return 0 };
     r
 };
 
-@fn f236 x:Int := {
-    @let p:Pair := &Pair x, 157;
-    @let r:Int := p.lo + p.hi * 125;
+\\ f236 (Int) -> Int
+@fn f236 x := {
+    @let p := &Pair x, 157;
+    @let r := p.lo + p.hi * 125;
     r
 };
 
-@fn f237 x:Int := {
-    @let p:Pair := &Pair x, 174;
-    @let r:Int := p.lo + p.hi * 156;
+\\ f237 (Int) -> Int
+@fn f237 x := {
+    @let p := &Pair x, 174;
+    @let r := p.lo + p.hi * 156;
     r
 };
 
-@fn f238 x:Int := {
-    @let p:Pair := &Pair x, 191;
-    @let r:Int := p.lo + p.hi * 187;
-    @var acc:Int := 0;
-    @var k:Int := 1;
+\\ f238 (Int) -> Int
+@fn f238 x := {
+    @let p := &Pair x, 191;
+    @let r := p.lo + p.hi * 187;
+    @var acc := 0;
+    @var k := 1;
     &@loop k <= 10, { acc = acc + k * 191; k = k + 1; };
     r + acc
 };
 
-@fn f239 x:Int := {
-    @let p:Pair := &Pair x, 208;
-    @let r:Int := p.lo + p.hi * 218;
+\\ f239 (Int) -> Int
+@fn f239 x := {
+    @let p := &Pair x, 208;
+    @let r := p.lo + p.hi * 218;
     r
 };
 
-@fn f240 x:Int := {
-    @let p:Pair := &Pair x, 225;
-    @let r:Int := p.lo + p.hi * 249;
+\\ f240 (Int) -> Int
+@fn f240 x := {
+    @let p := &Pair x, 225;
+    @let r := p.lo + p.hi * 249;
     &@if r < 0, { &@return 0 };
     r
 };
 
-@fn f241 x:Int := {
-    @let p:Pair := &Pair x, 242;
-    @let r:Int := p.lo + p.hi * 23;
+\\ f241 (Int) -> Int
+@fn f241 x := {
+    @let p := &Pair x, 242;
+    @let r := p.lo + p.hi * 23;
     r
 };
 
-@fn f242 x:Int := {
-    @let p:Pair := &Pair x, 2;
-    @let r:Int := p.lo + p.hi * 54;
+\\ f242 (Int) -> Int
+@fn f242 x := {
+    @let p := &Pair x, 2;
+    @let r := p.lo + p.hi * 54;
     r
 };
 
-@fn f243 x:Int := {
-    @let p:Pair := &Pair x, 19;
-    @let r:Int := p.lo + p.hi * 85;
+\\ f243 (Int) -> Int
+@fn f243 x := {
+    @let p := &Pair x, 19;
+    @let r := p.lo + p.hi * 85;
     r
 };
 
-@fn f244 x:Int := {
-    @let p:Pair := &Pair x, 36;
-    @let r:Int := p.lo + p.hi * 116;
+\\ f244 (Int) -> Int
+@fn f244 x := {
+    @let p := &Pair x, 36;
+    @let r := p.lo + p.hi * 116;
     r
 };
 
-@fn f245 x:Int := {
-    @let p:Pair := &Pair x, 53;
-    @let r:Int := p.lo + p.hi * 147;
+\\ f245 (Int) -> Int
+@fn f245 x := {
+    @let p := &Pair x, 53;
+    @let r := p.lo + p.hi * 147;
     &@if r < 0, { &@return 0 };
-    @var acc:Int := 0;
-    @var k:Int := 1;
+    @var acc := 0;
+    @var k := 1;
     &@loop k <= 10, { acc = acc + k * 53; k = k + 1; };
     r + acc
 };
 
-@fn f246 x:Int := {
-    @let p:Pair := &Pair x, 70;
-    @let r:Int := p.lo + p.hi * 178;
+\\ f246 (Int) -> Int
+@fn f246 x := {
+    @let p := &Pair x, 70;
+    @let r := p.lo + p.hi * 178;
     r
 };
 
-@fn f247 x:Int := {
-    @let p:Pair := &Pair x, 87;
-    @let r:Int := p.lo + p.hi * 209;
+\\ f247 (Int) -> Int
+@fn f247 x := {
+    @let p := &Pair x, 87;
+    @let r := p.lo + p.hi * 209;
     r
 };
 
-@fn f248 x:Int := {
-    @let p:Pair := &Pair x, 104;
-    @let r:Int := p.lo + p.hi * 240;
+\\ f248 (Int) -> Int
+@fn f248 x := {
+    @let p := &Pair x, 104;
+    @let r := p.lo + p.hi * 240;
     r
 };
 
-@fn f249 x:Int := {
-    @let p:Pair := &Pair x, 121;
-    @let r:Int := p.lo + p.hi * 14;
+\\ f249 (Int) -> Int
+@fn f249 x := {
+    @let p := &Pair x, 121;
+    @let r := p.lo + p.hi * 14;
     r
 };
 
-@fn f250 x:Int := {
-    @let p:Pair := &Pair x, 138;
-    @let r:Int := p.lo + p.hi * 45;
+\\ f250 (Int) -> Int
+@fn f250 x := {
+    @let p := &Pair x, 138;
+    @let r := p.lo + p.hi * 45;
     &@if r < 0, { &@return 0 };
     r
 };
 
-@fn f251 x:Int := {
-    @let p:Pair := &Pair x, 155;
-    @let r:Int := p.lo + p.hi * 76;
+\\ f251 (Int) -> Int
+@fn f251 x := {
+    @let p := &Pair x, 155;
+    @let r := p.lo + p.hi * 76;
     r
 };
 
-@fn f252 x:Int := {
-    @let p:Pair := &Pair x, 172;
-    @let r:Int := p.lo + p.hi * 107;
-    @var acc:Int := 0;
-    @var k:Int := 1;
+\\ f252 (Int) -> Int
+@fn f252 x := {
+    @let p := &Pair x, 172;
+    @let r := p.lo + p.hi * 107;
+    @var acc := 0;
+    @var k := 1;
     &@loop k <= 10, { acc = acc + k * 172; k = k + 1; };
     r + acc
 };
 
-@fn f253 x:Int := {
-    @let p:Pair := &Pair x, 189;
-    @let r:Int := p.lo + p.hi * 138;
+\\ f253 (Int) -> Int
+@fn f253 x := {
+    @let p := &Pair x, 189;
+    @let r := p.lo + p.hi * 138;
     r
 };
 
-@fn f254 x:Int := {
-    @let p:Pair := &Pair x, 206;
-    @let r:Int := p.lo + p.hi * 169;
+\\ f254 (Int) -> Int
+@fn f254 x := {
+    @let p := &Pair x, 206;
+    @let r := p.lo + p.hi * 169;
     r
 };
 
-@fn f255 x:Int := {
-    @let p:Pair := &Pair x, 223;
-    @let r:Int := p.lo + p.hi * 200;
+\\ f255 (Int) -> Int
+@fn f255 x := {
+    @let p := &Pair x, 223;
+    @let r := p.lo + p.hi * 200;
     &@if r < 0, { &@return 0 };
     r
 };
 
-@fn f256 x:Int := {
-    @let p:Pair := &Pair x, 240;
-    @let r:Int := p.lo + p.hi * 231;
+\\ f256 (Int) -> Int
+@fn f256 x := {
+    @let p := &Pair x, 240;
+    @let r := p.lo + p.hi * 231;
     r
 };
 
-@fn f257 x:Int := {
-    @let p:Pair := &Pair x, 0;
-    @let r:Int := p.lo + p.hi * 5;
+\\ f257 (Int) -> Int
+@fn f257 x := {
+    @let p := &Pair x, 0;
+    @let r := p.lo + p.hi * 5;
     r
 };
 
-@fn f258 x:Int := {
-    @let p:Pair := &Pair x, 17;
-    @let r:Int := p.lo + p.hi * 36;
+\\ f258 (Int) -> Int
+@fn f258 x := {
+    @let p := &Pair x, 17;
+    @let r := p.lo + p.hi * 36;
     r
 };
 
-@fn f259 x:Int := {
-    @let p:Pair := &Pair x, 34;
-    @let r:Int := p.lo + p.hi * 67;
-    @var acc:Int := 0;
-    @var k:Int := 1;
+\\ f259 (Int) -> Int
+@fn f259 x := {
+    @let p := &Pair x, 34;
+    @let r := p.lo + p.hi * 67;
+    @var acc := 0;
+    @var k := 1;
     &@loop k <= 10, { acc = acc + k * 34; k = k + 1; };
     r + acc
 };
 
-@fn f260 x:Int := {
-    @let p:Pair := &Pair x, 51;
-    @let r:Int := p.lo + p.hi * 98;
+\\ f260 (Int) -> Int
+@fn f260 x := {
+    @let p := &Pair x, 51;
+    @let r := p.lo + p.hi * 98;
     &@if r < 0, { &@return 0 };
     r
 };
 
-@fn f261 x:Int := {
-    @let p:Pair := &Pair x, 68;
-    @let r:Int := p.lo + p.hi * 129;
+\\ f261 (Int) -> Int
+@fn f261 x := {
+    @let p := &Pair x, 68;
+    @let r := p.lo + p.hi * 129;
     r
 };
 
-@fn f262 x:Int := {
-    @let p:Pair := &Pair x, 85;
-    @let r:Int := p.lo + p.hi * 160;
+\\ f262 (Int) -> Int
+@fn f262 x := {
+    @let p := &Pair x, 85;
+    @let r := p.lo + p.hi * 160;
     r
 };
 
-@fn f263 x:Int := {
-    @let p:Pair := &Pair x, 102;
-    @let r:Int := p.lo + p.hi * 191;
+\\ f263 (Int) -> Int
+@fn f263 x := {
+    @let p := &Pair x, 102;
+    @let r := p.lo + p.hi * 191;
     r
 };
 
-@fn f264 x:Int := {
-    @let p:Pair := &Pair x, 119;
-    @let r:Int := p.lo + p.hi * 222;
+\\ f264 (Int) -> Int
+@fn f264 x := {
+    @let p := &Pair x, 119;
+    @let r := p.lo + p.hi * 222;
     r
 };
 
-@fn f265 x:Int := {
-    @let p:Pair := &Pair x, 136;
-    @let r:Int := p.lo + p.hi * 253;
+\\ f265 (Int) -> Int
+@fn f265 x := {
+    @let p := &Pair x, 136;
+    @let r := p.lo + p.hi * 253;
     &@if r < 0, { &@return 0 };
     r
 };
 
-@fn f266 x:Int := {
-    @let p:Pair := &Pair x, 153;
-    @let r:Int := p.lo + p.hi * 27;
-    @var acc:Int := 0;
-    @var k:Int := 1;
+\\ f266 (Int) -> Int
+@fn f266 x := {
+    @let p := &Pair x, 153;
+    @let r := p.lo + p.hi * 27;
+    @var acc := 0;
+    @var k := 1;
     &@loop k <= 10, { acc = acc + k * 153; k = k + 1; };
     r + acc
 };
 
-@fn f267 x:Int := {
-    @let p:Pair := &Pair x, 170;
-    @let r:Int := p.lo + p.hi * 58;
+\\ f267 (Int) -> Int
+@fn f267 x := {
+    @let p := &Pair x, 170;
+    @let r := p.lo + p.hi * 58;
     r
 };
 
-@fn f268 x:Int := {
-    @let p:Pair := &Pair x, 187;
-    @let r:Int := p.lo + p.hi * 89;
+\\ f268 (Int) -> Int
+@fn f268 x := {
+    @let p := &Pair x, 187;
+    @let r := p.lo + p.hi * 89;
     r
 };
 
-@fn f269 x:Int := {
-    @let p:Pair := &Pair x, 204;
-    @let r:Int := p.lo + p.hi * 120;
+\\ f269 (Int) -> Int
+@fn f269 x := {
+    @let p := &Pair x, 204;
+    @let r := p.lo + p.hi * 120;
     r
 };
 
-@fn f270 x:Int := {
-    @let p:Pair := &Pair x, 221;
-    @let r:Int := p.lo + p.hi * 151;
+\\ f270 (Int) -> Int
+@fn f270 x := {
+    @let p := &Pair x, 221;
+    @let r := p.lo + p.hi * 151;
     &@if r < 0, { &@return 0 };
     r
 };
 
-@fn f271 x:Int := {
-    @let p:Pair := &Pair x, 238;
-    @let r:Int := p.lo + p.hi * 182;
+\\ f271 (Int) -> Int
+@fn f271 x := {
+    @let p := &Pair x, 238;
+    @let r := p.lo + p.hi * 182;
     r
 };
 
-@fn f272 x:Int := {
-    @let p:Pair := &Pair x, 255;
-    @let r:Int := p.lo + p.hi * 213;
+\\ f272 (Int) -> Int
+@fn f272 x := {
+    @let p := &Pair x, 255;
+    @let r := p.lo + p.hi * 213;
     r
 };
 
-@fn f273 x:Int := {
-    @let p:Pair := &Pair x, 15;
-    @let r:Int := p.lo + p.hi * 244;
-    @var acc:Int := 0;
-    @var k:Int := 1;
+\\ f273 (Int) -> Int
+@fn f273 x := {
+    @let p := &Pair x, 15;
+    @let r := p.lo + p.hi * 244;
+    @var acc := 0;
+    @var k := 1;
     &@loop k <= 10, { acc = acc + k * 15; k = k + 1; };
     r + acc
 };
 
-@fn f274 x:Int := {
-    @let p:Pair := &Pair x, 32;
-    @let r:Int := p.lo + p.hi * 18;
+\\ f274 (Int) -> Int
+@fn f274 x := {
+    @let p := &Pair x, 32;
+    @let r := p.lo + p.hi * 18;
     r
 };
 
-@fn f275 x:Int := {
-    @let p:Pair := &Pair x, 49;
-    @let r:Int := p.lo + p.hi * 49;
+\\ f275 (Int) -> Int
+@fn f275 x := {
+    @let p := &Pair x, 49;
+    @let r := p.lo + p.hi * 49;
     &@if r < 0, { &@return 0 };
     r
 };
 
-@fn f276 x:Int := {
-    @let p:Pair := &Pair x, 66;
-    @let r:Int := p.lo + p.hi * 80;
+\\ f276 (Int) -> Int
+@fn f276 x := {
+    @let p := &Pair x, 66;
+    @let r := p.lo + p.hi * 80;
     r
 };
 
-@fn f277 x:Int := {
-    @let p:Pair := &Pair x, 83;
-    @let r:Int := p.lo + p.hi * 111;
+\\ f277 (Int) -> Int
+@fn f277 x := {
+    @let p := &Pair x, 83;
+    @let r := p.lo + p.hi * 111;
     r
 };
 
-@fn f278 x:Int := {
-    @let p:Pair := &Pair x, 100;
-    @let r:Int := p.lo + p.hi * 142;
+\\ f278 (Int) -> Int
+@fn f278 x := {
+    @let p := &Pair x, 100;
+    @let r := p.lo + p.hi * 142;
     r
 };
 
-@fn f279 x:Int := {
-    @let p:Pair := &Pair x, 117;
-    @let r:Int := p.lo + p.hi * 173;
+\\ f279 (Int) -> Int
+@fn f279 x := {
+    @let p := &Pair x, 117;
+    @let r := p.lo + p.hi * 173;
     r
 };
 
-@fn f280 x:Int := {
-    @let p:Pair := &Pair x, 134;
-    @let r:Int := p.lo + p.hi * 204;
+\\ f280 (Int) -> Int
+@fn f280 x := {
+    @let p := &Pair x, 134;
+    @let r := p.lo + p.hi * 204;
     &@if r < 0, { &@return 0 };
-    @var acc:Int := 0;
-    @var k:Int := 1;
+    @var acc := 0;
+    @var k := 1;
     &@loop k <= 10, { acc = acc + k * 134; k = k + 1; };
     r + acc
 };
 
-@fn f281 x:Int := {
-    @let p:Pair := &Pair x, 151;
-    @let r:Int := p.lo + p.hi * 235;
+\\ f281 (Int) -> Int
+@fn f281 x := {
+    @let p := &Pair x, 151;
+    @let r := p.lo + p.hi * 235;
     r
 };
 
-@fn f282 x:Int := {
-    @let p:Pair := &Pair x, 168;
-    @let r:Int := p.lo + p.hi * 9;
+\\ f282 (Int) -> Int
+@fn f282 x := {
+    @let p := &Pair x, 168;
+    @let r := p.lo + p.hi * 9;
     r
 };
 
-@fn f283 x:Int := {
-    @let p:Pair := &Pair x, 185;
-    @let r:Int := p.lo + p.hi * 40;
+\\ f283 (Int) -> Int
+@fn f283 x := {
+    @let p := &Pair x, 185;
+    @let r := p.lo + p.hi * 40;
     r
 };
 
-@fn f284 x:Int := {
-    @let p:Pair := &Pair x, 202;
-    @let r:Int := p.lo + p.hi * 71;
+\\ f284 (Int) -> Int
+@fn f284 x := {
+    @let p := &Pair x, 202;
+    @let r := p.lo + p.hi * 71;
     r
 };
 
-@fn f285 x:Int := {
-    @let p:Pair := &Pair x, 219;
-    @let r:Int := p.lo + p.hi * 102;
+\\ f285 (Int) -> Int
+@fn f285 x := {
+    @let p := &Pair x, 219;
+    @let r := p.lo + p.hi * 102;
     &@if r < 0, { &@return 0 };
     r
 };
 
-@fn f286 x:Int := {
-    @let p:Pair := &Pair x, 236;
-    @let r:Int := p.lo + p.hi * 133;
+\\ f286 (Int) -> Int
+@fn f286 x := {
+    @let p := &Pair x, 236;
+    @let r := p.lo + p.hi * 133;
     r
 };
 
-@fn f287 x:Int := {
-    @let p:Pair := &Pair x, 253;
-    @let r:Int := p.lo + p.hi * 164;
-    @var acc:Int := 0;
-    @var k:Int := 1;
+\\ f287 (Int) -> Int
+@fn f287 x := {
+    @let p := &Pair x, 253;
+    @let r := p.lo + p.hi * 164;
+    @var acc := 0;
+    @var k := 1;
     &@loop k <= 10, { acc = acc + k * 253; k = k + 1; };
     r + acc
 };
 
-@fn f288 x:Int := {
-    @let p:Pair := &Pair x, 13;
-    @let r:Int := p.lo + p.hi * 195;
+\\ f288 (Int) -> Int
+@fn f288 x := {
+    @let p := &Pair x, 13;
+    @let r := p.lo + p.hi * 195;
     r
 };
 
-@fn f289 x:Int := {
-    @let p:Pair := &Pair x, 30;
-    @let r:Int := p.lo + p.hi * 226;
+\\ f289 (Int) -> Int
+@fn f289 x := {
+    @let p := &Pair x, 30;
+    @let r := p.lo + p.hi * 226;
     r
 };
 
-@fn f290 x:Int := {
-    @let p:Pair := &Pair x, 47;
-    @let r:Int := p.lo + p.hi * 0;
+\\ f290 (Int) -> Int
+@fn f290 x := {
+    @let p := &Pair x, 47;
+    @let r := p.lo + p.hi * 0;
     &@if r < 0, { &@return 0 };
     r
 };
 
-@fn f291 x:Int := {
-    @let p:Pair := &Pair x, 64;
-    @let r:Int := p.lo + p.hi * 31;
+\\ f291 (Int) -> Int
+@fn f291 x := {
+    @let p := &Pair x, 64;
+    @let r := p.lo + p.hi * 31;
     r
 };
 
-@fn f292 x:Int := {
-    @let p:Pair := &Pair x, 81;
-    @let r:Int := p.lo + p.hi * 62;
+\\ f292 (Int) -> Int
+@fn f292 x := {
+    @let p := &Pair x, 81;
+    @let r := p.lo + p.hi * 62;
     r
 };
 
-@fn f293 x:Int := {
-    @let p:Pair := &Pair x, 98;
-    @let r:Int := p.lo + p.hi * 93;
+\\ f293 (Int) -> Int
+@fn f293 x := {
+    @let p := &Pair x, 98;
+    @let r := p.lo + p.hi * 93;
     r
 };
 
-@fn f294 x:Int := {
-    @let p:Pair := &Pair x, 115;
-    @let r:Int := p.lo + p.hi * 124;
-    @var acc:Int := 0;
-    @var k:Int := 1;
+\\ f294 (Int) -> Int
+@fn f294 x := {
+    @let p := &Pair x, 115;
+    @let r := p.lo + p.hi * 124;
+    @var acc := 0;
+    @var k := 1;
     &@loop k <= 10, { acc = acc + k * 115; k = k + 1; };
     r + acc
 };
 
-@fn f295 x:Int := {
-    @let p:Pair := &Pair x, 132;
-    @let r:Int := p.lo + p.hi * 155;
+\\ f295 (Int) -> Int
+@fn f295 x := {
+    @let p := &Pair x, 132;
+    @let r := p.lo + p.hi * 155;
     &@if r < 0, { &@return 0 };
     r
 };
 
-@fn f296 x:Int := {
-    @let p:Pair := &Pair x, 149;
-    @let r:Int := p.lo + p.hi * 186;
+\\ f296 (Int) -> Int
+@fn f296 x := {
+    @let p := &Pair x, 149;
+    @let r := p.lo + p.hi * 186;
     r
 };
 
-@fn f297 x:Int := {
-    @let p:Pair := &Pair x, 166;
-    @let r:Int := p.lo + p.hi * 217;
+\\ f297 (Int) -> Int
+@fn f297 x := {
+    @let p := &Pair x, 166;
+    @let r := p.lo + p.hi * 217;
     r
 };
 
-@fn f298 x:Int := {
-    @let p:Pair := &Pair x, 183;
-    @let r:Int := p.lo + p.hi * 248;
+\\ f298 (Int) -> Int
+@fn f298 x := {
+    @let p := &Pair x, 183;
+    @let r := p.lo + p.hi * 248;
     r
 };
 
-@fn f299 x:Int := {
-    @let p:Pair := &Pair x, 200;
-    @let r:Int := p.lo + p.hi * 22;
+\\ f299 (Int) -> Int
+@fn f299 x := {
+    @let p := &Pair x, 200;
+    @let r := p.lo + p.hi * 22;
     r
 };
 
-@fn f300 x:Int := {
-    @let p:Pair := &Pair x, 217;
-    @let r:Int := p.lo + p.hi * 53;
+\\ f300 (Int) -> Int
+@fn f300 x := {
+    @let p := &Pair x, 217;
+    @let r := p.lo + p.hi * 53;
     &@if r < 0, { &@return 0 };
     r
 };
 
-@fn f301 x:Int := {
-    @let p:Pair := &Pair x, 234;
-    @let r:Int := p.lo + p.hi * 84;
-    @var acc:Int := 0;
-    @var k:Int := 1;
+\\ f301 (Int) -> Int
+@fn f301 x := {
+    @let p := &Pair x, 234;
+    @let r := p.lo + p.hi * 84;
+    @var acc := 0;
+    @var k := 1;
     &@loop k <= 10, { acc = acc + k * 234; k = k + 1; };
     r + acc
 };
 
-@fn f302 x:Int := {
-    @let p:Pair := &Pair x, 251;
-    @let r:Int := p.lo + p.hi * 115;
+\\ f302 (Int) -> Int
+@fn f302 x := {
+    @let p := &Pair x, 251;
+    @let r := p.lo + p.hi * 115;
     r
 };
 
-@fn f303 x:Int := {
-    @let p:Pair := &Pair x, 11;
-    @let r:Int := p.lo + p.hi * 146;
+\\ f303 (Int) -> Int
+@fn f303 x := {
+    @let p := &Pair x, 11;
+    @let r := p.lo + p.hi * 146;
     r
 };
 
-@fn f304 x:Int := {
-    @let p:Pair := &Pair x, 28;
-    @let r:Int := p.lo + p.hi * 177;
+\\ f304 (Int) -> Int
+@fn f304 x := {
+    @let p := &Pair x, 28;
+    @let r := p.lo + p.hi * 177;
     r
 };
 
-@fn f305 x:Int := {
-    @let p:Pair := &Pair x, 45;
-    @let r:Int := p.lo + p.hi * 208;
+\\ f305 (Int) -> Int
+@fn f305 x := {
+    @let p := &Pair x, 45;
+    @let r := p.lo + p.hi * 208;
     &@if r < 0, { &@return 0 };
     r
 };
 
-@fn f306 x:Int := {
-    @let p:Pair := &Pair x, 62;
-    @let r:Int := p.lo + p.hi * 239;
+\\ f306 (Int) -> Int
+@fn f306 x := {
+    @let p := &Pair x, 62;
+    @let r := p.lo + p.hi * 239;
     r
 };
 
-@fn f307 x:Int := {
-    @let p:Pair := &Pair x, 79;
-    @let r:Int := p.lo + p.hi * 13;
+\\ f307 (Int) -> Int
+@fn f307 x := {
+    @let p := &Pair x, 79;
+    @let r := p.lo + p.hi * 13;
     r
 };
 
-@fn f308 x:Int := {
-    @let p:Pair := &Pair x, 96;
-    @let r:Int := p.lo + p.hi * 44;
-    @var acc:Int := 0;
-    @var k:Int := 1;
+\\ f308 (Int) -> Int
+@fn f308 x := {
+    @let p := &Pair x, 96;
+    @let r := p.lo + p.hi * 44;
+    @var acc := 0;
+    @var k := 1;
     &@loop k <= 10, { acc = acc + k * 96; k = k + 1; };
     r + acc
 };
 
-@fn f309 x:Int := {
-    @let p:Pair := &Pair x, 113;
-    @let r:Int := p.lo + p.hi * 75;
+\\ f309 (Int) -> Int
+@fn f309 x := {
+    @let p := &Pair x, 113;
+    @let r := p.lo + p.hi * 75;
     r
 };
 
-@fn f310 x:Int := {
-    @let p:Pair := &Pair x, 130;
-    @let r:Int := p.lo + p.hi * 106;
+\\ f310 (Int) -> Int
+@fn f310 x := {
+    @let p := &Pair x, 130;
+    @let r := p.lo + p.hi * 106;
     &@if r < 0, { &@return 0 };
     r
 };
 
-@fn f311 x:Int := {
-    @let p:Pair := &Pair x, 147;
-    @let r:Int := p.lo + p.hi * 137;
+\\ f311 (Int) -> Int
+@fn f311 x := {
+    @let p := &Pair x, 147;
+    @let r := p.lo + p.hi * 137;
     r
 };
 
-@fn f312 x:Int := {
-    @let p:Pair := &Pair x, 164;
-    @let r:Int := p.lo + p.hi * 168;
+\\ f312 (Int) -> Int
+@fn f312 x := {
+    @let p := &Pair x, 164;
+    @let r := p.lo + p.hi * 168;
     r
 };
 
-@fn f313 x:Int := {
-    @let p:Pair := &Pair x, 181;
-    @let r:Int := p.lo + p.hi * 199;
+\\ f313 (Int) -> Int
+@fn f313 x := {
+    @let p := &Pair x, 181;
+    @let r := p.lo + p.hi * 199;
     r
 };
 
-@fn f314 x:Int := {
-    @let p:Pair := &Pair x, 198;
-    @let r:Int := p.lo + p.hi * 230;
+\\ f314 (Int) -> Int
+@fn f314 x := {
+    @let p := &Pair x, 198;
+    @let r := p.lo + p.hi * 230;
     r
 };
 
-@fn f315 x:Int := {
-    @let p:Pair := &Pair x, 215;
-    @let r:Int := p.lo + p.hi * 4;
+\\ f315 (Int) -> Int
+@fn f315 x := {
+    @let p := &Pair x, 215;
+    @let r := p.lo + p.hi * 4;
     &@if r < 0, { &@return 0 };
-    @var acc:Int := 0;
-    @var k:Int := 1;
+    @var acc := 0;
+    @var k := 1;
     &@loop k <= 10, { acc = acc + k * 215; k = k + 1; };
     r + acc
 };
 
-@fn f316 x:Int := {
-    @let p:Pair := &Pair x, 232;
-    @let r:Int := p.lo + p.hi * 35;
+\\ f316 (Int) -> Int
+@fn f316 x := {
+    @let p := &Pair x, 232;
+    @let r := p.lo + p.hi * 35;
     r
 };
 
-@fn f317 x:Int := {
-    @let p:Pair := &Pair x, 249;
-    @let r:Int := p.lo + p.hi * 66;
+\\ f317 (Int) -> Int
+@fn f317 x := {
+    @let p := &Pair x, 249;
+    @let r := p.lo + p.hi * 66;
     r
 };
 
-@fn f318 x:Int := {
-    @let p:Pair := &Pair x, 9;
-    @let r:Int := p.lo + p.hi * 97;
+\\ f318 (Int) -> Int
+@fn f318 x := {
+    @let p := &Pair x, 9;
+    @let r := p.lo + p.hi * 97;
     r
 };
 
-@fn f319 x:Int := {
-    @let p:Pair := &Pair x, 26;
-    @let r:Int := p.lo + p.hi * 128;
+\\ f319 (Int) -> Int
+@fn f319 x := {
+    @let p := &Pair x, 26;
+    @let r := p.lo + p.hi * 128;
     r
 };
 
-@fn f320 x:Int := {
-    @let p:Pair := &Pair x, 43;
-    @let r:Int := p.lo + p.hi * 159;
+\\ f320 (Int) -> Int
+@fn f320 x := {
+    @let p := &Pair x, 43;
+    @let r := p.lo + p.hi * 159;
     &@if r < 0, { &@return 0 };
     r
 };
 
-@fn f321 x:Int := {
-    @let p:Pair := &Pair x, 60;
-    @let r:Int := p.lo + p.hi * 190;
+\\ f321 (Int) -> Int
+@fn f321 x := {
+    @let p := &Pair x, 60;
+    @let r := p.lo + p.hi * 190;
     r
 };
 
-@fn f322 x:Int := {
-    @let p:Pair := &Pair x, 77;
-    @let r:Int := p.lo + p.hi * 221;
-    @var acc:Int := 0;
-    @var k:Int := 1;
+\\ f322 (Int) -> Int
+@fn f322 x := {
+    @let p := &Pair x, 77;
+    @let r := p.lo + p.hi * 221;
+    @var acc := 0;
+    @var k := 1;
     &@loop k <= 10, { acc = acc + k * 77; k = k + 1; };
     r + acc
 };
 
-@fn f323 x:Int := {
-    @let p:Pair := &Pair x, 94;
-    @let r:Int := p.lo + p.hi * 252;
+\\ f323 (Int) -> Int
+@fn f323 x := {
+    @let p := &Pair x, 94;
+    @let r := p.lo + p.hi * 252;
     r
 };
 
-@fn f324 x:Int := {
-    @let p:Pair := &Pair x, 111;
-    @let r:Int := p.lo + p.hi * 26;
+\\ f324 (Int) -> Int
+@fn f324 x := {
+    @let p := &Pair x, 111;
+    @let r := p.lo + p.hi * 26;
     r
 };
 
-@fn f325 x:Int := {
-    @let p:Pair := &Pair x, 128;
-    @let r:Int := p.lo + p.hi * 57;
+\\ f325 (Int) -> Int
+@fn f325 x := {
+    @let p := &Pair x, 128;
+    @let r := p.lo + p.hi * 57;
     &@if r < 0, { &@return 0 };
     r
 };
 
-@fn f326 x:Int := {
-    @let p:Pair := &Pair x, 145;
-    @let r:Int := p.lo + p.hi * 88;
+\\ f326 (Int) -> Int
+@fn f326 x := {
+    @let p := &Pair x, 145;
+    @let r := p.lo + p.hi * 88;
     r
 };
 
-@fn f327 x:Int := {
-    @let p:Pair := &Pair x, 162;
-    @let r:Int := p.lo + p.hi * 119;
+\\ f327 (Int) -> Int
+@fn f327 x := {
+    @let p := &Pair x, 162;
+    @let r := p.lo + p.hi * 119;
     r
 };
 
-@fn f328 x:Int := {
-    @let p:Pair := &Pair x, 179;
-    @let r:Int := p.lo + p.hi * 150;
+\\ f328 (Int) -> Int
+@fn f328 x := {
+    @let p := &Pair x, 179;
+    @let r := p.lo + p.hi * 150;
     r
 };
 
-@fn f329 x:Int := {
-    @let p:Pair := &Pair x, 196;
-    @let r:Int := p.lo + p.hi * 181;
-    @var acc:Int := 0;
-    @var k:Int := 1;
+\\ f329 (Int) -> Int
+@fn f329 x := {
+    @let p := &Pair x, 196;
+    @let r := p.lo + p.hi * 181;
+    @var acc := 0;
+    @var k := 1;
     &@loop k <= 10, { acc = acc + k * 196; k = k + 1; };
     r + acc
 };
 
-@fn f330 x:Int := {
-    @let p:Pair := &Pair x, 213;
-    @let r:Int := p.lo + p.hi * 212;
+\\ f330 (Int) -> Int
+@fn f330 x := {
+    @let p := &Pair x, 213;
+    @let r := p.lo + p.hi * 212;
     &@if r < 0, { &@return 0 };
     r
 };
 
-@fn f331 x:Int := {
-    @let p:Pair := &Pair x, 230;
-    @let r:Int := p.lo + p.hi * 243;
+\\ f331 (Int) -> Int
+@fn f331 x := {
+    @let p := &Pair x, 230;
+    @let r := p.lo + p.hi * 243;
     r
 };
 
-@fn f332 x:Int := {
-    @let p:Pair := &Pair x, 247;
-    @let r:Int := p.lo + p.hi * 17;
+\\ f332 (Int) -> Int
+@fn f332 x := {
+    @let p := &Pair x, 247;
+    @let r := p.lo + p.hi * 17;
     r
 };
 
-@fn f333 x:Int := {
-    @let p:Pair := &Pair x, 7;
-    @let r:Int := p.lo + p.hi * 48;
+\\ f333 (Int) -> Int
+@fn f333 x := {
+    @let p := &Pair x, 7;
+    @let r := p.lo + p.hi * 48;
     r
 };
 
-@fn f334 x:Int := {
-    @let p:Pair := &Pair x, 24;
-    @let r:Int := p.lo + p.hi * 79;
+\\ f334 (Int) -> Int
+@fn f334 x := {
+    @let p := &Pair x, 24;
+    @let r := p.lo + p.hi * 79;
     r
 };
 
-@fn f335 x:Int := {
-    @let p:Pair := &Pair x, 41;
-    @let r:Int := p.lo + p.hi * 110;
+\\ f335 (Int) -> Int
+@fn f335 x := {
+    @let p := &Pair x, 41;
+    @let r := p.lo + p.hi * 110;
     &@if r < 0, { &@return 0 };
     r
 };
 
-@fn f336 x:Int := {
-    @let p:Pair := &Pair x, 58;
-    @let r:Int := p.lo + p.hi * 141;
-    @var acc:Int := 0;
-    @var k:Int := 1;
+\\ f336 (Int) -> Int
+@fn f336 x := {
+    @let p := &Pair x, 58;
+    @let r := p.lo + p.hi * 141;
+    @var acc := 0;
+    @var k := 1;
     &@loop k <= 10, { acc = acc + k * 58; k = k + 1; };
     r + acc
 };
 
-@fn f337 x:Int := {
-    @let p:Pair := &Pair x, 75;
-    @let r:Int := p.lo + p.hi * 172;
+\\ f337 (Int) -> Int
+@fn f337 x := {
+    @let p := &Pair x, 75;
+    @let r := p.lo + p.hi * 172;
     r
 };
 
-@fn f338 x:Int := {
-    @let p:Pair := &Pair x, 92;
-    @let r:Int := p.lo + p.hi * 203;
+\\ f338 (Int) -> Int
+@fn f338 x := {
+    @let p := &Pair x, 92;
+    @let r := p.lo + p.hi * 203;
     r
 };
 
-@fn f339 x:Int := {
-    @let p:Pair := &Pair x, 109;
-    @let r:Int := p.lo + p.hi * 234;
+\\ f339 (Int) -> Int
+@fn f339 x := {
+    @let p := &Pair x, 109;
+    @let r := p.lo + p.hi * 234;
     r
 };
 
-@fn f340 x:Int := {
-    @let p:Pair := &Pair x, 126;
-    @let r:Int := p.lo + p.hi * 8;
+\\ f340 (Int) -> Int
+@fn f340 x := {
+    @let p := &Pair x, 126;
+    @let r := p.lo + p.hi * 8;
     &@if r < 0, { &@return 0 };
     r
 };
 
-@fn f341 x:Int := {
-    @let p:Pair := &Pair x, 143;
-    @let r:Int := p.lo + p.hi * 39;
+\\ f341 (Int) -> Int
+@fn f341 x := {
+    @let p := &Pair x, 143;
+    @let r := p.lo + p.hi * 39;
     r
 };
 
-@fn f342 x:Int := {
-    @let p:Pair := &Pair x, 160;
-    @let r:Int := p.lo + p.hi * 70;
+\\ f342 (Int) -> Int
+@fn f342 x := {
+    @let p := &Pair x, 160;
+    @let r := p.lo + p.hi * 70;
     r
 };
 
-@fn f343 x:Int := {
-    @let p:Pair := &Pair x, 177;
-    @let r:Int := p.lo + p.hi * 101;
-    @var acc:Int := 0;
-    @var k:Int := 1;
+\\ f343 (Int) -> Int
+@fn f343 x := {
+    @let p := &Pair x, 177;
+    @let r := p.lo + p.hi * 101;
+    @var acc := 0;
+    @var k := 1;
     &@loop k <= 10, { acc = acc + k * 177; k = k + 1; };
     r + acc
 };
 
-@fn f344 x:Int := {
-    @let p:Pair := &Pair x, 194;
-    @let r:Int := p.lo + p.hi * 132;
+\\ f344 (Int) -> Int
+@fn f344 x := {
+    @let p := &Pair x, 194;
+    @let r := p.lo + p.hi * 132;
     r
 };
 
-@fn f345 x:Int := {
-    @let p:Pair := &Pair x, 211;
-    @let r:Int := p.lo + p.hi * 163;
+\\ f345 (Int) -> Int
+@fn f345 x := {
+    @let p := &Pair x, 211;
+    @let r := p.lo + p.hi * 163;
     &@if r < 0, { &@return 0 };
     r
 };
 
-@fn f346 x:Int := {
-    @let p:Pair := &Pair x, 228;
-    @let r:Int := p.lo + p.hi * 194;
+\\ f346 (Int) -> Int
+@fn f346 x := {
+    @let p := &Pair x, 228;
+    @let r := p.lo + p.hi * 194;
     r
 };
 
-@fn f347 x:Int := {
-    @let p:Pair := &Pair x, 245;
-    @let r:Int := p.lo + p.hi * 225;
+\\ f347 (Int) -> Int
+@fn f347 x := {
+    @let p := &Pair x, 245;
+    @let r := p.lo + p.hi * 225;
     r
 };
 
-@fn f348 x:Int := {
-    @let p:Pair := &Pair x, 5;
-    @let r:Int := p.lo + p.hi * 256;
+\\ f348 (Int) -> Int
+@fn f348 x := {
+    @let p := &Pair x, 5;
+    @let r := p.lo + p.hi * 256;
     r
 };
 
-@fn f349 x:Int := {
-    @let p:Pair := &Pair x, 22;
-    @let r:Int := p.lo + p.hi * 30;
+\\ f349 (Int) -> Int
+@fn f349 x := {
+    @let p := &Pair x, 22;
+    @let r := p.lo + p.hi * 30;
     r
 };
 
-@fn f350 x:Int := {
-    @let p:Pair := &Pair x, 39;
-    @let r:Int := p.lo + p.hi * 61;
+\\ f350 (Int) -> Int
+@fn f350 x := {
+    @let p := &Pair x, 39;
+    @let r := p.lo + p.hi * 61;
     &@if r < 0, { &@return 0 };
-    @var acc:Int := 0;
-    @var k:Int := 1;
+    @var acc := 0;
+    @var k := 1;
     &@loop k <= 10, { acc = acc + k * 39; k = k + 1; };
     r + acc
 };
 
-@fn f351 x:Int := {
-    @let p:Pair := &Pair x, 56;
-    @let r:Int := p.lo + p.hi * 92;
+\\ f351 (Int) -> Int
+@fn f351 x := {
+    @let p := &Pair x, 56;
+    @let r := p.lo + p.hi * 92;
     r
 };
 
-@fn f352 x:Int := {
-    @let p:Pair := &Pair x, 73;
-    @let r:Int := p.lo + p.hi * 123;
+\\ f352 (Int) -> Int
+@fn f352 x := {
+    @let p := &Pair x, 73;
+    @let r := p.lo + p.hi * 123;
     r
 };
 
-@fn f353 x:Int := {
-    @let p:Pair := &Pair x, 90;
-    @let r:Int := p.lo + p.hi * 154;
+\\ f353 (Int) -> Int
+@fn f353 x := {
+    @let p := &Pair x, 90;
+    @let r := p.lo + p.hi * 154;
     r
 };
 
-@fn f354 x:Int := {
-    @let p:Pair := &Pair x, 107;
-    @let r:Int := p.lo + p.hi * 185;
+\\ f354 (Int) -> Int
+@fn f354 x := {
+    @let p := &Pair x, 107;
+    @let r := p.lo + p.hi * 185;
     r
 };
 
-@fn f355 x:Int := {
-    @let p:Pair := &Pair x, 124;
-    @let r:Int := p.lo + p.hi * 216;
+\\ f355 (Int) -> Int
+@fn f355 x := {
+    @let p := &Pair x, 124;
+    @let r := p.lo + p.hi * 216;
     &@if r < 0, { &@return 0 };
     r
 };
 
-@fn f356 x:Int := {
-    @let p:Pair := &Pair x, 141;
-    @let r:Int := p.lo + p.hi * 247;
+\\ f356 (Int) -> Int
+@fn f356 x := {
+    @let p := &Pair x, 141;
+    @let r := p.lo + p.hi * 247;
     r
 };
 
-@fn f357 x:Int := {
-    @let p:Pair := &Pair x, 158;
-    @let r:Int := p.lo + p.hi * 21;
-    @var acc:Int := 0;
-    @var k:Int := 1;
+\\ f357 (Int) -> Int
+@fn f357 x := {
+    @let p := &Pair x, 158;
+    @let r := p.lo + p.hi * 21;
+    @var acc := 0;
+    @var k := 1;
     &@loop k <= 10, { acc = acc + k * 158; k = k + 1; };
     r + acc
 };
 
-@fn f358 x:Int := {
-    @let p:Pair := &Pair x, 175;
-    @let r:Int := p.lo + p.hi * 52;
+\\ f358 (Int) -> Int
+@fn f358 x := {
+    @let p := &Pair x, 175;
+    @let r := p.lo + p.hi * 52;
     r
 };
 
-@fn f359 x:Int := {
-    @let p:Pair := &Pair x, 192;
-    @let r:Int := p.lo + p.hi * 83;
+\\ f359 (Int) -> Int
+@fn f359 x := {
+    @let p := &Pair x, 192;
+    @let r := p.lo + p.hi * 83;
     r
 };
 
-@fn f360 x:Int := {
-    @let p:Pair := &Pair x, 209;
-    @let r:Int := p.lo + p.hi * 114;
+\\ f360 (Int) -> Int
+@fn f360 x := {
+    @let p := &Pair x, 209;
+    @let r := p.lo + p.hi * 114;
     &@if r < 0, { &@return 0 };
     r
 };
 
-@fn f361 x:Int := {
-    @let p:Pair := &Pair x, 226;
-    @let r:Int := p.lo + p.hi * 145;
+\\ f361 (Int) -> Int
+@fn f361 x := {
+    @let p := &Pair x, 226;
+    @let r := p.lo + p.hi * 145;
     r
 };
 
-@fn f362 x:Int := {
-    @let p:Pair := &Pair x, 243;
-    @let r:Int := p.lo + p.hi * 176;
+\\ f362 (Int) -> Int
+@fn f362 x := {
+    @let p := &Pair x, 243;
+    @let r := p.lo + p.hi * 176;
     r
 };
 
-@fn f363 x:Int := {
-    @let p:Pair := &Pair x, 3;
-    @let r:Int := p.lo + p.hi * 207;
+\\ f363 (Int) -> Int
+@fn f363 x := {
+    @let p := &Pair x, 3;
+    @let r := p.lo + p.hi * 207;
     r
 };
 
-@fn f364 x:Int := {
-    @let p:Pair := &Pair x, 20;
-    @let r:Int := p.lo + p.hi * 238;
-    @var acc:Int := 0;
-    @var k:Int := 1;
+\\ f364 (Int) -> Int
+@fn f364 x := {
+    @let p := &Pair x, 20;
+    @let r := p.lo + p.hi * 238;
+    @var acc := 0;
+    @var k := 1;
     &@loop k <= 10, { acc = acc + k * 20; k = k + 1; };
     r + acc
 };
 
-@fn f365 x:Int := {
-    @let p:Pair := &Pair x, 37;
-    @let r:Int := p.lo + p.hi * 12;
+\\ f365 (Int) -> Int
+@fn f365 x := {
+    @let p := &Pair x, 37;
+    @let r := p.lo + p.hi * 12;
     &@if r < 0, { &@return 0 };
     r
 };
 
-@fn f366 x:Int := {
-    @let p:Pair := &Pair x, 54;
-    @let r:Int := p.lo + p.hi * 43;
+\\ f366 (Int) -> Int
+@fn f366 x := {
+    @let p := &Pair x, 54;
+    @let r := p.lo + p.hi * 43;
     r
 };
 
-@fn f367 x:Int := {
-    @let p:Pair := &Pair x, 71;
-    @let r:Int := p.lo + p.hi * 74;
+\\ f367 (Int) -> Int
+@fn f367 x := {
+    @let p := &Pair x, 71;
+    @let r := p.lo + p.hi * 74;
     r
 };
 
-@fn f368 x:Int := {
-    @let p:Pair := &Pair x, 88;
-    @let r:Int := p.lo + p.hi * 105;
+\\ f368 (Int) -> Int
+@fn f368 x := {
+    @let p := &Pair x, 88;
+    @let r := p.lo + p.hi * 105;
     r
 };
 
-@fn f369 x:Int := {
-    @let p:Pair := &Pair x, 105;
-    @let r:Int := p.lo + p.hi * 136;
+\\ f369 (Int) -> Int
+@fn f369 x := {
+    @let p := &Pair x, 105;
+    @let r := p.lo + p.hi * 136;
     r
 };
 
-@fn f370 x:Int := {
-    @let p:Pair := &Pair x, 122;
-    @let r:Int := p.lo + p.hi * 167;
+\\ f370 (Int) -> Int
+@fn f370 x := {
+    @let p := &Pair x, 122;
+    @let r := p.lo + p.hi * 167;
     &@if r < 0, { &@return 0 };
     r
 };
 
-@fn f371 x:Int := {
-    @let p:Pair := &Pair x, 139;
-    @let r:Int := p.lo + p.hi * 198;
-    @var acc:Int := 0;
-    @var k:Int := 1;
+\\ f371 (Int) -> Int
+@fn f371 x := {
+    @let p := &Pair x, 139;
+    @let r := p.lo + p.hi * 198;
+    @var acc := 0;
+    @var k := 1;
     &@loop k <= 10, { acc = acc + k * 139; k = k + 1; };
     r + acc
 };
 
-@fn f372 x:Int := {
-    @let p:Pair := &Pair x, 156;
-    @let r:Int := p.lo + p.hi * 229;
+\\ f372 (Int) -> Int
+@fn f372 x := {
+    @let p := &Pair x, 156;
+    @let r := p.lo + p.hi * 229;
     r
 };
 
-@fn f373 x:Int := {
-    @let p:Pair := &Pair x, 173;
-    @let r:Int := p.lo + p.hi * 3;
+\\ f373 (Int) -> Int
+@fn f373 x := {
+    @let p := &Pair x, 173;
+    @let r := p.lo + p.hi * 3;
     r
 };
 
-@fn f374 x:Int := {
-    @let p:Pair := &Pair x, 190;
-    @let r:Int := p.lo + p.hi * 34;
+\\ f374 (Int) -> Int
+@fn f374 x := {
+    @let p := &Pair x, 190;
+    @let r := p.lo + p.hi * 34;
     r
 };
 
-@fn f375 x:Int := {
-    @let p:Pair := &Pair x, 207;
-    @let r:Int := p.lo + p.hi * 65;
+\\ f375 (Int) -> Int
+@fn f375 x := {
+    @let p := &Pair x, 207;
+    @let r := p.lo + p.hi * 65;
     &@if r < 0, { &@return 0 };
     r
 };
 
-@fn f376 x:Int := {
-    @let p:Pair := &Pair x, 224;
-    @let r:Int := p.lo + p.hi * 96;
+\\ f376 (Int) -> Int
+@fn f376 x := {
+    @let p := &Pair x, 224;
+    @let r := p.lo + p.hi * 96;
     r
 };
 
-@fn f377 x:Int := {
-    @let p:Pair := &Pair x, 241;
-    @let r:Int := p.lo + p.hi * 127;
+\\ f377 (Int) -> Int
+@fn f377 x := {
+    @let p := &Pair x, 241;
+    @let r := p.lo + p.hi * 127;
     r
 };
 
-@fn f378 x:Int := {
-    @let p:Pair := &Pair x, 1;
-    @let r:Int := p.lo + p.hi * 158;
-    @var acc:Int := 0;
-    @var k:Int := 1;
+\\ f378 (Int) -> Int
+@fn f378 x := {
+    @let p := &Pair x, 1;
+    @let r := p.lo + p.hi * 158;
+    @var acc := 0;
+    @var k := 1;
     &@loop k <= 10, { acc = acc + k * 1; k = k + 1; };
     r + acc
 };
 
-@fn f379 x:Int := {
-    @let p:Pair := &Pair x, 18;
-    @let r:Int := p.lo + p.hi * 189;
+\\ f379 (Int) -> Int
+@fn f379 x := {
+    @let p := &Pair x, 18;
+    @let r := p.lo + p.hi * 189;
     r
 };
 
-@fn f380 x:Int := {
-    @let p:Pair := &Pair x, 35;
-    @let r:Int := p.lo + p.hi * 220;
+\\ f380 (Int) -> Int
+@fn f380 x := {
+    @let p := &Pair x, 35;
+    @let r := p.lo + p.hi * 220;
     &@if r < 0, { &@return 0 };
     r
 };
 
-@fn f381 x:Int := {
-    @let p:Pair := &Pair x, 52;
-    @let r:Int := p.lo + p.hi * 251;
+\\ f381 (Int) -> Int
+@fn f381 x := {
+    @let p := &Pair x, 52;
+    @let r := p.lo + p.hi * 251;
     r
 };
 
-@fn f382 x:Int := {
-    @let p:Pair := &Pair x, 69;
-    @let r:Int := p.lo + p.hi * 25;
+\\ f382 (Int) -> Int
+@fn f382 x := {
+    @let p := &Pair x, 69;
+    @let r := p.lo + p.hi * 25;
     r
 };
 
-@fn f383 x:Int := {
-    @let p:Pair := &Pair x, 86;
-    @let r:Int := p.lo + p.hi * 56;
+\\ f383 (Int) -> Int
+@fn f383 x := {
+    @let p := &Pair x, 86;
+    @let r := p.lo + p.hi * 56;
     r
 };
 
-@fn f384 x:Int := {
-    @let p:Pair := &Pair x, 103;
-    @let r:Int := p.lo + p.hi * 87;
+\\ f384 (Int) -> Int
+@fn f384 x := {
+    @let p := &Pair x, 103;
+    @let r := p.lo + p.hi * 87;
     r
 };
 
-@fn f385 x:Int := {
-    @let p:Pair := &Pair x, 120;
-    @let r:Int := p.lo + p.hi * 118;
+\\ f385 (Int) -> Int
+@fn f385 x := {
+    @let p := &Pair x, 120;
+    @let r := p.lo + p.hi * 118;
     &@if r < 0, { &@return 0 };
-    @var acc:Int := 0;
-    @var k:Int := 1;
+    @var acc := 0;
+    @var k := 1;
     &@loop k <= 10, { acc = acc + k * 120; k = k + 1; };
     r + acc
 };
 
-@fn f386 x:Int := {
-    @let p:Pair := &Pair x, 137;
-    @let r:Int := p.lo + p.hi * 149;
+\\ f386 (Int) -> Int
+@fn f386 x := {
+    @let p := &Pair x, 137;
+    @let r := p.lo + p.hi * 149;
     r
 };
 
-@fn f387 x:Int := {
-    @let p:Pair := &Pair x, 154;
-    @let r:Int := p.lo + p.hi * 180;
+\\ f387 (Int) -> Int
+@fn f387 x := {
+    @let p := &Pair x, 154;
+    @let r := p.lo + p.hi * 180;
     r
 };
 
-@fn f388 x:Int := {
-    @let p:Pair := &Pair x, 171;
-    @let r:Int := p.lo + p.hi * 211;
+\\ f388 (Int) -> Int
+@fn f388 x := {
+    @let p := &Pair x, 171;
+    @let r := p.lo + p.hi * 211;
     r
 };
 
-@fn f389 x:Int := {
-    @let p:Pair := &Pair x, 188;
-    @let r:Int := p.lo + p.hi * 242;
+\\ f389 (Int) -> Int
+@fn f389 x := {
+    @let p := &Pair x, 188;
+    @let r := p.lo + p.hi * 242;
     r
 };
 
-@fn f390 x:Int := {
-    @let p:Pair := &Pair x, 205;
-    @let r:Int := p.lo + p.hi * 16;
+\\ f390 (Int) -> Int
+@fn f390 x := {
+    @let p := &Pair x, 205;
+    @let r := p.lo + p.hi * 16;
     &@if r < 0, { &@return 0 };
     r
 };
 
-@fn f391 x:Int := {
-    @let p:Pair := &Pair x, 222;
-    @let r:Int := p.lo + p.hi * 47;
+\\ f391 (Int) -> Int
+@fn f391 x := {
+    @let p := &Pair x, 222;
+    @let r := p.lo + p.hi * 47;
     r
 };
 
-@fn f392 x:Int := {
-    @let p:Pair := &Pair x, 239;
-    @let r:Int := p.lo + p.hi * 78;
-    @var acc:Int := 0;
-    @var k:Int := 1;
+\\ f392 (Int) -> Int
+@fn f392 x := {
+    @let p := &Pair x, 239;
+    @let r := p.lo + p.hi * 78;
+    @var acc := 0;
+    @var k := 1;
     &@loop k <= 10, { acc = acc + k * 239; k = k + 1; };
     r + acc
 };
 
-@fn f393 x:Int := {
-    @let p:Pair := &Pair x, 256;
-    @let r:Int := p.lo + p.hi * 109;
+\\ f393 (Int) -> Int
+@fn f393 x := {
+    @let p := &Pair x, 256;
+    @let r := p.lo + p.hi * 109;
     r
 };
 
-@fn f394 x:Int := {
-    @let p:Pair := &Pair x, 16;
-    @let r:Int := p.lo + p.hi * 140;
+\\ f394 (Int) -> Int
+@fn f394 x := {
+    @let p := &Pair x, 16;
+    @let r := p.lo + p.hi * 140;
     r
 };
 
-@fn f395 x:Int := {
-    @let p:Pair := &Pair x, 33;
-    @let r:Int := p.lo + p.hi * 171;
+\\ f395 (Int) -> Int
+@fn f395 x := {
+    @let p := &Pair x, 33;
+    @let r := p.lo + p.hi * 171;
     &@if r < 0, { &@return 0 };
     r
 };
 
-@fn f396 x:Int := {
-    @let p:Pair := &Pair x, 50;
-    @let r:Int := p.lo + p.hi * 202;
+\\ f396 (Int) -> Int
+@fn f396 x := {
+    @let p := &Pair x, 50;
+    @let r := p.lo + p.hi * 202;
     r
 };
 
-@fn f397 x:Int := {
-    @let p:Pair := &Pair x, 67;
-    @let r:Int := p.lo + p.hi * 233;
+\\ f397 (Int) -> Int
+@fn f397 x := {
+    @let p := &Pair x, 67;
+    @let r := p.lo + p.hi * 233;
     r
 };
 
-@fn f398 x:Int := {
-    @let p:Pair := &Pair x, 84;
-    @let r:Int := p.lo + p.hi * 7;
+\\ f398 (Int) -> Int
+@fn f398 x := {
+    @let p := &Pair x, 84;
+    @let r := p.lo + p.hi * 7;
     r
 };
 
-@fn f399 x:Int := {
-    @let p:Pair := &Pair x, 101;
-    @let r:Int := p.lo + p.hi * 38;
-    @var acc:Int := 0;
-    @var k:Int := 1;
+\\ f399 (Int) -> Int
+@fn f399 x := {
+    @let p := &Pair x, 101;
+    @let r := p.lo + p.hi * 38;
+    @var acc := 0;
+    @var k := 1;
     &@loop k <= 10, { acc = acc + k * 101; k = k + 1; };
     r + acc
 };
 
-@fn f400 x:Int := {
-    @let p:Pair := &Pair x, 118;
-    @let r:Int := p.lo + p.hi * 69;
+\\ f400 (Int) -> Int
+@fn f400 x := {
+    @let p := &Pair x, 118;
+    @let r := p.lo + p.hi * 69;
     &@if r < 0, { &@return 0 };
     r
 };
 
-@fn f401 x:Int := {
-    @let p:Pair := &Pair x, 135;
-    @let r:Int := p.lo + p.hi * 100;
+\\ f401 (Int) -> Int
+@fn f401 x := {
+    @let p := &Pair x, 135;
+    @let r := p.lo + p.hi * 100;
     r
 };
 
-@fn f402 x:Int := {
-    @let p:Pair := &Pair x, 152;
-    @let r:Int := p.lo + p.hi * 131;
+\\ f402 (Int) -> Int
+@fn f402 x := {
+    @let p := &Pair x, 152;
+    @let r := p.lo + p.hi * 131;
     r
 };
 
-@fn f403 x:Int := {
-    @let p:Pair := &Pair x, 169;
-    @let r:Int := p.lo + p.hi * 162;
+\\ f403 (Int) -> Int
+@fn f403 x := {
+    @let p := &Pair x, 169;
+    @let r := p.lo + p.hi * 162;
     r
 };
 
-@fn f404 x:Int := {
-    @let p:Pair := &Pair x, 186;
-    @let r:Int := p.lo + p.hi * 193;
+\\ f404 (Int) -> Int
+@fn f404 x := {
+    @let p := &Pair x, 186;
+    @let r := p.lo + p.hi * 193;
     r
 };
 
-@fn f405 x:Int := {
-    @let p:Pair := &Pair x, 203;
-    @let r:Int := p.lo + p.hi * 224;
+\\ f405 (Int) -> Int
+@fn f405 x := {
+    @let p := &Pair x, 203;
+    @let r := p.lo + p.hi * 224;
     &@if r < 0, { &@return 0 };
     r
 };
 
-@fn f406 x:Int := {
-    @let p:Pair := &Pair x, 220;
-    @let r:Int := p.lo + p.hi * 255;
-    @var acc:Int := 0;
-    @var k:Int := 1;
+\\ f406 (Int) -> Int
+@fn f406 x := {
+    @let p := &Pair x, 220;
+    @let r := p.lo + p.hi * 255;
+    @var acc := 0;
+    @var k := 1;
     &@loop k <= 10, { acc = acc + k * 220; k = k + 1; };
     r + acc
 };
 
-@fn f407 x:Int := {
-    @let p:Pair := &Pair x, 237;
-    @let r:Int := p.lo + p.hi * 29;
+\\ f407 (Int) -> Int
+@fn f407 x := {
+    @let p := &Pair x, 237;
+    @let r := p.lo + p.hi * 29;
     r
 };
 
-@fn f408 x:Int := {
-    @let p:Pair := &Pair x, 254;
-    @let r:Int := p.lo + p.hi * 60;
+\\ f408 (Int) -> Int
+@fn f408 x := {
+    @let p := &Pair x, 254;
+    @let r := p.lo + p.hi * 60;
     r
 };
 
-@fn f409 x:Int := {
-    @let p:Pair := &Pair x, 14;
-    @let r:Int := p.lo + p.hi * 91;
+\\ f409 (Int) -> Int
+@fn f409 x := {
+    @let p := &Pair x, 14;
+    @let r := p.lo + p.hi * 91;
     r
 };
 
-@fn f410 x:Int := {
-    @let p:Pair := &Pair x, 31;
-    @let r:Int := p.lo + p.hi * 122;
+\\ f410 (Int) -> Int
+@fn f410 x := {
+    @let p := &Pair x, 31;
+    @let r := p.lo + p.hi * 122;
     &@if r < 0, { &@return 0 };
     r
 };
 
-@fn f411 x:Int := {
-    @let p:Pair := &Pair x, 48;
-    @let r:Int := p.lo + p.hi * 153;
+\\ f411 (Int) -> Int
+@fn f411 x := {
+    @let p := &Pair x, 48;
+    @let r := p.lo + p.hi * 153;
     r
 };
 
-@fn f412 x:Int := {
-    @let p:Pair := &Pair x, 65;
-    @let r:Int := p.lo + p.hi * 184;
+\\ f412 (Int) -> Int
+@fn f412 x := {
+    @let p := &Pair x, 65;
+    @let r := p.lo + p.hi * 184;
     r
 };
 
-@fn f413 x:Int := {
-    @let p:Pair := &Pair x, 82;
-    @let r:Int := p.lo + p.hi * 215;
-    @var acc:Int := 0;
-    @var k:Int := 1;
+\\ f413 (Int) -> Int
+@fn f413 x := {
+    @let p := &Pair x, 82;
+    @let r := p.lo + p.hi * 215;
+    @var acc := 0;
+    @var k := 1;
     &@loop k <= 10, { acc = acc + k * 82; k = k + 1; };
     r + acc
 };
 
-@fn f414 x:Int := {
-    @let p:Pair := &Pair x, 99;
-    @let r:Int := p.lo + p.hi * 246;
+\\ f414 (Int) -> Int
+@fn f414 x := {
+    @let p := &Pair x, 99;
+    @let r := p.lo + p.hi * 246;
     r
 };
 
-@fn f415 x:Int := {
-    @let p:Pair := &Pair x, 116;
-    @let r:Int := p.lo + p.hi * 20;
+\\ f415 (Int) -> Int
+@fn f415 x := {
+    @let p := &Pair x, 116;
+    @let r := p.lo + p.hi * 20;
     &@if r < 0, { &@return 0 };
     r
 };
 
-@fn f416 x:Int := {
-    @let p:Pair := &Pair x, 133;
-    @let r:Int := p.lo + p.hi * 51;
+\\ f416 (Int) -> Int
+@fn f416 x := {
+    @let p := &Pair x, 133;
+    @let r := p.lo + p.hi * 51;
     r
 };
 
-@fn f417 x:Int := {
-    @let p:Pair := &Pair x, 150;
-    @let r:Int := p.lo + p.hi * 82;
+\\ f417 (Int) -> Int
+@fn f417 x := {
+    @let p := &Pair x, 150;
+    @let r := p.lo + p.hi * 82;
     r
 };
 
-@fn f418 x:Int := {
-    @let p:Pair := &Pair x, 167;
-    @let r:Int := p.lo + p.hi * 113;
+\\ f418 (Int) -> Int
+@fn f418 x := {
+    @let p := &Pair x, 167;
+    @let r := p.lo + p.hi * 113;
     r
 };
 
-@fn f419 x:Int := {
-    @let p:Pair := &Pair x, 184;
-    @let r:Int := p.lo + p.hi * 144;
+\\ f419 (Int) -> Int
+@fn f419 x := {
+    @let p := &Pair x, 184;
+    @let r := p.lo + p.hi * 144;
     r
 };
 
-@fn f420 x:Int := {
-    @let p:Pair := &Pair x, 201;
-    @let r:Int := p.lo + p.hi * 175;
+\\ f420 (Int) -> Int
+@fn f420 x := {
+    @let p := &Pair x, 201;
+    @let r := p.lo + p.hi * 175;
     &@if r < 0, { &@return 0 };
-    @var acc:Int := 0;
-    @var k:Int := 1;
+    @var acc := 0;
+    @var k := 1;
     &@loop k <= 10, { acc = acc + k * 201; k = k + 1; };
     r + acc
 };
 
-@fn f421 x:Int := {
-    @let p:Pair := &Pair x, 218;
-    @let r:Int := p.lo + p.hi * 206;
+\\ f421 (Int) -> Int
+@fn f421 x := {
+    @let p := &Pair x, 218;
+    @let r := p.lo + p.hi * 206;
     r
 };
 
-@fn f422 x:Int := {
-    @let p:Pair := &Pair x, 235;
-    @let r:Int := p.lo + p.hi * 237;
+\\ f422 (Int) -> Int
+@fn f422 x := {
+    @let p := &Pair x, 235;
+    @let r := p.lo + p.hi * 237;
     r
 };
 
-@fn f423 x:Int := {
-    @let p:Pair := &Pair x, 252;
-    @let r:Int := p.lo + p.hi * 11;
+\\ f423 (Int) -> Int
+@fn f423 x := {
+    @let p := &Pair x, 252;
+    @let r := p.lo + p.hi * 11;
     r
 };
 
-@fn f424 x:Int := {
-    @let p:Pair := &Pair x, 12;
-    @let r:Int := p.lo + p.hi * 42;
+\\ f424 (Int) -> Int
+@fn f424 x := {
+    @let p := &Pair x, 12;
+    @let r := p.lo + p.hi * 42;
     r
 };
 
-@fn f425 x:Int := {
-    @let p:Pair := &Pair x, 29;
-    @let r:Int := p.lo + p.hi * 73;
+\\ f425 (Int) -> Int
+@fn f425 x := {
+    @let p := &Pair x, 29;
+    @let r := p.lo + p.hi * 73;
     &@if r < 0, { &@return 0 };
     r
 };
 
-@fn f426 x:Int := {
-    @let p:Pair := &Pair x, 46;
-    @let r:Int := p.lo + p.hi * 104;
+\\ f426 (Int) -> Int
+@fn f426 x := {
+    @let p := &Pair x, 46;
+    @let r := p.lo + p.hi * 104;
     r
 };
 
-@fn f427 x:Int := {
-    @let p:Pair := &Pair x, 63;
-    @let r:Int := p.lo + p.hi * 135;
-    @var acc:Int := 0;
-    @var k:Int := 1;
+\\ f427 (Int) -> Int
+@fn f427 x := {
+    @let p := &Pair x, 63;
+    @let r := p.lo + p.hi * 135;
+    @var acc := 0;
+    @var k := 1;
     &@loop k <= 10, { acc = acc + k * 63; k = k + 1; };
     r + acc
 };
 
-@fn f428 x:Int := {
-    @let p:Pair := &Pair x, 80;
-    @let r:Int := p.lo + p.hi * 166;
+\\ f428 (Int) -> Int
+@fn f428 x := {
+    @let p := &Pair x, 80;
+    @let r := p.lo + p.hi * 166;
     r
 };
 
-@fn f429 x:Int := {
-    @let p:Pair := &Pair x, 97;
-    @let r:Int := p.lo + p.hi * 197;
+\\ f429 (Int) -> Int
+@fn f429 x := {
+    @let p := &Pair x, 97;
+    @let r := p.lo + p.hi * 197;
     r
 };
 
-@fn f430 x:Int := {
-    @let p:Pair := &Pair x, 114;
-    @let r:Int := p.lo + p.hi * 228;
+\\ f430 (Int) -> Int
+@fn f430 x := {
+    @let p := &Pair x, 114;
+    @let r := p.lo + p.hi * 228;
     &@if r < 0, { &@return 0 };
     r
 };
 
-@fn f431 x:Int := {
-    @let p:Pair := &Pair x, 131;
-    @let r:Int := p.lo + p.hi * 2;
+\\ f431 (Int) -> Int
+@fn f431 x := {
+    @let p := &Pair x, 131;
+    @let r := p.lo + p.hi * 2;
     r
 };
 
-@fn f432 x:Int := {
-    @let p:Pair := &Pair x, 148;
-    @let r:Int := p.lo + p.hi * 33;
+\\ f432 (Int) -> Int
+@fn f432 x := {
+    @let p := &Pair x, 148;
+    @let r := p.lo + p.hi * 33;
     r
 };
 
-@fn f433 x:Int := {
-    @let p:Pair := &Pair x, 165;
-    @let r:Int := p.lo + p.hi * 64;
+\\ f433 (Int) -> Int
+@fn f433 x := {
+    @let p := &Pair x, 165;
+    @let r := p.lo + p.hi * 64;
     r
 };
 
-@fn f434 x:Int := {
-    @let p:Pair := &Pair x, 182;
-    @let r:Int := p.lo + p.hi * 95;
-    @var acc:Int := 0;
-    @var k:Int := 1;
+\\ f434 (Int) -> Int
+@fn f434 x := {
+    @let p := &Pair x, 182;
+    @let r := p.lo + p.hi * 95;
+    @var acc := 0;
+    @var k := 1;
     &@loop k <= 10, { acc = acc + k * 182; k = k + 1; };
     r + acc
 };
 
-@fn f435 x:Int := {
-    @let p:Pair := &Pair x, 199;
-    @let r:Int := p.lo + p.hi * 126;
+\\ f435 (Int) -> Int
+@fn f435 x := {
+    @let p := &Pair x, 199;
+    @let r := p.lo + p.hi * 126;
     &@if r < 0, { &@return 0 };
     r
 };
 
-@fn f436 x:Int := {
-    @let p:Pair := &Pair x, 216;
-    @let r:Int := p.lo + p.hi * 157;
+\\ f436 (Int) -> Int
+@fn f436 x := {
+    @let p := &Pair x, 216;
+    @let r := p.lo + p.hi * 157;
     r
 };
 
-@fn f437 x:Int := {
-    @let p:Pair := &Pair x, 233;
-    @let r:Int := p.lo + p.hi * 188;
+\\ f437 (Int) -> Int
+@fn f437 x := {
+    @let p := &Pair x, 233;
+    @let r := p.lo + p.hi * 188;
     r
 };
 
-@fn f438 x:Int := {
-    @let p:Pair := &Pair x, 250;
-    @let r:Int := p.lo + p.hi * 219;
+\\ f438 (Int) -> Int
+@fn f438 x := {
+    @let p := &Pair x, 250;
+    @let r := p.lo + p.hi * 219;
     r
 };
 
-@fn f439 x:Int := {
-    @let p:Pair := &Pair x, 10;
-    @let r:Int := p.lo + p.hi * 250;
+\\ f439 (Int) -> Int
+@fn f439 x := {
+    @let p := &Pair x, 10;
+    @let r := p.lo + p.hi * 250;
     r
 };
 
-@fn f440 x:Int := {
-    @let p:Pair := &Pair x, 27;
-    @let r:Int := p.lo + p.hi * 24;
+\\ f440 (Int) -> Int
+@fn f440 x := {
+    @let p := &Pair x, 27;
+    @let r := p.lo + p.hi * 24;
     &@if r < 0, { &@return 0 };
     r
 };
 
-@fn f441 x:Int := {
-    @let p:Pair := &Pair x, 44;
-    @let r:Int := p.lo + p.hi * 55;
-    @var acc:Int := 0;
-    @var k:Int := 1;
+\\ f441 (Int) -> Int
+@fn f441 x := {
+    @let p := &Pair x, 44;
+    @let r := p.lo + p.hi * 55;
+    @var acc := 0;
+    @var k := 1;
     &@loop k <= 10, { acc = acc + k * 44; k = k + 1; };
     r + acc
 };
 
-@fn f442 x:Int := {
-    @let p:Pair := &Pair x, 61;
-    @let r:Int := p.lo + p.hi * 86;
+\\ f442 (Int) -> Int
+@fn f442 x := {
+    @let p := &Pair x, 61;
+    @let r := p.lo + p.hi * 86;
     r
 };
 
-@fn f443 x:Int := {
-    @let p:Pair := &Pair x, 78;
-    @let r:Int := p.lo + p.hi * 117;
+\\ f443 (Int) -> Int
+@fn f443 x := {
+    @let p := &Pair x, 78;
+    @let r := p.lo + p.hi * 117;
     r
 };
 
-@fn f444 x:Int := {
-    @let p:Pair := &Pair x, 95;
-    @let r:Int := p.lo + p.hi * 148;
+\\ f444 (Int) -> Int
+@fn f444 x := {
+    @let p := &Pair x, 95;
+    @let r := p.lo + p.hi * 148;
     r
 };
 
-@fn f445 x:Int := {
-    @let p:Pair := &Pair x, 112;
-    @let r:Int := p.lo + p.hi * 179;
+\\ f445 (Int) -> Int
+@fn f445 x := {
+    @let p := &Pair x, 112;
+    @let r := p.lo + p.hi * 179;
     &@if r < 0, { &@return 0 };
     r
 };
 
-@fn f446 x:Int := {
-    @let p:Pair := &Pair x, 129;
-    @let r:Int := p.lo + p.hi * 210;
+\\ f446 (Int) -> Int
+@fn f446 x := {
+    @let p := &Pair x, 129;
+    @let r := p.lo + p.hi * 210;
     r
 };
 
-@fn f447 x:Int := {
-    @let p:Pair := &Pair x, 146;
-    @let r:Int := p.lo + p.hi * 241;
+\\ f447 (Int) -> Int
+@fn f447 x := {
+    @let p := &Pair x, 146;
+    @let r := p.lo + p.hi * 241;
     r
 };
 
-@fn f448 x:Int := {
-    @let p:Pair := &Pair x, 163;
-    @let r:Int := p.lo + p.hi * 15;
-    @var acc:Int := 0;
-    @var k:Int := 1;
+\\ f448 (Int) -> Int
+@fn f448 x := {
+    @let p := &Pair x, 163;
+    @let r := p.lo + p.hi * 15;
+    @var acc := 0;
+    @var k := 1;
     &@loop k <= 10, { acc = acc + k * 163; k = k + 1; };
     r + acc
 };
 
-@fn f449 x:Int := {
-    @let p:Pair := &Pair x, 180;
-    @let r:Int := p.lo + p.hi * 46;
+\\ f449 (Int) -> Int
+@fn f449 x := {
+    @let p := &Pair x, 180;
+    @let r := p.lo + p.hi * 46;
     r
 };
 
-@fn f450 x:Int := {
-    @let p:Pair := &Pair x, 197;
-    @let r:Int := p.lo + p.hi * 77;
+\\ f450 (Int) -> Int
+@fn f450 x := {
+    @let p := &Pair x, 197;
+    @let r := p.lo + p.hi * 77;
     &@if r < 0, { &@return 0 };
     r
 };
 
-@fn f451 x:Int := {
-    @let p:Pair := &Pair x, 214;
-    @let r:Int := p.lo + p.hi * 108;
+\\ f451 (Int) -> Int
+@fn f451 x := {
+    @let p := &Pair x, 214;
+    @let r := p.lo + p.hi * 108;
     r
 };
 
-@fn f452 x:Int := {
-    @let p:Pair := &Pair x, 231;
-    @let r:Int := p.lo + p.hi * 139;
+\\ f452 (Int) -> Int
+@fn f452 x := {
+    @let p := &Pair x, 231;
+    @let r := p.lo + p.hi * 139;
     r
 };
 
-@fn f453 x:Int := {
-    @let p:Pair := &Pair x, 248;
-    @let r:Int := p.lo + p.hi * 170;
+\\ f453 (Int) -> Int
+@fn f453 x := {
+    @let p := &Pair x, 248;
+    @let r := p.lo + p.hi * 170;
     r
 };
 
-@fn f454 x:Int := {
-    @let p:Pair := &Pair x, 8;
-    @let r:Int := p.lo + p.hi * 201;
+\\ f454 (Int) -> Int
+@fn f454 x := {
+    @let p := &Pair x, 8;
+    @let r := p.lo + p.hi * 201;
     r
 };
 
-@fn f455 x:Int := {
-    @let p:Pair := &Pair x, 25;
-    @let r:Int := p.lo + p.hi * 232;
+\\ f455 (Int) -> Int
+@fn f455 x := {
+    @let p := &Pair x, 25;
+    @let r := p.lo + p.hi * 232;
     &@if r < 0, { &@return 0 };
-    @var acc:Int := 0;
-    @var k:Int := 1;
+    @var acc := 0;
+    @var k := 1;
     &@loop k <= 10, { acc = acc + k * 25; k = k + 1; };
     r + acc
 };
 
-@fn f456 x:Int := {
-    @let p:Pair := &Pair x, 42;
-    @let r:Int := p.lo + p.hi * 6;
+\\ f456 (Int) -> Int
+@fn f456 x := {
+    @let p := &Pair x, 42;
+    @let r := p.lo + p.hi * 6;
     r
 };
 
-@fn f457 x:Int := {
-    @let p:Pair := &Pair x, 59;
-    @let r:Int := p.lo + p.hi * 37;
+\\ f457 (Int) -> Int
+@fn f457 x := {
+    @let p := &Pair x, 59;
+    @let r := p.lo + p.hi * 37;
     r
 };
 
-@fn f458 x:Int := {
-    @let p:Pair := &Pair x, 76;
-    @let r:Int := p.lo + p.hi * 68;
+\\ f458 (Int) -> Int
+@fn f458 x := {
+    @let p := &Pair x, 76;
+    @let r := p.lo + p.hi * 68;
     r
 };
 
-@fn f459 x:Int := {
-    @let p:Pair := &Pair x, 93;
-    @let r:Int := p.lo + p.hi * 99;
+\\ f459 (Int) -> Int
+@fn f459 x := {
+    @let p := &Pair x, 93;
+    @let r := p.lo + p.hi * 99;
     r
 };
 
-@fn f460 x:Int := {
-    @let p:Pair := &Pair x, 110;
-    @let r:Int := p.lo + p.hi * 130;
+\\ f460 (Int) -> Int
+@fn f460 x := {
+    @let p := &Pair x, 110;
+    @let r := p.lo + p.hi * 130;
     &@if r < 0, { &@return 0 };
     r
 };
 
-@fn f461 x:Int := {
-    @let p:Pair := &Pair x, 127;
-    @let r:Int := p.lo + p.hi * 161;
+\\ f461 (Int) -> Int
+@fn f461 x := {
+    @let p := &Pair x, 127;
+    @let r := p.lo + p.hi * 161;
     r
 };
 
-@fn f462 x:Int := {
-    @let p:Pair := &Pair x, 144;
-    @let r:Int := p.lo + p.hi * 192;
-    @var acc:Int := 0;
-    @var k:Int := 1;
+\\ f462 (Int) -> Int
+@fn f462 x := {
+    @let p := &Pair x, 144;
+    @let r := p.lo + p.hi * 192;
+    @var acc := 0;
+    @var k := 1;
     &@loop k <= 10, { acc = acc + k * 144; k = k + 1; };
     r + acc
 };
 
-@fn f463 x:Int := {
-    @let p:Pair := &Pair x, 161;
-    @let r:Int := p.lo + p.hi * 223;
+\\ f463 (Int) -> Int
+@fn f463 x := {
+    @let p := &Pair x, 161;
+    @let r := p.lo + p.hi * 223;
     r
 };
 
-@fn f464 x:Int := {
-    @let p:Pair := &Pair x, 178;
-    @let r:Int := p.lo + p.hi * 254;
+\\ f464 (Int) -> Int
+@fn f464 x := {
+    @let p := &Pair x, 178;
+    @let r := p.lo + p.hi * 254;
     r
 };
 
-@fn f465 x:Int := {
-    @let p:Pair := &Pair x, 195;
-    @let r:Int := p.lo + p.hi * 28;
+\\ f465 (Int) -> Int
+@fn f465 x := {
+    @let p := &Pair x, 195;
+    @let r := p.lo + p.hi * 28;
     &@if r < 0, { &@return 0 };
     r
 };
 
-@fn f466 x:Int := {
-    @let p:Pair := &Pair x, 212;
-    @let r:Int := p.lo + p.hi * 59;
+\\ f466 (Int) -> Int
+@fn f466 x := {
+    @let p := &Pair x, 212;
+    @let r := p.lo + p.hi * 59;
     r
 };
 
-@fn f467 x:Int := {
-    @let p:Pair := &Pair x, 229;
-    @let r:Int := p.lo + p.hi * 90;
+\\ f467 (Int) -> Int
+@fn f467 x := {
+    @let p := &Pair x, 229;
+    @let r := p.lo + p.hi * 90;
     r
 };
 
-@fn f468 x:Int := {
-    @let p:Pair := &Pair x, 246;
-    @let r:Int := p.lo + p.hi * 121;
+\\ f468 (Int) -> Int
+@fn f468 x := {
+    @let p := &Pair x, 246;
+    @let r := p.lo + p.hi * 121;
     r
 };
 
-@fn f469 x:Int := {
-    @let p:Pair := &Pair x, 6;
-    @let r:Int := p.lo + p.hi * 152;
-    @var acc:Int := 0;
-    @var k:Int := 1;
+\\ f469 (Int) -> Int
+@fn f469 x := {
+    @let p := &Pair x, 6;
+    @let r := p.lo + p.hi * 152;
+    @var acc := 0;
+    @var k := 1;
     &@loop k <= 10, { acc = acc + k * 6; k = k + 1; };
     r + acc
 };
 
-@fn f470 x:Int := {
-    @let p:Pair := &Pair x, 23;
-    @let r:Int := p.lo + p.hi * 183;
+\\ f470 (Int) -> Int
+@fn f470 x := {
+    @let p := &Pair x, 23;
+    @let r := p.lo + p.hi * 183;
     &@if r < 0, { &@return 0 };
     r
 };
 
-@fn f471 x:Int := {
-    @let p:Pair := &Pair x, 40;
-    @let r:Int := p.lo + p.hi * 214;
+\\ f471 (Int) -> Int
+@fn f471 x := {
+    @let p := &Pair x, 40;
+    @let r := p.lo + p.hi * 214;
     r
 };
 
-@fn f472 x:Int := {
-    @let p:Pair := &Pair x, 57;
-    @let r:Int := p.lo + p.hi * 245;
+\\ f472 (Int) -> Int
+@fn f472 x := {
+    @let p := &Pair x, 57;
+    @let r := p.lo + p.hi * 245;
     r
 };
 
-@fn f473 x:Int := {
-    @let p:Pair := &Pair x, 74;
-    @let r:Int := p.lo + p.hi * 19;
+\\ f473 (Int) -> Int
+@fn f473 x := {
+    @let p := &Pair x, 74;
+    @let r := p.lo + p.hi * 19;
     r
 };
 
-@fn f474 x:Int := {
-    @let p:Pair := &Pair x, 91;
-    @let r:Int := p.lo + p.hi * 50;
+\\ f474 (Int) -> Int
+@fn f474 x := {
+    @let p := &Pair x, 91;
+    @let r := p.lo + p.hi * 50;
     r
 };
 
-@fn f475 x:Int := {
-    @let p:Pair := &Pair x, 108;
-    @let r:Int := p.lo + p.hi * 81;
+\\ f475 (Int) -> Int
+@fn f475 x := {
+    @let p := &Pair x, 108;
+    @let r := p.lo + p.hi * 81;
     &@if r < 0, { &@return 0 };
     r
 };
 
-@fn f476 x:Int := {
-    @let p:Pair := &Pair x, 125;
-    @let r:Int := p.lo + p.hi * 112;
-    @var acc:Int := 0;
-    @var k:Int := 1;
+\\ f476 (Int) -> Int
+@fn f476 x := {
+    @let p := &Pair x, 125;
+    @let r := p.lo + p.hi * 112;
+    @var acc := 0;
+    @var k := 1;
     &@loop k <= 10, { acc = acc + k * 125; k = k + 1; };
     r + acc
 };
 
-@fn f477 x:Int := {
-    @let p:Pair := &Pair x, 142;
-    @let r:Int := p.lo + p.hi * 143;
+\\ f477 (Int) -> Int
+@fn f477 x := {
+    @let p := &Pair x, 142;
+    @let r := p.lo + p.hi * 143;
     r
 };
 
-@fn f478 x:Int := {
-    @let p:Pair := &Pair x, 159;
-    @let r:Int := p.lo + p.hi * 174;
+\\ f478 (Int) -> Int
+@fn f478 x := {
+    @let p := &Pair x, 159;
+    @let r := p.lo + p.hi * 174;
     r
 };
 
-@fn f479 x:Int := {
-    @let p:Pair := &Pair x, 176;
-    @let r:Int := p.lo + p.hi * 205;
+\\ f479 (Int) -> Int
+@fn f479 x := {
+    @let p := &Pair x, 176;
+    @let r := p.lo + p.hi * 205;
     r
 };
 
-@fn f480 x:Int := {
-    @let p:Pair := &Pair x, 193;
-    @let r:Int := p.lo + p.hi * 236;
+\\ f480 (Int) -> Int
+@fn f480 x := {
+    @let p := &Pair x, 193;
+    @let r := p.lo + p.hi * 236;
     &@if r < 0, { &@return 0 };
     r
 };
 
-@fn f481 x:Int := {
-    @let p:Pair := &Pair x, 210;
-    @let r:Int := p.lo + p.hi * 10;
+\\ f481 (Int) -> Int
+@fn f481 x := {
+    @let p := &Pair x, 210;
+    @let r := p.lo + p.hi * 10;
     r
 };
 
-@fn f482 x:Int := {
-    @let p:Pair := &Pair x, 227;
-    @let r:Int := p.lo + p.hi * 41;
+\\ f482 (Int) -> Int
+@fn f482 x := {
+    @let p := &Pair x, 227;
+    @let r := p.lo + p.hi * 41;
     r
 };
 
-@fn f483 x:Int := {
-    @let p:Pair := &Pair x, 244;
-    @let r:Int := p.lo + p.hi * 72;
-    @var acc:Int := 0;
-    @var k:Int := 1;
+\\ f483 (Int) -> Int
+@fn f483 x := {
+    @let p := &Pair x, 244;
+    @let r := p.lo + p.hi * 72;
+    @var acc := 0;
+    @var k := 1;
     &@loop k <= 10, { acc = acc + k * 244; k = k + 1; };
     r + acc
 };
 
-@fn f484 x:Int := {
-    @let p:Pair := &Pair x, 4;
-    @let r:Int := p.lo + p.hi * 103;
+\\ f484 (Int) -> Int
+@fn f484 x := {
+    @let p := &Pair x, 4;
+    @let r := p.lo + p.hi * 103;
     r
 };
 
-@fn f485 x:Int := {
-    @let p:Pair := &Pair x, 21;
-    @let r:Int := p.lo + p.hi * 134;
+\\ f485 (Int) -> Int
+@fn f485 x := {
+    @let p := &Pair x, 21;
+    @let r := p.lo + p.hi * 134;
     &@if r < 0, { &@return 0 };
     r
 };
 
-@fn f486 x:Int := {
-    @let p:Pair := &Pair x, 38;
-    @let r:Int := p.lo + p.hi * 165;
+\\ f486 (Int) -> Int
+@fn f486 x := {
+    @let p := &Pair x, 38;
+    @let r := p.lo + p.hi * 165;
     r
 };
 
-@fn f487 x:Int := {
-    @let p:Pair := &Pair x, 55;
-    @let r:Int := p.lo + p.hi * 196;
+\\ f487 (Int) -> Int
+@fn f487 x := {
+    @let p := &Pair x, 55;
+    @let r := p.lo + p.hi * 196;
     r
 };
 
-@fn f488 x:Int := {
-    @let p:Pair := &Pair x, 72;
-    @let r:Int := p.lo + p.hi * 227;
+\\ f488 (Int) -> Int
+@fn f488 x := {
+    @let p := &Pair x, 72;
+    @let r := p.lo + p.hi * 227;
     r
 };
 
-@fn f489 x:Int := {
-    @let p:Pair := &Pair x, 89;
-    @let r:Int := p.lo + p.hi * 1;
+\\ f489 (Int) -> Int
+@fn f489 x := {
+    @let p := &Pair x, 89;
+    @let r := p.lo + p.hi * 1;
     r
 };
 
-@fn f490 x:Int := {
-    @let p:Pair := &Pair x, 106;
-    @let r:Int := p.lo + p.hi * 32;
+\\ f490 (Int) -> Int
+@fn f490 x := {
+    @let p := &Pair x, 106;
+    @let r := p.lo + p.hi * 32;
     &@if r < 0, { &@return 0 };
-    @var acc:Int := 0;
-    @var k:Int := 1;
+    @var acc := 0;
+    @var k := 1;
     &@loop k <= 10, { acc = acc + k * 106; k = k + 1; };
     r + acc
 };
 
-@fn f491 x:Int := {
-    @let p:Pair := &Pair x, 123;
-    @let r:Int := p.lo + p.hi * 63;
+\\ f491 (Int) -> Int
+@fn f491 x := {
+    @let p := &Pair x, 123;
+    @let r := p.lo + p.hi * 63;
     r
 };
 
-@fn f492 x:Int := {
-    @let p:Pair := &Pair x, 140;
-    @let r:Int := p.lo + p.hi * 94;
+\\ f492 (Int) -> Int
+@fn f492 x := {
+    @let p := &Pair x, 140;
+    @let r := p.lo + p.hi * 94;
     r
 };
 
-@fn f493 x:Int := {
-    @let p:Pair := &Pair x, 157;
-    @let r:Int := p.lo + p.hi * 125;
+\\ f493 (Int) -> Int
+@fn f493 x := {
+    @let p := &Pair x, 157;
+    @let r := p.lo + p.hi * 125;
     r
 };
 
-@fn f494 x:Int := {
-    @let p:Pair := &Pair x, 174;
-    @let r:Int := p.lo + p.hi * 156;
+\\ f494 (Int) -> Int
+@fn f494 x := {
+    @let p := &Pair x, 174;
+    @let r := p.lo + p.hi * 156;
     r
 };
 
-@fn f495 x:Int := {
-    @let p:Pair := &Pair x, 191;
-    @let r:Int := p.lo + p.hi * 187;
+\\ f495 (Int) -> Int
+@fn f495 x := {
+    @let p := &Pair x, 191;
+    @let r := p.lo + p.hi * 187;
     &@if r < 0, { &@return 0 };
     r
 };
 
-@fn f496 x:Int := {
-    @let p:Pair := &Pair x, 208;
-    @let r:Int := p.lo + p.hi * 218;
+\\ f496 (Int) -> Int
+@fn f496 x := {
+    @let p := &Pair x, 208;
+    @let r := p.lo + p.hi * 218;
     r
 };
 
-@fn f497 x:Int := {
-    @let p:Pair := &Pair x, 225;
-    @let r:Int := p.lo + p.hi * 249;
-    @var acc:Int := 0;
-    @var k:Int := 1;
+\\ f497 (Int) -> Int
+@fn f497 x := {
+    @let p := &Pair x, 225;
+    @let r := p.lo + p.hi * 249;
+    @var acc := 0;
+    @var k := 1;
     &@loop k <= 10, { acc = acc + k * 225; k = k + 1; };
     r + acc
 };
 
-@fn f498 x:Int := {
-    @let p:Pair := &Pair x, 242;
-    @let r:Int := p.lo + p.hi * 23;
+\\ f498 (Int) -> Int
+@fn f498 x := {
+    @let p := &Pair x, 242;
+    @let r := p.lo + p.hi * 23;
     r
 };
 
-@fn f499 x:Int := {
-    @let p:Pair := &Pair x, 2;
-    @let r:Int := p.lo + p.hi * 54;
+\\ f499 (Int) -> Int
+@fn f499 x := {
+    @let p := &Pair x, 2;
+    @let r := p.lo + p.hi * 54;
     r
 };
 
 @fn bench_main := {
-    @var total:Int := 0;
+    @var total := 0;
     total = total + (&f0 0);
     total = total + (&f1 1);
     total = total + (&f2 2);

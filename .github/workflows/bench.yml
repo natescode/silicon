@@ -1,5 +1,10 @@
 name: Bench
 
+# Opt into Node 24 for JS actions ahead of the 2026-06-16 forced cutoff
+# (actions/checkout, upload-artifact, configure-pages still ship Node 20).
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
 on:
   pull_request:
     paths:
@@ -19,7 +24,7 @@ jobs:
         with:
           fetch-depth: 0
 
-      - uses: oven-sh/setup-bun@v1
+      - uses: oven-sh/setup-bun@v2
         with:
           bun-version: latest
 

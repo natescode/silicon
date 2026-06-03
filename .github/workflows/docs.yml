@@ -1,5 +1,10 @@
 name: Docs site
 
+# Opt into Node 24 for JS actions ahead of the 2026-06-16 forced cutoff
+# (actions/checkout, upload-artifact, configure-pages still ship Node 20).
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
 on:
   push:
     branches: [main]
@@ -28,7 +33,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: oven-sh/setup-bun@v1
+      - uses: oven-sh/setup-bun@v2
         with:
           bun-version: latest
 
@@ -44,6 +49,10 @@ jobs:
         run: bun run build
 
       - uses: actions/configure-pages@v5
+        with:
+          # Auto-enable Pages (Actions source) so the run doesn't fail with
+          # "Get Pages site failed" when Pages isn't yet enabled in Settings.
+          enablement: true
 
       - uses: actions/upload-pages-artifact@v3
         with:

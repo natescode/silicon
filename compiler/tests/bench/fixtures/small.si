@@ -2,25 +2,28 @@
 # Bench fixture — ~50 LOC.  Exercises @fn, @if, @loop, @match, @struct,
 # Option, basic arithmetic.
 
-@struct Point x:Int, y:Int;
+@struct Point x Int, y Int;
 
 @type Color := $Red | $Green | $Blue;
 
-@fn priority c:Color := {
+\\ priority (Color) -> Int
+@fn priority c := {
     &@match c,
         $Red => 3,
         $Green => 2,
         $Blue => 1
 };
 
-@fn abs n:Int := {
+\\ abs (Int) -> Int
+@fn abs n := {
     &@if n < 0, { &@return (0 - n) };
     n
 };
 
-@fn sum_to n:Int := {
-    @var total:Int := 0;
-    @var i:Int := 1;
+\\ sum_to (Int) -> Int
+@fn sum_to n := {
+    @var total := 0;
+    @var i := 1;
     &@loop i <= n, {
         total = total + i;
         i = i + 1;
@@ -28,22 +31,24 @@
     total
 };
 
-@fn manhattan a:Point, b:Point := {
+\\ manhattan (Point, Point) -> Int
+@fn manhattan a, b := {
     (&abs (a.x - b.x)) + (&abs (a.y - b.y))
 };
 
-@fn safe_div n:Int, d:Int := {
+\\ safe_div (Int, Int) -> Int
+@fn safe_div n, d := {
     &@if d == 0, { &@return 0 };
     n / d
 };
 
 @fn main := {
-    @local p:Point := &Point 3, 4;
-    @local q:Point := &Point 0, 0;
-    @local _:Int := &manhattan p, q;
-    @local _:Int := &sum_to 100;
-    @local _:Int := &priority $Red;
-    @local _:Int := &safe_div 10, 0;
+    @local p := &Point 3, 4;
+    @local q := &Point 0, 0;
+    @local m := &manhattan p, q;
+    @local s := &sum_to 100;
+    @local pr := &priority $Red;
+    @local sd := &safe_div 10, 0;
     0
 };
 

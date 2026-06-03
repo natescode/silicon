@@ -1,5 +1,10 @@
 name: Self-host — native pipeline
 
+# Opt into Node 24 for JS actions ahead of the 2026-06-16 forced cutoff
+# (actions/checkout, upload-artifact, configure-pages still ship Node 20).
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
 # Verifies that the native QBE pipeline can compile the full Silicon example
 # suite on every supported tier-1 platform.  This is the "native sigilc
 # compiles programs" gate: the compiler successfully compiles and runs all
@@ -34,16 +39,12 @@ jobs:
         include:
           - os: ubuntu-latest
             label: linux-x64
-            qbe_install: sudo apt-get update -qq && sudo apt-get install -y qbe gcc
           - os: ubuntu-24.04-arm
             label: linux-arm64
-            qbe_install: sudo apt-get update -qq && sudo apt-get install -y qbe gcc
           - os: macos-14
             label: macos-arm64
-            qbe_install: brew install qbe
           - os: macos-13
             label: macos-x64
-            qbe_install: brew install qbe
 
     steps:
       - name: Checkout
@@ -57,8 +58,18 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
-      - name: Install QBE and C compiler
-        run: ${{ matrix.qbe_install }}
+      - name: Install C compiler + build QBE from source
+        # `qbe` isn't packaged in apt/brew; build it from the c9x.me release
+        # (the version `sgl setup` fetches) so the native backend has a linker.
+        run: |
+          if [ "$RUNNER_OS" = "Linux" ]; then
+            sudo apt-get update -qq
+            sudo apt-get install -y gcc make curl
+          fi
+          curl -fsSL https://c9x.me/compile/release/qbe-1.2.tar.gz -o /tmp/qbe.tar.gz
+          mkdir -p /tmp/qbe && tar xzf /tmp/qbe.tar.gz -C /tmp/qbe --strip-components=1
+          make -C /tmp/qbe -j4
+          sudo make -C /tmp/qbe install
 
       - name: Verify toolchain
         run: |

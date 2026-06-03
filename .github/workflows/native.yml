@@ -1,5 +1,10 @@
 name: Native Backend (Linux x86-64)
 
+# Opt into Node 24 for JS actions ahead of the 2026-06-16 forced cutoff
+# (actions/checkout, upload-artifact, configure-pages still ship Node 20).
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
 on:
   push:
     branches: [main]
@@ -32,10 +37,16 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
-      - name: Install QBE and GCC
+      - name: Install GCC + build QBE from source
+        # `qbe` isn't an apt package; build it from the c9x.me release (the
+        # same version `sgl setup` fetches) so the native backend has a linker.
         run: |
           sudo apt-get update -qq
-          sudo apt-get install -y qbe gcc
+          sudo apt-get install -y gcc make curl
+          curl -fsSL https://c9x.me/compile/release/qbe-1.2.tar.gz -o /tmp/qbe.tar.gz
+          mkdir -p /tmp/qbe && tar xzf /tmp/qbe.tar.gz -C /tmp/qbe --strip-components=1
+          make -C /tmp/qbe -j4
+          sudo make -C /tmp/qbe install
 
       - name: Verify toolchain
         run: |

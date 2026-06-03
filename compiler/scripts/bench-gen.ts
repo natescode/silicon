@@ -21,21 +21,22 @@ const HEADER = `# SPDX-License-Identifier: MIT
 
 function emit(funcCount: number): string {
     const out: string[] = [HEADER]
-    out.push('@struct Pair lo:Int, hi:Int;\n')
+    out.push('@struct Pair lo Int, hi Int;\n')
     out.push('@type Maybe[T] := $Just v:T | $Nothing;\n\n')
 
     for (let i = 0; i < funcCount; i++) {
         const a = (i * 17) % 257
         const b = (i * 31 + 5) % 257
-        out.push(`@fn f${i} x:Int := {`)
-        out.push(`    @let p:Pair := &Pair x, ${a};`)
-        out.push(`    @let r:Int := p.lo + p.hi * ${b};`)
+        out.push(`\\\\ f${i} (Int) -> Int`)
+        out.push(`@fn f${i} x := {`)
+        out.push(`    @let p := &Pair x, ${a};`)
+        out.push(`    @let r := p.lo + p.hi * ${b};`)
         if (i % 5 === 0) {
             out.push(`    &@if r < 0, { &@return 0 };`)
         }
         if (i % 7 === 0) {
-            out.push(`    @var acc:Int := 0;`)
-            out.push(`    @var k:Int := 1;`)
+            out.push(`    @var acc := 0;`)
+            out.push(`    @var k := 1;`)
             out.push(`    &@loop k <= 10, { acc = acc + k * ${a}; k = k + 1; };`)
             out.push(`    r + acc`)
         } else {
@@ -45,7 +46,7 @@ function emit(funcCount: number): string {
     }
 
     out.push('@fn bench_main := {')
-    out.push('    @var total:Int := 0;')
+    out.push('    @var total := 0;')
     for (let i = 0; i < Math.min(funcCount, 50); i++) {
         out.push(`    total = total + (&f${i} ${i});`)
     }

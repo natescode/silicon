@@ -1,5 +1,10 @@
 name: License headers
 
+# Opt into Node 24 for JS actions ahead of the 2026-06-16 forced cutoff
+# (actions/checkout, upload-artifact, configure-pages still ship Node 20).
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
 on:
   pull_request:
     paths:
@@ -22,10 +27,13 @@ jobs:
           set -euo pipefail
           missing=()
 
+          # `tr -d '\r'` makes the check tolerant of CRLF-committed files —
+          # otherwise `// SPDX… MIT\r` fails to match the `…MIT$` anchor.
+
           # TypeScript: every src/**/*.ts must carry `// SPDX-License-Identifier: MIT`
           # within the first two lines (line 2 if line 1 is a shebang).
           while IFS= read -r f; do
-            if ! head -2 "$f" | grep -q '^// SPDX-License-Identifier: MIT$'; then
+            if ! head -2 "$f" | tr -d '\r' | grep -q '^// SPDX-License-Identifier: MIT$'; then
               missing+=("$f")
             fi
           done < <(find src -type f -name '*.ts')
@@ -33,7 +41,7 @@ jobs:
           # Silicon strata + stdlib: every src/strata/**/*.si, src/stdlib/**/*.si
           # must start with `# SPDX-License-Identifier: MIT`
           while IFS= read -r f; do
-            if ! head -1 "$f" | grep -q '^# SPDX-License-Identifier: MIT$'; then
+            if ! head -1 "$f" | tr -d '\r' | grep -q '^# SPDX-License-Identifier: MIT$'; then
               missing+=("$f")
             fi
           done < <(find src/strata src/stdlib -type f -name '*.si')

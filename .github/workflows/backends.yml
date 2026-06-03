@@ -1,5 +1,10 @@
 name: Backend consistency — WAT + QBE determinism
 
+# Opt into Node 24 for JS actions ahead of the 2026-06-16 forced cutoff
+# (actions/checkout, upload-artifact, configure-pages still ship Node 20).
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
 # Verifies that both compilation backends produce byte-equal output across
 # runs (determinism gate) and agree on type encodings (cross-backend
 # consistency gate).  No qbe or cc binary required — all assertions are

@@ -1,5 +1,10 @@
 name: Acceptance gate (10c-9)
 
+# Opt into Node 24 for JS actions ahead of the 2026-06-16 forced cutoff
+# (actions/checkout, upload-artifact, configure-pages still ship Node 20).
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
 # Story 10c-9 — verify the install-to-running-program flow on a clean
 # runner.  Runs automatically after a release tag is pushed, and on
 # manual dispatch.

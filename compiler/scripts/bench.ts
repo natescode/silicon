@@ -24,7 +24,7 @@
 import { readFileSync, statSync } from 'fs'
 import { join } from 'path'
 import { performance } from 'perf_hooks'
-import { parse, compile } from '/home/natescode/repos/sigil/src/caas/index.ts'
+import { parse, compile } from '../src/caas/index.ts'
 
 const RUNS = Number(process.env.SIGIL_BENCH_RUNS ?? 11)
 const WARMUP = Number(process.env.SIGIL_BENCH_WARMUP ?? 2)
