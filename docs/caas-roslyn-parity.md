@@ -33,11 +33,19 @@ with a recorded rationale below — none are half-built.
 | 4c **opt-level / debug-info / target-triple** options | No codegen consumer (`lower()` runs no passes, emits no debug info, CaaS emits wasm not native) — would be no-op options |
 | **M2** copy-on-write line fix-up | *Tried and reverted* — the suffix line-shift walk cost ≈ reparsing; M3's reference-sharing is the real win |
 
-**Beyond the tracker:** the next high-value frontier is **incremental
-elaboration / type-checking** — the Workspace still re-runs those fully per edit,
-so they (not parsing) dominate end-to-end editor latency. M3's relative-position
-model (stable node identity + position-independent subtrees) is the substrate
-that work would build on.
+**Beyond the tracker — incremental semantics** (the next frontier, since
+elaborate+typecheck dominate end-to-end edit latency; M3 is its substrate):
+- **E1a ✅ (2026-06-02):** the `Workspace` now reparses edits incrementally
+  (`existing.tree.withText(newSource)`) — it previously full-parsed every edit,
+  ignoring the incremental parser entirely. Gated by an incremental≡full
+  equivalence harness (`incremental-compile.test.ts`).
+- **E1b 🔲 (designed):** reuse per-element *elaboration* (it's element-local
+  against a frozen registry — provably sound) via a per-element reuse diff from
+  the incremental parse + a per-document cache.
+- **E2 🔲 (designed):** incremental *type-checking* — demand-driven re-check of
+  only the elements an edit's symbol-signature changes affect (dependency edges
+  already exist via the typechecker's per-element reference recording), reusing
+  cached per-element results. The large, higher-value milestone.
 
 ---
 
