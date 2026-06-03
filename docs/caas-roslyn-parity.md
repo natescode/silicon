@@ -39,9 +39,14 @@ elaborate+typecheck dominate end-to-end edit latency; M3 is its substrate):
   (`existing.tree.withText(newSource)`) — it previously full-parsed every edit,
   ignoring the incremental parser entirely. Gated by an incremental≡full
   equivalence harness (`incremental-compile.test.ts`).
-- **E1b 🔲 (designed):** reuse per-element *elaboration* (it's element-local
-  against a frozen registry — provably sound) via a per-element reuse diff from
-  the incremental parse + a per-document cache.
+- **E1b ✅ (2026-06-02):** reuse per-element *elaboration* — element-local
+  against a frozen registry, so the spliced elaborated tree is byte-identical to
+  a full elaborate(). `incrementalReparse` exposes a per-element reuse diff;
+  `src/caas/incrementalElaborate.ts` reuses cached per-element elaboration
+  (shifting reused-suffix `elemBase`), re-elaborates only fresh elements, and
+  rebuilds the frozen registry on a `@stratum` edit. Verified by an equivalence
+  property suite (random edit chains over the corpus: structure + authoritative
+  `model.typeOf` + diagnostics + symbols) and a reuse-by-reference proof.
 - **E2 🔲 (designed):** incremental *type-checking* — demand-driven re-check of
   only the elements an edit's symbol-signature changes affect (dependency edges
   already exist via the typechecker's per-element reference recording), reusing
