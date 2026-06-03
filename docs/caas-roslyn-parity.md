@@ -62,20 +62,34 @@ elaborate+typecheck dominate end-to-end edit latency; M3 is its substrate):
     `tests/properties/incremental-{boundary,typeflip,multidoc}.property.test.ts`
     (the surviving adversarial suites) plus a comment-insertion edit added to the
     parse- and compile-equivalence fuzzers. The other four categories were clean.
-- **E2 🔲 (designed — `docs/incremental-typecheck-design.md`):** incremental
-  *type-checking*. A design-investigation workflow (5 agents probing the real
-  typechecker) produced a soundness-first design with a **conditional go**: the
-  shared fresh-type-variable counter (`ctx.fresh`) leaks order-dependent `?Tn`
-  into `model.typeOf` (e.g. `@let x := &None` stores `Option[?T1]`; a preceding
-  `&None` shifts it to `?T3`), and unannotated forward references make a caller's
-  inferred types depend on check **order**. So byte-identical incremental
-  type-checking must be **"reuse the unaffected prefix + replay the suffix in
-  source order"**, *not* node-level reuse of only the edited element. Staged A–E
-  (smallest-safe-first) with the full `typecheck()` kept untouched as the oracle
-  and a `SIGIL_INCREMENTAL_VERIFY` discard-on-mismatch tripwire. **Implementation
-  deferred:** full typecheck is already sub-millisecond on the current corpus
-  (~0.6 ms/100 fns), so the prefix-reuse win only materializes at file scales
-  Silicon doesn't yet hit — the design is the durable artifact for when it does.
+- **E2 ✅ Stage A+B (`src/caas/incrementalTypecheck.ts`, design in
+  `docs/incremental-typecheck-design.md`):** incremental *type-checking* —
+  **prefix-reuse engine**. A design-investigation workflow (5 agents probing the
+  real typechecker) established that the shared fresh-type-variable counter
+  (`ctx.fresh`) leaks order-dependent `?Tn` into `model.typeOf` (e.g.
+  `@let x := &None` stores `Option[?T1]`; a preceding `&None` shifts it to `?T3`),
+  and unannotated forward references make a caller's inferred types depend on
+  check **order** — so byte-identical incremental type-checking must
+  **reuse the unchanged prefix and replay the suffix in source order**, not
+  node-level reuse of the edited element. The engine: builds a fresh ctx,
+  re-runs (cheap) pre-registration over the whole element list, **replays** each
+  verbatim-unchanged prefix group's cached write-set (finalized sigs, typeMap
+  slice, reference edges, diagnostics) while advancing the shared fresh-var
+  counter by what it consumed, then **re-checks** every group from the first
+  change to EOF. A `preRegSig` gate falls back to a full re-check when any
+  *declaration* changed (a prefix element may forward-reference a later
+  declaration); cross-document/target changes gate on `externalSig`/`target`.
+  The full `typecheck()` is refactored into reusable pieces but stays the
+  byte-identical **oracle/fallback**; `SIGIL_E2_VERIFY=1` runs it beside every
+  edit (reuse ON) as a discard-on-mismatch tripwire. Verified byte-identical to
+  fresh on diagnostics + symbols + per-node `model.typeOf` by the equivalence,
+  property (random edit chains), and adversarial suites, with a reuse-firing
+  guard so the engine can't silently regress to full re-check.
+  - **Stages C–E deferred** (forward-only finalized-sig propagation for *middle*
+    edits, fresh-counter replay across leaks, per-symbol cross-doc invalidation):
+    Stage B already reuses the unchanged prefix on the dominant edit (a function
+    body), and full typecheck is sub-millisecond on the current corpus
+    (~0.6 ms/100 fns), so the finer-grained reuse only pays off at larger scales.
 
 ---
 

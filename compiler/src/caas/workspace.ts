@@ -47,6 +47,11 @@ import {
     incrementalElaborate, elaborateGroupsFull, elabErrorsToDiagnostics, stratumSignature,
     type ElabGroup,
 } from './incrementalElaborate'
+import {
+    incrementalTypecheck, externalSymbolsSignature,
+    type TypeGroupCache, type PriorTypeState,
+} from './incrementalTypecheck'
+import { astChildren } from '../ast/astChildren'
 import type { ElaboratorRegistry } from '../elaborator/registry'
 import type { SemanticModel, Symbol as CaaSSymbol, SourceRange } from '../ast/semanticModel'
 import { typeDisplayString } from '../ast/semanticModel'
@@ -235,8 +240,22 @@ export class Workspace {
      * Per-document incremental-elaboration cache (incremental semantics E1b):
      * the prior compile's per-element-group elaboration + a strata signature to
      * detect a stale registry.  Lets an edit re-elaborate only changed elements.
+     *
+     * Also carries the prior per-group *type-check* cache (E2) plus the
+     * cross-document / target signatures that gate type reuse: an edit replays
+     * the unchanged prefix's type results when these are stable.
      */
-    readonly #elabState = new Map<string, { strataSig: string; groups: ElabGroup[] }>()
+    readonly #elabState = new Map<string, {
+        strataSig: string
+        groups: ElabGroup[]
+        typeCache: TypeGroupCache[]
+        preRegSig: string
+        externalSig: string
+        target: LowerTarget | undefined
+    }>()
+
+    /** @internal Last compile's incremental type-check reuse stats (for tests). */
+    _lastTypecheckReuse?: { reused: number; total: number }
 
     constructor(options: WorkspaceOptions = {}) {
         this.#registry = options.registry
@@ -753,6 +772,7 @@ export class Workspace {
         const extents = parseResult.tree._extents
         let elabTree: SyntaxTree
         let elabGroups: ElabGroup[] | undefined
+        let elabReused = false   // whether the prefix elaboration was reused (E1b)
         if (extents !== undefined) {
             const canReuse = parseResult._elementReuse !== undefined
                 && prior !== undefined && prior.strataSig === strataSig
@@ -762,6 +782,7 @@ export class Workspace {
             allDiags.push(...elabErrorsToDiagnostics(elab.errors))
             elabTree = new SyntaxTree(elab.program, source, uri)
             elabGroups = elab.groups
+            elabReused = canReuse
         } else {
             // No extents (e.g. a parse error produced a minimal tree) — full
             // elaborate, no per-element cache.
@@ -777,17 +798,56 @@ export class Workspace {
         //    symbols are scoped to this document's project + dependency closure
         //    (CaaS tracker 3a); the project's compile target is threaded through
         //    so portability diagnostics fire for `wasm-gc` projects.
+        //
+        //    Incremental type-check (E2): when the prefix elaboration was reused
+        //    and the cross-doc/target inputs are unchanged, replay the unchanged
+        //    prefix's type results and re-check only the suffix — byte-identical
+        //    to a full check.  `typecheck()` stays the oracle: a discard-on-
+        //    mismatch tripwire under SIGIL_INCREMENTAL_VERIFY, and the fallback
+        //    whenever the per-group engine can't apply.
         const project = this.#docToProject.get(uri)
         const externalSymbols = this.#buildExternalSymbols(uri)
-        const checkResult = typecheck(elabTree, registry, {
-            externalSymbols,
-            target: project?.target,
-        })
-        allDiags.push(...checkResult.diagnostics)
+        const externalSig = externalSymbolsSignature(externalSymbols)
+        const target = project?.target
 
-        // Cache (or clear) this document's per-element elaboration for the next edit.
-        if (elabGroups !== undefined) this.#elabState.set(uri, { strataSig, groups: elabGroups })
-        else this.#elabState.delete(uri)
+        let model: SemanticModel
+        let typeCache: TypeGroupCache[] | undefined
+        let preRegSig: string | undefined
+        if (elabGroups !== undefined) {
+            const reuseType = elabReused
+                && prior !== undefined
+                && prior.externalSig === externalSig
+                && prior.target === target
+                && parseResult._elementReuse !== undefined
+            const priorType: PriorTypeState | undefined = reuseType
+                ? { reuse: parseResult._elementReuse!, cache: prior!.typeCache, preRegSig: prior!.preRegSig }
+                : undefined
+            const result = incrementalTypecheck(
+                elabTree.program, elabGroups, source, uri, registry,
+                { externalSymbols, target }, priorType,
+            )
+            model = result.model
+            typeCache = result.cache
+            preRegSig = result.preRegSig
+            allDiags.push(...result.diagnostics)
+            this._lastTypecheckReuse = { reused: result.reusedGroups, total: result.totalGroups }
+
+            if (this.#verifyIncremental) {
+                this.#verifyTypecheckAgainstOracle(uri, source, elabTree, registry, externalSymbols, target, result)
+            }
+        } else {
+            // No per-group cache available (parse-error tree) — full oracle path.
+            const checkResult = typecheck(elabTree, registry, { externalSymbols, target })
+            model = checkResult.model
+            allDiags.push(...checkResult.diagnostics)
+        }
+
+        // Cache (or clear) this document's per-element elaboration + type results.
+        if (elabGroups !== undefined && typeCache !== undefined && preRegSig !== undefined) {
+            this.#elabState.set(uri, { strataSig, groups: elabGroups, typeCache, preRegSig, externalSig, target })
+        } else {
+            this.#elabState.delete(uri)
+        }
 
         return {
             uri,
@@ -796,8 +856,62 @@ export class Workspace {
             projectName: project?.name,
             tree: parseResult.tree,
             elabTree,
-            model: checkResult.model,
+            model,
             diagnostics: allDiags,
+        }
+    }
+
+    /** Compare the incremental type-check against a full oracle run and warn on any
+     *  divergence (the model already returned is the incremental one; this is a
+     *  CI/canary tripwire, not a production fallback).
+     *
+     *  Two env vars enable it, with a deliberate difference:
+     *   - `SIGIL_INCREMENTAL_VERIFY=1` also engages the PARSE-layer tripwire, which
+     *     discards an incremental parse on any node mismatch — and a prior typecheck
+     *     dirties reused parse nodes, so reuse is effectively OFF.  This verifies the
+     *     engine's full-capture path == oracle.
+     *   - `SIGIL_E2_VERIFY=1` engages ONLY this semantic tripwire, leaving parse +
+     *     elaboration reuse ON — so it verifies the prefix-REUSE path == oracle.
+     *  The incremental≡fresh equivalence property suite verifies reuse vs a fresh
+     *  Workspace independently of either flag. */
+    readonly #verifyIncremental = typeof process !== 'undefined'
+        && (process.env?.SIGIL_INCREMENTAL_VERIFY === '1' || process.env?.SIGIL_E2_VERIFY === '1')
+
+    #verifyTypecheckAgainstOracle(
+        uri: string,
+        source: string,
+        elabTree: SyntaxTree,
+        registry: ElaboratorRegistry,
+        externalSymbols: ReadonlyMap<string, SiliconType>,
+        target: LowerTarget | undefined,
+        incremental: { model: SemanticModel; diagnostics: Diagnostic[] },
+    ): void {
+        // Build the oracle from an INDEPENDENT fresh parse+elaborate of the same
+        // source, so it cannot mutate the live tree's shared nodes (a tripwire
+        // must observe, not perturb).  Its diagnostics + symbols + per-node types
+        // must equal the incremental result's.
+        const oracleTree = elaborate(parse(source, { file: uri }).tree, registry).tree
+        const oracle = typecheck(oracleTree, registry, { externalSymbols, target })
+        const digest = (model: SemanticModel, root: any, diags: Diagnostic[]): string => {
+            const syms = [...model.allSymbols]
+                .map(s => `${s.name}|${s.kind}|${s.displayString}|${s.definitionSpan?.line ?? '-'}:${s.definitionSpan?.col ?? '-'}|${s.isImplicitlyDeclared}`)
+                .sort().join('\n')
+            const d = diags.map(x => `${x.code}@${x.span.line}:${x.span.col}+${x.span.length}:${x.message}`).sort().join('\n')
+            const types: string[] = []
+            const walk = (n: any): void => {
+                if (n === null || typeof n !== 'object') return
+                const t = model.typeOf(n)
+                types.push(t ? JSON.stringify(t) : '-')
+                for (const c of astChildren(n)) walk(c)
+            }
+            walk(root)
+            return `SYMS\n${syms}\nDIAGS\n${d}\nTYPES\n${types.join(',')}`
+        }
+        const incDigest = digest(incremental.model, elabTree.program, incremental.diagnostics)
+        const oracleDigest = digest(oracle.model, oracleTree.program, oracle.diagnostics)
+        if (incDigest !== oracleDigest) {
+            // eslint-disable-next-line no-console
+            console.error(`[SIGIL_INCREMENTAL_VERIFY] incremental type-check diverged from oracle for ${uri}`)
         }
     }
 

@@ -342,12 +342,45 @@ export default function typecheck(
     // tree once, up front, so the rest of the checker reads `node.sourceLocation`
     // unchanged.  Idempotent while the parser still also writes `sourceLocation`.
     if (positions) stampSourceLocations(program, positions)
-    const typeMap = new WeakMap<object, SiliconType>()
-    const nodeToSymbolName = new WeakMap<object, string>()
-    const symbolToNodes = new Map<string, object[]>()
-    const symbolToSpans = new Map<string, SourceSpan[]>()
-    const definitionNodes = new Map<string, object>()
-    const variantConstructors = new Set<string>()
+    const ctx = createCheckContext(registry, moduleRegistry, target, file, externalSymbols)
+    // Pre-registration pass: seed the function/symbol tables and type alias
+    // table from top-level definitions so forward references resolve correctly.
+    preRegisterDefinitions(program.elements as any[], ctx)
+    for (const element of program.elements as any[]) {
+        checkNode(element, ctx)
+    }
+    const semanticModel = assembleSemanticModel(ctx)
+    return { program, errors: ctx.errors, functions: ctx.functions, typeAliases: ctx.typeAliases, semanticModel }
+}
+
+// ---------------------------------------------------------------------------
+// Incremental-typecheck building blocks (CaaS incremental semantics E2).
+//
+// `typecheck()` above is the canonical full pass and the oracle/fallback for the
+// incremental engine (src/caas/incrementalTypecheck.ts).  These exported pieces
+// let that engine drive the SAME passes — build a context, pre-register, check a
+// top-level element, assemble the model — so a prefix of unchanged elements can
+// be replayed from cache and only the changed suffix re-checked, byte-identically.
+// They are thin extractions of the body above; using them in `typecheck()`'s
+// exact order reproduces it operation-for-operation.
+// ---------------------------------------------------------------------------
+
+/** The mutable type-checking context.  Exposed for the incremental engine. */
+export type { Ctx as CheckContext }
+
+/**
+ * Build a fresh checking context and run the module/std pre-registration passes
+ * (module function signatures first so user functions calling them infer return
+ * types correctly).  Definition pre-registration is a separate call so the
+ * incremental engine can run it over the full element list.
+ */
+export function createCheckContext(
+    registry?: ElaboratorRegistry,
+    moduleRegistry?: ModuleRegistry,
+    target?: import('../ir/lower').LowerTarget,
+    file = '',
+    externalSymbols?: ReadonlyMap<string, SiliconType>,
+): Ctx {
     const ctx: Ctx = {
         file,
         errors: [],
@@ -360,35 +393,35 @@ export default function typecheck(
         variantSchemes: new Map(),
         structFields: new Map(),
         registry,
-        typeMap,
-        nodeToSymbolName,
-        symbolToNodes,
-        symbolToSpans,
-        definitionNodes,
-        variantConstructors,
+        typeMap: new WeakMap<object, SiliconType>(),
+        nodeToSymbolName: new WeakMap<object, string>(),
+        symbolToNodes: new Map<string, object[]>(),
+        symbolToSpans: new Map<string, SourceSpan[]>(),
+        definitionNodes: new Map<string, object>(),
+        variantConstructors: new Set<string>(),
         target,
         externalSymbols,
     }
-    // Pre-registration pass: seed module function signatures first so that
-    // user-defined functions whose bodies call module functions can resolve
-    // the return type correctly via type inference.
     if (moduleRegistry) preRegisterModules(moduleRegistry, ctx)
     preRegisterStdFunctions(ctx)
-    // Pre-registration pass: seed the function/symbol tables and type alias
-    // table from top-level definitions so forward references resolve correctly.
-    preRegisterDefinitions(program.elements as any[], ctx)
-    for (const element of program.elements as any[]) {
-        checkNode(element, ctx)
-    }
-    const semanticModel = new SemanticModel({
-        types: typeMap,
-        nodeToSymbolName,
+    return ctx
+}
+
+/** Type-check one top-level element against `ctx` (the per-element main pass). */
+export function checkElement(element: any, ctx: Ctx): void {
+    checkNode(element, ctx)
+}
+
+/** Assemble the SemanticModel from an accumulated context (pure, O(n)). */
+export function assembleSemanticModel(ctx: Ctx): SemanticModel {
+    return new SemanticModel({
+        types: ctx.typeMap,
+        nodeToSymbolName: ctx.nodeToSymbolName,
         symbols: buildSymbolTable(ctx),
-        symbolToNodes,
-        symbolToSpans,
+        symbolToNodes: ctx.symbolToNodes,
+        symbolToSpans: ctx.symbolToSpans,
         diagnostics: ctx.errors.map(e => toDiagnostic(e)),
     })
-    return { program, errors: ctx.errors, functions: ctx.functions, typeAliases: ctx.typeAliases, semanticModel }
 }
 
 // ---------------------------------------------------------------------------
@@ -509,7 +542,7 @@ function isTypeDeclKeyword(kw: string): boolean {
         || kw === '@struct'
 }
 
-function preRegisterDefinitions(elements: any[], ctx: Ctx): void {
+export function preRegisterDefinitions(elements: any[], ctx: Ctx): void {
     // Sub-pass 1: collect @type_alias and @type_distinct declarations.
     for (const el of elements) {
         const def = extractDefinitionNode(el)
@@ -1556,7 +1589,7 @@ function typeOfNamespace(ns: any, ctx: Ctx): SiliconType {
  * the ephemeral elaborated tree at the start of `typecheck` so the rest of the
  * checker reads `sourceLocation` exactly as before (output-preserving).
  */
-function stampSourceLocations(node: any, positions: PositionTable): void {
+export function stampSourceLocations(node: any, positions: PositionTable): void {
     if (node === null || typeof node !== 'object') return
     if (node.relSpan) {
         const loc = positions.loc(node)
