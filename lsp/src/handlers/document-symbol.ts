@@ -1,50 +1,46 @@
-import type { Connection, TextDocuments } from 'vscode-languageserver/node.js'
-import { SymbolKind as LspKind } from 'vscode-languageserver/node.js'
+import type { Connection, TextDocuments, DocumentSymbol } from 'vscode-languageserver/node.js'
 import type { TextDocument } from 'vscode-languageserver-textdocument'
 import type { Workspace } from '../workspace.ts'
-import type { SymbolEntry, SymbolKind } from '../symbol-index.ts'
-
-const KIND_MAP: Record<SymbolKind, LspKind> = {
-    fn:      LspKind.Function,
-    let:     LspKind.Constant,
-    var:     LspKind.Variable,
-    extern:  LspKind.Function,
-    type:    LspKind.Class,
-    stratum: LspKind.Operator,
-    local:   LspKind.Variable,
-    param:   LspKind.Variable,
-    use:     LspKind.Module,
-}
+import type { CaaSSymbol } from '@silicon/compiler'
+import { spanToRange, symbolKindToLsp } from '../lsp-convert.ts'
 
 export function registerDocumentSymbols(
     connection: Connection,
     _documents: TextDocuments<TextDocument>,
     workspace: Workspace,
 ): void {
-    connection.onDocumentSymbol(({ textDocument }) => {
-        const analysis = workspace.get(textDocument.uri)
-        if (!analysis) return []
+    connection.onDocumentSymbol(({ textDocument }): DocumentSymbol[] => {
+        const doc = workspace.getDoc(textDocument.uri)
+        if (!doc) return []
 
-        // Build a flat list of top-level symbols, each with its enclosed
-        // locals/params nested as children.  VS Code's Outline pane
-        // renders this hierarchically.
-        const tops = analysis.symbols.filter(s => !s.container)
-        return tops.map(top => toLspSymbol(top, childrenOf(top.name, analysis.symbols)))
+        const all = [...doc.model.allSymbols].filter(s => s.definitionSpan)
+        const childrenOf = new Map<CaaSSymbol, CaaSSymbol[]>()
+        const tops: CaaSSymbol[] = []
+        for (const s of all) {
+            const parent = s.containingSymbol
+            if (parent && parent.definitionSpan) {
+                const list = childrenOf.get(parent) ?? []
+                list.push(s)
+                childrenOf.set(parent, list)
+            } else {
+                tops.push(s)
+            }
+        }
+        return tops.map(t => toDocumentSymbol(t, childrenOf))
     })
 }
 
-function childrenOf(parent: string, all: SymbolEntry[]): SymbolEntry[] {
-    return all.filter(s => s.container === parent)
-}
-
-function toLspSymbol(s: SymbolEntry, children: SymbolEntry[]): any {
-    const detail = [s.keyword, s.typeAnnotation].filter(Boolean).join(' ')
+function toDocumentSymbol(
+    sym: CaaSSymbol,
+    childrenOf: Map<CaaSSymbol, CaaSSymbol[]>,
+): DocumentSymbol {
+    const range = spanToRange(sym.definitionSpan!)
     return {
-        name:           s.name,
-        detail,
-        kind:           KIND_MAP[s.kind],
-        range:          s.range,
-        selectionRange: s.selectionRange,
-        children:       children.map(c => toLspSymbol(c, [])),
+        name: sym.name,
+        detail: sym.displayString,
+        kind: symbolKindToLsp(sym.kind),
+        range,
+        selectionRange: range,
+        children: (childrenOf.get(sym) ?? []).map(c => toDocumentSymbol(c, childrenOf)),
     }
 }

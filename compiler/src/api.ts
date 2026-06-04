@@ -36,8 +36,12 @@ export {
     SyntaxWalker,
     SyntaxRewriter,
 
-    // CaaS-2b code action codes
+    // CaaS-2b / CaaS-11 code actions — quick-fix surface for the LSP
     listCodeActionCodes,
+    getCodeActions,
+    applyEdits,
+    type CodeAction,
+    type TextEdit,
 } from './caas/index'
 
 export {

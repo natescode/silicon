@@ -2,9 +2,12 @@
 /**
  * Silicon Language Server — stdio entry point.
  *
- * Spec: docs/language-server-plan.html — v1 alpha covers diagnostics,
- * document symbols, go-to definition, and hover.  See the per-handler
- * files under handlers/ for the implementation of each.
+ * Backed by the compiler's incremental CaaS `Workspace`: every edit reparses
+ * only the damaged window, reuses unchanged elaboration, and replays the
+ * unchanged type-check prefix.  Features (diagnostics, symbols, definition,
+ * hover, completion, references, rename, signature help, formatting, semantic
+ * tokens, code actions) are thin adapters over the compiler's `SemanticModel`
+ * and Workspace navigation API — see the per-handler files under handlers/.
  */
 
 import {
@@ -13,10 +16,18 @@ import {
 } from 'vscode-languageserver/node.js'
 import { TextDocument } from 'vscode-languageserver-textdocument'
 import { Workspace } from './workspace.ts'
+import { SEMANTIC_TOKEN_TYPES } from './lsp-convert.ts'
 import { registerDiagnostics } from './handlers/diagnostics.ts'
 import { registerDocumentSymbols } from './handlers/document-symbol.ts'
 import { registerDefinition } from './handlers/definition.ts'
 import { registerHover } from './handlers/hover.ts'
+import { registerCompletion } from './handlers/completion.ts'
+import { registerReferences } from './handlers/references.ts'
+import { registerRename } from './handlers/rename.ts'
+import { registerSignatureHelp } from './handlers/signature-help.ts'
+import { registerFormatting } from './handlers/formatting.ts'
+import { registerSemanticTokens } from './handlers/semantic-tokens.ts'
+import { registerCodeActions } from './handlers/code-action.ts'
 
 // Default to stdio when no transport flag is passed.  VS Code's
 // LanguageClient supplies --stdio explicitly; CLI / smoke tests don't.
@@ -37,12 +48,22 @@ connection.onInitialize(() => ({
         documentSymbolProvider: true,
         definitionProvider: true,
         hoverProvider: true,
+        completionProvider: { triggerCharacters: ['&', '@', ':'] },
+        referencesProvider: true,
+        renameProvider: true,
+        signatureHelpProvider: { triggerCharacters: ['(', ',', ' '] },
+        documentFormattingProvider: true,
+        codeActionProvider: true,
+        semanticTokensProvider: {
+            legend: { tokenTypes: SEMANTIC_TOKEN_TYPES, tokenModifiers: [] },
+            full: true,
+        },
     },
-    serverInfo: { name: 'silicon-lsp', version: '0.1.0' },
+    serverInfo: { name: 'silicon-lsp', version: '0.2.0' },
 }))
 
 connection.onInitialized(() => {
-    connection.console.info('silicon-lsp initialised')
+    connection.console.info('silicon-lsp initialised (incremental engine)')
 })
 
 // Wire up handlers.  Each registration attaches its own document /
@@ -51,6 +72,13 @@ registerDiagnostics(connection, documents, workspace)
 registerDocumentSymbols(connection, documents, workspace)
 registerDefinition(connection, documents, workspace)
 registerHover(connection, documents, workspace)
+registerCompletion(connection, documents, workspace)
+registerReferences(connection, documents, workspace)
+registerRename(connection, documents, workspace)
+registerSignatureHelp(connection, documents, workspace)
+registerFormatting(connection, documents, workspace)
+registerSemanticTokens(connection, documents, workspace)
+registerCodeActions(connection, documents, workspace)
 
 documents.listen(connection)
 connection.listen()

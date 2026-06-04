@@ -33,7 +33,8 @@ const send = (msg: any) => {
     child.stdin.write(`Content-Length: ${Buffer.byteLength(body)}\r\n\r\n${body}`)
 }
 
-const sample = `@fn add a:Int, b:Int := { a + b };
+const sample = `\\\\ add (Int, Int) -> Int
+@fn add a, b := { a + b };
 
 @fn main := { &add 20, 22 };
 `
@@ -52,11 +53,11 @@ send({
 })
 send({
     jsonrpc: '2.0', id: id++, method: 'textDocument/definition',
-    params: { textDocument: { uri }, position: { line: 2, character: 17 } },
+    params: { textDocument: { uri }, position: { line: 3, character: 16 } },
 })
 send({
     jsonrpc: '2.0', id: id++, method: 'textDocument/hover',
-    params: { textDocument: { uri }, position: { line: 2, character: 17 } },
+    params: { textDocument: { uri }, position: { line: 3, character: 16 } },
 })
 await new Promise(r => setTimeout(r, 800))
 
@@ -65,7 +66,7 @@ for (const m of messages) {
     if (m.method === 'textDocument/publishDiagnostics') {
         console.log(`  diagnostics: ${(m.params.diagnostics ?? []).length} entry/ies`)
     } else if (typeof m.id === 'number') {
-        const tag = JSON.stringify(m.result).slice(0, 180)
+        const tag = JSON.stringify(m.result).slice(0, 400)
         console.log(`  id=${m.id} result: ${tag}`)
     }
 }

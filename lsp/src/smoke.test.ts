@@ -39,10 +39,10 @@ describe('Silicon LSP — v1 alpha', () => {
         expect(out).toContain('definitionProvider":true')
         expect(out).toContain('hoverProvider":true')
 
-        // Symbol index returned `add` with a non-zero selectionRange.
-        expect(out).toMatch(/"name":"add".*"selectionRange":\{"start":\{"line":0,"character":[1-9]/)
+        // Document symbols returned `add`, defined on source line 2 (0-based 1).
+        expect(out).toMatch(/"name":"add".*"selectionRange":\{"start":\{"line":1,"character":[1-9]/)
 
-        // Hover markdown mentions @fn keyword.
-        expect(out).toContain('@fn')
+        // Hover markdown shows the resolved signature.
+        expect(out).toContain('fn add')
     }, 30_000)
 })
