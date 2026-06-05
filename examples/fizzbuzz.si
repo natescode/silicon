@@ -1,0 +1,27 @@
+# examples/fizzbuzz.si — the classic, in Silicon.
+#
+# Shows control flow (@loop, nested @if), modulo, and the standard library's
+# number formatting (num::int_to_str via io::print_int).
+#
+#   sgl run examples/fizzbuzz.si
+
+@use 'io';
+
+\\ fizzbuzz (Int) -> Int
+@fn fizzbuzz n := {
+    @var i := 1;
+    &@loop i <= n, {
+        @local by3 := (i % 3) == 0;
+        @local by5 := (i % 5) == 0;
+        &@if by3, {
+            &@if by5, { &print 'FizzBuzz' }, { &print 'Fizz' };
+        }, {
+            &@if by5, { &print 'Buzz' }, { &print_int i };
+        };
+        i = i + 1;
+    };
+    0
+};
+
+@fn main := { &fizzbuzz 15 };
+&main;

@@ -1,0 +1,28 @@
+# examples/calculator.si — read two numbers from stdin and do arithmetic.
+#
+# Shows interactive input: io::read_line + num::str_to_int, then formatted
+# output.  Pipe input in, or type it when run in a terminal:
+#
+#   printf '6\n7\n' | sgl run examples/calculator.si
+
+@use 'io';
+@use 'num';
+
+@fn main := {
+    &print_str 'first number:  ';
+    @local a := &str_to_int (&read_line);
+    &print_str 'second number: ';
+    @local b := &str_to_int (&read_line);
+
+    &print ('sum:      ' ++ (&int_to_str (a + b)));
+    &print ('product:  ' ++ (&int_to_str (a * b)));
+    &print ('max:      ' ++ (&int_to_str (&int_max a, b)));
+    &@if b != 0, {
+        &print ('quotient: ' ++ (&int_to_str (a / b)));
+        &print ('remainder:' ++ (&int_to_str (a % b)));
+    }, {
+        &print 'quotient: (division by zero)';
+    };
+    0
+};
+&main;

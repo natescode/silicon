@@ -1,0 +1,24 @@
+# examples/bun_stdlib.si — the portable stdlib on the JS host (bun platform).
+#
+# The pure stdlib modules (num, str) are platform-agnostic: they compile on
+# native/WASI, bun, and web alike.  Here they run under the JS host and the
+# results are logged with the web:: console surface.
+#
+#   sgl run --platform=bun examples/bun_stdlib.si
+
+@use 'num';
+@use 'str';
+
+@fn main := {
+    @local greeting := 'Silicon' ++ ' on ' ++ 'bun';
+    &web::console_log_str greeting;
+    &web::console_log_str (&int_to_str (&int_pow 2, 16));     # 65536
+    &web::console_log_str (&str_repeat '-', 16);
+    &@if (&str_contains greeting, 'bun'), {
+        &web::console_log_str 'contains "bun": yes';
+    }, {
+        &web::console_log_str 'contains "bun": no';
+    };
+    0
+};
+&main;
