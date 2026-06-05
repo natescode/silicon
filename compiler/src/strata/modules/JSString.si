@@ -22,3 +22,9 @@
 @extern { \\ substring (JSString, Int, Int) -> JSString }
 @extern { \\ fromCharCode (Int) -> JSString }
 @extern { \\ fromCodePoint (Int) -> JSString }
+
+# Bridge to/from Silicon's linear-memory UTF-8 `String` (host-provided, module
+# `"js-bridge"`).  `fromString` copies linear bytes into a JS string; `toString`
+# encodes a JS string back into a fresh linear-memory `String`.
+@extern { \\ fromString (String) -> JSString }
+@extern { \\ toString (JSString) -> String }

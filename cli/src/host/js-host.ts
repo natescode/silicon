@@ -43,10 +43,10 @@ function buildImports(state: HostState, write: (s: string) => void) {
             print: (v: number) => { if (v === 10) flush(); else buf.push(v) },
             read: () => 0,
         },
-        // String↔JSString bridge (W4): linear String ⇄ JS string (externref).
+        // String↔JSString bridge: linear `String` ⇄ JS string (externref).
         'js-bridge': {
-            string_to_js: (ptr: number) => readLenString(ptr),
-            js_to_string: (s: string) => allocLenString(s),
+            fromString: (ptr: number) => readLenString(ptr),
+            toString: (s: string) => allocLenString(s),
         },
         // Base Browser/Bun API surface — externref-typed; users extend via @extern.
         console: {

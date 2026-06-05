@@ -36,6 +36,10 @@ const IMPORT_ENV_OVERRIDE: Record<string, string> = {
     JSString: 'wasm:js-string',
 }
 
+/** `JSString::` functions that are the host String↔JSString bridge (import
+ *  module `"js-bridge"`), not standardized `wasm:js-string` builtins. */
+const JSSTRING_BRIDGE_FNS = new Set(['fromString', 'toString'])
+
 // ---------------------------------------------------------------------------
 // Lowering context
 // ---------------------------------------------------------------------------
@@ -89,6 +93,8 @@ interface LowerCtx {
      *  collapse to no-ops because the engine GC owns reclamation).
      *  Defaults to 'host' (Phase 9c bump-allocator semantics). */
     target: LowerTarget
+    /** Host platform (web/bun = JS host; gates JSString / js-string builtins). */
+    platform: LowerPlatform
     /** Phase 9d-7: registry of WasmGC struct/array type declarations
      *  populated as the program is lowered.  Drained into
      *  `IRModule.wasmGcTypes` at the end of `lowerProgram`.  Only
@@ -254,6 +260,7 @@ export function lowerProgram(
         structLocals: new Map(),
         funcrefTable: { entries: [], signatures: [] },
         target,
+        platform: options.platform ?? 'native',
         wasmGcTypes: new WasmGcTypeRegistry(),
     }
     // Pass the live ctx (not a snapshot) so $compiler is current when
@@ -1331,6 +1338,17 @@ function lowerModuleCall(name: string, sepIdx: number, n: any, ctx: LowerCtx): I
         )
     }
 
+    // JS String Builtins need a JS host: gate JSString + any externref-typed
+    // module on `--platform=web|bun` (wasmtime / native can't provide them).
+    const usesExternref = moduleName === 'JSString'
+        || fnSig.siliconResult === 'JSString' || fnSig.siliconParams.includes('JSString')
+    if (usesExternref && ctx.platform !== 'web' && ctx.platform !== 'bun') {
+        throw new IRLowerError(
+            `'${moduleName}::${funcName}' uses JSString (JS String Builtins) — ` +
+            `compile with --platform=web or --platform=bun (sgl.toml: [build] platform = "bun").`
+        )
+    }
+
     // WAT internal name: module__function (double-underscore avoids collision with user names)
     const watName = `${moduleName}__${funcName}`
 
@@ -1338,7 +1356,11 @@ function lowerModuleCall(name: string, sepIdx: number, n: any, ctx: LowerCtx): I
     if (!ctx.pendingImports.has(watName)) {
         // JS-host modules whose import-module string differs from the call prefix
         // (e.g. `&JSString::concat` → `(import "wasm:js-string" "concat" …)`).
-        const env = IMPORT_ENV_OVERRIDE[moduleName] ?? moduleName
+        // The String↔JSString bridge functions are host-provided (`js-bridge`),
+        // not standardized builtins.
+        const env = JSSTRING_BRIDGE_FNS.has(funcName) && moduleName === 'JSString'
+            ? 'js-bridge'
+            : IMPORT_ENV_OVERRIDE[moduleName] ?? moduleName
 
         // JSString-typed params/results become `externref` / `(ref extern)` slots
         // (JS String Builtins).  String params are nullable `externref`; a

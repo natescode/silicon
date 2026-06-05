@@ -59,6 +59,34 @@ describe('W2/W3: JSString via wasm:js-string builtins (Bun)', () => {
         expect(out).toBe('Hi')
     })
 
+    test('String↔JSString bridge round-trips', async () => {
+        const bin = buildBun(`\\\\ rt () -> Int
+@fn rt := {
+  \\\\ js JSString
+  @local js := &JSString::fromString 'hi there';
+  \\\\ back String
+  @local back := &JSString::toString js;
+  &str_len back
+};
+@export rt;`)
+        const state: any = {}
+        const readLen = (p: number) => { const v = new DataView(state.mem.buffer); const n = v.getInt32(p, true); return new TextDecoder().decode(new Uint8Array(state.mem.buffer, p + 4, n)) }
+        const allocLen = (s: string) => { const b = new TextEncoder().encode(s); const p = state.alloc(4 + b.length); new DataView(state.mem.buffer).setInt32(p, b.length, true); new Uint8Array(state.mem.buffer, p + 4, b.length).set(b); return p }
+        const mod = await WebAssembly.compile(bin, { builtins: ['js-string'] } as any)
+        const inst = await WebAssembly.instantiate(mod, { env: { print: () => {}, read: () => 0 }, 'js-bridge': { fromString: readLen, toString: allocLen } })
+        state.mem = (inst.exports as any).memory; state.alloc = (inst.exports as any).alloc
+        expect((inst.exports as any).rt()).toBe(8)   // str_len(toString(fromString("hi there")))
+    })
+
+    test('JSString on platform=native is a clean error (not a silent miscompile)', () => {
+        const mods = loadModules(ROOT)
+        const r = compile(`\\\\ f () -> Int
+@fn f := &JSString::length (&JSString::fromCodePoint 65);
+@export f;`, { file: 'm.si', moduleRegistry: mods, target: 'host', platform: 'native', emitBinary: true } as any)
+        expect(r.diagnostics.length).toBeGreaterThan(0)
+        expect(r.diagnostics.some((d: any) => /JSString|--platform/.test(d.message))).toBe(true)
+    })
+
     test('emits the wasm:js-string import module + externref signature', () => {
         const mods = loadModules(ROOT)
         const r = compile(`\\\\ f (Int) -> Int
