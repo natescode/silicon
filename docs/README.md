@@ -27,6 +27,7 @@ If you're new, start with [`getting-started.md`](getting-started.md).
 | [compiler-api.md](compiler-api.md) | The `&Compiler::*` surface that strata bodies call |
 | [compiler-as-a-service.md](compiler-as-a-service.md) | The library-first compiler API (Roslyn-style) |
 | [caas-roslyn-parity.md](caas-roslyn-parity.md) | CaaS gap tracker — what's left to reach Roslyn-level IDE API coverage |
+| [js-string-builtins.md](js-string-builtins.md) | The `JSString` type, WASM JS String Builtins, and the web/bun platform (`--platform`) |
 | [api-boundaries.md](api-boundaries.md) | Per-subsystem import rules; public vs internal |
 | [struct-design.md](struct-design.md) | `@struct` design and layout rules |
 | [extern-out-pointer.md](extern-out-pointer.md) | `@extern` out-pointer ABI |
