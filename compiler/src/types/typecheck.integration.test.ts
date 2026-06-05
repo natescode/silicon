@@ -237,6 +237,15 @@ test('@var binding can be reassigned', () => {
     expect(errors).toHaveLength(0)
 })
 
+test('a mutable @var local shadows a same-named top-level @fn for assignment', () => {
+    // Regression: a top-level `@fn out` marked `out` immutable globally, so a
+    // later local `@var out` inside another function could not be reassigned.
+    const { errors } = check(
+        '\\\\ out () -> Int\n@fn out := 0;\n' +
+        '\\\\ build () -> Int\n@fn build := { @var out := 1; out = 2; out };')
+    expect(errors).toHaveLength(0)
+})
+
 // ------------------------------------------------------------------
 // String equality
 // ------------------------------------------------------------------

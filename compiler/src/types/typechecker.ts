@@ -137,6 +137,12 @@ interface Ctx {
     // Names of immutable bindings (@let, @fn, @extern). Assignment to these is
     // a type error.
     immutable: Set<string>
+    // Names ever declared as a mutable binding (@var / @local). A mutable local
+    // shadows a same-named top-level immutable for assignment purposes, so the
+    // immutable check is suppressed when the name also appears here. The symbol
+    // table is flat (no lexical scopes), so this only ever *loosens* the check —
+    // it never introduces a false ImmutableAssignment.
+    mutable: Set<string>
     // User-defined type names from @type_alias and @type_distinct declarations.
     // Passed to parseTypeName so annotations like `x: age` resolve correctly.
     typeAliases: Map<string, SiliconType>
@@ -387,6 +393,7 @@ export function createCheckContext(
         symbols: new Map(),
         functions: new Map(),
         immutable: new Set(),
+        mutable: new Set(),
         typeAliases: new Map(),
         typeVars: new Set(),
         fresh: makeFreshGen(),
@@ -600,6 +607,8 @@ export function preRegisterDefinitions(elements: any[], ctx: Ctx): void {
         const isMutable = hook === 'global' || kw === '@var'
         if (!isMutable) {
             ctx.immutable.add(def.name.name)
+        } else {
+            ctx.mutable.add(def.name.name)
         }
 
         // CaaS-3: record definition node for symbol table construction.
@@ -981,7 +990,8 @@ function checkAssignment(a: any, ctx: Ctx): SiliconType {
     const path: string[] = target && target.path ? target.path : []
     const key = path.join('::')
 
-    if (ctx.immutable.has(key)) {
+    // A mutable local (@var/@local) shadows a same-named top-level immutable.
+    if (ctx.immutable.has(key) && !ctx.mutable?.has(key)) {
         ctx.errors.push(immutableAssignment(key, a.sourceLocation))
         return valueT
     }
@@ -1098,6 +1108,8 @@ function checkDefinition(d: any, ctx: Ctx): SiliconType {
         const isMutable = hook === 'global' || hook === 'local' || keyword === '@var' || keyword === '@local'
         if (!isMutable) {
             ctx.immutable.add(d.name.name)
+        } else {
+            ctx.mutable.add(d.name.name)
         }
     }
     ctx.typeVars = savedTypeVars
