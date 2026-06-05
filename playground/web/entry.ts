@@ -19,7 +19,7 @@ import {
     compileToWasm,
     elaborate, buildStrataRegistry,
     typecheck, formatTypeError, formatType, wasmTypeOf, type FunctionSig,
-    loadModules,
+    loadModules, inlineStdlibUses,
     loadPlatform, getRequiredExports, type PlatformConfig,
 } from '@silicon/compiler/pipeline'
 
@@ -104,7 +104,11 @@ function toBase64(bytes: Uint8Array): string {
 }
 
 async function compile(req: CompileRequest) {
-    const source = req.source ?? ''
+    // Inline bare-name stdlib `@use` directives (browser-safe textual
+    // expansion of the bundled module sources) so playground programs can
+    // pull in `num` / `str` / `mem` etc. — the full filesystem `@use`
+    // resolver is not part of the browser bundle.
+    const source = inlineStdlibUses(req.source ?? '')
     const target = req.target && req.target !== 'host' ? req.target : undefined
     const platformConfig: PlatformConfig | undefined = req.platform
         ? { platform: req.platform as PlatformConfig['platform'], features: req.features ?? [] }

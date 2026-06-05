@@ -26,4 +26,5 @@ export {
 } from './types'
 export { siliconGrammar } from './grammar'
 export { loadModules } from './modules'
+export { inlineStdlibUses } from './modules/inlineUses'
 export { loadPlatform, getRequiredExports, type PlatformConfig } from './platforms'

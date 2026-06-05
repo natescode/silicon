@@ -314,6 +314,46 @@ button:disabled { opacity: 0.4; cursor: not-allowed; }
   flex: 1; overflow-y: auto; min-height: 120px;
 }
 #html-out:empty { display: none; }
+
+/* ── Cheatsheet side panel (left, collapsible) ──────────────────────────── */
+.cheatsheet-panel {
+  display: flex; flex-direction: row;
+  flex-shrink: 0; width: 270px;
+  border-right: 1px solid var(--border);
+  background: var(--surface);
+  overflow: hidden;
+  transition: width 0.2s ease;
+}
+.cheatsheet-panel.collapsed { width: 30px; }
+.cheatsheet-toggle {
+  flex-shrink: 0; width: 30px;
+  border: none; border-right: 1px solid var(--border);
+  background: var(--surface); color: var(--muted);
+  cursor: pointer; font-size: 0.78rem; letter-spacing: 0.08em;
+  writing-mode: vertical-rl; text-orientation: mixed;
+  padding: 10px 0; user-select: none;
+}
+.cheatsheet-toggle:hover { background: var(--surface2); color: var(--text); }
+.cheatsheet-body { flex: 1; min-width: 0; overflow-y: auto; padding: 10px 12px; }
+.cheatsheet-panel.collapsed .cheatsheet-body { display: none; }
+.cheat-title { font-weight: 700; color: var(--accent); font-size: 0.9rem; margin-bottom: 4px; }
+.cheat-note { color: var(--muted); font-size: 0.72rem; line-height: 1.45; margin-bottom: 8px; }
+.cheat-section { border-bottom: 1px solid var(--border); }
+.cheat-section > summary {
+  cursor: pointer; padding: 7px 2px; color: var(--blue);
+  font-weight: 600; font-size: 0.8rem; list-style: none; user-select: none;
+}
+.cheat-section > summary::-webkit-details-marker { display: none; }
+.cheat-section > summary::before { content: '▸ '; color: var(--muted); }
+.cheat-section[open] > summary::before { content: '▾ '; }
+.cheat-section pre {
+  font-family: var(--mono); font-size: 0.71rem; line-height: 1.5;
+  background: var(--bg); border: 1px solid var(--border); border-radius: 4px;
+  padding: 6px 8px; margin: 2px 0 8px; white-space: pre-wrap;
+  color: var(--text); overflow-x: auto;
+}
+.cheat-section pre b { color: var(--green); font-weight: 600; }
+.cheat-section pre i { color: var(--wat-comment); font-style: normal; }
 </style>
 </head>
 <body>
@@ -321,22 +361,42 @@ button:disabled { opacity: 0.4; cursor: not-allowed; }
 <header>
   <div class="logo">⬡ Sigil <span>Playground</span></div>
   <select id="example-select">
-    <option value="hello_world" selected>Hello World</option>
-    <option value="empty">Empty</option>
-    <option value="hypotenuse">Hypotenuse</option>
-    <option value="fibonacci">Fibonacci</option>
-    <option value="factorial">Factorial</option>
-    <option value="safe_divide">Safe Divide</option>
-    <option value="countdown">Countdown</option>
-    <option value="color_match">Color Match</option>
-    <option value="bitwise">Bitwise Ops</option>
-    <option value="math_sampler">Math Sampler</option>
-    <option value="simple_main">Simple Main</option>
-    <option value="html_todo">HTML TODO</option>
-    <option value="snake">Snake</option>
-    <option value="structs">Structs</option>
-    <option value="wasm_gc">WasmGC Sum Type</option>
-    <option value="gc_vec">WasmGC Vec (array)</option>
+    <optgroup label="Basics">
+      <option value="hello_world" selected>Hello World</option>
+      <option value="simple_main">Main + helpers</option>
+    </optgroup>
+    <optgroup label="Control flow">
+      <option value="countdown">Loop / countdown</option>
+      <option value="fibonacci">Fibonacci</option>
+      <option value="factorial">Factorial</option>
+      <option value="safe_divide">Safe divide / @return</option>
+    </optgroup>
+    <optgroup label="Operators">
+      <option value="bitwise">Bitwise ops</option>
+    </optgroup>
+    <optgroup label="Data types">
+      <option value="structs">Structs</option>
+      <option value="color_match">Sum type / match</option>
+      <option value="wasm_gc">Option (wasm-gc)</option>
+    </optgroup>
+    <optgroup label="Standard library">
+      <option value="stdlib_numbers">num — numbers</option>
+      <option value="stdlib_strings">str — strings</option>
+    </optgroup>
+    <optgroup label="Math (web)">
+      <option value="hypotenuse">Hypotenuse</option>
+      <option value="math_sampler">Math sampler</option>
+    </optgroup>
+    <optgroup label="Collections">
+      <option value="gc_vec">Vec[Int] (wasm-gc)</option>
+    </optgroup>
+    <optgroup label="Platform / graphics">
+      <option value="html_todo">HTML render</option>
+      <option value="snake">Snake (canvas)</option>
+    </optgroup>
+    <optgroup label="—">
+      <option value="empty">Empty</option>
+    </optgroup>
   </select>
   <select id="theme-select">
     <option value="sigil-dark" selected>Sigil Dark</option>
@@ -370,6 +430,74 @@ button:disabled { opacity: 0.4; cursor: not-allowed; }
 </header>
 
 <div class="layout">
+
+  <!-- Cheatsheet (left, collapsible) — quick reference for playground-supported APIs -->
+  <div class="cheatsheet-panel" id="cheatsheet-panel">
+    <button class="cheatsheet-toggle" id="cheatsheet-toggle" title="Toggle cheatsheet">◧ Cheatsheet</button>
+    <div class="cheatsheet-body">
+      <div class="cheat-title">Cheatsheet</div>
+      <p class="cheat-note">APIs &amp; stdlib functions you can use here. The examples menu (top-left) follows the <b>language overview</b>. <code>&amp;</code> calls, <code>@</code> defines.</p>
+
+      <details class="cheat-section" open><summary>Output (web)</summary><pre>&amp;<b>web::console_log_str</b> 'hi'   <i># → console</i>
+&amp;<b>web::console_log</b> 42       <i># Int</i>
+&amp;<b>web::set_html</b> '&lt;b&gt;x&lt;/b&gt;'  <i># HTML panel</i></pre></details>
+
+      <details class="cheat-section"><summary>Variables</summary><pre>@let x := 5;      <i># immutable</i>
+@local y := 0;    <i># local</i>
+@var z := 0;      <i># mutable</i>
+z = z + 1;</pre></details>
+
+      <details class="cheat-section"><summary>Operators</summary><pre>+  -  *  /  %     <i># arithmetic</i>
+== != &lt; &lt;= &gt; &gt;=    <i># compare → Bool</i>
+||                <i># logical OR</i>
+&amp; | ^ &lt;&lt; &gt;&gt;        <i># bitwise</i>
+'a' ++ 'b'        <i># concat</i></pre></details>
+
+      <details class="cheat-section"><summary>Control flow</summary><pre>&amp;@if c, { … }, { … };
+&amp;@loop c, { … };
+&amp;@return v;
+&amp;@match s, $A v =&gt; v, $B =&gt; 0</pre></details>
+
+      <details class="cheat-section"><summary>Functions</summary><pre>\\ add (Int, Int) -&gt; Int
+@fn add a, b := { a + b };
+&amp;add 2, 3;
+@export add;</pre></details>
+
+      <details class="cheat-section"><summary>Structs &amp; sum types</summary><pre>@struct Point x Int, y Int;
+@local p := &amp;Point 3, 4;  p.x
+
+@type Shape := $Circle r Int | $Sq s Int;
+@enum Color := Red | Green | Blue;</pre></details>
+
+      <details class="cheat-section"><summary>stdlib: <code>num</code></summary><pre><i># @use 'num';</i>
+&amp;<b>int_to_str</b> 42        <i># "42"</i>
+&amp;<b>str_to_int</b> '42'      <i># 42</i>
+&amp;<b>int_min</b> a,b  &amp;<b>int_max</b> a,b
+&amp;<b>int_abs</b> n  &amp;<b>int_clamp</b> x,lo,hi
+&amp;<b>int_pow</b> 2,10        <i># 1024</i>
+&amp;<b>float_sqrt</b> f  &amp;<b>float_to_str</b> f</pre></details>
+
+      <details class="cheat-section"><summary>stdlib: <code>str</code></summary><pre><i># @use 'str';</i>
+&amp;<b>str_eq</b> a,b   &amp;<b>str_byte_len</b> s
+&amp;<b>str_contains</b> s,sub
+&amp;<b>str_starts_with</b> s,p
+&amp;<b>str_ends_with</b> s,p
+&amp;<b>str_index_of</b> s,sub   <i># or -1</i>
+&amp;<b>str_slice</b> s,0,5
+&amp;<b>str_repeat</b> '=',10</pre></details>
+
+      <details class="cheat-section"><summary>Web math &amp; canvas</summary><pre>&amp;<b>web::math_sqrt</b> x  <b>math_pow</b> a,b
+&amp;<b>web::math_sin</b>/<b>cos</b>/<b>log</b> x
+&amp;<b>web::math_random</b>
+&amp;<b>web::canvas_set_fill</b> r,g,b
+&amp;<b>web::canvas_fill_rect</b> x,y,w,h</pre></details>
+
+      <details class="cheat-section"><summary>Builtins</summary><pre>&amp;<b>alloc_string</b> n  &amp;<b>str_ptr</b> s  &amp;<b>str_len</b> s
+&amp;<b>WASM::i32_load8_u</b> p
+&amp;<b>WASM::i32_store8</b> p, b
+@true   @false   &amp;@toInt f   &amp;@toFloat n</pre></details>
+    </div>
+  </div>
 
   <div class="main-area">
     <div class="editors">
@@ -637,6 +765,42 @@ const editorView = new EditorView({
 
 const EXAMPLES = {
     empty: '',
+
+    stdlib_numbers:
+`# Standard library — numbers (the 'num' module).
+# @use pulls a stdlib module into your program. Call demo() below.
+
+@use 'num';
+
+\\\\ demo () -> Int
+@fn demo := {
+    &web::console_log_str (&int_to_str (&int_pow 2, 10));   # 1024
+    &web::console_log_str (&int_to_str (&int_max 3, 99));   # 99
+    &web::console_log_str (&int_to_str (&str_to_int '-42')); # -42
+    &web::console_log_str (&float_to_str (&float_sqrt 2.0)); # 1.414…
+    &int_pow 2, 10
+};
+
+@export demo;`,
+
+    stdlib_strings:
+`# Standard library — strings (the 'str' module).
+# Byte-level UTF-8 helpers. Call demo() below (→ index of "play" = 7).
+
+@use 'str';
+
+\\\\ demo () -> Int
+@fn demo := {
+    @local s := 'hello, playground';
+    &web::console_log_str (&str_slice s, 0, 5);            # hello
+    &@if (&str_contains s, 'play'), {
+        &web::console_log_str 'contains "play"';
+    }, {};
+    &web::console_log_str (&str_repeat '=', 12);
+    &str_index_of s, 'play'
+};
+
+@export demo;`,
 
     hello_world:
 `# Concatenate a greeting string and print it to the console.
@@ -988,6 +1152,11 @@ const EXAMPLE_TARGETS = {
     wasm_gc: 'wasm-gc',
     gc_vec:  'wasm-gc',
 }
+
+// Cheatsheet side panel — collapse / expand.
+document.getElementById('cheatsheet-toggle').addEventListener('click', () => {
+    document.getElementById('cheatsheet-panel').classList.toggle('collapsed')
+})
 
 document.getElementById('example-select').addEventListener('change', e => {
     const key = e.target.value
