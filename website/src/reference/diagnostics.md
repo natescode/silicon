@@ -49,7 +49,7 @@ E0004 [typecheck] main.si:7:5: unbound identifier 'aloc'
 | E0004 | UnboundIdentifier   | Reference to a name not in scope.  Carries a "did you mean" hint when a close candidate is known. |
 | E0005 | HeterogeneousArray  | Array literal elements do not all share the same type. |
 | E0006 | Annotation          | Initialiser type does not match the declared annotation. |
-| E0007 | ImmutableAssignment | Assignment to a binding declared immutable (`@let`, `@fn`, `@extern`). |
+| E0007 | ImmutableAssignment | Assignment to a binding declared immutable (`@global`, `@fn`, `@extern`). |
 | E0008 | MissingReturn       | Function with an explicit non-void return annotation has a body that may not produce a value. |
 | E0009 | ArityMismatch       | Call site passed the wrong number of arguments. |
 

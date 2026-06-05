@@ -42,7 +42,7 @@ That registration lets `1 + 2;` compile correctly. Once the constraint StrataTyp
 
 ## Definition-Kind Strata
 
-`@let`, `@fn`, `@var`, `@extern`, `@local`, `@enum`, `@type_alias`, `@type_distinct`, `@export`, `@platform` are all definition keywords whose lowering is contributed by strata in `src/strata/defkinds.si` and `src/strata/metadata.si`. Each one references an `IR::*` intrinsic (see `src/ir/irKinds.ts`); the elaborator stamps the matching `CodegenKind` onto the AST Definition node, and the lowering walker picks the corresponding def-expander from the registry.
+`@global`, `@fn`, `@local`, `@extern`, `@local`, `@enum`, `@type_alias`, `@type_distinct`, `@export`, `@platform` are all definition keywords whose lowering is contributed by strata in `src/strata/defkinds.si` and `src/strata/metadata.si`. Each one references an `IR::*` intrinsic (see `src/ir/irKinds.ts`); the elaborator stamps the matching `CodegenKind` onto the AST Definition node, and the lowering walker picks the corresponding def-expander from the registry.
 
 ## Bootstrap Notes
 

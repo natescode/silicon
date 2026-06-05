@@ -8,14 +8,14 @@ When you need shared ownership but don't want to pay the cost of a real
 GC, `Rc<T>` (single-threaded reference count) is in the stdlib:
 
 ```silicon
-@use 'stdlib/rc.si';
+@use 'rc';
 
-@struct Node value:Int, next:Rc[Node];
+@struct Node value Int, next Rc[Node];
 
 @fn main := {
-    @global tail:Rc[Node] := &Rc::new (&Node 3, &Rc::nil);
-    @global mid:Rc[Node]  := &Rc::new (&Node 2, &Rc::clone &tail);
-    @global head:Rc[Node] := &Rc::new (&Node 1, &Rc::clone &mid);
+    @global tail := &Rc::new (&Node 3, &Rc::nil);
+    @global mid  := &Rc::new (&Node 2, &Rc::clone &tail);
+    @global head := &Rc::new (&Node 1, &Rc::clone &mid);
     # head, mid, tail all share ownership of tail
     0
 };

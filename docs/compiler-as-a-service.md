@@ -18,7 +18,7 @@ re-exported from `src/api.ts`.
 ```typescript
 import { compile } from './src/api'
 
-const { wat, diagnostics } = compile('@fn answer:Int := { 42 };')
+const { wat, diagnostics } = compile('\\ answer () -> Int\n@fn answer := { 42 };')
 if (diagnostics.length) { /* handle errors */ }
 // wat contains WebAssembly Text Format output
 ```
@@ -614,8 +614,9 @@ ParseResult   ElabResult   CheckResult   LowerResult   CompileResult
 import { parse, buildRegistry, elaborate, typecheck, lower } from './src/api'
 
 const source = `
-@fn add x:Int, y:Int := { x + y };
-@global result:Int := &add 1, 2;
+\\ add (Int, Int) -> Int
+@fn add x, y := { x + y };
+@global result := &add 1, 2;
 `
 
 // 1. Parse

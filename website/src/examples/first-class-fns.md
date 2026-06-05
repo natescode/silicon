@@ -7,19 +7,22 @@ title: First-class functions
 Functions are values:
 
 ```silicon
-@fn add a:Int, b:Int := { a + b };
-@fn sub a:Int, b:Int := { a - b };
+\\ add (Int, Int) -> Int
+@fn add a, b := { a + b };
+\\ sub (Int, Int) -> Int
+@fn sub a, b := { a - b };
 
-@fn apply f:$fn _:Int _:Int _:Int, x:Int, y:Int := { &f x, y };
+\\ apply ($fn (Int, Int) -> Int, Int, Int) -> Int
+@fn apply f, x, y := { &f x, y };
 
 @fn main := {
-    @global s:Int := &apply add, 3, 4;        # 7
-    @global d:Int := &apply sub, 10, 4;       # 6
+    @global s := &apply add, 3, 4;        # 7
+    @global d := &apply sub, 10, 4;       # 6
     s + d                                  # 13
 };
 ```
 
-`:$fn _:Int _:Int _:Int` is the parameter-type annotation — a function
+`$fn (Int, Int) -> Int` is the parameter-type annotation — a function
 taking `(Int, Int)` and returning `Int`.
 
 Indirect calls compile to `call_indirect` over the function reference
@@ -29,11 +32,12 @@ site.
 `Vec[T]::map` uses this:
 
 ```silicon
-@fn double n:Int := { n * 2 };
+\\ double (Int) -> Int
+@fn double n := { n * 2 };
 
 @fn main := {
-    @global v:Vec[Int] := &Vec::from_array [1, 2, 3, 4];
-    @global doubled:Vec[Int] := &Vec::map &v, double;
+    @global v := &Vec::from_array [1, 2, 3, 4];
+    @global doubled := &Vec::map &v, double;
     0
 };
 ```

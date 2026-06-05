@@ -284,7 +284,7 @@ The complete strata, end to end, for the `@local` definition kind:
 };
 ```
 
-What happens when `@local x:Int := 5;` is encountered:
+What happens when a `\\ x Int` annotated `@local x := 5;` is encountered:
 
 1. `Node` is the `Definition` AST node (`{type: 'Definition', keyword: '@local', name: {name: 'x', typeAnnotation: {typename: 'Int'}}, binding: …}`).
 2. `wasmType` ← `'i32'` (from `resolveType` of the `Int` annotation).

@@ -51,7 +51,7 @@ Assignment  = Namespace "=" Expression ;
 
 Definition  = def-kw TypedIdentifier [ GenericParams ] Params [ Binding ] ;
 
-def-kw      = "@" identifier ;   (* e.g. @fn, @let, @var, @type, @struct *)
+def-kw      = "@" identifier ;   (* e.g. @fn, @global, @local, @type, @struct *)
 
 Binding     = ":=" Expression ;
 
@@ -318,7 +318,7 @@ doc-comment   = "##" { (* any char except line-end *) } line-end ;
   under the natural form parses identically under the left-factored form.
   It only documents the parser shape a strict LL(1) implementation must
   follow.  No surface-level "purity for purity's sake" changes (e.g.
-  requiring `@let x := ...` instead of `x = ...`) are implied.
+  requiring `@global x := ...` instead of `x = ...`) are implied.
 *)
 
 (* ── Strata boundary ─────────────────────────────────────────────────────── *)
@@ -330,7 +330,7 @@ doc-comment   = "##" { (* any char except line-end *) } line-end ;
   All keywords other than those built into the grammar skeleton (@true, @false)
   are resolved at elaboration time via the strata registry.  This means:
 
-    - @fn, @let, @var, @type, @struct, @enum, @if, @loop, @match, @return,
+    - @fn, @global, @local, @type, @struct, @enum, @if, @loop, @match, @return,
       @defer, @try, @extern, @use — all are elaborated keywords, not grammar
       reserved words.
 

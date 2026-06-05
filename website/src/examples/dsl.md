@@ -23,7 +23,8 @@ That's not in the language. You write the stratum:
     &Compiler::on::decl '@table', Table_on_decl;
 };
 
-@fn Table_on_decl node:Int := {
+\\ Table_on_decl (Int) -> Void
+@fn Table_on_decl node := {
     # Walk the node's body, for each "key = value" entry:
     #   &Compiler::module::push_global key, IR_const(value);
     # … using &Compiler::ast::* to read the body shape.

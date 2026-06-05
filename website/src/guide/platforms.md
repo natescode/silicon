@@ -36,8 +36,9 @@ There is no libc in a WASM sandbox.  All I/O goes through **WASI** (`wasi_snapsh
 If you need raw WASI access, declare the extern yourself:
 
 ```silicon
-@extern wasi_snapshot_preview1::fd_write:Int
-    fd:Int, iovs_ptr:Int, iovs_len:Int, nwritten_out:Int;
+@extern {
+    \\ wasi_snapshot_preview1::fd_write (Int, Int, Int, Int) -> Int
+}
 ```
 
 ### String layout
@@ -79,8 +80,10 @@ sgl setup
 The native binary links against **libc** automatically (the same way any C program does).  Declare any libc function with `@extern` and call it directly:
 
 ```silicon
-@extern puts:Int s:String;
-@extern printf:Int fmt:String;
+@extern {
+    \\ puts (String) -> Int
+    \\ printf (String) -> Int
+}
 
 &puts 'Hello, world!';
 ```
@@ -104,8 +107,10 @@ The length is found via `strlen` from libc (or by tracking it separately in your
 Use `String` for C string pointer parameters so the typechecker accepts string literals and the lowerer emits a 64-bit pointer (`l` in QBE IR):
 
 ```silicon
-@extern puts:Int s:String;       # correct — accepts string literals
-@extern printf:Int fmt:String;   # correct
+@extern {
+    \\ puts (String) -> Int      # correct — accepts string literals
+    \\ printf (String) -> Int    # correct
+}
 ```
 
 Using `Int` for a string parameter will cause a typecheck error when you pass a string literal.
@@ -127,7 +132,9 @@ The split is handled entirely in the lowerer; Silicon source code is identical o
 ### WASM — wrap WASI
 
 ```silicon
-@extern wasi_snapshot_preview1::proc_exit code:Int;
+@extern {
+    \\ wasi_snapshot_preview1::proc_exit (Int) -> Void
+}
 
 &wasi_snapshot_preview1::proc_exit 0;
 ```
@@ -142,12 +149,14 @@ Or use the stdlib which wraps this:
 ### Native — call libc directly
 
 ```silicon
-@extern exit code:Int;
-@extern malloc:Int size:Int;
-@extern free ptr:Int;
-@extern strlen:Int s:String;
+@extern {
+    \\ exit (Int) -> Void
+    \\ malloc (Int) -> Int
+    \\ free (Int) -> Void
+    \\ strlen (String) -> Int
+}
 
-@local n:Int := &strlen 'hello';   # 5
+@local n := &strlen 'hello';   # 5
 ```
 
 ---

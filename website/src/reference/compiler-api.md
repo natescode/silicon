@@ -20,7 +20,7 @@ A strata definition has three parts: the dispatch header, the dispatch
 marker, and (optionally) a rich body.
 
 ```silicon
-@stratum_keyword LetDef ('@let', Node) = {
+@stratum_keyword LetDef ('@global', Node) = {
   &IR::def_function;                              # 1. dispatch marker
   @local name := &Compiler::watId Node.name.name; # 2. rich body
   @local body := &Compiler::lowerExpr Node.binding.expression;
@@ -86,7 +86,7 @@ the rest of the module.
 | `&Compiler::ctx::locals::set(name, type)`      | Record a local in the locals map.                                       |
 | `&Compiler::ctx::globals::get(name)`           | Read a global's WASM type, or undefined.                                |
 | `&Compiler::ctx::globals::set(name, type)`     | Record a global in the globals map.                                     |
-| `&Compiler::ctx::varNames::has(name)`          | True if `name` is a real WAT global (a `@var` / sum-type variant).      |
+| `&Compiler::ctx::varNames::has(name)`          | True if `name` is a real WAT global (a `@local` / sum-type variant).      |
 | `&Compiler::ctx::varNames::add(name)`          | Mark `name` as a real WAT global.                                       |
 | `&Compiler::ctx::pendingLocals::push(local)`   | Hoist an `IRLocal` to the current function's preamble.                  |
 | `&Compiler::ctx::loopStack::push(id)`          | Push a loop ID — needed when nesting `@break` / `@continue` targets.    |
@@ -132,7 +132,7 @@ either passed explicitly or inferred from the inputs.
 | `&Compiler::lowerParams(node)`             | Iterate `node.params`, lower each entry, return the `IRParam[]`.                                    |
 | `&Compiler::lowerExprIfDefined(node)`      | Like `lowerExpr` but returns `undefined` when `node` itself is null/undefined.                      |
 | `&Compiler::lowerFunctionBody(node, params)` | Create a child scope with `params` added to locals, lower `node.binding`, return `{body, locals}`. |
-| `&Compiler::lowerGlobalInit(node, defaultType)` | Lower a `@var` initialiser or fall back to `(const 0 : defaultType)`; refines wasmType from init. |
+| `&Compiler::lowerGlobalInit(node, defaultType)` | Lower a `@local` initialiser or fall back to `(const 0 : defaultType)`; refines wasmType from init. |
 | `&Compiler::lowerExternParams(node)`       | Extract the WASM param types of an `@extern`.                                                       |
 | `&Compiler::lowerExternResult(node)`       | Extract the WASM result type of an `@extern`, or undefined.                                         |
 | `&Compiler::expandMatchChain(args, type)`  | Build the nested `if`/`else` chain for `@match`. Used by `match.si`.                                |
@@ -234,7 +234,7 @@ When a strata needs to lower a sub-expression in a fresh locals scope
 the outer locals map:
 
 ```silicon
-@stratum_keyword LetDef ('@let', Node) = {
+@stratum_keyword LetDef ('@global', Node) = {
   &IR::def_function;
   @local name       := &Compiler::watId Node.name.name;
   @local params     := &Compiler::lowerParams Node;
@@ -287,7 +287,7 @@ The complete strata, end to end, for the `@local` definition kind:
 };
 ```
 
-What happens when `@local x:Int := 5;` is encountered:
+What happens when a `\\ x Int` annotated `@local x := 5;` is encountered:
 
 1. `Node` is the `Definition` AST node (`{type: 'Definition', keyword: '@local', name: {name: 'x', typeAnnotation: {typename: 'Int'}}, binding: …}`).
 2. `wasmType` ← `'i32'` (from `resolveType` of the `Int` annotation).

@@ -37,7 +37,8 @@ Per the bootstrap plan and cleanup plan, the simplest possible rule:
 
 ```silicon
 # helper.si
-@fn add:Int a:Int, b:Int := { a + b };
+\\ add (Int, Int) -> Int
+@fn add a, b := { a + b };
 ```
 
 ```silicon

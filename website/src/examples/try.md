@@ -7,14 +7,16 @@ title: Error handling with @try
 `Result[T, E]` is the canonical fallible-return type:
 
 ```silicon
-@type Result[T, E] := $Ok value:T | $Err error:E;
+@type Result[T, E] := $Ok value T | $Err error E;
 
-@fn parse_int s:Str := …;  # → Result[Int, Str]
+\\ parse_int (Str) -> Result[Int, Str]
+@fn parse_int s := …;
 
-@fn add_two_parsed a:Str, b:Str := {
-    @global x:Int := &@try (&parse_int a);   # propagates $Err
-    @global y:Int := &@try (&parse_int b);
-    &$Ok (x + y)
+\\ add_two_parsed (Str, Str) -> Result[Int, Str]
+@fn add_two_parsed a, b := {
+    @global x := &@try (&parse_int a);   # propagates $Err
+    @global y := &@try (&parse_int b);
+    &Ok (x + y)
 };
 ```
 
@@ -27,7 +29,8 @@ On `$Err e` the enclosing function returns `$Err e` immediately.
 For default-on-error, prefer `&unwrap_or`:
 
 ```silicon
-@fn safe_lookup map:HashMap, key:Int := {
+\\ safe_lookup (HashMap, Int) -> Int
+@fn safe_lookup map, key := {
     &unwrap_or (&HashMap::get &map, key), 0
 };
 ```

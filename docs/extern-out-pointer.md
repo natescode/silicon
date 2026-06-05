@@ -9,8 +9,8 @@ syscalls that return more than a single i32.
 `@extern` declares a single result type:
 
 ```silicon
-@extern wasi_proc_exit code:Int;        # void return
-@extern get_arg_count : Int;            # single i32 return
+@extern { \\ wasi_proc_exit (Int) -> Void }   # void return
+@extern { \\ get_arg_count () -> Int }        # single i32 return
 ```
 
 But WASI syscalls like `path_open` return an *errno* and write their actual
@@ -49,18 +49,13 @@ arguments, so the out-parameter rides the input arg list.
 ## Example: `path_open`
 
 ```silicon
-@extern wasi_path_open
-  dirfd:Int,
-  lookup_flags:Int,
-  path_ptr:Int,
-  path_len:Int,
-  oflags:Int,
-  rights_base:Int,
-  rights_inheriting:Int,
-  fdflags:Int,
-  opened_fd_out:Int;        # out-pointer: host writes the new fd here
+@extern {
+  # out-pointer (last arg): host writes the new fd there
+  \\ wasi_path_open (Int, Int, Int, Int, Int, Int, Int, Int, Int) -> Int
+}
 
-@global openFile path_ptr:Int, path_len:Int := {
+\\ openFile (Int, Int) -> Int
+@global openFile path_ptr, path_len := {
   @local fd_out := &scratch_alloc 4;
   &wasi_path_open
     3, 0, path_ptr, path_len,    # dirfd=3 (first preopen), flags=0
