@@ -189,9 +189,10 @@ describe('incremental parse via withChanges (3b/M1)', () => {
         const src = '@global a := 1;\n@global b := 2;\n@global c := 3;'
         const tree = parse(src).tree
 
-        // Single change: "2" → "2002" on line 2 (col 11..12, endCol exclusive).
+        // Single change: "2" → "2002" on line 2 (col 14..15, endCol exclusive —
+        // the literal sits at col 14 in `@global b := 2;`).
         const single: TextChange[] = [
-            { range: { startLine: 2, startCol: 11, endLine: 2, endCol: 12 }, newText: '2002' },
+            { range: { startLine: 2, startCol: 14, endLine: 2, endCol: 15 }, newText: '2002' },
         ]
         const afterSingle = '@global a := 1;\n@global b := 2002;\n@global c := 3;'
         expect(stableStringify(tree.withChanges(single).tree.program))
@@ -200,8 +201,8 @@ describe('incremental parse via withChanges (3b/M1)', () => {
 
         // Multi change: edit line 1 and line 3 literals at once (disjoint).
         const multi: TextChange[] = [
-            { range: { startLine: 1, startCol: 11, endLine: 1, endCol: 12 }, newText: '11' },
-            { range: { startLine: 3, startCol: 11, endLine: 3, endCol: 12 }, newText: '33' },
+            { range: { startLine: 1, startCol: 14, endLine: 1, endCol: 15 }, newText: '11' },
+            { range: { startLine: 3, startCol: 14, endLine: 3, endCol: 15 }, newText: '33' },
         ]
         const afterMulti = '@global a := 11;\n@global b := 2;\n@global c := 33;'
         expect(stableStringify(tree.withChanges(multi).tree.program))
