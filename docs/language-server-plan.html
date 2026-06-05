@@ -160,9 +160,25 @@
   <h1>Silicon Language Server — v1 Alpha Plan</h1>
   <p class="subtitle">A Language Server Protocol implementation for <code>.si</code> files.  Targets VS Code first via the existing <code>vscode-silicon</code> extension; the server itself speaks plain LSP and runs in any editor that supports it (vim, emacs, helix, neovim, sublime).</p>
 
+  <div class="card info" style="border-left: 4px solid var(--accent2);">
+    <strong>Shipped — superseded scope (2026-06-04).</strong> The server shipped and
+    went <em>well beyond</em> this v1-alpha plan. It lives in <code>lsp/</code> and
+    now routes every edit through the compiler's incremental
+    <code>Workspace</code> (incremental parse → elaborate → typecheck, with parser
+    error recovery), so it stays responsive and keeps a live semantic model even
+    while you type an incomplete line. All navigation is backed by the
+    <code>SemanticModel</code>; the text-regex symbol index this plan describes was
+    retired. Implemented capabilities: <strong>diagnostics, document symbols,
+    definition, hover, completion, find references, rename, signature help,
+    document formatting, semantic tokens, and code actions</strong> — not the four
+    below. This document is kept as the original design record; the authoritative
+    status lives in <a href="caas-roslyn-parity.md">docs/caas-roslyn-parity.md</a>
+    (milestone <code>E3</code>).
+  </div>
+
   <div class="card info">
-    <strong>Status:</strong> plan only — no code shipped.<br />
-    <strong>Scope:</strong> v1 alpha covers everything an editor needs to feel like it understands Silicon.  Strata-aware semantics and project-config parsing are explicit later goals captured here so the architecture leaves room for them, but neither ships in v1.
+    <strong>Original status:</strong> plan only — no code shipped.<br />
+    <strong>Original scope:</strong> v1 alpha covers everything an editor needs to feel like it understands Silicon.  Strata-aware semantics and project-config parsing are explicit later goals captured here so the architecture leaves room for them, but neither ships in v1.
   </div>
 
   <div class="card info" style="border-left: 4px solid var(--accent4);">

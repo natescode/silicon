@@ -54,7 +54,7 @@ If you're new, start with [`getting-started.md`](getting-started.md).
 |------|--------------|
 | [v1-user-stories.html](v1-user-stories.html) | v1.0 story tracker — all closed as of 2026-05-28 |
 | [v1.1-user-stories.html](v1.1-user-stories.html) | v1.1 work — LSP, package registry, interpreter, etc. |
-| [language-server-plan.html](language-server-plan.html) | LSP v1-alpha plan (foundation for v1.1) |
+| [language-server-plan.html](language-server-plan.html) | LSP — original v1-alpha design record (shipped + superseded; see caas-roslyn-parity.md E3) |
 | [silicon_standard_library_v_1.md](silicon_standard_library_v_1.md) | Design target for the v1.x stdlib expansion |
 | [aaa-big-plan.md](aaa-big-plan.md) | Short planning note (working draft) |
 

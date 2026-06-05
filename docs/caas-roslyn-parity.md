@@ -12,7 +12,7 @@ CaaS correctness issue, not a language issue.
 
 ---
 
-## Status at a glance (2026-06-02)
+## Status at a glance (2026-06-04)
 
 **Tiers 1–4 are complete.** Every remaining item is *deliberately* deferred, each
 with a recorded rationale below — none are half-built.
@@ -90,6 +90,44 @@ elaborate+typecheck dominate end-to-end edit latency; M3 is its substrate):
     Stage B already reuses the unchanged prefix on the dominant edit (a function
     body), and full typecheck is sub-millisecond on the current corpus
     (~0.6 ms/100 fns), so the finer-grained reuse only pays off at larger scales.
+- **E3 ✅ LSP rides the incremental engine (2026-06-04):** the language server
+  (`lsp/`) previously ran the full `check()` front-end on *every keystroke* and
+  resolved symbols with a text-regex index, exposing only diagnostics, document
+  symbols, definition, and hover. It now routes every edit through the compiler
+  `Workspace` (`openDocument`/`editDocument`), so it inherits the E1+E2
+  incremental pipeline, and all navigation is backed by the `SemanticModel`.
+  `@use` dependencies are opened into the same workspace, so cross-file
+  references resolve through `externalSymbols` with real types — the old
+  E0004/E0002 diagnostic-suppression heuristics are deleted. The full feature set
+  is now wired (each a thin adapter over an already-implemented Workspace method):
+  diagnostics · document symbols · definition · hover · **completion** ·
+  **find references** · **rename** · **signature help** · **formatting** ·
+  **semantic tokens** · **code actions**. `compiler/src/api.ts` additively
+  re-exports `getCodeActions`/`applyEdits`/`CodeAction`/`TextEdit`. Verified by
+  the LSP suite (incremental reuse fires; cross-file resolves with no false
+  unbound-identifier diagnostics) + the over-the-wire smoke test. The text-regex
+  `symbol-index.ts` is retired.
+- **E4 ✅ Parser error recovery (2026-06-04):** a syntax error no longer empties
+  the model — the critical moment is mid-typing. `parseProgramWithExtents`
+  recovers: on a per-element parse failure it emits a `ParseError` node for the
+  broken span, synchronizes to the next element boundary (consume through a `;`,
+  or stop before the next `\\`/definition keyword — always making progress), and
+  continues, so the well-formed elements survive *with their extents* and the
+  Workspace stays incremental. Downstream is already tolerant (elaboration passes
+  the node through; the typechecker skips it → no symbol). Parse diagnostics are
+  derived from the `ParseError` nodes via the `PositionTable`
+  (`collectParseDiagnostics`), so a reused, shifted error node reports its current
+  position, not a stale one. Two invariants keep incremental ≡ fresh on malformed
+  input: the node's `relSpan` is clamped into its own element extent (the
+  offending token is often the *next* element's start — a cross-element span
+  would break the M3 model under reuse), and a `ParseError` element is **never
+  reused** by `incrementalReparse` (its message can depend on context outside its
+  extent — a `#` comment or the following token). The low-level throwing `parse`
+  (`src/parser/parser.ts`) and the CLI build path are untouched, so `sgl build`
+  still hard-fails on a syntax error. Verified by `parse-recovery.test.ts`, the
+  break-then-fix edit chains in `incremental-compile.test.ts`, the incremental≡
+  fresh equivalence/boundary/random-mutation property suites over malformed
+  states, and the LSP "keeps symbols + completion alive while typing" regression.
 
 ---
 

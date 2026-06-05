@@ -32,7 +32,11 @@ immutable result type. You can stop at any stage:
 
 ```typescript
 // Parse Silicon source into a SyntaxTree.
-// Never throws — parse errors appear in diagnostics.
+// Never throws — parse errors appear in diagnostics.  The parser also *recovers*:
+// a syntax error in one top-level element becomes a `ParseError` node, so the
+// well-formed elements around it still parse (with their extents intact).  The
+// returned tree is therefore usable even mid-edit — the basis for keeping the
+// LSP's semantic model alive while typing.
 function parse(source: string, options?: ParseOptions): ParseResult
 
 // Build the strata registry from @stratum_* declarations in the tree.
