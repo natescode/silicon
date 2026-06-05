@@ -273,30 +273,18 @@ async function compileFile(
 const HELLO_WORLD_SI = `# src/main.si — Silicon Hello World
 # Compile:  sgl build
 # Run:      sgl run
+#
+# The standard library wraps WASI behind ergonomic snake_case helpers, so a
+# first program reads like a normal high-level language.  See docs/stdlib.md.
 
-\\\\ write_bytes (Int, Int, Int) -> Int
-@fn write_bytes fd, ptr, len := {
-    @local iovs := &scratch_alloc 8;
-    &WASM::i32_store iovs, ptr;
-    &WASM::i32_store (iovs + 4), len;
-    @local nwritten := &scratch_alloc 4;
-    &wasi_snapshot_preview1::fd_write fd, iovs, 1, nwritten
+@use 'io';
+
+@fn main := {
+    &print 'Hello, Silicon!';
+    0
 };
 
-\\\\ write_str (Int, String) -> Int
-@fn write_str fd, s := {
-    &write_bytes fd, ((&str_ptr s) + 4), (&str_len s)
-};
-
-\\\\ write_nl (Int) -> Int
-@fn write_nl fd := {
-    @local buf := &scratch_alloc 4;
-    &WASM::i32_store8 buf, 10;
-    &write_bytes fd, buf, 1
-};
-
-&write_str 1, 'Hello, Silicon!';
-&write_nl 1;
+&main;
 `
 
 function tomlTemplate(name: string): string {

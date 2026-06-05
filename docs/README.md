@@ -11,6 +11,8 @@ If you're new, start with [`getting-started.md`](getting-started.md).
 | File | What's in it |
 |------|--------------|
 | [getting-started.md](getting-started.md) | 15-minute install-to-running-program walkthrough |
+| [overview.md](overview.md) | Language tour (Go-Tour / Odin-overview style) — types, control flow, data, generics, stdlib, platforms, strata |
+| [stdlib.md](stdlib.md) | Standard library reference — `io` / `num` / `str` / `mem` and the shipped data structures |
 | [targets.md](targets.md) | WASM vs native targets — I/O, string layout, `@extern` patterns |
 | [memory.md](memory.md) | Arenas, `with_arena`, parent-arena escape, `Rc<T>` |
 | [strata-authoring-guide.md](strata-authoring-guide.md) | Step-by-step for writing a new stratum |

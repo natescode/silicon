@@ -48,15 +48,19 @@ hello/
     └── main.si     # entry point
 ```
 
-`src/main.si` starts with a hello-world program using Silicon's WASI I/O layer:
+`src/main.si` starts with a hello-world program using Silicon's standard
+library (`@use 'io'` — the stdlib wraps WASI behind ergonomic `snake_case`
+helpers):
 
 ```silicon
-@use 'src/stdlib/io';
+@use 'io';
 
 @fn main := {
     &print 'Hello, Silicon!';
     0
 };
+
+&main;
 ```
 
 ---
@@ -126,17 +130,19 @@ sgl run --release
 Open `src/main.si` and add a function:
 
 ```silicon
-@use 'src/stdlib/io';
+@use 'io';
 
-\\ greet (Str)
+\\ greet (String) -> Int
 @fn greet name := {
-    &print name
+    &print ('Hello, ' ++ name ++ '!')
 };
 
 @fn main := {
     &greet 'Silicon';
     0
 };
+
+&main;
 ```
 
 Run again:
@@ -148,6 +154,10 @@ sgl run
 ---
 
 ## 8. Explore the language
+
+For the full tour — types, control flow, structs, sum types, generics, error
+handling, the standard library, platforms, and strata — read the
+[**Language Overview**](overview.md). A quick reference:
 
 | Feature | Example |
 |---|---|
@@ -196,11 +206,13 @@ the v1.1 roadmap.
 
 ## Next steps
 
+- **Language overview:** [`docs/overview.md`](overview.md) — the full tour.
+- **Standard library:** [`docs/stdlib.md`](stdlib.md) — `io` (`print`,
+  `print_int`, `read_line`, …), `num`, `str`, `mem`, and the data structures.
 - **Language reference:** the EBNF grammar is in `docs/grammar.ebnf`; built-in
   keywords and operators are defined as strata in `src/strata/`.
 - **Memory model:** `docs/memory.md` — arenas, parent-arena escape, the
   v1.1 GC outlook.
-- **Stdlib:** `src/stdlib/io.si` — `print`, `eprint`, `exit`; more modules are in `src/stdlib/`.
 - **Compiler API:** `docs/compiler-as-a-service.md` — use Silicon as a library
   for IDE integrations, linters, and other tooling.
 - **Strata authoring:** `docs/strata-authoring-guide.md` — add your own keywords
