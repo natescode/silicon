@@ -28,3 +28,14 @@
 # encodes a JS string back into a fresh linear-memory `String`.
 @extern { \\ fromString (String) -> JSString }
 @extern { \\ toString (JSString) -> String }
+
+# CharCodeArray — a WASM-GC `(array (mut i16))` of UTF-16 code units.  The
+# `codeArray`/`getCode`/`setCode`/`codeLen` ops lower to inline `array.*`
+# instructions (no host call); `fromCharCodeArray`/`intoCharCodeArray` are the
+# standardized `wasm:js-string` builtins that consume / fill one host-natively.
+@extern { \\ codeArray (Int) -> CharCodeArray }
+@extern { \\ getCode (CharCodeArray, Int) -> Int }
+@extern { \\ setCode (CharCodeArray, Int, Int) -> Void }
+@extern { \\ codeLen (CharCodeArray) -> Int }
+@extern { \\ fromCharCodeArray (CharCodeArray, Int, Int) -> JSString }
+@extern { \\ intoCharCodeArray (JSString, CharCodeArray, Int) -> Int }

@@ -40,6 +40,21 @@ const IMPORT_ENV_OVERRIDE: Record<string, string> = {
  *  module `"js-bridge"`), not standardized `wasm:js-string` builtins. */
 const JSSTRING_BRIDGE_FNS = new Set(['fromString', 'toString'])
 
+/** `JSString::` CharCodeArray ops that lower to inline `array.*` instructions
+ *  on the `(array (mut i16))` GC type (not a host import). */
+const CHARCODE_INLINE_OPS = new Set(['codeArray', 'getCode', 'setCode', 'codeLen'])
+const ARRAY_I16_NAME = '$Array_i16'
+
+/** Register the `(array (mut i16))` GC type (CharCodeArray's backing array) and
+ *  return its type index; marks the program as using it. */
+function charCodeArrayTypeIdx(ctx: LowerCtx): number {
+    ctx.usesCharCodeArray.v = true
+    return ctx.wasmGcTypes.internNominal({
+        name: ARRAY_I16_NAME,
+        spec: { kind: 'array', element: { storage: { kind: 'packed', type: 'i16' }, mutable: true } },
+    })
+}
+
 // ---------------------------------------------------------------------------
 // Lowering context
 // ---------------------------------------------------------------------------
@@ -95,6 +110,9 @@ interface LowerCtx {
     target: LowerTarget
     /** Host platform (web/bun = JS host; gates JSString / js-string builtins). */
     platform: LowerPlatform
+    /** Set when the program uses CharCodeArray (the `(array (mut i16))`): drives
+     *  the GC-array helper-function injection + ref-slot stamping. */
+    usesCharCodeArray: { v: boolean }
     /** Phase 9d-7: registry of WasmGC struct/array type declarations
      *  populated as the program is lowered.  Drained into
      *  `IRModule.wasmGcTypes` at the end of `lowerProgram`.  Only
@@ -261,6 +279,7 @@ export function lowerProgram(
         funcrefTable: { entries: [], signatures: [] },
         target,
         platform: options.platform ?? 'native',
+        usesCharCodeArray: { v: false },
         wasmGcTypes: new WasmGcTypeRegistry(),
     }
     // Pass the live ctx (not a snapshot) so $compiler is current when
@@ -436,6 +455,13 @@ export function lowerProgram(
     // builtins validate.  No-op when the program uses no JSString.
     injectJSStringRefSlots(program, functions, functionSigs)
 
+    // CharCodeArray (web/bun): stamp CharCodeArray-typed params/results/locals as
+    // a concrete `(ref null $Array_i16)` so they hold the GC array ref.
+    if (ctx.usesCharCodeArray.v) {
+        const arrIdx = ctx.wasmGcTypes.lookupByName(ARRAY_I16_NAME)
+        if (arrIdx !== undefined) injectCharCodeArrayRefSlots(program, functions, functionSigs, arrIdx)
+    }
+
     return {
         kind: 'Module',
         imports,
@@ -549,6 +575,59 @@ function walkLocalsForJSString(node: any, fn: IRFunction): void {
         const val = (node as any)[key]
         if (Array.isArray(val)) for (const v of val) walkLocalsForJSString(v, fn)
         else if (val && typeof val === 'object') walkLocalsForJSString(val, fn)
+    }
+}
+
+/** CharCodeArray — stamp CharCodeArray-typed params/results/locals with a concrete
+ *  `(ref null $Array_i16)` slot so they hold the GC array ref (mirror of
+ *  injectJSStringRefSlots, with a concrete typeidx instead of extern). */
+function injectCharCodeArrayRefSlots(
+    program: any,
+    functions: IRFunction[],
+    functionSigs: Map<string, FunctionSig>,
+    arrIdx: number,
+): void {
+    const slot: IRRefSlot = { localTypeIdx: arrIdx, nullable: true }
+    const fnByName = new Map<string, IRFunction>()
+    for (const f of functions) fnByName.set(f.name, f)
+
+    for (const fn of functions) {
+        const sig = functionSigs?.get(fn.name)
+        if (!sig) continue
+        if (!fn.refResult && sig.result?.kind === 'CharCodeArray') fn.refResult = slot
+        sig.params.forEach((p, i) => {
+            if (p?.kind === 'CharCodeArray') {
+                if (!fn.refParams) fn.refParams = new Map()
+                if (!fn.refParams.has(i)) fn.refParams.set(i, slot)
+            }
+        })
+    }
+
+    const walk = (node: any, fn: IRFunction): void => {
+        if (!node || typeof node !== 'object') return
+        if (node.type === 'Definition' && (node.keyword === '@local' || node.keyword === '@var')) {
+            const localName: string | undefined = node.name?.name
+            if (localName && node.name?.typeAnnotation?.typename === 'CharCodeArray') {
+                const wln = watId(localName)
+                for (const l of fn.locals) {
+                    if (l.name === wln || l.name === localName) { l.refType = slot; break }
+                }
+            }
+        }
+        for (const key of Object.keys(node)) {
+            if (key === 'type' || key === 'sourceLocation') continue
+            const val = (node as any)[key]
+            if (Array.isArray(val)) for (const v of val) walk(v, fn)
+            else if (val && typeof val === 'object') walk(val, fn)
+        }
+    }
+    const items: any[] = (program?.elements ?? program?.items ?? []) as any[]
+    for (const item of items) {
+        const def = unwrap(item)
+        if (!def || def.type !== 'Definition') continue
+        if (def.keyword !== '@fn' && def.keyword !== '@let') continue
+        const fn = fnByName.get(watId(def.name?.name ?? '')) ?? fnByName.get(def.name?.name ?? '')
+        if (fn) walk(def.binding?.expression ?? def.binding, fn)
     }
 }
 
@@ -1349,6 +1428,19 @@ function lowerModuleCall(name: string, sepIdx: number, n: any, ctx: LowerCtx): I
         )
     }
 
+    // CharCodeArray ops lower to inline `array.*` on the GC i16 array — no host
+    // import.  (`codeArray`/`getCode`/`setCode`/`codeLen`.)
+    if (moduleName === 'JSString' && CHARCODE_INLINE_OPS.has(funcName)) {
+        const idx = charCodeArrayTypeIdx(ctx)
+        const a = (n.args || []).map((x: any) => lowerExpr(x, ctx))
+        switch (funcName) {
+            case 'codeArray': return { kind: 'ArrayNewDefault', wasmType: 'i32', typeIdx: idx, typeName: ARRAY_I16_NAME, size: a[0] }
+            case 'getCode':   return { kind: 'ArrayGet', wasmType: 'i32', typeIdx: idx, typeName: ARRAY_I16_NAME, signed: 'u', target: a[0], idx: a[1] }
+            case 'setCode':   return { kind: 'ArraySet', wasmType: 'void', typeIdx: idx, typeName: ARRAY_I16_NAME, target: a[0], idx: a[1], value: a[2] }
+            case 'codeLen':   return { kind: 'ArrayLen', wasmType: 'i32', target: a[0] }
+        }
+    }
+
     // WAT internal name: module__function (double-underscore avoids collision with user names)
     const watName = `${moduleName}__${funcName}`
 
@@ -1366,15 +1458,21 @@ function lowerModuleCall(name: string, sepIdx: number, n: any, ctx: LowerCtx): I
         // (JS String Builtins).  String params are nullable `externref`; a
         // string-returning builtin must declare a non-null `(ref extern)` result
         // (the host validates the exact signature — verified under Bun).
+        // A CharCodeArray param/result is a concrete `(ref null $Array_i16)` GC
+        // ref (for fromCharCodeArray / intoCharCodeArray).
         let refParams: Map<number, IRRefSlot> | undefined
         fnSig.siliconParams.forEach((t, i) => {
             if (t === 'JSString') {
                 (refParams ??= new Map()).set(i, { localTypeIdx: 0, nullable: true, extern: true })
+            } else if (t === 'CharCodeArray') {
+                (refParams ??= new Map()).set(i, { localTypeIdx: charCodeArrayTypeIdx(ctx), nullable: true })
             }
         })
         const refResult: IRRefSlot | undefined = fnSig.siliconResult === 'JSString'
             ? { localTypeIdx: 0, nullable: false, extern: true }
-            : undefined
+            : fnSig.siliconResult === 'CharCodeArray'
+                ? { localTypeIdx: charCodeArrayTypeIdx(ctx), nullable: true }
+                : undefined
 
         ctx.pendingImports.set(watName, {
             kind: 'Import',

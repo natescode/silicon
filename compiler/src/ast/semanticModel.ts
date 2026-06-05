@@ -28,6 +28,7 @@ export function typeDisplayString(type: SiliconType | undefined): string {
         case 'Float':     return 'Float'
         case 'String':    return 'String'
         case 'JSString':  return 'JSString'
+        case 'CharCodeArray': return 'CharCodeArray'
         case 'Bool':      return 'Bool'
         case 'UInt8':     return 'UInt8'
         case 'UInt16':    return 'UInt16'

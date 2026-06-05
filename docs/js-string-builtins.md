@@ -53,6 +53,14 @@ units (JS semantics).
 `&JSString::fromString s` (linear `String` → JS string) and
 `&JSString::toString js` (JS string → fresh linear `String`).
 
+**`CharCodeArray`** — a WASM-GC `(array (mut i16))` of UTF-16 code units, for the
+two array builtins. `&JSString::codeArray n` allocates one; `setCode`/`getCode`/
+`codeLen` read & write it (inline `array.*` instructions). `&JSString::
+fromCharCodeArray a, start, end` builds a JS string from a slice; `&JSString::
+intoCharCodeArray s, a, start` copies a JS string's code units into the array and
+returns the count. These run host-native under the bun runner — GC types coexist
+with the linear-memory model in the same module. (`examples/charcode_array.si`.)
+
 ## Reaching other Browser/Bun APIs
 
 The host-import foundation is general: declare an externref-typed `@extern` and

@@ -87,6 +87,31 @@ describe('W2/W3: JSString via wasm:js-string builtins (Bun)', () => {
         expect(r.diagnostics.some((d: any) => /JSString|--platform/.test(d.message))).toBe(true)
     })
 
+    test('CharCodeArray ↔ JSString via fromCharCodeArray / intoCharCodeArray (GC i16 array)', async () => {
+        // Build "Hi" from code units through a GC `(array (mut i16))`, then read a
+        // JSString's units back out — both host-native under the js-string builtins.
+        const bin = buildBun(`\\\\ probe () -> Int
+@fn probe := {
+  \\\\ arr CharCodeArray
+  @local arr := &JSString::codeArray 2;
+  &JSString::setCode arr, 0, 72;
+  &JSString::setCode arr, 1, 105;
+  \\\\ hi JSString
+  @local hi := &JSString::fromCharCodeArray arr, 0, 2;
+  \\\\ back CharCodeArray
+  @local back := &JSString::codeArray 8;
+  \\\\ n Int
+  @local n := &JSString::intoCharCodeArray hi, back, 0;
+  \\\\ result Int
+  @local result := (&JSString::length hi) * 1000;
+  result + ((&JSString::getCode back, 1) + ((&JSString::codeLen back) * 100000))
+};
+@export probe;`)
+        const inst = await instantiate(bin, () => {})
+        // length("Hi")=2 → 2000 ; getCode(back,1)='i'=105 ; codeLen(back)=8 → 800000
+        expect((inst.exports as any).probe()).toBe(802105)
+    })
+
     test('emits the wasm:js-string import module + externref signature', () => {
         const mods = loadModules(ROOT)
         const r = compile(`\\\\ f (Int) -> Int

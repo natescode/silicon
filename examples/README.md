@@ -15,6 +15,7 @@ builtins; `--platform=web` builds for the browser. These use the `JSString` type
 | [greeter/](greeter/) | `cd greeter && sgl run` | **Full project** — `sgl.toml`, multi-file `@use`, JSString + console |
 | [js_string_demo.si](js_string_demo.si) | `sgl run --platform=bun examples/js_string_demo.si` | JSString basics — `fromCodePoint`, `concat`, `console::log` |
 | [jsstring_ops.si](jsstring_ops.si) | `sgl run --platform=bun examples/jsstring_ops.si` | JSString builtins — `length`, `charCodeAt`, `substring`, `equals`, the `String` bridge |
+| [charcode_array.si](charcode_array.si) | `sgl run --platform=bun examples/charcode_array.si` | `CharCodeArray` (WASM-GC `array i16`) ↔ JSString via `fromCharCodeArray`/`intoCharCodeArray` |
 | [web_math.si](web_math.si) | `sgl run --platform=bun examples/web_math.si` | `web::math_*` (the JS `Math` object) |
 | [web_letters_playground.si](web_letters_playground.si) | browser playground | Walk a string as bytes (browser/canvas) |
 
