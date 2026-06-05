@@ -43,3 +43,7 @@ dependency bumps.
 | [0009](0009-wasm-gc-target.md) | WasmGC target: opt-in `--target=wasm-gc` for v1.0 | Accepted |
 | [0010](0010-grammar-targets-ll1.md) | Silicon's grammar targets LL(1) | Accepted |
 | [0011](0011-borrow-checker-and-rcaps.md) | Borrow checker design: arenas + rcaps + actor isolation | Proposed |
+| [0012](0012-capability-driven-optimization.md) | Optimizer consumes rcaps + ocaps as a modular purity certificate | Proposed |
+| [0013](0013-capability-checker-bootstrap.md) | Capability checker: comptime reflection + `@capability` stratum + host-first→in-stratum build order | Proposed |
+| [0014](0014-global-local-bindings.md) | Simplify value bindings to `@global` (immutable) + `@local` (mutable) | Accepted |
+| [0015](0015-object-capabilities.md) | Object capabilities: authority as unforgeable values, checked at comptime, no effect rows | Proposed |
