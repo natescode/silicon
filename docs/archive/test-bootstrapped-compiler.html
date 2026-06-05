@@ -303,7 +303,7 @@ test.sh: 20 passed, 0 failed</pre>
     <td>Typechecker — registration</td>
     <td><code>preregister_std_test</code>, <code>preregister_defs_test</code></td>
     <td>The 11 <code>std.wat</code> helpers seed correctly; a real parsed
-        program's <code>@fn / @let / @var / @extern</code> definitions populate
+        program's <code>@fn / @global / @local / @extern</code> definitions populate
         the function table with correct param/result types + immutability bits.</td>
   </tr>
   <tr>
@@ -388,7 +388,7 @@ wasmtime main.wasm</pre>
   between parse and lower:
 </p>
 
-<pre>echo '@let x:Int := 5; @let y:Float := 3.14; (x + y);' \
+<pre>echo '@global x:Int := 5; @global y:Float := 3.14; (x + y);' \
   | wasmtime wasm-bin/stage1.wasm --typecheck &gt; bad.wat</pre>
 
 <p>Standard output is the WAT (the compile continues regardless), and stderr
@@ -398,7 +398,7 @@ carries the diagnostic:</p>
 
 <p>A clean program emits no stderr:</p>
 
-<pre>echo '@let x:Int := 5; (x + 1);' \
+<pre>echo '@global x:Int := 5; (x + 1);' \
   | wasmtime wasm-bin/stage1.wasm --typecheck &gt; ok.wat
 <span class="out"># stderr is empty; exit 0</span></pre>
 
@@ -412,7 +412,7 @@ carries the diagnostic:</p>
   <tr><td><code>UnknownType</code></td><td>Type annotation names a type the checker doesn't recognise.</td><td><code>[UnknownType] unknown type 'Widget'</code></td></tr>
   <tr><td><code>HeterogeneousArray</code></td><td>Array literal mixes element types.</td><td><code>[HeterogeneousArray] array literal must be homogeneous: first element is Int, found Float</code></td></tr>
   <tr><td><code>Annotation</code></td><td>Binding initialiser doesn't match the declared annotation.</td><td><code>[Annotation] 'x' declared as Int but initialiser has type Bool</code></td></tr>
-  <tr><td><code>ImmutableAssignment</code></td><td>Writing to a <code>@let</code> / <code>@fn</code> / <code>@extern</code> name.</td><td><code>[ImmutableAssignment] 'foo' is immutable and cannot be reassigned</code></td></tr>
+  <tr><td><code>ImmutableAssignment</code></td><td>Writing to a <code>@global</code> / <code>@fn</code> / <code>@extern</code> name.</td><td><code>[ImmutableAssignment] 'foo' is immutable and cannot be reassigned</code></td></tr>
 </table>
 
 <div class="card info">

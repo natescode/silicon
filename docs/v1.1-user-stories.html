@@ -333,7 +333,7 @@
 <details class="lang">
   <summary><span class="id">CT-2</span> @comptime in expression position (returns a value) <span class="est">M, ~3h</span></summary>
   <div class="deps"><strong>Depends on:</strong> CT-1</div>
-  <p class="goal"><code>@let x:Int := @comptime { 6 * 7 };</code>.  The block's last expression becomes the inferred value at the call site.  Lowering replaces the @comptime expression with the evaluated literal so runtime code carries no trace.</p>
+  <p class="goal"><code>@global x:Int := @comptime { 6 * 7 };</code>.  The block's last expression becomes the inferred value at the call site.  Lowering replaces the @comptime expression with the evaluated literal so runtime code carries no trace.</p>
 </details>
 
 <details class="lang">
@@ -437,7 +437,7 @@
 </details>
 
 <details class="runtime">
-  <summary><span class="id">7-6</span> Walker for @let / @var / @local (bindings + scope) <span class="est">M, ~4h</span></summary>
+  <summary><span class="id">7-6</span> Walker for @global / @local / @local (bindings + scope) <span class="est">M, ~4h</span></summary>
   <div class="deps"><strong>Depends on:</strong> 7-3</div>
 </details>
 

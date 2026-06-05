@@ -111,7 +111,7 @@ describe('Phase 9c: &@with_arena + &@move_to_parent_arena', () => {
             \\\\ probe () -> Int
             @fn probe  := {
                 @local before := &heap_get;
-                @var i := 0;
+                @local i := 0;
                 &@loop i < 100, {
                     &@with_arena {
                         @local s := 'scratch';
@@ -362,8 +362,8 @@ describe('Phase 9c: &@with_arena + &@move_to_parent_arena', () => {
                 @local s := 'pad-this-up';
                 # &str_concat doubles ~ish each call; 100 iterations
                 # well exceeds 2 pages.
-                @var i := 0;
-                @var acc := 'x';
+                @local i := 0;
+                @local acc := 'x';
                 &@loop i < 1000, {
                     acc = &str_concat acc, s;
                     i = i + 1;

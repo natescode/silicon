@@ -55,7 +55,7 @@ expression shape. The emitter needs to match wabt's output exactly.
 import { compileToWat, compileToWasm } from './src/codegen/index.ts'
 import { watToWasm } from './src/codegen/toWasm.ts'
 // ... set up parse/elaborate/typecheck pipeline ...
-const source = "@let add x:Int, y:Int := x + y;"
+const source = "@global add x:Int, y:Int := x + y;"
 const viaDirect = compileToWasm(typed, registry, functions)
 const viaWat    = await watToWasm(compileToWat(typed, registry, functions))
 // viaDirect.byteLength === viaWat.byteLength === 599

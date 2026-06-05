@@ -15,7 +15,7 @@
 \\ print_letters (String) -> Int
 @fn print_letters word := {
     @local len := &str_byte_len word;
-    @var i := 0;
+    @local i := 0;
     &@loop i < len, {
         &print (&str_slice word, i, (i + 1));
         i = i + 1;

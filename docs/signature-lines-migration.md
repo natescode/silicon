@@ -20,7 +20,7 @@ Counts across `src/strata`, `src/stdlib`, `examples`, `src/platforms`,
 | `@extern` declarations | 226 | group per-file into `@extern { … }` blocks |
 | inline `$fn` param types | **0** | — (the collision case lives only in `.ts` test strings) |
 | `@struct` / `@type` defs | 11 / 7 | fields drop `:` → juxtaposition (rule F); function-typed fields also need parens |
-| `@let`/`@var` inline types | (few) | → ascription keyword `&@as` (rule G), or dropped if unambiguous |
+| `@global`/`@local` inline types | (few) | → ascription keyword `&@as` (rule G), or dropped if unambiguous |
 
 The headline: **~704 of 745 functions need only their inline param types
 stripped** and rely on inference afterward — no signature at all. Signatures are
@@ -138,13 +138,13 @@ deleted corpus-wide.
 @struct Rect w Int, h Int;
 
 # G. local with inline type  →  ascription keyword (':' is gone)
-#    @let x:Option[Int] := &None;
-@let x := &@as Option[Int], (&None);
+#    @global x:Option[Int] := &None;
+@global x := &@as Option[Int], (&None);
 ```
 
 - **`:` is removed corpus-wide.** Every `:` type-annotation site is migrated —
   params (→ signature, rule A/C), return slot (→ signature range), **struct /
-  variant fields** (rule F, juxtaposition), and **`@let`/`@var` inline types**
+  variant fields** (rule F, juxtaposition), and **`@global`/`@local` inline types**
   (rule G, ascription keyword). The only `:`-bearing token left in the corpus
   afterward is the namespace `::`. This makes the parser's removal of `:` safe:
   nothing in the migrated corpus uses it.
@@ -158,7 +158,7 @@ deleted corpus-wide.
 - **Struct / `@type` fields** are now *touched* (rule F — a `:`→space edit;
   11 structs + 7 sum types). A function-typed field additionally needs a
   parenthesized domain (none in the corpus today — a guard, not a bulk edit).
-- **`@let`/`@var` inline types** (rule G) are rare; each becomes an ascription.
+- **`@global`/`@local` inline types** (rule G) are rare; each becomes an ascription.
   Count them in the report (§5) — if any initializer is *not* ambiguous, the
   annotation can simply be dropped instead.
 

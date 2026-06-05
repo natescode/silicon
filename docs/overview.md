@@ -13,7 +13,7 @@ below runs with the `sgl` compiler — install it from
 
 > Convention: a leading `&` marks a **function call** (`&print x`), and a
 > leading `@` marks a **definition or built-in keyword** (`@fn`, `@if`,
-> `@let`). A `\\ name (Types) -> Ret` line above a definition is its
+> `@global`). A `\\ name (Types) -> Ret` line above a definition is its
 > **signature line**.
 
 ---
@@ -80,28 +80,22 @@ Conversions are explicit — there is no implicit numeric coercion:
 
 ## 4. Variables and bindings
 
+Silicon has two value bindings, distinguished by mutability:
+
 ```silicon
-@let name := 'Silicon';          # immutable, module or local
-@local x := 0;                   # immutable local binding
-@var count := 0;                 # mutable local
-count = count + 1;               # reassignment (only @var)
+@global PI := 3.14159;       # immutable — a module constant (cannot be reassigned)
+@local count := 0;           # mutable
+count = count + 1;           # reassign — only @local can be reassigned
 ```
 
-A `\\` signature line declares types. It sits directly above the definition:
+`@global` is an immutable top-level binding (a module constant). `@local` is
+mutable: at the top level it's a module variable, inside a function it's a
+local. **Binding types are always inferred** — there is no type annotation on a
+variable. To pin types, annotate the *function* with a `\\` signature line:
 
 ```silicon
-\\ greeting Str
-@let greeting := 'hi';
-
 \\ area (Int, Int) -> Int
 @fn area w, h := { w * h };
-```
-
-To annotate a single local, put a signature line above it:
-
-```silicon
-\\ total Int
-@local total := a + b;
 ```
 
 ---
@@ -136,7 +130,7 @@ nested `@if` (there is no `&&` operator).
 `@loop` repeats while a condition holds; `&@break` exits early:
 
 ```silicon
-@var i := 0;
+@local i := 0;
 &@loop i < 10, {
     &print_int i;
     i = i + 1;
@@ -357,7 +351,7 @@ only I/O differs. On the JS host, JavaScript strings are the `JSString` type
 ## 15. Strata — Silicon's metaprogramming
 
 Silicon's grammar is intentionally tiny and stable. Almost every "keyword" and
-"operator" — `@if`, `@loop`, `@var`, `+`, `==`, `++` — is **not** baked into the
+"operator" — `@if`, `@loop`, `@local`, `+`, `==`, `++` — is **not** baked into the
 grammar. They are defined as **strata**: data-driven Silicon declarations,
 loaded into the compiler, that say how a construct lowers.
 

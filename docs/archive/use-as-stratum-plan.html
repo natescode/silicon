@@ -202,7 +202,7 @@
 
 <p>
   The fix is to make <code>@use</code> a real construct, processed via the same data-driven
-  stratum machinery that already handles <code>@let</code>, <code>@fn</code>,
+  stratum machinery that already handles <code>@global</code>, <code>@fn</code>,
   <code>@if</code>, <code>@loop</code>, and the rest.
 </p>
 
@@ -340,8 +340,8 @@
 <table>
 <tr><th>Definition kind</th><th>Goes into module signature?</th><th>Notes</th></tr>
 <tr><td><code>@fn name:T params := body</code></td><td>Yes &mdash; as <code>FunctionSig { name, params: T[], result: T }</code></td><td>Already in <code>src/types/typechecker.ts</code>.</td></tr>
-<tr><td><code>@let name := expr</code></td><td>Yes &mdash; as <code>{ name, type, mutable: false }</code></td><td>Type from initialiser inference.</td></tr>
-<tr><td><code>@var name:T := expr</code></td><td>Yes &mdash; as <code>{ name, type, mutable: true }</code></td><td>&nbsp;</td></tr>
+<tr><td><code>@global name := expr</code></td><td>Yes &mdash; as <code>{ name, type, mutable: false }</code></td><td>Type from initialiser inference.</td></tr>
+<tr><td><code>@local name:T := expr</code></td><td>Yes &mdash; as <code>{ name, type, mutable: true }</code></td><td>&nbsp;</td></tr>
 <tr><td><code>@extern</code></td><td>Yes</td><td>External signatures are inherently exported.</td></tr>
 <tr><td><code>@enum</code> / <code>@type</code> / <code>@type_alias</code> / <code>@type_distinct</code></td><td>Yes &mdash; as type declarations</td><td>Types and constructors both go into scope.</td></tr>
 <tr><td><code>@stratum_keyword</code> / <code>@stratum_operator</code></td><td>Yes &mdash; as registry entries</td><td>Imported strata extend the importer's elaborator registry.</td></tr>
@@ -560,12 +560,12 @@
 <h2>7. Risks &amp; Open Questions</h2>
 
 <div class="card warn">
-  <h4 style="margin-top: 0;">Open: signature inference for <code>@let</code> initialisers</h4>
+  <h4 style="margin-top: 0;">Open: signature inference for <code>@global</code> initialisers</h4>
   <p style="margin-bottom: 0;">
-    Building a module signature requires knowing the type of every exported <code>@let</code>.
+    Building a module signature requires knowing the type of every exported <code>@global</code>.
     Today inference happens during typecheck, after elaborate. We need a lighter
     "signature inference" pass during <code>resolveImports</code> &mdash; or, simpler,
-    allow forward references and only resolve <code>@let</code> types lazily on lookup.
+    allow forward references and only resolve <code>@global</code> types lazily on lookup.
     The simpler path adds latency to LSP hover/definition but avoids a duplicate pass.
     Decision deferred to Phase B kickoff.
   </p>

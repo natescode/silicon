@@ -50,7 +50,7 @@ This is the conceptual line the whole proposal rests on:
 
 | Kind | Form | Types |
 |---|---|---|
-| **Bindings** — function params, `@let`, `@var` | bare names | inferred; signature line optional (functions only) |
+| **Bindings** — function params, `@global`, `@local` | bare names | inferred; signature line optional (functions only) |
 | **Declarations** — struct fields, sum-type variant payloads | `name Type` (juxtaposed) | mandatory — the pair *is* the definition |
 
 The type-carrying `name Type` pair is **not** removed globally. It is removed
@@ -343,7 +343,7 @@ added later without breaking code; removing them after use could not.
 
 A separate discussion proposes making `@fn params := body` an anonymous
 function *expression* (lambda), with `@fn name …` as sugar for
-`@let name := @fn …`. These compose cleanly:
+`@global name := @fn …`. These compose cleanly:
 
 - Signature lines serve **named** functions (the common case — and where the
   collision lived).

@@ -19,7 +19,7 @@
 \\ align_up (Int, Int) -> Int
 @fn align_up n, a := {
     @local r := n % a;
-    @var out := n;
+    @local out := n;
     &@if r != 0, { out = n + (a - r) }, {};
     out
 };
@@ -37,7 +37,7 @@
 # Write `n` copies of byte `b` starting at address `ptr`.
 \\ mem_fill (Int, Int, Int) -> Int
 @fn mem_fill ptr, b, n := {
-    @var i := 0;
+    @local i := 0;
     &@loop i < n, {
         &WASM::i32_store8 (ptr + i), b;
         i = i + 1;
@@ -49,8 +49,8 @@
 # equal, @false on the first mismatch.
 \\ mem_eq (Int, Int, Int) -> Bool
 @fn mem_eq a, b, n := {
-    @var i := 0;
-    @var same := @true;
+    @local i := 0;
+    @local same := @true;
     &@loop i < n, {
         @local ca := &WASM::i32_load8_u (a + i);
         @local cb := &WASM::i32_load8_u (b + i);

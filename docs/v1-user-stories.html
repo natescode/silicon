@@ -238,7 +238,7 @@
 
 <details class="dissolution complete">
   <summary><span class="id">D-B-5</span> Wrap IR module-level builders (Function, Global, Import, Export) <span class="done">✅</span> <span class="est">M, ~3h</span></summary>
-  <p class="goal">Imports for module-level IR construction — required for <code>defkinds.si</code> (@let, @fn, @var, @extern) migration.</p>
+  <p class="goal">Imports for module-level IR construction — required for <code>defkinds.si</code> (@global, @fn, @local, @extern) migration.</p>
   <div class="deps"><strong>Depends on:</strong> D-B-3</div>
 </details>
 
@@ -380,14 +380,14 @@
 </details>
 
 <details class="dissolution complete">
-  <summary><span class="id">D-D-11b</span> Migrate <code>defkinds.si</code> — @let / @fn (function def-kind) <span class="done">✅</span> <span class="est">L, ~6h</span></summary>
+  <summary><span class="id">D-D-11b</span> Migrate <code>defkinds.si</code> — @global / @fn (function def-kind) <span class="done">✅</span> <span class="est">L, ~6h</span></summary>
   <p style="color: var(--accent3); font-size: 0.85rem;">Both share one LetOrFn_lower handler that reads params, lowers function body, resolves return type, builds IRFunction.  Engine's synthetic @fn for handler compilation bypasses the migrated path by pre-stamping <code>hook: 'function'</code> (preserved by the elaborator), routing to a TS-side <code>functionExpander</code> that matches the legacy semantics — breaks the chicken-and-egg.</p>
   <div class="deps"><strong>Depends on:</strong> D-B-5, D-B-12</div>
 </details>
 
 <details class="dissolution complete">
-  <summary><span class="id">D-D-11c</span> Migrate <code>defkinds.si</code> — @var, @extern <span class="done">✅</span> <span class="est">M, ~3h</span></summary>
-  <p style="color: var(--accent3); font-size: 0.85rem;">Both migrated.  Added <code>compiler_lowerGlobalInit</code> / <code>compiler_globalInit_init</code> / <code>compiler_globalInit_wasmType</code> / <code>compiler_lowerExternParams</code> / <code>compiler_lowerExternResult</code> imports.  lowerProgram preScan + lowerAsStmt extended to recognise migrated @var by keyword (preserves forward-ref globals + in-function local treatment).</p>
+  <summary><span class="id">D-D-11c</span> Migrate <code>defkinds.si</code> — @local, @extern <span class="done">✅</span> <span class="est">M, ~3h</span></summary>
+  <p style="color: var(--accent3); font-size: 0.85rem;">Both migrated.  Added <code>compiler_lowerGlobalInit</code> / <code>compiler_globalInit_init</code> / <code>compiler_globalInit_wasmType</code> / <code>compiler_lowerExternParams</code> / <code>compiler_lowerExternResult</code> imports.  lowerProgram preScan + lowerAsStmt extended to recognise migrated @local by keyword (preserves forward-ref globals + in-function local treatment).</p>
   <div class="deps"><strong>Depends on:</strong> D-B-5, D-B-12</div>
 </details>
 
@@ -615,7 +615,7 @@
   <pre>error[T0042]: cannot add Int and Float
   --> src/math.si:12:14
    |
-12 |   @let total := count + ratio;
+12 |   @global total := count + ratio;
    |                 ^^^^^ Int
    |                         ^^^^^ Float
    = hint: use &amp;@toFloat count to convert</pre>
@@ -951,7 +951,7 @@
 
 <details class="runtime complete">
   <summary><span class="id">8-1</span> QBE IR emitter scaffolding + module skeleton <span class="done">✅</span> <span class="est">M, ~4h</span></summary>
-  <p class="done-note">✓ Direct typed-AST → QBE text (no WASM IR intermediate). Types.ts: SiliconType→QbeType, lookupOpToQbe. Lower.ts: @fn/@extern/@var skeletons. 45 tests.</p>
+  <p class="done-note">✓ Direct typed-AST → QBE text (no WASM IR intermediate). Types.ts: SiliconType→QbeType, lookupOpToQbe. Lower.ts: @fn/@extern/@local skeletons. 45 tests.</p>
 </details>
 
 <details class="runtime complete">
@@ -975,7 +975,7 @@
 <details class="runtime complete">
   <summary><span class="id">8-5</span> Emit Global / Import / Export <span class="done">✅</span> <span class="est">M, ~3h</span></summary>
   <div class="deps"><strong>Depends on:</strong> 8-3</div>
-  <p class="done-note">✓ @var data declarations with actual init values, loadw/storew in function bodies, Float/Int64 alignment.</p>
+  <p class="done-note">✓ @local data declarations with actual init values, loadw/storew in function bodies, Float/Int64 alignment.</p>
 </details>
 
 <details class="runtime complete">
@@ -1427,7 +1427,7 @@
 
 <details class="distro complete" open>
   <summary><span class="id">10a-2</span> Document strata vs grammar boundary <span class="est">S, ~2h</span> <span class="done">✅</span></summary>
-  <p><strong>Shipped as part of 10a-1:</strong> The "Strata boundary" section at the bottom of <code>docs/grammar.ebnf</code> explains that all keywords (@fn, @let, @if, etc.) are elaborated names resolved at elaboration time, not grammar reserved words; user-defined strata keywords are syntactically identical to built-in ones; the grammar will not be extended to add keyword tokens.</p>
+  <p><strong>Shipped as part of 10a-1:</strong> The "Strata boundary" section at the bottom of <code>docs/grammar.ebnf</code> explains that all keywords (@fn, @global, @if, etc.) are elaborated names resolved at elaboration time, not grammar reserved words; user-defined strata keywords are syntactically identical to built-in ones; the grammar will not be extended to add keyword tokens.</p>
   <div class="deps"><strong>Depends on:</strong> 10a-1</div>
 </details>
 

@@ -33,7 +33,7 @@
 @fn str_eq a, b := {
     @local la := &str_len a;
     @local lb := &str_len b;
-    @var r := @false;
+    @local r := @false;
     &@if la == lb, {
         @local pa := (&str_ptr a) + 4;
         @local pb := (&str_ptr b) + 4;
@@ -46,7 +46,7 @@
 @fn str_starts_with s, prefix := {
     @local n := &str_len s;
     @local m := &str_len prefix;
-    @var r := @false;
+    @local r := @false;
     &@if m <= n, {
         @local sp := (&str_ptr s) + 4;
         @local pp := (&str_ptr prefix) + 4;
@@ -59,7 +59,7 @@
 @fn str_ends_with s, suffix := {
     @local n := &str_len s;
     @local m := &str_len suffix;
-    @var r := @false;
+    @local r := @false;
     &@if m <= n, {
         @local sp := ((&str_ptr s) + 4) + (n - m);
         @local pp := (&str_ptr suffix) + 4;
@@ -76,10 +76,10 @@
     @local m := &str_len sub;
     @local sp := (&str_ptr s) + 4;
     @local subp := (&str_ptr sub) + 4;
-    @var result := 0 - 1;
+    @local result := 0 - 1;
     &@if m == 0, { result = 0 }, {};
-    @var i := 0;
-    @var go := @true;
+    @local i := 0;
+    @local go := @true;
     &@if m == 0, { go = @false }, {};
     &@loop go, {
         &@if i <= (n - m), {
@@ -97,8 +97,8 @@
 \\ str_slice (String, Int, Int) -> String
 @fn str_slice s, start, end := {
     @local n := &str_len s;
-    @var lo := start;
-    @var hi := end;
+    @local lo := start;
+    @local hi := end;
     &@if lo < 0, { lo = 0 }, {};
     &@if hi > n, { hi = n }, {};
     &@if hi < lo, { hi = lo }, {};
@@ -106,7 +106,7 @@
     @local out := &alloc_string count;
     @local dst := (&str_ptr out) + 4;
     @local src := ((&str_ptr s) + 4) + lo;
-    @var i := 0;
+    @local i := 0;
     &@loop i < count, {
         @local c := &WASM::i32_load8_u (src + i);
         &WASM::i32_store8 (dst + i), c;
@@ -120,15 +120,15 @@
 \\ str_repeat (String, Int) -> String
 @fn str_repeat s, n := {
     @local len := &str_len s;
-    @var reps := n;
+    @local reps := n;
     &@if reps < 0, { reps = 0 }, {};
     @local total := len * reps;
     @local out := &alloc_string total;
     @local dst := (&str_ptr out) + 4;
     @local src := (&str_ptr s) + 4;
-    @var r := 0;
+    @local r := 0;
     &@loop r < reps, {
-        @var i := 0;
+        @local i := 0;
         &@loop i < len, {
             @local c := &WASM::i32_load8_u (src + i);
             &WASM::i32_store8 (dst + ((r * len) + i)), c;

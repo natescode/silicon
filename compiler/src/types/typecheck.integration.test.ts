@@ -104,19 +104,19 @@ test('all comparison operators on Int clean', () => {
 })
 
 test('type annotation Int matches int literal', () => {
-    // Silicon grammar supports `@let x := 5`
-    const { errors } = check('@let x := 5;')
+    // Silicon grammar supports `@global x := 5`
+    const { errors } = check('@global x := 5;')
     expect(errors).toHaveLength(0)
 })
 
 test('type annotation Float on int binding is an error', () => {
-    const { errors } = check('@let x := &@as Float, 5;')
+    const { errors } = check('@global x := &@as Float, 5;')
     expect(errors.length).toBeGreaterThan(0)
     expect(errors[0].kind).toBe('Annotation')
 })
 
 test('unknown type annotation errors', () => {
-    const { errors } = check('@let x := &@as Bogus, 5;')
+    const { errors } = check('@global x := &@as Bogus, 5;')
     expect(errors.length).toBeGreaterThan(0)
     expect(errors[0].kind).toBe('UnknownType')
 })
@@ -144,7 +144,7 @@ test('WASM::i32_add with float operand fails', () => {
 
 test('annotation informs inferred types (i32 alias)', () => {
     // Using i32 as annotation is allowed as a low-level escape hatch
-    const { errors, program } = check('@let x := 42;')
+    const { errors, program } = check('@global x := 42;')
     expect(errors).toHaveLength(0)
     // The definition's type should resolve as Int
     // (we don't introspect beyond "no errors" since Definition node isn't
@@ -156,7 +156,7 @@ test('annotation informs inferred types (i32 alias)', () => {
 // ------------------------------------------------------------------
 
 test('@if with matching branches has no errors', () => {
-    const { errors } = check('\\\\ abs (Int)\n@let abs x := { &@if x < 0, { 0 - x }, { x } };')
+    const { errors } = check('\\\\ abs (Int)\n@global abs x := { &@if x < 0, { 0 - x }, { x } };')
     expect(errors).toHaveLength(0)
 })
 
@@ -168,7 +168,7 @@ test('@if result type flows through to caller', () => {
 
 test('@if with mismatched branch types produces an error', () => {
     // then: Int, else: Float → mismatch
-    const { errors } = check('@let x := { &@if 1, { 1 }, { 2.5 } };')
+    const { errors } = check('@global x := { &@if 1, { 1 }, { 2.5 } };')
     expect(errors.length).toBeGreaterThan(0)
 })
 
@@ -183,18 +183,18 @@ test('@if without else branch is void (TypeUnknown — no errors)', () => {
 // ------------------------------------------------------------------
 
 test('return type of user function resolves at call site', () => {
-    const { errors } = check('\\\\ add (Int, Int)\n@let add x, y := x + y; &add 1, 2;')
+    const { errors } = check('\\\\ add (Int, Int)\n@global add x, y := x + y; &add 1, 2;')
     expect(errors).toHaveLength(0)
 })
 
 test('wrong arg type at user function call site errors', () => {
-    const { errors } = check('\\\\ double (Int)\n@let double x := x + x; &double 1.5;')
+    const { errors } = check('\\\\ double (Int)\n@global double x := x + x; &double 1.5;')
     expect(errors.length).toBeGreaterThan(0)
     expect(errors[0].kind).toBe('Mismatch')
 })
 
 test('wrong arity at user function call site errors', () => {
-    const { errors } = check('\\\\ add (Int, Int)\n@let add x, y := x + y; &add 1;')
+    const { errors } = check('\\\\ add (Int, Int)\n@global add x, y := x + y; &add 1;')
     expect(errors.length).toBeGreaterThan(0)
     expect(errors[0].kind).toBe('ArityMismatch')
 })
@@ -204,15 +204,15 @@ test('wrong arity at user function call site errors', () => {
 // ------------------------------------------------------------------
 
 test('forward reference: wrong arg type caught before definition', () => {
-    // &add appears before @let add — pre-pass seeds the signature so the
+    // &add appears before @global add — pre-pass seeds the signature so the
     // call site is type-checked even though the definition comes later.
-    const { errors } = check('&add 1.0, 2.0;\n\\\\ add (Int, Int)\n@let add x, y := x + y;')
+    const { errors } = check('&add 1.0, 2.0;\n\\\\ add (Int, Int)\n@global add x, y := x + y;')
     expect(errors.length).toBeGreaterThan(0)
     expect(errors[0].kind).toBe('Mismatch')
 })
 
 test('forward reference: correct call before definition has no errors', () => {
-    const { errors } = check('\\\\ add (Int, Int)\n@let add x, y := x + y;')
+    const { errors } = check('\\\\ add (Int, Int)\n@global add x, y := x + y;')
     expect(errors).toHaveLength(0)
 })
 
@@ -220,8 +220,8 @@ test('forward reference: correct call before definition has no errors', () => {
 // Immutable bindings
 // ------------------------------------------------------------------
 
-test('@let binding cannot be reassigned', () => {
-    const { errors } = check('@let x := 5; x = 10;')
+test('@global binding cannot be reassigned', () => {
+    const { errors } = check('@global x := 5; x = 10;')
     expect(errors.length).toBeGreaterThan(0)
     expect(errors[0].kind).toBe('ImmutableAssignment')
 })
@@ -232,17 +232,17 @@ test('@fn binding cannot be reassigned', () => {
     expect(errors[0].kind).toBe('ImmutableAssignment')
 })
 
-test('@var binding can be reassigned', () => {
-    const { errors } = check('@var count := 0; count = 1;')
+test('@local binding can be reassigned', () => {
+    const { errors } = check('@local count := 0; count = 1;')
     expect(errors).toHaveLength(0)
 })
 
-test('a mutable @var local shadows a same-named top-level @fn for assignment', () => {
+test('a mutable @local local shadows a same-named top-level @fn for assignment', () => {
     // Regression: a top-level `@fn out` marked `out` immutable globally, so a
-    // later local `@var out` inside another function could not be reassigned.
+    // later local `@local out` inside another function could not be reassigned.
     const { errors } = check(
         '\\\\ out () -> Int\n@fn out := 0;\n' +
-        '\\\\ build () -> Int\n@fn build := { @var out := 1; out = 2; out };')
+        '\\\\ build () -> Int\n@fn build := { @local out := 1; out = 2; out };')
     expect(errors).toHaveLength(0)
 })
 
@@ -276,12 +276,12 @@ test('@type_alias: declaration alone produces no errors', () => {
 })
 
 test('@type_alias: annotation using the alias resolves correctly', () => {
-    const { errors } = check('@type_alias age := Int;\n@let my_age := 34;')
+    const { errors } = check('@type_alias age := Int;\n@global my_age := 34;')
     expect(errors).toHaveLength(0)
 })
 
 test('@type_alias: alias is transparent — alias value + Int is valid', () => {
-    const { errors } = check('@type_alias age := Int;\n@let x := 5;\nx + 10;')
+    const { errors } = check('@type_alias age := Int;\n@global x := 5;\nx + 10;')
     expect(errors).toHaveLength(0)
 })
 
@@ -319,7 +319,7 @@ test('@type_distinct: registered as Distinct kind in typeAliases', () => {
 })
 
 test('@type_distinct: assigning Int to distinct-typed binding is a type error', () => {
-    const { errors } = check('@type_distinct UserId := Int;\n@let id := &@as UserId, 42;')
+    const { errors } = check('@type_distinct UserId := Int;\n@global id := &@as UserId, 42;')
     // 42 is Int; UserId is Distinct — they are not equal, so this is a type error.
     expect(errors.length).toBeGreaterThan(0)
     expect(errors[0].kind).toBe('Annotation')
@@ -383,7 +383,7 @@ test('@type_sum: single-variant sum type works', () => {
 test('@match: basic sum type matching has no errors', () => {
     const { errors } = check(
         '@type_sum Color := Red | Green | Blue;\n' +
-        '@var c := Color::Red;\n' +
+        '@local c := Color::Red;\n' +
         '&@match c, Color::Red, { 1 }, Color::Green, { 2 }, Color::Blue, { 3 };'
     )
     expect(errors).toHaveLength(0)
@@ -393,7 +393,7 @@ test('@match: wrong pattern type is a type error', () => {
     // Pattern is Int literal, discriminant is Color — Mismatch
     const { errors } = check(
         '@type_sum Color := Red | Green | Blue;\n' +
-        '@var c := Color::Red;\n' +
+        '@local c := Color::Red;\n' +
         '&@match c, 1, { 10 }, 2, { 20 };'
     )
     expect(errors.length).toBeGreaterThan(0)
@@ -404,7 +404,7 @@ test('@match: mismatched arm result types is a type error', () => {
     // First arm returns Int, second returns Float
     const { errors } = check(
         '@type_sum Color := Red | Green | Blue;\n' +
-        '@var c := Color::Red;\n' +
+        '@local c := Color::Red;\n' +
         '&@match c, Color::Red, { 1 }, Color::Green, { 2.5 };'
     )
     expect(errors.length).toBeGreaterThan(0)
@@ -415,7 +415,7 @@ test('@match: result type flows through to caller', () => {
     // @match returns Int, so 3 + result should be valid
     const { errors } = check(
         '@type_sum Color := Red | Green | Blue;\n' +
-        '@var c := Color::Red;\n' +
+        '@local c := Color::Red;\n' +
         '3 + &@match c, Color::Red, { 1 }, Color::Green, { 2 }, Color::Blue, { 3 };'
     )
     expect(errors).toHaveLength(0)
@@ -426,29 +426,29 @@ test('@match: result type flows through to caller', () => {
 // ---------------------------------------------------------------------------
 
 test('@local: declaration with matching annotation has no errors', () => {
-    const { errors } = check('\\\\ f (Int)\n@let f x := { @local tmp := x + 1; tmp };')
+    const { errors } = check('\\\\ f (Int)\n@global f x := { @local tmp := x + 1; tmp };')
     expect(errors).toHaveLength(0)
 })
 
 test('@local: wrong annotation type is a type error', () => {
-    const { errors } = check('\\\\ f (Int)\n@let f x := { @local tmp := &@as Float, x + 1; tmp };')
+    const { errors } = check('\\\\ f (Int)\n@global f x := { @local tmp := &@as Float, x + 1; tmp };')
     expect(errors.length).toBeGreaterThan(0)
     expect(errors[0].kind).toBe('Annotation')
 })
 
 test('@local: is mutable — reassignment does not error', () => {
-    const { errors } = check('\\\\ f (Int)\n@let f x := { @local tmp := 0; tmp = x + 1; tmp };')
+    const { errors } = check('\\\\ f (Int)\n@global f x := { @local tmp := 0; tmp = x + 1; tmp };')
     expect(errors).toHaveLength(0)
 })
 
 test('@local: type flows through to caller', () => {
     // tmp is Int, so tmp + 1 should be valid
-    const { errors } = check('\\\\ f (Int)\n@let f x := { @local tmp := x; tmp + 1 };')
+    const { errors } = check('\\\\ f (Int)\n@global f x := { @local tmp := x; tmp + 1 };')
     expect(errors).toHaveLength(0)
 })
 
 test('@local: wrong type in reassignment is a type error', () => {
-    const { errors } = check('\\\\ f (Int)\n@let f x := { @local tmp := 0; tmp = 3.14; tmp };')
+    const { errors } = check('\\\\ f (Int)\n@global f x := { @local tmp := 0; tmp = 3.14; tmp };')
     expect(errors.length).toBeGreaterThan(0)
     expect(errors[0].kind).toBe('Mismatch')
 })

@@ -735,7 +735,7 @@
 <pre>error[E0102]: type mismatch
   --&gt; src/main.si:12:5
    |
-12 |     @let count:Int := 3.14;
+12 |     @global count:Int := 3.14;
    |     ^^^^^^^^^^^^^^^^^^^^^^ expected Int, got Float
    |
    = note: a runtime trap at this location will fire if the program
@@ -787,7 +787,7 @@ unreachable                    ;; validator requirement</pre>
 <h3>6.3 Errors that bind to a value (not just a site)</h3>
 
 <p>
-  For "value-level" errors — like <code>@let x:Int := some_function_returning_string</code>
+  For "value-level" errors — like <code>@global x:Int := some_function_returning_string</code>
   — the trap fires when <code>x</code> is <em>read</em>, not at the
   binding.  This requires writing the diag id into the slot in place of
   the offending value and trapping on read.  Adds complexity; for the

@@ -60,7 +60,7 @@ arguments, so the out-parameter rides the input arg list.
   fdflags:Int,
   opened_fd_out:Int;        # out-pointer: host writes the new fd here
 
-@let openFile path_ptr:Int, path_len:Int := {
+@global openFile path_ptr:Int, path_len:Int := {
   @local fd_out := &scratch_alloc 4;
   &wasi_path_open
     3, 0, path_ptr, path_len,    # dirfd=3 (first preopen), flags=0

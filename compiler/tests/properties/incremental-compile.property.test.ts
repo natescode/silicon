@@ -77,7 +77,7 @@ const EDIT_CHARS = [' ', '1', 'x', 'q', ';', '\n', ')', '+', '@', 'r', '#']
 
 /** Apply one pseudo-random edit (insert / delete / replace) to `src`. */
 function mutate(src: string, rand: () => number): string {
-    if (src.length === 0) return '@let x := 1;'
+    if (src.length === 0) return '@global x := 1;'
     const at = Math.floor(rand() * src.length)
     const op = rand()
     const ch = EDIT_CHARS[Math.floor(rand() * EDIT_CHARS.length)]

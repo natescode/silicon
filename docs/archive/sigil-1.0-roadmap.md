@@ -114,7 +114,7 @@ line, column, underline), and what to do about it. A message that says only
 error[T0042]: cannot add Int and Float
   --> src/math.si:12:14
    |
-12 |   @let total := count + ratio;
+12 |   @global total := count + ratio;
    |                 ^^^^^ Int
    |                         ^^^^^ Float
    = hint: use &@toFloat count to convert, or &@toInt ratio
@@ -264,8 +264,8 @@ array or string must accept separate pointer and length arguments, and there is
 no way to express "a view into the middle of a buffer" safely.
 
 ```silicon
-@let sum slice:Slice[Int] := {
-    @var total:Int := 0;
+@global sum slice:Slice[Int] := {
+    @local total:Int := 0;
     @loop i := 0; i < slice.len; i = i + 1; {
         total = total + slice[i];
     };
@@ -370,7 +370,7 @@ the acceptance test for the entire toolchain.
 my-project/
 ├── sgl.toml          # name, version, entry point
 └── src/
-    └── main.si       # @extern print x:Int; @let main := { &print 72; }
+    └── main.si       # @extern print x:Int; @global main := { &print 72; }
                       # — or a proper string print once stdlib ships
 ```
 

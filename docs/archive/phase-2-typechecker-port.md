@@ -134,8 +134,8 @@ stage1's emitted errors JSON should match TS's byte-for-byte.
 3. **`preRegisterDefinitions`** — walk top-level definitions twice:
    - Pass 1: collect `@type_alias` and `@type_distinct` declarations into
      `ctx.typeAliases` (so subsequent `@fn` annotations can reference them).
-   - Pass 2: collect `@fn`/`@let`/`@var`/`@extern` signatures into
-     `ctx.functions`/`ctx.symbols`; mark `@let`/`@fn`/`@extern` names in
+   - Pass 2: collect `@fn`/`@global`/`@local`/`@extern` signatures into
+     `ctx.functions`/`ctx.symbols`; mark `@global`/`@fn`/`@extern` names in
      `ctx.immutable`.
 
 4. **Main walk** — for each top-level element, call `checkNode(element, ctx)`.
@@ -317,7 +317,7 @@ The TS-deletion checklist becomes:
 - ✓ Typechecker (this phase)
 - Pending: `@use` resolver in Silicon (Phase 3 — small)
 - Pending: expanded Silicon-side test runner (Phase 6 — medium)
-- Pending: definition keywords (`@let`/`@fn`/`@var`/`@extern`/`@export`)
+- Pending: definition keywords (`@global`/`@fn`/`@local`/`@extern`/`@export`)
   fully wired through body_rich (continuation of the work that proved out
   with `@const` and `@loc`)
 

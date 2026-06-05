@@ -1,2 +1,2 @@
-@let PI := 314;
+@global PI := 314;
 &PI;

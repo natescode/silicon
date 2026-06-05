@@ -333,7 +333,7 @@ Delfina</pre>
   <li>New build script (one of: <code>scripts/build-sigil.ts</code> for Stage 0 bootstrap;
     later replaced by a Silicon-side equivalent): reads every <code>src/strata/*.si</code>
     and <code>src/strata/modules/*.si</code>, concatenates with file headers, emits a
-    length-prefixed UTF-8 blob as a Silicon <code>@let bundle :String := '...'</code>
+    length-prefixed UTF-8 blob as a Silicon <code>@global bundle :String := '...'</code>
     in a generated <code>boot/embedded_bundle.si</code>.</li>
   <li>Adjust <code>boot/stage1.si</code> (renamed <code>boot/sigil.si</code> at this point)
     to consume the embedded bundle <em>before</em> reading user source from stdin: parse +

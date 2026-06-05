@@ -301,7 +301,7 @@ export function lowerProgram(
         // Legacy 'global' codegenKind OR migrated @var (D-D-11c — hook is
         // 'stratum_def' but the keyword still needs the same forward-ref
         // global registration).
-        if (hook === 'global' || node.keyword === '@var') {
+        if (hook === 'global' || node.keyword === '@local') {
             const name = watId(node.name?.name ?? '')
             ctx.globals.set(name, 'i32') // refined below
             ctx.varNames.add(name)
@@ -552,7 +552,7 @@ function injectJSStringRefSlots(
     for (const item of items) {
         const def = unwrap(item)
         if (!def || def.type !== 'Definition') continue
-        if (def.keyword !== '@fn' && def.keyword !== '@let') continue
+        if (def.keyword !== '@fn' && def.keyword !== '@global') continue
         const fn = fnByName.get(watId(def.name?.name ?? '')) ?? fnByName.get(def.name?.name ?? '')
         if (!fn) continue
         walkLocalsForJSString(def.binding?.expression ?? def.binding, fn)
@@ -561,7 +561,7 @@ function injectJSStringRefSlots(
 
 function walkLocalsForJSString(node: any, fn: IRFunction): void {
     if (!node || typeof node !== 'object') return
-    if (node.type === 'Definition' && (node.keyword === '@local' || node.keyword === '@var')) {
+    if (node.type === 'Definition' && node.keyword === '@local') {
         const localName: string | undefined = node.name?.name
         if (localName && node.name?.typeAnnotation?.typename === 'JSString') {
             const watLocalName = watId(localName)
@@ -605,7 +605,7 @@ function injectCharCodeArrayRefSlots(
 
     const walk = (node: any, fn: IRFunction): void => {
         if (!node || typeof node !== 'object') return
-        if (node.type === 'Definition' && (node.keyword === '@local' || node.keyword === '@var')) {
+        if (node.type === 'Definition' && node.keyword === '@local') {
             const localName: string | undefined = node.name?.name
             if (localName && node.name?.typeAnnotation?.typename === 'CharCodeArray') {
                 const wln = watId(localName)
@@ -625,7 +625,7 @@ function injectCharCodeArrayRefSlots(
     for (const item of items) {
         const def = unwrap(item)
         if (!def || def.type !== 'Definition') continue
-        if (def.keyword !== '@fn' && def.keyword !== '@let') continue
+        if (def.keyword !== '@fn' && def.keyword !== '@global') continue
         const fn = fnByName.get(watId(def.name?.name ?? '')) ?? fnByName.get(def.name?.name ?? '')
         if (fn) walk(def.binding?.expression ?? def.binding, fn)
     }
@@ -649,7 +649,7 @@ function injectLocalRefSlots(
     for (const item of items) {
         const def = unwrap(item)
         if (!def || def.type !== 'Definition') continue
-        if (def.keyword !== '@fn' && def.keyword !== '@let') continue
+        if (def.keyword !== '@fn' && def.keyword !== '@global') continue
         const name = def.name?.name
         if (!name) continue
         const watName = watId(name)
@@ -663,7 +663,7 @@ function walkLocalsForRefs(
     node: any, fn: IRFunction, wasmGcTypes: WasmGcTypeRegistry,
 ): void {
     if (!node || typeof node !== 'object') return
-    if (node.type === 'Definition' && (node.keyword === '@local' || node.keyword === '@var')) {
+    if (node.type === 'Definition' && node.keyword === '@local') {
         const localName: string | undefined = node.name?.name
         let annot = node.name?.typeAnnotation
         // New-design: locals carry no declared `:Type` annotation any more.
@@ -2063,11 +2063,10 @@ function lowerAsStmt(node: any, ctx: LowerCtx): IRStmt | null {
         return { kind: 'GlobalSet', name: target, value }
     }
 
-    // @var inside a function body: treat as a mutable local variable.
-    // Recognise by hook (legacy 'global') or by keyword (D-D-11c migrated @var
-    // with hook='stratum_def').  Either way, in-function @var emits a Local
-    // declaration + LocalSet, not a module Global.
-    if (node.type === 'Definition' && (node.hook === 'global' || node.keyword === '@var')) {
+    // Legacy 'global' codegenKind binding inside a function body: treat as a
+    // mutable local variable (Local declaration + LocalSet, not a module
+    // Global).  In-function @local is handled by the @local branch below.
+    if (node.type === 'Definition' && node.hook === 'global') {
         const name = watId(node.name?.name ?? '')
         let wasmType: WasmValType = 'i32'
         if (node.name?.typeAnnotation?.typename) {

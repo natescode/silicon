@@ -163,7 +163,7 @@
     <pre>error[E0102]: type mismatch
   --&gt; src/main.si:12:5
    |
-12 |     @let count:Int := 3.14;
+12 |     @global count:Int := 3.14;
    |     ^^^^^^^^^^^^^^^^^^^^^^ expected Int, got Float
    |</pre>
     <ol class="ac">
@@ -216,7 +216,7 @@
   </div>
   <div class="body">
     <p>As a <em>Silicon developer</em>, I want the compiler to suggest the closest valid identifier / type / keyword when I make a typo.</p>
-    <p>Example: <code>@let x:Itn := 5;</code> → <em>note: did you mean <code>Int</code>?</em></p>
+    <p>Example: <code>@global x:Itn := 5;</code> → <em>note: did you mean <code>Int</code>?</em></p>
     <ol class="ac">
       <li>Levenshtein distance &le; 2 against in-scope identifiers / known types / registered keywords.</li>
       <li>Suggestion rendered as a separate <em>note</em> line under the main error.</li>
@@ -386,7 +386,7 @@
     <p>As a <em>Silicon learner</em>, I want a REPL where I can type expressions and see their values, so I can experiment without writing a full program.</p>
     <ol class="ac">
       <li>Wraps each input in a synthetic <code>_start</code>, compiles to WASM, runs under an in-process wasmtime, prints result.</li>
-      <li>State accumulates: <code>@let x := 5</code> then <code>x + 1</code> works.</li>
+      <li>State accumulates: <code>@global x := 5</code> then <code>x + 1</code> works.</li>
       <li>Handles incomplete input (newline continuation on unmatched brace).</li>
     </ol>
   </div>
@@ -667,7 +667,7 @@
   <div class="body">
     <p>As a <em>Silicon developer</em>, I want to write <code>@fn first&lt;T&gt; xs:List&lt;T&gt; := { ... }</code>, so collection types and helpers don't require copy-paste-per-type.</p>
     <ol class="ac">
-      <li>Type-parameter syntax in <code>@fn</code>, <code>@let</code>, <code>@type</code>.</li>
+      <li>Type-parameter syntax in <code>@fn</code>, <code>@global</code>, <code>@type</code>.</li>
       <li>Monomorphization at call sites (no boxing / dynamic dispatch).</li>
       <li>Type inference at the call site doesn't require explicit <code>::&lt;T&gt;</code>.</li>
       <li>Bounded generics (<code>T: Hashable</code>) require LANG-3.</li>

@@ -35,66 +35,66 @@
 @extern { \\ sinf (Float) -> Float }
 @extern { \\ cosf (Float) -> Float }
 
-@var gAngleX := 0.0;
-@var gAngleY := 0.0;
-@var gSinX := 0.0;
-@var gCosX := 1.0;
-@var gSinY := 0.0;
-@var gCosY := 1.0;
-@var pos := 1.0;
-@var neg := 0.0;
-@var gCx := 450.0;
-@var gCy := 350.0;
-@var gFocal := 320.0;
+@local gAngleX := 0.0;
+@local gAngleY := 0.0;
+@local gSinX := 0.0;
+@local gCosX := 1.0;
+@local gSinY := 0.0;
+@local gCosY := 1.0;
+@local pos := 1.0;
+@local neg := 0.0;
+@local gCx := 450.0;
+@local gCy := 350.0;
+@local gFocal := 320.0;
 
 \\ rx (Float, Float, Float) -> Float
 @fn rx x, y, z := { ((x * gCosY) + (z * gSinY)) };
 \\ ry (Float, Float, Float) -> Float
 @fn ry x, y, z := {
-    @var z1 := ((z * gCosY) - (x * gSinY));
+    @local z1 := ((z * gCosY) - (x * gSinY));
     ((y * gCosX) - (z1 * gSinX))
 };
 \\ rz (Float, Float, Float) -> Float
 @fn rz x, y, z := {
-    @var z1 := ((z * gCosY) - (x * gSinY));
+    @local z1 := ((z * gCosY) - (x * gSinY));
     ((y * gSinX) + (z1 * gCosX))
 };
 \\ sx (Float, Float, Float) -> Float
 @fn sx x, y, z := {
-    @var ox := &rx x, y, z;
-    @var oz := &rz x, y, z;
-    @var scale := (gFocal / (4.0 - oz));
+    @local ox := &rx x, y, z;
+    @local oz := &rz x, y, z;
+    @local scale := (gFocal / (4.0 - oz));
     (gCx + (ox * scale))
 };
 \\ sy (Float, Float, Float) -> Float
 @fn sy x, y, z := {
-    @var oy := &ry x, y, z;
-    @var oz := &rz x, y, z;
-    @var scale := (gFocal / (4.0 - oz));
+    @local oy := &ry x, y, z;
+    @local oz := &rz x, y, z;
+    @local scale := (gFocal / (4.0 - oz));
     (gCy - (oy * scale))
 };
 \\ normalZ (Float, Float, Float, Float, Float, Float, Float, Float, Float) -> Float
 @fn normalZ ax, ay, az, bx, by, bz, cx, cy, cz := {
-    @var rax := &rx ax, ay, az;
-    @var ray := &ry ax, ay, az;
-    @var rbx := &rx bx, by, bz;
-    @var rby := &ry bx, by, bz;
-    @var rcx := &rx cx, cy, cz;
-    @var rcy := &ry cx, cy, cz;
-    @var e1x := (rbx - rax);
-    @var e1y := (rby - ray);
-    @var e2x := (rcx - rax);
-    @var e2y := (rcy - ray);
+    @local rax := &rx ax, ay, az;
+    @local ray := &ry ax, ay, az;
+    @local rbx := &rx bx, by, bz;
+    @local rby := &ry bx, by, bz;
+    @local rcx := &rx cx, cy, cz;
+    @local rcy := &ry cx, cy, cz;
+    @local e1x := (rbx - rax);
+    @local e1y := (rby - ray);
+    @local e2x := (rcx - rax);
+    @local e2y := (rcy - ray);
     ((e1x * e2y) - (e1y * e2x))
 };
 \\ drawFace (Float, Float, Float, Float, Float, Float, Float, Float, Float, Float, Float, Float, Int, Int, Int)
 @fn drawFace ax, ay, az, bx, by, bz, cx, cy, cz, dx, dy, dz, r, g, b := {
-    @var nz := &normalZ ax, ay, az, bx, by, bz, cx, cy, cz;
+    @local nz := &normalZ ax, ay, az, bx, by, bz, cx, cy, cz;
     &@if nz > 0.0, {
-        @var ax2 := &sx ax, ay, az;  @var ay2 := &sy ax, ay, az;
-        @var bx2 := &sx bx, by, bz;  @var by2 := &sy bx, by, bz;
-        @var cx2 := &sx cx, cy, cz;  @var cy2 := &sy cx, cy, cz;
-        @var dx2 := &sx dx, dy, dz;  @var dy2 := &sy dx, dy, dz;
+        @local ax2 := &sx ax, ay, az;  @local ay2 := &sy ax, ay, az;
+        @local bx2 := &sx bx, by, bz;  @local by2 := &sy bx, by, bz;
+        @local cx2 := &sx cx, cy, cz;  @local cy2 := &sy cx, cy, cz;
+        @local dx2 := &sx dx, dy, dz;  @local dy2 := &sy dx, dy, dz;
         &rlBegin 4;
         &rlColor4ub r, g, b, 255;
         &rlVertex2f ax2, ay2; &rlVertex2f bx2, by2; &rlVertex2f cx2, cy2;

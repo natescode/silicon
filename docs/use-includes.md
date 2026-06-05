@@ -44,7 +44,7 @@ Per the bootstrap plan and cleanup plan, the simplest possible rule:
 # main.si
 @use 'helper.si';
 
-@let sum := { &add 1, 2 };
+@global sum := { &add 1, 2 };
 ```
 
 Compiling `main.si` produces a WAT module that contains `$add`, `$sum`, and

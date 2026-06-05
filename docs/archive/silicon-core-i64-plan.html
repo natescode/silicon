@@ -244,7 +244,7 @@
 
 <p>
   Matches the existing <code>Int</code> / <code>Float</code> naming pattern.
-  Explicit about width.  Reads cleanly in declarations: <code>@let x:Int64</code>,
+  Explicit about width.  Reads cleanly in declarations: <code>@global x:Int64</code>,
   <code>@extern fd_seek a:Int, b:Int64, c:Int</code>.  Alternatives considered
   and rejected:
 </p>
@@ -266,17 +266,17 @@
 <h3>3.2 Literal suffix &mdash; <code>i64</code></h3>
 
 <pre><span class="cm"># Decimal</span>
-<span class="kw">@let</span> a:<span class="ty">Int64</span> <span class="op">:=</span> <span class="op">0</span><span class="ty">i64</span>;
-<span class="kw">@let</span> b:<span class="ty">Int64</span> <span class="op">:=</span> <span class="op">1234</span><span class="ty">i64</span>;
+<span class="kw">@global</span> a:<span class="ty">Int64</span> <span class="op">:=</span> <span class="op">0</span><span class="ty">i64</span>;
+<span class="kw">@global</span> b:<span class="ty">Int64</span> <span class="op">:=</span> <span class="op">1234</span><span class="ty">i64</span>;
 
 <span class="cm"># Hex / binary / octal</span>
-<span class="kw">@let</span> mask:<span class="ty">Int64</span> <span class="op">:=</span> <span class="op">0xFFFFFFFFFFFFFFFF</span><span class="ty">i64</span>;
-<span class="kw">@let</span> flags:<span class="ty">Int64</span> <span class="op">:=</span> <span class="op">0b1010</span><span class="ty">i64</span>;
-<span class="kw">@let</span> perm:<span class="ty">Int64</span> <span class="op">:=</span> <span class="op">0c755</span><span class="ty">i64</span>;
+<span class="kw">@global</span> mask:<span class="ty">Int64</span> <span class="op">:=</span> <span class="op">0xFFFFFFFFFFFFFFFF</span><span class="ty">i64</span>;
+<span class="kw">@global</span> flags:<span class="ty">Int64</span> <span class="op">:=</span> <span class="op">0b1010</span><span class="ty">i64</span>;
+<span class="kw">@global</span> perm:<span class="ty">Int64</span> <span class="op">:=</span> <span class="op">0c755</span><span class="ty">i64</span>;
 
 <span class="cm"># Negative</span>
-<span class="kw">@let</span> neg:<span class="ty">Int64</span> <span class="op">:=</span> <span class="op">0</span><span class="ty">i64</span> <span class="op">-</span> <span class="op">1</span><span class="ty">i64</span>;     <span class="cm"># reliable</span>
-<span class="kw">@let</span> neg2:<span class="ty">Int64</span> <span class="op">:=</span> <span class="op">-1</span><span class="ty">i64</span>;          <span class="cm"># IF unary-minus syntax lands</span>
+<span class="kw">@global</span> neg:<span class="ty">Int64</span> <span class="op">:=</span> <span class="op">0</span><span class="ty">i64</span> <span class="op">-</span> <span class="op">1</span><span class="ty">i64</span>;     <span class="cm"># reliable</span>
+<span class="kw">@global</span> neg2:<span class="ty">Int64</span> <span class="op">:=</span> <span class="op">-1</span><span class="ty">i64</span>;          <span class="cm"># IF unary-minus syntax lands</span>
 </pre>
 
 <p>
@@ -288,16 +288,16 @@
 
 <p>
   Plain integer literals without suffix keep their existing meaning
-  (<code>Int</code> = i32).  This means <code>@let x := 5;</code> is <em>still</em>
+  (<code>Int</code> = i32).  This means <code>@global x := 5;</code> is <em>still</em>
   i32 even if assigned to an <code>Int64</code> variable &mdash; the typechecker
-  raises a mismatch error.  Explicit suffix required: <code>@let x:Int64 := 5i64;</code>.
+  raises a mismatch error.  Explicit suffix required: <code>@global x:Int64 := 5i64;</code>.
 </p>
 
 <h3>3.3 Casts &mdash; <code>@toInt64</code> and <code>@toInt</code></h3>
 
-<pre><span class="kw">@let</span> a:<span class="ty">Int</span>   <span class="op">:=</span> <span class="op">42</span>;
-<span class="kw">@let</span> b:<span class="ty">Int64</span> <span class="op">:=</span> <span class="kw">@toInt64</span> a;       <span class="cm"># signed extend i32 -> i64</span>
-<span class="kw">@let</span> c:<span class="ty">Int</span>   <span class="op">:=</span> <span class="kw">@toInt</span>   b;       <span class="cm"># truncate i64 -> i32 (wrap)</span>
+<pre><span class="kw">@global</span> a:<span class="ty">Int</span>   <span class="op">:=</span> <span class="op">42</span>;
+<span class="kw">@global</span> b:<span class="ty">Int64</span> <span class="op">:=</span> <span class="kw">@toInt64</span> a;       <span class="cm"># signed extend i32 -> i64</span>
+<span class="kw">@global</span> c:<span class="ty">Int</span>   <span class="op">:=</span> <span class="kw">@toInt</span>   b;       <span class="cm"># truncate i64 -> i32 (wrap)</span>
 </pre>
 
 <p>
@@ -314,7 +314,7 @@
 <tr><td><code>5i64 + 3i64</code></td><td>Int64 (new in Phase C)</td></tr>
 <tr><td><code>5 + 3i64</code></td><td><strong>Type error.</strong>  Must <code>@toInt64 5</code>.</td></tr>
 <tr><td><code>&amp;f 5</code> where <code>f</code> declares <code>:Int64</code></td><td><strong>Type error.</strong>  Must pass <code>5i64</code>.</td></tr>
-<tr><td><code>@let x:Int64 := 5;</code></td><td><strong>Type error.</strong>  Initializer is Int.</td></tr>
+<tr><td><code>@global x:Int64 := 5;</code></td><td><strong>Type error.</strong>  Initializer is Int.</td></tr>
 </table>
 
 <p>

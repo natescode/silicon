@@ -1366,7 +1366,7 @@ function paramNameForPosition(doc: Document, fnName: string, i: number): string 
 
 /** Silicon built-in keywords offered as completion items. */
 const SILICON_KEYWORDS = [
-    '@fn', '@let', '@var', '@type', '@enum', '@extern', '@if', '@loop',
+    '@fn', '@global', '@local', '@type', '@enum', '@extern', '@if', '@loop',
     '@match', '@return', '@break', '@continue', '@struct', '@use',
 ]
 

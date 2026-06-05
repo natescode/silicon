@@ -45,7 +45,7 @@ describe('signature-lines grammar — NEW syntax parses', () => {
         expect(matches(L('@interface Show[T] {', `  ${BS} show T -> String`, '}'))).toBe(true)
     })
     test('expression-level ascription &@as', () => {
-        expect(matches('@let x := &@as Int, 0;')).toBe(true)
+        expect(matches('@global x := &@as Int, 0;')).toBe(true)
     })
 })
 

@@ -148,11 +148,11 @@ describe('Elaborator Registry', () => {
         test('lists all registered keywords', () => {
             const registry = createElaboratorRegistry()
             registerElaborator(registry, 'keyword', '@fn', createTestKeywordNode('@fn'))
-            registerElaborator(registry, 'keyword', '@let', createTestKeywordNode('@let'))
+            registerElaborator(registry, 'keyword', '@global', createTestKeywordNode('@global'))
             const kws = listKeywords(registry)
             expect(kws).toHaveLength(2)
             expect(kws).toContain('@fn')
-            expect(kws).toContain('@let')
+            expect(kws).toContain('@global')
         })
     })
 
@@ -190,13 +190,13 @@ describe('Elaborator Registry', () => {
 
             const reg2 = createElaboratorRegistry()
             registerElaborator(reg2, 'operator', '-', createTestOperatorNode('-'))
-            registerElaborator(reg2, 'keyword', '@let', createTestKeywordNode('@let'))
+            registerElaborator(reg2, 'keyword', '@global', createTestKeywordNode('@global'))
 
             const merged = mergeRegistries(reg1, reg2)
             expect(hasOperator(merged, '+')).toBe(true)
             expect(hasOperator(merged, '-')).toBe(true)
             expect(hasKeyword(merged, '@fn')).toBe(true)
-            expect(hasKeyword(merged, '@let')).toBe(true)
+            expect(hasKeyword(merged, '@global')).toBe(true)
         })
 
         test('source overwrites target on conflicts', () => {

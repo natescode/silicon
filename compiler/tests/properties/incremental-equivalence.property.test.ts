@@ -73,7 +73,7 @@ function growIdent(src: string): string | null {
 
 /** Append a fresh top-level definition (adds a trailing line). */
 function appendDef(src: string): string {
-    return src + (src.endsWith('\n') ? '' : '\n') + '@let __probe_zz := 0;'
+    return src + (src.endsWith('\n') ? '' : '\n') + '@global __probe_zz := 0;'
 }
 
 /** Insert a newline right after the first top-level `;` (ΔLines != 0). */
@@ -108,7 +108,7 @@ function commentOutLastLine(src: string): string | null {
 
 /** Prepend a definition (damage at offset 0 → fallback path). */
 function prepend(src: string): string {
-    return '@let __pre := 0;\n' + src
+    return '@global __pre := 0;\n' + src
 }
 
 // ---------------------------------------------------------------------------
@@ -186,14 +186,14 @@ describe('incremental parse ≡ full reparse (3b/M1)', () => {
 describe('incremental parse via withChanges (3b/M1)', () => {
     test('range-based single + multi edits ≡ full', () => {
         // Two top-level lets on separate lines; edit the literal on each.
-        const src = '@let a := 1;\n@let b := 2;\n@let c := 3;'
+        const src = '@global a := 1;\n@global b := 2;\n@global c := 3;'
         const tree = parse(src).tree
 
         // Single change: "2" → "2002" on line 2 (col 11..12, endCol exclusive).
         const single: TextChange[] = [
             { range: { startLine: 2, startCol: 11, endLine: 2, endCol: 12 }, newText: '2002' },
         ]
-        const afterSingle = '@let a := 1;\n@let b := 2002;\n@let c := 3;'
+        const afterSingle = '@global a := 1;\n@global b := 2002;\n@global c := 3;'
         expect(stableStringify(tree.withChanges(single).tree.program))
             .toBe(stableStringify(parse(afterSingle).tree.program))
         expect(damageFromChanges(src, single)).not.toBeNull()
@@ -203,13 +203,13 @@ describe('incremental parse via withChanges (3b/M1)', () => {
             { range: { startLine: 1, startCol: 11, endLine: 1, endCol: 12 }, newText: '11' },
             { range: { startLine: 3, startCol: 11, endLine: 3, endCol: 12 }, newText: '33' },
         ]
-        const afterMulti = '@let a := 11;\n@let b := 2;\n@let c := 33;'
+        const afterMulti = '@global a := 11;\n@global b := 2;\n@global c := 33;'
         expect(stableStringify(tree.withChanges(multi).tree.program))
             .toBe(stableStringify(parse(afterMulti).tree.program))
     })
 
     test('empty change set is a no-op equivalent to the source', () => {
-        const src = '@let a := 1;\n@let b := 2;'
+        const src = '@global a := 1;\n@global b := 2;'
         const tree = parse(src).tree
         expect(stableStringify(tree.withChanges([]).tree.program))
             .toBe(stableStringify(parse(src).tree.program))
@@ -221,9 +221,9 @@ describe('incremental parse via withChanges (3b/M1)', () => {
         // — even outside the window — must fall back to a full reparse and
         // surface the diagnostic, never throw.  Regression for the
         // parseProgramFragment construction-time lex error.
-        const src = '@let a := 1;\n@let b := 2;\n@let c := 3;'
+        const src = '@global a := 1;\n@global b := 2;\n@global c := 3;'
         const tree = parse(src).tree
-        const edited = '@let a := 1;\n@let b := `;\n@let c := 3;'   // backtick is not a token
+        const edited = '@global a := 1;\n@global b := `;\n@global c := 3;'   // backtick is not a token
         let inc!: ReturnType<typeof tree.withText>
         expect(() => { inc = tree.withText(edited) }).not.toThrow()
         const full = parse(edited)
@@ -235,10 +235,10 @@ describe('incremental parse via withChanges (3b/M1)', () => {
 
 describe('M3: zero-copy suffix reuse across newline edits', () => {
     test('a newline-inserting edit reuses suffix descendants by reference', () => {
-        const src = '@let a := 1;\n@let b := 2;\n@let c := 3;'
+        const src = '@global a := 1;\n@global b := 2;\n@global c := 3;'
         const { extents } = parseProgramWithExtents(src)
-        const oldB = (extents[1].nodes[0] as any)        // old `@let b` Definition
-        const edited = '@let a := 1;\n\n@let b := 2;\n@let c := 3;'   // blank line inserted (ΔLines=1)
+        const oldB = (extents[1].nodes[0] as any)        // old `@global b` Definition
+        const edited = '@global a := 1;\n\n@global b := 2;\n@global c := 3;'   // blank line inserted (ΔLines=1)
 
         const dmg = damageFromText(src, edited)!
         const res = incrementalReparse(src, extents, edited, dmg)

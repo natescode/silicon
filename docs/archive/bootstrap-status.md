@@ -110,7 +110,7 @@ What lands today:
   and `defKinds`.  The test rebuilds the same registry via Stage 0's
   `buildStrataRegistry`, formats the same shape, and diffs
   byte-for-byte.  Currently **17 bare operators + 23 keywords +
-  12 defkinds** match exactly (`@let=function`, `@var=global`,
+  12 defkinds** match exactly (`@global=function`, `@local=global`,
   `@enum=type_sum`, …).  Typed variants like `+:Int` / `+:Float`
   collapse to a single `+` entry on both sides — the Silicon
   registry won't track typed variants until the body interpreter

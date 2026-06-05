@@ -75,7 +75,7 @@ function chainStr(calls: string[]): string {
 type Elem = { kind: 'fn'; name: string } | { kind: 'let'; name: string; body: Body }
 function elemStr(e: Elem): string {
     if (e.kind === 'fn') return `@fn ${e.name} x := { x + 1 };`
-    return `@let ${e.name} := ${bodyStr(e.body)};`
+    return `@global ${e.name} := ${bodyStr(e.body)};`
 }
 const progStr = (p: Elem[]) => p.map(elemStr).join('\n')
 

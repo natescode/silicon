@@ -103,18 +103,18 @@ test("buildStrataRegistry: registers @toInt and @toFloat cast strata (D-D-5 migr
 // Def-kinds registration
 // ---------------------------------------------------------------------------
 
-test("buildStrataRegistry: registers @let, @fn, @var def-kinds (D-D-11b/c migrated)", () => {
+test("buildStrataRegistry: registers @global, @fn, @local def-kinds (D-D-11b/c migrated)", () => {
     const registry = buildStrataRegistry(ASTFactory.program([]))
     // D-D-11b/c: all three now codegenKind 'stratum_def'.  Forward-ref
-    // global preScan still fires for @var via a keyword check in lowerProgram.
-    expect(registry.defKinds['@let']?.codegenKind).toBe('stratum_def')
+    // global preScan still fires for @local via a keyword check in lowerProgram.
+    expect(registry.defKinds['@global']?.codegenKind).toBe('stratum_def')
     expect(registry.defKinds['@fn']?.codegenKind).toBe('stratum_def')
-    expect(registry.defKinds['@var']?.codegenKind).toBe('stratum_def')
+    expect(registry.defKinds['@local']?.codegenKind).toBe('stratum_def')
 })
 
-test("buildStrataRegistry: @let allows params and binding", () => {
+test("buildStrataRegistry: @global allows params and binding", () => {
     const registry = buildStrataRegistry(ASTFactory.program([]))
-    const entry = registry.defKinds['@let']
+    const entry = registry.defKinds['@global']
     expect(entry.allowsParams).toBe(true)
     expect(entry.allowsBinding).toBe(true)
 })

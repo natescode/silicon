@@ -171,7 +171,7 @@ What's unblocked:
 | File | Declarations | Body complexity | Effort estimate |
 |---|---|---|---|
 | `metadata.si` | 2 (`@export`, `@platform`) | Low — one is a no-op, one needs `watId`+`isVarName`+`ir::makeExport` | 0.5 day |
-| `defkinds.si` | 10 | High — `@let`/`@fn` use `lowerParams`, `lowerFunctionBody`, `resolveFunctionReturnType`, `ir::makeFunction`. Heavy import-surface adds. | 2 days |
+| `defkinds.si` | 10 | High — `@global`/`@fn` use `lowerParams`, `lowerFunctionBody`, `resolveFunctionReturnType`, `ir::makeFunction`. Heavy import-surface adds. | 2 days |
 | `if.si` | 1 (`@if`) | Medium — `lowerExpr` × 3, `ir::makeIf`.  Cleanest IR-builder migration. | 0.5 day |
 | `loop.si` | 1 | Medium — control-flow IR, loop-id management | 1 day |
 | `match.si` | 1 | High — interacts with `expandMatchChain`, variant tag computation | 1 day |

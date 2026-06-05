@@ -16,7 +16,7 @@ import { Workspace } from './workspace'
 // resolution can produce a concrete return type (HM-lite does not infer a
 // usable type for untyped, un-annotated parameters — see the 2g tests).
 const ADD_LIB  = '\\\\ add (Int, Int)\n@fn add x, y := { x + y };'
-const USES_ADD = '@let r := &add 1, 2;'
+const USES_ADD = '@global r := &add 1, 2;'
 
 // ---------------------------------------------------------------------------
 // Project creation & membership
@@ -203,8 +203,8 @@ describe('Project — completion is scoped to project visibility (3a)', () => {
         app.addDependency(core)
 
         core.addDocument('core/math.si', ADD_LIB)        // defines `add`
-        app.addDocument('app/main.si', '@let x := 1;')
-        other.addDocument('other/c.si', '@let y := 1;')
+        app.addDocument('app/main.si', '@global x := 1;')
+        other.addDocument('other/c.si', '@global y := 1;')
 
         // app depends on core → `add` is offered.
         expect(ws.getCompletions('app/main.si', 1, 1).map(c => c.label)).toContain('add')

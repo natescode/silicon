@@ -443,10 +443,9 @@ button:disabled { opacity: 0.4; cursor: not-allowed; }
 &amp;<b>web::console_log</b> 42       <i># Int</i>
 &amp;<b>web::set_html</b> '&lt;b&gt;x&lt;/b&gt;'  <i># HTML panel</i></pre></details>
 
-      <details class="cheat-section"><summary>Variables</summary><pre>@let x := 5;      <i># immutable</i>
-@local y := 0;    <i># local</i>
-@var z := 0;      <i># mutable</i>
-z = z + 1;</pre></details>
+      <details class="cheat-section"><summary>Variables</summary><pre>@global PI := 5;   <i># immutable constant</i>
+@local count := 0; <i># mutable</i>
+count = count + 1; <i># reassign (only @local)</i></pre></details>
 
       <details class="cheat-section"><summary>Operators</summary><pre>+  -  *  /  %     <i># arithmetic</i>
 == != &lt; &lt;= &gt; &gt;=    <i># compare → Bool</i>
@@ -583,7 +582,7 @@ const silicon = StreamLanguage.define({
             return 'string'
         }
 
-        // @ keywords  (@let, @fn, @export, @local, @extern, @match, ...)
+        // @ keywords  (@global, @fn, @export, @local, @extern, @match, ...)
         if (stream.peek() === '@') {
             stream.next()
             stream.match(/^\w+/)
@@ -813,7 +812,7 @@ const EXAMPLES = {
 @fn run := {
     @local word := 'Silicon';
     @local n := &str_byte_len word;
-    @var i := 0;
+    @local i := 0;
     &@loop i < n, {
         &web::console_log_str (&str_slice word, i, (i + 1));
         i = i + 1;
@@ -892,7 +891,7 @@ const EXAMPLES = {
 
 \\\\ countTo (Int)
 @fn countTo n := {
-    @var i := 0;
+    @local i := 0;
     &@loop i < n, { i = i + 1; };
     i
 };
@@ -1007,22 +1006,22 @@ const EXAMPLES = {
 `# Snake — uses the tick + handle_key export convention.
 # Enable "run main" and compile. Use arrow keys to steer.
 
-@let GRID   := 20;
-@let CELL   := 16;
-@let MAXLEN := 400;
+@global GRID   := 20;
+@global CELL   := 16;
+@global MAXLEN := 400;
 
-@var head_x     := 10;
-@var head_y     := 10;
-@var dir        := 0;
-@var food_x     := 5;
-@var food_y     := 15;
-@var alive      := 1;
-@var length     := 3;
-@var body_x_ptr := 0;
-@var body_y_ptr := 0;
-@var ring_head  := 0;
-@var draw_i     := 0;
-@var draw_bi    := 0;
+@local head_x     := 10;
+@local head_y     := 10;
+@local dir        := 0;
+@local food_x     := 5;
+@local food_y     := 15;
+@local alive      := 1;
+@local length     := 3;
+@local body_x_ptr := 0;
+@local body_y_ptr := 0;
+@local ring_head  := 0;
+@local draw_i     := 0;
+@local draw_bi    := 0;
 
 \\\\ cell (Int, Int, Int, Int, Int)
 @fn cell x, y, r, g, b := {

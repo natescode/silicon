@@ -143,50 +143,50 @@ describe('applyTextChanges — errors', () => {
 
 describe('SyntaxTree.withChanges', () => {
     test('returns a ParseResult', () => {
-        const { tree } = parse('@let x := 42;')
-        const result = tree.withChanges([change(1, 11, 1, 13, '99')])
+        const { tree } = parse('@global x := 42;')
+        const result = tree.withChanges([change(1, 14, 1, 16, '99')])
         expect(result).toHaveProperty('tree')
         expect(result).toHaveProperty('diagnostics')
     })
 
     test('the new tree reflects the applied changes', () => {
-        const { tree } = parse('@let x := 42;')
+        const { tree } = parse('@global x := 42;')
         // Replace '42' with '99'
-        const { tree: newTree } = tree.withChanges([change(1, 11, 1, 13, '99')])
-        expect(newTree.source).toBe('@let x := 99;')
+        const { tree: newTree } = tree.withChanges([change(1, 14, 1, 16, '99')])
+        expect(newTree.source).toBe('@global x := 99;')
     })
 
     test('preserves the file name from the original tree', () => {
-        const { tree } = parse('@let x := 42;', { file: 'src/main.si' })
-        const { tree: newTree } = tree.withChanges([change(1, 11, 1, 13, '99')])
+        const { tree } = parse('@global x := 42;', { file: 'src/main.si' })
+        const { tree: newTree } = tree.withChanges([change(1, 14, 1, 16, '99')])
         expect(newTree.file).toBe('src/main.si')
     })
 
     test('original tree is not mutated', () => {
-        const { tree } = parse('@let x := 42;')
-        tree.withChanges([change(1, 11, 1, 13, '99')])
-        expect(tree.source).toBe('@let x := 42;')
+        const { tree } = parse('@global x := 42;')
+        tree.withChanges([change(1, 14, 1, 16, '99')])
+        expect(tree.source).toBe('@global x := 42;')
     })
 
     test('empty changes returns a tree with the same source text', () => {
-        const { tree } = parse('@let x := 42;')
+        const { tree } = parse('@global x := 42;')
         const { tree: newTree } = tree.withChanges([])
         expect(newTree.source).toBe(tree.source)
     })
 
     test('multi-line change produces a valid parse result', () => {
-        const src = '@fn answer := { 42 };\n@let r := &answer;'
+        const src = '@fn answer := { 42 };\n@global r := &answer;'
         const { tree } = parse(src)
         // Replace the entire second line with a new let binding
         const { tree: newTree, diagnostics } = tree.withChanges([
-            change(2, 1, 2, src.split('\n')[1].length + 1, '@let s := &answer;'),
+            change(2, 1, 2, src.split('\n')[1].length + 1, '@global s := &answer;'),
         ])
         expect(diagnostics).toHaveLength(0)
-        expect(newTree.source).toContain('@let s := &answer;')
+        expect(newTree.source).toContain('@global s := &answer;')
     })
 
     test('throws on overlapping changes (propagated from applyTextChanges)', () => {
-        const { tree } = parse('@let x := 42;')
+        const { tree } = parse('@global x := 42;')
         expect(() =>
             tree.withChanges([
                 change(1, 1, 1, 5, 'AAA'),

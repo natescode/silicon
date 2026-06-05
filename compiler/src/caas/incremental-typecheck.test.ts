@@ -39,7 +39,7 @@ function fresh(source: string): Document { return new Workspace().openDocument('
 // the final binding's literal leaves the first ten elements a verbatim prefix.
 const TEN = Array.from({ length: 10 }, (_, i) =>
     `\\\\ f${i} (Int)\n@fn f${i} x := { x + ${i} };`).join('\n')
-const DOC = `${TEN}\n@let r := &f9 100;`
+const DOC = `${TEN}\n@global r := &f9 100;`
 
 describe('E2 incremental type-check actually reuses the prefix', () => {
     test('editing the last element replays the unchanged prefix (reused > 0)', () => {
@@ -77,7 +77,7 @@ describe('E2 incremental type-check actually reuses the prefix', () => {
         // `&None` with no pinning annotation leaks an order-dependent ?Tn into the
         // typeMap. A prefix replay must advance the shared counter so the suffix's
         // ?Tn matches a full check exactly.
-        const base = `${TEN}\n@let a := &None;\n@let b := &None;`
+        const base = `${TEN}\n@global a := &None;\n@global b := &None;`
         const ws = new Workspace()
         ws.openDocument('m.si', base)
         const edited = base.replace('x + 5', 'x + 55')   // edit a middle annotated fn
@@ -86,11 +86,11 @@ describe('E2 incremental type-check actually reuses the prefix', () => {
     })
 
     test('a prefix element that forward-references a renamed suffix def is NOT stale-reused', () => {
-        // element 0 (`@let r`) forward-references `gg`, defined in element 1.
+        // element 0 (`@global r`) forward-references `gg`, defined in element 1.
         // Renaming gg→hh changes a DECLARATION, so a fresh check makes element 0's
         // `&gg` unbound. The prefix must NOT be replayed (its result depends on the
         // changed declaration) — the preRegSig gate forces a full re-check.
-        const base = `@let r := &gg 1;\n\\\\ gg (Int)\n@fn gg x := { x };`
+        const base = `@global r := &gg 1;\n\\\\ gg (Int)\n@fn gg x := { x };`
         const ws = new Workspace()
         ws.openDocument('m.si', base)
         const edited = base.replace(/gg/g, 'hh')   // rename the def (and its sig line)
@@ -103,7 +103,7 @@ describe('E2 incremental type-check actually reuses the prefix', () => {
     })
 
     test('changing a forward-referenced annotation stays equivalent (gate falls back)', () => {
-        const base = `@let r := &add 1, 2;\n\\\\ add (Int, Int)\n@fn add x, y := { x + y };`
+        const base = `@global r := &add 1, 2;\n\\\\ add (Int, Int)\n@fn add x, y := { x + y };`
         const ws = new Workspace()
         ws.openDocument('m.si', base)
         const edited = base.replace('(Int, Int)', '(Float, Float)').replace('x + y', '&toFloat x')

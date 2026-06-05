@@ -89,7 +89,7 @@ pair `()` to denote "no params explicitly":
 
 ```silicon
 @fn empty:Int () := 0;
-@let cb:$fn _:Int () := some_thunk;
+@global cb:$fn _:Int () := some_thunk;
 ```
 
 This is the same one-form-fits-all property the rest of the grammar
@@ -142,10 +142,10 @@ Existing bare forms continue to work unchanged.
 @fn nullary:Int () := 0;                      ;; new paren form
 
 ;; $fn type annotations
-@let cb:$fn _:Int _:Int := some_fn;            ;; existing
-@let cb:$fn _:Int (_:Int) := some_fn;          ;; new paren form
-@let thunk:$fn _:Int := zero;                  ;; existing — nullary
-@let thunk:$fn _:Int () := zero;               ;; new explicit nullary parens
+@global cb:$fn _:Int _:Int := some_fn;            ;; existing
+@global cb:$fn _:Int (_:Int) := some_fn;          ;; new paren form
+@global thunk:$fn _:Int := zero;                  ;; existing — nullary
+@global thunk:$fn _:Int () := zero;               ;; new explicit nullary parens
 
 ;; Disambiguation case — the entire reason this exists
 @fn dispatch (a:$fn _:Int (_:Int), b:$fn _:Bool (_:Float)) := 0;

@@ -196,7 +196,7 @@
 
   <ol>
     <li><strong>Diagnostics on save / change</strong> — surface the existing typechecker errors (already structured per <code>docs/diagnostics.md</code>) as <code>textDocument/publishDiagnostics</code>.  Free win: every check the Stage 0 compiler already runs becomes a red squiggle.</li>
-    <li><strong>Document symbols</strong> — outline view + breadcrumb support via <code>textDocument/documentSymbol</code>: every <code>@let</code>, <code>@fn</code>, <code>@var</code>, <code>@extern</code>, <code>@type</code>, <code>@stratum_*</code> in the file.</li>
+    <li><strong>Document symbols</strong> — outline view + breadcrumb support via <code>textDocument/documentSymbol</code>: every <code>@global</code>, <code>@fn</code>, <code>@local</code>, <code>@extern</code>, <code>@type</code>, <code>@stratum_*</code> in the file.</li>
     <li><strong>Go-to definition</strong> — <code>textDocument/definition</code> for <code>&amp;name</code> call sites, <code>name</code> identifier references (locals → declaration; globals → top-level def; cross-file via <code>@use</code> resolution).</li>
     <li><strong>Hover</strong> — <code>textDocument/hover</code> shows the source location and signature of whatever the cursor is on (function name, local, type).</li>
   </ol>
@@ -336,7 +336,7 @@ connection.<span class="fn">listen</span>()</pre>
     <tr><td>Unused local (future)</td><td>Warning</td><td><code>silicon.unused</code></td></tr>
   </table>
 
-  <div class="gate"><span class="lbl">Gate</span> &nbsp; Open <code>boot/parser/parse.si</code>, introduce an obvious type error (<code>@let bad := 'string' + 1;</code>) → red squiggle within ~200ms.  Fix it → squiggle disappears on next change.  No false positives on a clean file.</div>
+  <div class="gate"><span class="lbl">Gate</span> &nbsp; Open <code>boot/parser/parse.si</code>, introduce an obvious type error (<code>@global bad := 'string' + 1;</code>) → red squiggle within ~200ms.  Fix it → squiggle disappears on next change.  No false positives on a clean file.</div>
 
   <hr class="divider" />
 
@@ -375,7 +375,7 @@ connection.<span class="fn">listen</span>()</pre>
   <h4>Resolution algorithm for go-to definition</h4>
   <ol>
     <li>Find the AST node under the cursor.  Must be a <code>Namespace</code> (identifier reference) or <code>FunctionCall</code>.</li>
-    <li><strong>Single-segment name</strong>: walk outward from the cursor position through enclosing <code>@fn</code>'s scope (params → hoisted <code>@local</code>s → enclosing <code>@let</code>s of same file → other top-level defs of same file → <code>@use</code>'d files).  First match wins.</li>
+    <li><strong>Single-segment name</strong>: walk outward from the cursor position through enclosing <code>@fn</code>'s scope (params → hoisted <code>@local</code>s → enclosing <code>@global</code>s of same file → other top-level defs of same file → <code>@use</code>'d files).  First match wins.</li>
     <li><strong>Multi-segment name</strong> (<code>Module::fn</code>): resolve <code>Module</code> against <code>@use 'Module.si'</code>; look up <code>fn</code> in that file's symbol index.</li>
     <li>Return the symbol's <code>selectionRange</code> as a <code>Location</code> in the original file.</li>
   </ol>
@@ -423,7 +423,7 @@ connection.<span class="fn">listen</span>()</pre>
   <h3>5.1  Strata-aware editor semantics</h3>
 
   <div class="card idea">
-    <strong>Why this is hard, and why we punt it from v1.</strong>  Today the LSP can hard-code knowledge of built-in keywords (<code>@if</code>, <code>@loop</code>, <code>@let</code>, …).  To honour user-defined strata, the server has to evaluate each project's <code>@stratum_*</code> declarations and register them dynamically — same job <code>src/elaborator/strataLoader.ts</code> does at compile time.  Doable, but cross-cuts every feature (completion suggests user strata; hover explains them; definition jumps to <code>@stratum_keyword Foo ('@foo', Node) = { ... }</code>; rename rewrites both the declarator and every <code>&amp;@foo</code> call site).
+    <strong>Why this is hard, and why we punt it from v1.</strong>  Today the LSP can hard-code knowledge of built-in keywords (<code>@if</code>, <code>@loop</code>, <code>@global</code>, …).  To honour user-defined strata, the server has to evaluate each project's <code>@stratum_*</code> declarations and register them dynamically — same job <code>src/elaborator/strataLoader.ts</code> does at compile time.  Doable, but cross-cuts every feature (completion suggests user strata; hover explains them; definition jumps to <code>@stratum_keyword Foo ('@foo', Node) = { ... }</code>; rename rewrites both the declarator and every <code>&amp;@foo</code> call site).
   </div>
 
   <p>The mechanism, when it lands:</p>

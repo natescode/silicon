@@ -75,7 +75,7 @@ release page.
 
 > Silicon is a small WebAssembly-targeting systems language whose
 > compiler core has no special-case branches for keywords. `@if`,
-> `@loop`, `@match`, `@fn`, `@let`, `@struct`, `@type`, `@enum`,
+> `@loop`, `@match`, `@fn`, `@global`, `@struct`, `@type`, `@enum`,
 > `@defer`, `@try` — all are defined as Silicon source under
 > `src/strata/` and dispatched data-drivenly. Adding `@my_keyword`
 > is the same kind of work as writing a function.

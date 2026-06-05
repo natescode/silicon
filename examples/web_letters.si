@@ -30,7 +30,7 @@
 @fn log_letters word := {
     @local view := &string_as_slice word;
     @local len  := &slice_len view;
-    @var i := 0;
+    @local i := 0;
 
     &@loop i < len, {
         @local b := &slice_get_byte view, i;

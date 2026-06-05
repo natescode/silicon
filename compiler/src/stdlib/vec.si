@@ -123,7 +123,7 @@
 @fn vec_map_i32_i32 v, cb := {
     @local len := &vec_len v;
     @local result := &vec_new len;
-    @var i := 0;
+    @local i := 0;
     &@loop i < len, {
         @local x := &vec_get_i32 v, i;
         @local y := &@call_indirect cb, x;

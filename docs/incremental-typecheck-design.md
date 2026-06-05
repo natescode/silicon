@@ -14,7 +14,7 @@ I re-ran the load-bearing claims rather than trusting them. **One probe report i
 
 | Claim under test | Probe report said | What I observed | Verdict |
 |---|---|---|---|
-| `model.typeOf` never contains unresolved fresh vars (`?Tn`) | Report 1: "NO unresolved fresh type variables… counter not observable" | `@let x := &None;` (unconstrained no-arg polymorphic constructor) stores `Option[?T1]` **into the typeMap**. Two leading `&None`s shift it to `?T3`. | **FALSE in general.** Counter IS observable and order-dependent. |
+| `model.typeOf` never contains unresolved fresh vars (`?Tn`) | Report 1: "NO unresolved fresh type variables… counter not observable" | `@global x := &None;` (unconstrained no-arg polymorphic constructor) stores `Option[?T1]` **into the typeMap**. Two leading `&None`s shift it to `?T3`. | **FALSE in general.** Counter IS observable and order-dependent. |
 | Counter can be reset per-element without breaking byte-identity | Report 1 implication | Resetting per-element would renumber a later leaking element's `?Tn`, diverging from full. | **UNSAFE** as stated. |
 | Check **order** changes unannotated inference | Report 2 | `@fn a := {&b}; @fn b := {1};` → a-first gives `a=Unknown`, b-first gives `a=Int`. Confirmed at the typeMap level. | **CONFIRMED.** |
 | Annotated callee edits localize | Report 2 (4), Report 3 | Editing `@fn b := {1}` → `{2}` with `\\ b () (Int)` leaves the type/diag/symbol digests of callers `a`,`c` identical. | **CONFIRMED.** |
@@ -258,4 +258,4 @@ The full pass is: seed fresh `ctx` → `preRegisterDefinitions(all)` → `for el
 - Integration point: `/home/natescode/repos/silicon/compiler/src/caas/workspace.ts` (`#elabState` 239, `#compile` 729, typecheck call 782, cache write 789)
 - Model contract: `/home/natescode/repos/silicon/compiler/src/ast/semanticModel.ts` (`typeOf` 146, `allSymbols` 170 — note: an `IterableIterator`, not an array)
 
-**Correction flagged for the human:** Probe Report 1's conclusion ("no fresh vars in `model.typeOf`; counter can be reset per-element") is **empirically false** for unconstrained polymorphic calls (`@let x := &None` stores `Option[?T1]`; the number is order-sensitive prefix state). The design above does **not** rely on per-element counter reset; it preserves the shared monotonic counter via prefix replay / poison flags. All other probe findings reproduced.
+**Correction flagged for the human:** Probe Report 1's conclusion ("no fresh vars in `model.typeOf`; counter can be reset per-element") is **empirically false** for unconstrained polymorphic calls (`@global x := &None` stores `Option[?T1]`; the number is order-sensitive prefix state). The design above does **not** rely on per-element counter reset; it preserves the shared monotonic counter via prefix replay / poison flags. All other probe findings reproduced.

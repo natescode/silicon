@@ -166,7 +166,7 @@ class SemanticModel {
 
 ### `Symbol`
 
-A definition site — a name introduced by `@let`, `@fn`, `@type`, `@var`, etc.
+A definition site — a name introduced by `@global`, `@fn`, `@type`, `@local`, etc.
 
 ```typescript
 interface Symbol {
@@ -258,7 +258,7 @@ class SyntaxNode {
 ```typescript
 import { parse } from './src/api'
 
-const { tree } = parse('@fn add x, y := { x + y };\n@let result := &add 1, 2;')
+const { tree } = parse('@fn add x, y := { x + y };\n@global result := &add 1, 2;')
 
 // All definitions in the file:
 for (const node of tree.root.descendantsOfKind('Definition')) {
@@ -469,7 +469,7 @@ const app  = ws.addProject('app', { target: 'wasm-gc' })
 app.addDependency(core)                         // app → core
 
 core.addDocument('core/math.si', '\\ add (Int, Int)\n@fn add x, y := { x + y };')
-const main = app.addDocument('app/main.si', '@let r := &add 1, 2;')
+const main = app.addDocument('app/main.si', '@global r := &add 1, 2;')
 
 main.projectName                                // 'app'
 main.model.symbolNamed('r')?.type?.kind         // 'Int' — resolved across the edge
@@ -508,7 +508,7 @@ const manifest: SymbolManifest = {
 }
 
 ws.addReference(manifest)                       // global — visible to every document
-ws.openDocument('main.si', '@let r := &add 1, 2;')
+ws.openDocument('main.si', '@global r := &add 1, 2;')
 // `add` resolves through the reference; no "unbound identifier" error.
 
 // or scope it to a project (+ its dependents):
@@ -615,7 +615,7 @@ import { parse, buildRegistry, elaborate, typecheck, lower } from './src/api'
 
 const source = `
 @fn add x:Int, y:Int := { x + y };
-@let result:Int := &add 1, 2;
+@global result:Int := &add 1, 2;
 `
 
 // 1. Parse

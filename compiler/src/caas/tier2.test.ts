@@ -76,7 +76,7 @@ describe('Symbol.containingSymbol (2c)', () => {
 
     test('containingSymbol field is present on all symbols', () => {
         const ws = new Workspace()
-        ws.openDocument('f.si', '@fn add x, y := { x + y };\n@let result := &add 1, 2;')
+        ws.openDocument('f.si', '@fn add x, y := { x + y };\n@global result := &add 1, 2;')
         const doc = ws.getDocument('f.si')!
         for (const sym of doc.model.allSymbols) {
             expect('containingSymbol' in sym).toBe(true)
@@ -124,7 +124,7 @@ describe('Symbol.locations (2d)', () => {
 describe('Trivia (2e)', () => {
     function triviaDoc() {
         const ws = new Workspace()
-        ws.openDocument('f.si', '@fn add x, y := { x + y };\n@let r := &add 1, 2;')
+        ws.openDocument('f.si', '@fn add x, y := { x + y };\n@global r := &add 1, 2;')
         return ws.getDocument('f.si')!
     }
 
@@ -190,7 +190,7 @@ describe('Trivia (2e)', () => {
 describe('SyntaxWalker (2f)', () => {
     test('walk visits all nodes in the tree', () => {
         const ws = new Workspace()
-        ws.openDocument('f.si', '@fn add x, y := { x + y };\n@let r := &add 1, 2;')
+        ws.openDocument('f.si', '@fn add x, y := { x + y };\n@global r := &add 1, 2;')
         const doc = ws.getDocument('f.si')!
 
         class Counter extends SyntaxWalker {
@@ -221,7 +221,7 @@ describe('SyntaxWalker (2f)', () => {
 
     test('not calling super.visitNode prunes a subtree', () => {
         const ws = new Workspace()
-        ws.openDocument('f.si', '@fn add x, y := { x + y };\n@let r := &add 1, 2;')
+        ws.openDocument('f.si', '@fn add x, y := { x + y };\n@global r := &add 1, 2;')
         const doc = ws.getDocument('f.si')!
 
         class TopOnly extends SyntaxWalker {
@@ -279,7 +279,7 @@ describe('Cross-document typechecking (2g)', () => {
     test('result type is resolved correctly when callee is in another document', () => {
         const ws = new Workspace()
         ws.openDocument('lib.si', '\\\\ add (Int, Int)\n@fn add x, y := { x + y };')
-        ws.openDocument('main.si', '@let result := &add 1, 2;')
+        ws.openDocument('main.si', '@global result := &add 1, 2;')
         const doc = ws.getDocument('main.si')!
         const sym = doc.model.symbolNamed('result')
         expect(sym).toBeDefined()
@@ -290,7 +290,7 @@ describe('Cross-document typechecking (2g)', () => {
     test('no unbound-identifier diagnostic for cross-document calls', () => {
         const ws = new Workspace()
         ws.openDocument('lib.si', '@fn helper x := { x };')
-        ws.openDocument('main.si', '@let r := &helper 42;')
+        ws.openDocument('main.si', '@global r := &helper 42;')
         const doc = ws.getDocument('main.si')!
         const unboundErrors = doc.diagnostics.filter(d => d.code === 'E0004')
         expect(unboundErrors).toHaveLength(0)
@@ -299,14 +299,14 @@ describe('Cross-document typechecking (2g)', () => {
     test('editing the defining document degrades type when callee is renamed', () => {
         const ws = new Workspace()
         ws.openDocument('lib.si', '\\\\ add (Int, Int)\n@fn add x, y := { x + y };')
-        ws.openDocument('main.si', '@let r := &add 1, 2;')
+        ws.openDocument('main.si', '@global r := &add 1, 2;')
         const before = ws.getDocument('main.si')!
         // Cross-doc: r should be typed (not Unknown) while add exists.
         expect(before.model.symbolNamed('r')?.type?.kind).not.toBe('Unknown')
 
         // Edit lib.si to rename the function — 'add' no longer exists.
         ws.editDocument('lib.si', '\\\\ sub (Int, Int)\n@fn sub x, y := { x + y };')
-        ws.editDocument('main.si', '@let r := &add 1, 2;')
+        ws.editDocument('main.si', '@global r := &add 1, 2;')
 
         const after = ws.getDocument('main.si')!
         // With 'add' gone, the return type can no longer be inferred.
@@ -317,12 +317,12 @@ describe('Cross-document typechecking (2g)', () => {
     test('closing the defining document degrades type to Unknown', () => {
         const ws = new Workspace()
         ws.openDocument('lib.si', '\\\\ add (Int, Int)\n@fn add x, y := { x + y };')
-        ws.openDocument('main.si', '@let r := &add 1, 2;')
+        ws.openDocument('main.si', '@global r := &add 1, 2;')
         const doc1 = ws.getDocument('main.si')!
         expect(doc1.model.symbolNamed('r')?.type?.kind).not.toBe('Unknown')
 
         ws.closeDocument('lib.si')
-        ws.editDocument('main.si', '@let r := &add 1, 2;')
+        ws.editDocument('main.si', '@global r := &add 1, 2;')
         const doc2 = ws.getDocument('main.si')!
         expect(doc2.model.symbolNamed('r')?.type?.kind).toBe('Unknown')
     })

@@ -221,7 +221,7 @@ describe('WAT regression snapshots — known-good function shapes', () => {
     })
 
     test('global var appears in WAT data section', () => {
-        const wat = compileToWatString('@var count := 0;')
+        const wat = compileToWatString('@local count := 0;')
         expect(wat).toContain('(global')
         expect(wat).toContain('i32')
     })
@@ -237,7 +237,7 @@ describe('WAT regression snapshots — known-good function shapes', () => {
 
     test('@loop lowers to WAT block/loop pair', () => {
         const wat = compileToWatString(
-            '@fn f  := { @var n := 0; &@loop n < 5, { n = n + 1; }; n };'
+            '@fn f  := { @local n := 0; &@loop n < 5, { n = n + 1; }; n };'
         )
         expect(wat).toContain('(block')
         expect(wat).toContain('(loop')
@@ -258,7 +258,7 @@ describe('QBE IR regression snapshots — known-good function shapes', () => {
     })
 
     test('global var appears in QBE data/thread section', () => {
-        const qbe = toQbeIr('@var count := 0;')
+        const qbe = toQbeIr('@local count := 0;')
         expect(qbe).toMatch(/\$(count|_count)/)
     })
 
@@ -272,7 +272,7 @@ describe('QBE IR regression snapshots — known-good function shapes', () => {
 
     test('@loop lowers to QBE head/exit label pair with jnz condition', () => {
         const qbe = toQbeIr(
-            '@fn f  := { @var n := 0; &@loop n < 5, { n = n + 1; }; n };'
+            '@fn f  := { @local n := 0; &@loop n < 5, { n = n + 1; }; n };'
         )
         expect(qbe).toContain('@loop')       // loop head
         expect(qbe).toContain('@loop_exit')  // exit label

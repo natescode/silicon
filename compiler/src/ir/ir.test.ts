@@ -65,11 +65,11 @@ function lower(node: any): IRExpr {
 
 /** Lower an expression node directly using the internal lowerer. */
 function lowerExprDirect(node: any): IRExpr {
-    // Build a zero-param @let that returns the node as its body.
+    // Build a zero-param @global that returns the node as its body.
     const binding = { expression: node }
     const def = {
         type: 'Definition',
-        keyword: '@let',
+        keyword: '@global',
         name: { name: '__test', typeAnnotation: undefined },
         params: [],
         binding,
@@ -306,7 +306,7 @@ describe('IR pipeline: lowerProgram + emitModule', () => {
     test('simple Int function emits i32.add', () => {
         const addDef = {
             type: 'Definition',
-            keyword: '@let',
+            keyword: '@global',
             name: { name: 'add', typeAnnotation: { typename: 'Int' } },
             params: [
                 { name: 'a', typeAnnotation: { typename: 'Int' }, isLiteral: false },
@@ -342,7 +342,7 @@ describe('IR pipeline: lowerProgram + emitModule', () => {
     test('Float function emits f32.add — type-driven, not sniffed', () => {
         const addDef = {
             type: 'Definition',
-            keyword: '@let',
+            keyword: '@global',
             name: { name: 'fadd', typeAnnotation: { typename: 'Float' } },
             params: [
                 { name: 'a', typeAnnotation: { typename: 'Float' }, isLiteral: false },
@@ -373,7 +373,7 @@ describe('IR pipeline: lowerProgram + emitModule', () => {
     test('Float comparison function emits f32.gt with i32 result', () => {
         const def = {
             type: 'Definition',
-            keyword: '@let',
+            keyword: '@global',
             name: { name: 'greater', typeAnnotation: { typename: 'Int' } },
             params: [
                 { name: 'a', typeAnnotation: { typename: 'Float' }, isLiteral: false },

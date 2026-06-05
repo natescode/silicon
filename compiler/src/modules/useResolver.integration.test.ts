@@ -37,7 +37,7 @@ describe('@use end-to-end', () => {
     test('main.si calls helper.si @fn — full pipeline succeeds', () => {
         const files = {
             'helper.si': '\\\\ add (Int, Int) -> Int\n@fn add a, b := { a + b };',
-            'main.si':   "@use 'helper.si';\n@let sum := { &add 1, 2 };",
+            'main.si':   "@use 'helper.si';\n@global sum := { &add 1, 2 };",
         }
         const wat = fullCompile(files['main.si'], P('main.si'), files)
         expect(wat).toContain('$add')
@@ -49,7 +49,7 @@ describe('@use end-to-end', () => {
         const files = {
             'leaf.si': '@fn one  := { 1 };',
             'mid.si':  "@use 'leaf.si';\n@fn two := { (&one) + (&one) };",
-            'main.si': "@use 'mid.si';\n@let result := { &two };",
+            'main.si': "@use 'mid.si';\n@global result := { &two };",
         }
         const wat = fullCompile(files['main.si'], P('main.si'), files)
         expect(wat).toContain('$one')

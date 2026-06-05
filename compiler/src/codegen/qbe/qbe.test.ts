@@ -7,7 +7,7 @@
  *   - Operator mapping (WAT intrinsic name → QBE mnemonic)
  *   - Function signature emission from real Silicon source
  *   - @extern declaration emission
- *   - @var global declaration emission
+ *   - @local global declaration emission
  *
  * Tests use actual Silicon source code compiled through the real pipeline
  * (parse → elaborate → typecheck) then lowered directly to QBE IR text.
@@ -156,30 +156,30 @@ describe('lowerToQbe — @extern', () => {
 })
 
 // ---------------------------------------------------------------------------
-// @var global declaration emission  (Story 8-1 / 8-5)
+// @local global declaration emission  (Story 8-1 / 8-5)
 // ---------------------------------------------------------------------------
 
-describe('lowerToQbe — @var globals', () => {
-    test('@var Int emits a w-typed data declaration', () => {
-        const out = toQbe(`@var counter := 0;`)
+describe('lowerToQbe — @local globals', () => {
+    test('@local Int emits a w-typed data declaration', () => {
+        const out = toQbe(`@local counter := 0;`)
         expect(out).toContain('data $counter')
         expect(out).toContain('w 0')
     })
 
-    test('@var with non-zero init emits the actual value', () => {
-        const out = toQbe(`@var answer := 42;`)
+    test('@local with non-zero init emits the actual value', () => {
+        const out = toQbe(`@local answer := 42;`)
         expect(out).toContain('w 42')
     })
 
-    test('@var Float emits an s-typed data declaration', () => {
-        const out = toQbe(`@var pi := 3.14;`)
+    test('@local Float emits an s-typed data declaration', () => {
+        const out = toQbe(`@local pi := 3.14;`)
         expect(out).toContain('data $pi')
         expect(out).toContain('s ')
     })
 
     test('global appears before functions in output', () => {
         const out = toQbe(`
-            @var x := 0;
+            @local x := 0;
             \\\\ f () -> Int
             @fn f  := 1;
         `)
@@ -190,7 +190,7 @@ describe('lowerToQbe — @var globals', () => {
 
     test('global read in function body emits loadw', () => {
         const out = toQbe(`
-            @var g := 0;
+            @local g := 0;
             \\\\ read_g () -> Int
             @fn read_g  := g;
         `)
@@ -199,7 +199,7 @@ describe('lowerToQbe — @var globals', () => {
 
     test('global write in function body emits storew', () => {
         const out = toQbe(`
-            @var g := 0;
+            @local g := 0;
             @fn set_g  := { g = 99; };
         `)
         expect(out).toContain('storew')
@@ -208,7 +208,7 @@ describe('lowerToQbe — @var globals', () => {
 
     test('global read-modify-write emits load + op + store', () => {
         const out = toQbe(`
-            @var counter := 0;
+            @local counter := 0;
             @fn inc  := { counter = counter + 1; };
         `)
         expect(out).toContain('loadw $counter')

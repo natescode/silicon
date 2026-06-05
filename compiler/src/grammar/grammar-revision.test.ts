@@ -55,7 +55,7 @@ describe('Phase 5 grammar: discard identifier `_`', () => {
 // covered by src/types/fntype.test.ts in the new syntax.
 describe.skip('Phase 5 grammar: `$fn` sigil function-type annotation', () => {
     test('nullary fn type `:$fn _:Int`', () => {
-        const ast = parseSrc(`@let x := 42;`)
+        const ast = parseSrc(`@global x := 42;`)
         const ann = ast.elements[0].name.typeAnnotation
         expect(ann.typename).toBe('$fn')
         expect(ann.fnReturn.name).toBe('_')
@@ -64,7 +64,7 @@ describe.skip('Phase 5 grammar: `$fn` sigil function-type annotation', () => {
     })
 
     test('unary fn type `:$fn _:R _:T`', () => {
-        const ast = parseSrc(`@let f := 0;`)
+        const ast = parseSrc(`@global f := 0;`)
         const ann = ast.elements[0].name.typeAnnotation
         expect(ann.typename).toBe('$fn')
         expect(ann.fnReturn.typeAnnotation.typename).toBe('Int')
@@ -73,7 +73,7 @@ describe.skip('Phase 5 grammar: `$fn` sigil function-type annotation', () => {
     })
 
     test('n-ary fn type `:$fn _:R _:T1, _:T2, _:T3`', () => {
-        const ast = parseSrc(`@let f := 0;`)
+        const ast = parseSrc(`@global f := 0;`)
         const ann = ast.elements[0].name.typeAnnotation
         expect(ann.fnParams).toHaveLength(3)
         expect(ann.fnParams.map((p: any) => p.typeAnnotation.typename)).toEqual(['Int', 'Float', 'Bool'])
@@ -85,7 +85,7 @@ describe.skip('Phase 5 grammar: `$fn` sigil function-type annotation', () => {
         // is identical.
         const fnSrc  = `\\\\ add (Int, Int) -> Int
 @fn add a, b := a + b;`
-        const refSrc = `@let r := 0;`
+        const refSrc = `@global r := 0;`
         // Both must parse cleanly.  This is the structural regularity
         // assertion the design hangs on.
         expect(parseOk(fnSrc)).toBe(true)

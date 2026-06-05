@@ -32,7 +32,7 @@
 @fn log_letters word := {
     @local ptr := (&str_ptr word) + 4;
     @local len := &str_len word;
-    @var i := 0;
+    @local i := 0;
 
     &@loop i < len, {
         @local b := &WASM::i32_load8_u (ptr + i);

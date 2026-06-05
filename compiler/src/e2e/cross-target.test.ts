@@ -109,8 +109,8 @@ describe('Phase 9d-9: primitives parity', () => {
         await assertParity(`
             \\\\ run () -> Int
             @fn run  := {
-                @var sum := 0;
-                @var i := 1;
+                @local sum := 0;
+                @local i := 1;
                 &@loop i <= 10, { sum = sum + i; i = i + 1; };
                 sum
             };

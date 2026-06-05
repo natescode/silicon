@@ -654,7 +654,7 @@
       <code>int64_extern_call.si</code> excluded; no implementations provided</li>
     <li><strong><code>@defer</code> cleanup expressions</strong> — <code>defer_*.si</code>
       excluded</li>
-    <li><strong>Struct-based <code>@let</code></strong> — uncertain call-style access</li>
+    <li><strong>Struct-based <code>@global</code></strong> — uncertain call-style access</li>
   </ul>
   <p>
     If you delete src/ before these land, you also delete the reference
@@ -880,7 +880,7 @@
   would inherit.  Each one removes a footnote from the boot/ port stories.</em></p>
   <ol class="steps">
     <li><strong>Complete QBE backend (4–5d)</strong> — strings, structs, type
-      casts, @extern marshaling, @defer cleanup, struct-based @let.  Each
+      casts, @extern marshaling, @defer cleanup, struct-based @global.  Each
       feature is gated by a currently-excluded selfhost test
       (<code>src/e2e/selfhost.test.ts</code> lines 87–95 list them).
       <br/><span class="evidence">Acceptance: src/e2e/selfhost.test.ts excludeList shrinks to ≤ 2 entries; each remaining exclusion has a tracked v1.1 story.</span></li>
@@ -1810,7 +1810,7 @@ DECISION (§2c):
    ║ parens                     │ ✓ supported                      ║
    ╠═══════════════════════════╪══════════════════════════════════╣
    ║ Block { … }                │ 🔴 MISSING                       ║
-   ║ Definition (@let / @fn …)  │ 🔴 MISSING                       ║
+   ║ Definition (@global / @fn …)  │ 🔴 MISSING                       ║
    ║ DocComment (##)            │ 🔴 MISSING                       ║
    ║ Assignment (:=, +=, etc.)  │ 🔴 MISSING                       ║
    ║ VariantDecl ($Tag…)        │ 🔴 MISSING                       ║

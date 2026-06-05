@@ -79,8 +79,8 @@ const COMPILE_OK: string[] = [
     'if_in_block.si',             // @fn abs x:Int := { &@if x < 0, { 0 - x }, { x } };
     'early_return.si',            // @fn safeDivide ... @return
     // -- loops + variables --
-    'count_loop.si',              // @var n:Int + @loop
-    'var_global.si',              // @var count:Int := 0;
+    'count_loop.si',              // @local n:Int + @loop
+    'var_global.si',              // @local count:Int := 0;
     'var_mutation.si',            // global var mutation
     'local_set_fix.si',           // @fn inc x:Int := { x = x + 1; x };
 ]
@@ -90,7 +90,7 @@ const COMPILE_OK: string[] = [
 // string_literal.si, multiple_statements.si — string data sections unimplemented
 // struct_basic.si, struct_nested.si        — struct field layout unimplemented
 // cast_to_float.si, cast_to_int.si         — @toFloat/@toInt casts unimplemented
-// let_constant.si                          — @let + call-style access uncertain
+// let_constant.si                          — @global + call-style access uncertain
 // user_stratum_add.si                      — compiler API strata
 // path_open_i64.si                         — WASI FFI
 // defer_*.si, int64_extern_call.si         — @extern (no implementations provided)

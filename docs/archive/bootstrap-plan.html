@@ -272,7 +272,7 @@
   <table>
     <thead><tr><th>#</th><th>Form</th><th>Lead sigil</th><th>Surface syntax</th><th>Example</th></tr></thead>
     <tbody>
-      <tr><td>1</td><td><strong>Definition</strong></td><td><code>@</code></td><td><code>@kw name [params] [: type] [:= body];</code></td><td><code>@let add a, b := a + b;</code></td></tr>
+      <tr><td>1</td><td><strong>Definition</strong></td><td><code>@</code></td><td><code>@kw name [params] [: type] [:= body];</code></td><td><code>@global add a, b := a + b;</code></td></tr>
       <tr><td>2</td><td><strong>Annotation</strong></td><td><code>@@</code></td><td><code>@@name [args]</code> — decorates the next form</td><td><code>@@inline @fn fast := ...;</code></td></tr>
       <tr><td>3</td><td><strong>Function call</strong></td><td><code>&amp;</code> &middot; <code>&amp;&amp;</code> &middot; <code>\</code></td><td><code>&amp;name [args]</code> (<code>&amp;&amp;</code> = comptime, <code>\</code> = lambda invocation)</td><td><code>&amp;print 'hello'</code></td></tr>
       <tr><td>4</td><td><strong>Binary expression</strong></td><td>none</td><td><code>expr op expr (op expr)*</code> — flat, no precedence</td><td><code>a + b * c == 30</code></td></tr>
@@ -432,7 +432,7 @@ wasmer run sigil.wasm --use wasix --dir=. -- compile main.si
       <li><strong>Memory intrinsics</strong> — <code>WASM::i32_load</code>, <code>i32_store</code>, <code>i32_load8_u</code>, <code>i32_load8_s</code>, <code>i32_store8</code>, <code>f32_load</code>, <code>f32_store</code>, <code>memory.grow</code>, <code>memory.size</code> all callable from Silicon (<code>intrinsics.ts:94–106</code>).</li>
       <li><strong>String literal interning</strong> — string literals lower to length-prefixed UTF-16 LE data segments via <code>allocString</code> (<code>lower.ts:79</code>); <code>IRDataSegment</code> emission works (<code>emit.ts:67</code>).</li>
       <li><strong>Heap runtime</strong> — <code>$alloc</code> bump allocator and <code>$str_concat</code> already live in <code>std.wat</code> and are inlined into every module.</li>
-      <li><strong>Definition kinds</strong> — <code>@let</code>, <code>@fn</code>, <code>@local</code>, <code>@var</code>, <code>@extern</code>, <code>@export</code> all lower correctly via existing strata.</li>
+      <li><strong>Definition kinds</strong> — <code>@global</code>, <code>@fn</code>, <code>@local</code>, <code>@local</code>, <code>@extern</code>, <code>@export</code> all lower correctly via existing strata.</li>
       <li><strong>Expressions</strong> — arithmetic, comparison, bitwise (signed i32 + f32), <code>@if</code>, <code>@match</code> on values, <code>@loop</code>, <code>@break</code>, <code>@continue</code>, <code>@return</code>, blocks, function calls, intrinsics.</li>
     </ul>
   </div>
@@ -646,7 +646,7 @@ wasmer run sigil.wasm --use wasix --dir=. -- compile main.si
         <td>D</td>
         <td><strong>UTF-8 byte buffers</strong> — runtime-only feature: a new <code>@extern</code> read path that hands the caller a <code>(ptr, byte_len)</code> into raw UTF-8. String literals stay UTF-16; the parser uses <code>WASM::i32_load8_u</code> on the byte buffer and compares numeric byte-runs against per-keyword constant tables (no string-vs-string compare). <em>No language change required if we adopt this convention.</em></td>
         <td>convention only; docs</td>
-        <td>Smoke test: read a UTF-8 file, compare first 4 bytes against the bytes of <code>'@let'</code> coded as integers.</td>
+        <td>Smoke test: read a UTF-8 file, compare first 4 bytes against the bytes of <code>'@global'</code> coded as integers.</td>
       </tr>
       <tr>
         <td>E</td>
@@ -813,7 +813,7 @@ EOF</pre>
     <li><strong>Forward compatibility.</strong> A future <code>strata/refinement-types.si</code> registers a second Type-Stratum that contributes refinement types alongside the core ones; the engine doesn't change.</li>
     <li>Error-format struct matches Stage 0's <code>formatTypeError</code> output byte-for-byte so CLI tests don't diverge on text.</li>
   </ul>
-  <div class="gate"><span class="lbl">Gate</span> &nbsp; Same <code>(line, col, message)</code> tuple set as Stage 0 across the corpus. Additional fixture: a test Type-Stratum that adds a <code>BigInt</code> type type-checks an <code>@let x:BigInt := 5</code> program without engine changes.</div>
+  <div class="gate"><span class="lbl">Gate</span> &nbsp; Same <code>(line, col, message)</code> tuple set as Stage 0 across the corpus. Additional fixture: a test Type-Stratum that adds a <code>BigInt</code> type type-checks an <code>@global x:BigInt := 5</code> program without engine changes.</div>
 
   <!-- ─── PHASE 6 ─── -->
   <div class="phase-head"><span class="phase-num">Phase 6</span><span class="phase-name">IR Lowering — Codegen-Stratum Middleware</span></div>
@@ -1102,7 +1102,7 @@ EOF</pre>
       <li><strong>Open-extension fixtures green</strong> — the three "test stratum" fixtures from the Phase 3, 5, and 6 gates pass:
         <ul>
           <li>Registering a new IR kind <code>'TestKind'</code> round-trips through emit (Phase 3).</li>
-          <li>A test Type-Stratum adding <code>BigInt</code> type-checks an <code>@let x:BigInt := 5</code> program (Phase 5).</li>
+          <li>A test Type-Stratum adding <code>BigInt</code> type-checks an <code>@global x:BigInt := 5</code> program (Phase 5).</li>
           <li>A test Codegen-Stratum overriding <code>'BinOp'</code> changes lowering output (Phase 6).</li>
         </ul>
         Together these prove that <em>none</em> of the nine StrataTypes is hard-coded into the bootstrap — the architecture is mod-ready even if only built-ins are loaded.

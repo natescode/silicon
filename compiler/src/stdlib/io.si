@@ -79,7 +79,7 @@
 # print_bool(b) — write "true"/"false" and a newline to stdout.
 \\ print_bool (Bool) -> Int
 @fn print_bool b := {
-    @var s := 'false';
+    @local s := 'false';
     &@if b, { s = 'true' }, {};
     &print s
 };
@@ -103,7 +103,7 @@
     &WASM::i32_store (iov + 4), 1;
     @local nread := &scratch_alloc 4;
     @local rc := &wasi_snapshot_preview1::fd_read 0, iov, 1, nread;
-    @var result := 0 - 1;
+    @local result := 0 - 1;
     &@if rc == 0, {
         @local got := &WASM::i32_load nread;
         &@if got > 0, { result = &WASM::i32_load8_u buf }, {};
@@ -120,8 +120,8 @@
     @local buf := &alloc_string cap;
     @local buf_ptr := &str_ptr buf;
     @local base := buf_ptr + 4;
-    @var count := 0;
-    @var go := @true;
+    @local count := 0;
+    @local go := @true;
     &@loop go, {
         @local c := &read_byte;
         &@if c < 0, { go = @false }, {

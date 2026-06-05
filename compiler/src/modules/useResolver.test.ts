@@ -32,15 +32,15 @@ function inMemoryFs(files: Record<string, string>) {
 
 describe('resolveUses', () => {
     test('source without @use is returned unchanged (modulo region markers)', () => {
-        const fs = inMemoryFs({ 'main.si': '@let x := 1;' })
+        const fs = inMemoryFs({ 'main.si': '@global x := 1;' })
         const { source, visited } = resolveUses(fs.files[P('main.si')]!, P('main.si'), fs)
-        expect(source).toContain('@let x := 1;')
+        expect(source).toContain('@global x := 1;')
         expect(visited).toEqual([P('main.si')])
     })
 
     test('single @use is resolved and prepended', () => {
         const fs = inMemoryFs({
-            'main.si': "@use 'helper.si';\n@let m := &help 1;",
+            'main.si': "@use 'helper.si';\n@global m := &help 1;",
             'helper.si': '\\\\ help (Int)\n@fn help v := { v + 1 };',
         })
         const { source, visited } = resolveUses(fs.files[P('main.si')]!, P('main.si'), fs)
@@ -56,7 +56,7 @@ describe('resolveUses', () => {
 
     test('nested @use chains are visited in dependency order', () => {
         const fs = inMemoryFs({
-            'main.si': "@use 'mid.si';\n@let m := &mid_fn;",
+            'main.si': "@use 'mid.si';\n@global m := &mid_fn;",
             'mid.si':  "@use 'leaf.si';\n@fn mid_fn := { &leaf_fn };",
             'leaf.si': '@fn leaf_fn  := { 1 };',
         })
@@ -66,7 +66,7 @@ describe('resolveUses', () => {
 
     test('duplicate @use of the same file emits the file only once', () => {
         const fs = inMemoryFs({
-            'main.si': "@use 'a.si';\n@use 'a.si';\n@let m := 0;",
+            'main.si': "@use 'a.si';\n@use 'a.si';\n@global m := 0;",
             'a.si':    '@fn a  := { 1 };',
         })
         const { source, visited } = resolveUses(fs.files[P('main.si')]!, P('main.si'), fs)
@@ -89,7 +89,7 @@ describe('resolveUses', () => {
     })
 
     test('missing file throws with the resolved path in the error', () => {
-        const fs = inMemoryFs({ 'main.si': "@use 'nope.si';\n@let x := 0;" })
+        const fs = inMemoryFs({ 'main.si': "@use 'nope.si';\n@global x := 0;" })
         let err = ''
         try { resolveUses(fs.files[P('main.si')]!, P('main.si'), fs) }
         catch (e) { err = String(e) }
@@ -99,7 +99,7 @@ describe('resolveUses', () => {
 
     test('@use inside a # comment is NOT followed', () => {
         const fs = inMemoryFs({
-            'main.si': "# @use 'never.si';\n@let x := 1;",
+            'main.si': "# @use 'never.si';\n@global x := 1;",
         })
         const { source, visited } = resolveUses(fs.files[P('main.si')]!, P('main.si'), fs)
         expect(visited).toEqual([P('main.si')])
@@ -108,7 +108,7 @@ describe('resolveUses', () => {
 
     test('relative paths resolve from the including file, not the entry', () => {
         const fs = inMemoryFs({
-            'proj/main.si':       "@use 'lib/a.si';\n@let m := 0;",
+            'proj/main.si':       "@use 'lib/a.si';\n@global m := 0;",
             'proj/lib/a.si':      "@use './b.si';\n@fn a := { 1 };",
             'proj/lib/b.si':      '@fn b  := { 2 };',
         })

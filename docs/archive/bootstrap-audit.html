@@ -345,7 +345,7 @@ endorsing the compiler for external use.</p>
     <code>parse.si</code> appears to recover silently on every unexpected
     token, treating unrecognised top-level constructs as no-ops.  There is
     no <code>panic_stderr</code> or equivalent on the parser path.  Even
-    obviously malformed programs (<code>@let MISSING_TYPE := 5; @let x :=
+    obviously malformed programs (<code>@global MISSING_TYPE := 5; @global x :=
     MISSING_TYPE + ;</code>, dangling operator, missing brace) produce a
     nominally-valid WAT module that just lacks the user's code.
   </p>
@@ -515,7 +515,7 @@ endorsing the compiler for external use.</p>
     <code>preregister_defs</code> seeds the top-level function table
     with each <code>@fn</code>'s signature, but the inline
     <code>check_inline_def</code> path only handles
-    <em>expression-position</em> definitions (<code>@let</code> /
+    <em>expression-position</em> definitions (<code>@global</code> /
     <code>@loc</code> inside a body).  When the main walk descends
     into an <code>@fn</code>'s body, the parameters themselves
     (<code>a:Int</code>, <code>b:Int</code>) are not pushed into the

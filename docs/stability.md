@@ -32,7 +32,7 @@ on the first `1.0.0` tag.  Pre-1.0 tags (`0.x.y`, including 0.1) are development
 
 | Feature | Notes |
 |---|---|
-| Definition keywords | `@fn`, `@let`, `@var`, `@type`, `@enum`, `@struct`, `@extern`, `@use` |
+| Definition keywords | `@fn`, `@global`, `@local`, `@type`, `@enum`, `@struct`, `@extern`, `@use` |
 | Control-flow keywords | `@if`, `@loop`, `@match`, `@return`, `@defer`, `@try` |
 | Literal syntax | integers (decimal, hex `0x`, binary `0b`, octal `0o`), floats, booleans (`@true`/`@false`), strings, arrays `[…]`, tuples `(…)`, objects `{…}` |
 | Type surface | `Int`, `Int32`, `Int64`, `Float`, `Bool`, `Str`, `Option[T]`, `Result[T,E]`, `Slice[T]` |

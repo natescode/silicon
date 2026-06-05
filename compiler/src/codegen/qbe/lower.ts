@@ -199,7 +199,7 @@ export function lowerToQbe(
     for (const el of (program as any).elements as any[]) {
         const node = unwrap(el)
         if (!node || node.type !== 'Definition') continue
-        if (node.keyword === '@var' || node.hook === 'global') {
+        if (node.keyword === '@local' || node.hook === 'global') {
             const rawName = node.name?.name ?? node.name ?? ''
             const name = qbeName(rawName)
             // Type comes from the typechecker's inferredType on the definition node,
@@ -259,7 +259,7 @@ function lowerTopLevel(node: any, mod: QbeModCtx): void {
         return
     }
 
-    if (kw === '@var' || hook === 'global') {
+    if (kw === '@local' || hook === 'global') {
         lowerGlobalVarDef(node, mod)
         return
     }
@@ -956,9 +956,9 @@ function lowerLocalDef(node: any, fn: QbeFnCtx): string {
     const kw: string = node.keyword ?? ''
 
     // @var / @local / @let  — declare a local variable and initialise it.
-    // @var is mutable; all three use QBE's quasi-SSA (re-assign same temp name)
+    // @local is mutable; both use QBE's quasi-SSA (re-assign same temp name)
     // which QBE converts to proper phi-SSA internally.
-    if (kw === '@local' || kw === '@let' || kw === '@var') {
+    if (kw === '@local' || kw === '@global') {
         const varName = qbeName(node.name?.name ?? node.name ?? '')
         // Type from type annotation or inferred type on the node/binding
         const annot: SiliconType | undefined =

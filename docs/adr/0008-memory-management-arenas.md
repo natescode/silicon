@@ -67,8 +67,8 @@ allocated returns (`String`, value-type arrays, sum types with
 all-value payloads) escape via an explicit builtin:
 
 ```silicon
-&@var greeting := &with_arena {
-    &@var hello := &str_concat "hi, ", name;
+&@local greeting := &with_arena {
+    &@local hello := &str_concat "hi, ", name;
     # ... arbitrary work allocating scratch strings ...
     &move_to_parent_arena hello   # must be the block's tail expression
 };

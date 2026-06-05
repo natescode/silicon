@@ -40,7 +40,7 @@ function makeNamespace(path: string[]): any {
 function makeLetDef(name: string, binding: any): any {
     return {
         type: 'Definition',
-        keyword: '@let',
+        keyword: '@global',
         name: { type: 'TypedIdentifier', name },
         params: [],
         binding: { type: 'Binding', expression: binding },

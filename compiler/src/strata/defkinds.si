@@ -1,11 +1,14 @@
 # SPDX-License-Identifier: MIT
-# D-D-11b: @let and @fn migrated to the new @stratum form.  Both share
-# the same handler (LetOrFn_lower) — @fn is a syntactic alias for @let
-# that conventionally marks function-style definitions.
+# Binding def-kinds.  Silicon has two value bindings:
+#   @global — immutable, top-level module constant; reassignment is an error.
+#   @local  — mutable; top-level binds a module variable, inside a function a
+#             local.  Reassign with `name = expr`.
+# @fn defines a function; it shares @global's lowering (a named definition).
+# (@let / @var were the previous spellings and have been removed.)
 
-@stratum LetDef := {
-    &Compiler::register::keyword '@let';
-    &Compiler::on::lower '@let', LetOrFn_lower;
+@stratum GlobalDef := {
+    &Compiler::register::keyword '@global';
+    &Compiler::on::lower '@global', LetOrFn_lower;
 };
 
 @stratum FnDef := {
@@ -27,18 +30,18 @@
     &compiler::ir_makeFunction name, params, returnType, locals, body
 };
 
-# D-D-11c: @var and @extern migrated to the new @stratum form.
-#
-# @var: top-level binds a mutable global; in-function use is handled
-# specially in lowerAsStmt (recognised by keyword).  Forward-ref
-# pre-scan is preserved by adding a keyword check in lowerProgram.
+# @local: a mutable binding.  At top level it binds a module variable
+# (a mutable global); inside a function body it binds a local.  The
+# in-function case is handled specially in lowerAsStmt (recognised by
+# keyword); the top-level case runs this handler.  Forward-ref pre-scan
+# is preserved by a keyword check in lowerProgram.
 #
 # @extern: declares a WASI / module import.  Handler builds an IRImport
 # from the @extern declaration's param/result types.
 
-@stratum VarDef := {
-    &Compiler::register::keyword '@var';
-    &Compiler::on::lower '@var', VarDef_lower;
+@stratum LocalVarDef := {
+    &Compiler::register::keyword '@local';
+    &Compiler::on::lower '@local', VarDef_lower;
 };
 \\ VarDef_lower (Int)
 @fn VarDef_lower node := {
@@ -120,33 +123,3 @@
 };
 \\ TypeRecordDef_lower (Int)
 @fn TypeRecordDef_lower node := &compiler::compiler_expandTypeRecord node;
-
-# D-D-11a: @local migrated.  Handler reads the type + name, pushes a
-# pending local, sets up the local in ctx.locals, and emits no IR
-# itself — the local declaration appears in the function preamble
-# through the pendingLocals accumulator.  Companion change in
-# lowerAsStmt added a `stratum_def` branch so the handler runs when
-# @local appears inside a function body.
-@stratum LocalDef := {
-    &Compiler::register::keyword '@local';
-    &Compiler::on::lower '@local', LocalDef_lower;
-};
-\\ LocalDef_lower (Int)
-@fn LocalDef_lower node := {
-    @local wasmType := &compiler::compiler_resolveType
-        (&compiler::compiler_ast_node_field node,
-            (&compiler::compiler_str_intern 'name.typeAnnotation', 0));
-    @local sname := &compiler::compiler_watId
-        (&compiler::compiler_ast_str_field node,
-            (&compiler::compiler_str_intern 'name.name', 0));
-    @local decl := &compiler::ir_makeLocal sname, wasmType;
-    &compiler::compiler_ctx_pendingLocals_push decl;
-    &compiler::compiler_ctx_locals_set sname, wasmType;
-    # If there's a binding init (`@local x:Int := <expr>`), emit a LocalSet.
-    # Otherwise (`@local x:Int;`), emit no IR (declaration only).
-    @local binding := &compiler::compiler_ast_node_field node,
-        (&compiler::compiler_str_intern 'binding.expression', 0);
-    &@if binding,
-        { &compiler::ir_makeLocalSet sname, (&compiler::compiler_lowerExpr binding) },
-        { &compiler::ir_null }
-};

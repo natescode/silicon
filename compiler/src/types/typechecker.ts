@@ -601,10 +601,10 @@ export function preRegisterDefinitions(elements: any[], ctx: Ctx): void {
             ctx.symbols.set(def.name.name, resultType)
         }
 
-        // Mark immutable for non-mutable definitions. @var / hook==='global'
-        // is the only mutable def-kind.
+        // Mark immutable for non-mutable definitions. @local / hook==='global'
+        // is mutable; @global (and @fn) are immutable.
         const hook = def.hook
-        const isMutable = hook === 'global' || kw === '@var'
+        const isMutable = hook === 'global' || kw === '@local'
         if (!isMutable) {
             ctx.immutable.add(def.name.name)
         } else {
@@ -1103,9 +1103,10 @@ function checkDefinition(d: any, ctx: Ctx): SiliconType {
             ctx.symbols.set(d.name.name, finalType)
         }
 
-        // Mark immutable. @var, @local, and hook==='global'/'local' are mutable.
+        // Mark immutable. @local and hook==='global'/'local' are mutable;
+        // @global (and @fn) are immutable.
         const hook = (d as any).hook
-        const isMutable = hook === 'global' || hook === 'local' || keyword === '@var' || keyword === '@local'
+        const isMutable = hook === 'global' || hook === 'local' || keyword === '@local'
         if (!isMutable) {
             ctx.immutable.add(d.name.name)
         } else {
@@ -1733,7 +1734,7 @@ function symbolKindFromKeyword(kw: string, paramCount: number): SymbolKind {
     if (kw === '@stratum') return 'stratum'
     if (kw === '@type' || kw === '@type_sum' || kw === '@enum' || kw === '@type_alias'
         || kw === '@type_distinct' || kw === '@generic') return 'type'
-    if (kw === '@var' || kw === '@local') return 'variable'
+    if (kw === '@local') return 'variable'
     if (paramCount > 0 || kw === '@fn' || kw === '@extern') return 'function'
     return 'variable'
 }

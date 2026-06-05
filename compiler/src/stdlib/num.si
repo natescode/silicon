@@ -16,18 +16,18 @@
 # ── Integer helpers ────────────────────────────────────────────────────
 
 \\ int_abs (Int) -> Int
-@fn int_abs n := { @var r := n; &@if n < 0, { r = 0 - n }, {}; r };
+@fn int_abs n := { @local r := n; &@if n < 0, { r = 0 - n }, {}; r };
 
 \\ int_min (Int, Int) -> Int
-@fn int_min a, b := { @var r := a; &@if b < a, { r = b }, {}; r };
+@fn int_min a, b := { @local r := a; &@if b < a, { r = b }, {}; r };
 
 \\ int_max (Int, Int) -> Int
-@fn int_max a, b := { @var r := a; &@if b > a, { r = b }, {}; r };
+@fn int_max a, b := { @local r := a; &@if b > a, { r = b }, {}; r };
 
 # Clamp `x` into the inclusive range [lo, hi].
 \\ int_clamp (Int, Int, Int) -> Int
 @fn int_clamp x, lo, hi := {
-    @var r := x;
+    @local r := x;
     &@if r < lo, { r = lo }, {};
     &@if r > hi, { r = hi }, {};
     r
@@ -36,8 +36,8 @@
 # Integer power: base ** exp for exp >= 0.  Returns 1 for exp == 0.
 \\ int_pow (Int, Int) -> Int
 @fn int_pow base, exp := {
-    @var r := 1;
-    @var i := 0;
+    @local r := 1;
+    @local i := 0;
     &@loop i < exp, { r = r * base; i = i + 1; };
     r
 };
@@ -45,8 +45,8 @@
 # Number of decimal digits in |n| (at least 1, ignores sign).
 \\ int_digits (Int) -> Int
 @fn int_digits n := {
-    @var m := &int_abs n;
-    @var d := 0;
+    @local m := &int_abs n;
+    @local d := 0;
     &@if m == 0, { d = 1 }, {};
     &@loop m > 0, { d = d + 1; m = m / 10; };
     d
@@ -57,8 +57,8 @@
 # Decimal text for `n`, with a leading '-' for negatives.
 \\ int_to_str (Int) -> String
 @fn int_to_str n := {
-    @var neg := 0;
-    @var m := n;
+    @local neg := 0;
+    @local m := n;
     &@if n < 0, { neg = 1; m = 0 - n; }, {};
     @local digits := &int_digits m;
     @local total := digits + neg;
@@ -66,8 +66,8 @@
     @local base := (&str_ptr s) + 4;
     &@if neg == 1, { &WASM::i32_store8 base, 45 }, {};      # '-'
     &@if m == 0, { &WASM::i32_store8 base, 48 }, {};        # '0'
-    @var i := total - 1;
-    @var u := m;
+    @local i := total - 1;
+    @local u := m;
     &@loop u > 0, {
         @local d := u % 10;
         &WASM::i32_store8 (base + i), (d + 48);
@@ -84,15 +84,15 @@
 @fn uint_to_str_pad n, width := {
     @local raw := &int_to_str n;
     @local len := &str_len raw;
-    @var pad := width - len;
+    @local pad := width - len;
     &@if pad < 0, { pad = 0 }, {};
     @local total := len + pad;
     @local s := &alloc_string total;
     @local base := (&str_ptr s) + 4;
-    @var i := 0;
+    @local i := 0;
     &@loop i < pad, { &WASM::i32_store8 (base + i), 48; i = i + 1; };
     @local rp := (&str_ptr raw) + 4;
-    @var j := 0;
+    @local j := 0;
     &@loop j < len, {
         @local c := &WASM::i32_load8_u (rp + j);
         &WASM::i32_store8 (base + pad + j), c;
@@ -111,17 +111,17 @@
 @fn str_to_int s := {
     @local p := (&str_ptr s) + 4;
     @local n := &str_len s;
-    @var i := 0;
-    @var sign := 1;
+    @local i := 0;
+    @local sign := 1;
     &@if n > 0, {
         @local c0 := &WASM::i32_load8_u p;
         &@if c0 == 45, { sign = 0 - 1; i = 1; }, {};        # '-'
         &@if c0 == 43, { i = 1; }, {};                      # '+'
     }, {};
-    @var acc := 0;
-    @var go := @true;
+    @local acc := 0;
+    @local go := @true;
     &@loop go, {
-        @var more := @false;
+        @local more := @false;
         &@if i < n, {
             @local c := &WASM::i32_load8_u (p + i);
             &@if c >= 48, { &@if c <= 57, {
@@ -144,10 +144,10 @@
 @fn float_sqrt f := &WASM::f32_sqrt f;
 
 \\ float_min (Float, Float) -> Float
-@fn float_min a, b := { @var r := a; &@if b < a, { r = b }, {}; r };
+@fn float_min a, b := { @local r := a; &@if b < a, { r = b }, {}; r };
 
 \\ float_max (Float, Float) -> Float
-@fn float_max a, b := { @var r := a; &@if b > a, { r = b }, {}; r };
+@fn float_max a, b := { @local r := a; &@if b > a, { r = b }, {}; r };
 
 # Truncate toward zero to an Int (drops the fractional part).
 \\ float_trunc (Float) -> Int
@@ -161,13 +161,13 @@
 \\ float_to_str (Float) -> String
 @fn float_to_str f := {
     @local is_neg := f < 0.0;
-    @var x := f;
+    @local x := f;
     &@if is_neg, { x = &WASM::f32_neg f }, {};
     @local ip := &@toInt x;
     @local frac := x - (&@toFloat ip);
     @local scaled := &@toInt (frac * 1000000.0);
     @local body := (&int_to_str ip) ++ '.' ++ (&uint_to_str_pad scaled, 6);
-    @var out := body;
+    @local out := body;
     &@if is_neg, { out = '-' ++ body }, {};
     out
 };

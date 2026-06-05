@@ -91,7 +91,7 @@ describe('parser fuzz: random bytes', () => {
 // ---------------------------------------------------------------------------
 
 const tokenArb: fc.Arbitrary<string> = fc.oneof(
-    fc.constant('@let'), fc.constant('@fn'), fc.constant('@var'),
+    fc.constant('@global'), fc.constant('@fn'), fc.constant('@local'),
     fc.constant('@local'), fc.constant('@if'), fc.constant('@loop'),
     fc.constant('@return'), fc.constant('@break'), fc.constant('@continue'),
     fc.constant('@true'), fc.constant('@false'),
@@ -131,7 +131,7 @@ describe('parser fuzz: random token streams', () => {
 
 /**
  * Generate small, syntactically-valid Silicon programs.  Each program is a
- * sequence of `@let` and bare-expression statements over integers and a few
+ * sequence of `@global` and bare-expression statements over integers and a few
  * identifiers.  This is intentionally narrower than the full grammar — the
  * goal is to grow corpus pressure on the most-exercised paths, not to cover
  * every production.
@@ -153,7 +153,7 @@ const exprArb: fc.Arbitrary<string> = fc.letrec((tie) => ({
 })).expr
 
 const stmtArb: fc.Arbitrary<string> = fc.oneof(
-    fc.tuple(identArb, exprArb).map(([n, e]) => `@let ${n} := ${e}`),
+    fc.tuple(identArb, exprArb).map(([n, e]) => `@global ${n} := ${e}`),
     exprArb,
 )
 

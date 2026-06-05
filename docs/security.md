@@ -143,7 +143,7 @@ Three targets, 60-second budget per target (configurable via
 - **Random token streams** — sequences of valid tokens joined by
   spaces. Default 800 runs.
 - **Generative round-trip** — generates small valid Silicon over the
-  Int / `@let` / bin-op subset; parses, pretty-prints, re-parses.
+  Int / `@global` / bin-op subset; parses, pretty-prints, re-parses.
   Default 400 runs.
 
 **Acceptance:** Parser **must not** throw an unstructured exception,

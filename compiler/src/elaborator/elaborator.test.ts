@@ -193,9 +193,9 @@ test("elaborate registers builtin elaborators for arithmetic operators", () => {
   }
 })
 
-// Test: @let definition gets hook = 'stratum_def' after elaboration (D-D-11b migrated)
-test("elaborate sets hook 'stratum_def' on @let Definition (D-D-11b migrated)", () => {
-  const def = ASTFactory.definition('@let', ASTFactory.typedIdentifier('add'), [], undefined, undefined)
+// Test: @global definition gets hook = 'stratum_def' after elaboration (D-D-11b migrated)
+test("elaborate sets hook 'stratum_def' on @global Definition (D-D-11b migrated)", () => {
+  const def = ASTFactory.definition('@global', ASTFactory.typedIdentifier('add'), [], undefined, undefined)
   const stmt = ASTFactory.statement('definition', def)
   const item = ASTFactory.item('statement', stmt)
   const element = ASTFactory.element('item', item)
@@ -224,14 +224,14 @@ test("elaborate sets hook false on unknown definition keyword", () => {
   expect(errors[0].message).toContain('Unknown definition keyword')
 })
 
-// D-D-11b migrated: @let/@fn now use codegenKind 'stratum_def'.  The
+// D-D-11b migrated: @global/@fn now use codegenKind 'stratum_def'.  The
 // engine's synthesised @fn still gets hook='function' via the elaborator's
 // preserve-pre-stamped-hook path (see elaborator.ts:182 comment).
-test("elaborate registry contains @let def-kind (D-D-11b migrated)", () => {
+test("elaborate registry contains @global def-kind (D-D-11b migrated)", () => {
   const program = ASTFactory.program([])
   const { registry } = elaborate(program)
-  expect(registry.defKinds['@let']).toBeDefined()
-  expect(registry.defKinds['@let'].codegenKind).toBe('stratum_def')
+  expect(registry.defKinds['@global']).toBeDefined()
+  expect(registry.defKinds['@global'].codegenKind).toBe('stratum_def')
 })
 
 test("elaborate registry contains @fn def-kind (D-D-11b migrated)", () => {
@@ -241,12 +241,12 @@ test("elaborate registry contains @fn def-kind (D-D-11b migrated)", () => {
   expect(registry.defKinds['@fn'].codegenKind).toBe('stratum_def')
 })
 
-// Test: defKinds registry is populated with @var (D-D-11c migrated)
-test("elaborate registry contains @var def-kind (D-D-11c migrated)", () => {
+// Test: defKinds registry is populated with @local (D-D-11c migrated)
+test("elaborate registry contains @local def-kind (D-D-11c migrated)", () => {
   const program = ASTFactory.program([])
   const { registry } = elaborate(program)
-  expect(registry.defKinds['@var']).toBeDefined()
-  expect(registry.defKinds['@var'].codegenKind).toBe('stratum_def')
+  expect(registry.defKinds['@local']).toBeDefined()
+  expect(registry.defKinds['@local'].codegenKind).toBe('stratum_def')
 })
 
 test("elaborate registers @if as a keyword stratum (D-D-2: new @stratum form)", () => {
@@ -278,10 +278,10 @@ test("elaborate: @if registered (D-D-2 migrated — StrataType.Keyword in new fo
   expect(registry.keywords['@if'].type).toBe(StrataType.Keyword)
 })
 
-test("elaborate: @let registered (D-D-11b migrated; StrataType.Keyword in new form)", () => {
+test("elaborate: @global registered (D-D-11b migrated; StrataType.Keyword in new form)", () => {
   const { registry } = elaborate(ASTFactory.program([]))
-  expect(registry.keywords['@let']).toBeDefined()
-  expect(registry.keywords['@let'].type).toBe(StrataType.Keyword)
+  expect(registry.keywords['@global']).toBeDefined()
+  expect(registry.keywords['@global'].type).toBe(StrataType.Keyword)
 })
 
 test("elaborate: '+' operator strata is registered (D-D-7a migrated; StrataType.Keyword)", () => {

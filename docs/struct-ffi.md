@@ -171,7 +171,7 @@ layout metadata threaded to the QBE lowerer, plus the four wiring points above.
 
 @fn main:Int := {
     &InitWindow 800, 600, '3D cube';
-    @var cam:Camera3D := &Camera3D
+    @local cam:Camera3D := &Camera3D
         (&Vector3 10.0, 10.0, 10.0), (&Vector3 0.0, 0.0, 0.0),
         (&Vector3 0.0, 1.0, 0.0), 45.0, 0;
     &BeginMode3D cam;

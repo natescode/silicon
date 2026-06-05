@@ -12,7 +12,7 @@
 
 \\ countDown (Int)
 @fn countDown n := {
-    @var i := n;
+    @local i := n;
     &@loop i > 0, { i = i - 1; };
     i
 };

@@ -38,7 +38,7 @@ For programs that **loop**, this is a one-way ratchet:
 ```silicon
 \\ server_loop () -> Int
 @fn server_loop := {
-    @var i := 0;
+    @local i := 0;
     &@loop i < 1000000, {
         @local response := &str_concat 'reply: ', (&handle_request i);
         &send response;
@@ -74,7 +74,7 @@ Rewriting the server loop with an arena:
 ```silicon
 \\ server_loop () -> Int
 @fn server_loop := {
-    @var i := 0;
+    @local i := 0;
     &@loop i < 1000000, {
         &@with_arena {
             @local response := &str_concat 'reply: ', (&handle_request i);

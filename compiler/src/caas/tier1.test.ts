@@ -13,7 +13,7 @@ import { Workspace } from './workspace'
 // 'add' definition is on line 1, col 5 (1-based: @=1 f=2 n=3 space=4 a=5)
 const LIB_SOURCE = '@fn add x, y := { x + y };'
 
-const MAIN_SOURCE = '@let result := &add 1, 2;'
+const MAIN_SOURCE = '@global result := &add 1, 2;'
 // 'add' reference: '&' at col 16, 'add' Namespace at col 17
 
 function twoDocWs() {
@@ -50,8 +50,8 @@ describe('Symbol.displayString', () => {
 
     test('variable symbol shows its type', () => {
         const ws = new Workspace()
-        ws.openDocument('f.si', '@let x := 42;')
-        const sym = ws.findDefinition('f.si', 1, 6)
+        ws.openDocument('f.si', '@global x := 42;')
+        const sym = ws.findDefinition('f.si', 1, 9)
         expect(sym).toBeDefined()
         expect(sym!.displayString).toContain('let x')
     })
@@ -84,8 +84,8 @@ describe('Workspace.hoverInfo()', () => {
 
     test('cross-document: resolves a symbol defined in another document', () => {
         const ws = twoDocWs()
-        // col 17 is 'add' in '&add 1, 2'
-        const info = ws.hoverInfo('main.si', 1, 17)
+        // col 20 is 'add' in '@global result := &add 1, 2'
+        const info = ws.hoverInfo('main.si', 1, 20)
         expect(info).toBeDefined()
         expect(info!.symbol.name).toBe('add')
     })
@@ -135,7 +135,7 @@ describe('Workspace.getCompletions()', () => {
         const items = ws.getCompletions('f.si', 1, 1)
         const labels = items.map(i => i.label)
         expect(labels).toContain('@fn')
-        expect(labels).toContain('@let')
+        expect(labels).toContain('@global')
     })
 
     test('returns empty array for unopened document', () => {
@@ -155,7 +155,7 @@ describe('Workspace.getCompletions()', () => {
 
     test('each item has a valid kind', () => {
         const ws = new Workspace()
-        ws.openDocument('f.si', '@fn foo := { 1 };\n@let x := 0;')
+        ws.openDocument('f.si', '@fn foo := { 1 };\n@global x := 0;')
         const items = ws.getCompletions('f.si', 1, 1)
         const VALID = new Set(['function', 'variable', 'type', 'parameter', 'keyword'])
         for (const item of items) {
@@ -172,8 +172,8 @@ describe('Workspace.signatureHelp()', () => {
     test('returns SignatureHelp inside a function call argument list', () => {
         const ws = new Workspace()
         // \\ signature line gives 'add' a Function type with Int params
-        ws.openDocument('f.si', '\\\\ add (Int, Int)\n@fn add x, y := { x + y };\n@let r := &add 1, 2;')
-        // line 3: '@let r := &add 1, 2;'
+        ws.openDocument('f.si', '\\\\ add (Int, Int)\n@fn add x, y := { x + y };\n@global r := &add 1, 2;')
+        // line 3: '@global r := &add 1, 2;'
         // '@'=1 'l'=2 'e'=3 't'=4 ' '=5 'r'=6 ' '=7 ':'=8 '='=9 ' '=10 '&'=11 'a'=12 'd'=13 'd'=14 ' '=15 '1'=16
         const help = ws.signatureHelp('f.si', 3, 16)
         expect(help).toBeDefined()
@@ -183,7 +183,7 @@ describe('Workspace.signatureHelp()', () => {
 
     test('parameters have type strings when typed via signature line', () => {
         const ws = new Workspace()
-        ws.openDocument('f.si', '\\\\ add (Int, Int)\n@fn add x, y := { x + y };\n@let r := &add 1, 2;')
+        ws.openDocument('f.si', '\\\\ add (Int, Int)\n@fn add x, y := { x + y };\n@global r := &add 1, 2;')
         const help = ws.signatureHelp('f.si', 3, 16)
         expect(help).toBeDefined()
         for (const p of help!.parameters) {
@@ -281,7 +281,7 @@ describe('Workspace.formatDocument()', () => {
 
     test('returned edit newText produces valid-looking Silicon', () => {
         const ws = new Workspace()
-        ws.openDocument('f.si', '@let  x  :=  42;')
+        ws.openDocument('f.si', '@global  x  :=  42;')
         const edits = ws.formatDocument('f.si')
         expect(edits.length).toBeGreaterThan(0)
         expect(edits[0].newText).toContain(':=')
@@ -296,7 +296,7 @@ describe('Workspace.formatDocument()', () => {
 describe('Workspace.formatRange()', () => {
     test('formats only the selected lines', () => {
         const ws = new Workspace()
-        const src = '@fn add x := { x };\n@let  result :=  &add 1;'
+        const src = '@fn add x := { x };\n@global  result :=  &add 1;'
         ws.openDocument('f.si', src)
         const edits = ws.formatRange('f.si', {
             startLine: 2, startCol: 1,

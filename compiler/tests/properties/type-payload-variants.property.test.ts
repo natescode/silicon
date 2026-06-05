@@ -88,7 +88,7 @@ describe('@type payload sum types', () => {
             '    $Rectangle w, h, { w * h }',
             '};',
             '\\\\ main () -> Int',
-            '@let main := {',
+            '@global main := {',
             '  @local c := &Circle 5;',
             '  @local r := &Rectangle 4, 6;',
             '  (&area c) + (&area r)',
@@ -105,7 +105,7 @@ describe('@type payload sum types', () => {
         try {
             compile([
                 '@type Shape := $Circle r Int | $Rectangle w Int, h Int;',
-                '@let bad := { &Circle 1, 2 };',     // Circle takes 1 arg, not 2
+                '@global bad := { &Circle 1, 2 };',     // Circle takes 1 arg, not 2
             ].join('\n'))
         } catch (e) { err = String(e) }
         expect(err).toMatch(/expects 1 argument|got 2/)
@@ -118,7 +118,7 @@ describe('@type payload sum types', () => {
             '\\\\ area (Shape) -> Int',
             '@fn area s := { &@match s, $Circle r, { r }, $Rectangle w, h, { w } };',
             '\\\\ go () -> Int',
-            '@let go := { &area (&Circle 7) };',
+            '@global go := { &area (&Circle 7) };',
         ].join('\n'))
         expect(wat).toContain('(call $area (call $Circle (i32.const 7)))')
     })

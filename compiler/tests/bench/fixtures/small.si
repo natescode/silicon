@@ -22,8 +22,8 @@
 
 \\ sum_to (Int) -> Int
 @fn sum_to n := {
-    @var total := 0;
-    @var i := 1;
+    @local total := 0;
+    @local i := 1;
     &@loop i <= n, {
         total = total + i;
         i = i + 1;

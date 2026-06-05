@@ -268,8 +268,8 @@
       <tr><td><code>@local</code></td><td>defkinds.si</td><td>lower.ts <code>lowerLocalDef</code> (hardcoded)</td><td><span class="tag red">Hardcoded TS</span></td></tr>
       <tr><td><code>@export</code></td><td>metadata.si</td><td>lower.ts <code>lowerExportDecl</code> (hardcoded)</td><td><span class="tag red">Hardcoded TS</span></td></tr>
       <tr><td><code>@platform</code></td><td>metadata.si</td><td>lower.ts (no-op, hardcoded)</td><td><span class="tag red">Hardcoded TS</span></td></tr>
-      <tr><td><code>@let</code> / <code>@fn</code></td><td>defkinds.si</td><td>lower.ts <code>lowerFunction</code> (hardcoded)</td><td><span class="tag red">Hardcoded TS</span></td></tr>
-      <tr><td><code>@var</code></td><td>defkinds.si</td><td>lower.ts <code>lowerGlobal</code> (hardcoded)</td><td><span class="tag red">Hardcoded TS</span></td></tr>
+      <tr><td><code>@global</code> / <code>@fn</code></td><td>defkinds.si</td><td>lower.ts <code>lowerFunction</code> (hardcoded)</td><td><span class="tag red">Hardcoded TS</span></td></tr>
+      <tr><td><code>@local</code></td><td>defkinds.si</td><td>lower.ts <code>lowerGlobal</code> (hardcoded)</td><td><span class="tag red">Hardcoded TS</span></td></tr>
       <tr><td><code>@extern</code></td><td>defkinds.si</td><td>lower.ts <code>lowerExtern</code> (hardcoded)</td><td><span class="tag red">Hardcoded TS</span></td></tr>
     </tbody>
   </table>
@@ -607,7 +607,7 @@
 };</pre>
 
   <h3>5.5 def_global (VarDef) — target</h3>
-  <pre><span class="kw">@stratum_keyword</span> <span class="ty">VarDef</span> (<span class="str">'@var'</span>, <span class="ty">Node</span>) = {
+  <pre><span class="kw">@stratum_keyword</span> <span class="ty">VarDef</span> (<span class="str">'@local'</span>, <span class="ty">Node</span>) = {
   <span class="kw">@local</span> name     = <span class="api">$compiler.watId</span>(Node.name.name);
   <span class="kw">@local</span> wasmType = <span class="api">$compiler.resolveType</span>(Node.name.typeAnnotation) ?? <span class="str">'i32'</span>;
   <span class="kw">@local</span> initExpr = <span class="api">$compiler.lowerExpr</span>(Node.binding.expression);
@@ -762,7 +762,7 @@
       </tr>
       <tr>
         <td><code>$compiler.lowerDefinition(node)</code></td>
-        <td>Allow strata to recursively lower a child definition (e.g., a type_sum stratum generating per-variant <code>@let</code> functions)</td>
+        <td>Allow strata to recursively lower a child definition (e.g., a type_sum stratum generating per-variant <code>@global</code> functions)</td>
         <td><span class="tag orange">Lower</span></td>
       </tr>
       <tr>

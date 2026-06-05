@@ -312,10 +312,10 @@ test('Unbound identifier produces error', () => {
 // ------------------------------------------------------------------
 
 test('Definition with matching type annotation passes', () => {
-    // @let x := 5
+    // @global x := 5
     const typed = ASTFactory.typedIdentifier('x', ASTFactory.typeAnnotation('Int'))
     const binding = ASTFactory.binding(intExpEnd('5'))
-    const def = ASTFactory.definition('@let', typed, [], undefined, binding)
+    const def = ASTFactory.definition('@global', typed, [], undefined, binding)
     const stmt = ASTFactory.statement('definition', def)
     const item = ASTFactory.item('statement', stmt)
     const elem = ASTFactory.element('item', item)
@@ -326,10 +326,10 @@ test('Definition with matching type annotation passes', () => {
 })
 
 test('Definition with mismatched type annotation produces error', () => {
-    // @let x := 5
+    // @global x := 5
     const typed = ASTFactory.typedIdentifier('x', ASTFactory.typeAnnotation('Float'))
     const binding = ASTFactory.binding(intExpEnd('5'))
-    const def = ASTFactory.definition('@let', typed, [], undefined, binding)
+    const def = ASTFactory.definition('@global', typed, [], undefined, binding)
     const stmt = ASTFactory.statement('definition', def)
     const item = ASTFactory.item('statement', stmt)
     const elem = ASTFactory.element('item', item)
@@ -343,7 +343,7 @@ test('Definition with mismatched type annotation produces error', () => {
 test('Unknown type annotation produces error', () => {
     const typed = ASTFactory.typedIdentifier('x', ASTFactory.typeAnnotation('Widget'))
     const binding = ASTFactory.binding(intExpEnd('5'))
-    const def = ASTFactory.definition('@let', typed, [], undefined, binding)
+    const def = ASTFactory.definition('@global', typed, [], undefined, binding)
     const stmt = ASTFactory.statement('definition', def)
     const item = ASTFactory.item('statement', stmt)
     const elem = ASTFactory.element('item', item)
@@ -453,9 +453,9 @@ function makeDefinition(
 }
 
 test('call site resolves return type of a user-defined function', () => {
-    // @let add x:Int, y:Int := x + y;
+    // @global add x:Int, y:Int := x + y;
     // &add 1, 2   ← should infer Int
-    const addDef = makeDefinition('@let', 'add',
+    const addDef = makeDefinition('@global', 'add',
         [{ name: 'x', type: 'Int' }, { name: 'y', type: 'Int' }],
         ASTFactory.expressionStart(
             'binOp',
@@ -484,9 +484,9 @@ test('call site resolves return type of a user-defined function', () => {
 })
 
 test('call with wrong arg type emits a mismatch error', () => {
-    // @let double x:Int := x + x;
+    // @global double x:Int := x + x;
     // &double 1.5   ← Float arg to Int param → error
-    const doubleDef = makeDefinition('@let', 'double',
+    const doubleDef = makeDefinition('@global', 'double',
         [{ name: 'x', type: 'Int' }],
         ASTFactory.expressionStart(
             'binOp',
@@ -513,9 +513,9 @@ test('call with wrong arg type emits a mismatch error', () => {
 })
 
 test('call with wrong arity emits an error', () => {
-    // @let add x:Int, y:Int := x + y;
+    // @global add x:Int, y:Int := x + y;
     // &add 1   ← too few args → error
-    const addDef = makeDefinition('@let', 'add',
+    const addDef = makeDefinition('@global', 'add',
         [{ name: 'x', type: 'Int' }, { name: 'y', type: 'Int' }],
         intExp('0')
     )

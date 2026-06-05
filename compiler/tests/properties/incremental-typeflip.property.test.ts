@@ -255,10 +255,10 @@ describe('ADV typeflip: add-signature edits, caller reused', () => {
  */
 function buildLetChain(firstExpr: string): string {
     return [
-        `@let a := ${firstExpr};`,
-        '@let b := a + 1;',
-        '@let c := b + 2;',
-        '@let d := c + 3;',
+        `@global a := ${firstExpr};`,
+        '@global b := a + 1;',
+        '@global c := b + 2;',
+        '@global d := c + 3;',
     ].join('\n')
 }
 

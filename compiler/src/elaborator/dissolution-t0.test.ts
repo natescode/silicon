@@ -56,7 +56,7 @@ describe('T0 loader accepts the new @stratum + @fn forms', () => {
         expect(registry.operators['==']).toBeDefined()
         expect(registry.keywords['@if']).toBeDefined()
         expect(registry.keywords['@loop']).toBeDefined()
-        expect(registry.keywords['@let']).toBeDefined()
+        expect(registry.keywords['@global']).toBeDefined()
         expect(registry.keywords['@fn']).toBeDefined()
     })
 })

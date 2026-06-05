@@ -18,7 +18,7 @@ import { compileToWatString } from './_compile'
 
 describe('extern out-pointer convention', () => {
     test('$scratch_alloc helper is emitted into every module', () => {
-        const wat = compileToWatString('@let x := 1;')
+        const wat = compileToWatString('@global x := 1;')
         expect(wat).toContain('$scratch_alloc')
         expect(wat).toContain('(export "scratch_alloc" (func $scratch_alloc))')
     })
@@ -43,7 +43,7 @@ describe('extern out-pointer convention', () => {
         // the call lowers to (call $scratch_alloc) at WAT level.
         const src = [
             "@extern { \\\\ host_fill (Int, Int) -> Void }",
-            "@let go := {",
+            "@global go := {",
             "  @local buf := &scratch_alloc 16;",
             "  &host_fill buf, 16;",
             "  &WASM::i32_load buf",
