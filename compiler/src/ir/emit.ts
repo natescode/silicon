@@ -5,6 +5,19 @@
  * Walks an IRModule tree and emits a WebAssembly Text Format string.
  * No type sniffing: every expression node carries its `wasmType` from the
  * IR lowerer, so instruction selection and result-type declarations are exact.
+ *
+ * KNOWN LIMITATION — no WASM-GC support: this WAT emitter does NOT render
+ * `mod.wasmGcTypes` (struct/array type declarations) and renders ref-typed
+ * params/results as their `i32` placeholder rather than `(ref $T)` (only the
+ * abstract `externref`/`(ref extern)` slots used by JS String Builtins are
+ * handled — see `externRefText`).  The **binary emitter** (`wasm-emitter.ts`) is
+ * the source of truth for GC: it emits the type section + concrete ref slots and
+ * is what `--target=wasm-gc`, the `.wasm` build, and the bun runner use.  So
+ * `sgl build --wat` on a program that uses GC types (`Vec[Int]` under wasm-gc, or
+ * `CharCodeArray` / `fromCharCodeArray` under the web/bun platform) produces
+ * **incomplete WAT** — the array/struct types are missing and the ref params show
+ * as `i32`.  Full GC support in the WAT path is a deferred follow-on; until then,
+ * inspect GC modules via the binary (e.g. `wasm-tools print`) instead of `--wat`.
  */
 
 import type {
@@ -59,6 +72,9 @@ export function emitModule(mod: IRModule, stdWat: string): string {
             parts.push(`(elem (i32.const 0) ${elems})`)
         }
     }
+    // NOTE: `mod.wasmGcTypes` are intentionally NOT emitted here — the WAT path
+    // has no GC support (see the module doc-block).  GC modules must go through
+    // the binary emitter; `--wat` output for them is incomplete.
     for (const g of mod.globals)  parts.push(emitGlobal(g))
     for (const f of mod.functions) parts.push(emitFunction(f))
     for (const exp of mod.exports) parts.push(emitExplicitExport(exp))

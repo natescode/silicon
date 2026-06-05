@@ -61,6 +61,18 @@ intoCharCodeArray s, a, start` copies a JS string's code units into the array an
 returns the count. These run host-native under the bun runner — GC types coexist
 with the linear-memory model in the same module. (`examples/charcode_array.si`.)
 
+## Tooling note: `--wat` and GC
+
+`CharCodeArray` / `fromCharCodeArray` rely on a WASM-GC `(array (mut i16))`, and
+**the WAT emitter has no GC support** — only the binary emitter does. So
+`sgl build --wat` on a program that uses `CharCodeArray` (or `Vec[Int]` under
+`--target=wasm-gc`) produces **incomplete WAT**: the GC type declarations are
+missing and ref-typed params print as `i32`. This does not affect running — the
+`.wasm` build and `sgl run --platform=bun` use the binary emitter, which is the
+source of truth for GC. To inspect such a module, build the `.wasm` and use a
+GC-aware tool (e.g. `wasm-tools print`) rather than `--wat`. Full GC support in
+the WAT path is a deferred follow-on.
+
 ## Reaching other Browser/Bun APIs
 
 The host-import foundation is general: declare an externref-typed `@extern` and
