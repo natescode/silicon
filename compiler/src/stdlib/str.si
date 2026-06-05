@@ -1,0 +1,141 @@
+# SPDX-License-Identifier: MIT
+# Silicon standard library — string operations (snake_case).
+#
+# Silicon strings are length-prefixed UTF-8 in linear memory.  These
+# helpers work at the byte level: indices and lengths are UTF-8 bytes,
+# not code points.  They are portable (pure linear-memory computation)
+# and complement the built-in `++` concatenation operator and the
+# `&str_len` / `&str_ptr` prelude views.
+#
+#   @use 'str';
+#   &@if (&str_contains 'hello world', 'world'), { ... }, {};
+#   @local head := &str_slice 'hello', 0, 2;          ;; "he"
+#   @local line := &str_repeat '=', 10;               ;; "=========="
+
+@use 'mem';
+
+# Byte length of `s` (O(1) — reads the length header).
+\\ str_byte_len (String) -> Int
+@fn str_byte_len s := &str_len s;
+
+\\ str_is_empty (String) -> Bool
+@fn str_is_empty s := { (&str_len s) == 0 };
+
+# The byte at index `i` (0-based) as an Int.  Caller checks bounds.
+\\ str_byte_at (String, Int) -> Int
+@fn str_byte_at s, i := {
+    @local p := (&str_ptr s) + 4;
+    &WASM::i32_load8_u (p + i)
+};
+
+# Byte-wise equality.
+\\ str_eq (String, String) -> Bool
+@fn str_eq a, b := {
+    @local la := &str_len a;
+    @local lb := &str_len b;
+    @var r := @false;
+    &@if la == lb, {
+        @local pa := (&str_ptr a) + 4;
+        @local pb := (&str_ptr b) + 4;
+        r = &mem_eq pa, pb, la;
+    }, {};
+    r
+};
+
+\\ str_starts_with (String, String) -> Bool
+@fn str_starts_with s, prefix := {
+    @local n := &str_len s;
+    @local m := &str_len prefix;
+    @var r := @false;
+    &@if m <= n, {
+        @local sp := (&str_ptr s) + 4;
+        @local pp := (&str_ptr prefix) + 4;
+        r = &mem_eq sp, pp, m;
+    }, {};
+    r
+};
+
+\\ str_ends_with (String, String) -> Bool
+@fn str_ends_with s, suffix := {
+    @local n := &str_len s;
+    @local m := &str_len suffix;
+    @var r := @false;
+    &@if m <= n, {
+        @local sp := ((&str_ptr s) + 4) + (n - m);
+        @local pp := (&str_ptr suffix) + 4;
+        r = &mem_eq sp, pp, m;
+    }, {};
+    r
+};
+
+# First byte index where `sub` occurs in `s`, or -1 if absent.
+# The empty substring matches at index 0.
+\\ str_index_of (String, String) -> Int
+@fn str_index_of s, sub := {
+    @local n := &str_len s;
+    @local m := &str_len sub;
+    @local sp := (&str_ptr s) + 4;
+    @local subp := (&str_ptr sub) + 4;
+    @var result := 0 - 1;
+    &@if m == 0, { result = 0 }, {};
+    @var i := 0;
+    @var go := @true;
+    &@if m == 0, { go = @false }, {};
+    &@loop go, {
+        &@if i <= (n - m), {
+            &@if (&mem_eq (sp + i), subp, m), { result = i; go = @false; }, { i = i + 1; };
+        }, { go = @false; };
+    };
+    result
+};
+
+\\ str_contains (String, String) -> Bool
+@fn str_contains s, sub := { (&str_index_of s, sub) >= 0 };
+
+# Substring of the bytes in [start, end).  `start`/`end` are clamped to
+# [0, len]; an empty range yields the empty string.
+\\ str_slice (String, Int, Int) -> String
+@fn str_slice s, start, end := {
+    @local n := &str_len s;
+    @var lo := start;
+    @var hi := end;
+    &@if lo < 0, { lo = 0 }, {};
+    &@if hi > n, { hi = n }, {};
+    &@if hi < lo, { hi = lo }, {};
+    @local count := hi - lo;
+    @local out := &alloc_string count;
+    @local dst := (&str_ptr out) + 4;
+    @local src := ((&str_ptr s) + 4) + lo;
+    @var i := 0;
+    &@loop i < count, {
+        @local c := &WASM::i32_load8_u (src + i);
+        &WASM::i32_store8 (dst + i), c;
+        i = i + 1;
+    };
+    &heap_align;
+    out
+};
+
+# `s` repeated `n` times (n <= 0 yields the empty string).
+\\ str_repeat (String, Int) -> String
+@fn str_repeat s, n := {
+    @local len := &str_len s;
+    @var reps := n;
+    &@if reps < 0, { reps = 0 }, {};
+    @local total := len * reps;
+    @local out := &alloc_string total;
+    @local dst := (&str_ptr out) + 4;
+    @local src := (&str_ptr s) + 4;
+    @var r := 0;
+    &@loop r < reps, {
+        @var i := 0;
+        &@loop i < len, {
+            @local c := &WASM::i32_load8_u (src + i);
+            &WASM::i32_store8 (dst + ((r * len) + i)), c;
+            i = i + 1;
+        };
+        r = r + 1;
+    };
+    &heap_align;
+    out
+};

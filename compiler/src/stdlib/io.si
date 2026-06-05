@@ -1,21 +1,28 @@
 # SPDX-License-Identifier: MIT
-# Silicon standard I/O — portable WASI wrappers.
+# Silicon standard I/O — portable WASI wrappers (snake_case).
 #
 # Uses wasi_snapshot_preview1::fd_write / fd_read / proc_exit via the
 # built-in module registry (no @extern declaration needed — the module
-# loader auto-registers them).  Compatible with the wasix and host targets
-# produced by the src/ compiler.
+# loader auto-registers them).  Works on the native/WASI target the
+# `sgl run` default produces (wasmtime) and any WASI host.
 #
 # Usage from user code:
 #   @use 'io';
-#   &write_str 1, 'Hello, world!';
-#   &write_nl  1;
+#   &print 'Hello, world!';     ;; line to stdout
+#   &print_int 42;              ;; number to stdout
+#   @local name := &read_line;  ;; a line from stdin (newline stripped)
+
+@use 'mem';
+@use 'num';
 
 # write_bytes(fd, ptr, len) — write `len` raw bytes from `ptr` to `fd`.
 # Builds a one-entry iovec [ptr, len] in scratch space and calls fd_write.
-# Returns the WASI errno (0 = success).
+# Returns the WASI errno (0 = success).  Re-aligns the bump pointer first
+# so the iovec store is always 4-aligned even after odd-length string
+# allocations (see 'mem').
 \\ write_bytes (Int, Int, Int) -> Int
 @fn write_bytes fd, ptr, len := {
+    &heap_align;
     @local iovs := &scratch_alloc 8;
     &WASM::i32_store iovs, ptr;
     &WASM::i32_store (iovs + 4), len;
@@ -33,6 +40,7 @@
 # write_nl(fd) — write a Unix newline (LF, byte 10) to fd.
 \\ write_nl (Int) -> Int
 @fn write_nl fd := {
+    &heap_align;
     @local buf := &scratch_alloc 4;
     &WASM::i32_store8 buf, 10;
     &write_bytes fd, buf, 1
@@ -45,6 +53,14 @@
     &write_nl 1
 };
 
+# println(s) — explicit alias of print (string + newline to stdout).
+\\ println (String) -> Int
+@fn println s := { &print s };
+
+# print_str(s) — write a string to stdout with NO trailing newline.
+\\ print_str (String) -> Int
+@fn print_str s := { &write_str 1, s };
+
 # eprint(s) — write a string followed by a newline to stderr (fd 2).
 \\ eprint (String) -> Int
 @fn eprint s := {
@@ -52,8 +68,72 @@
     &write_nl 2
 };
 
+# print_int(n) — write the decimal form of `n` and a newline to stdout.
+\\ print_int (Int) -> Int
+@fn print_int n := { &print (&int_to_str n) };
+
+# print_float(f) — write the decimal form of `f` and a newline to stdout.
+\\ print_float (Float) -> Int
+@fn print_float f := { &print (&float_to_str f) };
+
+# print_bool(b) — write "true"/"false" and a newline to stdout.
+\\ print_bool (Bool) -> Int
+@fn print_bool b := {
+    @var s := 'false';
+    &@if b, { s = 'true' }, {};
+    &print s
+};
+
 # exit(code) — terminate the process with the given exit code.
-\\ exit (Int)
+\\ exit (Int) -> Void
 @fn exit code := {
     &wasi_snapshot_preview1::proc_exit code
+};
+
+# ── stdin ──────────────────────────────────────────────────────────────
+
+# read_byte() — read a single byte from stdin (fd 0).  Returns the byte
+# value 0..255, or -1 at end of input.
+\\ read_byte () -> Int
+@fn read_byte := {
+    &heap_align;
+    @local buf := &scratch_alloc 4;
+    @local iov := &scratch_alloc 8;
+    &WASM::i32_store iov, buf;
+    &WASM::i32_store (iov + 4), 1;
+    @local nread := &scratch_alloc 4;
+    @local rc := &wasi_snapshot_preview1::fd_read 0, iov, 1, nread;
+    @var result := 0 - 1;
+    &@if rc == 0, {
+        @local got := &WASM::i32_load nread;
+        &@if got > 0, { result = &WASM::i32_load8_u buf }, {};
+    }, {};
+    result
+};
+
+# read_line() — read a line from stdin (fd 0) up to a newline or EOF.
+# The trailing newline is stripped.  Returns the empty string at EOF.
+\\ read_line () -> String
+@fn read_line := {
+    &heap_align;
+    @local cap := 4096;
+    @local buf := &alloc_string cap;
+    @local buf_ptr := &str_ptr buf;
+    @local base := buf_ptr + 4;
+    @var count := 0;
+    @var go := @true;
+    &@loop go, {
+        @local c := &read_byte;
+        &@if c < 0, { go = @false }, {
+            &@if c == 10, { go = @false }, {
+                &@if count < cap, {
+                    &WASM::i32_store8 (base + count), c;
+                    count = count + 1;
+                }, { go = @false };
+            };
+        };
+    };
+    &WASM::i32_store buf_ptr, count;
+    &heap_align;
+    buf
 };
