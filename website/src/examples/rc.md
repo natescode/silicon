@@ -13,9 +13,9 @@ GC, `Rc<T>` (single-threaded reference count) is in the stdlib:
 @struct Node value Int, next Rc[Node];
 
 @fn main := {
-    @global tail := &Rc::new (&Node 3, &Rc::nil);
-    @global mid  := &Rc::new (&Node 2, &Rc::clone &tail);
-    @global head := &Rc::new (&Node 1, &Rc::clone &mid);
+    @local tail := &Rc::new (&Node 3, &Rc::nil);
+    @local mid  := &Rc::new (&Node 2, &Rc::clone &tail);
+    @local head := &Rc::new (&Node 1, &Rc::clone &mid);
     # head, mid, tail all share ownership of tail
     0
 };

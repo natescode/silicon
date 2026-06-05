@@ -16,8 +16,8 @@ Functions are values:
 @fn apply f, x, y := { &f x, y };
 
 @fn main := {
-    @global s := &apply add, 3, 4;        # 7
-    @global d := &apply sub, 10, 4;       # 6
+    @local s := &apply add, 3, 4;        # 7
+    @local d := &apply sub, 10, 4;       # 6
     s + d                                  # 13
 };
 ```
@@ -36,8 +36,8 @@ site.
 @fn double n := { n * 2 };
 
 @fn main := {
-    @global v := &Vec::from_array [1, 2, 3, 4];
-    @global doubled := &Vec::map &v, double;
+    @local v := &Vec::from_array [1, 2, 3, 4];
+    @local doubled := &Vec::map &v, double;
     0
 };
 ```

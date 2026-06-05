@@ -14,8 +14,8 @@ title: Error handling with @try
 
 \\ add_two_parsed (Str, Str) -> Result[Int, Str]
 @fn add_two_parsed a, b := {
-    @global x := &@try (&parse_int a);   # propagates $Err
-    @global y := &@try (&parse_int b);
+    @local x := &@try (&parse_int a);   # propagates $Err
+    @local y := &@try (&parse_int b);
     &Ok (x + y)
 };
 ```

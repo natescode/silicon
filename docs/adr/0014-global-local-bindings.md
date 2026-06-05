@@ -61,10 +61,16 @@ ADR does not preclude it — `@mut` can layer on later.
 
 - **Positive:** two keywords instead of three; mutability is explicit in the
   keyword; immutable-by-intent constants get a real compile-time guarantee.
-- **Negative:** there is no *immutable local* and no *keyword-distinguished
-  mutable global* — `@global` is immutable everywhere, `@local` mutable
-  everywhere. Mutable module state uses a top-level `@local`. The immutable-local
-  case is deferred to the future capability model.
+- **Negative / scoping caveat:** `@global` is **module-scoped** — it registers
+  a top-level name (it reuses `@let`'s `LetOrFn_lower`, a nullary definition).
+  So `@global` is a **top-level-only** construct: written inside a function it
+  hoists to module scope and the local reference fails at codegen. **Inside a
+  function the only binding is `@local`** (mutable). Consequences: there is no
+  *immutable local* (use `@local`; it simply won't be reassigned) and no
+  *keyword-distinguished mutable global* (mutable module state is a top-level
+  `@local`). Both gaps are deferred to the future capability model. A follow-up
+  should make an in-function `@global` a clean front-end error instead of a
+  codegen failure.
 - **Follow-up work:** when ADR 0011 lands, reconcile `@mut`/region capabilities
   with this surface.
 
