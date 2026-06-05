@@ -104,7 +104,9 @@ ExprEnd     = Literal
             | "(" Expression ")"
             ;
 
-BinOp       = operator-char { operator-char } ;
+BinOp       = operator-char { operator-char }
+            | ".."                          (* half-open range — ADR 0016 *)
+            ;
 operator-char
             = "=" | "<" | ">" | "!" | "+" | "-" | "*" | "/" | "%"
             | "^" | "|" | "~" | "?"
@@ -113,7 +115,14 @@ operator-char
                are reserved for call sigils, keyword sigils, variant sigils, and
                namespace separators.  ":" appears only in ":=" (binding) and
                "::" (namespace), never as a type-annotation sigil.  "->" (an
-               operator string) denotes a function type inside a TypeExpr. *)
+               operator string) denotes a function type inside a TypeExpr.
+
+               ".." is a distinct two-character token the lexer recognises
+               ahead of the single "." namespace separator (ADR 0016).  It is a
+               half-open range `lo..hi` (hi excluded) and is SYNTACTIC-ONLY:
+               valid only as the subject of an iterate `@loop` (see below), not
+               a first-class value.  A `..` anywhere else is rejected at
+               elaboration; `1...5`, `1..`, `..5`, `a..b..c` are errors. *)
 
 (* ── Function calls ─────────────────────────────────────────────────────── *)
 
@@ -353,6 +362,16 @@ doc-comment   = "##" { (* any char except line-end *) } line-end ;
     - @fn, @global, @local, @type, @struct, @enum, @if, @loop, @match, @return,
       @defer, @try, @extern, @use — all are elaborated keywords, not grammar
       reserved words.
+
+    - @loop is one keyword whose meaning is chosen at elaboration by the count
+      of comma-operands before the trailing { body } block (ADR 0016):
+          &@loop { body }                infinite (≡ &@loop 1, { body })
+          &@loop cond, { body }          while — cond re-checked each iteration
+          &@loop v, subject, { body }    iterate: v ← each element
+          &@loop i, v, subject, { body } iterate: i ← position, v ← element
+      `subject` is a `lo..hi` range or an i32-element Vec; `_` discards a binder;
+      ≥ 4 operands are rejected.  Every form desugars to the while shape, so the
+      grammar needs no new production — it is an ordinary FunctionCall.
 
     - User-defined strata keywords (@my_kw) are syntactically identical to
       any other @identifier.  The grammar accepts them; the elaborator resolves

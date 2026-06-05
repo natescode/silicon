@@ -151,6 +151,11 @@
           "match": "\\$"
         },
         {
+          "comment": "Half-open range operator (ADR 0016) — matched before the single '.'",
+          "name": "keyword.operator.range.silicon",
+          "match": "\\.\\."
+        },
+        {
           "comment": "Multi-char operators — :=, ::, ++, ->, ==, !=, <=, >=, <<, >>, ||, &&",
           "name": "keyword.operator.silicon",
           "match": ":=|::|\\+\\+|->|==|!=|<=|>=|<<|>>|\\|\\||&&"

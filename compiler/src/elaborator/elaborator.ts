@@ -29,6 +29,7 @@ import {
   type ElaboratorRegistry,
 } from './registry'
 import { buildStrataRegistry } from './strataLoader'
+import { desugarLoops } from './loopDesugar'
 
 export interface ElaborationError {
   keyword: string
@@ -56,8 +57,11 @@ export default function elaborate(
   extraSources: string[] = [],
 ): ElaborateResult {
   const reg = registry ?? buildStrataRegistry(ast, extraSources)
-  const { program, errors } = elaborateAST(ast, reg)
-  return { program, registry: reg, errors }
+  // ADR 0016 — rewrite iterate/range/infinite `@loop` forms into plain
+  // while-shaped loops before operator elaboration and typechecking.
+  const { program: desugared, errors: loopErrors } = desugarLoops(ast)
+  const { program, errors } = elaborateAST(desugared, reg)
+  return { program, registry: reg, errors: [...loopErrors, ...errors] }
 }
 
 /**

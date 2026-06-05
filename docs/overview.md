@@ -127,15 +127,21 @@ nested `@if` (there is no `&&` operator).
 &@if x == 0, { &print 'zero' }, { &print 'nonzero' };
 ```
 
-`@loop` repeats while a condition holds; `&@break` exits early:
+`@loop` is the one loop keyword; it dispatches on the number of operands before
+the `{ body }` block — a bare block loops forever, one operand is a `while`
+condition, and two or three iterate over a `lo..hi` range or a `Vec` (`&@break`
+exits early):
 
 ```silicon
 @local i := 0;
-&@loop i < 10, {
-    &print_int i;
-    i = i + 1;
-};
+&@loop i < 10, { &print_int i; i = i + 1 };   # while
+
+&@loop v, 0..10, { &print_int v };            # half-open range (10 excluded)
+&@loop i, v, xs, { … };                       # Vec: index + element
 ```
+
+See [Conditions & loops](https://silicon-lang.org/examples/control-flow) and
+ADR 0016 for every form and the v1 scope.
 
 `&@return` returns early from a function:
 

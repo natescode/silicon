@@ -159,6 +159,13 @@ export class Lexer {
             this.i++; return this.tok('op', start)        // bare ':' (invalid) → 1-char op
         }
 
+        // '..' half-open range operator (ADR 0016).  Emitted as a 2-char `op`
+        // token so the binary-op chain parses `a..b` as BinaryOp('..'); the
+        // `@loop` desugar consumes it (ranges are syntactic-only inside @loop).
+        // Must precede the single-'.' nsSep rule.  A third '.' falls through to
+        // nsSep, so `1...5` lexes as int op('..') nsSep('.') int — a parse error.
+        if (c === '.' && s[this.i + 1] === '.') { this.i += 2; return this.tok('op', start) }
+
         // '.' namespace separator (numbers consume their own '.').
         if (c === '.') { this.i++; return this.tok('nsSep', start, { sep: '.' }) }
 

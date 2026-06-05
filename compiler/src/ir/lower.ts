@@ -141,6 +141,10 @@ const STRING_ENCODER = new TextEncoder()
  * still work without a SemanticModel.
  */
 function inferredTypeOf(node: any, ctx: LowerCtx): SiliconType | undefined {
+    // Guard non-object nodes: zero-arg builtin keywords (e.g. `@break`,
+    // `@continue`) reach lowerBuiltinCall with `rawArgs[0] === undefined`, and
+    // SemanticModel.typeOf → unwrap throws on a `'_node' in <primitive>` test.
+    if (!node || typeof node !== 'object') return undefined
     return ctx.semanticModel?.typeOf(node) ?? node?.inferredType as SiliconType | undefined
 }
 

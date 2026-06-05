@@ -47,3 +47,4 @@ dependency bumps.
 | [0013](0013-capability-checker-bootstrap.md) | Capability checker: comptime reflection + `@capability` stratum + host-first→in-stratum build order | Proposed |
 | [0014](0014-global-local-bindings.md) | Simplify value bindings to `@global` (immutable) + `@local` (mutable) | Accepted |
 | [0015](0015-object-capabilities.md) | Object capabilities: authority as unforgeable values, checked at comptime, no effect rows | Proposed |
+| [0016](0016-loop-over-iterables.md) | `@loop` over iterables: one keyword, syntactic dispatch, value-returning `IterStep[T,R]` protocol | Accepted |
