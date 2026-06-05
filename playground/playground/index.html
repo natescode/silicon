@@ -382,6 +382,7 @@ button:disabled { opacity: 0.4; cursor: not-allowed; }
     <optgroup label="Standard library">
       <option value="stdlib_numbers">num — numbers</option>
       <option value="stdlib_strings">str — strings</option>
+      <option value="web_letters">str — web letters</option>
     </optgroup>
     <optgroup label="Math (web)">
       <option value="hypotenuse">Hypotenuse</option>
@@ -407,14 +408,14 @@ button:disabled { opacity: 0.4; cursor: not-allowed; }
   <div class="platform-selector">
     <span class="platform-label">Platform:</span>
     <span class="platform-name">web</span>
-    <label class="feature-label active" id="feature-canvas-label" title="2D canvas drawing APIs">
-      <input type="checkbox" class="feature-cb" value="canvas" checked> canvas
+    <label class="feature-label" id="feature-canvas-label" title="2D canvas drawing APIs">
+      <input type="checkbox" class="feature-cb" value="canvas"> canvas
     </label>
-    <label class="feature-label active" id="feature-game-label" title="requestAnimationFrame game loop — requires exported tick()">
-      <input type="checkbox" class="feature-cb" value="game" checked> game
+    <label class="feature-label" id="feature-game-label" title="requestAnimationFrame game loop — requires exported tick()">
+      <input type="checkbox" class="feature-cb" value="game"> game
     </label>
-    <label class="feature-label active" id="feature-dom-label" title="HTML output APIs (set_html, clear_html)">
-      <input type="checkbox" class="feature-cb" value="dom" checked> dom
+    <label class="feature-label" id="feature-dom-label" title="HTML output APIs (set_html, clear_html)">
+      <input type="checkbox" class="feature-cb" value="dom"> dom
     </label>
   </div>
 
@@ -801,6 +802,26 @@ const EXAMPLES = {
 };
 
 @export demo;`,
+
+    web_letters:
+`# Standard library — walk a string and log each letter (web platform).
+# Uses the 'str' module; output via the web console. Call run() below (→ 7).
+
+@use 'str';
+
+\\\\ run () -> Int
+@fn run := {
+    @local word := 'Silicon';
+    @local n := &str_byte_len word;
+    @var i := 0;
+    &@loop i < n, {
+        &web::console_log_str (&str_slice word, i, (i + 1));
+        i = i + 1;
+    };
+    n
+};
+
+@export run;`,
 
     hello_world:
 `# Concatenate a greeting string and print it to the console.
@@ -1203,7 +1224,11 @@ let webEnv = null
 let cancelGameLoop = null
 let keydownListener = null
 let renderPanelOpen = false
-let activeFeatures = ['canvas', 'game', 'dom']
+// Platform features default OFF; the example picker turns on exactly what each
+// example needs (and the user can toggle manually). Defaulting them on made
+// every non-graphics example — including Hello World — fail the
+// required-exports check (e.g. 'game' wants an exported tick()).
+let activeFeatures = []
 let activeTarget = 'host'   // compilation target; set per-example (e.g. wasm-gc)
 
 // ── DOM refs ──────────────────────────────────────────────────────────────
@@ -1427,8 +1452,11 @@ async function compile() {
     // browsers/runtimes that don't support the { builtins } option.
     let instance
     try {
+      // instantiate(Module, imports) resolves to the Instance directly — NOT a
+      // { module, instance } result object (that shape is only for the bytes
+      // overload below).  Reading `.instance` here yields undefined.
       const mod = await WebAssembly.compile(wasmBytes, { builtins: ['js-string'] })
-      instance = (await WebAssembly.instantiate(mod, webEnv.imports)).instance
+      instance = await WebAssembly.instantiate(mod, webEnv.imports)
     } catch (_) {
       instance = (await WebAssembly.instantiate(wasmBytes, webEnv.imports)).instance
     }

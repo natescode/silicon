@@ -112,6 +112,66 @@ try {
         } else {
             console.log(`✓ console output decodes as UTF-8: "${(printed as any).out[0]}"`)
         }
+
+        // ── Drive the real UI for every example ──────────────────────────────
+        // Selects each example from the dropdown (which sets its platform
+        // features), enables "run main", compiles, and calls every export with
+        // valid args — exercising the actual compile→instantiate→run path in
+        // index.html (the `{ builtins: 'js-string' }` Module-instantiate path
+        // the bytes-only check above never touches).  Catches the
+        // "wasmInstance undefined" and feature-default classes of bug.
+        console.log('\nRunning every example through the UI:')
+        await page.evaluate(() => {
+            const cb = document.getElementById('run-main-checkbox') as HTMLInputElement | null
+            if (cb && !cb.checked) cb.click()
+        })
+        const exampleKeys: string[] = await page.evaluate(() =>
+            Array.from(document.querySelectorAll('#example-select option'))
+                .map(o => (o as HTMLOptionElement).value)
+                .filter(v => v && v !== 'empty'))
+        let ranOk = 0
+        for (const key of exampleKeys) {
+            await page.evaluate(k => {
+                const s = document.getElementById('example-select') as HTMLSelectElement
+                s.value = k; s.dispatchEvent(new Event('change'))
+            }, key)
+            await page.waitForTimeout(80)
+            await page.evaluate(() => (document.getElementById('btn-clear-console') as HTMLButtonElement | null)?.click())
+            const before = pageErrors.length
+            await page.click('#btn-compile')
+            await page.waitForTimeout(700)
+            const nrows: number = await page.evaluate(() => document.querySelectorAll('#exports-panel .export-row').length)
+            for (let i = 0; i < nrows; i++) {
+                await page.evaluate(j => {
+                    const row = document.querySelectorAll('#exports-panel .export-row')[j]
+                    if (!row) return
+                    row.querySelectorAll('.param-input').forEach(el => {
+                        const inp = el as HTMLInputElement
+                        const ph = inp.placeholder || ''
+                        inp.value = ph.toLowerCase().includes('string') ? 'hi' : ph === '0.0' ? '2.0' : '3'
+                    })
+                    ;(row.querySelector('.btn-call') as HTMLButtonElement | null)?.click()
+                }, i)
+                await page.waitForTimeout(50)
+            }
+            await page.waitForTimeout(120)
+            const banner: string = await page.evaluate(() => {
+                const e = document.getElementById('error-banner') as HTMLElement
+                return e && e.style.display !== 'none' ? e.textContent || '' : ''
+            })
+            const errLines: string[] = await page.evaluate(() =>
+                Array.from(document.querySelectorAll('#console .console-line.err, #console .console-line.error'))
+                    .map(l => l.textContent || ''))
+            const newPageErrs = pageErrors.slice(before)
+            if (banner || errLines.length || newPageErrs.length) {
+                failed++
+                console.error(`✗ run ${key}: ${[banner, ...errLines, ...newPageErrs].filter(Boolean).join(' | ')}`)
+            } else {
+                ranOk++
+                console.log(`✓ run ${key}`)
+            }
+        }
+        console.log(`\n${ranOk}/${exampleKeys.length} example(s) ran without errors in the UI.`)
     }
 } finally {
     await browser.close()
