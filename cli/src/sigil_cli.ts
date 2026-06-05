@@ -124,6 +124,10 @@ interface SglToml {
     build: {
         /** `target = "wasm-gc"` opts into ADR 0009's GC target by default. */
         target?: string
+        /** `platform = "bun"` / `"web"` selects a JS host (enables JS String
+         *  Builtins + the externref `JSString` type; `sgl run` executes under
+         *  Bun instead of wasmtime).  Default `"native"`. */
+        platform?: string
     }
     /** `[native]` section — default linker inputs for the QBE native backend.
      *  `libs = ["raylib", "m"]` → `-lraylib -lm`; `link-args = [...]` is raw.
@@ -210,6 +214,9 @@ function resolveEntry(positional: string | undefined, cwd: string): string {
 interface CompileOptions {
     strataFiles: string[]
     target: LowerTarget
+    /** Host platform.  `web`/`bun` enable JS String Builtins; `bun` makes
+     *  `sgl run` execute in-process under Bun.  Default `native`. */
+    platform: Platform
     pretty: boolean
     wat: boolean
     native: boolean
@@ -247,7 +254,8 @@ async function compileFile(
 
     const result = compile(source, {
         file: entryAbs, extraSources, moduleRegistry: moduleReg,
-        target: opts.target, maxHeapPages: opts.maxHeapPages, emitBinary: true,
+        target: opts.target, platform: opts.platform,
+        maxHeapPages: opts.maxHeapPages, emitBinary: true,
     })
     if (result.diagnostics.length) emitDiagnostics(result.diagnostics, opts)
     return { wat: result.wat, binary: result.binary! }
@@ -441,6 +449,15 @@ async function cmdRun(positional: string | undefined, opts: CompileOptions): Pro
     if (opts.native) {
         await cmdRunNative(entry, opts)
         return
+    }
+
+    // Web/bun platform: instantiate under Bun's WebAssembly with the JS String
+    // Builtins opt-in (wasmtime can't provide them).  No WASI; the linear-memory
+    // `host` model + the exported `_start` run in-process.
+    if (opts.platform === 'bun' || opts.platform === 'web') {
+        const { runUnderBun } = await import('./host/js-host')
+        const { binary } = await compileFile(entry, { ...opts, target: 'host' })
+        process.exit(await runUnderBun(binary))
     }
 
     // wasix target so wasmtime can invoke _start directly
@@ -742,6 +759,16 @@ function parseTarget(value: string, source: '--target' | 'sgl.toml [build] targe
     process.exit(1)
 }
 
+/** Host platform — orthogonal to the wasm memory-model `target`.  `web`/`bun`
+ *  are JS hosts that provide the `wasm:js-string` builtins; `sgl run` executes a
+ *  bun-platform module in-process under Bun's WebAssembly. */
+export type Platform = 'native' | 'web' | 'bun'
+function parsePlatform(value: string, source: '--platform' | 'sgl.toml [build] platform' = '--platform'): Platform {
+    if (value === 'native' || value === 'web' || value === 'bun') return value
+    console.error(`sgl: unknown ${source} value '${value}' (expected: native | web | bun)`)
+    process.exit(1)
+}
+
 const SGL_VERSION = cliPackage.version
 
 const argv = process.argv.slice(2)
@@ -781,6 +808,9 @@ const tomlForTarget = readSglToml(process.cwd())
 let target: LowerTarget = tomlForTarget?.build.target
     ? parseTarget(tomlForTarget.build.target, 'sgl.toml [build] target')
     : 'host'
+let platform: Platform = tomlForTarget?.build.platform
+    ? parsePlatform(tomlForTarget.build.platform, 'sgl.toml [build] platform')
+    : 'native'
 let pretty = false
 let fmtCheck = false
 let fmtStdout = false
@@ -815,6 +845,12 @@ for (let i = 0; i < rest.length; i++) {
         target = parseTarget(next)
     } else if (arg.startsWith('--target=')) {
         target = parseTarget(arg.slice('--target='.length))
+    } else if (arg === '--platform') {
+        const next = rest[++i]
+        if (!next) { console.error('--platform requires a value'); process.exit(1) }
+        platform = parsePlatform(next)
+    } else if (arg.startsWith('--platform=')) {
+        platform = parsePlatform(arg.slice('--platform='.length))
     } else if (arg === '--max-heap') {
         const next = rest[++i]
         if (!next) { console.error('--max-heap requires a page count'); process.exit(1) }
@@ -853,7 +889,7 @@ const nativeTomlFlags = [
     ...(tomlForTarget?.native.linkArgs ?? []),
 ]
 const opts: CompileOptions = {
-    strataFiles, target, pretty, wat: emitWat, native, maxHeapPages,
+    strataFiles, target, platform, pretty, wat: emitWat, native, maxHeapPages,
     linkArgs: [...nativeTomlFlags, ...linkArgs],
     emitQbe, saveTemps,
 }

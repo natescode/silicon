@@ -1,0 +1,24 @@
+# SPDX-License-Identifier: MIT
+#
+# WASM JS String Builtins (web/bun platform).  Each function maps 1:1 to the
+# standardized `wasm:js-string` import the host (browser / Bun) provides natively
+# when the module is instantiated with `{ builtins: ['js-string'] }`.
+#
+# `JSString` is an `externref` handle to a *JavaScript* string — distinct from
+# Silicon's default linear-memory UTF-8 `String`.  These are only callable under
+# `--platform=web|bun`; on `native` they raise a typecheck error.
+#
+# Lengths / indices are UTF-16 code units (JS semantics).  Call as
+# `&JSString::concat a, b`, `&JSString::fromCodePoint 0x1F389`, etc.
+
+@extern { \\ length (JSString) -> Int }
+@extern { \\ charCodeAt (JSString, Int) -> Int }
+@extern { \\ codePointAt (JSString, Int) -> Int }
+@extern { \\ equals (JSString, JSString) -> Bool }
+@extern { \\ compare (JSString, JSString) -> Int }
+@extern { \\ test (JSString) -> Bool }
+
+@extern { \\ concat (JSString, JSString) -> JSString }
+@extern { \\ substring (JSString, Int, Int) -> JSString }
+@extern { \\ fromCharCode (Int) -> JSString }
+@extern { \\ fromCodePoint (Int) -> JSString }

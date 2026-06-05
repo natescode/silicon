@@ -24,11 +24,17 @@ import type {
     WasmValType, WasmType, AbstractOp,
     IRModule, IRFunction, IRGlobal, IRImport, IRDataSegment, IRExport,
     IRExpr, IRStmt, IRParam, IRLocal,
-    IRLocalGet, IRGlobalGet, IRCall,
+    IRLocalGet, IRGlobalGet, IRCall, IRRefSlot,
     IRBlock, IRIf, IRLoop, IRBreak, IRContinue, IRNop, IRUnreachable, IRExprStmt,
 } from './nodes'
 import { ARRAY_LITERAL_CALLEE, WasmGcTypeRegistry } from './nodes'
 import { type CompilerAPI, type LowerFns, createCompilerAPI } from '../compiler-api'
+
+/** Built-in modules whose WASM import-module string differs from the Silicon
+ *  call prefix.  `&JSString::concat` → `(import "wasm:js-string" "concat" …)`. */
+const IMPORT_ENV_OVERRIDE: Record<string, string> = {
+    JSString: 'wasm:js-string',
+}
 
 // ---------------------------------------------------------------------------
 // Lowering context
@@ -203,10 +209,15 @@ export class IRLowerError extends Error {
  *   E0013 physical-byte); lifecycle primitives compile to no-ops.
  */
 export type LowerTarget = 'host' | 'wasix' | 'wasm-gc'
+export type LowerPlatform = 'native' | 'web' | 'bun'
 
 export interface LowerOptions {
     /** Target runtime — controls emit-time conventions (e.g. _start export). */
     target?: LowerTarget
+    /** Host platform (web/bun = JS host).  Under web/bun the module exports
+     *  `_start` so the JS runner can invoke the top-level program, and
+     *  JS String Builtins / the `JSString` type are available.  Default native. */
+    platform?: LowerPlatform
     /** Phase 9c-4: cap wasm memory at this many 64KB pages.  Forwarded
      *  to the prelude memory section.  Powers the `--max-heap=N` CLI
      *  flag for exercising heap-exhaustion paths in tests.  Undefined
@@ -360,8 +371,10 @@ export function lowerProgram(
     // We always synthesise $__start so the module-init wrapper exists; on the
     // 'wasix' target we additionally export it under the WASIX-mandated name.
     // Empty $__start is fine: WASIX semantics treat it as the "no-op init".
+    const platform = options.platform ?? 'native'
+    const jsHost = platform === 'web' || platform === 'bun'
     const hasStartBody = startStmts.length > 0
-    if (hasStartBody || target === 'wasix') {
+    if (hasStartBody || target === 'wasix' || jsHost) {
         functions.push({
             kind: 'Function',
             name: '__start',
@@ -371,7 +384,9 @@ export function lowerProgram(
             body: { kind: 'Block', wasmType: 'void', stmts: startStmts },
         })
     }
-    if (target === 'wasix') {
+    // Export `_start` for WASIX (wasmer) and for the JS hosts (web/bun), where the
+    // bun/browser runner invokes it to run the top-level program.
+    if (target === 'wasix' || jsHost) {
         irExports.push({ kind: 'Export', what: 'func', internalName: '__start', alias: '_start' })
     }
 
@@ -408,6 +423,11 @@ export function lowerProgram(
         injectRefSlots(functions, functionSigs, ctx.wasmGcTypes)
         injectLocalRefSlots(program, functions, ctx.wasmGcTypes)
     }
+
+    // JS String Builtins (web/bun): encode JSString-typed user params/results/
+    // locals as `externref` so `local.set`/calls from the `(ref extern)`-returning
+    // builtins validate.  No-op when the program uses no JSString.
+    injectJSStringRefSlots(program, functions, functionSigs)
 
     return {
         kind: 'Module',
@@ -465,6 +485,63 @@ function injectRefSlots(
                 fn.refParams.set(i, { localTypeIdx: idx, nullable: false })
             }
         }
+    }
+}
+
+/** JS String Builtins — mark every JSString-typed user function param/result and
+ *  `@local`/`@var` as a nullable `externref` ref slot (`IRRefSlot.extern`).  The
+ *  builtins return non-null `(ref extern)`; declaring the holding slots as the
+ *  wider nullable `externref` lets `local.set` / calls validate. */
+const EXTERN_SLOT: IRRefSlot = { localTypeIdx: 0, nullable: true, extern: true }
+function injectJSStringRefSlots(
+    program: any,
+    functions: IRFunction[],
+    functionSigs: Map<string, FunctionSig>,
+): void {
+    const fnByName = new Map<string, IRFunction>()
+    for (const f of functions) fnByName.set(f.name, f)
+
+    // Params + result from the typechecker's signature.
+    for (const fn of functions) {
+        const sig = functionSigs?.get(fn.name)
+        if (!sig) continue
+        if (!fn.refResult && sig.result?.kind === 'JSString') fn.refResult = EXTERN_SLOT
+        sig.params.forEach((p, i) => {
+            if (p?.kind === 'JSString') {
+                if (!fn.refParams) fn.refParams = new Map()
+                if (!fn.refParams.has(i)) fn.refParams.set(i, EXTERN_SLOT)
+            }
+        })
+    }
+
+    // `@local`/`@var` declarations annotated `\\ name JSString`.
+    const items: any[] = (program?.elements ?? program?.items ?? []) as any[]
+    for (const item of items) {
+        const def = unwrap(item)
+        if (!def || def.type !== 'Definition') continue
+        if (def.keyword !== '@fn' && def.keyword !== '@let') continue
+        const fn = fnByName.get(watId(def.name?.name ?? '')) ?? fnByName.get(def.name?.name ?? '')
+        if (!fn) continue
+        walkLocalsForJSString(def.binding?.expression ?? def.binding, fn)
+    }
+}
+
+function walkLocalsForJSString(node: any, fn: IRFunction): void {
+    if (!node || typeof node !== 'object') return
+    if (node.type === 'Definition' && (node.keyword === '@local' || node.keyword === '@var')) {
+        const localName: string | undefined = node.name?.name
+        if (localName && node.name?.typeAnnotation?.typename === 'JSString') {
+            const watLocalName = watId(localName)
+            for (const l of fn.locals) {
+                if (l.name === watLocalName || l.name === localName) { l.refType = EXTERN_SLOT; break }
+            }
+        }
+    }
+    for (const key of Object.keys(node)) {
+        if (key === 'type' || key === 'sourceLocation') continue
+        const val = (node as any)[key]
+        if (Array.isArray(val)) for (const v of val) walkLocalsForJSString(v, fn)
+        else if (val && typeof val === 'object') walkLocalsForJSString(val, fn)
     }
 }
 
@@ -1259,13 +1336,33 @@ function lowerModuleCall(name: string, sepIdx: number, n: any, ctx: LowerCtx): I
 
     // Register the import once per compilation (deduplicated by watName).
     if (!ctx.pendingImports.has(watName)) {
+        // JS-host modules whose import-module string differs from the call prefix
+        // (e.g. `&JSString::concat` → `(import "wasm:js-string" "concat" …)`).
+        const env = IMPORT_ENV_OVERRIDE[moduleName] ?? moduleName
+
+        // JSString-typed params/results become `externref` / `(ref extern)` slots
+        // (JS String Builtins).  String params are nullable `externref`; a
+        // string-returning builtin must declare a non-null `(ref extern)` result
+        // (the host validates the exact signature — verified under Bun).
+        let refParams: Map<number, IRRefSlot> | undefined
+        fnSig.siliconParams.forEach((t, i) => {
+            if (t === 'JSString') {
+                (refParams ??= new Map()).set(i, { localTypeIdx: 0, nullable: true, extern: true })
+            }
+        })
+        const refResult: IRRefSlot | undefined = fnSig.siliconResult === 'JSString'
+            ? { localTypeIdx: 0, nullable: false, extern: true }
+            : undefined
+
         ctx.pendingImports.set(watName, {
             kind: 'Import',
-            env: moduleName,
+            env,
             field: funcName,
             name: watName,
             params: fnSig.params,
             result: fnSig.result,
+            refParams,
+            refResult,
         })
     }
 

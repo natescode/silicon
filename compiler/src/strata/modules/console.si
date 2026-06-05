@@ -1,0 +1,11 @@
+# SPDX-License-Identifier: MIT
+#
+# Browser/Bun `console` bindings (web/bun platform).  The host provides these as
+# ordinary imports (module string `"console"`); under `sgl run --platform=bun`
+# they are wired to the JS `console`.  `log` takes a `JSString` (externref) so a
+# JS string passes through to `console.log` natively.
+#
+#   &console::log (&JSString::fromCodePoint 0x1F389);   # 🎉
+
+@extern { \\ log (JSString) -> Void }
+@extern { \\ error (JSString) -> Void }
