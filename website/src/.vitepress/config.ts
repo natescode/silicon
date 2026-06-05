@@ -87,6 +87,8 @@ export default defineConfig({
                     items: [
                         { text: 'Getting started', link: '/guide/getting-started' },
                         { text: 'Install', link: '/guide/install' },
+                        { text: 'Language overview', link: '/guide/overview' },
+                        { text: 'Standard library', link: '/guide/stdlib' },
                         { text: 'Language tour', link: '/guide/tour' },
                         { text: 'Writing a stratum', link: '/guide/strata' },
                         { text: 'Memory + arenas', link: '/guide/memory' },

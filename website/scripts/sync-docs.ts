@@ -28,6 +28,8 @@ interface Sync {
 const SYNCS: Sync[] = [
     // Guide
     { from: 'docs/getting-started.md',         to: 'guide/getting-started.md', frontmatter: { title: 'Getting started' } },
+    { from: 'docs/overview.md',                to: 'guide/overview.md',        frontmatter: { title: 'Language overview' } },
+    { from: 'docs/stdlib.md',                  to: 'guide/stdlib.md',          frontmatter: { title: 'Standard library' } },
     { from: 'docs/memory.md',                  to: 'guide/memory.md',          frontmatter: { title: 'Memory + arenas' } },
     { from: 'docs/strata-authoring-guide.md',  to: 'guide/strata.md',          frontmatter: { title: 'Writing a stratum' } },
     { from: 'docs/targets.md',                 to: 'guide/platforms.md',       frontmatter: { title: 'Platforms' } },

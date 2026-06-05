@@ -1,8 +1,8 @@
 # docs
 
 The source-of-truth documentation for Sigil / Silicon. The published
-docs site at [`site/`](../site/) renders these pages; keep edits here
-and let the sync script propagate them.
+docs site under [`website/`](../website/) renders these pages; keep edits
+here and let the sync script propagate them.
 
 If you're new, start with [`getting-started.md`](getting-started.md).
 
@@ -49,7 +49,7 @@ If you're new, start with [`getting-started.md`](getting-started.md).
 | [stability.md](stability.md) | Stable / unstable / will-not-be-added surfaces per layer |
 | [security.md](security.md) | Threat model + disclosure address (story 10b-4) |
 | [performance.md](performance.md) | 1.0 perf baseline + regression methodology (10b-5) |
-| [adr/](adr/) | 10 Architectural Decision Records |
+| [adr/](adr/) | Architectural Decision Records (0001–0013) |
 
 ## Roadmap — what's planned
 
@@ -88,8 +88,8 @@ re-activation protocol.
 
 - All Markdown is GitHub-flavoured; HTML files are self-contained
   pages with inline styling (no external CSS).
-- The site at `site/src/` re-renders these via
-  `site/scripts/sync-docs.ts`; update that script's `SYNCS` table
+- The site at `website/src/` re-renders these via
+  `website/scripts/sync-docs.ts`; update that script's `SYNCS` table
   when you add a new page that should appear on the published site.
 - ADRs use the template at [`adr/0000-template.md`](adr/0000-template.md).
 - For new launch / release notes, follow the structure of the existing

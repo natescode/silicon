@@ -11,7 +11,7 @@ Silicon compiles to two targets: **WebAssembly** (the default) and **native** vi
 | I/O | WASI (`wasi_snapshot_preview1`) | libc (`puts`, `printf`, …) |
 | String layout | length-prefixed | plain C string |
 | `@extern` namespace | `wasi_snapshot_preview1::fd_write` etc. | `puts`, `printf`, `malloc`, … |
-| Standard library | `@use` `src/stdlib/io.si` | `@extern` libc functions directly |
+| Standard library | `@use 'io'` (snake_case stdlib) | `@extern` libc functions directly |
 | Memory model | linear bump-allocator (`&alloc`, `@with_arena`) | same via `malloc`, or libc |
 
 ---
@@ -25,7 +25,7 @@ Silicon compiles to two targets: **WebAssembly** (the default) and **native** vi
 There is no libc in a WASM sandbox.  All I/O goes through **WASI** (`wasi_snapshot_preview1`).  The standard library wraps this for you:
 
 ```silicon
-@use 'src/stdlib/io.si';
+@use 'io';
 
 &print 'Hello, Silicon!';   # writes to stdout via WASI fd_write
 ```
@@ -132,7 +132,7 @@ The split is handled entirely in the lowerer; Silicon source code is identical o
 Or use the stdlib which wraps this:
 
 ```silicon
-@use 'src/stdlib/io.si';
+@use 'io';
 &exit 0;
 ```
 
