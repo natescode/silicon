@@ -112,6 +112,17 @@ contiguously.
 };
 ```
 
+`@loop` is the only loop keyword — it dispatches on the number of operands
+before the `{ body }` block (ADR 0016). The `sum_to` while above can also be
+written as a half-open range, and the same keyword iterates a `Vec` or loops
+forever:
+
+```silicon
+&@loop v, 0..n, { total = total + v };   \\ range: v = 0,1,…,n-1
+&@loop i, x, xs, { … };                  \\ Vec: index + element
+&@loop { … &@break };                    \\ forever, exit with @break
+```
+
 `@return`, `@break`, `@continue` exit early. `@defer` runs LIFO at
 every exit:
 

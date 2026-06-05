@@ -367,6 +367,7 @@ button:disabled { opacity: 0.4; cursor: not-allowed; }
     </optgroup>
     <optgroup label="Control flow">
       <option value="countdown">Loop / countdown</option>
+      <option value="loops">Loops / iterables</option>
       <option value="fibonacci">Fibonacci</option>
       <option value="factorial">Factorial</option>
       <option value="safe_divide">Safe divide / @return</option>
@@ -454,7 +455,11 @@ count = count + 1; <i># reassign (only @local)</i></pre></details>
 'a' ++ 'b'        <i># concat</i></pre></details>
 
       <details class="cheat-section"><summary>Control flow</summary><pre>&amp;@if c, { … }, { … };
-&amp;@loop c, { … };
+&amp;@loop c, { … };          <i># while</i>
+&amp;@loop v, 0..n, { … };    <i># range (n excluded)</i>
+&amp;@loop i, v, 0..n, { … }; <i># index + element</i>
+&amp;@loop x, xs, { … };      <i># Vec elements</i>
+&amp;@loop { … &amp;@break };     <i># forever</i>
 &amp;@return v;
 &amp;@match s, $A v =&gt; v, $B =&gt; 0</pre></details>
 
@@ -897,6 +902,47 @@ const EXAMPLES = {
 };
 
 @export countTo;`,
+
+    loops:
+`# @loop over iterables (ADR 0016) — one keyword, dispatched by the number of
+# operands before the { body } block. Every export below returns an Int.
+
+@use 'vec';
+
+\\\\ sum_range (Int) -> Int
+@fn sum_range n := {
+    @local total := 0;
+    &@loop v, 0..n, { total = total + v };        # range: v = 0,1,…,n-1
+    total
+};
+
+\\\\ dot_index () -> Int
+@fn dot_index := {
+    @local acc := 0;
+    &@loop i, v, 2..5, { acc = acc + (i * v) };    # index + element: i=0,1,2 ; v=2,3,4
+    acc
+};
+
+\\\\ sum_vec () -> Int
+@fn sum_vec := {
+    @local xs := &vec_new 4;
+    &vec_push_i32 xs, 10;  &vec_push_i32 xs, 20;  &vec_push_i32 xs, 30;
+    @local s := 0;
+    &@loop x, xs, { s = s + x };                   # iterate a Vec (i32 elements)
+    s
+};
+
+\\\\ first_pow2_over (Int) -> Int
+@fn first_pow2_over limit := {
+    @local p := 1;
+    &@loop { &@if p > limit, { &@break }; p = p * 2 };   # infinite + @break
+    p
+};
+
+@export sum_range;
+@export dot_index;
+@export sum_vec;
+@export first_pow2_over;`,
 
     color_match:
 `# Algebraic sum type with exhaustive pattern matching.
