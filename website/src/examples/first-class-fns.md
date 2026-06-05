@@ -13,8 +13,8 @@ Functions are values:
 @fn apply f:$fn _:Int _:Int _:Int, x:Int, y:Int := { &f x, y };
 
 @fn main := {
-    @let s:Int := &apply add, 3, 4;        # 7
-    @let d:Int := &apply sub, 10, 4;       # 6
+    @global s:Int := &apply add, 3, 4;        # 7
+    @global d:Int := &apply sub, 10, 4;       # 6
     s + d                                  # 13
 };
 ```
@@ -32,8 +32,8 @@ site.
 @fn double n:Int := { n * 2 };
 
 @fn main := {
-    @let v:Vec[Int] := &Vec::from_array [1, 2, 3, 4];
-    @let doubled:Vec[Int] := &Vec::map &v, double;
+    @global v:Vec[Int] := &Vec::from_array [1, 2, 3, 4];
+    @global doubled:Vec[Int] := &Vec::map &v, double;
     0
 };
 ```

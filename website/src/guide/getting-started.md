@@ -164,12 +164,12 @@ handling, the standard library, platforms, and strata — read the
 
 | Feature | Example |
 |---|---|
-| Variables | `@var x := 0; x = x + 1` |
-| Immutable binding | `@let y := 42` |
+| Variables | `@local x := 0; x = x + 1` |
+| Immutable binding | `@global y := 42` |
 | Conditionals | `&@if x == 0, { &print 'zero' }, { &print 'nonzero' }` |
 | Loops | `&@loop { &@if done, { &@break }, {}; }` |
 | Pattern matching | `&@match opt, $Some v => v, $None => 0` |
-| Error handling | `@let r := ...; &@try r` |
+| Error handling | `@global r := ...; &@try r` |
 | Generic functions | `\\ id[T] T -> T` / `@fn id x := x` |
 | Sum types | `@type Shape := $Circle r Int \| $Rectangle w Int, h Int` |
 | Structs | `@struct Point x Int, y Int;` |
@@ -188,7 +188,7 @@ when the iteration produces a value the parent scope keeps:
 ```silicon
 \\ handle_loop () -> Int
 @fn handle_loop := {
-    @var i := 0;
+    @local i := 0;
     &@loop i < 1000000, {
         @local response := &@with_arena {
             @local body := &build_response i;

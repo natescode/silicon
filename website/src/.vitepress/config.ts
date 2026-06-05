@@ -130,16 +130,22 @@ export default defineConfig({
                     text: 'Cookbook',
                     items: [
                         { text: 'Index', link: '/examples/' },
+                        // Basics
                         { text: 'Hello world', link: '/examples/hello' },
+                        { text: 'Variables', link: '/examples/variables' },
+                        { text: 'Functions', link: '/examples/functions' },
+                        { text: 'Conditions & loops', link: '/examples/control-flow' },
                         { text: 'Sum types + @match', link: '/examples/sum-types' },
                         { text: 'Generics', link: '/examples/generics' },
                         { text: 'Error handling with @try', link: '/examples/try' },
+                        { text: 'First-class functions', link: '/examples/first-class-fns' },
+                        // Systems & platforms
+                        { text: 'C interop (@extern)', link: '/examples/native' },
                         { text: 'Arena allocation', link: '/examples/arena' },
                         { text: 'Rc smart pointer', link: '/examples/rc' },
+                        // Metaprogramming
                         { text: 'Writing a stratum', link: '/examples/stratum' },
                         { text: 'Strata as design solvent', link: '/examples/dsl' },
-                        { text: 'QBE native compile', link: '/examples/native' },
-                        { text: 'First-class functions', link: '/examples/first-class-fns' },
                     ],
                 },
             ],

@@ -17,23 +17,28 @@ What `sgl init` scaffolded for you:
 
 ```silicon
 # src/main.si
-@use 'stdlib/io.si';
+@use 'io';
 
 @fn main := {
-    &println "Hello, Silicon!";
+    &print 'Hello, Silicon!';
     0
 };
 
-@export main;
+&main;
 ```
 
-`sgl run` compiled to WAT, assembled to `.wasm`, and ran under
-`wasmtime`. The exit code came from the value `main` returned (`0`).
+`sgl run` compiled to WAT, assembled to `.wasm`, and ran under `wasmtime`. The
+exit code came from the value `main` returned (`0`).
 
 ## What just happened
 
 1. `sgl.toml` declared the project entry (`src/main.si`).
-2. The compiler resolved the `@use` to bring in `println` (which wraps
-   WASI `fd_write`).
-3. `@fn main := { … }` is the entry point because it's `@export`ed
-   under the name `main` — WASI's start hook.
+2. `@use 'io'` pulled in the standard library's I/O module — `&print` writes a
+   line to stdout (wrapping WASI `fd_write`). Strings are single-quoted.
+3. The top-level `&main;` runs the program.
+
+## Next
+
+- [Variables](/examples/variables) — `@global` vs `@local`.
+- [Functions](/examples/functions) — `@fn` and `\\` signature lines.
+- [Conditions & loops](/examples/control-flow) — `@if`, `@loop`, `@return`.

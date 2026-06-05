@@ -4,37 +4,56 @@ title: Generics
 
 # Generics + HM-lite inference
 
-```silicon
-@fn id[T] x:T := x;
+Declare a type parameter in brackets on the signature line and the `@fn`. The
+call site infers it — no explicit `[Int]` needed:
 
-@fn pair[T] a:T, b:T := …;   # returns some Pair[T] you define
+```silicon
+@use 'io';
+
+\\ id[T] (T) -> T
+@fn id x := x;
 
 @fn main := {
-    @let n:Int  := &id 42;        # T = Int  — inferred at call site
-    @let s:Str  := &id "hello";   # T = Str  — inferred at call site
+    @local n := &id 42;        # T = Int — inferred
+    &print_int n;              # 42
     0
+};
+&main;
+```
+
+Silicon uses **HM-lite** — Hindley–Milner restricted to declared polymorphism
+on `@fn[T]` and `@type[T]`, with no let-generalisation.
+
+## Parametric sum types
+
+The standard library's `Option[T]` is a parametric sum type. `@use 'option'` to
+get it and its helpers:
+
+```silicon
+@use 'io';
+@use 'option';
+
+@fn main := {
+    @local picked := &option_unwrap_or (&Some 7), 0;    # T = Int → 7
+    @local fallen := &option_unwrap_or (&None), 99;     # T = Int → 99
+    &print_int picked;
+    &print_int fallen;
+    0
+};
+&main;
+```
+
+Defining your own:
+
+```silicon
+@type Option[T] := $Some value T | $None;
+
+\\ unwrap_or[T] (Option[T], T) -> T
+@fn unwrap_or opt, dflt := {
+    &@match opt,
+        $Some v => v,
+        $None   => dflt
 };
 ```
 
-No explicit `[Int]` at the call. Silicon uses HM-lite (Hindley-Milner
-restricted to declared polymorphism on `@fn[T]` and `@type[T]`, no
-let-generalisation).
-
-Parametric sum types compose naturally:
-
-```silicon
-@type Option[T] := $Some value:T | $None;
-
-@fn unwrap_or[T] opt:Option[T], dflt:T := {
-    &@match opt, $Some v => v, $None => dflt
-};
-
-@fn main := {
-    @let x:Int := &unwrap_or (&$Some 42), 0;     # T = Int
-    @let y:Str := &unwrap_or (&$Some "yes"), "no"; # T = Str
-    0
-};
-```
-
-The full type-inference reference is at
-[/reference/hm-lite](/reference/hm-lite).
+The full type-inference reference is at [/reference/hm-lite](/reference/hm-lite).

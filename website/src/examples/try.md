@@ -12,8 +12,8 @@ title: Error handling with @try
 @fn parse_int s:Str := …;  # → Result[Int, Str]
 
 @fn add_two_parsed a:Str, b:Str := {
-    @let x:Int := &@try (&parse_int a);   # propagates $Err
-    @let y:Int := &@try (&parse_int b);
+    @global x:Int := &@try (&parse_int a);   # propagates $Err
+    @global y:Int := &@try (&parse_int b);
     &$Ok (x + y)
 };
 ```

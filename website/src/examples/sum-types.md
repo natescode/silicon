@@ -4,39 +4,68 @@ title: Sum types + @match
 
 # Sum types + `@match`
 
-```silicon
-@type Shape := $Circle r:Int | $Rect w:Int, h:Int | $Square s:Int;
+A **sum type** has variants, each marked with `$` and an optional payload.
+Payload fields are written `name Type` (no colon):
 
-@fn area s:Shape := {
+```silicon
+@type Shape := $Circle r Int | $Rect w Int, h Int | $Square s Int;
+```
+
+Each variant becomes a constructor function — call it with `&`:
+
+```silicon
+@local c := &Circle 5;
+@local r := &Rect 4, 7;
+```
+
+`@match` destructures a value, binding the payload fields by name. Each arm is
+`pattern => expr`:
+
+```silicon
+@use 'io';
+
+@type Shape := $Circle r Int | $Rect w Int, h Int;
+
+\\ longest_side (Shape) -> Int
+@fn longest_side s := {
     &@match s,
-        $Circle r => r * r * 3,
-        $Rect w h => w * h,
-        $Square side => side * side
+        $Circle r   => r,
+        $Rect w, h  => w
+};
+
+\\ tag (Shape) -> Int
+@fn tag s := {
+    &@match s,
+        $Circle r   => 1,
+        $Rect w, h  => 2
 };
 
 @fn main := {
-    @let c:Shape := &$Circle 5;
-    @let r:Shape := &$Rect 4, 7;
-    @let q:Shape := &$Square 3;
-    (&area c) + (&area r) + (&area q)
+    &print_int (&longest_side (&Circle 5));   # 5
+    &print_int (&longest_side (&Rect 4, 7));  # 4
+    &print_int (&tag (&Rect 4, 7));           # 2
+    0
 };
-
-@export main;
+&main;
 ```
 
-Each variant becomes a constructor function (`$Circle`, `$Rect`,
-`$Square`); pattern destructure binds the fields by name in the arm.
-
-Per-arm alternation is supported:
+Keep arm bodies simple — bind the payload and return it (or a tag), then do any
+arithmetic outside the `@match`. Pattern alternation shares a body across
+variants:
 
 ```silicon
-@type Color := $Red | $Green | $Blue;
+@enum Color := Red | Green | Blue;
 
-@fn warm c:Color := {
+\\ code (Color) -> Int
+@fn code c := {
     &@match c,
-        $Red | $Green => @true,
-        $Blue => @false
+        Color::Red | Color::Green => 1,
+        Color::Blue               => 0
 };
 ```
+
+`Option[T]` and `Result[T, E]` (in the standard library) are exactly this
+machinery — see [Generics](/examples/generics) and
+[Error handling with `@try`](/examples/try).
 
 [Reference: HM-lite inference rules for variant constructors →](/reference/hm-lite)
