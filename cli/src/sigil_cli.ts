@@ -72,6 +72,11 @@ Build / run flags:
                   (ADR 0009).  Mvp-only primitives (&alloc, &@with_arena,
                   raw &heap_*, Rc introspection) are rejected at typecheck;
                   lifecycle primitives (@with_arena, Rc) compile to no-ops.
+  --platform=<p>  Host platform: native (default) | web | bun
+                  web / bun are JS hosts: enable the externref `JSString` type +
+                  the WASM `wasm:js-string` builtins.  `sgl run --platform=bun`
+                  executes in-process under Bun (not wasmtime).  Set persistently
+                  via sgl.toml: [build] platform = "bun".
   --release       Compile via the QBE native backend (alias for --native)
   -l<lib> -L<dir> Pass cc-style linker flags to the native link step
                   (e.g. -lraylib -lm).  --native only.

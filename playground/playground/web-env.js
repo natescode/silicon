@@ -123,12 +123,32 @@
             })
         }
 
+        // String↔JSString bridge: linear-memory `String` ⇄ JS string (externref).
+        function allocLenString (s) {
+            if (!wasmMemory || !wasmAlloc) return 0
+            var bytes = new TextEncoder().encode(String(s == null ? '' : s))
+            var ptr = wasmAlloc(4 + bytes.length)
+            new DataView(wasmMemory.buffer).setInt32(ptr, bytes.length, true)
+            new Uint8Array(wasmMemory.buffer, ptr + 4, bytes.length).set(bytes)
+            return ptr
+        }
+
         var imports = {
             env: {
                 print: function (v) { if (v === 10) { flushCharBuf() } else { charBuf.push(v) } },
                 read:  function ()  { return 0 },
             },
             web: web,
+            // String↔JSString bridge (web/bun platform).
+            'js-bridge': {
+                fromString: function (ptr) { return readLenString(ptr) },
+                toString:   function (s)   { return allocLenString(s) },
+            },
+            // Base `console` bindings — take a JSString (externref) directly.
+            console: {
+                log:   function (s) { onPrint(String(s == null ? '' : s), 'print') },
+                error: function (s) { onPrint(String(s == null ? '' : s), 'error') },
+            },
         }
 
         return {

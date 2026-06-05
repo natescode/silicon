@@ -1253,7 +1253,16 @@ async function compile() {
 
   try {
     const wasmBytes = Uint8Array.from(atob(data.wasm), c => c.charCodeAt(0))
-    const { instance } = await WebAssembly.instantiate(wasmBytes, webEnv.imports)
+    // Opt into the WASM JS String Builtins so `wasm:js-string` imports (the
+    // JSString type) resolve natively; fall back to a plain instantiate on
+    // browsers/runtimes that don't support the { builtins } option.
+    let instance
+    try {
+      const mod = await WebAssembly.compile(wasmBytes, { builtins: ['js-string'] })
+      instance = (await WebAssembly.instantiate(mod, webEnv.imports)).instance
+    } catch (_) {
+      instance = (await WebAssembly.instantiate(wasmBytes, webEnv.imports)).instance
+    }
     webEnv.bindInstance(instance)
     wasmInstance = instance
     wasmExports = data.exports ?? []
