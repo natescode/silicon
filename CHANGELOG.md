@@ -3,6 +3,32 @@
 All notable changes to `sgl` (the Silicon compiler CLI) are recorded here.
 This project aims for [Semantic Versioning](https://semver.org/).
 
+## 0.1.3
+
+### Added
+- **`@loop` over iterables** ([ADR 0016](docs/adr/0016-loop-over-iterables.md)) —
+  one keyword, dispatched by the number of operands before the `{ body }` block,
+  every form desugaring to the existing `while` primitive (no iterator object,
+  no per-iteration allocation):
+  - `&@loop { body }` — 0-operand infinite loop (exit with `&@break`).
+  - `&@loop v, lo..hi, { body }` — half-open `..` ranges (`hi` excluded); a
+    two-binder form `&@loop i, v, lo..hi, { body }` binds position then element.
+  - `&@loop x, xs, { body }` / `&@loop i, x, xs, { body }` — i32-element `Vec`
+    iteration via the `vec_len` / `vec_get_i32` surface.
+  - `_` discards a binder (`&@loop _, 0..n, { … }`).
+  - New `iter` stdlib module: `IterStep[T, R] := $Item value T | $Done result R`
+    plus `iter_is_item` / `iter_is_done` / `iter_item_or` — the documented
+    iterator-protocol convention (not yet auto-dispatched by `@loop`).
+  - New example: `examples/loop_iterables.si`.
+- New `..` range token in the lexer (recognised ahead of the `.` namespace
+  separator); valid only as a `@loop` range subject.
+
+### Fixed
+- **Lowering**: a zero-argument builtin keyword (`@break` / `@continue`) no
+  longer crashes the lowerer (`node is not an Object`) when a `SemanticModel`
+  is present — `inferredTypeOf` now guards non-object nodes. This had broken the
+  `&@loop 1, { … @break … }` loop-forever idiom on the CaaS / CLI compile paths.
+
 ## 0.1.2
 
 ### Added
