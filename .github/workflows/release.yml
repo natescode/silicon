@@ -14,153 +14,55 @@ permissions:
   contents: write
 
 jobs:
-  # ── Build native sgl binaries for each Tier 1 platform ──────────────────
+  # ── Build native sgl binaries for every Tier 1 platform ─────────────────
+  #
+  # `bun build --compile` cross-compiles to every target triple from a single
+  # host, so all four binaries are produced on one always-available
+  # ubuntu-latest runner.  This replaces the previous per-OS-runner model,
+  # which broke when GitHub retired the Intel macOS `macos-13` runner: the
+  # `build-macos-x64` job sat "awaiting a runner" for 24h and never ran, so the
+  # dependent `release` job never published (the v0.1.1 release failure).
 
-  build-linux-x64:
-    name: Build — Linux x86-64
+  build:
+    name: Build — all Tier 1 platforms (cross-compiled)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: oven-sh/setup-bun@v2
         with: { bun-version: latest }
       - run: bun install --frozen-lockfile
-      - name: Build sgl binary
-        run: |
-          # build-binary.ts inlines the compiler's built-in assets (strata /
-          # std.wat / modules) and tracks the CLI entry point under cli/.
-          # A naive `bun build --compile` traps at runtime on /$bunfs/root.
-          # It emits cli/dist/sgl-<host-platform>; each release job runs on
-          # its target's native runner, so the host build is the target build.
-          bun run cli/scripts/build-binary.ts
-          cp cli/dist/sgl-* sgl
-      - name: Smoke test
-        run: |
-          echo '@fn main := 0;' > /tmp/smoke.si
-          ./sgl check /tmp/smoke.si
-      - name: Package tarball
-        run: |
-          VERSION="${GITHUB_REF_NAME}"
-          PLATFORM="linux-x86_64"
-          DIST="sgl-${VERSION}-${PLATFORM}"
-          mkdir -p "${DIST}"
-          cp sgl "${DIST}/"
-          cp README.md LICENSE "${DIST}/" 2>/dev/null || true
-          tar czf "${DIST}.tar.gz" "${DIST}/"
-          sha256sum "${DIST}.tar.gz" > "${DIST}.tar.gz.sha256"
-      - uses: actions/upload-artifact@v4
-        with:
-          name: sgl-linux-x86_64
-          path: sgl-*.tar.gz*
-          retention-days: 1
 
-  build-linux-arm64:
-    name: Build — Linux ARM64
-    runs-on: ubuntu-24.04-arm
-    steps:
-      - uses: actions/checkout@v4
-      - uses: oven-sh/setup-bun@v2
-        with: { bun-version: latest }
-      - run: bun install --frozen-lockfile
-      - name: Build sgl binary
+      - name: Build sgl binaries
         run: |
           # build-binary.ts inlines the compiler's built-in assets (strata /
-          # std.wat / modules) and tracks the CLI entry point under cli/.
-          # A naive `bun build --compile` traps at runtime on /$bunfs/root.
-          # It emits cli/dist/sgl-<host-platform>; each release job runs on
-          # its target's native runner, so the host build is the target build.
-          bun run cli/scripts/build-binary.ts
-          cp cli/dist/sgl-* sgl
-      - name: Smoke test
-        run: |
-          echo '@fn main := 0;' > /tmp/smoke.si
-          ./sgl check /tmp/smoke.si
-      - name: Package tarball
-        run: |
-          VERSION="${GITHUB_REF_NAME}"
-          PLATFORM="linux-aarch64"
-          DIST="sgl-${VERSION}-${PLATFORM}"
-          mkdir -p "${DIST}"
-          cp sgl "${DIST}/"
-          cp README.md LICENSE "${DIST}/" 2>/dev/null || true
-          tar czf "${DIST}.tar.gz" "${DIST}/"
-          sha256sum "${DIST}.tar.gz" > "${DIST}.tar.gz.sha256"
-      - uses: actions/upload-artifact@v4
-        with:
-          name: sgl-linux-aarch64
-          path: sgl-*.tar.gz*
-          retention-days: 1
+          # std.wat / modules) and tracks the CLI entry point under cli/.  Given
+          # explicit platform args it emits cli/dist/sgl-<platform> for each
+          # target triple via `bun build --compile --target=...`.
+          bun run cli/scripts/build-binary.ts \
+            linux-x86_64 linux-aarch64 macos-x86_64 macos-aarch64
 
-  build-macos-arm64:
-    name: Build — macOS ARM64 (Apple Silicon)
-    runs-on: macos-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: oven-sh/setup-bun@v2
-        with: { bun-version: latest }
-      - run: bun install --frozen-lockfile
-      - name: Build sgl binary
+      - name: Smoke test (native linux-x86_64)
         run: |
-          # build-binary.ts inlines the compiler's built-in assets (strata /
-          # std.wat / modules) and tracks the CLI entry point under cli/.
-          # A naive `bun build --compile` traps at runtime on /$bunfs/root.
-          # It emits cli/dist/sgl-<host-platform>; each release job runs on
-          # its target's native runner, so the host build is the target build.
-          bun run cli/scripts/build-binary.ts
-          cp cli/dist/sgl-* sgl
-      - name: Smoke test
-        run: |
+          # The host-native binary validates the bundle + compile path; the
+          # other three are the same bundle cross-targeted.
           echo '@fn main := 0;' > /tmp/smoke.si
-          ./sgl check /tmp/smoke.si
-      - name: Package tarball
-        run: |
-          VERSION="${GITHUB_REF_NAME}"
-          PLATFORM="macos-aarch64"
-          DIST="sgl-${VERSION}-${PLATFORM}"
-          mkdir -p "${DIST}"
-          cp sgl "${DIST}/"
-          cp README.md LICENSE "${DIST}/" 2>/dev/null || true
-          tar czf "${DIST}.tar.gz" "${DIST}/"
-          shasum -a 256 "${DIST}.tar.gz" > "${DIST}.tar.gz.sha256"
-      - uses: actions/upload-artifact@v4
-        with:
-          name: sgl-macos-aarch64
-          path: sgl-*.tar.gz*
-          retention-days: 1
+          ./cli/dist/sgl-linux-x86_64 check /tmp/smoke.si
 
-  build-macos-x64:
-    name: Build — macOS x86-64
-    runs-on: macos-13
-    steps:
-      - uses: actions/checkout@v4
-      - uses: oven-sh/setup-bun@v2
-        with: { bun-version: latest }
-      - run: bun install --frozen-lockfile
-      - name: Build sgl binary
-        run: |
-          # build-binary.ts inlines the compiler's built-in assets (strata /
-          # std.wat / modules) and tracks the CLI entry point under cli/.
-          # A naive `bun build --compile` traps at runtime on /$bunfs/root.
-          # It emits cli/dist/sgl-<host-platform>; each release job runs on
-          # its target's native runner, so the host build is the target build.
-          bun run cli/scripts/build-binary.ts
-          cp cli/dist/sgl-* sgl
-      - name: Smoke test
-        run: |
-          echo '@fn main := 0;' > /tmp/smoke.si
-          ./sgl check /tmp/smoke.si
-      - name: Package tarball
+      - name: Package tarballs
         run: |
           VERSION="${GITHUB_REF_NAME}"
-          PLATFORM="macos-x86_64"
-          DIST="sgl-${VERSION}-${PLATFORM}"
-          mkdir -p "${DIST}"
-          cp sgl "${DIST}/"
-          cp README.md LICENSE "${DIST}/" 2>/dev/null || true
-          tar czf "${DIST}.tar.gz" "${DIST}/"
-          shasum -a 256 "${DIST}.tar.gz" > "${DIST}.tar.gz.sha256"
+          for PLATFORM in linux-x86_64 linux-aarch64 macos-x86_64 macos-aarch64; do
+            DIST="sgl-${VERSION}-${PLATFORM}"
+            mkdir -p "${DIST}"
+            cp "cli/dist/sgl-${PLATFORM}" "${DIST}/sgl"
+            cp README.md LICENSE "${DIST}/" 2>/dev/null || true
+            tar czf "${DIST}.tar.gz" "${DIST}/"
+            sha256sum "${DIST}.tar.gz" > "${DIST}.tar.gz.sha256"
+          done
+
       - uses: actions/upload-artifact@v4
         with:
-          name: sgl-macos-x86_64
+          name: sgl-binaries
           path: sgl-*.tar.gz*
           retention-days: 1
 
@@ -168,7 +70,7 @@ jobs:
 
   release:
     name: Publish GitHub Release
-    needs: [build-linux-x64, build-linux-arm64, build-macos-arm64, build-macos-x64]
+    needs: [build]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
