@@ -11,9 +11,9 @@ This page is a quick reference for the language surface only.
 
 - The grammar (`docs/grammar.ebnf`). Changes require a major version bump.
 - Built-in keywords currently exposed through `src/strata/*.si`:
-  `@if`, `@loop`, `@match`, `@fn`, `@let`, `@var`, `@struct`, `@type`,
+  `@if`, `@loop`, `@match`, `@fn`, `@global`, `@local`, `@struct`, `@type`,
   `@enum`, `@type_alias`, `@type_distinct`, `@defer`, `@try`,
-  `@return`, `@break`, `@continue`, `@local`, `@export`, `@extern`,
+  `@return`, `@break`, `@continue`, `@export`, `@extern`,
   `@platform`, `@true`, `@false`.
 - Operators: `+`, `-`, `*`, `/`, `%`, `==`, `!=`, `<`, `>`, `<=`, `>=`,
   `&&`, `||`, `!`, `&`, `|`, `^`, `<<`, `>>`, `=>`, `|` (in `@match`

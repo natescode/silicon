@@ -28,17 +28,23 @@ features:
     details: No package registry, no incremental compile — all later work, all called out explicitly in the changelog.
 ---
 
-## A five-line example
+## A small example
 
 ```silicon
-@fn area s:Shape := {
-    &@match s,
-        $Circle r => r * r * 3,
-        $Rect w h => w * h
+@type Shape := $Circle r Int | $Square s Int;
+
+\\ size (Shape) -> Int
+@fn size sh := {
+    &@match sh,
+        $Circle r => r,
+        $Square s => s
 };
 
-@export area;
+@export size;
 ```
+
+Types live on a `\\` signature line, not inline; sum-type variants are
+constructed with `&` and destructured by `@match`.
 
 `sgl run` compiles, executes in wasmtime. `sgl build --release` produces
 a native binary via the QBE backend.

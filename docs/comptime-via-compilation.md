@@ -31,7 +31,7 @@ Original design proposal dated 2026-05-22.
 
 - Strata can reference top-level `@fn`s as handlers:
   `&Compiler::on::decl '@token', MyHandler;` paired with
-  `@fn MyHandler node:Int := { ... };`
+  `\ MyHandler (Int) -> _ ` + `@fn MyHandler node := { ... };`
 - Body still interpreted (Phase A is the bridge; Phase C compiles it).
 - Pre-pass in `buildStrataRegistry` collects every top-level `@fn` body
   into `registry.namedHandlers` so forward references resolve.
@@ -112,7 +112,8 @@ can call `&compiler::*` imports.
     &Compiler::register::keyword '@bridge';
     &Compiler::on::decl '@bridge', Bridge_handler;
 };
-@fn Bridge_handler n:Int := { (n + n) };
+\ Bridge_handler (Int) -> Int
+@fn Bridge_handler n := { (n + n) };
 ```
 
 `Bridge_handler` is compiled to a real WASM function. When `@bridge X;`
@@ -151,7 +152,8 @@ What's unblocked:
          &Compiler::register::keyword '@foo';
          &Compiler::on::lower '@foo', X_lower;
      };
-     @fn X_lower node:Int := { body };
+     \ X_lower (Int) -> _
+     @fn X_lower node := { body };
      ```
      For operators: `&Compiler::register::operator '+'` and
      `&Compiler::on::lower '+', X_lower`.
@@ -445,10 +447,13 @@ A strata body that today does:
 functions:
 
 ```silicon
-@extern compiler ast_capture_template (i32, i32) -> i32;
-@extern compiler module_push_definition (i32) -> i32;
+@extern {
+    \ ast_capture_template (i32, i32) -> i32
+    \ module_push_definition (i32) -> i32
+}
 
-@fn handler node_id:Int := {
+\ handler (Int) -> _
+@fn handler node_id := {
     @local tmpl_id := &compiler::ast_capture_template node_id, 0; # 0 = 'pre'
     &compiler::module_push_definition tmpl_id;
 };
@@ -489,7 +494,8 @@ well-known entry point. Each `on::X` handler becomes a `@fn`:
     &Compiler::on::call_site Generics_call_site;
 };
 
-@fn Generics_call_site node_id:Int := {
+\ Generics_call_site (Int) -> _
+@fn Generics_call_site node_id := {
     # ... body identical to today's, but compiled, not interpreted ...
 };
 ```
@@ -622,7 +628,8 @@ between phases.
       &Compiler::register::keyword '@generic';
       &Compiler::on::call_site Generics_call_site;
   };
-  @fn Generics_call_site node:Int := { ... };
+  \ Generics_call_site (Int) -> _
+  @fn Generics_call_site node := { ... };
   ```
 - These `@fn`s lower to WASM like any other.
 - Keep the AST-walking interpreter alive for inline `{ ... }` blocks during
@@ -774,7 +781,8 @@ After the dissolution:
     &Compiler::on::call_site Generics_call_site;
 };
 
-@fn Generics_call_site node:Handle := {
+\ Generics_call_site (Handle) -> _
+@fn Generics_call_site node := {
     @local s := &compiler::state 'stratum';
     @local callee := &compiler::callee_name node;
     &@if (&compiler::state_has s, callee), {

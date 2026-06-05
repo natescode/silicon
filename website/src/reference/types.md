@@ -54,7 +54,7 @@ generalisation lands.
 
 ## Slice[T]
 
-A `Slice[T]` is `{ ptr:Int, len:Int }` — bounds-checked at runtime by
+A `Slice[T]` is `{ ptr Int, len Int }` — bounds-checked at runtime by
 `&Slice::get`. The slice does not own its memory.
 
 ## Structs

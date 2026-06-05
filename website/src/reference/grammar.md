@@ -30,7 +30,8 @@ title: "Grammar (EBNF)"
 
 Program     = { Element } ;
 
-Element     = Item ";"
+Element     = SignatureLine          (* a `\\` type signature for the next def *)
+            | Item ";"
             | DocComment
             ;
 
@@ -49,7 +50,21 @@ doc-char    = (* any character except newline *) ;
 
 Assignment  = Namespace "=" Expression ;
 
-Definition  = def-kw TypedIdentifier [ GenericParams ] Params [ Binding ] ;
+Definition  = def-kw [ identifier ] [ GenericParams ]
+              ( SignatureBlock | Params [ Binding ] ) ;
+
+(*
+  Types are NOT written inline on a definition's name or params.  Instead a
+  `\\` SignatureLine on the preceding element carries the function/value type
+  (see Element).  The `@extern` / `@interface` brace form carries a
+  SignatureBlock in place of Params + Binding.
+    \\ add (Int, Int) -> Int
+    @fn add a, b := { a + b };
+    @extern { \\ puts (String) -> Int }
+*)
+
+SignatureLine  = "\\" Namespace [ GenericParams ] TypeExpr ;
+SignatureBlock = "{" { SignatureLine } "}" ;
 
 def-kw      = "@" identifier ;   (* e.g. @fn, @global, @local, @type, @struct *)
 
@@ -57,13 +72,19 @@ Binding     = ":=" Expression ;
 
 GenericParams = "[" identifier { "," identifier } "]" ;
 
-Params      = "(" [ ParamLiteral { "," ParamLiteral } ] ")"
-            | [ ParamLiteral { "," ParamLiteral } ]          (* bare form *)
+(*
+  Function parameters are bare identifiers — their types come from the `\\`
+  signature line.  Struct fields and variant payloads write the type after the
+  name, space-separated (no colon):
+    @fn add a, b          @struct Point x Int, y Int          $Circle r Int
+*)
+Params      = "(" [ Param { "," Param } ] ")"
+            | [ Param { "," Param } ]                 (* bare form *)
             ;
 
-ParamLiteral = TypedIdentifier
-             | Literal
-             ;
+Param       = identifier [ TypeExpr ]
+            | Literal
+            ;
 
 (* ── Expressions ────────────────────────────────────────────────────────── *)
 
@@ -88,9 +109,11 @@ operator-char
             = "=" | "<" | ">" | "!" | "+" | "-" | "*" | "/" | "%"
             | "^" | "|" | "~" | "?"
             ;
-            (* Note: "&", "@", "$", ".", ":" are NOT valid operator characters —
-               they are reserved for call sigils, keyword sigils, variant sigils,
-               namespace separators, and type annotations respectively. *)
+            (* Note: "&", "@", "$", "." are NOT valid operator characters — they
+               are reserved for call sigils, keyword sigils, variant sigils, and
+               namespace separators.  ":" appears only in ":=" (binding) and
+               "::" (namespace), never as a type-annotation sigil.  "->" (an
+               operator string) denotes a function type inside a TypeExpr. *)
 
 (* ── Function calls ─────────────────────────────────────────────────────── *)
 
@@ -113,8 +136,8 @@ Block       = "{" { Item ";" } [ Expression ] "}" ;
 
 (* ── Variant declarations ────────────────────────────────────────────────── *)
 
-VariantDecl = "$" identifier { TypedIdentifier } ;
-            (* e.g.  $Some value:Int   $None   $Circle r:Int *)
+VariantDecl = "$" identifier { Param } ;
+            (* e.g.  $Some value Int   $None   $Circle r Int *)
 
 (* ── Namespace paths ─────────────────────────────────────────────────────── *)
 
@@ -157,34 +180,29 @@ hex-digit     = digit | "a".."f" | "A".."F" ;
 
 (* ── Types ───────────────────────────────────────────────────────────────── *)
 
-TypedIdentifier = identifier [ Type ] ;
-
-Type        = ":" SigilFnType        (* function type: $fn _:R _:A, _:B *)
-            | ":" identifier [ TypeArgs ]  (* simple or generic: Int, Option[Int] *)
-            ;
-
-TypeArgs    = "[" TypeArg { "," TypeArg } "]" ;
-TypeArg     = identifier [ TypeArgs ] ;
-
 (*
-  Function type — mirrors Definition syntax; allows zero or more param slots.
+  Types appear in `\\` signature lines, in struct fields / variant payloads
+  ("name Type"), and as type arguments.  There is NO leading ":" — that
+  annotation syntax was removed.  A function type is parenthesised parameter
+  types and "->":  (Int, Int) -> Int.  A value type is bare:  Int, Option[Int].
   Examples:
-    $fn _:Int _:Int, _:Int    — function (Int, Int) -> Int
-    $fn _:Bool                — nullary function -> Bool
-    $fn _:Unit ()             — explicit empty-paren nullary
+    (Int, Int) -> Int    — binary function returning Int
+    () -> Bool           — nullary function returning Bool
+    Int                  — a plain value type
+    Option[Int]          — a generic value type
 *)
 
-SigilFnType = "$" identifier TypedIdentifier [ SigilFnTail ] ;
+TypeExpr    = TypeAtom [ "->" TypeExpr ] ;            (* "->" = function type *)
 
-SigilFnTail = SigilFnParenForm                           (* paren — empty or params *)
-            | SigilFnParams                              (* bare params *)
+TypeAtom    = "(" [ TypeExpr { "," TypeExpr } ] ")"  (* param list / grouping *)
+            | identifier [ TypeArgs ]                 (* Int, Option[Int] *)
             ;
 
-SigilFnParenForm = "(" ")"                               (* paren empty *)
-                 | "(" SigilFnParams ")"                 (* paren with params *)
-                 ;
+TypeArgs    = "[" TypeExpr { "," TypeExpr } "]" ;
 
-SigilFnParams = TypedIdentifier { "," TypedIdentifier } ;
+(* A name with an optional space-separated type — a struct field, a variant
+   payload, or an object-literal key. *)
+TypedIdentifier = identifier [ TypeExpr ] ;
 
 (* ── Identifiers ─────────────────────────────────────────────────────────── *)
 
@@ -297,6 +315,8 @@ doc-comment   = "##" { (* any char except line-end *) } line-end ;
       "$["  "${"  "$("    (* array / object / tuple literal openers *)
       "::"               (* namespace separator *)
       ":="               (* definition binding *)
+      "\\"               (* attached-signature sigil (two backslashes) *)
+      "->"               (* function-type arrow inside a TypeExpr *)
       "##"               (* doc comment *)
       "@true"  "@false"  (* boolean literals — distinct from @kw *)
 

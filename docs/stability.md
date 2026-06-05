@@ -37,9 +37,9 @@ on the first `1.0.0` tag.  Pre-1.0 tags (`0.x.y`, including 0.1) are development
 | Literal syntax | integers (decimal, hex `0x`, binary `0b`, octal `0o`), floats, booleans (`@true`/`@false`), strings, arrays `[…]`, tuples `(…)`, objects `{…}` |
 | Type surface | `Int`, `Int32`, `Int64`, `Float`, `Bool`, `Str`, `Option[T]`, `Result[T,E]`, `Slice[T]` |
 | Operator surface | `+`, `-`, `*`, `/`, `%`, `==`, `!=`, `<`, `<=`, `>`, `>=`, `&&`, `\|\|`, `!`, `&` (call sigil), `@` (keyword sigil), `$` (variant sigil) |
-| Generic functions | `@fn f[T] x:T := …` — call-site inference, no explicit `[T]` required |
-| Sum types | `@type Foo := $A x:Int \| $B;` — variant constructors + `@match` destructure |
-| Parametric types | `@type Opt[T] := $Some v:T \| $None;` |
+| Generic functions | `@fn f x := …` with signature `\ f[T] (T) -> …` — call-site inference, no explicit `[T]` required |
+| Sum types | `@type Foo := $A x Int \| $B;` — variant constructors + `@match` destructure |
+| Parametric types | `@type Opt[T] := $Some v T \| $None;` |
 | `@match` forms | flat form and arm-expression (`$A v => expr`) forms |
 | Namespace paths | `Module::name` |
 | Semicolon rules | trailing semicolons required on definitions; expressions inside blocks are semicolon-separated |
@@ -49,7 +49,7 @@ on the first `1.0.0` tag.  Pre-1.0 tags (`0.x.y`, including 0.1) are development
 
 | Feature | Caveat |
 |---|---|
-| `@use "path"` | path resolution algorithm may change in a minor release if it is needed to support package registries |
+| `@use 'path'` | path resolution algorithm may change in a minor release if it is needed to support package registries |
 | Strata keywords | user-defined keywords via `@stratum` are stable once registered; the _registration API_ follows the strata API contract below |
 | `@comptime` | strata-body interpreter is Zig-style dissolution target (see `docs/comptime-via-compilation.md`); the surface syntax is stable but the execution model may change |
 

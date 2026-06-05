@@ -67,8 +67,8 @@ Parametric sum types use `@type T[X] := …`. See
 @fn pair a, b := { … };
 
 @fn main := {
-    @let n := &id 42;        # T = Int
-    @let s := &id "hello";   # T = Str
+    @local n := &id 42;        # T = Int
+    @local s := &id 'hello';   # T = Str
     0
 };
 ```
@@ -102,8 +102,8 @@ contiguously.
 
 \\ sum_to (Int) -> Int
 @fn sum_to n := {
-    @var total := 0;
-    @var i := 1;
+    @local total := 0;
+    @local i := 1;
     &@loop i <= n, {
         total = total + i;
         i = i + 1;
@@ -117,8 +117,8 @@ every exit:
 
 ```silicon
 @fn main := {
-    &@defer { &println "bye" };
-    &println "hi";
+    &@defer { &println 'bye' };
+    &println 'hi';
     0
 };
 ```
