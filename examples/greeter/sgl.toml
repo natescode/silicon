@@ -1,0 +1,13 @@
+[package]
+name    = "greeter"
+version = "0.1.0"
+entry   = "src/main.si"
+
+# Run on a JS host (Bun): enables the `JSString` type + the WASM
+# `wasm:js-string` builtins, and `sgl run` executes under Bun.
+#   sgl run            # uses this platform
+#   sgl run --platform=bun src/main.si
+[build]
+platform = "bun"
+
+[dependencies]

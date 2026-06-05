@@ -1,0 +1,26 @@
+# greeting.si — JSString helpers, shared with main.si via `@use`.
+#
+# A `JSString` is a JavaScript string (externref).  Build them from linear-memory
+# `String` literals with `&JSString::fromString '...'`, then use the host-native
+# `wasm:js-string` builtins (concat, substring, length, …).
+
+# "Hello, <name>!" as a JS string.
+\\ greet (JSString) -> JSString
+@fn greet name := {
+    \\ hello JSString
+    @local hello := &JSString::fromString 'Hello, ';
+    \\ bang JSString
+    @local bang := &JSString::fromString '!';
+    \\ lead JSString
+    @local lead := &JSString::concat hello, name;
+    &JSString::concat lead, bang
+};
+
+# Shout: uppercase-ish emphasis by appending three '!' (kept simple — the point
+# is composing builtins, not casing).
+\\ shout (JSString) -> JSString
+@fn shout s := {
+    \\ marks JSString
+    @local marks := &JSString::fromString '!!!';
+    &JSString::concat s, marks
+};

@@ -53,6 +53,25 @@ function buildImports(state: HostState, write: (s: string) => void) {
             log: (s: unknown) => { flush(); write(String(s ?? '') + '\n') },
             error: (s: unknown) => { flush(); process.stderr.write(String(s ?? '') + '\n') },
         },
+        // The `web` module (web.si): console + portable Math.  Canvas/DOM are
+        // browser-only and intentionally absent — a program that imports them
+        // won't instantiate under the headless bun runner.
+        web: {
+            console_log: (v: number) => { flush(); write(String(v) + '\n') },
+            console_log_f: (v: number) => { flush(); write(String(v) + '\n') },
+            console_log_str: (ptr: number) => { flush(); write(readLenString(ptr) + '\n') },
+            console_error: (v: number) => { flush(); process.stderr.write(String(v) + '\n') },
+            console_warn: (v: number) => { flush(); write('[warn] ' + v + '\n') },
+            console_info: (v: number) => { flush(); write('[info] ' + v + '\n') },
+            math_sin: Math.sin, math_cos: Math.cos, math_tan: Math.tan,
+            math_sqrt: Math.sqrt, math_log: Math.log, math_exp: Math.exp,
+            math_pow: Math.pow, math_atan2: Math.atan2,
+            math_floor: Math.floor, math_ceil: Math.ceil, math_round: Math.round,
+            math_abs: Math.abs, math_min: Math.min, math_max: Math.max,
+            math_random: Math.random,
+            performance_now: () => performance.now(),
+            date_now: () => Date.now(),
+        },
     }
     return { imports, flush }
 }
