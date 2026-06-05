@@ -314,6 +314,10 @@ export interface IRLocal { name: string; wasmType: WasmValType; refType?: IRRefS
 export interface IRRefSlot {
     localTypeIdx: number
     nullable: boolean
+    /** When true this is the abstract `extern` heaptype (JS String Builtins /
+     *  web-bun platform): encode `externref` (`0x6F`) when nullable, or
+     *  `(ref extern)` (`0x64 0x6F`) when non-null.  `localTypeIdx` is ignored. */
+    extern?: boolean
 }
 
 export interface IRFunction {
@@ -351,6 +355,12 @@ export interface IRImport {
     name: string
     params: WasmValType[]
     result?: WasmValType
+    /** Ref-typed param slots (e.g. `externref` for JS String Builtins), keyed by
+     *  param index; the listed indices override `params[i]`'s valtype. */
+    refParams?: Map<number, IRRefSlot>
+    /** Ref-typed result slot (e.g. `(ref extern)` for a string-returning
+     *  builtin); overrides `result` for emit. */
+    refResult?: IRRefSlot
 }
 
 export interface IRDataSegment {

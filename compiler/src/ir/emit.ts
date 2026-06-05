@@ -72,9 +72,19 @@ export function emitModule(mod: IRModule, stdWat: string): string {
 // Module-level emitters
 // ---------------------------------------------------------------------------
 
+/** WAT text for an abstract `extern` heaptype ref slot (JS String Builtins). */
+function externRefText(nullable: boolean): string {
+    return nullable ? 'externref' : '(ref extern)'
+}
+
 function emitImport(imp: IRImport): string {
-    const params = imp.params.map(t => `(param ${t})`).join(' ')
-    const result = imp.result ? `(result ${imp.result})` : ''
+    const params = imp.params.map((t, i) => {
+        const ref = imp.refParams?.get(i)
+        return `(param ${ref?.extern ? externRefText(ref.nullable) : t})`
+    }).join(' ')
+    const result = imp.refResult?.extern
+        ? `(result ${externRefText(imp.refResult.nullable)})`
+        : imp.result ? `(result ${imp.result})` : ''
     const sig = [params, result].filter(Boolean).join(' ')
     return `(import "${imp.env}" "${imp.field}" (func $${imp.name} ${sig}))`
 }
@@ -85,11 +95,17 @@ function emitGlobal(g: IRGlobal): string {
 }
 
 function emitFunction(f: IRFunction): string {
-    const params = f.params.map(p => `(param $${p.name} ${p.wasmType})`).join(' ')
-    const result = f.returnType !== 'void' ? `(result ${f.returnType})` : ''
+    const params = f.params.map((p, i) => {
+        const ref = f.refParams?.get(i)
+        return `(param $${p.name} ${ref?.extern ? externRefText(ref.nullable) : p.wasmType})`
+    }).join(' ')
+    const result = f.refResult?.extern
+        ? `(result ${externRefText(f.refResult.nullable)})`
+        : f.returnType !== 'void' ? `(result ${f.returnType})` : ''
     // $addr is a scratch local required by array/string allocation helpers.
     const addrLocal = '(local $addr i32)'
-    const userLocals = f.locals.map(l => `(local $${l.name} ${l.wasmType})`).join('\n')
+    const userLocals = f.locals.map(l =>
+        `(local $${l.name} ${l.refType?.extern ? externRefText(l.refType.nullable) : l.wasmType})`).join('\n')
     const preamble = [addrLocal, userLocals].filter(Boolean).join('\n')
 
     const bodyWat = f.body ? emitExpr(f.body) : ''

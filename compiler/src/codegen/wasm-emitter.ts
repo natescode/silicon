@@ -14,7 +14,7 @@ import type { PreludeSpec } from './prelude-ir'
 import type {
     IRModule, IRFunction, IRGlobal, IRImport, IRExport, IRDataSegment,
     IRExpr, IRStmt, IRLocal, WasmValType, WasmType, AbstractOp,
-    WasmGcType, WasmGcField, WasmGcStorageType,
+    WasmGcType, WasmGcField, WasmGcStorageType, IRRefSlot,
 } from '../ir/nodes'
 import { ARRAY_LITERAL_CALLEE } from '../ir/nodes'
 import { wasmIntrinsics } from '../intrinsics/intrinsics'
@@ -156,12 +156,21 @@ const OPCODES: Record<string, number[]> = {
 type FuncSigSlot =
     | { kind: 'val';  type: WasmType }
     | { kind: 'ref';  localTypeIdx: number; nullable: boolean }
+    | { kind: 'externref'; nullable: boolean }
 
 interface FuncSig { params: FuncSigSlot[]; result: FuncSigSlot }
 
 function slotKey(s: FuncSigSlot): string {
     if (s.kind === 'val') return s.type
+    if (s.kind === 'externref') return `x${s.nullable ? '?' : ''}`
     return `r${s.nullable ? '?' : ''}${s.localTypeIdx}`
+}
+
+/** A FuncSigSlot for an IRRefSlot (extern heaptype or concrete GC typeidx). */
+function refSlot(ref: IRRefSlot): FuncSigSlot {
+    return ref.extern
+        ? { kind: 'externref', nullable: ref.nullable }
+        : { kind: 'ref', localTypeIdx: ref.localTypeIdx, nullable: ref.nullable }
 }
 
 function sigKey(s: FuncSig): string {
@@ -174,18 +183,21 @@ function valSlot(t: WasmType): FuncSigSlot {
 
 function importSig(imp: IRImport): FuncSig {
     return {
-        params: imp.params.map(p => valSlot(p)),
-        result: valSlot(imp.result ?? 'void'),
+        params: imp.params.map((p, i) => {
+            const ref = imp.refParams?.get(i)
+            return ref ? refSlot(ref) : valSlot(p)
+        }),
+        result: imp.refResult ? refSlot(imp.refResult) : valSlot(imp.result ?? 'void'),
     }
 }
 
 function funcSig(f: IRFunction): FuncSig {
     const params: FuncSigSlot[] = f.params.map((p, i) => {
         const ref = f.refParams?.get(i)
-        return ref ? { kind: 'ref' as const, ...ref } : valSlot(p.wasmType)
+        return ref ? refSlot(ref) : valSlot(p.wasmType)
     })
     const result: FuncSigSlot = f.refResult
-        ? { kind: 'ref', ...f.refResult }
+        ? refSlot(f.refResult)
         : valSlot(f.returnType)
     return { params, result }
 }
@@ -516,6 +528,7 @@ function compressLocalSlots(slots: FuncSigSlot[]): Array<[number, FuncSigSlot]> 
         if (a.kind === 'ref' && b.kind === 'ref') {
             return a.localTypeIdx === b.localTypeIdx && a.nullable === b.nullable
         }
+        if (a.kind === 'externref' && b.kind === 'externref') return a.nullable === b.nullable
         return false
     }
     for (const s of slots) {
@@ -530,7 +543,7 @@ function compressLocalSlots(slots: FuncSigSlot[]): Array<[number, FuncSigSlot]> 
 
 /** Convert an IRLocal to a FuncSigSlot (ref-typed if refType is set). */
 function localToSlot(l: IRLocal): FuncSigSlot {
-    if (l.refType) return { kind: 'ref', ...l.refType }
+    if (l.refType) return refSlot(l.refType)
     return { kind: 'val', type: l.wasmType }
 }
 
@@ -631,8 +644,25 @@ function encodeFuncSlot(buf: WasmBuffer, slot: FuncSigSlot, gcBase: number): voi
         buf.u8(VALTYPE[slot.type as WasmValType])
         return
     }
+    if (slot.kind === 'externref') {
+        encodeExternRef(buf, slot.nullable)
+        return
+    }
     buf.u8(slot.nullable ? REF_NULLABLE : REF_NON_NULL)
     buf.i32(gcBase + slot.localTypeIdx)
+}
+
+/** Encode an abstract `extern` heaptype valtype: `externref` (`0x6F`) when
+ *  nullable, or `(ref extern)` (`0x64 0x6F`) when non-null.  The heaptype byte
+ *  `0x6F` is written raw (it is the abbreviated negative-SLEB form), not via the
+ *  unsigned typeidx path. */
+const HEAPTYPE_EXTERN = 0x6f
+function encodeExternRef(buf: WasmBuffer, nullable: boolean): void {
+    if (nullable) {
+        buf.u8(HEAPTYPE_EXTERN)            // `externref` abbreviation
+    } else {
+        buf.u8(REF_NON_NULL); buf.u8(HEAPTYPE_EXTERN)   // `(ref extern)`
+    }
 }
 
 function buildImportSection(imports: IRImport[], typeIdxOf: (sig: FuncSig) => number): WasmBuffer {
