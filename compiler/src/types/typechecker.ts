@@ -86,6 +86,7 @@ import {
     heterogeneousArray,
     annotationMismatch,
     immutableAssignment,
+    globalInFunction,
     arityMismatch,
     missingReturn,
     mvpOnlyIntrospection,
@@ -143,6 +144,10 @@ interface Ctx {
     // table is flat (no lexical scopes), so this only ever *loosens* the check —
     // it never introduces a false ImmutableAssignment.
     mutable: Set<string>
+    // True while checking the body of a definition (a function/value body).
+    // `@global` is a top-level/module-scoped binding, so a `@global` seen with
+    // this flag set is an in-function misuse (E0014) — use `@local` there.
+    inFunctionBody?: boolean
     // User-defined type names from @type_alias and @type_distinct declarations.
     // Passed to parseTypeName so annotations like `x: age` resolve correctly.
     typeAliases: Map<string, SiliconType>
@@ -394,6 +399,7 @@ export function createCheckContext(
         functions: new Map(),
         immutable: new Set(),
         mutable: new Set(),
+        inFunctionBody: false,
         typeAliases: new Map(),
         typeVars: new Set(),
         fresh: makeFreshGen(),
@@ -1008,6 +1014,14 @@ function checkAssignment(a: any, ctx: Ctx): SiliconType {
 function checkDefinition(d: any, ctx: Ctx): SiliconType {
     const keyword: string = d.keyword ?? ''
 
+    // `@global` is a top-level, module-scoped binding (it lowers as a named
+    // module definition).  Inside a function body it would hoist to module
+    // scope and the local reference would fail at codegen — flag it here so
+    // `sgl check` catches it.  In a function body the binding is `@local`.
+    if (keyword === '@global' && ctx.inFunctionBody) {
+        ctx.errors.push(globalInFunction(d.name?.name ?? '?', d.sourceLocation))
+    }
+
     // Type declarations and export markers are handled at pre-registration time
     // or by the IR; they have no body to check and must not overwrite existing sigs.
     if (isTypeDeclKeyword(keyword) || keyword === '@export') {
@@ -1036,6 +1050,8 @@ function checkDefinition(d: any, ctx: Ctx): SiliconType {
     // Parameters are scoped to the body so they don't pollute the outer table.
     let bodyType: SiliconType = TypeUnknown
     if (d.binding) {
+        const savedInFn = ctx.inFunctionBody
+        ctx.inFunctionBody = true
         bodyType = withScope(ctx, inner => {
             // Inherit the typeVars we just set (withScope clones ctx.typeVars).
             for (const param of d.params || []) {
@@ -1052,6 +1068,7 @@ function checkDefinition(d: any, ctx: Ctx): SiliconType {
             const binding = Array.isArray(d.binding) ? d.binding[0] : d.binding
             return checkNode(binding.expression ?? binding, inner)
         })
+        ctx.inFunctionBody = savedInFn
     }
 
     // Reconcile annotation with body — via unification so polymorphic body

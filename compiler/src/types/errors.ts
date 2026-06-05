@@ -32,6 +32,7 @@ export type TypeErrorKind =
     | 'ArityMismatch'         // Wrong number of arguments at a call site
     | 'MvpOnlyIntrospection'  // Phase 9d-5a (E0012) — &rc_count, &heap_used, …
     | 'MvpOnlyPhysicalByte'   // Phase 9d-5b (E0013) — &alloc, &str_ptr, …
+    | 'GlobalInFunction'      // @global used inside a function body (E0014)
 
 export interface TypeError {
     kind: TypeErrorKind
@@ -135,6 +136,21 @@ export function immutableAssignment(name: string, sourceLocation?: SourceLocatio
         kind: 'ImmutableAssignment',
         message: `'${name}' is immutable and cannot be reassigned`,
         sourceLocation,
+    }
+}
+
+/**
+ * Factory — `@global` used inside a function body.  `@global` is a top-level,
+ * module-scoped immutable binding; written in a function it would hoist to
+ * module scope and the local reference would fail at codegen.  Inside a
+ * function the binding is `@local`.
+ */
+export function globalInFunction(name: string, sourceLocation?: SourceLocation): TypeError {
+    return {
+        kind: 'GlobalInFunction',
+        message: `'@global ${name}' is a top-level binding — use '@local ${name}' inside a function body`,
+        sourceLocation,
+        hint: `@global declares a module-scoped constant; @local declares a function-local`,
     }
 }
 

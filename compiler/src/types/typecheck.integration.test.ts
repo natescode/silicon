@@ -246,6 +246,17 @@ test('a mutable @local local shadows a same-named top-level @fn for assignment',
     expect(errors).toHaveLength(0)
 })
 
+test('@global inside a function body is an error (E0014 — use @local)', () => {
+    const { errors } = check('\\\\ f () -> Int\n@fn f := { @global x := 5; x + 1 };')
+    expect(errors.length).toBeGreaterThan(0)
+    expect(errors[0].kind).toBe('GlobalInFunction')
+})
+
+test('top-level @global is fine and is readable from a function body', () => {
+    const { errors } = check('@global PI := 3;\n\\\\ f () -> Int\n@fn f := { PI + 1 };')
+    expect(errors).toHaveLength(0)
+})
+
 // ------------------------------------------------------------------
 // String equality
 // ------------------------------------------------------------------
