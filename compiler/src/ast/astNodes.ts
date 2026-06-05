@@ -43,6 +43,27 @@ export type ASTNode =
     | Parameter
     | GenericParams
     | DocComment
+    | ParseError
+
+/**
+ * A top-level element that failed to parse (CaaS parser error recovery).  The
+ * parser emits one of these in place of an unparseable element so the
+ * well-formed elements around it survive — keeping the semantic model alive
+ * while the user is mid-edit.  It carries its own diagnostic `message` and a
+ * `relSpan` over the unparseable byte range; downstream phases treat it as an
+ * unrecognized (benign) node — elaboration passes it through and the
+ * typechecker skips it, so it never produces a symbol.  Diagnostics are derived
+ * from these nodes via the {@link PositionTable} so a reused error element keeps
+ * its diagnostic across incremental edits.
+ */
+export interface ParseError {
+    type: 'ParseError'
+    /** The parser's `Parse error: Line L, col C: …` message. */
+    message: string
+    /** Element-relative byte span of the unparseable region (CaaS 3b/M3). */
+    relSpan?: RelSpan
+    sourceLocation?: SourceLocation
+}
 
 export interface Program {
     type: 'Program'

@@ -126,14 +126,62 @@ class Parser {
         const extents: ElementExtent[] = []
         while (!this.atEof()) {
             const start = this.peek().start
-            const r = this.parseElement()
-            const end = this.toks[this.pos - 1].end
-            const nodes = Array.isArray(r) ? r : [r]
+            const startPos = this.pos
+            let nodes: any[]
+            let end: number
+            try {
+                const r = this.parseElement()
+                end = this.toks[this.pos - 1].end
+                nodes = Array.isArray(r) ? r : [r]
+            } catch (err) {
+                // Error recovery: a single unparseable element becomes a
+                // ParseError node so the well-formed elements around it survive.
+                // The node's relSpan points at the offending token (for a precise
+                // squiggle); the element *extent* still covers the whole skipped
+                // region so incremental reuse accounts for every byte.  The
+                // diagnostic's `Line L, col C` prefix is reconstructed from the
+                // span later (collectParseDiagnostics) so a reused, shifted error
+                // node never carries a stale line number.
+                const raw = err instanceof Error ? err.message : String(err)
+                const message = raw.replace(/^Parse error: Line \d+, col \d+: /, '')
+                const errTok = this.peek()
+                this.synchronize(startPos)
+                end = this.toks[Math.min(this.pos, this.toks.length) - 1]?.end ?? start
+                // Clamp the error span into the element's own extent.  The
+                // offending token is often the *next* element's start (e.g. a
+                // missing `;` runs into `@let`); a relSpan reaching outside the
+                // element would break the M3 position model under incremental
+                // reuse (it must be invariant relative to the element base).
+                const errStart = Math.min(Math.max(errTok.start, start), end)
+                const errEnd = Math.min(Math.max(errTok.end, errStart), end)
+                nodes = [{ type: 'ParseError', message, relSpan: { start: errStart, end: errEnd } }]
+            }
             relativizeElement(nodes, start)
             elements.push(...nodes)
             extents.push({ nodes, start, end })
         }
         return { program: ASTFactory.program(elements), extents }
+    }
+
+    /**
+     * Panic-mode synchronization after a parse error: advance the token cursor to
+     * the start of the next top-level element.  Guarantees ≥1 token of progress
+     * (so the recovery loop can't spin), then consumes through a terminating
+     * `;`, or stops *before* the next element-start token (`\\` signature or a
+     * definition keyword), or reaches EOF.
+     */
+    private synchronize(startPos: number): void {
+        // Always make progress: if the failure left the cursor at (or before) the
+        // element's first token, step past it.
+        if (this.pos <= startPos) this.pos = startPos + 1
+        while (!this.atEof()) {
+            const t = this.peek()
+            // The next element begins here — leave the cursor on it.
+            if (t.kind === 'attachedSig' || this.isDefKw(t)) return
+            // A terminator closes the broken element — consume it and stop.
+            if (t.kind === 'semi') { this.next(); return }
+            this.next()
+        }
     }
 
     /**

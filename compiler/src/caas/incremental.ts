@@ -134,6 +134,11 @@ function suffixThreshold(newSource: string, damage: Damage, delta: number): numb
     return Math.max(damage.endOld, safeEnd - delta)
 }
 
+/** Whether an element group holds a recovered ParseError node (never reused). */
+function hasParseError(e: ElementExtent): boolean {
+    return e.nodes.some(n => (n as { type?: string }).type === 'ParseError')
+}
+
 // ---------------------------------------------------------------------------
 // Incremental reparse
 // ---------------------------------------------------------------------------
@@ -158,15 +163,27 @@ export function incrementalReparse(
     // Partition old elements: prefix (entirely before the edit) and suffix
     // candidates (entirely after the edit, past the marker-safe threshold).
     // Anything else is "touched" and lives inside the reparse window.
+    //
+    // A recovered ParseError element is never reused: its diagnostic message
+    // (e.g. "expected semi but found <token>") depends on context *outside* its
+    // own extent — a `#` comment or the next token after the broken region — so
+    // a reused node could carry a message a fresh parse wouldn't.  Forcing it
+    // into the window re-parses it (a window parse error then falls back to a
+    // recovering full reparse), keeping incremental ≡ fresh.
     const prefix: ElementExtent[] = []
     for (const e of oldIndex) {
-        if (e.end <= damage.start) prefix.push(e)
-        else break   // extents are ordered; first non-prefix ends the run
+        if (e.end <= damage.start && !hasParseError(e)) prefix.push(e)
+        else break   // extents are ordered; first non-prefix (or error) ends the run
     }
     const suffix: ElementExtent[] = []
     for (const e of oldIndex) {
         if (e.start >= sfxStart) suffix.push(e)
     }
+    // Drop the suffix run up to and including its last ParseError so no error
+    // element is reused (the window then covers it).
+    let suffixCut = 0
+    for (let i = 0; i < suffix.length; i++) if (hasParseError(suffix[i])) suffixCut = i + 1
+    suffix.splice(0, suffixCut)
 
     const windowStartByte = prefix.length > 0 ? prefix[prefix.length - 1].end : 0
 

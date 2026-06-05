@@ -26,6 +26,7 @@
 
 import { parseProgramWithExtents } from '../parser/parser'
 import { buildPositionTable } from '../ast/positionTable'
+import { astChildren } from '../ast/astChildren'
 import { SyntaxNode } from './syntaxNode'
 export { SyntaxNode }
 import {
@@ -185,7 +186,9 @@ export class SyntaxTree {
                 // Identical source — reuse the existing program + index verbatim
                 // (every element group is reused, unshifted).
                 const reuse: ElementReuse[] = this.#greenIndex.map((_, i) => ({ kind: 'reused', oldGroupIndex: i, delta: 0 }))
-                return { tree: new SyntaxTree(this.program, newSource, file, this.#greenIndex), diagnostics: [], _elementReuse: reuse }
+                // Diagnostics are derived from the tree, so a reused ParseError
+                // element (recovery) keeps its (re-based) diagnostic.
+                return { tree: new SyntaxTree(this.program, newSource, file, this.#greenIndex), diagnostics: collectParseDiagnostics(this.program, newSource, file), _elementReuse: reuse }
             }
             const result = incrementalReparse(this.source, this.#greenIndex, newSource, damage)
             if (result !== null) {
@@ -194,10 +197,10 @@ export class SyntaxTree {
                     const fullParsed = parseProgramWithExtents(newSource)
                     if (stableStringify(program) !== stableStringify(fullParsed.program)) {
                         // Discarded — the reuse diff no longer describes the tree.
-                        return { tree: new SyntaxTree(fullParsed.program, newSource, file, fullParsed.extents), diagnostics: [] }
+                        return { tree: new SyntaxTree(fullParsed.program, newSource, file, fullParsed.extents), diagnostics: collectParseDiagnostics(fullParsed.program, newSource, file) }
                     }
                 }
-                return { tree: new SyntaxTree(program, newSource, file, extents), diagnostics: [], _elementReuse: reuse }
+                return { tree: new SyntaxTree(program, newSource, file, extents), diagnostics: collectParseDiagnostics(program, newSource, file), _elementReuse: reuse }
             }
         }
         // Fallback: full reparse (also produces proper diagnostics on syntax errors).
@@ -328,11 +331,15 @@ export function parse(source: string, options: ParseOptions = {}): ParseResult {
     const file = options.file ?? '<input>'
     try {
         // Parse with per-element byte extents so the resulting tree can drive
-        // incremental reparses (CaaS tracker 3b).
+        // incremental reparses (CaaS tracker 3b).  The parser recovers from a
+        // syntax error by emitting a ParseError element, so the well-formed
+        // elements survive; diagnostics are derived from those ParseError nodes.
         const { program, extents } = parseProgramWithExtents(source)
         const tree = new SyntaxTree(program, source, file, extents)
-        return { tree, diagnostics: [] }
+        return { tree, diagnostics: collectParseDiagnostics(program, source, file) }
     } catch (err) {
+        // Defensive: recovery itself failed (should not happen).  Fall back to a
+        // minimal valid tree so callers don't have to null-check.
         const msg = err instanceof Error ? err.message : String(err)
         const diag: Diagnostic = {
             phase: 'parse',
@@ -340,7 +347,6 @@ export function parse(source: string, options: ParseOptions = {}): ParseResult {
             span: { file, line: 1, col: 1, length: 0 },
             message: msg,
         }
-        // Return a minimal valid tree so callers don't have to null-check.
         const emptyTree = new SyntaxTree(
             { type: 'Program', elements: [], source } as unknown as Program,
             source,
@@ -348,6 +354,35 @@ export function parse(source: string, options: ParseOptions = {}): ParseResult {
         )
         return { tree: emptyTree, diagnostics: [diag] }
     }
+}
+
+/**
+ * Derive parse diagnostics from the `ParseError` nodes the recovering parser
+ * left in the tree.  Positions are reconstructed via the {@link PositionTable}
+ * (element `elemBase` + node `relSpan`), so a ParseError node reused verbatim in
+ * an incrementally-reparsed prefix/suffix keeps a correct, re-based span.
+ */
+export function collectParseDiagnostics(program: Program, source: string, file: string): Diagnostic[] {
+    const out: Diagnostic[] = []
+    let positions: import('../ast/positionTable').PositionTable | undefined
+    const walk = (n: any): void => {
+        if (n === null || typeof n !== 'object') return
+        if (n.type === 'ParseError') {
+            positions ??= buildPositionTable(program, source)
+            const span = positions.spanOf(n, file)
+            // Reconstruct the canonical message from the current span so a reused,
+            // shifted ParseError node reports its new line/col (not a stale one).
+            out.push({
+                phase: 'parse',
+                code: 'E0000',
+                span,
+                message: `Parse error: Line ${span.line}, col ${span.col}: ${n.message}`,
+            })
+        }
+        for (const c of astChildren(n)) walk(c)
+    }
+    for (const el of (program as any).elements ?? []) walk(el)
+    return out
 }
 
 // ---------------------------------------------------------------------------

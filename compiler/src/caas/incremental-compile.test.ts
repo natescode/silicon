@@ -63,6 +63,14 @@ const EDITS: Array<{ label: string; steps: string[] }> = [
     { label: 'shrink to one element',   steps: ['@let only := 1;'] },
     { label: 'add a @type + constructor use',
       steps: ['@type Shape := $Circle r Int | $Rectangle w Int, h Int;\n@let c := &Circle 5;'] },
+    // Parser error recovery: a malformed intermediate state, then a fix, must
+    // stay incremental-≡-fresh at every step (diagnostics + model + elab tree).
+    { label: 'break the tail then fix it',
+      steps: [BASE + '\n@let t := &ad', BASE + '\n@let t := &add 3, 4;'] },
+    { label: 'drop a semicolon then restore it',
+      steps: [BASE.replace('@fn add x, y := { x + y };', '@fn add x, y := { x + y }'), BASE] },
+    { label: 'inject garbage between elements',
+      steps: [BASE.replace('@let r', '@@@ junk\n@let r'), BASE] },
 ]
 
 describe('incremental Workspace compile ≡ fresh compile (E1)', () => {

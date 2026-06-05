@@ -121,6 +121,22 @@ describe('LSP rides the incremental compiler Workspace', () => {
         expect(refs.length).toBeGreaterThanOrEqual(1)
     })
 
+    test('a syntax error mid-typing keeps earlier symbols + completion alive', () => {
+        // The regression that motivated parser error recovery: typing an
+        // incomplete trailing line used to empty the model.  Now the well-formed
+        // prefix survives, so completion/nav keep working while you type.
+        const ws = new Workspace()
+        const u = uri('typing.si')
+        ws.update(u, `@fn greet x := { x };\n@let g := 1;`)
+        expect([...ws.getDoc(u)!.model.allSymbols].map(s => s.name)).toContain('greet')
+
+        // edit: start a new, incomplete line (a parse error)
+        const doc = ws.update(u, `@fn greet x := { x };\n@let g := 1;\n@let h := &gr`)!
+        expect(doc.diagnostics.some(d => d.code === 'E0000')).toBe(true)      // error surfaced
+        expect([...doc.model.allSymbols].map(s => s.name)).toContain('greet') // …but model alive
+        expect(ws.compiler.getCompletions(u, 3, 14, 'gr').some(i => i.label === 'greet')).toBe(true)
+    })
+
     test('formatting returns edits or a no-op array', () => {
         const ws = new Workspace()
         const u = uri('fmt.si')
