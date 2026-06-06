@@ -4,49 +4,29 @@
 # them to IR, and builds an IRBinOp with the right WAT instruction.
 
 @stratum BitOr := {
-    &Compiler::register::operator '|';
-    &Compiler::on::lower '|', BitOr_lower;
+    Compiler::register::operator('|');
+    Compiler::on::lower('|', BitOr_lower);
 };
 \\ BitOr_lower (Int)
-@fn BitOr_lower node :=
-    &compiler::ir_makeBinOp
-        (&compiler::compiler_str_intern 'i32.or', 0),
-        (&compiler::compiler_lowerExpr (&compiler::compiler_ast_node_field node, (&compiler::compiler_str_intern 'left', 0))),
-        (&compiler::compiler_lowerExpr (&compiler::compiler_ast_node_field node, (&compiler::compiler_str_intern 'right', 0))),
-        (&compiler::compiler_str_intern 'i32', 0);
+@fn BitOr_lower node := compiler::ir_makeBinOp(compiler::compiler_str_intern('i32.or', 0), compiler::compiler_lowerExpr(compiler::compiler_ast_node_field(node, compiler::compiler_str_intern('left', 0))), compiler::compiler_lowerExpr(compiler::compiler_ast_node_field(node, compiler::compiler_str_intern('right', 0))), compiler::compiler_str_intern('i32', 0));
 
 @stratum BitXor := {
-    &Compiler::register::operator '^';
-    &Compiler::on::lower '^', BitXor_lower;
+    Compiler::register::operator('^');
+    Compiler::on::lower('^', BitXor_lower);
 };
 \\ BitXor_lower (Int)
-@fn BitXor_lower node :=
-    &compiler::ir_makeBinOp
-        (&compiler::compiler_str_intern 'i32.xor', 0),
-        (&compiler::compiler_lowerExpr (&compiler::compiler_ast_node_field node, (&compiler::compiler_str_intern 'left', 0))),
-        (&compiler::compiler_lowerExpr (&compiler::compiler_ast_node_field node, (&compiler::compiler_str_intern 'right', 0))),
-        (&compiler::compiler_str_intern 'i32', 0);
+@fn BitXor_lower node := compiler::ir_makeBinOp(compiler::compiler_str_intern('i32.xor', 0), compiler::compiler_lowerExpr(compiler::compiler_ast_node_field(node, compiler::compiler_str_intern('left', 0))), compiler::compiler_lowerExpr(compiler::compiler_ast_node_field(node, compiler::compiler_str_intern('right', 0))), compiler::compiler_str_intern('i32', 0));
 
 @stratum Shl := {
-    &Compiler::register::operator '<<';
-    &Compiler::on::lower '<<', Shl_lower;
+    Compiler::register::operator('<<');
+    Compiler::on::lower('<<', Shl_lower);
 };
 \\ Shl_lower (Int)
-@fn Shl_lower node :=
-    &compiler::ir_makeBinOp
-        (&compiler::compiler_str_intern 'i32.shl', 0),
-        (&compiler::compiler_lowerExpr (&compiler::compiler_ast_node_field node, (&compiler::compiler_str_intern 'left', 0))),
-        (&compiler::compiler_lowerExpr (&compiler::compiler_ast_node_field node, (&compiler::compiler_str_intern 'right', 0))),
-        (&compiler::compiler_str_intern 'i32', 0);
+@fn Shl_lower node := compiler::ir_makeBinOp(compiler::compiler_str_intern('i32.shl', 0), compiler::compiler_lowerExpr(compiler::compiler_ast_node_field(node, compiler::compiler_str_intern('left', 0))), compiler::compiler_lowerExpr(compiler::compiler_ast_node_field(node, compiler::compiler_str_intern('right', 0))), compiler::compiler_str_intern('i32', 0));
 
 @stratum Shr := {
-    &Compiler::register::operator '>>';
-    &Compiler::on::lower '>>', Shr_lower;
+    Compiler::register::operator('>>');
+    Compiler::on::lower('>>', Shr_lower);
 };
 \\ Shr_lower (Int)
-@fn Shr_lower node :=
-    &compiler::ir_makeBinOp
-        (&compiler::compiler_str_intern 'i32.shr_s', 0),
-        (&compiler::compiler_lowerExpr (&compiler::compiler_ast_node_field node, (&compiler::compiler_str_intern 'left', 0))),
-        (&compiler::compiler_lowerExpr (&compiler::compiler_ast_node_field node, (&compiler::compiler_str_intern 'right', 0))),
-        (&compiler::compiler_str_intern 'i32', 0);
+@fn Shr_lower node := compiler::ir_makeBinOp(compiler::compiler_str_intern('i32.shr_s', 0), compiler::compiler_lowerExpr(compiler::compiler_ast_node_field(node, compiler::compiler_str_intern('left', 0))), compiler::compiler_lowerExpr(compiler::compiler_ast_node_field(node, compiler::compiler_str_intern('right', 0))), compiler::compiler_str_intern('i32', 0));

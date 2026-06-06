@@ -7,27 +7,25 @@
 # (@let / @var were the previous spellings and have been removed.)
 
 @stratum GlobalDef := {
-    &Compiler::register::keyword '@global';
-    &Compiler::on::lower '@global', LetOrFn_lower;
+    Compiler::register::keyword('@global');
+    Compiler::on::lower('@global', LetOrFn_lower);
 };
 
 @stratum FnDef := {
-    &Compiler::register::keyword '@fn';
-    &Compiler::on::lower '@fn', LetOrFn_lower;
+    Compiler::register::keyword('@fn');
+    Compiler::on::lower('@fn', LetOrFn_lower);
 };
 
 \\ LetOrFn_lower (Int)
 @fn LetOrFn_lower node := {
-    @local name       := &compiler::compiler_watId
-        (&compiler::compiler_ast_str_field node,
-            (&compiler::compiler_str_intern 'name.name', 0));
-    @local params     := &compiler::compiler_lowerParams node;
-    @local funcResult := &compiler::compiler_lowerFunctionBody node, params;
-    @local body       := &compiler::compiler_funcResult_body funcResult;
-    @local locals     := &compiler::compiler_funcResult_locals funcResult;
-    @local returnType := &compiler::compiler_resolveFunctionReturnType node, name, body;
-    &compiler::compiler_ctx_globals_set name, (&compiler::compiler_str_intern 'i32', 0);
-    &compiler::ir_makeFunction name, params, returnType, locals, body
+    name := compiler::compiler_watId(compiler::compiler_ast_str_field(node, compiler::compiler_str_intern('name.name', 0)));
+    params := compiler::compiler_lowerParams(node);
+    funcResult := compiler::compiler_lowerFunctionBody(node, params);
+    body := compiler::compiler_funcResult_body(funcResult);
+    locals := compiler::compiler_funcResult_locals(funcResult);
+    returnType := compiler::compiler_resolveFunctionReturnType(node, name, body);
+    compiler::compiler_ctx_globals_set(name, compiler::compiler_str_intern('i32', 0));
+    compiler::ir_makeFunction(name, params, returnType, locals, body)
 };
 
 # @local: a mutable binding.  At top level it binds a module variable
@@ -40,39 +38,31 @@
 # from the @extern declaration's param/result types.
 
 @stratum LocalVarDef := {
-    &Compiler::register::keyword '@local';
-    &Compiler::on::lower '@local', VarDef_lower;
+    Compiler::register::keyword('@local');
+    Compiler::on::lower('@local', VarDef_lower);
 };
 \\ VarDef_lower (Int)
 @fn VarDef_lower node := {
-    @local name     := &compiler::compiler_watId
-        (&compiler::compiler_ast_str_field node,
-            (&compiler::compiler_str_intern 'name.name', 0));
-    @local declared := &compiler::compiler_resolveType
-        (&compiler::compiler_ast_node_field node,
-            (&compiler::compiler_str_intern 'name.typeAnnotation', 0));
-    @local initInfo := &compiler::compiler_lowerGlobalInit node, declared;
-    @local init     := &compiler::compiler_globalInit_init initInfo;
-    @local wasmType := &compiler::compiler_globalInit_wasmType initInfo;
-    &compiler::compiler_ctx_globals_set name, wasmType;
-    &compiler::compiler_ctx_varNames_add name;
-    &compiler::ir_makeGlobal name, wasmType, 1, init
+    name := compiler::compiler_watId(compiler::compiler_ast_str_field(node, compiler::compiler_str_intern('name.name', 0)));
+    declared := compiler::compiler_resolveType(compiler::compiler_ast_node_field(node, compiler::compiler_str_intern('name.typeAnnotation', 0)));
+    initInfo := compiler::compiler_lowerGlobalInit(node, declared);
+    init := compiler::compiler_globalInit_init(initInfo);
+    wasmType := compiler::compiler_globalInit_wasmType(initInfo);
+    compiler::compiler_ctx_globals_set(name, wasmType);
+    compiler::compiler_ctx_varNames_add(name);
+    compiler::ir_makeGlobal(name, wasmType, 1, init)
 };
 
 @stratum ExternDef := {
-    &Compiler::register::keyword '@extern';
-    &Compiler::on::lower '@extern', ExternDef_lower;
+    Compiler::register::keyword('@extern');
+    Compiler::on::lower('@extern', ExternDef_lower);
 };
 \\ ExternDef_lower (Int)
 @fn ExternDef_lower node := {
-    @local name   := &compiler::compiler_watId
-        (&compiler::compiler_ast_str_field node,
-            (&compiler::compiler_str_intern 'name.name', 0));
-    @local params := &compiler::compiler_lowerExternParams node;
-    @local result := &compiler::compiler_lowerExternResult node;
-    &compiler::ir_makeImport
-        (&compiler::compiler_str_intern 'env', 0),
-        name, name, params, result
+    name := compiler::compiler_watId(compiler::compiler_ast_str_field(node, compiler::compiler_str_intern('name.name', 0)));
+    params := compiler::compiler_lowerExternParams(node);
+    result := compiler::compiler_lowerExternResult(node);
+    compiler::ir_makeImport(compiler::compiler_str_intern('env', 0), name, name, params, result)
 };
 
 # D-D-11a: leaf def-kinds (@type_alias, @type_distinct, @local) migrated to
@@ -80,18 +70,18 @@
 # their IR through compiler_ctx_* and ir_makeLocal.
 
 @stratum TypeAliasDef := {
-    &Compiler::register::keyword '@type_alias';
-    &Compiler::on::lower '@type_alias', TypeAliasDef_lower;
+    Compiler::register::keyword('@type_alias');
+    Compiler::on::lower('@type_alias', TypeAliasDef_lower);
 };
 \\ TypeAliasDef_lower (Int)
-@fn TypeAliasDef_lower node := &compiler::ir_null;
+@fn TypeAliasDef_lower node := compiler::ir_null();
 
 @stratum TypeDistinctDef := {
-    &Compiler::register::keyword '@type_distinct';
-    &Compiler::on::lower '@type_distinct', TypeDistinctDef_lower;
+    Compiler::register::keyword('@type_distinct');
+    Compiler::on::lower('@type_distinct', TypeDistinctDef_lower);
 };
 \\ TypeDistinctDef_lower (Int)
-@fn TypeDistinctDef_lower node := &compiler::ir_null;
+@fn TypeDistinctDef_lower node := compiler::ir_null();
 
 # D-D-11d: @type_sum / @enum / @type migrated to the new @stratum form.
 # Each handler delegates to a TS-side expander (sumTypeExpander or
@@ -104,22 +94,22 @@
 # already handles array results.
 
 @stratum TypeSumDef := {
-    &Compiler::register::keyword '@type_sum';
-    &Compiler::on::lower '@type_sum', TypeSumDef_lower;
+    Compiler::register::keyword('@type_sum');
+    Compiler::on::lower('@type_sum', TypeSumDef_lower);
 };
 \\ TypeSumDef_lower (Int)
-@fn TypeSumDef_lower node := &compiler::compiler_expandSumType node;
+@fn TypeSumDef_lower node := compiler::compiler_expandSumType(node);
 
 @stratum EnumDef := {
-    &Compiler::register::keyword '@enum';
-    &Compiler::on::lower '@enum', EnumDef_lower;
+    Compiler::register::keyword('@enum');
+    Compiler::on::lower('@enum', EnumDef_lower);
 };
 \\ EnumDef_lower (Int)
-@fn EnumDef_lower node := &compiler::compiler_expandSumType node;
+@fn EnumDef_lower node := compiler::compiler_expandSumType(node);
 
 @stratum TypeRecordDef := {
-    &Compiler::register::keyword '@type';
-    &Compiler::on::lower '@type', TypeRecordDef_lower;
+    Compiler::register::keyword('@type');
+    Compiler::on::lower('@type', TypeRecordDef_lower);
 };
 \\ TypeRecordDef_lower (Int)
-@fn TypeRecordDef_lower node := &compiler::compiler_expandTypeRecord node;
+@fn TypeRecordDef_lower node := compiler::compiler_expandTypeRecord(node);

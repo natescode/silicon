@@ -5,16 +5,16 @@
 # The handler reads the AST node args via compiler_arg + compiler_lowerExpr
 # and builds an IRIf via ir_makeIf.
 @stratum If := {
-    &Compiler::register::expression_keyword '@if';
-    &Compiler::on::lower '@if', If_lower;
+    Compiler::register::expression_keyword('@if');
+    Compiler::on::lower('@if', If_lower);
 };
 \\ If_lower (Int)
 @fn If_lower node := {
-    @local condN := &compiler::compiler_arg node, 0;
-    @local thenN := &compiler::compiler_arg node, 1;
-    @local elseN := &compiler::compiler_arg node, 2;
-    @local cond  := &compiler::compiler_lowerExpr condN;
-    @local then  := &compiler::compiler_lowerExpr thenN;
-    @local else_ := &compiler::compiler_lowerExprIfDefined elseN;
-    &compiler::ir_makeIf cond, then, else_, 0
+    condN := compiler::compiler_arg(node, 0);
+    thenN := compiler::compiler_arg(node, 1);
+    elseN := compiler::compiler_arg(node, 2);
+    cond := compiler::compiler_lowerExpr(condN);
+    then := compiler::compiler_lowerExpr(thenN);
+    else_ := compiler::compiler_lowerExprIfDefined(elseN);
+    compiler::ir_makeIf(cond, then, else_, 0)
 };

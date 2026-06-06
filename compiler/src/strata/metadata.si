@@ -5,24 +5,20 @@
 # compiler_str_intern, and build IR via the &compiler::ir_make* imports.
 
 @stratum PlatformDecl := {
-    &Compiler::register::keyword '@platform';
-    &Compiler::on::lower '@platform', PlatformDecl_lower;
+    Compiler::register::keyword('@platform');
+    Compiler::on::lower('@platform', PlatformDecl_lower);
 };
 \\ PlatformDecl_lower (Int)
-@fn PlatformDecl_lower node := &compiler::ir_null;
+@fn PlatformDecl_lower node := compiler::ir_null();
 
 @stratum ExportDecl := {
-    &Compiler::register::keyword '@export';
-    &Compiler::on::lower '@export', ExportDecl_lower;
+    Compiler::register::keyword('@export');
+    Compiler::on::lower('@export', ExportDecl_lower);
 };
 \\ ExportDecl_lower (Int)
 @fn ExportDecl_lower node := {
-    @local sname := &compiler::compiler_watId
-        (&compiler::compiler_ast_str_field node,
-            (&compiler::compiler_str_intern 'name.name', 0));
-    @local isVar := &compiler::compiler_isVarName sname;
-    @local kind  := &compiler::compiler_choose isVar,
-        (&compiler::compiler_str_intern 'global', 0),
-        (&compiler::compiler_str_intern 'func', 0);
-    &compiler::ir_makeExport sname, sname, kind
+    sname := compiler::compiler_watId(compiler::compiler_ast_str_field(node, compiler::compiler_str_intern('name.name', 0)));
+    isVar := compiler::compiler_isVarName(sname);
+    kind := compiler::compiler_choose(isVar, compiler::compiler_str_intern('global', 0), compiler::compiler_str_intern('func', 0));
+    compiler::ir_makeExport(sname, sname, kind)
 };
