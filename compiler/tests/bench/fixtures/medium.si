@@ -3,447 +3,491 @@
 # the generator instead.
 
 
-@struct Pair lo Int, hi Int;
+@type Pair := { lo Int, hi Int };
 
-@type Maybe[T] := $Just v:T | $Nothing;
+@type Maybe[T] := $Just v : T | $Nothing;
 
 
 \\ f0 (Int) -> Int
 @fn f0 x := {
-    @global p := &Pair x, 0;
-    @global r := p.lo + p.hi * 5;
-    &@if r < 0, { &@return 0 };
-    @local acc := 0;
-    @local k := 1;
-    &@loop k <= 10, { acc = acc + k * 0; k = k + 1; };
+    p := Pair(x, 0);
+    r := p::lo + p::hi * 5;
+    @if(r < 0, {
+        @return(0)
+    });
+    @mut acc := 0;
+    @mut k := 1;
+    @loop(k <= 10, {
+        acc = acc + k * 0;
+        k = k + 1;
+    });
     r + acc
 };
 
 \\ f1 (Int) -> Int
 @fn f1 x := {
-    @global p := &Pair x, 17;
-    @global r := p.lo + p.hi * 36;
+    p := Pair(x, 17);
+    r := p::lo + p::hi * 36;
     r
 };
 
 \\ f2 (Int) -> Int
 @fn f2 x := {
-    @global p := &Pair x, 34;
-    @global r := p.lo + p.hi * 67;
+    p := Pair(x, 34);
+    r := p::lo + p::hi * 67;
     r
 };
 
 \\ f3 (Int) -> Int
 @fn f3 x := {
-    @global p := &Pair x, 51;
-    @global r := p.lo + p.hi * 98;
+    p := Pair(x, 51);
+    r := p::lo + p::hi * 98;
     r
 };
 
 \\ f4 (Int) -> Int
 @fn f4 x := {
-    @global p := &Pair x, 68;
-    @global r := p.lo + p.hi * 129;
+    p := Pair(x, 68);
+    r := p::lo + p::hi * 129;
     r
 };
 
 \\ f5 (Int) -> Int
 @fn f5 x := {
-    @global p := &Pair x, 85;
-    @global r := p.lo + p.hi * 160;
-    &@if r < 0, { &@return 0 };
+    p := Pair(x, 85);
+    r := p::lo + p::hi * 160;
+    @if(r < 0, {
+        @return(0)
+    });
     r
 };
 
 \\ f6 (Int) -> Int
 @fn f6 x := {
-    @global p := &Pair x, 102;
-    @global r := p.lo + p.hi * 191;
+    p := Pair(x, 102);
+    r := p::lo + p::hi * 191;
     r
 };
 
 \\ f7 (Int) -> Int
 @fn f7 x := {
-    @global p := &Pair x, 119;
-    @global r := p.lo + p.hi * 222;
-    @local acc := 0;
-    @local k := 1;
-    &@loop k <= 10, { acc = acc + k * 119; k = k + 1; };
+    p := Pair(x, 119);
+    r := p::lo + p::hi * 222;
+    @mut acc := 0;
+    @mut k := 1;
+    @loop(k <= 10, {
+        acc = acc + k * 119;
+        k = k + 1;
+    });
     r + acc
 };
 
 \\ f8 (Int) -> Int
 @fn f8 x := {
-    @global p := &Pair x, 136;
-    @global r := p.lo + p.hi * 253;
+    p := Pair(x, 136);
+    r := p::lo + p::hi * 253;
     r
 };
 
 \\ f9 (Int) -> Int
 @fn f9 x := {
-    @global p := &Pair x, 153;
-    @global r := p.lo + p.hi * 27;
+    p := Pair(x, 153);
+    r := p::lo + p::hi * 27;
     r
 };
 
 \\ f10 (Int) -> Int
 @fn f10 x := {
-    @global p := &Pair x, 170;
-    @global r := p.lo + p.hi * 58;
-    &@if r < 0, { &@return 0 };
+    p := Pair(x, 170);
+    r := p::lo + p::hi * 58;
+    @if(r < 0, {
+        @return(0)
+    });
     r
 };
 
 \\ f11 (Int) -> Int
 @fn f11 x := {
-    @global p := &Pair x, 187;
-    @global r := p.lo + p.hi * 89;
+    p := Pair(x, 187);
+    r := p::lo + p::hi * 89;
     r
 };
 
 \\ f12 (Int) -> Int
 @fn f12 x := {
-    @global p := &Pair x, 204;
-    @global r := p.lo + p.hi * 120;
+    p := Pair(x, 204);
+    r := p::lo + p::hi * 120;
     r
 };
 
 \\ f13 (Int) -> Int
 @fn f13 x := {
-    @global p := &Pair x, 221;
-    @global r := p.lo + p.hi * 151;
+    p := Pair(x, 221);
+    r := p::lo + p::hi * 151;
     r
 };
 
 \\ f14 (Int) -> Int
 @fn f14 x := {
-    @global p := &Pair x, 238;
-    @global r := p.lo + p.hi * 182;
-    @local acc := 0;
-    @local k := 1;
-    &@loop k <= 10, { acc = acc + k * 238; k = k + 1; };
+    p := Pair(x, 238);
+    r := p::lo + p::hi * 182;
+    @mut acc := 0;
+    @mut k := 1;
+    @loop(k <= 10, {
+        acc = acc + k * 238;
+        k = k + 1;
+    });
     r + acc
 };
 
 \\ f15 (Int) -> Int
 @fn f15 x := {
-    @global p := &Pair x, 255;
-    @global r := p.lo + p.hi * 213;
-    &@if r < 0, { &@return 0 };
+    p := Pair(x, 255);
+    r := p::lo + p::hi * 213;
+    @if(r < 0, {
+        @return(0)
+    });
     r
 };
 
 \\ f16 (Int) -> Int
 @fn f16 x := {
-    @global p := &Pair x, 15;
-    @global r := p.lo + p.hi * 244;
+    p := Pair(x, 15);
+    r := p::lo + p::hi * 244;
     r
 };
 
 \\ f17 (Int) -> Int
 @fn f17 x := {
-    @global p := &Pair x, 32;
-    @global r := p.lo + p.hi * 18;
+    p := Pair(x, 32);
+    r := p::lo + p::hi * 18;
     r
 };
 
 \\ f18 (Int) -> Int
 @fn f18 x := {
-    @global p := &Pair x, 49;
-    @global r := p.lo + p.hi * 49;
+    p := Pair(x, 49);
+    r := p::lo + p::hi * 49;
     r
 };
 
 \\ f19 (Int) -> Int
 @fn f19 x := {
-    @global p := &Pair x, 66;
-    @global r := p.lo + p.hi * 80;
+    p := Pair(x, 66);
+    r := p::lo + p::hi * 80;
     r
 };
 
 \\ f20 (Int) -> Int
 @fn f20 x := {
-    @global p := &Pair x, 83;
-    @global r := p.lo + p.hi * 111;
-    &@if r < 0, { &@return 0 };
+    p := Pair(x, 83);
+    r := p::lo + p::hi * 111;
+    @if(r < 0, {
+        @return(0)
+    });
     r
 };
 
 \\ f21 (Int) -> Int
 @fn f21 x := {
-    @global p := &Pair x, 100;
-    @global r := p.lo + p.hi * 142;
-    @local acc := 0;
-    @local k := 1;
-    &@loop k <= 10, { acc = acc + k * 100; k = k + 1; };
+    p := Pair(x, 100);
+    r := p::lo + p::hi * 142;
+    @mut acc := 0;
+    @mut k := 1;
+    @loop(k <= 10, {
+        acc = acc + k * 100;
+        k = k + 1;
+    });
     r + acc
 };
 
 \\ f22 (Int) -> Int
 @fn f22 x := {
-    @global p := &Pair x, 117;
-    @global r := p.lo + p.hi * 173;
+    p := Pair(x, 117);
+    r := p::lo + p::hi * 173;
     r
 };
 
 \\ f23 (Int) -> Int
 @fn f23 x := {
-    @global p := &Pair x, 134;
-    @global r := p.lo + p.hi * 204;
+    p := Pair(x, 134);
+    r := p::lo + p::hi * 204;
     r
 };
 
 \\ f24 (Int) -> Int
 @fn f24 x := {
-    @global p := &Pair x, 151;
-    @global r := p.lo + p.hi * 235;
+    p := Pair(x, 151);
+    r := p::lo + p::hi * 235;
     r
 };
 
 \\ f25 (Int) -> Int
 @fn f25 x := {
-    @global p := &Pair x, 168;
-    @global r := p.lo + p.hi * 9;
-    &@if r < 0, { &@return 0 };
+    p := Pair(x, 168);
+    r := p::lo + p::hi * 9;
+    @if(r < 0, {
+        @return(0)
+    });
     r
 };
 
 \\ f26 (Int) -> Int
 @fn f26 x := {
-    @global p := &Pair x, 185;
-    @global r := p.lo + p.hi * 40;
+    p := Pair(x, 185);
+    r := p::lo + p::hi * 40;
     r
 };
 
 \\ f27 (Int) -> Int
 @fn f27 x := {
-    @global p := &Pair x, 202;
-    @global r := p.lo + p.hi * 71;
+    p := Pair(x, 202);
+    r := p::lo + p::hi * 71;
     r
 };
 
 \\ f28 (Int) -> Int
 @fn f28 x := {
-    @global p := &Pair x, 219;
-    @global r := p.lo + p.hi * 102;
-    @local acc := 0;
-    @local k := 1;
-    &@loop k <= 10, { acc = acc + k * 219; k = k + 1; };
+    p := Pair(x, 219);
+    r := p::lo + p::hi * 102;
+    @mut acc := 0;
+    @mut k := 1;
+    @loop(k <= 10, {
+        acc = acc + k * 219;
+        k = k + 1;
+    });
     r + acc
 };
 
 \\ f29 (Int) -> Int
 @fn f29 x := {
-    @global p := &Pair x, 236;
-    @global r := p.lo + p.hi * 133;
+    p := Pair(x, 236);
+    r := p::lo + p::hi * 133;
     r
 };
 
 \\ f30 (Int) -> Int
 @fn f30 x := {
-    @global p := &Pair x, 253;
-    @global r := p.lo + p.hi * 164;
-    &@if r < 0, { &@return 0 };
+    p := Pair(x, 253);
+    r := p::lo + p::hi * 164;
+    @if(r < 0, {
+        @return(0)
+    });
     r
 };
 
 \\ f31 (Int) -> Int
 @fn f31 x := {
-    @global p := &Pair x, 13;
-    @global r := p.lo + p.hi * 195;
+    p := Pair(x, 13);
+    r := p::lo + p::hi * 195;
     r
 };
 
 \\ f32 (Int) -> Int
 @fn f32 x := {
-    @global p := &Pair x, 30;
-    @global r := p.lo + p.hi * 226;
+    p := Pair(x, 30);
+    r := p::lo + p::hi * 226;
     r
 };
 
 \\ f33 (Int) -> Int
 @fn f33 x := {
-    @global p := &Pair x, 47;
-    @global r := p.lo + p.hi * 0;
+    p := Pair(x, 47);
+    r := p::lo + p::hi * 0;
     r
 };
 
 \\ f34 (Int) -> Int
 @fn f34 x := {
-    @global p := &Pair x, 64;
-    @global r := p.lo + p.hi * 31;
+    p := Pair(x, 64);
+    r := p::lo + p::hi * 31;
     r
 };
 
 \\ f35 (Int) -> Int
 @fn f35 x := {
-    @global p := &Pair x, 81;
-    @global r := p.lo + p.hi * 62;
-    &@if r < 0, { &@return 0 };
-    @local acc := 0;
-    @local k := 1;
-    &@loop k <= 10, { acc = acc + k * 81; k = k + 1; };
+    p := Pair(x, 81);
+    r := p::lo + p::hi * 62;
+    @if(r < 0, {
+        @return(0)
+    });
+    @mut acc := 0;
+    @mut k := 1;
+    @loop(k <= 10, {
+        acc = acc + k * 81;
+        k = k + 1;
+    });
     r + acc
 };
 
 \\ f36 (Int) -> Int
 @fn f36 x := {
-    @global p := &Pair x, 98;
-    @global r := p.lo + p.hi * 93;
+    p := Pair(x, 98);
+    r := p::lo + p::hi * 93;
     r
 };
 
 \\ f37 (Int) -> Int
 @fn f37 x := {
-    @global p := &Pair x, 115;
-    @global r := p.lo + p.hi * 124;
+    p := Pair(x, 115);
+    r := p::lo + p::hi * 124;
     r
 };
 
 \\ f38 (Int) -> Int
 @fn f38 x := {
-    @global p := &Pair x, 132;
-    @global r := p.lo + p.hi * 155;
+    p := Pair(x, 132);
+    r := p::lo + p::hi * 155;
     r
 };
 
 \\ f39 (Int) -> Int
 @fn f39 x := {
-    @global p := &Pair x, 149;
-    @global r := p.lo + p.hi * 186;
+    p := Pair(x, 149);
+    r := p::lo + p::hi * 186;
     r
 };
 
 \\ f40 (Int) -> Int
 @fn f40 x := {
-    @global p := &Pair x, 166;
-    @global r := p.lo + p.hi * 217;
-    &@if r < 0, { &@return 0 };
+    p := Pair(x, 166);
+    r := p::lo + p::hi * 217;
+    @if(r < 0, {
+        @return(0)
+    });
     r
 };
 
 \\ f41 (Int) -> Int
 @fn f41 x := {
-    @global p := &Pair x, 183;
-    @global r := p.lo + p.hi * 248;
+    p := Pair(x, 183);
+    r := p::lo + p::hi * 248;
     r
 };
 
 \\ f42 (Int) -> Int
 @fn f42 x := {
-    @global p := &Pair x, 200;
-    @global r := p.lo + p.hi * 22;
-    @local acc := 0;
-    @local k := 1;
-    &@loop k <= 10, { acc = acc + k * 200; k = k + 1; };
+    p := Pair(x, 200);
+    r := p::lo + p::hi * 22;
+    @mut acc := 0;
+    @mut k := 1;
+    @loop(k <= 10, {
+        acc = acc + k * 200;
+        k = k + 1;
+    });
     r + acc
 };
 
 \\ f43 (Int) -> Int
 @fn f43 x := {
-    @global p := &Pair x, 217;
-    @global r := p.lo + p.hi * 53;
+    p := Pair(x, 217);
+    r := p::lo + p::hi * 53;
     r
 };
 
 \\ f44 (Int) -> Int
 @fn f44 x := {
-    @global p := &Pair x, 234;
-    @global r := p.lo + p.hi * 84;
+    p := Pair(x, 234);
+    r := p::lo + p::hi * 84;
     r
 };
 
 \\ f45 (Int) -> Int
 @fn f45 x := {
-    @global p := &Pair x, 251;
-    @global r := p.lo + p.hi * 115;
-    &@if r < 0, { &@return 0 };
+    p := Pair(x, 251);
+    r := p::lo + p::hi * 115;
+    @if(r < 0, {
+        @return(0)
+    });
     r
 };
 
 \\ f46 (Int) -> Int
 @fn f46 x := {
-    @global p := &Pair x, 11;
-    @global r := p.lo + p.hi * 146;
+    p := Pair(x, 11);
+    r := p::lo + p::hi * 146;
     r
 };
 
 \\ f47 (Int) -> Int
 @fn f47 x := {
-    @global p := &Pair x, 28;
-    @global r := p.lo + p.hi * 177;
+    p := Pair(x, 28);
+    r := p::lo + p::hi * 177;
     r
 };
 
 \\ f48 (Int) -> Int
 @fn f48 x := {
-    @global p := &Pair x, 45;
-    @global r := p.lo + p.hi * 208;
+    p := Pair(x, 45);
+    r := p::lo + p::hi * 208;
     r
 };
 
 \\ f49 (Int) -> Int
 @fn f49 x := {
-    @global p := &Pair x, 62;
-    @global r := p.lo + p.hi * 239;
-    @local acc := 0;
-    @local k := 1;
-    &@loop k <= 10, { acc = acc + k * 62; k = k + 1; };
+    p := Pair(x, 62);
+    r := p::lo + p::hi * 239;
+    @mut acc := 0;
+    @mut k := 1;
+    @loop(k <= 10, {
+        acc = acc + k * 62;
+        k = k + 1;
+    });
     r + acc
 };
 
 @fn bench_main := {
-    @local total := 0;
-    total = total + (&f0 0);
-    total = total + (&f1 1);
-    total = total + (&f2 2);
-    total = total + (&f3 3);
-    total = total + (&f4 4);
-    total = total + (&f5 5);
-    total = total + (&f6 6);
-    total = total + (&f7 7);
-    total = total + (&f8 8);
-    total = total + (&f9 9);
-    total = total + (&f10 10);
-    total = total + (&f11 11);
-    total = total + (&f12 12);
-    total = total + (&f13 13);
-    total = total + (&f14 14);
-    total = total + (&f15 15);
-    total = total + (&f16 16);
-    total = total + (&f17 17);
-    total = total + (&f18 18);
-    total = total + (&f19 19);
-    total = total + (&f20 20);
-    total = total + (&f21 21);
-    total = total + (&f22 22);
-    total = total + (&f23 23);
-    total = total + (&f24 24);
-    total = total + (&f25 25);
-    total = total + (&f26 26);
-    total = total + (&f27 27);
-    total = total + (&f28 28);
-    total = total + (&f29 29);
-    total = total + (&f30 30);
-    total = total + (&f31 31);
-    total = total + (&f32 32);
-    total = total + (&f33 33);
-    total = total + (&f34 34);
-    total = total + (&f35 35);
-    total = total + (&f36 36);
-    total = total + (&f37 37);
-    total = total + (&f38 38);
-    total = total + (&f39 39);
-    total = total + (&f40 40);
-    total = total + (&f41 41);
-    total = total + (&f42 42);
-    total = total + (&f43 43);
-    total = total + (&f44 44);
-    total = total + (&f45 45);
-    total = total + (&f46 46);
-    total = total + (&f47 47);
-    total = total + (&f48 48);
-    total = total + (&f49 49);
+    @mut total := 0;
+    total = total + f0(0);
+    total = total + f1(1);
+    total = total + f2(2);
+    total = total + f3(3);
+    total = total + f4(4);
+    total = total + f5(5);
+    total = total + f6(6);
+    total = total + f7(7);
+    total = total + f8(8);
+    total = total + f9(9);
+    total = total + f10(10);
+    total = total + f11(11);
+    total = total + f12(12);
+    total = total + f13(13);
+    total = total + f14(14);
+    total = total + f15(15);
+    total = total + f16(16);
+    total = total + f17(17);
+    total = total + f18(18);
+    total = total + f19(19);
+    total = total + f20(20);
+    total = total + f21(21);
+    total = total + f22(22);
+    total = total + f23(23);
+    total = total + f24(24);
+    total = total + f25(25);
+    total = total + f26(26);
+    total = total + f27(27);
+    total = total + f28(28);
+    total = total + f29(29);
+    total = total + f30(30);
+    total = total + f31(31);
+    total = total + f32(32);
+    total = total + f33(33);
+    total = total + f34(34);
+    total = total + f35(35);
+    total = total + f36(36);
+    total = total + f37(37);
+    total = total + f38(38);
+    total = total + f39(39);
+    total = total + f40(40);
+    total = total + f41(41);
+    total = total + f42(42);
+    total = total + f43(43);
+    total = total + f44(44);
+    total = total + f45(45);
+    total = total + f46(46);
+    total = total + f47(47);
+    total = total + f48(48);
+    total = total + f49(49);
     total
 };
 

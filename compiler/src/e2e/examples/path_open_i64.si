@@ -4,8 +4,5 @@
 # automatically.  The @toInt64 cast turns Int literals into i64 args.
 \\ try_open (Int, Int, Int, Int)
 @fn try_open dir_fd, path_ptr, path_len, fd_out := {
-  &wasi_snapshot_preview1::path_open
-    dir_fd, 0, path_ptr, path_len, 0,
-    (&@toInt64 0), (&@toInt64 0),
-    0, fd_out
+    wasi_snapshot_preview1::path_open(dir_fd, 0, path_ptr, path_len, 0, @toInt64(0), @toInt64(0), 0, fd_out)
 };

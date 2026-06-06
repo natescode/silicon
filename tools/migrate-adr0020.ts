@@ -200,16 +200,26 @@ function emitDefinition(def: any, depth: number): string {
         return '@type ' + namePlain + generics + ' := { ' + fields + ' }'
     }
     if (kw === '@enum') {
-        FLAGS.push(`@enum '${namePlain}' passed through unchanged — needs manual ADR 0020 form`)
+        // @enum (payload-free i32-global variants) has no clean ADR-0020 sum
+        // equivalent — it stays a first-class keyword. Emit verbatim.
+        let out = '@enum ' + namePlain + generics
+        if (def.binding) out += ' := ' + emit(def.binding.expression, depth)
+        return out
     }
-    if (kw === '@type') {
-        // type definition kept; variant payloads / aliases emit via emit() (space form)
+    if (kw === '@type' || kw === '@type_sum') {
+        // @type_sum is the legacy spelling of a sum — fold into @type (RHS unchanged).
         let out = '@type ' + namePlain + generics
         if (def.binding) out += ' := ' + emit(def.binding.expression, depth)
         return out
     }
     if (kw === '@extern') {
-        FLAGS.push(`@extern '${namePlain}' -> should become a '\\\\ @extern' signature-line modifier (manual)`)
+        // @extern came from `@extern { \\ … }`; the parser split it into per-sig
+        // @extern Definitions (params = _argN with types, name carries the return
+        // type). Re-emit each as the ADR-0020 `\\ @extern …;` line form.
+        const ptypes = def.params.map((p: any) => p.typeAnnotation ? typeExprSource(p.typeAnnotation) : '_')
+        let sig = '\\\\ @extern ' + namePlain + generics + ' (' + ptypes.join(', ') + ')'
+        if (def.name.typeAnnotation) sig += ' -> ' + typeExprSource(def.name.typeAnnotation)
+        return sig
     }
 
     // ADR 0020 binding model: bare = immutable value (common), @mut = mutable value,

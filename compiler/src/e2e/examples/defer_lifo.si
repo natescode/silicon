@@ -1,18 +1,18 @@
+\\ @extern acquire_a () -> Int;
+\\ @extern acquire_b () -> Int;
+\\ @extern acquire_c () -> Int;
+\\ @extern release_a (Int);
+\\ @extern release_b (Int);
+\\ @extern release_c (Int);
 # Phase 4 (@defer) — multiple defers run in LIFO order.
 # After body executes, cleanups fire bottom-up: release_c, release_b, release_a.
-@extern { \\ acquire_a () -> Int }
-@extern { \\ acquire_b () -> Int }
-@extern { \\ acquire_c () -> Int }
-@extern { \\ release_a (Int) -> Void }
-@extern { \\ release_b (Int) -> Void }
-@extern { \\ release_c (Int) -> Void }
 
-@fn chained  := {
-    @local a := &acquire_a;
-    &@defer &release_a a;
-    @local b := &acquire_b;
-    &@defer &release_b b;
-    @local c := &acquire_c;
-    &@defer &release_c c;
+@fn chained := {
+    a := acquire_a();
+    @defer(release_a(a));
+    b := acquire_b();
+    @defer(release_b(b));
+    c := acquire_c();
+    @defer(release_c(c));
     a + b + c
 };

@@ -1,1 +1,1 @@
-@local count := 0;
+@mut count := 0;

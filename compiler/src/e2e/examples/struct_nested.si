@@ -1,8 +1,8 @@
-@struct Point x Int, y Int;
-@struct Rect origin Point, width Int, height Int;
+@type Point := { x Int, y Int };
+@type Rect := { origin Point, width Int, height Int };
 
-@fn main  := {
-    @local p := &Point 3, 7;
-    @local r := &Rect p, 100, 50;
-    r.width
+@fn main := {
+    p := Point(3, 7);
+    r := Rect(p, 100, 50);
+    r::width
 };

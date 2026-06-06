@@ -2,17 +2,12 @@
 ## Defines `+++` to lower to i32.add and uses it inside a typed function.
 
 @stratum MyAdd := {
-    &Compiler::register::operator '+++';
-    &Compiler::on::lower '+++', MyAdd_lower;
+    Compiler::register::operator('+++');
+    Compiler::on::lower('+++', MyAdd_lower);
 };
 
 \\ MyAdd_lower (Int)
-@fn MyAdd_lower node :=
-    &compiler::ir_makeBinOp
-        (&compiler::compiler_str_intern 'i32.add', 0),
-        (&compiler::compiler_lowerExpr (&compiler::compiler_ast_node_field node, (&compiler::compiler_str_intern 'left', 0))),
-        (&compiler::compiler_lowerExpr (&compiler::compiler_ast_node_field node, (&compiler::compiler_str_intern 'right', 0))),
-        (&compiler::compiler_str_intern 'i32', 0);
+@fn MyAdd_lower node := compiler::ir_makeBinOp(compiler::compiler_str_intern('i32.add', 0), compiler::compiler_lowerExpr(compiler::compiler_ast_node_field(node, compiler::compiler_str_intern('left', 0))), compiler::compiler_lowerExpr(compiler::compiler_ast_node_field(node, compiler::compiler_str_intern('right', 0))), compiler::compiler_str_intern('i32', 0));
 
 \\ myAdd (Int, Int)
 @fn myAdd x, y := x +++ y;

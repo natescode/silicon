@@ -1,12 +1,12 @@
+\\ @extern acquire () -> Int;
+\\ @extern release (Int);
+\\ @extern noop (Int);
 # Phase 4 (@defer) — basic end-of-body cleanup.
 # Acquires a resource, runs some work, and schedules cleanup via @defer.
 # The cleanup call is appended to the function body at lowering time.
-@extern { \\ acquire () -> Int }
-@extern { \\ release (Int) -> Void }
-@extern { \\ noop (Int) -> Void }
 
-@fn run  := {
-    @local handle := &acquire;
-    &@defer &release handle;
-    &noop handle
+@fn run := {
+    handle := acquire();
+    @defer(release(handle));
+    noop(handle)
 };

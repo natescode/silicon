@@ -635,9 +635,9 @@ test("E2E: @fn definition emits WAT func with params", () => {
 });
 
 /**
- * Test: @local definition emits a mutable WAT global
+ * Test: @mut definition emits a mutable WAT global
  */
-test("E2E: @local definition emits mutable WAT global", () => {
+test("E2E: @mut definition emits mutable WAT global", () => {
     const sourceCode = loadExample("var_global.si");
     const result = compileSource(sourceCode);
 

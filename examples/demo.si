@@ -1,5 +1,5 @@
-@type_sum Color := Red | Green | Blue;
-@type_sum Status := Ok | Warn | Error;
+@type Color := Red | Green | Blue;
+@type Status := Ok | Warn | Error;
 
 \\ add (Int, Int)
 @fn add a, b := {

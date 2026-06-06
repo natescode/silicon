@@ -8,12 +8,12 @@
 \\ greet (JSString) -> JSString
 @fn greet name := {
     \\ hello JSString
-    @local hello := &JSString::fromString 'Hello, ';
+    hello := JSString::fromString('Hello, ');
     \\ bang JSString
-    @local bang := &JSString::fromString '!';
+    bang := JSString::fromString('!');
     \\ lead JSString
-    @local lead := &JSString::concat hello, name;
-    &JSString::concat lead, bang
+    lead := JSString::concat(hello, name);
+    JSString::concat(lead, bang)
 };
 
 # Shout: uppercase-ish emphasis by appending three '!' (kept simple — the point
@@ -21,6 +21,6 @@
 \\ shout (JSString) -> JSString
 @fn shout s := {
     \\ marks JSString
-    @local marks := &JSString::fromString '!!!';
-    &JSString::concat s, marks
+    marks := JSString::fromString('!!!');
+    JSString::concat(s, marks)
 };
