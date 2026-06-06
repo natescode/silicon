@@ -57,6 +57,9 @@ class Parser {
      *  positions via `PositionTable` from `relSpan` + `elemBase`. */
     private readonly windowed: boolean
     private pos = 0
+    /** Block nesting depth (ADR-0020): >0 inside a block. Scopes a bare immutable
+     *  definition to an immutable local (in a block) vs an immutable global. */
+    private blockDepth = 0
 
     constructor(private readonly src: string, lexRange?: readonly [number, number]) {
         if (lexRange) {
@@ -227,7 +230,9 @@ class Parser {
             this.expect('semi')
             return def
         }
-        if (this.isDefKw(t)) {
+        // A def-kw followed by '(' is an ADR-0020 intrinsic CALL (`@if(...)`,
+        // `@loop(...)`), not a definition — let it fall through to parseItem.
+        if (this.isDefKw(t) && this.peek(1).kind !== 'lparen') {
             const r = this.parseDefOrBlockDef()
             if (Array.isArray(r)) return r          // BlockDef — no trailing ';'
             this.expect('semi')
@@ -257,22 +262,65 @@ class Parser {
         }
 
         if (!identTok) this.fail('definition requires a name')
+
+        // ADR-0020: `@type Name := { field Type, ... }` is a struct definition.
+        if (kw === '@type' && this.at('bind') && this.peek(1).kind === 'lbrace') {
+            this.next()                                 // consume ':='
+            return this.parseStructDef(identTok, generics)
+        }
+
         const params = this.parseParams()
         const binding = this.at('bind') ? this.parseBinding() : undefined
         return this.buildDefinition(undefined, kw, identTok, generics, params, binding)
+    }
+
+    // ADR-0020 surface keyword → existing AST keyword (+ immutability). `@mut`
+    // maps to the existing mutable-local keyword `@local` with immutable=false;
+    // every other keyword passes through unchanged (legacy behaviour).
+    private resolveDefKind(kw: string): { keyword: string; immutable?: boolean } {
+        if (kw === '@mut') return { keyword: '@local', immutable: false }
+        return { keyword: kw }
+    }
+
+    // ADR-0020: `{ field Type, ... }` after `@type Name :=` — emit the existing
+    // @struct AST (a Definition whose params are the fields, no binding).
+    private parseStructDef(identTok: Token, generics: GenericParams | undefined): Definition {
+        this.expect('lbrace')
+        const fields: Parameter[] = []
+        if (!this.at('rbrace')) {
+            fields.push(this.parseParamLiteral())
+            while (this.at('comma')) {
+                this.next()
+                if (this.at('rbrace')) break
+                fields.push(this.parseParamLiteral())
+            }
+        }
+        this.expect('rbrace')
+        return this.buildDefinition(undefined, '@struct', identTok, generics, fields, undefined)
     }
 
     // Definition = AttachedSig defKw identifier generics? Params Binding?
     private parseDefinitionWithSig(): Definition {
         const sig = this.parseAttachedSig()
         const kwTok = this.peek()
-        if (!this.isDefKw(kwTok)) this.fail('expected a definition keyword after signature')
-        const kw = this.next().text
+        if (this.isDefKw(kwTok)) {
+            const kw = this.next().text
+            const identTok = this.expect('ident')
+            const generics = this.at('lbrack') ? this.parseGenericParams() : undefined
+            const params = this.parseParams()
+            const binding = this.at('bind') ? this.parseBinding() : undefined
+            return this.buildDefinition(sig, kw, identTok, generics, params, binding)
+        }
+        // ADR-0020: a `\\` signature line followed by a BARE definition (no keyword).
+        // params present ⇒ function (@fn); none ⇒ immutable value (scope by depth).
         const identTok = this.expect('ident')
         const generics = this.at('lbrack') ? this.parseGenericParams() : undefined
         const params = this.parseParams()
         const binding = this.at('bind') ? this.parseBinding() : undefined
-        return this.buildDefinition(sig, kw, identTok, generics, params, binding)
+        const kind = params.length > 0 ? '@fn' : (this.blockDepth > 0 ? '@local' : '@global')
+        const node = this.buildDefinition(sig, kind, identTok, generics, params, binding)
+        if (params.length === 0) (node as any).immutable = true
+        return node
     }
 
     // AttachedSig = "\\" namespace generics? TypeExpr
@@ -337,7 +385,9 @@ class Parser {
         }
 
         const name = ASTFactory.typedIdentifier(identTok.text, returnAnnotation)
-        const node = ASTFactory.definition(kw, name, paramList, genericParams, binding)
+        const resolved = this.resolveDefKind(kw)
+        const node = ASTFactory.definition(resolved.keyword, name, paramList, genericParams, binding)
+        if (resolved.immutable !== undefined) (node as any).immutable = resolved.immutable
         node.sourceLocation = this.loc(identTok.start, identTok.end)
         node.relSpan = { start: identTok.start, end: identTok.end }   // absolute now; relativized per element (M3)
         return node
@@ -398,7 +448,8 @@ class Parser {
     private parseItem(): ASTNode {
         const t = this.peek()
         if (t.kind === 'attachedSig') return this.parseDefinitionWithSig()
-        if (this.isDefKw(t)) {
+        // def-kw followed by '(' is an intrinsic call (`@if(...)`), not a def.
+        if (this.isDefKw(t) && this.peek(1).kind !== 'lparen') {
             const r = this.parseDefOrBlockDef()
             // A BlockDef cannot appear as a block Item in valid programs; only a
             // Definition reaches here in practice.
@@ -407,13 +458,37 @@ class Parser {
         }
         if (t.kind === 'ident') {
             const ns = this.parseNamespace()
+            if (this.at('bind')) return this.parseBareDef(ns)          // ADR-0020 bare def: name := value
             if (this.at('op') && this.peek().text === '=') {
                 this.next()
                 return ASTFactory.assignment(ns, this.parseExpressionStart() as ExpressionStart)
             }
-            return this.parseBinOpChain(ns)
+            return this.parseBinOpChain(this.applyCallSuffix(ns))      // ADR-0020 paren call: f(...)
         }
         return this.parseExpressionStart()
+    }
+
+    // ADR-0020 bare definition `name := value`: an immutable value binding. Scope by
+    // block depth: top-level ⇒ immutable global (@global); in a block ⇒ immutable
+    // local (@local + immutable flag, enforced by the typechecker).
+    private parseBareDef(ns: Namespace): Definition {
+        this.expect('bind')
+        const binding = ASTFactory.binding(this.parseExpressionStart())
+        const kind = this.blockDepth > 0 ? '@local' : '@global'
+        const node = ASTFactory.definition(kind, ASTFactory.typedIdentifier(ns.path[0]), [], undefined, binding)
+        ;(node as any).immutable = true
+        node.sourceLocation = ns.sourceLocation
+        node.relSpan = ns.relSpan
+        return node
+    }
+
+    // ADR-0020 paren call: a namespace immediately followed by `(args)`.
+    private applyCallSuffix(callee: Namespace): ASTNode {
+        if (!this.at('lparen')) return callee
+        this.next()
+        const args = this.exprListUntil('rparen')
+        this.expect('rparen')
+        return ASTFactory.functionCall(callee, false, args as ExpressionStart[])
     }
 
     // ExpressionStart = ExpressionEnd (BinOp ExpressionEnd)*
@@ -438,16 +513,24 @@ class Parser {
         switch (t.kind) {
             case 'string': case 'int': case 'float': case 'arrOpen': case 'objOpen': case 'tupOpen':
                 return this.parseLiteral()
-            case 'kw':
+            case 'kw': {
                 if (t.text === '@true' || t.text === '@false') return this.parseLiteral()
+                // ADR-0020: a keyword used as a call head, e.g. @if(c, {a}, {b}).
+                this.next()                                   // consume the keyword
+                if (this.at('lparen')) {
+                    this.next()
+                    const args = this.exprListUntil('rparen')
+                    this.expect('rparen')
+                    return ASTFactory.functionCall(t.text, true, args as ExpressionStart[])
+                }
                 this.fail(`unexpected keyword '${t.text}' in expression`, t)
-            // eslint-disable-next-line no-fallthrough
+            }
             case 'amp':
                 return this.parseAmp()
             case 'dollar':
                 return this.parseVariantDecl()
             case 'ident':
-                return this.parseNamespace()
+                return this.applyCallSuffix(this.parseNamespace())   // ADR-0020 paren call: f(...)
             case 'lbrace':
                 return this.parseBlock()
             case 'lparen': {
@@ -563,6 +646,7 @@ class Parser {
     // Block = "{" { Item ";" } [ ExpressionStart ] "}"  (left-factored)
     private parseBlock(): ASTNode {
         this.expect('lbrace')
+        this.blockDepth++
         const items: any[] = []
         let trailing: any
         while (!this.at('rbrace')) {
@@ -571,6 +655,7 @@ class Parser {
             else { trailing = node; break }
         }
         this.expect('rbrace')
+        this.blockDepth--
         return ASTFactory.block(items, trailing)
     }
 
