@@ -48,3 +48,4 @@ dependency bumps.
 | [0014](0014-global-local-bindings.md) | Simplify value bindings to `@global` (immutable) + `@local` (mutable) | Accepted |
 | [0015](0015-object-capabilities.md) | Object capabilities: authority as unforgeable values, checked at comptime, no effect rows | Proposed |
 | [0016](0016-loop-over-iterables.md) | `@loop` over iterables: one keyword, syntactic dispatch, value-returning `IterStep[T,R]` protocol | Accepted |
+| [0017](0017-ffi-binding-generator.md) | FFI binding generator: machine-generate Web/Node/Bun `@extern` bindings + dual host shims from upstream specs | Proposed |
