@@ -16,55 +16,55 @@
 
 # Byte length of `s` (O(1) — reads the length header).
 \\ str_byte_len (String) -> Int
-str_byte_len s := str_len(s);
+@fn str_byte_len s := str_len(s);
 
 \\ str_is_empty (String) -> Bool
-str_is_empty s := {
+@fn str_is_empty s := {
     str_len(s) == 0
 };
 
 # The byte at index `i` (0-based) as an Int.  Caller checks bounds.
 \\ str_byte_at (String, Int) -> Int
-str_byte_at s, i := {
-    @mut p := str_ptr(s) + 4;
+@fn str_byte_at s, i := {
+    p := str_ptr(s) + 4;
     WASM::i32_load8_u(p + i)
 };
 
 # Byte-wise equality.
 \\ str_eq (String, String) -> Bool
-str_eq a, b := {
-    @mut la := str_len(a);
-    @mut lb := str_len(b);
+@fn str_eq a, b := {
+    la := str_len(a);
+    lb := str_len(b);
     @mut r := @false;
     @if(la == lb, {
-        @mut pa := str_ptr(a) + 4;
-        @mut pb := str_ptr(b) + 4;
+        pa := str_ptr(a) + 4;
+        pb := str_ptr(b) + 4;
         r = mem_eq(pa, pb, la);
     }, {});
     r
 };
 
 \\ str_starts_with (String, String) -> Bool
-str_starts_with s, prefix := {
-    @mut n := str_len(s);
-    @mut m := str_len(prefix);
+@fn str_starts_with s, prefix := {
+    n := str_len(s);
+    m := str_len(prefix);
     @mut r := @false;
     @if(m <= n, {
-        @mut sp := str_ptr(s) + 4;
-        @mut pp := str_ptr(prefix) + 4;
+        sp := str_ptr(s) + 4;
+        pp := str_ptr(prefix) + 4;
         r = mem_eq(sp, pp, m);
     }, {});
     r
 };
 
 \\ str_ends_with (String, String) -> Bool
-str_ends_with s, suffix := {
-    @mut n := str_len(s);
-    @mut m := str_len(suffix);
+@fn str_ends_with s, suffix := {
+    n := str_len(s);
+    m := str_len(suffix);
     @mut r := @false;
     @if(m <= n, {
-        @mut sp := str_ptr(s) + 4 + (n - m);
-        @mut pp := str_ptr(suffix) + 4;
+        sp := str_ptr(s) + 4 + (n - m);
+        pp := str_ptr(suffix) + 4;
         r = mem_eq(sp, pp, m);
     }, {});
     r
@@ -73,11 +73,11 @@ str_ends_with s, suffix := {
 # First byte index where `sub` occurs in `s`, or -1 if absent.
 # The empty substring matches at index 0.
 \\ str_index_of (String, String) -> Int
-str_index_of s, sub := {
-    @mut n := str_len(s);
-    @mut m := str_len(sub);
-    @mut sp := str_ptr(s) + 4;
-    @mut subp := str_ptr(sub) + 4;
+@fn str_index_of s, sub := {
+    n := str_len(s);
+    m := str_len(sub);
+    sp := str_ptr(s) + 4;
+    subp := str_ptr(sub) + 4;
     @mut result := 0 - 1;
     @if(m == 0, {
         result = 0
@@ -103,15 +103,15 @@ str_index_of s, sub := {
 };
 
 \\ str_contains (String, String) -> Bool
-str_contains s, sub := {
+@fn str_contains s, sub := {
     str_index_of(s, sub) >= 0
 };
 
 # Substring of the bytes in [start, end).  `start`/`end` are clamped to
 # [0, len]; an empty range yields the empty string.
 \\ str_slice (String, Int, Int) -> String
-str_slice s, start, end := {
-    @mut n := str_len(s);
+@fn str_slice s, start, end := {
+    n := str_len(s);
     @mut lo := start;
     @mut hi := end;
     @if(lo < 0, {
@@ -123,13 +123,13 @@ str_slice s, start, end := {
     @if(hi < lo, {
         hi = lo
     }, {});
-    @mut count := hi - lo;
-    @mut out := alloc_string(count);
-    @mut dst := str_ptr(out) + 4;
-    @mut src := str_ptr(s) + 4 + lo;
+    count := hi - lo;
+    out := alloc_string(count);
+    dst := str_ptr(out) + 4;
+    src := str_ptr(s) + 4 + lo;
     @mut i := 0;
     @loop(i < count, {
-        @mut c := WASM::i32_load8_u(src + i);
+        c := WASM::i32_load8_u(src + i);
         WASM::i32_store8(dst + i, c);
         i = i + 1;
     });
@@ -139,21 +139,21 @@ str_slice s, start, end := {
 
 # `s` repeated `n` times (n <= 0 yields the empty string).
 \\ str_repeat (String, Int) -> String
-str_repeat s, n := {
-    @mut len := str_len(s);
+@fn str_repeat s, n := {
+    len := str_len(s);
     @mut reps := n;
     @if(reps < 0, {
         reps = 0
     }, {});
-    @mut total := len * reps;
-    @mut out := alloc_string(total);
-    @mut dst := str_ptr(out) + 4;
-    @mut src := str_ptr(s) + 4;
+    total := len * reps;
+    out := alloc_string(total);
+    dst := str_ptr(out) + 4;
+    src := str_ptr(s) + 4;
     @mut r := 0;
     @loop(r < reps, {
         @mut i := 0;
         @loop(i < len, {
-            @mut c := WASM::i32_load8_u(src + i);
+            c := WASM::i32_load8_u(src + i);
             WASM::i32_store8(dst + (r * len + i), c);
             i = i + 1;
         });

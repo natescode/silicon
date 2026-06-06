@@ -67,15 +67,15 @@
 # the compiler having to learn any of them.
 
 \\ rc_new (Int)
-rc_new value := {
-    @mut p := alloc(8);
+@fn rc_new value := {
+    p := alloc(8);
     WASM::i32_store(p, 1);
     WASM::i32_store(p + 4, value);
     p
 };
 
 \\ rc_clone (Int)
-rc_clone r := {
+@fn rc_clone r := {
     WASM::i32_store(r, WASM::i32_load(r) + 1);
     r
 };
@@ -83,15 +83,15 @@ rc_clone r := {
 # Decrement the refcount; the slot is logically dead at refcount 0 but
 # physical free is the enclosing allocator's job (arena exit / GC).
 \\ rc_drop (Int)
-rc_drop r := {
+@fn rc_drop r := {
     WASM::i32_store(r, WASM::i32_load(r) - 1)
 };
 
 \\ rc_get (Int)
-rc_get r := WASM::i32_load(r + 4);
+@fn rc_get r := WASM::i32_load(r + 4);
 
 \\ rc_count (Int)
-rc_count r := WASM::i32_load(r);
+@fn rc_count r := WASM::i32_load(r);
 
 \\ rc_is_unique (Int)
-rc_is_unique r := rc_count(r) == 1;
+@fn rc_is_unique r := rc_count(r) == 1;

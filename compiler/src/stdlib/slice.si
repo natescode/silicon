@@ -33,23 +33,23 @@
 # accessors gives the user a stable, mockable surface and a place to
 # document intent.
 \\ slice_ptr[T] (Slice[T])
-slice_ptr[T] s := s::ptr;
+@fn slice_ptr[T] s := s::ptr;
 \\ slice_len[T] (Slice[T])
-slice_len[T] s := s::len;
+@fn slice_len[T] s := s::len;
 
 # ── i32-element accessors ─────────────────────────────────────────────
 # 4-byte element layout: address = ptr + (i * 4).  Take Slice[T] so any
 # 4-byte-element slice can use these — the caller is responsible for
 # pairing the right access width with the right element type.
 \\ slice_get_i32[T] (Slice[T], Int)
-slice_get_i32[T] s, i := {
-    @mut p := s::ptr;
+@fn slice_get_i32[T] s, i := {
+    p := s::ptr;
     WASM::i32_load(p + (i * 4))
 };
 
 \\ slice_set_i32[T] (Slice[T], Int, Int)
-slice_set_i32[T] s, i, x := {
-    @mut p := s::ptr;
+@fn slice_set_i32[T] s, i, x := {
+    p := s::ptr;
     WASM::i32_store(p + (i * 4), x)
 };
 
@@ -57,14 +57,14 @@ slice_set_i32[T] s, i, x := {
 # 1-byte element layout: address = ptr + i.  Returns Int (the unsigned
 # byte value, zero-extended to i32).
 \\ slice_get_byte[T] (Slice[T], Int)
-slice_get_byte[T] s, i := {
-    @mut p := s::ptr;
+@fn slice_get_byte[T] s, i := {
+    p := s::ptr;
     WASM::i32_load8_u(p + i)
 };
 
 \\ slice_set_byte[T] (Slice[T], Int, Int)
-slice_set_byte[T] s, i, x := {
-    @mut p := s::ptr;
+@fn slice_set_byte[T] s, i, x := {
+    p := s::ptr;
     WASM::i32_store8(p + i, x)
 };
 
@@ -85,8 +85,8 @@ slice_set_byte[T] s, i, x := {
 # 0 ≤ i < s.len  →  the canonical in-range predicate.  Silicon's `&`
 # isn't a binary operator, so we nest `&@if` instead of `cond1 && cond2`.
 \\ slice_in_bounds[T] (Slice[T], Int)
-slice_in_bounds[T] s, i := {
-    @mut len := s::len;
+@fn slice_in_bounds[T] s, i := {
+    len := s::len;
     @if(i >= 0, {
         @if(i < len, {
             1
@@ -104,9 +104,9 @@ slice_in_bounds[T] s, i := {
 # Option[Int] vs Option[?T1]" because the call site has no other context
 # to ground T.
 \\ slice_at_i32[T] (Slice[T], Int) -> Option[Int]
-slice_at_i32[T] s, i := {
+@fn slice_at_i32[T] s, i := {
     \\ none_val Option[Int]
-    @mut none_val := None();
+    none_val := None();
     @if(slice_in_bounds(s, i), {
         Some(slice_get_i32(s, i))
     }, {
@@ -115,9 +115,9 @@ slice_at_i32[T] s, i := {
 };
 
 \\ slice_at_byte[T] (Slice[T], Int) -> Option[Int]
-slice_at_byte[T] s, i := {
+@fn slice_at_byte[T] s, i := {
     \\ none_val Option[Int]
-    @mut none_val := None();
+    none_val := None();
     @if(slice_in_bounds(s, i), {
         Some(slice_get_byte(s, i))
     }, {
@@ -139,8 +139,8 @@ slice_at_byte[T] s, i := {
 # Prelude provides &str_ptr / &str_len; both are pre-registered as
 # String → Int in the typechecker.
 \\ string_as_slice (String) -> Slice[u8]
-string_as_slice s := {
-    @mut p := str_ptr(s);
-    @mut n := str_len(s);
+@fn string_as_slice s := {
+    p := str_ptr(s);
+    n := str_len(s);
     Slice(p + 4, n)
 };

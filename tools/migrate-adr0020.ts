@@ -54,6 +54,23 @@ interface Pres { line: number; text: string; ownLine: boolean; kind: 'use' | 'co
 let PRES: Pres[] = []
 let PCUR = 0
 
+// Names reassigned (`name = …`) somewhere in the file. A binding whose name is here is
+// mutable (-> @mut); otherwise it demotes to a bare immutable binding. Whole-file (not
+// scope-aware) on purpose: it can only OVER-mark @mut across shadowed names, never
+// under-mark a genuinely-mutable binding as immutable (which would break enforcement).
+let REASSIGNED = new Set<string>()
+function collectReassigned(root: any): Set<string> {
+    const s = new Set<string>()
+    const visit = (x: any) => {
+        if (!x || typeof x !== 'object') return
+        if (Array.isArray(x)) { x.forEach(visit); return }
+        if (x.type === 'Assignment' && x.target?.path?.length) s.add(x.target.path[0])
+        for (const k in x) if (k !== 'sourceLocation' && k !== 'relSpan') visit(x[k])
+    }
+    visit(root)
+    return s
+}
+
 function scanPreserved(src: string): Pres[] {
     const out: Pres[] = []
     const lines = src.split('\n')
@@ -195,12 +212,17 @@ function emitDefinition(def: any, depth: number): string {
         FLAGS.push(`@extern '${namePlain}' -> should become a '\\\\ @extern' signature-line modifier (manual)`)
     }
 
+    // ADR 0020 binding model: bare = immutable value (common), @mut = mutable value,
+    // @fn = function, @type = type. @local/@global are dropped. A current @local/@var
+    // (which was mutable-capable) becomes @mut only if it is actually reassigned in the
+    // file; otherwise it demotes to a bare immutable binding.
+    const mutable = (n: string) => REASSIGNED.has(n) ? '@mut ' : ''
     const prefix =
-        kw === '@fn'     ? '' :          // bare; function (has params)
-        kw === '@global' ? '' :          // bare; immutable module constant
-        kw === '@let'    ? '' :          // bare; immutable (legacy)
-        kw === '@local'  ? '@mut ' :     // mutable binding
-        kw === '@var'    ? '@mut ' :     // mutable (legacy)
+        kw === '@fn'     ? '@fn ' :      // function (kept)
+        kw === '@global' ? '' :          // immutable value -> bare
+        kw === '@let'    ? '' :          // immutable (legacy) -> bare
+        kw === '@local'  ? mutable(namePlain) :   // @mut if reassigned, else bare immutable
+        kw === '@var'    ? mutable(namePlain) :   // (legacy)
         (FLAGS.push(`unmapped definition keyword '${kw}' kept verbatim — review`), kw + ' ')
 
     // bare def line: names only — NO inline types (they go on the reconstructed \\ line)
@@ -313,6 +335,7 @@ function migrateFile(path: string): { text: string; report: Report } {
     PRES = scanPreserved(original)
     PCUR = 0
     const ast = parseToAst(stripped)
+    REASSIGNED = collectReassigned(ast)
     const text = emitProgram(ast)
     return {
         text,

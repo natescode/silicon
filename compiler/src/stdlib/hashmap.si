@@ -32,40 +32,40 @@
 # ── Hash function ──────────────────────────────────────────────────────
 # Simple bit-mix: xor the high 16 bits into the low.
 \\ hashmap_hash (Int) -> Int
-hashmap_hash key := {
-    @mut hi := WASM::i32_shr_u(key, 16);
+@fn hashmap_hash key := {
+    hi := WASM::i32_shr_u(key, 16);
     key ^ hi
 };
 
 # ── Header accessors ──────────────────────────────────────────────────
 \\ hashmap_len (Int) -> Int
-hashmap_len h := WASM::i32_load(h);
+@fn hashmap_len h := WASM::i32_load(h);
 \\ hashmap_capacity (Int) -> Int
-hashmap_capacity h := WASM::i32_load(h + 4);
+@fn hashmap_capacity h := WASM::i32_load(h + 4);
 \\ hashmap_data_ptr (Int) -> Int
-hashmap_data_ptr h := WASM::i32_load(h + 8);
+@fn hashmap_data_ptr h := WASM::i32_load(h + 8);
 \\ hashmap_tombstones (Int) -> Int
-hashmap_tombstones h := WASM::i32_load(h + 12);
+@fn hashmap_tombstones h := WASM::i32_load(h + 12);
 
 # ── Slot helpers (internal) ───────────────────────────────────────────
 \\ hashmap_slot_addr (Int, Int) -> Int
-hashmap_slot_addr h, i := {
-    @mut data := hashmap_data_ptr(h);
+@fn hashmap_slot_addr h, i := {
+    data := hashmap_data_ptr(h);
     data + (i * 12)
 };
 \\ hashmap_slot_state (Int) -> Int
-hashmap_slot_state slot := WASM::i32_load(slot);
+@fn hashmap_slot_state slot := WASM::i32_load(slot);
 \\ hashmap_slot_key (Int) -> Int
-hashmap_slot_key slot := WASM::i32_load(slot + 4);
+@fn hashmap_slot_key slot := WASM::i32_load(slot + 4);
 \\ hashmap_slot_value (Int) -> Int
-hashmap_slot_value slot := WASM::i32_load(slot + 8);
+@fn hashmap_slot_value slot := WASM::i32_load(slot + 8);
 
 # ── Allocator ─────────────────────────────────────────────────────────
 \\ hashmap_new (Int) -> Int
-hashmap_new initial_capacity := {
-    @mut h := alloc(16);
-    @mut cap := initial_capacity;
-    @mut data := alloc(cap * 12);
+@fn hashmap_new initial_capacity := {
+    h := alloc(16);
+    cap := initial_capacity;
+    data := alloc(cap * 12);
     WASM::i32_store(h, 0);
     WASM::i32_store(h + 4, cap);
     WASM::i32_store(h + 8, data);
@@ -89,15 +89,15 @@ hashmap_new initial_capacity := {
 # Assumes capacity is a power of 2 — uses `&WASM::i32_and i, mask` for
 # the modulo.
 \\ hashmap_find_slot (Int, Int) -> Int
-hashmap_find_slot h, key := {
-    @mut cap := hashmap_capacity(h);
-    @mut mask := cap - 1;
+@fn hashmap_find_slot h, key := {
+    cap := hashmap_capacity(h);
+    mask := cap - 1;
     @mut i := WASM::i32_and(hashmap_hash(key), mask);
     @mut result := 0;
     @mut done := 0;
     @loop(done == 0, {
-        @mut slot := hashmap_slot_addr(h, i);
-        @mut state := hashmap_slot_state(slot);
+        slot := hashmap_slot_addr(h, i);
+        state := hashmap_slot_state(slot);
         @if(state == 0, {
             result = slot;
             done = 1;
@@ -119,14 +119,14 @@ hashmap_find_slot h, key := {
 
 # ── Public ops ────────────────────────────────────────────────────────
 \\ hashmap_has_i32 (Int, Int) -> Int
-hashmap_has_i32 h, key := {
-    @mut slot := hashmap_find_slot(h, key);
+@fn hashmap_has_i32 h, key := {
+    slot := hashmap_find_slot(h, key);
     hashmap_slot_state(slot) == 1
 };
 
 \\ hashmap_get_i32_i32 (Int, Int) -> Int
-hashmap_get_i32_i32 h, key := {
-    @mut slot := hashmap_find_slot(h, key);
+@fn hashmap_get_i32_i32 h, key := {
+    slot := hashmap_find_slot(h, key);
     hashmap_slot_value(slot)
 };
 
@@ -135,9 +135,9 @@ hashmap_get_i32_i32 h, key := {
 # resize before calling) and by hashmap_resize (which builds the new
 # table directly and shouldn't re-resize on every insert).
 \\ hashmap_insert_no_resize (Int, Int, Int)
-hashmap_insert_no_resize h, key, value := {
-    @mut slot := hashmap_find_slot(h, key);
-    @mut state := hashmap_slot_state(slot);
+@fn hashmap_insert_no_resize h, key, value := {
+    slot := hashmap_find_slot(h, key);
+    state := hashmap_slot_state(slot);
     WASM::i32_store(slot + 4, key);
     WASM::i32_store(slot + 8, value);
     @if(state == 0, {
@@ -151,11 +151,11 @@ hashmap_insert_no_resize h, key, value := {
 
 # Resize the table to 2x capacity, rehashing all live entries.  Internal.
 \\ hashmap_resize (Int)
-hashmap_resize h := {
-    @mut old_cap := hashmap_capacity(h);
-    @mut old_data := hashmap_data_ptr(h);
-    @mut new_cap := old_cap * 2;
-    @mut new_data := alloc(new_cap * 12);
+@fn hashmap_resize h := {
+    old_cap := hashmap_capacity(h);
+    old_data := hashmap_data_ptr(h);
+    new_cap := old_cap * 2;
+    new_data := alloc(new_cap * 12);
     # Zero-init new slots.
     @mut z := 0;
     @loop(z < new_cap, {
@@ -171,11 +171,11 @@ hashmap_resize h := {
     # Walk old slots; re-insert occupied ones.
     @mut i := 0;
     @loop(i < old_cap, {
-        @mut old_slot := old_data + (i * 12);
-        @mut old_state := WASM::i32_load(old_slot);
+        old_slot := old_data + (i * 12);
+        old_state := WASM::i32_load(old_slot);
         @if(old_state == 1, {
-            @mut k := WASM::i32_load(old_slot + 4);
-            @mut v := WASM::i32_load(old_slot + 8);
+            k := WASM::i32_load(old_slot + 4);
+            v := WASM::i32_load(old_slot + 8);
             hashmap_insert_no_resize(h, k, v);
         });
         i = i + 1;
@@ -183,16 +183,16 @@ hashmap_resize h := {
 };
 
 \\ hashmap_set_i32_i32 (Int, Int, Int)
-hashmap_set_i32_i32 h, key, value := {
+@fn hashmap_set_i32_i32 h, key, value := {
     # Resize check: if (len + tombstones) * 4 >= capacity * 3, grow.
-    @mut cap := hashmap_capacity(h);
-    @mut occupancy := hashmap_len(h) + hashmap_tombstones(h);
+    cap := hashmap_capacity(h);
+    occupancy := hashmap_len(h) + hashmap_tombstones(h);
     @if(occupancy * 4 >= (cap * 3), {
         hashmap_resize(h)
     });
     # Probe again on the (possibly new) table.
-    @mut slot := hashmap_find_slot(h, key);
-    @mut state := hashmap_slot_state(slot);
+    slot := hashmap_find_slot(h, key);
+    state := hashmap_slot_state(slot);
     WASM::i32_store(slot + 4, key);
     WASM::i32_store(slot + 8, value);
     @if(state == 0, {
@@ -203,9 +203,9 @@ hashmap_set_i32_i32 h, key, value := {
 # state == 1 (occupied with same key): just updated value, len same.
 
 \\ hashmap_remove_i32 (Int, Int) -> Int
-hashmap_remove_i32 h, key := {
-    @mut slot := hashmap_find_slot(h, key);
-    @mut state := hashmap_slot_state(slot);
+@fn hashmap_remove_i32 h, key := {
+    slot := hashmap_find_slot(h, key);
+    state := hashmap_slot_state(slot);
     @mut removed := 0;
     @if(state == 1, {
         WASM::i32_store(slot, 2);

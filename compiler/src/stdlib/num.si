@@ -16,7 +16,7 @@
 # ── Integer helpers ────────────────────────────────────────────────────
 
 \\ int_abs (Int) -> Int
-int_abs n := {
+@fn int_abs n := {
     @mut r := n;
     @if(n < 0, {
         r = 0 - n
@@ -25,7 +25,7 @@ int_abs n := {
 };
 
 \\ int_min (Int, Int) -> Int
-int_min a, b := {
+@fn int_min a, b := {
     @mut r := a;
     @if(b < a, {
         r = b
@@ -34,7 +34,7 @@ int_min a, b := {
 };
 
 \\ int_max (Int, Int) -> Int
-int_max a, b := {
+@fn int_max a, b := {
     @mut r := a;
     @if(b > a, {
         r = b
@@ -44,7 +44,7 @@ int_max a, b := {
 
 # Clamp `x` into the inclusive range [lo, hi].
 \\ int_clamp (Int, Int, Int) -> Int
-int_clamp x, lo, hi := {
+@fn int_clamp x, lo, hi := {
     @mut r := x;
     @if(r < lo, {
         r = lo
@@ -57,7 +57,7 @@ int_clamp x, lo, hi := {
 
 # Integer power: base ** exp for exp >= 0.  Returns 1 for exp == 0.
 \\ int_pow (Int, Int) -> Int
-int_pow base, exp := {
+@fn int_pow base, exp := {
     @mut r := 1;
     @mut i := 0;
     @loop(i < exp, {
@@ -69,7 +69,7 @@ int_pow base, exp := {
 
 # Number of decimal digits in |n| (at least 1, ignores sign).
 \\ int_digits (Int) -> Int
-int_digits n := {
+@fn int_digits n := {
     @mut m := int_abs(n);
     @mut d := 0;
     @if(m == 0, {
@@ -86,17 +86,17 @@ int_digits n := {
 
 # Decimal text for `n`, with a leading '-' for negatives.
 \\ int_to_str (Int) -> String
-int_to_str n := {
+@fn int_to_str n := {
     @mut neg := 0;
     @mut m := n;
     @if(n < 0, {
         neg = 1;
         m = 0 - n;
     }, {});
-    @mut digits := int_digits(m);
-    @mut total := digits + neg;
-    @mut s := alloc_string(total);
-    @mut base := str_ptr(s) + 4;
+    digits := int_digits(m);
+    total := digits + neg;
+    s := alloc_string(total);
+    base := str_ptr(s) + 4;
     @if(neg == 1, {
         WASM::i32_store8(base, 45)  # '-'
     }, {});
@@ -118,25 +118,25 @@ int_to_str n := {
 # Unsigned `n` rendered as decimal, left-padded with '0' to `width`.
 # Used by float_to_str for the fractional digits.
 \\ uint_to_str_pad (Int, Int) -> String
-uint_to_str_pad n, width := {
-    @mut raw := int_to_str(n);
-    @mut len := str_len(raw);
+@fn uint_to_str_pad n, width := {
+    raw := int_to_str(n);
+    len := str_len(raw);
     @mut pad := width - len;
     @if(pad < 0, {
         pad = 0
     }, {});
-    @mut total := len + pad;
-    @mut s := alloc_string(total);
-    @mut base := str_ptr(s) + 4;
+    total := len + pad;
+    s := alloc_string(total);
+    base := str_ptr(s) + 4;
     @mut i := 0;
     @loop(i < pad, {
         WASM::i32_store8(base + i, 48);
         i = i + 1;
     });
-    @mut rp := str_ptr(raw) + 4;
+    rp := str_ptr(raw) + 4;
     @mut j := 0;
     @loop(j < len, {
-        @mut c := WASM::i32_load8_u(rp + j);
+        c := WASM::i32_load8_u(rp + j);
         WASM::i32_store8(base + pad + j, c);
         j = j + 1;
     });
@@ -150,13 +150,13 @@ uint_to_str_pad n, width := {
 # leading '+'/'-' is honored; parsing stops at the first non-digit.
 # Returns 0 when no digits are present.
 \\ str_to_int (String) -> Int
-str_to_int s := {
-    @mut p := str_ptr(s) + 4;
-    @mut n := str_len(s);
+@fn str_to_int s := {
+    p := str_ptr(s) + 4;
+    n := str_len(s);
     @mut i := 0;
     @mut sign := 1;
     @if(n > 0, {
-        @mut c0 := WASM::i32_load8_u(p);
+        c0 := WASM::i32_load8_u(p);
         @if(c0 == 45, {
             sign = 0 - 1;  # '-'
             i = 1;
@@ -170,7 +170,7 @@ str_to_int s := {
     @loop(go, {
         @mut more := @false;
         @if(i < n, {
-            @mut c := WASM::i32_load8_u(p + i);
+            c := WASM::i32_load8_u(p + i);
             @if(c >= 48, {
                 @if(c <= 57, {
                     acc = acc * 10 + (c - 48);
@@ -187,13 +187,13 @@ str_to_int s := {
 # ── Float helpers ──────────────────────────────────────────────────────
 
 \\ float_abs (Float) -> Float
-float_abs f := WASM::f32_abs(f);
+@fn float_abs f := WASM::f32_abs(f);
 
 \\ float_sqrt (Float) -> Float
-float_sqrt f := WASM::f32_sqrt(f);
+@fn float_sqrt f := WASM::f32_sqrt(f);
 
 \\ float_min (Float, Float) -> Float
-float_min a, b := {
+@fn float_min a, b := {
     @mut r := a;
     @if(b < a, {
         r = b
@@ -202,7 +202,7 @@ float_min a, b := {
 };
 
 \\ float_max (Float, Float) -> Float
-float_max a, b := {
+@fn float_max a, b := {
     @mut r := a;
     @if(b > a, {
         r = b
@@ -212,7 +212,7 @@ float_max a, b := {
 
 # Truncate toward zero to an Int (drops the fractional part).
 \\ float_trunc (Float) -> Int
-float_trunc f := @toInt(f);
+@fn float_trunc f := @toInt(f);
 
 # ── Float -> String (approximate, fixed 6 decimals) ────────────────────
 
@@ -220,16 +220,16 @@ float_trunc f := @toInt(f);
 # f32 carries ~7 significant digits, so the last decimals are an
 # approximation — adequate for everyday output, not for exact decimals.
 \\ float_to_str (Float) -> String
-float_to_str f := {
-    @mut is_neg := f < 0.0;
+@fn float_to_str f := {
+    is_neg := f < 0.0;
     @mut x := f;
     @if(is_neg, {
         x = WASM::f32_neg(f)
     }, {});
-    @mut ip := @toInt(x);
-    @mut frac := x - @toFloat(ip);
-    @mut scaled := @toInt(frac * 1000000.0);
-    @mut body := int_to_str(ip) ++ '.' ++ uint_to_str_pad(scaled, 6);
+    ip := @toInt(x);
+    frac := x - @toFloat(ip);
+    scaled := @toInt(frac * 1000000.0);
+    body := int_to_str(ip) ++ '.' ++ uint_to_str_pad(scaled, 6);
     @mut out := body;
     @if(is_neg, {
         out = '-' ++ body

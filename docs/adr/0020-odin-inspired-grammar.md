@@ -58,23 +58,31 @@ Adopt an Odin-inspired surface governed by one principle:
 
 Concretely:
 
-1. **Definitions are the default, unified, and keyword-free.** One form:
-   `name params? := value`. The *kind* is inferred — params present (or a lambda
-   RHS) ⇒ **function**; otherwise ⇒ **value** (a module constant at top level, a
-   local inside a block). Drop `@fn`, `@global`, `@local`, `@struct`, `@enum`.
+1. **Bindings are bare; functions are marked `@fn`.** Value bindings vastly
+   outnumber function definitions, so the *common* case is bare: `name := value`
+   is an **immutable value binding**. Functions are `@fn name params? := body`,
+   mutable values are `@mut`, types are `@type`. Drop `@global`, `@local`,
+   `@struct`, `@enum` — but **keep `@fn`**: it cleanly owns all function syntax,
+   so a bare line is never a function (no params-vs-value inference) and the
+   zero-arg-function-vs-value ambiguity disappears (`now := clock()` is a value;
+   `@fn now := clock()` is a function).
 2. **Calls are always parenthesized.** `add(2, 3)`. `(` after a primary is a
    call; `(` in primary position is grouping. **Paren-free calls are removed.**
 3. **The `&` call sigil is removed entirely.** A bare expression is a legal
    statement; calls carry their own parens; nothing needs `&`. (Always-parens
    makes `&` redundant — see Options.)
-4. **Function parameters are bare-only** (`add a, b := …`). The parenthesized
-   param form is removed, so `name(...)` is *unambiguously* a call and
-   `name a, b` is *unambiguously* a definition with parameters.
-5. **Immutable by default; `@mut` marks a mutable binding.** `x := 0` is
-   immutable; `@mut x := 0` is mutable; `x = x + 1` reassigns (legal only on a
-   `@mut` binding). Position decides *storage* (top-level global vs in-block
-   local), never *mutability*. This realizes ADR 0011's `@mut` and supersedes
-   ADR 0014's `@global`/`@local` surface.
+4. **Function parameters are bare-only** (`@fn add a, b := …`). The parenthesized
+   param form is removed, so `name(...)` is *unambiguously* a call and bare params
+   appear only after `@fn name`.
+5. **Bare = immutable, `@mut` = mutable; all four storage×mutability kinds are
+   first-class and enforced.** `x := 0` is immutable; `@mut x := 0` is mutable;
+   `x = x + 1` reassigns (legal only on a `@mut` binding). Position decides
+   *storage* (top level ⇒ global, in a block ⇒ local), never *mutability* — so the
+   four kinds are immutable-global, mutable-global, immutable-local, mutable-local,
+   and the typechecker **enforces** immutability (reassigning a non-`@mut` binding
+   is `E0007`). This drops `@local`/`@global` and supersedes ADR 0014; it requires
+   adding an **immutable local** to the pipeline — ADR 0014 has only mutable locals
+   + immutable globals (see Consequences).
 6. **`@type` marks a type definition** and switches the RHS into *type context*.
    In type context `{ x Int, y Int }` is a struct, `$A … | $B …` is a variant
    sum, and a bare `TypeExpr` is an alias (`@type Meters := Int`). In value
@@ -121,12 +129,12 @@ by the brace-matching shard scan.
 @type Point := { x Int, y Int };
 
 \\ unwrap_or [T] (Option[T], T) -> T
-unwrap_or opt, default := @match(opt,
+@fn unwrap_or opt, default := @match(opt,
     $Some v => v,
     $None   => default);
 
 \\ fizzbuzz (Int) -> Int
-fizzbuzz n := {
+@fn fizzbuzz n := {
     @mut i := 1;
     @loop(i <= n, {
         by3 := i % 3 == 0;
@@ -141,7 +149,7 @@ fizzbuzz n := {
 
 \\ @extern puts (String) -> Int;   # body-less: implementation is external
 
-main := { fizzbuzz(15) };
+@fn main := { fizzbuzz(15) };
 main();
 ```
 
@@ -204,13 +212,12 @@ main();
 
 ## Consequences
 
-- **Positive:** the three core constructs become visually obvious; `&` leaves
-  every call site and `@fn`/`@local`/`@global` leave every definition. On the
-  three real files rewritten during exploration the sigil count fell ~25%
-  (fizzbuzz 27→20, calculator 33→28, vec 64→50), and the win grows once nested
-  calls stop carrying `&`. The surface reads like Odin/Rust. `@mut` completes the
-  ADR 0011 capability arc; `@type` collapses three disambiguation problems into
-  one marker.
+- **Positive:** the core constructs become visually obvious; `&` leaves every
+  call site and value bindings shed `@local`/`@global` — the *common* case
+  (immutable value) is now bare, with only mutation (`@mut`), functions (`@fn`),
+  and types (`@type`) carrying a marker. Sigil counts fall sharply (most stdlib
+  bindings go bare). The surface reads like Odin/Rust. `@mut` advances the ADR 0011
+  capability arc; `@type` collapses three disambiguation problems into one marker.
 - **Negative / cost:**
   - This is a **syntactic-skeleton change**, contradicting the `grammar.ebnf`
     freeze and the strata boundary. It is a one-time, deliberate reset of the
@@ -223,6 +230,13 @@ main();
   - **New lexer tokens:** `\` (lambda opener, distinct from `\\`), and `[` `]`
     in value/lvalue position for indexing. `&` is freed (could become a bitwise
     BinOp later; out of scope here).
+  - **Immutable locals are new pipeline work.** ADR 0014 has only mutable locals
+    (`@local` in a fn) + immutable globals (`@global`); a bare binding inside a
+    block is an *immutable local*, which the elaborator/typechecker/codegen must
+    grow to represent and enforce (reassignment → `E0007`). Storage is identical
+    to a mutable local (a local slot); the addition is the immutability flag +
+    the typechecker check. The codemod already targets this (bare = immutable,
+    `@mut` = mutable, chosen by a whole-file reassignment scan).
   - **Soft-keyword shadowing** of `@if`/`@loop`/etc. is prevented semantically
     (the strata registry reserves the names), not grammatically — unchanged from
     today, since they were already strata keywords.
