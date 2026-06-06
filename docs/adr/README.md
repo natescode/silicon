@@ -49,3 +49,4 @@ dependency bumps.
 | [0015](0015-object-capabilities.md) | Object capabilities: authority as unforgeable values, checked at comptime, no effect rows | Proposed |
 | [0016](0016-loop-over-iterables.md) | `@loop` over iterables: one keyword, syntactic dispatch, value-returning `IterStep[T,R]` protocol | Accepted |
 | [0017](0017-ffi-binding-generator.md) | FFI binding generator: machine-generate Web/Node/Bun `@extern` bindings + dual host shims from upstream specs | Proposed |
+| [0018](0018-async-promise-ffi.md) | Async/Promise (+ object-handle + callback) FFI to reach 100% web/bun coverage: Asyncify baseline + JSPI fast path, closures-gated reactor | Proposed |
