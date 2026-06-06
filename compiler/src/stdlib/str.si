@@ -14,128 +14,143 @@
 
 @use 'mem';
 
-# Byte length of `s` (O(1) — reads the length header).
 \\ str_byte_len (String) -> Int
-@fn str_byte_len s := &str_len s;
+str_byte_len s := str_len(s);
 
 \\ str_is_empty (String) -> Bool
-@fn str_is_empty s := { (&str_len s) == 0 };
-
-# The byte at index `i` (0-based) as an Int.  Caller checks bounds.
-\\ str_byte_at (String, Int) -> Int
-@fn str_byte_at s, i := {
-    @local p := (&str_ptr s) + 4;
-    &WASM::i32_load8_u (p + i)
+str_is_empty s := {
+    str_len(s) == 0
 };
 
-# Byte-wise equality.
+\\ str_byte_at (String, Int) -> Int
+str_byte_at s, i := {
+    @mut p := str_ptr(s) + 4;
+    WASM::i32_load8_u(p + i)
+};
+
 \\ str_eq (String, String) -> Bool
-@fn str_eq a, b := {
-    @local la := &str_len a;
-    @local lb := &str_len b;
-    @local r := @false;
-    &@if la == lb, {
-        @local pa := (&str_ptr a) + 4;
-        @local pb := (&str_ptr b) + 4;
-        r = &mem_eq pa, pb, la;
-    }, {};
+str_eq a, b := {
+    @mut la := str_len(a);
+    @mut lb := str_len(b);
+    @mut r := @false;
+    @if(la == lb, {
+        @mut pa := str_ptr(a) + 4;
+        @mut pb := str_ptr(b) + 4;
+        r = mem_eq(pa, pb, la);
+    }, {});
     r
 };
 
 \\ str_starts_with (String, String) -> Bool
-@fn str_starts_with s, prefix := {
-    @local n := &str_len s;
-    @local m := &str_len prefix;
-    @local r := @false;
-    &@if m <= n, {
-        @local sp := (&str_ptr s) + 4;
-        @local pp := (&str_ptr prefix) + 4;
-        r = &mem_eq sp, pp, m;
-    }, {};
+str_starts_with s, prefix := {
+    @mut n := str_len(s);
+    @mut m := str_len(prefix);
+    @mut r := @false;
+    @if(m <= n, {
+        @mut sp := str_ptr(s) + 4;
+        @mut pp := str_ptr(prefix) + 4;
+        r = mem_eq(sp, pp, m);
+    }, {});
     r
 };
 
 \\ str_ends_with (String, String) -> Bool
-@fn str_ends_with s, suffix := {
-    @local n := &str_len s;
-    @local m := &str_len suffix;
-    @local r := @false;
-    &@if m <= n, {
-        @local sp := ((&str_ptr s) + 4) + (n - m);
-        @local pp := (&str_ptr suffix) + 4;
-        r = &mem_eq sp, pp, m;
-    }, {};
+str_ends_with s, suffix := {
+    @mut n := str_len(s);
+    @mut m := str_len(suffix);
+    @mut r := @false;
+    @if(m <= n, {
+        @mut sp := str_ptr(s) + 4 + (n - m);
+        @mut pp := str_ptr(suffix) + 4;
+        r = mem_eq(sp, pp, m);
+    }, {});
     r
 };
 
-# First byte index where `sub` occurs in `s`, or -1 if absent.
-# The empty substring matches at index 0.
 \\ str_index_of (String, String) -> Int
-@fn str_index_of s, sub := {
-    @local n := &str_len s;
-    @local m := &str_len sub;
-    @local sp := (&str_ptr s) + 4;
-    @local subp := (&str_ptr sub) + 4;
-    @local result := 0 - 1;
-    &@if m == 0, { result = 0 }, {};
-    @local i := 0;
-    @local go := @true;
-    &@if m == 0, { go = @false }, {};
-    &@loop go, {
-        &@if i <= (n - m), {
-            &@if (&mem_eq (sp + i), subp, m), { result = i; go = @false; }, { i = i + 1; };
-        }, { go = @false; };
-    };
+str_index_of s, sub := {
+    @mut n := str_len(s);
+    @mut m := str_len(sub);
+    @mut sp := str_ptr(s) + 4;
+    @mut subp := str_ptr(sub) + 4;
+    @mut result := 0 - 1;
+    @if(m == 0, {
+        result = 0
+    }, {});
+    @mut i := 0;
+    @mut go := @true;
+    @if(m == 0, {
+        go = @false
+    }, {});
+    @loop(go, {
+        @if(i <= (n - m), {
+            @if(mem_eq(sp + i, subp, m), {
+                result = i;
+                go = @false;
+            }, {
+                i = i + 1;
+            });
+        }, {
+            go = @false;
+        });
+    });
     result
 };
 
 \\ str_contains (String, String) -> Bool
-@fn str_contains s, sub := { (&str_index_of s, sub) >= 0 };
+str_contains s, sub := {
+    str_index_of(s, sub) >= 0
+};
 
-# Substring of the bytes in [start, end).  `start`/`end` are clamped to
-# [0, len]; an empty range yields the empty string.
 \\ str_slice (String, Int, Int) -> String
-@fn str_slice s, start, end := {
-    @local n := &str_len s;
-    @local lo := start;
-    @local hi := end;
-    &@if lo < 0, { lo = 0 }, {};
-    &@if hi > n, { hi = n }, {};
-    &@if hi < lo, { hi = lo }, {};
-    @local count := hi - lo;
-    @local out := &alloc_string count;
-    @local dst := (&str_ptr out) + 4;
-    @local src := ((&str_ptr s) + 4) + lo;
-    @local i := 0;
-    &@loop i < count, {
-        @local c := &WASM::i32_load8_u (src + i);
-        &WASM::i32_store8 (dst + i), c;
+str_slice s, start, end := {
+    @mut n := str_len(s);
+    @mut lo := start;
+    @mut hi := end;
+    @if(lo < 0, {
+        lo = 0
+    }, {});
+    @if(hi > n, {
+        hi = n
+    }, {});
+    @if(hi < lo, {
+        hi = lo
+    }, {});
+    @mut count := hi - lo;
+    @mut out := alloc_string(count);
+    @mut dst := str_ptr(out) + 4;
+    @mut src := str_ptr(s) + 4 + lo;
+    @mut i := 0;
+    @loop(i < count, {
+        @mut c := WASM::i32_load8_u(src + i);
+        WASM::i32_store8(dst + i, c);
         i = i + 1;
-    };
-    &heap_align;
+    });
+    heap_align();
     out
 };
 
-# `s` repeated `n` times (n <= 0 yields the empty string).
 \\ str_repeat (String, Int) -> String
-@fn str_repeat s, n := {
-    @local len := &str_len s;
-    @local reps := n;
-    &@if reps < 0, { reps = 0 }, {};
-    @local total := len * reps;
-    @local out := &alloc_string total;
-    @local dst := (&str_ptr out) + 4;
-    @local src := (&str_ptr s) + 4;
-    @local r := 0;
-    &@loop r < reps, {
-        @local i := 0;
-        &@loop i < len, {
-            @local c := &WASM::i32_load8_u (src + i);
-            &WASM::i32_store8 (dst + ((r * len) + i)), c;
+str_repeat s, n := {
+    @mut len := str_len(s);
+    @mut reps := n;
+    @if(reps < 0, {
+        reps = 0
+    }, {});
+    @mut total := len * reps;
+    @mut out := alloc_string(total);
+    @mut dst := str_ptr(out) + 4;
+    @mut src := str_ptr(s) + 4;
+    @mut r := 0;
+    @loop(r < reps, {
+        @mut i := 0;
+        @loop(i < len, {
+            @mut c := WASM::i32_load8_u(src + i);
+            WASM::i32_store8(dst + (r * len + i), c);
             i = i + 1;
-        };
+        });
         r = r + 1;
-    };
-    &heap_align;
+    });
+    heap_align();
     out
 };

@@ -37,98 +37,75 @@
 # Returns the header pointer.  Capacity must be at least 1 — vec_new
 # always allocates a backing buffer up front so vec_push_i32's
 # grow-on-full path doesn't have to handle the "no buffer yet" case.
+
 \\ vec_new (Int) -> Int
-@fn vec_new initial_capacity := {
-    @local v := &alloc 12;
-    @local cap := initial_capacity;
-    @local data := &alloc (cap * 4);
-    &WASM::i32_store v, 0;                       # len = 0
-    &WASM::i32_store (v + 4), cap;               # capacity
-    &WASM::i32_store (v + 8), data;              # data_ptr
+vec_new initial_capacity := {
+    @mut v := alloc(12);
+    @mut cap := initial_capacity;
+    @mut data := alloc(cap * 4);
+    WASM::i32_store(v, 0);
+    WASM::i32_store(v + 4, cap);
+    WASM::i32_store(v + 8, data);
     v
 };
 
-# Read len from the header.
 \\ vec_len (Int) -> Int
-@fn vec_len v := &WASM::i32_load v;
+vec_len v := WASM::i32_load(v);
 
-# Read capacity from the header.
 \\ vec_capacity (Int) -> Int
-@fn vec_capacity v := &WASM::i32_load (v + 4);
+vec_capacity v := WASM::i32_load(v + 4);
 
-# Read data_ptr from the header.  Internal helper; callers should use
-# the typed get/set/push accessors below rather than touch raw memory.
 \\ vec_data_ptr (Int) -> Int
-@fn vec_data_ptr v := &WASM::i32_load (v + 8);
+vec_data_ptr v := WASM::i32_load(v + 8);
 
-# Read element i (0-indexed).  Caller is responsible for bounds.
-# (Bounds-checked indexing is the slice-stratum job — 5c-2 — and lives
-# at a higher abstraction layer.)
 \\ vec_get_i32 (Int, Int) -> Int
-@fn vec_get_i32 v, i := {
-    @local data := &vec_data_ptr v;
-    &WASM::i32_load (data + (i * 4))
+vec_get_i32 v, i := {
+    @mut data := vec_data_ptr(v);
+    WASM::i32_load(data + (i * 4))
 };
 
-# Write `x` at element i (0-indexed).  Caller is responsible for bounds.
 \\ vec_set_i32 (Int, Int, Int)
-@fn vec_set_i32 v, i, x := {
-    @local data := &vec_data_ptr v;
-    &WASM::i32_store (data + (i * 4)), x
+vec_set_i32 v, i, x := {
+    @mut data := vec_data_ptr(v);
+    WASM::i32_store(data + (i * 4), x)
 };
 
-# Append `x` to the Vec.  Grows the backing buffer if len == capacity:
-# new capacity is 2× the old (or 4 for a 0-capacity Vec — shouldn't
-# happen with vec_new's initial allocation, but defensive).
 \\ vec_push_i32 (Int, Int)
-@fn vec_push_i32 v, x := {
-    @local len := &vec_len v;
-    @local cap := &vec_capacity v;
-    &@if (len == cap), {
-        @local new_cap := cap * 2;
-        @local data := &vec_data_ptr v;
-        @local new_data := &realloc data, (cap * 4), (new_cap * 4);
-        &WASM::i32_store (v + 4), new_cap;       # capacity = new_cap
-        &WASM::i32_store (v + 8), new_data       # data_ptr = new_data
-    };
-    @local data2 := &vec_data_ptr v;
-    &WASM::i32_store (data2 + (len * 4)), x;
-    &WASM::i32_store v, (len + 1)                # len = len + 1
+vec_push_i32 v, x := {
+    @mut len := vec_len(v);
+    @mut cap := vec_capacity(v);
+    @if(len == cap, {
+        @mut new_cap := cap * 2;
+        @mut data := vec_data_ptr(v);
+        @mut new_data := realloc(data, cap * 4, new_cap * 4);
+        WASM::i32_store(v + 4, new_cap);
+        WASM::i32_store(v + 8, new_data)
+    });
+    @mut data2 := vec_data_ptr(v);
+    WASM::i32_store(data2 + (len * 4), x);
+    WASM::i32_store(v, len + 1)
 };
 
-# Remove and return the last element.  Caller responsible for ensuring
-# the Vec is non-empty (no automatic trap for 1.0 — bounds checks live
-# in the slice stratum layer at 5c-2).
 \\ vec_pop_i32 (Int) -> Int
-@fn vec_pop_i32 v := {
-    @local len := &vec_len v;
-    @local new_len := len - 1;
-    @local data := &vec_data_ptr v;
-    @local x := &WASM::i32_load (data + (new_len * 4));
-    &WASM::i32_store v, new_len;
+vec_pop_i32 v := {
+    @mut len := vec_len(v);
+    @mut new_len := len - 1;
+    @mut data := vec_data_ptr(v);
+    @mut x := WASM::i32_load(data + (new_len * 4));
+    WASM::i32_store(v, new_len);
     x
 };
 
-# Phase 5a-5 / 5d-4 — Vec.map proof.
-# Apply `cb` (an i32 → i32 callback obtained via @fnref) to each element
-# and return a new Vec holding the results.  Capacity of the result Vec
-# is the source Vec's length so no growth happens during the map loop.
-#
-# Signature is hardcoded i32 → i32 for the 1.0 surface; Float and Int64
-# callback variants are mechanical extensions of the same machinery.
-#
-#   @fn double:Int x:Int := x * 2;
-#   @local doubled:Int := &vec_map_i32_i32 v, (&@fnref double);
 \\ vec_map_i32_i32 (Int, Int) -> Int
-@fn vec_map_i32_i32 v, cb := {
-    @local len := &vec_len v;
-    @local result := &vec_new len;
-    @local i := 0;
-    &@loop i < len, {
-        @local x := &vec_get_i32 v, i;
-        @local y := &@call_indirect cb, x;
-        &vec_push_i32 result, y;
+vec_map_i32_i32 v, cb := {
+    @mut len := vec_len(v);
+    @mut result := vec_new(len);
+    @mut i := 0;
+    @loop(i < len, {
+        @mut x := vec_get_i32(v, i);
+        @mut y := @call_indirect(cb, x);
+        vec_push_i32(result, y);
         i = i + 1;
-    };
+    });
     result
 };

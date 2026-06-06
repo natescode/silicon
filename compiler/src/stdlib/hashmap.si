@@ -31,187 +31,165 @@
 
 # ── Hash function ──────────────────────────────────────────────────────
 # Simple bit-mix: xor the high 16 bits into the low.
+
 \\ hashmap_hash (Int) -> Int
-@fn hashmap_hash key := {
-    @local hi := &WASM::i32_shr_u key, 16;
+hashmap_hash key := {
+    @mut hi := WASM::i32_shr_u(key, 16);
     key ^ hi
 };
 
-# ── Header accessors ──────────────────────────────────────────────────
 \\ hashmap_len (Int) -> Int
-@fn hashmap_len h := &WASM::i32_load h;
-\\ hashmap_capacity (Int) -> Int
-@fn hashmap_capacity h := &WASM::i32_load (h + 4);
-\\ hashmap_data_ptr (Int) -> Int
-@fn hashmap_data_ptr h := &WASM::i32_load (h + 8);
-\\ hashmap_tombstones (Int) -> Int
-@fn hashmap_tombstones h := &WASM::i32_load (h + 12);
+hashmap_len h := WASM::i32_load(h);
 
-# ── Slot helpers (internal) ───────────────────────────────────────────
+\\ hashmap_capacity (Int) -> Int
+hashmap_capacity h := WASM::i32_load(h + 4);
+
+\\ hashmap_data_ptr (Int) -> Int
+hashmap_data_ptr h := WASM::i32_load(h + 8);
+
+\\ hashmap_tombstones (Int) -> Int
+hashmap_tombstones h := WASM::i32_load(h + 12);
+
 \\ hashmap_slot_addr (Int, Int) -> Int
-@fn hashmap_slot_addr h, i := {
-    @local data := &hashmap_data_ptr h;
+hashmap_slot_addr h, i := {
+    @mut data := hashmap_data_ptr(h);
     data + (i * 12)
 };
-\\ hashmap_slot_state (Int) -> Int
-@fn hashmap_slot_state slot := &WASM::i32_load slot;
-\\ hashmap_slot_key (Int) -> Int
-@fn hashmap_slot_key slot := &WASM::i32_load (slot + 4);
-\\ hashmap_slot_value (Int) -> Int
-@fn hashmap_slot_value slot := &WASM::i32_load (slot + 8);
 
-# ── Allocator ─────────────────────────────────────────────────────────
+\\ hashmap_slot_state (Int) -> Int
+hashmap_slot_state slot := WASM::i32_load(slot);
+
+\\ hashmap_slot_key (Int) -> Int
+hashmap_slot_key slot := WASM::i32_load(slot + 4);
+
+\\ hashmap_slot_value (Int) -> Int
+hashmap_slot_value slot := WASM::i32_load(slot + 8);
+
 \\ hashmap_new (Int) -> Int
-@fn hashmap_new initial_capacity := {
-    @local h := &alloc 16;
-    @local cap := initial_capacity;
-    @local data := &alloc (cap * 12);
-    &WASM::i32_store h, 0;
-    &WASM::i32_store (h + 4), cap;
-    &WASM::i32_store (h + 8), data;
-    &WASM::i32_store (h + 12), 0;
-    # Zero-init slot states (alloc doesn't zero memory).
-    @local i := 0;
-    &@loop i < cap, {
-        &WASM::i32_store (data + (i * 12)), 0;
+hashmap_new initial_capacity := {
+    @mut h := alloc(16);
+    @mut cap := initial_capacity;
+    @mut data := alloc(cap * 12);
+    WASM::i32_store(h, 0);
+    WASM::i32_store(h + 4, cap);
+    WASM::i32_store(h + 8, data);
+    WASM::i32_store(h + 12, 0);
+    @mut i := 0;
+    @loop(i < cap, {
+        WASM::i32_store(data + (i * 12), 0);
         i = i + 1;
-    };
+    });
     h
 };
 
-# ── Find slot for `key` ───────────────────────────────────────────────
-# Linear probing.  Returns the slot address where `key` either resides
-# (state=occupied with matching key) or would be inserted (state=empty).
-# Tombstones are probed-through (not returned as insertion points) so
-# `has` and `get` see the entry that lives past a tombstone chain.
-# `set` handles tombstone reuse at the call site.
-#
-# Assumes capacity is a power of 2 — uses `&WASM::i32_and i, mask` for
-# the modulo.
 \\ hashmap_find_slot (Int, Int) -> Int
-@fn hashmap_find_slot h, key := {
-    @local cap := &hashmap_capacity h;
-    @local mask := cap - 1;
-    @local i := &WASM::i32_and (&hashmap_hash key), mask;
-    @local result := 0;
-    @local done := 0;
-    &@loop done == 0, {
-        @local slot := &hashmap_slot_addr h, i;
-        @local state := &hashmap_slot_state slot;
-        &@if state == 0, {
+hashmap_find_slot h, key := {
+    @mut cap := hashmap_capacity(h);
+    @mut mask := cap - 1;
+    @mut i := WASM::i32_and(hashmap_hash(key), mask);
+    @mut result := 0;
+    @mut done := 0;
+    @loop(done == 0, {
+        @mut slot := hashmap_slot_addr(h, i);
+        @mut state := hashmap_slot_state(slot);
+        @if(state == 0, {
             result = slot;
             done = 1;
-        };
-        &@if done == 0, {
-            &@if state == 1, {
-                &@if (&hashmap_slot_key slot) == key, {
+        });
+        @if(done == 0, {
+            @if(state == 1, {
+                @if(hashmap_slot_key(slot) == key, {
                     result = slot;
                     done = 1;
-                };
-            };
-        };
-        &@if done == 0, {
-            i = &WASM::i32_and (i + 1), mask;
-        };
-    };
+                });
+            });
+        });
+        @if(done == 0, {
+            i = WASM::i32_and(i + 1, mask);
+        });
+    });
     result
 };
 
-# ── Public ops ────────────────────────────────────────────────────────
 \\ hashmap_has_i32 (Int, Int) -> Int
-@fn hashmap_has_i32 h, key := {
-    @local slot := &hashmap_find_slot h, key;
-    (&hashmap_slot_state slot) == 1
+hashmap_has_i32 h, key := {
+    @mut slot := hashmap_find_slot(h, key);
+    hashmap_slot_state(slot) == 1
 };
 
 \\ hashmap_get_i32_i32 (Int, Int) -> Int
-@fn hashmap_get_i32_i32 h, key := {
-    @local slot := &hashmap_find_slot h, key;
-    &hashmap_slot_value slot
+hashmap_get_i32_i32 h, key := {
+    @mut slot := hashmap_find_slot(h, key);
+    hashmap_slot_value(slot)
 };
 
-# Insert into the slot found by hashmap_find_slot.  Does NOT trigger
-# resize — used both by the public hashmap_set_i32_i32 (which checks
-# resize before calling) and by hashmap_resize (which builds the new
-# table directly and shouldn't re-resize on every insert).
 \\ hashmap_insert_no_resize (Int, Int, Int)
-@fn hashmap_insert_no_resize h, key, value := {
-    @local slot := &hashmap_find_slot h, key;
-    @local state := &hashmap_slot_state slot;
-    &WASM::i32_store (slot + 4), key;
-    &WASM::i32_store (slot + 8), value;
-    &@if state == 0, {
-        &WASM::i32_store slot, 1;
-        &WASM::i32_store h, ((&hashmap_len h) + 1)
-    }
-    # state == 1 (occupied with same key): just updated the value above,
-    # len unchanged.  state == 2 (tombstone) doesn't happen here because
-    # find_slot probes through tombstones and never returns one.
+hashmap_insert_no_resize h, key, value := {
+    @mut slot := hashmap_find_slot(h, key);
+    @mut state := hashmap_slot_state(slot);
+    WASM::i32_store(slot + 4, key);
+    WASM::i32_store(slot + 8, value);
+    @if(state == 0, {
+        WASM::i32_store(slot, 1);
+        WASM::i32_store(h, hashmap_len(h) + 1)
+    })
 };
 
-# Resize the table to 2x capacity, rehashing all live entries.  Internal.
 \\ hashmap_resize (Int)
-@fn hashmap_resize h := {
-    @local old_cap := &hashmap_capacity h;
-    @local old_data := &hashmap_data_ptr h;
-    @local new_cap := old_cap * 2;
-    @local new_data := &alloc (new_cap * 12);
-    # Zero-init new slots.
-    @local z := 0;
-    &@loop z < new_cap, {
-        &WASM::i32_store (new_data + (z * 12)), 0;
+hashmap_resize h := {
+    @mut old_cap := hashmap_capacity(h);
+    @mut old_data := hashmap_data_ptr(h);
+    @mut new_cap := old_cap * 2;
+    @mut new_data := alloc(new_cap * 12);
+    @mut z := 0;
+    @loop(z < new_cap, {
+        WASM::i32_store(new_data + (z * 12), 0);
         z = z + 1;
-    };
-    # Swap data + capacity in the header BEFORE rehashing so
-    # hashmap_find_slot reads the new table.
-    &WASM::i32_store (h + 4), new_cap;
-    &WASM::i32_store (h + 8), new_data;
-    &WASM::i32_store h, 0;
-    &WASM::i32_store (h + 12), 0;
-    # Walk old slots; re-insert occupied ones.
-    @local i := 0;
-    &@loop i < old_cap, {
-        @local old_slot := old_data + (i * 12);
-        @local old_state := &WASM::i32_load old_slot;
-        &@if old_state == 1, {
-            @local k := &WASM::i32_load (old_slot + 4);
-            @local v := &WASM::i32_load (old_slot + 8);
-            &hashmap_insert_no_resize h, k, v;
-        };
+    });
+    WASM::i32_store(h + 4, new_cap);
+    WASM::i32_store(h + 8, new_data);
+    WASM::i32_store(h, 0);
+    WASM::i32_store(h + 12, 0);
+    @mut i := 0;
+    @loop(i < old_cap, {
+        @mut old_slot := old_data + (i * 12);
+        @mut old_state := WASM::i32_load(old_slot);
+        @if(old_state == 1, {
+            @mut k := WASM::i32_load(old_slot + 4);
+            @mut v := WASM::i32_load(old_slot + 8);
+            hashmap_insert_no_resize(h, k, v);
+        });
         i = i + 1;
-    };
+    });
 };
 
 \\ hashmap_set_i32_i32 (Int, Int, Int)
-@fn hashmap_set_i32_i32 h, key, value := {
-    # Resize check: if (len + tombstones) * 4 >= capacity * 3, grow.
-    @local cap := &hashmap_capacity h;
-    @local occupancy := (&hashmap_len h) + (&hashmap_tombstones h);
-    &@if (occupancy * 4) >= (cap * 3), {
-        &hashmap_resize h
-    };
-    # Probe again on the (possibly new) table.
-    @local slot := &hashmap_find_slot h, key;
-    @local state := &hashmap_slot_state slot;
-    &WASM::i32_store (slot + 4), key;
-    &WASM::i32_store (slot + 8), value;
-    &@if state == 0, {
-        &WASM::i32_store slot, 1;
-        &WASM::i32_store h, ((&hashmap_len h) + 1)
-    }
-    # state == 1 (occupied with same key): just updated value, len same.
+hashmap_set_i32_i32 h, key, value := {
+    @mut cap := hashmap_capacity(h);
+    @mut occupancy := hashmap_len(h) + hashmap_tombstones(h);
+    @if(occupancy * 4 >= (cap * 3), {
+        hashmap_resize(h)
+    });
+    @mut slot := hashmap_find_slot(h, key);
+    @mut state := hashmap_slot_state(slot);
+    WASM::i32_store(slot + 4, key);
+    WASM::i32_store(slot + 8, value);
+    @if(state == 0, {
+        WASM::i32_store(slot, 1);
+        WASM::i32_store(h, hashmap_len(h) + 1)
+    })
 };
 
 \\ hashmap_remove_i32 (Int, Int) -> Int
-@fn hashmap_remove_i32 h, key := {
-    @local slot := &hashmap_find_slot h, key;
-    @local state := &hashmap_slot_state slot;
-    @local removed := 0;
-    &@if state == 1, {
-        &WASM::i32_store slot, 2;
-        &WASM::i32_store h, ((&hashmap_len h) - 1);
-        &WASM::i32_store (h + 12), ((&hashmap_tombstones h) + 1);
+hashmap_remove_i32 h, key := {
+    @mut slot := hashmap_find_slot(h, key);
+    @mut state := hashmap_slot_state(slot);
+    @mut removed := 0;
+    @if(state == 1, {
+        WASM::i32_store(slot, 2);
+        WASM::i32_store(h, hashmap_len(h) - 1);
+        WASM::i32_store(h + 12, hashmap_tombstones(h) + 1);
         removed = 1;
-    };
+    });
     removed
 };
