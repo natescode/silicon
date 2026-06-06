@@ -117,6 +117,12 @@ export interface Definition {
     relSpan?: RelSpan,
     // Set once during elaboration (on a fresh cloned node), never mutated after.
     readonly hook?: string | false // Resolved elaboration hook name (e.g. 'functionDefinition')
+    /**
+     * ADR 0020 mutability (overrides the legacy keyword/hook heuristic when set):
+     * `true` = immutable binding (reassignment is E0007), `false` = mutable.
+     * Left `undefined` by the legacy grammar, which keeps the old behaviour.
+     */
+    readonly immutable?: boolean
 }
 
 export interface ExpressionStart {

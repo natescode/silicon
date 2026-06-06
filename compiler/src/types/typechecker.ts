@@ -607,10 +607,15 @@ export function preRegisterDefinitions(elements: any[], ctx: Ctx): void {
             ctx.symbols.set(def.name.name, resultType)
         }
 
-        // Mark immutable for non-mutable definitions. @local / hook==='global'
-        // is mutable; @global (and @fn) are immutable.
+        // Mark immutable for non-mutable definitions. ADR 0020: an explicit
+        // `immutable` flag (set by the new grammar) wins; otherwise fall back to
+        // the legacy heuristic (@local / hook==='global' is mutable; @global/@fn
+        // immutable).
         const hook = def.hook
-        const isMutable = hook === 'global' || kw === '@local'
+        const imm = def.immutable
+        const isMutable = imm === true ? false
+            : imm === false ? true
+            : (hook === 'global' || kw === '@local')
         if (!isMutable) {
             ctx.immutable.add(def.name.name)
         } else {
@@ -1120,10 +1125,15 @@ function checkDefinition(d: any, ctx: Ctx): SiliconType {
             ctx.symbols.set(d.name.name, finalType)
         }
 
-        // Mark immutable. @local and hook==='global'/'local' are mutable;
-        // @global (and @fn) are immutable.
+        // Mark immutable. ADR 0020: an explicit `immutable` flag wins; otherwise
+        // legacy heuristic (@local / hook 'global'|'local' mutable; @global/@fn
+        // immutable). This is the line that previously made EVERY in-function
+        // @local mutable — the flag lets a bare immutable local be enforced.
         const hook = (d as any).hook
-        const isMutable = hook === 'global' || hook === 'local' || keyword === '@local'
+        const imm = (d as any).immutable
+        const isMutable = imm === true ? false
+            : imm === false ? true
+            : (hook === 'global' || hook === 'local' || keyword === '@local')
         if (!isMutable) {
             ctx.immutable.add(d.name.name)
         } else {
