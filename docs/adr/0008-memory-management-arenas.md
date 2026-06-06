@@ -33,6 +33,20 @@ Strata-defined. v1.0 must not paint us into an allocator choice that
 forecloses that — same architectural concern as ADR 0003's runtime
 agnosticism for the comptime engine.
 
+This is Silicon's founding inspiration: Jonathan Goodwin's **Gradual Memory
+Management** (*A Framework for Gradual Memory Management*, 2017,
+<https://jondgoodwin.com/pling/gmm.pdf>), prototyped in his language **Cone**
+(<https://cone.jondgoodwin.com/>, "Memory Managed Your Way"). GMM — by explicit
+analogy to gradual *typing* — lets one program pick its memory strategy on an
+alias-by-alias basis, decomposing every reference into value type, lifetime,
+**allocator type / region**, and **permission**. Silicon realizes the allocator
+axis as two whole-program **modes** (this ADR's arenas vs ADR 0009's wasm-gc)
+plus an `Rc` opt-in, and the permission axis as the rcaps of ADR 0011. Honest
+scope: GMM is a research-grade working hypothesis (Cone enforces only
+mutability + coercion today), so v1.0 is "switchable modes + opt-in," on a
+*path* to gradual-MM-in-Goodwin's-sense, not there yet — see
+[`docs/v1.0-critical-path.md`](../v1.0-critical-path.md) §1.
+
 ## Decision
 
 Three-part decision, mirroring ADR 0003's principle/instantiation/runway shape.
