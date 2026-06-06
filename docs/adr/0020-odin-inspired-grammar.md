@@ -1,6 +1,6 @@
 # ADR 0020 — Odin-inspired grammar: bare definitions, always-parens calls, drop the `&` call sigil
 
-- **Status:** Proposed
+- **Status:** Accepted — implemented on branch `feat/adr0020-grammar-migration`
 - **Date:** 2026-06-05
 - **Deciders:** NatesCode
 - **Related:** ADR 0010 (grammar targets LL(1)) · ADR 0011 (borrow checker / capability model — the `@mut` sketch this realizes) · ADR 0014 (global/local bindings — partially superseded) · ADR 0016 (loop-over-iterables / control-flow-as-calls) · `docs/grammar.ebnf` (the contract this changes) · `compiler/CLAUDE.md` ("grammar changes are last-resort and need discussion first" — this ADR is that discussion) · [[silicon-line-independent-parsing]] · [[silicon-mutability-capability-model]] · [[silicon-gradual-memory-management-inspiration]] · `tools/migrate-adr0020.ts` (migration codemod)
@@ -253,17 +253,27 @@ main();
   - **`@extern` placement:** confirmed as a `\\`-line modifier producing a
     body-less declaration; the parser must treat such a signature as a complete
     Element (no following def).
-  - **`@local` → `@mut` is conservative:** the codemod marks every migrated local
-    `@mut` (preserving today's mutable-capable semantics); locals never reassigned
-    could be bare-immutable. A follow-up linter should demote them — the codemod
-    cannot without dataflow.
-- **Follow-up work:** (1) the codemod (`tools/migrate-adr0020.ts`, §Migration) now
-  preserves comments; remaining nicety is to demote never-reassigned `@mut` to bare;
-  (2) fix the `sgl fmt` formatter's `:Type` bug (its output does not
-  re-parse) and rewrite `docs/grammar.ebnf` to the EBNF-diff form on acceptance;
-  (3) reconcile with ADR 0011 when the
-  borrow checker lands (`@mut` + region capabilities); (4) update
-  `docs/overview.md`, the tour, and the playground.
+  - **`@local` → `@mut`/bare:** the codemod demotes a migrated local to bare
+    (immutable) unless its name is reassigned somewhere in the file (a whole-file
+    scan that over-marks, never under-marks); a scope-aware pass could tighten the
+    few over-marked cross-function name collisions.
+- **Status — IMPLEMENTED on branch `feat/adr0020-grammar-migration` (unpushed):**
+  parser additive superset → existing AST (`07e29f4`); immutable-binding
+  enforcement in the typechecker (`70269ef`); `grammar.ebnf` rewritten to this
+  grammar and verified against the parser (`0070758`); stdlib
+  (`6a4ad72`/`8185c5f`), examples 15/17 (`5dae50a`), strata (`cb7a095`), and the
+  core usage docs (`c730ae7`) all migrated. Full compiler suite green (1747/0).
+- **Remaining (separate from the migration itself):**
+  (1) **implement** the `\\ @extern`/`@export`/`@platform` signature-line modifiers
+  (decision 8) — until then externals use the brace form, so `cube.si`/
+  `hello_native.si` and `demo.si`'s `@export`/`@type_sum` stay legacy;
+  (2) **retire the parser's legacy superset** — blocked on migrating the test
+  corpus (thousands of inline old-syntax snippets) to ADR-0020;
+  (3) refresh the remaining design/reference docs + the playground + the tour
+  (which has separate WIP);
+  (4) the `sgl fmt` `:Type` bug is fixed on a separate branch
+  (`fix/sgl-fmt-roundtrip`);
+  (5) reconcile with ADR 0011 when the borrow checker lands (`@mut` + regions).
 
 ## EBNF diff against `docs/grammar.ebnf`
 

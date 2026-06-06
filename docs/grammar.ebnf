@@ -142,19 +142,17 @@ Param       = identifier [ TypeExpr ] ;
   A `\\` SignatureLine attaches a type to the definition that follows it.  The
   definition may be keyword-led (`@fn`/`@type`/…) or BARE — a bare definition
   with params is a function, a bare definition without params is an immutable
-  binding.  Optional modifiers precede the name; `@extern` declares a body-less
-  external; `@export`/`@platform(...)` annotate linkage / target.
+  binding.
     \\ add (Int, Int) -> Int
     add a, b := { a + b };
 
-    \\ @extern puts (String) -> Int ;
+  NOT YET IMPLEMENTED: ADR-0020 decision 8 designs signature-line modifiers
+  (`\\ @extern name … ;` body-less external; `\\ @export …` / `\\ @platform(…) …`
+  linkage/target) — these are NOT parsed yet.  Until they land, externals use the
+  transitional brace form `@extern { \\ … }` and `@export name;` statements (see
+  §Legacy).
 *)
-SignatureLine = "\\" { Modifier } Namespace [ GenericParams ] TypeExpr ;
-
-Modifier      = "@extern"
-              | "@export"
-              | "@platform" "(" identifier ")"
-              ;
+SignatureLine = "\\" Namespace [ GenericParams ] TypeExpr ;
 
 (* ── Assignments (reassignment) ─────────────────────────────────────────── *)
 
@@ -460,7 +458,9 @@ line-comment  = "#" { (* any char except line-end *) } line-end ;
   the binding/type/mutability surface:
 
     @mut    @fn    @type    @true    @false
-    @extern @export @platform                 (* signature-line modifiers *)
+    @extern                                   (* brace form `@extern { \\ … }` today;
+                                                 `\\ @extern`/@export/@platform modifiers
+                                                 are designed but NOT YET parsed *)
 
   All OTHER keywords are resolved at elaboration time via the strata registry.
   This means:
@@ -532,7 +532,8 @@ line-comment  = "#" { (* any char except line-end *) } line-end ;
 
     - Parenthesised parameter lists and the `@extern { \\ … }` /
       `@interface { \\ … }` SignatureBlock brace form are accepted.  ADR-0020
-      uses bare Params and per-line `\\ @extern …` signatures.
+      uses bare Params; the brace form remains the only extern syntax until the
+      `\\ @extern …` modifier form (decision 8) is implemented.
 
     - "@fn" optional after `\\`.  Legacy code may still write an explicit `@fn`
       where a bare definition now suffices.
