@@ -32,12 +32,12 @@ on the first `1.0.0` tag.  Pre-1.0 tags (`0.x.y`, including 0.1) are development
 
 | Feature | Notes |
 |---|---|
-| Definition keywords | `@fn`, `@global`, `@local`, `@type`, `@enum`, `@struct`, `@extern`, `@use` |
+| Definition keywords | `@fn`, `@mut`, `@type`, `@extern`, `@use` |
 | Control-flow keywords | `@if`, `@loop`, `@match`, `@return`, `@defer`, `@try` |
 | Literal syntax | integers (decimal, hex `0x`, binary `0b`, octal `0o`), floats, booleans (`@true`/`@false`), strings, arrays `[…]`, tuples `(…)`, objects `{…}` |
 | Type surface | `Int`, `Int32`, `Int64`, `Float`, `Bool`, `Str`, `Option[T]`, `Result[T,E]`, `Slice[T]` |
-| Operator surface | `+`, `-`, `*`, `/`, `%`, `==`, `!=`, `<`, `<=`, `>`, `>=`, `&&`, `\|\|`, `!`, `&` (call sigil), `@` (keyword sigil), `$` (variant sigil) |
-| Generic functions | `@fn f x := …` with signature `\ f[T] (T) -> …` — call-site inference, no explicit `[T]` required |
+| Operator surface | `+`, `-`, `*`, `/`, `%`, `==`, `!=`, `<`, `<=`, `>`, `>=`, `&&`, `\|\|`, `!`, `@` (keyword sigil), `$` (variant sigil) |
+| Generic functions | `@fn f x := …` with signature `\\ f[T] (T) -> …` — call-site inference, no explicit `[T]` required |
 | Sum types | `@type Foo := $A x Int \| $B;` — variant constructors + `@match` destructure |
 | Parametric types | `@type Opt[T] := $Some v T \| $None;` |
 | `@match` forms | flat form and arm-expression (`$A v => expr`) forms |
@@ -69,7 +69,7 @@ on the first `1.0.0` tag.  Pre-1.0 tags (`0.x.y`, including 0.1) are development
 
 - Postfix operators (e.g. Rust-style `expr?`) — Silicon operators are binary
   infix or prefix-keyword.  Will not be added.  See ADR 0010 — LL(1) target.
-- Integer literal suffixes (`42i64`) — use `&@toInt64 42` instead.
+- Integer literal suffixes (`42i64`) — use `@toInt64(42)` instead.
 - Implicit numeric coercion — always explicit.
 
 ### Grammar shape invariant
@@ -140,37 +140,37 @@ not part of the public API.  They may be renamed or removed in a minor release.
 
 ## 3. Strata API stability
 
-The strata API is the set of `&Compiler::*` calls available inside a stratum
+The strata API is the set of `Compiler::*` calls available inside a stratum
 body.  Full reference in `docs/strata-authoring-guide.md`.
 
 ### Intended-stable calls (target for 1.0)
 
 | Call | Purpose |
 |---|---|
-| `&Compiler::register::keyword '@kw'` | Register a new definition keyword |
-| `&Compiler::register::operator 'op'` | Register a new binary operator |
-| `&Compiler::on::decl '@kw', { … }` | Handler for each declaration |
-| `&Compiler::on::call '@kw', { … }` | Handler for each call site |
-| `&Compiler::on::operator 'op', { … }` | Handler for each operator use |
-| `&Compiler::emit::ir node` | Emit an IR node |
-| `&Compiler::node::name` | Read the declaration name |
-| `&Compiler::node::params` | Read the parameter list |
-| `&Compiler::node::binding` | Read the binding expression |
-| `&Compiler::format str, …args` | Diagnostic message formatting |
-| `&Compiler::error msg` | Emit a diagnostic and halt elaboration |
-| `&Compiler::substitute template, env` | Text substitution for IR templates |
+| `Compiler::register::keyword('@kw')` | Register a new definition keyword |
+| `Compiler::register::operator('op')` | Register a new binary operator |
+| `Compiler::on::decl('@kw', { … })` | Handler for each declaration |
+| `Compiler::on::call('@kw', { … })` | Handler for each call site |
+| `Compiler::on::operator('op', { … })` | Handler for each operator use |
+| `Compiler::emit::ir(node)` | Emit an IR node |
+| `Compiler::node::name` | Read the declaration name |
+| `Compiler::node::params` | Read the parameter list |
+| `Compiler::node::binding` | Read the binding expression |
+| `Compiler::format(str, …args)` | Diagnostic message formatting |
+| `Compiler::error(msg)` | Emit a diagnostic and halt elaboration |
+| `Compiler::substitute(template, env)` | Text substitution for IR templates |
 
 ### Stable with caveats
 
 | Call | Caveat |
 |---|---|
-| `&Compiler::module::push_definition` | Signature may grow optional fields in a minor release |
-| `&Compiler::on::derive` | `@@derive` handler; stable syntax but derive trait registry is additive-only |
-| `&Compiler::state 'stratum'` | State keys other than `'stratum'` are not yet stable |
+| `Compiler::module::push_definition` | Signature may grow optional fields in a minor release |
+| `Compiler::on::derive` | `@@derive` handler; stable syntax but derive trait registry is additive-only |
+| `Compiler::state('stratum')` | State keys other than `'stratum'` are not yet stable |
 
 ### Not stable
 
-- Raw IR builder calls other than `&Compiler::emit::ir` — these are internal
+- Raw IR builder calls other than `Compiler::emit::ir` — these are internal
   and subject to change as the IR evolves.
 - The execution engine for strata bodies — currently an interpreter; will be
   replaced by the comptime-via-compilation approach documented in
@@ -178,8 +178,8 @@ body.  Full reference in `docs/strata-authoring-guide.md`.
 
 ### Extension rule
 
-Strata authors can add new `&Compiler::register::*` calls in a minor release.
-Calling an unrecognised `&Compiler::*` path emits a warning (not an error) so
+Strata authors can add new `Compiler::register::*` calls in a minor release.
+Calling an unrecognised `Compiler::*` path emits a warning (not an error) so
 that strata written against a newer compiler version degrade gracefully on older
 toolchains.
 

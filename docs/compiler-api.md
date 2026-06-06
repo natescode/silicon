@@ -18,10 +18,10 @@ marker, and (optionally) a rich body.
 
 ```silicon
 @stratum_keyword LetDef ('@global', Node) = {
-  &IR::def_function;                              # 1. dispatch marker
-  @local name := &Compiler::watId Node.name.name; # 2. rich body
-  @local body := &Compiler::lowerExpr Node.binding.expression;
-  &Compiler::ir::makeFunction name, [], 'void', [], body;
+  IR::def_function();                             # 1. dispatch marker
+  name := Compiler::watId(Node.name.name);        # 2. rich body
+  body := Compiler::lowerExpr(Node.binding.expression);
+  Compiler::ir::makeFunction(name, [], 'void', [], body);
 };
 ```
 
@@ -79,18 +79,18 @@ the rest of the module.
 
 | Call                                           | Effect                                                                  |
 | ---------------------------------------------- | ----------------------------------------------------------------------- |
-| `&Compiler::ctx::locals::get(name)`            | Read a local's WASM type, or undefined.                                 |
-| `&Compiler::ctx::locals::set(name, type)`      | Record a local in the locals map.                                       |
-| `&Compiler::ctx::globals::get(name)`           | Read a global's WASM type, or undefined.                                |
-| `&Compiler::ctx::globals::set(name, type)`     | Record a global in the globals map.                                     |
-| `&Compiler::ctx::varNames::has(name)`          | True if `name` is a real WAT global (a `@local` / sum-type variant).      |
-| `&Compiler::ctx::varNames::add(name)`          | Mark `name` as a real WAT global.                                       |
-| `&Compiler::ctx::pendingLocals::push(local)`   | Hoist an `IRLocal` to the current function's preamble.                  |
-| `&Compiler::ctx::loopStack::push(id)`          | Push a loop ID — needed when nesting `@break` / `@continue` targets.    |
-| `&Compiler::ctx::loopStack::pop`               | Pop the innermost loop ID.                                              |
-| `&Compiler::ctx::loopStack::peek`              | Peek the innermost loop ID without popping (undefined if empty).        |
-| `&Compiler::ctx::nextLoopId`                   | Allocate a fresh monotonic loop ID.                                     |
-| `&Compiler::ctx::functionSigs::get(name)`      | Look up a `FunctionSig` recorded by the type-checker.                   |
+| `Compiler::ctx::locals::get(name)`             | Read a local's WASM type, or undefined.                                 |
+| `Compiler::ctx::locals::set(name, type)`       | Record a local in the locals map.                                       |
+| `Compiler::ctx::globals::get(name)`            | Read a global's WASM type, or undefined.                                |
+| `Compiler::ctx::globals::set(name, type)`      | Record a global in the globals map.                                     |
+| `Compiler::ctx::varNames::has(name)`           | True if `name` is a real WAT global (a `@local` / sum-type variant).      |
+| `Compiler::ctx::varNames::add(name)`           | Mark `name` as a real WAT global.                                       |
+| `Compiler::ctx::pendingLocals::push(local)`    | Hoist an `IRLocal` to the current function's preamble.                  |
+| `Compiler::ctx::loopStack::push(id)`           | Push a loop ID — needed when nesting `@break` / `@continue` targets.    |
+| `Compiler::ctx::loopStack::pop()`              | Pop the innermost loop ID.                                              |
+| `Compiler::ctx::loopStack::peek()`             | Peek the innermost loop ID without popping (undefined if empty).        |
+| `Compiler::ctx::nextLoopId()`                  | Allocate a fresh monotonic loop ID.                                     |
+| `Compiler::ctx::functionSigs::get(name)`       | Look up a `FunctionSig` recorded by the type-checker.                   |
 
 ### 3.2 `Compiler::ir::*` — IR node constructors
 
@@ -99,68 +99,68 @@ either passed explicitly or inferred from the inputs.
 
 | Call                                                                                       | Returns        |
 | ------------------------------------------------------------------------------------------ | -------------- |
-| `&Compiler::ir::makeConst(value, wasmType)`                                                | `IRConst`      |
-| `&Compiler::ir::makeLocalGet(name, wasmType)`                                              | `IRLocalGet`   |
-| `&Compiler::ir::makeLocalSet(name, value)`                                                 | `IRLocalSet`   |
-| `&Compiler::ir::makeGlobalGet(name, wasmType)`                                             | `IRGlobalGet`  |
-| `&Compiler::ir::makeGlobalSet(name, value)`                                                | `IRGlobalSet`  |
-| `&Compiler::ir::makeBinOp(instr, left, right, wasmType)`                                   | `IRBinOp`      |
-| `&Compiler::ir::makeCall(callee, args, wasmType, callKind?)`                               | `IRCall`       |
-| `&Compiler::ir::makeBlock(stmts, trailing?, wasmType?)`                                    | `IRBlock`      |
-| `&Compiler::ir::makeIf(cond, then, else?, wasmType?)`                                      | `IRIf`         |
-| `&Compiler::ir::makeLoop(id, cond, body)`                                                  | `IRLoop`       |
-| `&Compiler::ir::makeBreak(id)` / `makeContinue(id)`                                        | `IRBreak/Continue` |
-| `&Compiler::ir::makeReturn(value?)`                                                        | `IRReturn`     |
-| `&Compiler::ir::makeNop` / `makeUnreachable`                                               | `IRNop/Unreachable` |
-| `&Compiler::ir::makeExport(alias, internalName, what)` where `what` is `'func' \| 'global'` | `IRExport`     |
-| `&Compiler::ir::makeGlobal(name, wasmType, mutable, init)`                                 | `IRGlobal`     |
-| `&Compiler::ir::makeFunction(name, params, returnType, locals, body)`                      | `IRFunction`   |
-| `&Compiler::ir::makeImport(env, field, name, params, result?)`                             | `IRImport`     |
-| `&Compiler::ir::makeLocal(name, wasmType)`                                                 | `IRLocal`      |
-| `&Compiler::ir::null`                                                                      | `null`         |
+| `Compiler::ir::makeConst(value, wasmType)`                                                 | `IRConst`      |
+| `Compiler::ir::makeLocalGet(name, wasmType)`                                               | `IRLocalGet`   |
+| `Compiler::ir::makeLocalSet(name, value)`                                                  | `IRLocalSet`   |
+| `Compiler::ir::makeGlobalGet(name, wasmType)`                                              | `IRGlobalGet`  |
+| `Compiler::ir::makeGlobalSet(name, value)`                                                 | `IRGlobalSet`  |
+| `Compiler::ir::makeBinOp(instr, left, right, wasmType)`                                    | `IRBinOp`      |
+| `Compiler::ir::makeCall(callee, args, wasmType, callKind?)`                                | `IRCall`       |
+| `Compiler::ir::makeBlock(stmts, trailing?, wasmType?)`                                     | `IRBlock`      |
+| `Compiler::ir::makeIf(cond, then, else?, wasmType?)`                                       | `IRIf`         |
+| `Compiler::ir::makeLoop(id, cond, body)`                                                   | `IRLoop`       |
+| `Compiler::ir::makeBreak(id)` / `makeContinue(id)`                                         | `IRBreak/Continue` |
+| `Compiler::ir::makeReturn(value?)`                                                         | `IRReturn`     |
+| `Compiler::ir::makeNop()` / `makeUnreachable()`                                            | `IRNop/Unreachable` |
+| `Compiler::ir::makeExport(alias, internalName, what)` where `what` is `'func' \| 'global'` | `IRExport`     |
+| `Compiler::ir::makeGlobal(name, wasmType, mutable, init)`                                  | `IRGlobal`     |
+| `Compiler::ir::makeFunction(name, params, returnType, locals, body)`                       | `IRFunction`   |
+| `Compiler::ir::makeImport(env, field, name, params, result?)`                              | `IRImport`     |
+| `Compiler::ir::makeLocal(name, wasmType)`                                                  | `IRLocal`      |
+| `Compiler::ir::null()`                                                                     | `null`         |
 
 ### 3.3 AST traversal
 
 | Call                                       | Effect                                                                                              |
 | ------------------------------------------ | --------------------------------------------------------------------------------------------------- |
-| `&Compiler::lowerExpr(node)`               | Recursively lower an expression AST node to `IRExpr` using the bound context.                       |
-| `&Compiler::lowerBlock(node)`              | Lower a `Block` AST node to `IRBlock`.                                                              |
-| `&Compiler::lowerParam(param)`             | Lower one function parameter to `IRParam`, or `null` for literal / untyped params.                  |
-| `&Compiler::lowerParams(node)`             | Iterate `node.params`, lower each entry, return the `IRParam[]`.                                    |
-| `&Compiler::lowerExprIfDefined(node)`      | Like `lowerExpr` but returns `undefined` when `node` itself is null/undefined.                      |
-| `&Compiler::lowerFunctionBody(node, params)` | Create a child scope with `params` added to locals, lower `node.binding`, return `{body, locals}`. |
-| `&Compiler::lowerGlobalInit(node, defaultType)` | Lower a `@local` initialiser or fall back to `(const 0 : defaultType)`; refines wasmType from init. |
-| `&Compiler::lowerExternParams(node)`       | Extract the WASM param types of an `@extern`.                                                       |
-| `&Compiler::lowerExternResult(node)`       | Extract the WASM result type of an `@extern`, or undefined.                                         |
-| `&Compiler::expandMatchChain(args, type)`  | Build the nested `if`/`else` chain for `@match`. Used by `match.si`.                                |
-| `&Compiler::unwrapNode(node)`              | Strip `Element` / `Item` / `Statement` wrappers from an AST node.                                   |
+| `Compiler::lowerExpr(node)`                | Recursively lower an expression AST node to `IRExpr` using the bound context.                       |
+| `Compiler::lowerBlock(node)`               | Lower a `Block` AST node to `IRBlock`.                                                              |
+| `Compiler::lowerParam(param)`              | Lower one function parameter to `IRParam`, or `null` for literal / untyped params.                  |
+| `Compiler::lowerParams(node)`              | Iterate `node.params`, lower each entry, return the `IRParam[]`.                                    |
+| `Compiler::lowerExprIfDefined(node)`       | Like `lowerExpr` but returns `undefined` when `node` itself is null/undefined.                      |
+| `Compiler::lowerFunctionBody(node, params)` | Create a child scope with `params` added to locals, lower `node.binding`, return `{body, locals}`. |
+| `Compiler::lowerGlobalInit(node, defaultType)` | Lower a `@local` initialiser or fall back to `(const 0 : defaultType)`; refines wasmType from init. |
+| `Compiler::lowerExternParams(node)`        | Extract the WASM param types of an `@extern`.                                                       |
+| `Compiler::lowerExternResult(node)`        | Extract the WASM result type of an `@extern`, or undefined.                                         |
+| `Compiler::expandMatchChain(args, type)`   | Build the nested `if`/`else` chain for `@match`. Used by `match.si`.                                |
+| `Compiler::unwrapNode(node)`               | Strip `Element` / `Item` / `Statement` wrappers from an AST node.                                   |
 
 ### 3.4 Type resolution
 
 | Call                                            | Returns                              |
 | ----------------------------------------------- | ------------------------------------ |
-| `&Compiler::resolveType(annotation)`            | `WasmValType` from a type-annotation AST node (`Float` → `'f32'`, else `'i32'`). |
-| `&Compiler::resolveTypeName(name)`              | Same, takes a raw string.            |
-| `&Compiler::resolveExprType(expr)`              | The `WasmType` of an already-lowered IR expression.                              |
-| `&Compiler::resolveFunctionReturnType(node, name, body)` | Three-priority lookup: annotation → function-sig → body refinement.        |
-| `&Compiler::isVarName(name)`                    | True if `name` is a real WAT global (delegates to `ctx.varNames.has`).           |
+| `Compiler::resolveType(annotation)`             | `WasmValType` from a type-annotation AST node (`Float` → `'f32'`, else `'i32'`). |
+| `Compiler::resolveTypeName(name)`               | Same, takes a raw string.            |
+| `Compiler::resolveExprType(expr)`               | The `WasmType` of an already-lowered IR expression.                              |
+| `Compiler::resolveFunctionReturnType(node, name, body)` | Three-priority lookup: annotation → function-sig → body refinement.        |
+| `Compiler::isVarName(name)`                     | True if `name` is a real WAT global (delegates to `ctx.varNames.has`).           |
 
 ### 3.5 Utility
 
 | Call                                       | Returns                                                                  |
 | ------------------------------------------ | ------------------------------------------------------------------------ |
-| `&Compiler::watId(name)`                   | Sanitise a Silicon identifier to a valid WAT identifier (`::` → `_`).    |
-| `&Compiler::freshId(prefix?)`              | Allocate a unique synthetic identifier — e.g. `tmp_3`.                   |
-| `&Compiler::resolveIntrinsic(name)`        | Resolve an `IR::foo` or `WASM::foo` name to its WAT instruction string.  |
-| `&Compiler::choose(cond, ifTrue, ifFalse)` | Eager ternary. Both branches are evaluated; pick one to return.          |
-| `&Compiler::arg(node, index)`              | `node[index]` — for stepping through the `rawArgs` array.                |
+| `Compiler::watId(name)`                    | Sanitise a Silicon identifier to a valid WAT identifier (`::` → `_`).    |
+| `Compiler::freshId(prefix?)`               | Allocate a unique synthetic identifier — e.g. `tmp_3`.                   |
+| `Compiler::resolveIntrinsic(name)`         | Resolve an `IR::foo` or `WASM::foo` name to its WAT instruction string.  |
+| `Compiler::choose(cond, ifTrue, ifFalse)`  | Eager ternary. Both branches are evaluated; pick one to return.          |
+| `Compiler::arg(node, index)`               | `node[index]` — for stepping through the `rawArgs` array.                |
 
 ### 3.6 Errors
 
 | Call                                       | Behaviour                                                                  |
 | ------------------------------------------ | -------------------------------------------------------------------------- |
-| `&Compiler::assertDefined(value, msg)`     | Throws `CompilerAPIError` if `value` is `null` / `undefined`.              |
-| `&Compiler::error(msg, node?)`             | Always throws `CompilerAPIError`. Optional `node` is used for source loc.  |
+| `Compiler::assertDefined(value, msg)`      | Throws `CompilerAPIError` if `value` is `null` / `undefined`.              |
+| `Compiler::error(msg, node?)`              | Always throws `CompilerAPIError`. Optional `node` is used for source loc.  |
 
 ---
 
@@ -187,10 +187,10 @@ The body interpreter currently exposes only `expand` as a rich-body hook.
 
 ```silicon
 @stratum_keyword Break ('@break', Node) = {
-  &IR::control_break;
-  @local id := &Compiler::ctx::loopStack::peek;
-  &Compiler::assertDefined id, '@break outside @loop';
-  &Compiler::ir::makeBreak id;
+  IR::control_break();
+  id := Compiler::ctx::loopStack::peek();
+  Compiler::assertDefined(id, '@break outside @loop');
+  Compiler::ir::makeBreak(id);
 };
 ```
 
@@ -198,10 +198,10 @@ The body interpreter currently exposes only `expand` as a rich-body hook.
 
 ```silicon
 @stratum_keyword Return ('@return', Node) = {
-  &IR::control_return;
-  @local valN  := &Compiler::arg Node, 0;
-  @local value := &Compiler::lowerExprIfDefined valN;
-  &Compiler::ir::makeReturn value;
+  IR::control_return();
+  valN  := Compiler::arg(Node, 0);
+  value := Compiler::lowerExprIfDefined(valN);
+  Compiler::ir::makeReturn(value);
 };
 ```
 
@@ -212,11 +212,11 @@ downstream `makeReturn` correctly emits a `return` with no value.
 
 ```silicon
 @stratum_keyword ExportDecl ('@export', Node) = {
-  &IR::meta_export;
-  @local sname := &Compiler::watId Node.name.name;
-  @local isVar := &Compiler::isVarName sname;
-  @local kind  := &Compiler::choose isVar, 'global', 'func';
-  &Compiler::ir::makeExport sname, sname, kind;
+  IR::meta_export();
+  sname := Compiler::watId(Node.name.name);
+  isVar := Compiler::isVarName(sname);
+  kind  := Compiler::choose(isVar, 'global', 'func');
+  Compiler::ir::makeExport(sname, sname, kind);
 };
 ```
 
@@ -232,15 +232,15 @@ the outer locals map:
 
 ```silicon
 @stratum_keyword LetDef ('@global', Node) = {
-  &IR::def_function;
-  @local name       := &Compiler::watId Node.name.name;
-  @local params     := &Compiler::lowerParams Node;
-  @local funcResult := &Compiler::lowerFunctionBody Node, params;
-  @local body       := funcResult.body;
-  @local locals     := funcResult.locals;
-  @local returnType := &Compiler::resolveFunctionReturnType Node, name, body;
-  &Compiler::ctx::globals::set name, 'i32';
-  &Compiler::ir::makeFunction name, params, returnType, locals, body;
+  IR::def_function();
+  name       := Compiler::watId(Node.name.name);
+  params     := Compiler::lowerParams(Node);
+  funcResult := Compiler::lowerFunctionBody(Node, params);
+  body       := funcResult.body;
+  locals     := funcResult.locals;
+  returnType := Compiler::resolveFunctionReturnType(Node, name, body);
+  Compiler::ctx::globals::set(name, 'i32');
+  Compiler::ir::makeFunction(name, params, returnType, locals, body);
 };
 ```
 
@@ -274,13 +274,13 @@ The complete strata, end to end, for the `@local` definition kind:
 
 ```silicon
 @stratum_keyword LocalDef ('@local', Node) = {
-  &IR::def_local;
-  @local wasmType := &Compiler::resolveType Node.name.typeAnnotation;
-  @local sname    := &Compiler::watId Node.name.name;
-  @local decl     := &Compiler::ir::makeLocal sname, wasmType;
-  &Compiler::ctx::pendingLocals::push decl;
-  &Compiler::ctx::locals::set sname, wasmType;
-  &IR::null;
+  IR::def_local();
+  wasmType := Compiler::resolveType(Node.name.typeAnnotation);
+  sname    := Compiler::watId(Node.name.name);
+  decl     := Compiler::ir::makeLocal(sname, wasmType);
+  Compiler::ctx::pendingLocals::push(decl);
+  Compiler::ctx::locals::set(sname, wasmType);
+  IR::null();
 };
 ```
 

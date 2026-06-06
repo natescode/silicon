@@ -15,7 +15,7 @@ Silicon compiles to two targets: **WebAssembly** (the default) and **native** vi
 | String layout | length-prefixed | plain C string |
 | `@extern` namespace | `wasi_snapshot_preview1::fd_write` etc. | `puts`, `printf`, `malloc`, … |
 | Standard library | `@use 'io'` (snake_case stdlib) | `@extern` libc functions directly |
-| Memory model | linear bump-allocator (`&alloc`, `@with_arena`) | same via `malloc`, or libc |
+| Memory model | linear bump-allocator (`alloc`, `@with_arena`) | same via `malloc`, or libc |
 
 ---
 
@@ -30,7 +30,7 @@ There is no libc in a WASM sandbox.  All I/O goes through **WASI** (`wasi_snapsh
 ```silicon
 @use 'io';
 
-&print 'Hello, Silicon!';   # writes to stdout via WASI fd_write
+print('Hello, Silicon!');   # writes to stdout via WASI fd_write
 ```
 
 If you need raw WASI access, declare the extern yourself:
@@ -85,7 +85,7 @@ The native binary links against **libc** automatically (the same way any C progr
     \\ printf (String) -> Int
 }
 
-&puts 'Hello, world!';
+puts('Hello, world!');
 ```
 
 Any POSIX or libc symbol is reachable this way — `malloc`, `free`, `open`, `read`, `write`, `exit`, and so on.
@@ -136,14 +136,14 @@ The split is handled entirely in the lowerer; Silicon source code is identical o
     \\ wasi_snapshot_preview1::proc_exit (Int) -> Void
 }
 
-&wasi_snapshot_preview1::proc_exit 0;
+wasi_snapshot_preview1::proc_exit(0);
 ```
 
 Or use the stdlib which wraps this:
 
 ```silicon
 @use 'io';
-&exit 0;
+exit(0);
 ```
 
 ### Native — call libc directly
@@ -156,7 +156,7 @@ Or use the stdlib which wraps this:
     \\ strlen (String) -> Int
 }
 
-@local n := &strlen 'hello';   # 5
+n := strlen('hello');   # 5
 ```
 
 ---

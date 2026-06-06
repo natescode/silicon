@@ -16,12 +16,12 @@ it on `native` is a compile error.
 \\ main () -> Void
 @fn main := {
     \\ hi JSString
-    @local hi := &JSString::concat
-        (&JSString::fromCodePoint 72),    # 'H'
-        (&JSString::fromCodePoint 105);   # 'i'
-    &console::log hi
+    hi := JSString::concat(
+        JSString::fromCodePoint(72),    # 'H'
+        JSString::fromCodePoint(105));  # 'i'
+    console::log(hi)
 };
-&main;
+main();
 ```
 
 ```sh
@@ -50,14 +50,14 @@ opt-in.
 units (JS semantics).
 
 **Bridge to `String`** (host-provided, module `js-bridge`):
-`&JSString::fromString s` (linear `String` → JS string) and
-`&JSString::toString js` (JS string → fresh linear `String`).
+`JSString::fromString(s)` (linear `String` → JS string) and
+`JSString::toString(js)` (JS string → fresh linear `String`).
 
 **`CharCodeArray`** — a WASM-GC `(array (mut i16))` of UTF-16 code units, for the
-two array builtins. `&JSString::codeArray n` allocates one; `setCode`/`getCode`/
-`codeLen` read & write it (inline `array.*` instructions). `&JSString::
-fromCharCodeArray a, start, end` builds a JS string from a slice; `&JSString::
-intoCharCodeArray s, a, start` copies a JS string's code units into the array and
+two array builtins. `JSString::codeArray(n)` allocates one; `setCode`/`getCode`/
+`codeLen` read & write it (inline `array.*` instructions). `JSString::
+fromCharCodeArray(a, start, end)` builds a JS string from a slice; `JSString::
+intoCharCodeArray(s, a, start)` copies a JS string's code units into the array and
 returns the count. These run host-native under the bun runner — GC types coexist
 with the linear-memory model in the same module. (`examples/charcode_array.si`.)
 

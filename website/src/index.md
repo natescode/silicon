@@ -35,16 +35,16 @@ features:
 
 \\ size (Shape) -> Int
 @fn size sh := {
-    &@match sh,
+    @match(sh,
         $Circle r => r,
-        $Square s => s
+        $Square s => s)
 };
 
 @export size;
 ```
 
 Types live on a `\\` signature line, not inline; sum-type variants are
-constructed with `&` and destructured by `@match`.
+constructed by calling the generated constructor (`Some(x)`) and destructured by `@match`.
 
 `sgl run` compiles, executes in wasmtime. `sgl build --release` produces
 a native binary via the QBE backend.

@@ -30,8 +30,8 @@ Original design proposal dated 2026-05-22.
 ### Phase A — Strata bodies as first-class Silicon programs — ✓ SHIPPED
 
 - Strata can reference top-level `@fn`s as handlers:
-  `&Compiler::on::decl '@token', MyHandler;` paired with
-  `\ MyHandler (Int) -> _ ` + `@fn MyHandler node := { ... };`
+  `Compiler::on::decl('@token', MyHandler);` paired with
+  `\\ MyHandler (Int) -> _ ` + `@fn MyHandler node := { ... };`
 - Body still interpreted (Phase A is the bridge; Phase C compiles it).
 - Pre-pass in `buildStrataRegistry` collects every top-level `@fn` body
   into `registry.namedHandlers` so forward references resolve.
@@ -109,10 +109,10 @@ can call `&compiler::*` imports.
 
 ```silicon
 @stratum Bridge := {
-    &Compiler::register::keyword '@bridge';
-    &Compiler::on::decl '@bridge', Bridge_handler;
+    Compiler::register::keyword('@bridge');
+    Compiler::on::decl('@bridge', Bridge_handler);
 };
-\ Bridge_handler (Int) -> Int
+\\ Bridge_handler (Int) -> Int
 @fn Bridge_handler n := { (n + n) };
 ```
 
@@ -149,14 +149,14 @@ What's unblocked:
   1. Rewrite `@stratum_keyword X ('@foo', Node) = { body }` as:
      ```silicon
      @stratum X := {
-         &Compiler::register::keyword '@foo';
-         &Compiler::on::lower '@foo', X_lower;
+         Compiler::register::keyword('@foo');
+         Compiler::on::lower('@foo', X_lower);
      };
-     \ X_lower (Int) -> _
+     \\ X_lower (Int) -> _
      @fn X_lower node := { body };
      ```
-     For operators: `&Compiler::register::operator '+'` and
-     `&Compiler::on::lower '+', X_lower`.
+     For operators: `Compiler::register::operator('+')` and
+     `Compiler::on::lower('+', X_lower)`.
   2. Audit the body for every `&Compiler::*` and `&IR::*` call.
      Each one must have a corresponding host-side import in
      `src/comptime/imports.ts`.  Extend the import surface as needed.
@@ -439,8 +439,8 @@ Components:
 A strata body that today does:
 
 ```silicon
-@local tmpl := &Compiler::ast::capture_template node, 'pre';
-&Compiler::module::push_definition tmpl.ast;
+tmpl := Compiler::ast::capture_template(node, 'pre');
+Compiler::module::push_definition(tmpl.ast);
 ```
 
 …becomes, after this dissolution, a Silicon program that calls imported
@@ -452,10 +452,10 @@ functions:
     \ module_push_definition (i32) -> i32
 }
 
-\ handler (Int) -> _
+\\ handler (Int) -> _
 @fn handler node_id := {
-    @local tmpl_id := &compiler::ast_capture_template node_id, 0; # 0 = 'pre'
-    &compiler::module_push_definition tmpl_id;
+    tmpl_id := compiler::ast_capture_template(node_id, 0); # 0 = 'pre'
+    compiler::module_push_definition(tmpl_id);
 };
 ```
 
@@ -490,11 +490,11 @@ well-known entry point. Each `on::X` handler becomes a `@fn`:
 
 ```silicon
 @stratum Generics := {
-    &Compiler::register::keyword '@generic';
-    &Compiler::on::call_site Generics_call_site;
+    Compiler::register::keyword('@generic');
+    Compiler::on::call_site(Generics_call_site);
 };
 
-\ Generics_call_site (Int) -> _
+\\ Generics_call_site (Int) -> _
 @fn Generics_call_site node_id := {
     # ... body identical to today's, but compiled, not interpreted ...
 };
@@ -503,8 +503,8 @@ well-known entry point. Each `on::X` handler becomes a `@fn`:
 Reuses everything:
 - `@local` → real WASM local.
 - `&compiler::*` → WASM import call.
-- `&@if` → the existing `@if` stratum that lowers to WASM `(if ...)`.
-- `node.field` → calls like `&compiler::ast_get_field node_id, 'field'`
+- `@if` → the existing `@if` stratum that lowers to WASM `(if ...)`.
+- `node.field` → calls like `compiler::ast_get_field(node_id, 'field')`
   returning the child's handle.
 
 The body's WASM is built **once** at registry-build time and cached. Each
@@ -625,10 +625,10 @@ between phases.
   Strata 2.0 `register::*` calls can name as handlers:
   ```silicon
   @stratum Generics := {
-      &Compiler::register::keyword '@generic';
-      &Compiler::on::call_site Generics_call_site;
+      Compiler::register::keyword('@generic');
+      Compiler::on::call_site(Generics_call_site);
   };
-  \ Generics_call_site (Int) -> _
+  \\ Generics_call_site (Int) -> _
   @fn Generics_call_site node := { ... };
   ```
 - These `@fn`s lower to WASM like any other.
@@ -760,12 +760,12 @@ Today (with the interpreter):
 
 ```silicon
 @stratum Generics := {
-    &Compiler::register::keyword '@generic';
-    &Compiler::on::call_site {
-        @local s := &Compiler::state 'stratum';
-        @local callee := &Compiler::callee::name node;
+    Compiler::register::keyword('@generic');
+    Compiler::on::call_site({
+        s := Compiler::state('stratum');
+        callee := Compiler::callee::name(node);
         ...
-    };
+    });
 };
 ```
 
@@ -777,17 +777,17 @@ After the dissolution:
 
 ```silicon
 @stratum Generics := {
-    &Compiler::register::keyword '@generic';
-    &Compiler::on::call_site Generics_call_site;
+    Compiler::register::keyword('@generic');
+    Compiler::on::call_site(Generics_call_site);
 };
 
-\ Generics_call_site (Handle) -> _
+\\ Generics_call_site (Handle) -> _
 @fn Generics_call_site node := {
-    @local s := &compiler::state 'stratum';
-    @local callee := &compiler::callee_name node;
-    &@if (&compiler::state_has s, callee), {
+    s := compiler::state('stratum');
+    callee := compiler::callee_name(node);
+    @if(compiler::state_has(s, callee), {
         ...
-    };
+    });
 };
 ```
 
@@ -795,7 +795,7 @@ After the dissolution:
 - The host instantiates the stratum's compiled WASM at registry-build
   time. At each call site, it calls the exported `Generics_call_site`
   function with a node handle.
-- `&@if` inside the body lowers to a WASM `(if ...)` — the SAME stratum
+- `@if` inside the body lowers to a WASM `(if ...)` — the SAME stratum
   used at runtime, no comptime/runtime split.
 - `+`, `==`, etc. are also the same strata used everywhere else.
 - No interpreter involved at any point.
