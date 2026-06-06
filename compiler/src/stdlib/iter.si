@@ -30,24 +30,18 @@
 
 # True if the step carries another element.
 \\ iter_is_item[T, R] (IterStep[T, R])
-@fn iter_is_item s := {
-    &@match s,
-        $Item _v => @true,
-        $Done _r => @false
+iter_is_item[T, R] s := {
+    @match(s, $Item _v => @true, $Done _r => @false)
 };
 
 # True if the step is the iterator's final result.
 \\ iter_is_done[T, R] (IterStep[T, R])
-@fn iter_is_done s := {
-    &@match s,
-        $Item _v => @false,
-        $Done _r => @true
+iter_is_done[T, R] s := {
+    @match(s, $Item _v => @false, $Done _r => @true)
 };
 
 # The element if this is an `$Item`, else the supplied default.
 \\ iter_item_or[T, R] (IterStep[T, R], T)
-@fn iter_item_or s, dflt := {
-    &@match s,
-        $Item v  => v,
-        $Done _r => dflt
+iter_item_or[T, R] s, dflt := {
+    @match(s, $Item v => v, $Done _r => dflt)
 };

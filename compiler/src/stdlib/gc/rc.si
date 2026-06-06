@@ -27,13 +27,13 @@
 # @defer + &@with_arena compiles unchanged across both targets.
 
 \\ rc_new (Int)
-@fn rc_new value := value;
+rc_new value := value;
 
 \\ rc_clone (Int)
-@fn rc_clone r := r;
+rc_clone r := r;
 
 \\ rc_drop (Int)
-@fn rc_drop _r := { };
+rc_drop _r := {};
 
 \\ rc_get (Int)
-@fn rc_get r := r;
+rc_get r := r;
