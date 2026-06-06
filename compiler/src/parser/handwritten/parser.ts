@@ -27,7 +27,7 @@ import { Lexer, computeLineStarts, lineColumnAt, type Token } from './lexer'
 import { astChildren } from '../../ast/astChildren'
 
 /** Internal shape produced by AttachedSig (mirrors toAst's anonymous object). */
-interface SigInfo { name: string; generics?: GenericParams; type: any }
+interface SigInfo { name: string; generics?: GenericParams; type: any; extern?: boolean }
 
 /**
  * Reproduce toAst's decLiteral value reconstruction, including its quirk: ohm's
@@ -302,6 +302,10 @@ class Parser {
     // Definition = AttachedSig defKw identifier generics? Params Binding?
     private parseDefinitionWithSig(): Definition {
         const sig = this.parseAttachedSig()
+        // ADR-0020 (decision 8): `\\ @extern name (Types) -> Ret;` is a complete,
+        // body-less external declaration (no following def) — the canonical
+        // replacement for the legacy `@extern { \\ … }` brace form.
+        if (sig.extern) return this.buildExternDef(sig)
         const kwTok = this.peek()
         if (this.isDefKw(kwTok)) {
             const kw = this.next().text
@@ -323,32 +327,40 @@ class Parser {
         return node
     }
 
-    // AttachedSig = "\\" namespace generics? TypeExpr
+    // AttachedSig = "\\" [ "@extern" ] namespace generics? TypeExpr
     private parseAttachedSig(): SigInfo {
         this.expect('attachedSig')
+        // ADR-0020: an optional leading `@extern` modifier marks a body-less external.
+        let extern = false
+        if (this.at('kw') && this.peek().text === '@extern') { this.next(); extern = true }
         const nsStart = this.peek().start
         const nsEnd = this.parseNamespaceRawEnd()       // consumes the namespace; returns end offset
         const name = this.src.slice(nsStart, nsEnd)     // raw text (keeps '::')
         const generics = this.at('lbrack') ? this.parseGenericParams() : undefined
         const type = this.parseTypeExpr()
-        return { name, generics, type }
+        return { name, generics, type, extern }
+    }
+
+    // Build a body-less `@extern` Definition from one signature (params get the
+    // sig's domain types as `_argN`, the range as the return type). Shared by the
+    // `\\ @extern …` line form and the legacy `@extern { \\ … }` brace form.
+    private buildExternDef(sig: SigInfo): Definition {
+        const fnType = sig.type
+        const slots = Array.isArray(fnType?.fnParams)
+            ? fnType.fnParams
+            : (fnType?.__domain ? fnType.types.map((t: any) => ({ typeAnnotation: t })) : [])
+        const params = slots.map((slot: any, i: number) =>
+            ASTFactory.parameter('_arg' + i, slot.typeAnnotation))
+        let ret = fnType?.fnReturn?.typeAnnotation
+        if (ret?.typename === 'Void') ret = undefined
+        const name = ASTFactory.typedIdentifier(sig.name, ret)
+        return ASTFactory.definition('@extern', name, params, sig.generics, undefined)
     }
 
     // BlockDef → Definition[].  @interface = stub (no defs); @extern expands each sig.
     private buildBlockDef(kw: string, _generics: GenericParams | undefined, sigs: SigInfo[]): Definition[] {
         if (kw === '@interface') return []
-        return sigs.map((sig) => {
-            const fnType = sig.type
-            const slots = Array.isArray(fnType?.fnParams)
-                ? fnType.fnParams
-                : (fnType?.__domain ? fnType.types.map((t: any) => ({ typeAnnotation: t })) : [])
-            const params = slots.map((slot: any, i: number) =>
-                ASTFactory.parameter('_arg' + i, slot.typeAnnotation))
-            let ret = fnType?.fnReturn?.typeAnnotation
-            if (ret?.typename === 'Void') ret = undefined
-            const name = ASTFactory.typedIdentifier(sig.name, ret)
-            return ASTFactory.definition(kw, name, params, sig.generics, undefined)
-        })
+        return sigs.map((sig) => this.buildExternDef(sig))
     }
 
     // Distribute an attached signature's domain/range onto bare params + return,
