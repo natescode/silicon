@@ -20,12 +20,12 @@ math — on every platform target.
 @use 'str';
 
 @fn main := {
-    @local name := &read_line;                 # read a line of input
-    &print ('Hello, ' ++ name ++ '!');         # greet
-    &print_int (&str_byte_len name);           # its length
+    name := read_line();                       # read a line of input
+    print('Hello, ' ++ name ++ '!');           # greet
+    print_int(str_byte_len(name));             # its length
     0
 };
-&main;
+main();
 ```
 
 ## How it is organized
@@ -45,7 +45,7 @@ A note on memory: the default allocator is a bump allocator that never frees
 and does **not** align allocations. Building odd-length strings at runtime
 leaves the bump pointer on an odd address, which makes the next WASI iovec
 store trap under strict runtimes (wasmtime). Every stdlib string builder calls
-`&heap_align` before returning, and `io`'s write path re-aligns defensively, so
+`heap_align()` before returning, and `io`'s write path re-aligns defensively, so
 this is invisible to user code.
 
 ---
@@ -63,8 +63,8 @@ this is invisible to user code.
 | `mem_fill` | `(Int, Int, Int) -> Int` | Write `n` copies of byte `b` from `ptr`. |
 | `mem_eq` | `(Int, Int, Int) -> Bool` | Compare `n` bytes at two addresses. |
 
-`mem_copy` is already available as a runtime prelude function (`&mem_copy dst,
-src, n`).
+`mem_copy` is already available as a runtime prelude function (`mem_copy(dst,
+src, n)`).
 
 ---
 
@@ -88,10 +88,10 @@ src, n`).
 
 | Function | Signature | Example |
 |----------|-----------|---------|
-| `int_to_str` | `(Int) -> String` | `&int_to_str (0 - 42)` → `"-42"` |
-| `str_to_int` | `(String) -> Int` | `&str_to_int '123'` → `123` (signed; stops at first non-digit; `0` if none) |
+| `int_to_str` | `(Int) -> String` | `int_to_str(0 - 42)` → `"-42"` |
+| `str_to_int` | `(String) -> Int` | `str_to_int('123')` → `123` (signed; stops at first non-digit; `0` if none) |
 | `uint_to_str_pad` | `(Int, Int) -> String` | zero-pad a non-negative number to a width |
-| `float_to_str` | `(Float) -> String` | `&float_to_str 2.5` → `"2.500000"` (6 decimals, approximate) |
+| `float_to_str` | `(Float) -> String` | `float_to_str(2.5)` → `"2.500000"` (6 decimals, approximate) |
 
 ### Float helpers
 
@@ -116,7 +116,7 @@ decimal formatting.
 
 Silicon strings are length-prefixed UTF-8 in linear memory. These helpers work
 at the **byte** level (indices and lengths are UTF-8 bytes). They complement
-the built-in `++` concatenation operator and the `&str_len` / `&str_ptr`
+the built-in `++` concatenation operator and the `str_len` / `str_ptr`
 prelude views.
 
 | Function | Signature | Result |
@@ -132,7 +132,7 @@ prelude views.
 | `str_slice` | `(String, Int, Int) -> String` | bytes `[start, end)`, clamped |
 | `str_repeat` | `(String, Int) -> String` | `s` repeated `n` times |
 
-Concatenation is the built-in operator: `'foo' ++ '-' ++ (&int_to_str 99)`.
+Concatenation is the built-in operator: `'foo' ++ '-' ++ int_to_str(99)`.
 
 ---
 
@@ -169,8 +169,8 @@ platform-specific:
 | Platform | Output | Strings |
 |----------|--------|---------|
 | **native / WASI** (default) | `@use 'io'` → `print`, `read_line` (WASI `fd_write`/`fd_read`) | linear-memory `String` |
-| **bun** (`--platform=bun`) | `&console::log` / `&web::console_log_f` | `JSString` (JS strings) + `String` bridge |
-| **web** (`--platform=web`) | `&web::canvas_*`, `&web::set_html`, `&console::log` | `JSString` + `String` |
+| **bun** (`--platform=bun`) | `console::log(...)` / `web::console_log_f(...)` | `JSString` (JS strings) + `String` bridge |
+| **web** (`--platform=web`) | `web::canvas_*(...)`, `web::set_html(...)`, `console::log(...)` | `JSString` + `String` |
 
 See [`js-string-builtins.md`](js-string-builtins.md) for the `JSString` type and
 the `console` / `web` modules, and [`targets.md`](targets.md) for the wasm
@@ -199,7 +199,7 @@ own sources and tests):
 1. **`snake_case` everywhere.** Function names read like C / Rust / Go stdlib.
 2. **Portable-first.** Pure computation (`mem`/`num`/`str`) has no host
    dependency and compiles on every target. I/O is isolated in `io`.
-3. **Wrap WASI, don't expose it.** User code calls `&print`, not `fd_write`
+3. **Wrap WASI, don't expose it.** User code calls `print(...)`, not `fd_write`
    with hand-built iovecs.
 4. **Small and correct over large and clever.** This is the 80% surface; the
    aspirational stdlib (async, JSON, HTTP, capabilities) is tracked separately.

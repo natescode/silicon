@@ -32,7 +32,7 @@ definition whose parameters are bare identifiers:
 
 ```silicon
 \\ apply ((Int -> Int), Int) -> Int
-@fn apply func, x := &func x;
+@fn apply func, x := func(x);
 ```
 
 - `\\ name <type>` is a signature line — name then type by **juxtaposition**, no
@@ -224,7 +224,7 @@ Struct fields and sum-type variant payloads keep a `name Type` pair
 (juxtaposed, no `:`), because the annotation *is* the data definition:
 
 ```silicon
-@struct Rect w Int, h Int;
+@type Rect := { w Int, h Int };
 @type Shape := $Circle r Int | $Rectangle w Int, h Int;
 ```
 
@@ -232,8 +232,8 @@ Struct fields and sum-type variant payloads keep a `name Type` pair
 because it once again sits inside a comma-separated list:
 
 ```silicon
-@struct Widget onClick (Int, Int) -> Void, label String;
-#                      └── parens REQUIRED so this comma can't read as a field separator
+@type Widget := { onClick (Int, Int) -> Void, label String };
+#                         └── parens REQUIRED so this comma can't read as a field separator
 ```
 
 So inline function types (in fields / payloads) must use the **parenthesized
@@ -266,7 +266,7 @@ redundancy doubles as a copy-paste check.
 
 ```silicon
 \\ apply ((Int -> Int), Int) -> Int
-@fn apply func, x := &func x;
+@fn apply func, x := func(x);
 ```
 
 ### Extern — `@extern { … }`

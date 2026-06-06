@@ -27,34 +27,34 @@ that still feels like HM, scoped to grow into full Roc-style later.
 \\ id[T] (T) -> T
 @fn id x := x;
 \\ use_i () -> Int
-@fn use_i := (&id 42);                  # T = Int  inferred
+@fn use_i := id(42);                    # T = Int  inferred
 \\ use_f () -> Float
-@fn use_f := (&id 3.14);                # T = Float inferred at this call site
+@fn use_f := id(3.14);                  # T = Float inferred at this call site
                                         # (each call gets fresh ?Ti)
 
 # Parametric sum types — `Option[Int]` and `Option[Float]` are distinct
 @type Option[T] := $Some value T | $None;
 \\ give_int () -> Option[Int]
-@fn give_int     := (&Some 42);         # arg type pins T
+@fn give_int     := Some(42);           # arg type pins T
 \\ give_float () -> Option[Float]
-@fn give_float := (&Some 3.14);         # different T per call
+@fn give_float := Some(3.14);           # different T per call
 \\ empty () -> Option[Int]
-@fn empty        := (&None);            # annotation pins T (no arg)
+@fn empty        := None();             # annotation pins T (no arg)
 
 # Generic functions over generic types — T flows through nested calls
 \\ unwrap_or[T] (Option[T], T) -> T
 @fn unwrap_or opt, dflt := dflt;
 \\ use () -> Int
-@fn use := (&unwrap_or (&Some 42), 0);  # T = Int via Some arg
+@fn use := unwrap_or(Some(42), 0);      # T = Int via Some arg
 \\ use2 () -> Int
-@fn use2 := (&unwrap_or (&None), 7);    # T = Int via dflt arg
+@fn use2 := unwrap_or(None(), 7);       # T = Int via dflt arg
 
 # Pattern matching over generic types — field bindings get the right type
 \\ unwrap_or_match[T] (Option[T], T) -> T
 @fn unwrap_or_match opt, dflt := {
-    &@match opt,
+    @match(opt,
         $Some v => v,        # `v` binds as T, not hardcoded Int
-        $None => dflt
+        $None => dflt)
 };
 ```
 
@@ -64,9 +64,9 @@ Errors look like this:
 \\ want_int (Option[Int]) -> Int
 @fn want_int x := 0;
 \\ give_float () -> Option[Float]
-@fn give_float := (&Some 1.0);
+@fn give_float := Some(1.0);
 \\ bad () -> Int
-@fn bad := (&want_int (&give_float));
+@fn bad := want_int(give_float());
                           ↑
         Mismatch: 'want_int' arg 0: expected Option[Int], got Option[Float]
 ```
@@ -189,7 +189,7 @@ Implementation: `src/types/typechecker.ts:checkPolymorphicCall`.
 ### Annotation reconciliation
 
 When a definition has both an annotation and a body
-(`\\ nothing () -> Option[Int]` / `@fn nothing := (&None);`), the body type might be polymorphic
+(`\\ nothing () -> Option[Int]` / `@fn nothing := None();`), the body type might be polymorphic
 (`Option[?T1]`) and need to be pinned by the annotation.  The typechecker
 calls `unify(annotated, bodyType)` instead of `typeEquals` — if they unify,
 the body's free vars get bound; if not, an annotation-mismatch error fires.
@@ -253,7 +253,7 @@ field as `TypeInt`.  This worked for `Option[Int]` by accident but broke
 
 ## What's deliberately NOT in HM-lite
 
-- **Let-generalisation.**  `@global id := \x. x; …` would NOT make `id`
+- **Let-generalisation.**  `id := \x => x; …` would NOT make `id`
   polymorphic.  Schemes only come from syntactic `[T]` declarations.
 - **Rank-N polymorphism.**  No `(∀T. T → T) → Int`-style higher-rank.
 - **Polymorphic recursion.**  A recursive call inside `@fn foo[T] …`

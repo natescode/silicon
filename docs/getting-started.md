@@ -56,11 +56,11 @@ helpers):
 @use 'io';
 
 @fn main := {
-    &print 'Hello, Silicon!';
+    print('Hello, Silicon!');
     0
 };
 
-&main;
+main();
 ```
 
 ---
@@ -134,15 +134,15 @@ Open `src/main.si` and add a function:
 
 \\ greet (String) -> Int
 @fn greet name := {
-    &print ('Hello, ' ++ name ++ '!')
+    print('Hello, ' ++ name ++ '!')
 };
 
 @fn main := {
-    &greet 'Silicon';
+    greet('Silicon');
     0
 };
 
-&main;
+main();
 ```
 
 Run again:
@@ -161,16 +161,16 @@ handling, the standard library, platforms, and strata — read the
 
 | Feature | Example |
 |---|---|
-| Variables | `@local x := 0; x = x + 1` |
-| Immutable binding | `@global y := 42` |
-| Conditionals | `&@if x == 0, { &print 'zero' }, { &print 'nonzero' }` |
-| Loops | `&@loop { &@if done, { &@break }, {}; }` |
-| Pattern matching | `&@match opt, $Some v => v, $None => 0` |
-| Error handling | `@global r := ...; &@try r` |
+| Variables | `@mut x := 0; x = x + 1` |
+| Immutable binding | `y := 42` |
+| Conditionals | `@if(x == 0, { print('zero') }, { print('nonzero') })` |
+| Loops | `@loop({ @if(done, { @break() }, {}); })` |
+| Pattern matching | `@match(opt, $Some v => v, $None => 0)` |
+| Error handling | `r := ...; @try(r)` |
 | Generic functions | `\\ id[T] T -> T` / `@fn id x := x` |
 | Sum types | `@type Shape := $Circle r Int \| $Rectangle w Int, h Int` |
-| Structs | `@struct Point x Int, y Int;` |
-| Cleanup | `@defer { &cleanup }` |
+| Structs | `@type Point := { x Int, y Int }` |
+| Cleanup | `@defer({ cleanup() })` |
 
 ---
 
@@ -178,22 +178,22 @@ handling, the standard library, platforms, and strata — read the
 
 The default bump allocator never frees — fine for `sgl run main.si` and
 exit, but a one-way ratchet for anything in a loop. Wrap per-iteration
-work in `&@with_arena { … }` so per-request allocations are freed when
-the iteration ends; use `&@move_to_parent_arena value` in tail position
+work in `@with_arena({ … })` so per-request allocations are freed when
+the iteration ends; use `@move_to_parent_arena(value)` in tail position
 when the iteration produces a value the parent scope keeps:
 
 ```silicon
 \\ handle_loop () -> Int
 @fn handle_loop := {
-    @local i := 0;
-    &@loop i < 1000000, {
-        @local response := &@with_arena {
-            @local body := &build_response i;
-            &@move_to_parent_arena body
-        };
-        &send response;
+    @mut i := 0;
+    @loop(i < 1000000, {
+        response := @with_arena({
+            body := build_response(i);
+            @move_to_parent_arena(body)
+        });
+        send(response);
         i = i + 1;
-    };
+    });
     0
 };
 ```

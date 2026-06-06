@@ -10,11 +10,11 @@ post-0.1 roadmap.
 > the internals.
 >
 > **TL;DR for long-running programs (servers, REPLs, watchers, anything in a loop)** —
-> wrap per-iteration work in `&@with_arena { ... }`. If the iteration produces
+> wrap per-iteration work in `@with_arena({ ... })`. If the iteration produces
 > a heap value the parent scope keeps (e.g. a `String` response), make the
-> last expression `&@move_to_parent_arena value`. See
-> [`&@with_arena`](#the-with_arena-scope) and
-> [`&@move_to_parent_arena`](#escaping-a-value-with-move_to_parent_arena).
+> last expression `@move_to_parent_arena(value)`. See
+> [`@with_arena`](#the-with_arena-scope) and
+> [`@move_to_parent_arena`](#escaping-a-value-with-move_to_parent_arena).
 
 ---
 
@@ -29,7 +29,7 @@ For programs that allocate, do their work, and exit, this is the right
 answer:
 
 - **Zero per-allocation overhead.** No headers, no bookkeeping.
-- **Predictable.** The bump pointer is observable via `&heap_get`.
+- **Predictable.** The bump pointer is observable via `heap_get()`.
 - **Simple to reason about.** Every allocation strictly comes after the
   previous one.
 
@@ -38,27 +38,27 @@ For programs that **loop**, this is a one-way ratchet:
 ```silicon
 \\ server_loop () -> Int
 @fn server_loop := {
-    @local i := 0;
-    &@loop i < 1000000, {
-        @local response := &str_concat 'reply: ', (&handle_request i);
-        &send response;
+    @mut i := 0;
+    @loop(i < 1000000, {
+        response := str_concat('reply: ', handle_request(i));
+        send(response);
         i = i + 1;
-    };
+    });
     0
 };
 ```
 
-Every `&str_concat` call adds bytes to the heap that are never freed —
+Every `str_concat` call adds bytes to the heap that are never freed —
 1,000,000 iterations later the program traps via the heap-exhaustion path
 (see [`--max-heap`](#testing-heap-exhaustion)). The arena scope is how you
 break the ratchet.
 
 ---
 
-## The `&@with_arena` scope
+## The `@with_arena` scope
 
 ```silicon
-&@with_arena { body }
+@with_arena({ body })
 ```
 
 - Saves the current heap pointer at entry.
@@ -74,14 +74,14 @@ Rewriting the server loop with an arena:
 ```silicon
 \\ server_loop () -> Int
 @fn server_loop := {
-    @local i := 0;
-    &@loop i < 1000000, {
-        &@with_arena {
-            @local response := &str_concat 'reply: ', (&handle_request i);
-            &send response;
-        };
+    @mut i := 0;
+    @loop(i < 1000000, {
+        @with_arena({
+            response := str_concat('reply: ', handle_request(i));
+            send(response);
+        });
         i = i + 1;
-    };
+    });
     0
 };
 ```
@@ -95,18 +95,18 @@ the heap pointer to the inner entry; the outer arena's exit further
 restores to the outer entry.
 
 ```silicon
-&@with_arena {                    # heap = H0
-    @local a := 'outer';          # heap = H1
-    &@with_arena {
-        @local b := 'inner';      # heap = H2
-    };                            # heap restored to H1
-    @local c := 'more';           # heap = H1' > H1
-};                                # heap restored to H0
+@with_arena({                     # heap = H0
+    a := 'outer';                 # heap = H1
+    @with_arena({
+        b := 'inner';             # heap = H2
+    });                           # heap restored to H1
+    c := 'more';                  # heap = H1' > H1
+});                               # heap restored to H0
 ```
 
 ---
 
-## Escaping a value with `&@move_to_parent_arena`
+## Escaping a value with `@move_to_parent_arena`
 
 The arena reset frees everything. If the block needs to return a heap
 value (`String`, `Array[T]` with `T` a value type, …) you'd hit a compile
@@ -115,19 +115,19 @@ value to the parent arena before the reset:
 
 ```silicon
 \\ greet (String) -> String
-@fn greet name := &@with_arena {
-    @local hello := &str_concat 'hello, ', name;
-    @local with_punct := &str_concat hello, '!';
+@fn greet name := @with_arena({
+    hello := str_concat('hello, ', name);
+    with_punct := str_concat(hello, '!');
     # ... work that allocates scratch strings ...
-    &@move_to_parent_arena with_punct
-};
+    @move_to_parent_arena(with_punct)
+});
 ```
 
 What happens at the call site:
 
-1. `&str_concat` builds up `hello`, then `with_punct`, plus arbitrary
+1. `str_concat` builds up `hello`, then `with_punct`, plus arbitrary
    scratch strings that share the inner arena.
-2. `&@move_to_parent_arena with_punct` looks at `with_punct`'s type
+2. `@move_to_parent_arena(with_punct)` looks at `with_punct`'s type
    (`String`), computes its contiguous byte size (`4 + length-header
    bytes`), and emits a runtime call to `$arena_promote`:
    - `memcpy` those bytes from inside-arena to the saved-pointer
@@ -142,11 +142,11 @@ What happens at the call site:
 
 Two restrictions, both enforced at compile time:
 
-**1. Tail position only.** `&@move_to_parent_arena` must be the arena
+**1. Tail position only.** `@move_to_parent_arena` must be the arena
 body's last expression — not buried mid-block. The compiler enforces
 this and surfaces:
 
-> `@move_to_parent_arena may only appear in the tail position of a &@with_arena { … } block (ADR 0008, Phase 9c; v1.1 will lift this restriction via pointer-fixup).`
+> `@move_to_parent_arena may only appear in the tail position of a @with_arena({ … }) block (ADR 0008, Phase 9c; v1.1 will lift this restriction via pointer-fixup).`
 
 If you need promotion mid-block, restructure so the work after the
 promotion lives in an outer scope.
@@ -166,7 +166,7 @@ trace-and-copy extension will lift this.
 ### Why explicit?
 
 Silicon avoids implicit memory operations. The same philosophy that
-makes integer width casts explicit (`&@toInt64 x`) makes arena escape
+makes integer width casts explicit (`@toInt64(x)`) makes arena escape
 explicit — the cost of the memcpy is visible at the call site, not
 hidden in a return edge.
 
@@ -177,20 +177,20 @@ hidden in a return edge.
 Two pure-read helpers let tests, dashboards, and CI memory budgets
 observe the bump pointer:
 
-- `&heap_used()` — bytes bump-allocated since program start
+- `heap_used()` — bytes bump-allocated since program start
   (`heap - heap_base`). Resets when something lowers `heap` — most
-  commonly an `&@with_arena` exit.
-- `&arena_used(saved)` — bytes since a caller-supplied entry pointer.
-  Pair with `&heap_get` to size the current arena without per-arena
+  commonly an `@with_arena` exit.
+- `arena_used(saved)` — bytes since a caller-supplied entry pointer.
+  Pair with `heap_get()` to size the current arena without per-arena
   handles:
 
 ```silicon
-&@with_arena {
-    @local saved := &heap_get;
+@with_arena({
+    saved := heap_get();
     # ... do work ...
-    @local cost := &arena_used saved;
-    &@if cost > 1000000, { &log_warn cost }, {};
-};
+    cost := arena_used(saved);
+    @if(cost > 1000000, { log_warn(cost) }, {});
+});
 ```
 
 Both are read-only — they don't allocate, don't fault, and don't
@@ -210,11 +210,11 @@ pointers.
 
 \\ share () -> Int
 @fn share := {
-    @local r := &rc_new 42;
-    &@defer &rc_drop r;          # auto-decrement on every return path
-    @local r2 := &rc_clone r;     # bumps count to 2
-    &@defer &rc_drop r2;          # LIFO: drops in reverse declaration order
-    (&rc_get r) + (&rc_get r2)
+    r := rc_new(42);
+    @defer(rc_drop(r));          # auto-decrement on every return path
+    r2 := rc_clone(r);           # bumps count to 2
+    @defer(rc_drop(r2));         # LIFO: drops in reverse declaration order
+    rc_get(r) + rc_get(r2)
 };
 ```
 
@@ -222,9 +222,9 @@ pointers.
 `@fn`s — no compiler changes, no new keyword. It composes with two
 existing strata to cover the full lifecycle:
 
-- `@defer` for scope-bound cleanup — `&@defer &rc_drop r` registers
+- `@defer` for scope-bound cleanup — `@defer(rc_drop(r))` registers
   the drop at any return-path exit.
-- `&@with_arena` for bulk free — `Rc` allocations inside an arena are
+- `@with_arena` for bulk free — `Rc` allocations inside an arena are
   physically reclaimed at arena exit regardless of refcount.
 
 Together they cover Rust's `Rc` / `Box` / `Drop` story without
@@ -232,11 +232,11 @@ teaching the compiler any of them. That's the v0.1 stratum power
 demo: ergonomic memory management as a library, not a language
 extension.
 
-**Caveat — physical free.** `&rc_drop` decrements the count but
+**Caveat — physical free.** `rc_drop` decrements the count but
 doesn't reclaim memory (the v0.1 bump allocator has no free list).
 The slot is logically dead at refcount 0; the bytes leak until the
 enclosing arena resets or a later GC runs. In practice this is
-fine — wrap `Rc`-using work in `&@with_arena` and the leak window
+fine — wrap `Rc`-using work in `@with_arena` and the leak window
 collapses to one iteration's allocations.
 
 ## Under `--target=wasm-gc` — portable lifecycle, no runtime cost
@@ -249,12 +249,12 @@ no-op at lowering time:
 
 | Primitive | Under wasm-mvp | Under wasm-gc |
 |---|---|---|
-| `&@with_arena { body }` | Save/restore `$heap` | `{ body }` (no envelope) |
-| `&@move_to_parent_arena v` | `arena_promote` memcpy | `v` (identity) |
-| `&rc_new value` | Heap-allocate `[1, value]` | `value` (identity) |
-| `&rc_clone r` | Bump refcount | `r` (identity) |
-| `&rc_drop r` | Decrement refcount | `()` (no-op) |
-| `&rc_get r` | Load value at `r+4` | `r` (identity) |
+| `@with_arena({ body })` | Save/restore `$heap` | `{ body }` (no envelope) |
+| `@move_to_parent_arena(v)` | `arena_promote` memcpy | `v` (identity) |
+| `rc_new(value)` | Heap-allocate `[1, value]` | `value` (identity) |
+| `rc_clone(r)` | Bump refcount | `r` (identity) |
+| `rc_drop(r)` | Decrement refcount | `()` (no-op) |
+| `rc_get(r)` | Load value at `r+4` | `r` (identity) |
 
 Two mechanisms, both compile-time:
 
@@ -269,17 +269,17 @@ Two mechanisms, both compile-time:
 What's **rejected** under wasm-gc (introspection has no honest GC
 semantics; raw pointers don't exist):
 
-- **E0012 — introspection.** `&rc_count`, `&rc_is_unique`,
-  `&heap_used`, `&arena_used`, `&heap_get`, `&heap_set`. Conservative
+- **E0012 — introspection.** `rc_count`, `rc_is_unique`,
+  `heap_used`, `arena_used`, `heap_get`, `heap_set`. Conservative
   no-op values would silently change branch behavior.
-- **E0013 — raw memory.** `&alloc`, `&realloc`, `&mem_copy`,
-  `&str_ptr`. Managed refs (`(ref $T)`) aren't addressable; no
+- **E0013 — raw memory.** `alloc`, `realloc`, `mem_copy`,
+  `str_ptr`. Managed refs (`(ref $T)`) aren't addressable; no
   pointer math.
 
 Programs that touch any of these primitives pick a target deliberately
 (`sgl build --target=wasm-mvp` for raw-memory work; `--target=wasm-gc`
 for managed-ref work). Programs using only the lifecycle layer +
-high-level types (`String`, `Array[T]`, `@struct`, sum types,
+high-level types (`String`, `Array[T]`, `@type` structs, sum types,
 `Option`, `Result`) compile under either target.
 
 ## Testing heap exhaustion
@@ -308,7 +308,7 @@ A later release extends the same surface without changing 0.1 program semantics:
 - **Mark-sweep GC stratum.** Implements the same `wit/allocator.wit`
   ABI as the bump allocator. Programs opt in via a compile flag; the
   allocator surface is byte-equal so existing code keeps running.
-- **Deep promotion.** `&@move_to_parent_arena` extends to nested heap
+- **Deep promotion.** `@move_to_parent_arena` extends to nested heap
   types via trace-and-copy — promoting a `Vec[String]` walks the value
   graph, recursively promotes reachable heap blocks, and rewrites
   internal pointers.
