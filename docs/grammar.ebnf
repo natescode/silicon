@@ -1,5 +1,5 @@
 (*
-  Silicon 0.1 — Formal Grammar (EBNF)
+  Silicon — Formal Grammar (EBNF) — ADR-0020 surface
 
   Notation follows ISO/IEC 14977 with these extensions:
     [ … ]   optional
@@ -9,13 +9,38 @@
     " … "   terminal string
     (* … *) comment
 
-  This EBNF is the human-readable grammar specification for Silicon.  It is
-  implemented by the hand-written, dependency-free recursive-descent parser in
+  This EBNF is the human-readable grammar specification for Silicon as defined
+  by ADR-0020 (Odin-inspired, keyword-light surface).  It is implemented by the
+  hand-written, dependency-free recursive-descent parser in
   src/parser/handwritten/ (lexer.ts + parser.ts); there is no separate grammar
   file.  This EBNF is the canonical contract the parser implements.
 
+  ADR-0020 in one breath:
+    - A bare `name := value` is an IMMUTABLE value binding (the common case).
+      At the top level it is an immutable global; inside a block it is an
+      immutable local (enforced — reassignment is a type error, E0007).
+    - `@mut name := value` is a MUTABLE value binding.
+    - `@fn name params? := body` defines a function (params are bare; their
+      types come from a preceding `\\` signature line).
+    - `@type Name := …` defines a type: `$A | $B` is a sum, `{ field Type, … }`
+      is a struct, a bare TypeExpr is an alias.
+    - Calls are ALWAYS parenthesised: user `f(a, b)` and intrinsics
+      `@if(c, {t}, {e})`, `@loop(cond, {b})`, `@match(x, $A v => v, …)`,
+      `@toInt(x)`, etc.  There is no call sigil.
+    - Types are SPACE-separated / positional, never colon-annotated:
+      `\\ add (Int, Int) -> Int`, struct field `x Int`, payload `$Some value T`.
+      ":" is reserved for ":=" and "::" only.
+
+  TRANSITIONAL NOTE (migration only — NOT part of this canonical grammar):
+    The parser is currently an ADDITIVE SUPERSET.  Alongside the ADR-0020 forms
+    above it still ACCEPTS the legacy pre-ADR-0020 surface (the "&"-call sigil,
+    explicit `@fn`/`@global`/`@local`/`@var`, `@struct`/`@enum`, and paren-free
+    calls) so existing src/strata/*.si and the test corpus keep parsing during
+    migration.  Those forms are DEPRECATED and slated for removal; they are
+    documented for reference in §Legacy below but are NOT the language.
+
   See §LL(1) below for the parser-shaped (left-factored) presentation of the
-  two productions that look non-LL(1) in their natural form.
+  productions that look non-LL(1) in their natural form.
 
   See docs/stability.md for the stability contract on this grammar.
   See docs/strata.md for how strata extend the keyword/operator surface
@@ -28,77 +53,147 @@ Program     = { Element } ;
 
 Element     = SignatureLine          (* a `\\` type signature for the next def *)
             | Item ";"
-            | DocComment
             ;
+            (* `#`/`##` comments are stripped as trivia by the lexer and are not
+               Elements — see §Whitespace and comments. *)
 
-Item        = Statement
+Item        = Definition
+            | Assignment
             | Expression
             ;
 
-Statement   = Assignment
-            | Definition
-            ;
-
-DocComment  = "##" { doc-char } ;
-doc-char    = (* any character except newline *) ;
-
-(* ── Assignments and definitions ────────────────────────────────────────── *)
-
-Assignment  = Namespace "=" Expression ;
-
-Definition  = def-kw [ identifier ] [ GenericParams ]
-              ( SignatureBlock | Params [ Binding ] ) ;
+(* ── Definitions (unified, keyword-light) ───────────────────────────────── *)
 
 (*
-  Types are NOT written inline on a definition's name or params.  Instead a
-  `\\` SignatureLine on the preceding element carries the function/value type
-  (see Element).  The `@extern` / `@interface` brace form carries a
-  SignatureBlock in place of Params + Binding.
-    \\ add (Int, Int) -> Int
-    @fn add a, b := { a + b };
-    @extern { \\ puts (String) -> Int }
+  Kinds of definition, distinguished by their leading token:
+
+    - bare           `name := value`          — immutable VALUE binding
+    - "@mut"         `@mut name := value`      — mutable VALUE binding
+    - "@fn"          `@fn name params := body` — FUNCTION definition
+    - "@type"        `@type Name := TypeRhs`   — TYPE definition
+
+  A `\\` SignatureLine on the preceding element carries the value/function type;
+  see SignatureLine below.  A bare definition (no keyword) may itself follow a
+  signature line — params present ⇒ a function, no params ⇒ an immutable binding.
+
+  KIND / scope rules (semantic, post-parse):
+    - A bare `name := value` is IMMUTABLE.  At the top level it is an immutable
+      global; inside a block it is an immutable local.  The typechecker rejects
+      reassignment to it (E0007).
+    - "@mut" is legal only on a VALUE binding (no params) and makes it mutable.
+    - "@fn" marks a function explicitly; bare params imply a function.
+    - "@type" puts its RHS in TYPE context (StructType / VariantSum / alias).
 *)
 
-SignatureLine  = "\\" Namespace [ GenericParams ] TypeExpr ;
-SignatureBlock = "{" { SignatureLine } "}" ;
+Definition  = BareDef                 (* name := value  — immutable binding *)
+            | "@mut" BareDef          (* mutable value binding *)
+            | "@fn"  FnDef            (* function definition *)
+            | "@type" TypeDef         (* type definition *)
+            ;
 
-def-kw      = "@" identifier ;   (* e.g. @fn, @global, @local, @type, @struct *)
+BareDef     = Namespace [ GenericParams ] [ Params ] Binding ;
+
+FnDef       = Namespace [ GenericParams ] [ Params ] Binding ;
+
+TypeDef     = Namespace [ GenericParams ] ":=" TypeRhs ;
 
 Binding     = ":=" Expression ;
+
+(*
+  The RHS of a `@type` is read in TYPE context:
+    @type Maybe := $Some value Int | $None   (* sum *)
+    @type Point := { x Int, y Int }          (* struct *)
+    @type Id    := Int                        (* alias *)
+  Parser reality: only the `:= {` struct form is recognised syntactically as a
+  struct.  A sum RHS is parsed as an ordinary expression — a `$`-variant Primary
+  chained by the `|` BinOp — and an alias RHS as a bare Namespace / type
+  expression; the TYPE meaning is assigned at elaboration.
+*)
+TypeRhs     = StructType
+            | VariantSum
+            | TypeExpr
+            ;
+
+StructType  = "{" [ TypedField { "," TypedField } ] "}" ;
+
+VariantSum  = VariantCase { "|" VariantCase } ;   (* "|" reuses the BinOp token *)
+
+VariantCase = "$" identifier [ TypedField { "," TypedField } ] ;
+
+(* A struct field or variant payload: "name Type" — the type is OPTIONAL (fields
+   reuse the bare-parameter rule, so `x` and `x Int` both parse).  No colon. *)
+TypedField  = identifier [ TypeExpr ] ;
 
 GenericParams = "[" identifier { "," identifier } "]" ;
 
 (*
-  Function parameters are bare identifiers — their types come from the `\\`
-  signature line.  Struct fields and variant payloads write the type after the
-  name, space-separated (no colon):
-    @fn add a, b          @struct Point x Int, y Int          $Circle r Int
+  Function parameters are BARE identifiers — their types come from the `\\`
+  signature line.  There is no parenthesised parameter form: parentheses now
+  mean a call or a grouping.  A parameter may optionally carry an inline type.
+    @fn add a, b := { a + b }     \\ add (Int, Int) -> Int
 *)
-Params      = "(" [ Param { "," Param } ] ")"
-            | [ Param { "," Param } ]                 (* bare form *)
-            ;
+Params      = Param { "," Param } ;
 
-Param       = identifier [ TypeExpr ]
-            | Literal
-            ;
+Param       = identifier [ TypeExpr ] ;
+
+(* ── Signature lines ────────────────────────────────────────────────────── *)
+
+(*
+  A `\\` SignatureLine attaches a type to the definition that follows it.  The
+  definition may be keyword-led (`@fn`/`@type`/…) or BARE — a bare definition
+  with params is a function, a bare definition without params is an immutable
+  binding.  Optional modifiers precede the name; `@extern` declares a body-less
+  external; `@export`/`@platform(...)` annotate linkage / target.
+    \\ add (Int, Int) -> Int
+    add a, b := { a + b };
+
+    \\ @extern puts (String) -> Int ;
+*)
+SignatureLine = "\\" { Modifier } Namespace [ GenericParams ] TypeExpr ;
+
+Modifier      = "@extern"
+              | "@export"
+              | "@platform" "(" identifier ")"
+              ;
+
+(* ── Assignments (reassignment) ─────────────────────────────────────────── *)
+
+(*
+  Reassignment is "=" (not ":=").  It is legal only against a MUTABLE binding
+  (`@mut`); reassigning an immutable bare binding is a type error (E0007).
+    @mut n := 0;  n = n + 1;
+  There is no element/index assignment form — collection mutation goes through
+  calls, e.g. `vec_set_i32(v, i, x)`.
+*)
+Assignment  = Namespace "=" Expression ;
 
 (* ── Expressions ────────────────────────────────────────────────────────── *)
 
 (*
-  Expressions are prefix-keyword or left-associative binary chains.
+  Expressions are left-associative binary chains over a postfix-called primary.
   There is no precedence table: all operators associate left-to-right.
   Precedence is expressed via parentheses or nested calls.
 *)
 
 Expression  = ExprEnd { BinOp ExprEnd } ;
 
-ExprEnd     = Literal
-            | FunctionCall
-            | VariantDecl
-            | Namespace
+ExprEnd     = Primary { CallSuffix } ;            (* postfix call: f(...) *)
+
+Primary     = Literal
+            | VariantCtor             (* $Name declarator / pattern (type RHS, @match) *)
+            | Keyword                 (* @if/@loop/@match/… ; args via CallSuffix *)
+            | Namespace               (* a name, or a call `name(args)` via CallSuffix *)
             | Block
             | "(" Expression ")"
             ;
+
+(* Calls are ALWAYS parenthesised: user `f(a, b)` and intrinsic `@if(c, …)`. *)
+CallSuffix  = "(" [ Expression { "," Expression } ] ")" ;
+
+Keyword     = "@" identifier ;
+            (* In expression context a Keyword MUST be followed by a CallSuffix
+               — `@if(...)`, `@loop(...)`, `@match(...)`.  A bare @kw with no
+               "(" is an error (except the @true/@false literals below). *)
 
 BinOp       = operator-char { operator-char }
             | ".."                          (* half-open range — ADR 0016 *)
@@ -107,42 +202,44 @@ operator-char
             = "=" | "<" | ">" | "!" | "+" | "-" | "*" | "/" | "%"
             | "^" | "|" | "~" | "?"
             ;
-            (* Note: "&", "@", "$", "." are NOT valid operator characters — they
-               are reserved for call sigils, keyword sigils, variant sigils, and
-               namespace separators.  ":" appears only in ":=" (binding) and
-               "::" (namespace), never as a type-annotation sigil.  "->" (an
-               operator string) denotes a function type inside a TypeExpr.
+            (* Note: "&", "@", "$", "." are NOT valid operator characters — "@"
+               is the keyword sigil, "$" the variant/literal sigil, "." a
+               namespace separator, and "&" is now a free (non-operator)
+               character (the call sigil it once denoted is retired).  ":"
+               appears only in ":=" (binding) and "::" (namespace), never as a
+               type-annotation sigil.  "->" (an operator string) denotes a
+               function type inside a TypeExpr.  "=>" (an operator run) is the
+               match-arm arrow.  "|" doubles as the variant separator inside a
+               `@type` VariantSum.
 
                ".." is a distinct two-character token the lexer recognises
                ahead of the single "." namespace separator (ADR 0016).  It is a
                half-open range `lo..hi` (hi excluded) and is SYNTACTIC-ONLY:
-               valid only as the subject of an iterate `@loop` (see below), not
-               a first-class value.  A `..` anywhere else is rejected at
+               valid only as the subject of an iterate `@loop`, not a
+               first-class value.  A `..` anywhere else is rejected at
                elaboration; `1...5`, `1..`, `..5`, `a..b..c` are errors. *)
 
-(* ── Function calls ─────────────────────────────────────────────────────── *)
+(* ── Variants ───────────────────────────────────────────────────────────── *)
 
-FunctionCall = "&" FunctionCallBody ;
+(*
+  `$Name` is the variant DECLARATOR / PATTERN sigil.  It appears in a `@type`
+  sum RHS and in `@match` patterns, optionally carrying comma-separated payload
+  fields (`$Some value T`, `$None`).  It does NOT take a CallSuffix.
 
-FunctionCallBody
-            = Keyword CallArgs       (* built-in keyword call *)
-            | Namespace CallArgs     (* user-defined function call *)
-            ;
-
-CallArgs    = Expression { "," Expression }   (* at least one argument *)
-            | (* empty — when followed by ";", ")", "}", ",", or EOF *)
-            ;
-
-Keyword     = "@" identifier ;
+  VALUE-position construction does NOT use `$`: it calls the generated
+  constructor function by plain name — `Some(x)`, `None()` — an ordinary
+  Namespace + CallSuffix.  So `Some(42)`, not `$Some(42)`, builds a value.
+*)
+VariantCtor = "$" identifier [ Param { "," Param } ] ;
 
 (* ── Blocks ─────────────────────────────────────────────────────────────── *)
 
+(*
+  A block is a sequence of ";"-terminated items with an optional trailing
+  expression that becomes the block's value (no ";").  A bare `name := value`
+  inside a block is an immutable LOCAL (scope inferred from block depth).
+*)
 Block       = "{" { Item ";" } [ Expression ] "}" ;
-
-(* ── Variant declarations ────────────────────────────────────────────────── *)
-
-VariantDecl = "$" identifier { Param } ;
-            (* e.g.  $Some value Int   $None   $Circle r Int *)
 
 (* ── Namespace paths ─────────────────────────────────────────────────────── *)
 
@@ -164,32 +261,26 @@ ArrayLiteral  = "$[" [ Expression { "," Expression } ] "]" ;
 ObjectLiteral = "${" [ KeyValuePair { "," KeyValuePair } ] "}" ;
 TupleLiteral  = "$(" [ Expression { "," Expression } ] ")" ;
 
-KeyValuePair  = TypedIdentifier "=" Expression ;
+KeyValuePair  = identifier "=" Expression ;
 
 StringLiteral = "'" { string-char } "'" ;
 string-char   = (* any character except "'", "\", and line terminators *) ;
 
-IntLiteral    = DecLiteral | BinLiteral | HexLiteral | OctLiteral ;
+IntLiteral    = DecLiteral ;          (* decimal only — no 0x/0b/0c prefixes *)
 
 DecLiteral    = digit { digit } { "_" digit { digit } } ;
 FloatLiteral  = digit { digit } "." digit { digit } ;
-BinLiteral    = "0b" bit { bit } { "_" bit { bit } } ;
-HexLiteral    = "0x" hex-digit { hex-digit } { "_" hex-digit { hex-digit } } ;
-OctLiteral    = "0c" oct-digit { oct-digit } { "_" oct-digit { oct-digit } } ;
 
 BooleanLiteral = "@true" | "@false" ;
-
-bit           = "0" | "1" ;
-oct-digit     = "0" | "1" | "2" | "3" | "4" | "5" | "6" | "7" ;
-hex-digit     = digit | "a".."f" | "A".."F" ;
 
 (* ── Types ───────────────────────────────────────────────────────────────── *)
 
 (*
   Types appear in `\\` signature lines, in struct fields / variant payloads
-  ("name Type"), and as type arguments.  There is NO leading ":" — that
-  annotation syntax was removed.  A function type is parenthesised parameter
-  types and "->":  (Int, Int) -> Int.  A value type is bare:  Int, Option[Int].
+  ("name Type"), as type arguments, and as a `@type` alias RHS.  There is NO
+  leading ":" — type syntax is space-separated / positional.  A function type
+  is parenthesised parameter types and "->":  (Int, Int) -> Int.  A value type
+  is bare:  Int, Option[Int].
   Examples:
     (Int, Int) -> Int    — binary function returning Int
     () -> Bool           — nullary function returning Bool
@@ -204,10 +295,6 @@ TypeAtom    = "(" [ TypeExpr { "," TypeExpr } ] ")"  (* param list / grouping *)
             ;
 
 TypeArgs    = "[" TypeExpr { "," TypeExpr } "]" ;
-
-(* A name with an optional space-separated type — a struct field, a variant
-   payload, or an object-literal key. *)
-TypedIdentifier = identifier [ TypeExpr ] ;
 
 (* ── Identifiers ─────────────────────────────────────────────────────────── *)
 
@@ -226,7 +313,7 @@ digit       = "0".."9" ;
   They are not listed in production rules above for clarity.
 *)
 
-whitespace    = " " | "\t" | "\x0B" | "\x0C" | " " | "﻿"
+whitespace    = " " | "\t" | "\x0B" | "\x0C" | " " | "﻿"
               | (* Unicode space separators U+2000–U+200B, U+3000 *)
               ;
 
@@ -234,12 +321,13 @@ line-end      = "\n" | "\r" | "" | "" ;
 
 line-comment  = "#" { (* any char except line-end *) } line-end ;
 
-doc-comment   = "##" { (* any char except line-end *) } line-end ;
-
 (*
   Notes:
-  - "#" starts a line comment; "##" starts a doc comment attached to the
-    next definition.  Both are consumed as whitespace during parsing.
+  - "#" starts a line comment; "##" is also consumed as a line comment.  Both
+    are stripped as trivia during lexing — no DocComment node is produced.
+  - `@use '<path>';` is NOT a grammar construct — it is a pre-parse module
+    directive resolved (and stripped) by the use-resolver before parsing, like
+    the comments above.  It never reaches this grammar.
   - String literals use "'" (single quote).  There are no escape sequences
     in 0.1 — use raw bytes or unicode code points via WASM intrinsics.
 *)
@@ -247,46 +335,58 @@ doc-comment   = "##" { (* any char except line-end *) } line-end ;
 (* ── LL(1) form ──────────────────────────────────────────────────────────── *)
 
 (*
-  Silicon's grammar targets LL(1): top-down, leftmost derivation, single
-  token of lookahead.  Two productions above are written in their natural
-  human-readable form rather than the left-factored form a strict LL(1)
-  parser consumes.  Both productions encode the same language under either
-  presentation — left-factoring is a parser-side concern, not a surface
-  change.
-
-  This section gives the left-factored equivalents for reference.  A future
-  hand-written LL(1) parser (Silicon-side, when the bootstrap is rewritten)
-  should follow these shapes.
+  Silicon's grammar targets LL(1): top-down, leftmost derivation, single token
+  of lookahead.  The Item three-way (definition / assignment / expression) and
+  the Block trailing-expression rule are written above in their natural,
+  human-readable form rather than the left-factored form the parser consumes.
+  Both encode the same language under either presentation — left-factoring is a
+  parser-side concern, not a surface change.  This section gives the
+  left-factored equivalents for reference.
 
   ──────────────────────────────────────────────────────────────────────
-  1. Item — assignment vs. expression-as-statement
+  0. Element / first-token classifier
+
+  At the top of an Element the parser peeks ONE token (and at most one more):
+
+      \\                                  -> SignatureLine, then the next def
+      def-kw  NOT followed by "("         -> Definition (@mut / @fn / @type)
+      def-kw  followed by "("             -> a keyword CALL, e.g. @if(...) —
+                                             routed to Item as an Expression
+      otherwise                           -> Item
+
+  A leading @kw is therefore a DEFINITION only when it is NOT immediately
+  followed by "(".  `@if(c, {t}, {e})` is an expression-statement, not a def.
+
+  ──────────────────────────────────────────────────────────────────────
+  1. Item — definition vs. reassignment vs. expression-as-statement
 
   Natural form (above):
-      Item       = Statement | Expression ;
-      Statement  = Assignment | Definition ;
+      Item       = Definition | Assignment | Expression ;
+      Definition = BareDef | "@mut" BareDef | "@fn" FnDef | "@type" TypeDef ;
       Assignment = Namespace "=" Expression ;
 
-  Both Assignment and Expression-via-Namespace start with `identifier`,
-  so the parser cannot decide which production to enter from a single
-  token of lookahead at the start of Item.
+  A bare definition, a reassignment, and an expression-via-Namespace all start
+  with `identifier`, so the parser cannot pick the production from the leading
+  token alone.  It first strips an optional "@mut", or takes the "@type" path,
+  then parses the leading Namespace and decides on the NEXT token.
 
   Left-factored (LL(1)):
-      Item            = Definition
-                      | Namespace ItemTail
-                      | NonNamespaceExpr
-                      ;
-      ItemTail        = "=" Expression                       (* assignment *)
-                      | { BinOp ExprEnd }                    (* expression continuation *)
-                      ;
-      NonNamespaceExpr = Literal { BinOp ExprEnd }
-                      | FunctionCall { BinOp ExprEnd }
-                      | VariantDecl { BinOp ExprEnd }
-                      | Block { BinOp ExprEnd }
-                      | "(" Expression ")" { BinOp ExprEnd }
-                      ;
+      Item       = [ "@mut" ] Namespace ItemTail
+                 | "@fn" FnDef
+                 | "@type" TypeDef
+                 | NonNamespacePrimary { CallSuffix } { BinOp ExprEnd }
+                 ;
+      ItemTail   = [ GenericParams ] [ Params ] ":=" Expression  (* definition *)
+                 | "=" Expression                               (* reassignment *)
+                 | { CallSuffix } { BinOp ExprEnd }              (* expression-stmt *)
+                 ;
 
-  After parsing the Namespace, ONE token of lookahead decides ItemTail:
-  "=" -> assignment; anything else -> expression continuation.
+  After the leading Namespace, ONE token decides ItemTail:
+    - a bare `identifier` / "[" (generics) / ":="   -> definition;
+    - "="                                           -> reassignment;
+    - "(" (a CallSuffix) or a BinOp                 -> expression-statement.
+  Single token of lookahead past the LHS, no backtracking — statement-local,
+  as the line-independence architecture requires.
 
   ──────────────────────────────────────────────────────────────────────
   2. Block — trailing expression vs. another statement
@@ -294,9 +394,9 @@ doc-comment   = "##" { (* any char except line-end *) } line-end ;
   Natural form (above):
       Block = "{" { Item ";" } [ Expression ] "}" ;
 
-  After parsing what looks like an Item, the parser cannot tell whether
-  it was a statement (followed by ";") or the trailing expression
-  (followed by "}") until it has consumed the whole thing.
+  After parsing what looks like an Item, the parser cannot tell whether it was
+  a statement (followed by ";") or the trailing expression (followed by "}")
+  until it has consumed the whole thing.
 
   Left-factored (LL(1)):
       Block     = "{" BlockBody "}" ;
@@ -308,29 +408,35 @@ doc-comment   = "##" { (* any char except line-end *) } line-end ;
                 ;
 
   After parsing one Item, ONE token of lookahead decides BlockTail:
-  ";" -> statement, continue; "}" -> trailing expression, done.
+  ";" -> statement, continue; "}" -> trailing expression, done.  Block entry
+  increments a block-depth counter; a bare `name := value` parsed at depth > 0
+  is an immutable LOCAL, at depth 0 an immutable GLOBAL.
 
   ──────────────────────────────────────────────────────────────────────
   Tokenization assumptions
 
-  The LL(1) classification assumes a tokenizer that treats the following
-  as single multi-character tokens (not as character sequences requiring
-  multi-char lookahead in the parser):
+  The LL(1) classification assumes a tokenizer that treats the following as
+  single multi-character tokens (not character sequences needing multi-char
+  lookahead in the parser):
 
       "$["  "${"  "$("    (* array / object / tuple literal openers *)
       "::"               (* namespace separator *)
       ":="               (* definition binding *)
       "\\"               (* attached-signature sigil (two backslashes) *)
       "->"               (* function-type arrow inside a TypeExpr *)
-      "##"               (* doc comment *)
+      ".."               (* half-open range — distinct from "." (ADR 0016) *)
       "@true"  "@false"  (* boolean literals — distinct from @kw *)
 
+  Operator runs ("=", "==", "=>", "<=", "->", "++", …) are lexed by maximal
+  munch into a single `op` token; "=>" (match-arm arrow) and "->" (function-type
+  arrow) are ordinary operator runs, not dedicated tokens.
+
   Under these tokenization rules:
-    - VariantDecl ("$" identifier ...) vs. literal openers ($[ / ${ / $()
+    - VariantCtor ("$" identifier) vs. literal openers ($[ / ${ / $()
       is LL(1): they are distinct tokens at the lexer level.
-    - Boolean literals (@true / @false) vs. Definition keywords (@kw)
-      is LL(1): the reserved boolean tokens never appear where a defKw
-      is expected.
+    - Boolean literals (@true / @false) vs. keyword calls (@kw "(")
+      is LL(1): the reserved boolean tokens are recognised by text, and a @kw
+      in expression position requires a following "(".
 
   The hand-written LL(1) recursive-descent parser in src/parser/handwritten/
   disambiguates these spots directly, following the left-factored forms
@@ -339,11 +445,9 @@ doc-comment   = "##" { (* any char except line-end *) } line-end ;
   ──────────────────────────────────────────────────────────────────────
   What this is NOT
 
-  This appendix does NOT change the language — every program that parses
-  under the natural form parses identically under the left-factored form.
-  It only documents the parser shape a strict LL(1) implementation must
-  follow.  No surface-level "purity for purity's sake" changes (e.g.
-  requiring `@global x := ...` instead of `x = ...`) are implied.
+  This appendix does NOT change the language — every program that parses under
+  the natural form parses identically under the left-factored form.  It only
+  documents the parser shape a strict LL(1) implementation must follow.
 *)
 
 (* ── Strata boundary ─────────────────────────────────────────────────────── *)
@@ -352,31 +456,87 @@ doc-comment   = "##" { (* any char except line-end *) } line-end ;
   This grammar defines the fixed syntactic skeleton of Silicon.  It is
   intentionally minimal and stable.
 
-  All keywords other than those built into the grammar skeleton (@true, @false)
-  are resolved at elaboration time via the strata registry.  This means:
+  ADR-0020 fixes a small set of keywords into the grammar skeleton itself —
+  the binding/type/mutability surface:
 
-    - @fn, @global, @local, @type, @struct, @enum, @if, @loop, @match, @return,
-      @defer, @try, @extern, @use — all are elaborated keywords, not grammar
-      reserved words.
+    @mut    @fn    @type    @true    @false
+    @extern @export @platform                 (* signature-line modifiers *)
+
+  All OTHER keywords are resolved at elaboration time via the strata registry.
+  This means:
+
+    - @if, @loop, @match, @return, @defer, @try, @as, @toInt, … — all are
+      elaborated keywords, not grammar reserved words.  In expression position
+      each appears as `@kw(args…)` (a Keyword Primary with a CallSuffix).
+
+    - @use is NOT a grammar construct: `@use '<path>';` is a pre-parse module
+      directive resolved (and stripped) by the use-resolver before parsing.
 
     - @loop is one keyword whose meaning is chosen at elaboration by the count
       of comma-operands before the trailing { body } block (ADR 0016):
-          &@loop { body }                infinite (≡ &@loop 1, { body })
-          &@loop cond, { body }          while — cond re-checked each iteration
-          &@loop v, subject, { body }    iterate: v ← each element
-          &@loop i, v, subject, { body } iterate: i ← position, v ← element
+          @loop({ body })                infinite (≡ @loop(1, { body }))
+          @loop(cond, { body })          while — cond re-checked each iteration
+          @loop(v, subject, { body })    iterate: v ← each element
+          @loop(i, v, subject, { body }) iterate: i ← position, v ← element
       `subject` is a `lo..hi` range or an i32-element Vec; `_` discards a binder;
       ≥ 4 operands are rejected.  Every form desugars to the while shape, so the
-      grammar needs no new production — it is an ordinary FunctionCall.
+      grammar needs no new production — it is an ordinary parenthesised call.
 
-    - User-defined strata keywords (@my_kw) are syntactically identical to
-      any other @identifier.  The grammar accepts them; the elaborator resolves
-      them.
+    - The surface storage/shape keywords of the pre-ADR-0020 grammar —
+      @global, @local, @var, @struct, @enum — are DROPPED from the canonical
+      surface.  Storage is inferred from scope (top level ⇒ global, in block ⇒
+      local), mutability is explicit via @mut, and struct/sum shapes are
+      written as `@type Name := { … }` / `@type Name := $A | $B`.  (The parser
+      still accepts the old keywords transitionally — see §Legacy.)
 
-    - The grammar will NOT be extended to add new keyword tokens.  New
-      language features ride the existing Definition and FunctionCall forms
-      via new strata entries.
+    - User-defined strata keywords (@my_kw) are syntactically identical to any
+      other @identifier.  The grammar accepts them; the elaborator resolves
+      them.  In expression position they too take the `@kw(args…)` call form.
+
+    - The grammar will NOT be extended to add new keyword tokens.  New language
+      features ride the existing Definition and parenthesised-call forms via
+      new strata entries.
 
   See docs/strata.md for authoring strata; docs/strata-authoring-guide.md for
   the &Compiler::* API; docs/stability.md §1 for the language stability rules.
+*)
+
+(* ── Legacy (transitional — DEPRECATED, NOT canonical) ───────────────────── *)
+
+(*
+  During migration to ADR-0020 the hand-written parser is an ADDITIVE SUPERSET:
+  in addition to everything above it STILL ACCEPTS the legacy pre-ADR-0020
+  surface so the existing src/strata/*.si sources and the test corpus keep
+  parsing.  None of the forms below are part of the canonical grammar; they are
+  documented only so readers of legacy code are not surprised.  They will be
+  retired.
+
+    - "&"-call sigil.  Paren-free calls introduced by "&":
+          & add 1, 2                ≡  add(1, 2)
+          & @if cond, {t}, {e}      ≡  @if(cond, {t}, {e})
+          & @as Type, expr          (ascription — a dedicated AscribeExpr form)
+      LegacyCall     = "&" ( Keyword | Namespace ) LegacyCallArgs ;
+      LegacyCallArgs = Expression { "," Expression } | (* empty *) ;
+      ADR-0020 retires "&" entirely; calls are always parenthesised.
+
+    - Explicit storage / mutability keywords.  `@global name := v`,
+      `@local name := v`, and `@var name := v` are accepted and mapped directly
+      to their kinds; unlike a bare `name := v` they do NOT auto-scope by depth
+      and do NOT carry the immutable flag.  ADR-0020 uses bare `name := v` and
+      `@mut name := v` instead.
+
+    - Explicit shape keywords.  `@struct Point x Int, y Int` and
+      `@enum …` are accepted and mapped to the corresponding type definition.
+      ADR-0020 writes `@type Point := { x Int, y Int }` and
+      `@type Name := $A | $B`.
+
+    - Parenthesised parameter lists and the `@extern { \\ … }` /
+      `@interface { \\ … }` SignatureBlock brace form are accepted.  ADR-0020
+      uses bare Params and per-line `\\ @extern …` signatures.
+
+    - "@fn" optional after `\\`.  Legacy code may still write an explicit `@fn`
+      where a bare definition now suffices.
+
+  Migration commits: 6a4ad72 (model), 70269ef (immutable flag + typechecker
+  E0007), 07e29f4 (parser additive superset).
 *)
