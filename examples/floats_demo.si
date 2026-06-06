@@ -10,15 +10,23 @@
 
 # Celsius -> Fahrenheit:  f = c * 9/5 + 32
 \\ to_fahrenheit (Float) -> Float
-@fn to_fahrenheit c := { (c * 1.8) + 32.0 };
+@fn to_fahrenheit c := {
+    c * 1.8 + 32.0
+};
 
 @fn main := {
-    &print_str 'sqrt(2)      = '; &print_float (&float_sqrt 2.0);
-    &print_str 'pi (approx)  = '; &print_float 3.14159;
-    &print_str '|-2.5|       = '; &print_float (&float_abs (0.0 - 2.5));
-    &print_str 'max(4.5,9.5) = '; &print_float (&float_max 4.5, 9.5);
-    &print_str '100C in F    = '; &print_float (&to_fahrenheit 100.0);
-    &print_str '0C in F      = '; &print_float (&to_fahrenheit 0.0);
+    print_str('sqrt(2)      = ');
+    print_float(float_sqrt(2.0));
+    print_str('pi (approx)  = ');
+    print_float(3.14159);
+    print_str('|-2.5|       = ');
+    print_float(float_abs(0.0 - 2.5));
+    print_str('max(4.5,9.5) = ');
+    print_float(float_max(4.5, 9.5));
+    print_str('100C in F    = ');
+    print_float(to_fahrenheit(100.0));
+    print_str('0C in F      = ');
+    print_float(to_fahrenheit(0.0));
     0
 };
-&main;
+main();

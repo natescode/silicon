@@ -2,33 +2,53 @@
 @type_sum Status := Ok | Warn | Error;
 
 \\ add (Int, Int)
-@fn add a, b := { a + b };
+@fn add a, b := {
+    a + b
+};
 
 \\ safeDivide (Int, Int)
 @fn safeDivide x, y := {
-    &@if y == 0, { &@return 0 };
+    @if(y == 0, {
+        @return(0)
+    });
     x / y
 };
 
 \\ countDown (Int)
 @fn countDown n := {
-    @local i := n;
-    &@loop i > 0, { i = i - 1; };
+    @mut i := n;
+    @loop(i > 0, {
+        i = i - 1;
+    });
     i
 };
 
 \\ colorCode (Color)
 @fn colorCode c := {
-    &@match c, Color::Red, { 1 }, Color::Green, { 2 }, { 0 }
+    @match(c, Color::Red, {
+        1
+    }, Color::Green, {
+        2
+    }, {
+        0
+    })
 };
 
 \\ statusPriority (Status)
 @fn statusPriority s := {
-    &@match s, Status::Error, { 2 }, Status::Warn, { 1 }, { 0 }
+    @match(s, Status::Error, {
+        2
+    }, Status::Warn, {
+        1
+    }, {
+        0
+    })
 };
 
 \\ circleArea (Float)
-@fn circleArea r := { r * r };
+@fn circleArea r := {
+    r * r
+};
 
 @export add;
 @export safeDivide;

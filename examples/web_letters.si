@@ -18,8 +18,8 @@
 # Slice setter rather than touching raw memory.
 \\ char_string (Int) -> String
 @fn char_string b := {
-    @local s := &alloc_string 1;
-    &slice_set_byte (&string_as_slice s), 0, b;
+    s := alloc_string(1);
+    slice_set_byte(string_as_slice(s), 0, b);
     s
 };
 
@@ -28,23 +28,23 @@
 # Returns the number of letters logged.
 \\ log_letters (String) -> Int
 @fn log_letters word := {
-    @local view := &string_as_slice word;
-    @local len  := &slice_len view;
-    @local i := 0;
+    view := string_as_slice(word);
+    len := slice_len(view);
+    @mut i := 0;
 
-    &@loop i < len, {
-        @local b := &slice_get_byte view, i;
-        &web::console_log_str (&char_string b);
+    @loop(i < len, {
+        b := slice_get_byte(view, i);
+        web::console_log_str(char_string(b));
         i = i + 1;
-    };
+    });
 
     len
 };
 
 # run() — entry point the web host calls; logs the letters of 'Silicon'.
-\\ run () -> Int
+\\ run Int
 @fn run := {
-    &log_letters 'Silicon'
+    log_letters('Silicon')
 };
 
 @export run;

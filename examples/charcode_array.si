@@ -7,25 +7,24 @@
 # lower to inline array.* instructions; fromCharCodeArray/intoCharCodeArray are
 # the host-native builtins that turn one into / out of a JSString.
 
-\\ main () -> Void
 @fn main := {
     # "Hi!" assembled from code units.
     \\ codes CharCodeArray
-    @local codes := &JSString::codeArray 3;
-    &JSString::setCode codes, 0, 72;    # 'H'
-    &JSString::setCode codes, 1, 105;   # 'i'
-    &JSString::setCode codes, 2, 33;    # '!'
+    codes := JSString::codeArray(3);
+    JSString::setCode(codes, 0, 72);  # 'H'
+    JSString::setCode(codes, 1, 105);  # 'i'
+    JSString::setCode(codes, 2, 33);  # '!'
     \\ greeting JSString
-    @local greeting := &JSString::fromCharCodeArray codes, 0, 3;
-    &console::log greeting;             # Hi!
+    greeting := JSString::fromCharCodeArray(codes, 0, 3);
+    console::log(greeting);  # Hi!
 
     # Read a JS string's code units back into an array.
     \\ buf CharCodeArray
-    @local buf := &JSString::codeArray 16;
+    buf := JSString::codeArray(16);
     \\ n Int
-    @local n := &JSString::intoCharCodeArray greeting, buf, 0;
-    &web::console_log n;                # 3 (units copied)
-    &web::console_log (&JSString::getCode buf, 0)    # 72 ('H')
+    n := JSString::intoCharCodeArray(greeting, buf, 0);
+    web::console_log(n);  # 3 (units copied)
+    web::console_log(JSString::getCode(buf, 0))  # 72 ('H')
 };
 
-&main;
+main();

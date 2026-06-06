@@ -6,14 +6,13 @@
 # (Canvas / DOM functions in the `web` module are browser-only — they don't
 #  instantiate under the headless bun runner.)
 
-\\ main () -> Void
 @fn main := {
-    &web::console_log_f (&web::math_sqrt 2.0);          # 1.4142135...
-    &web::console_log_f (&web::math_pow 2.0, 10.0);     # 1024
-    &web::console_log_f (&web::math_floor 3.7);         # 3
-    &web::console_log_f (&web::math_max 4.0, 9.0);      # 9
+    web::console_log_f(web::math_sqrt(2.0));  # 1.4142135...
+    web::console_log_f(web::math_pow(2.0, 10.0));  # 1024
+    web::console_log_f(web::math_floor(3.7));  # 3
+    web::console_log_f(web::math_max(4.0, 9.0));  # 9
     # math_random ∈ [0, 1)
-    &web::console_log_f (&web::math_random)
+    web::console_log_f(web::math_random())
 };
 
-&main;
+main();

@@ -20,8 +20,8 @@
 # header; we write the single payload byte just past it.
 \\ char_string (Int) -> String
 @fn char_string b := {
-    @local s := &alloc_string 1;
-    &WASM::i32_store8 ((&str_ptr s) + 4), b;
+    s := alloc_string(1);
+    WASM::i32_store8(str_ptr(s) + 4, b);
     s
 };
 
@@ -30,23 +30,23 @@
 # Returns the number of letters logged.
 \\ log_letters (String) -> Int
 @fn log_letters word := {
-    @local ptr := (&str_ptr word) + 4;
-    @local len := &str_len word;
-    @local i := 0;
+    ptr := str_ptr(word) + 4;
+    len := str_len(word);
+    @mut i := 0;
 
-    &@loop i < len, {
-        @local b := &WASM::i32_load8_u (ptr + i);
-        &web::console_log_str (&char_string b);
+    @loop(i < len, {
+        b := WASM::i32_load8_u(ptr + i);
+        web::console_log_str(char_string(b));
         i = i + 1;
-    };
+    });
 
     len
 };
 
 # run() — entry point the web host calls; logs the letters of 'Silicon'.
-\\ run () -> Int
+\\ run Int
 @fn run := {
-    &log_letters 'Silicon'
+    log_letters('Silicon')
 };
 
 @export run;
