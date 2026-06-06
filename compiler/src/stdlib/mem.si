@@ -16,47 +16,45 @@
 
 # Round `n` up to the next multiple of `a`.  `a` need not be a power of
 # two — uses plain modulo.
-
 \\ align_up (Int, Int) -> Int
-align_up n, a := {
-    @mut r := n % a;
-    @mut out := n;
-    @if(r != 0, {
-        out = n + (a - r)
-    }, {});
+@fn align_up n, a := {
+    @local r := n % a;
+    @local out := n;
+    &@if r != 0, { out = n + (a - r) }, {};
     out
 };
 
-\\ heap_align Int
-heap_align := {
-    @mut h := heap_get();
-    heap_set(align_up(h, 4));
+# Round the bump-allocator pointer up to a 4-byte boundary so the next
+# i32 store (iovec / WASI out-pointer) lands on an aligned address.
+# A no-op when the pointer is already aligned.
+\\ heap_align () -> Int
+@fn heap_align := {
+    @local h := &heap_get;
+    &heap_set (&align_up h, 4);
     0
 };
 
+# Write `n` copies of byte `b` starting at address `ptr`.
 \\ mem_fill (Int, Int, Int) -> Int
-mem_fill ptr, b, n := {
-    @mut i := 0;
-    @loop(i < n, {
-        WASM::i32_store8(ptr + i, b);
+@fn mem_fill ptr, b, n := {
+    @local i := 0;
+    &@loop i < n, {
+        &WASM::i32_store8 (ptr + i), b;
         i = i + 1;
-    });
+    };
     0
 };
 
+# Compare `n` bytes at addresses `a` and `b`.  @true if every byte is
+# equal, @false on the first mismatch.
 \\ mem_eq (Int, Int, Int) -> Bool
-mem_eq a, b, n := {
-    @mut i := 0;
-    @mut same := @true;
-    @loop(i < n, {
-        @mut ca := WASM::i32_load8_u(a + i);
-        @mut cb := WASM::i32_load8_u(b + i);
-        @if(ca != cb, {
-            same = @false;
-            i = n;
-        }, {
-            i = i + 1;
-        });
-    });
+@fn mem_eq a, b, n := {
+    @local i := 0;
+    @local same := @true;
+    &@loop i < n, {
+        @local ca := &WASM::i32_load8_u (a + i);
+        @local cb := &WASM::i32_load8_u (b + i);
+        &@if ca != cb, { same = @false; i = n; }, { i = i + 1; };
+    };
     same
 };

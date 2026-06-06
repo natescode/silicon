@@ -25,5 +25,3 @@
 #
 # See src/codegen/gc-vec.ts for the generated function bodies and
 # src/stdlib/gc/vec.test.ts for the cross-target parity suite.
-
-

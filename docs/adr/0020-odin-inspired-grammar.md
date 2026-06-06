@@ -243,9 +243,9 @@ main();
     `@mut` (preserving today's mutable-capable semantics); locals never reassigned
     could be bare-immutable. A follow-up linter should demote them — the codemod
     cannot without dataflow.
-- **Follow-up work:** (1) the codemod is drafted (`tools/migrate-adr0020.ts`,
-  §Migration) — tighten it (demote never-reassigned `@mut`; preserve interior `#`
-  comments); (2) fix the `sgl fmt` formatter's `:Type` bug (its output does not
+- **Follow-up work:** (1) the codemod (`tools/migrate-adr0020.ts`, §Migration) now
+  preserves comments; remaining nicety is to demote never-reassigned `@mut` to bare;
+  (2) fix the `sgl fmt` formatter's `:Type` bug (its output does not
   re-parse) and rewrite `docs/grammar.ebnf` to the EBNF-diff form on acceptance;
   (3) reconcile with ADR 0011 when the
   borrow checker lands (`@mut` + region capabilities); (4) update
@@ -386,9 +386,15 @@ Three emit changes vs the formatter; everything else passes through unchanged:
    paren-free calls (always-parens makes it unnecessary); keeps the no-precedence
    grouping parens.
 
-`@use '…';` is pulled out before parsing and re-emitted verbatim (it is resolved by
-preprocessing, not the grammar). The leading license/doc comment header is preserved
-verbatim.
+**Comments are preserved.** Although the lexer strips all `#`/`##` comments before they
+reach the AST, the codemod scans them from source and re-interleaves them by position:
+every node carries `sourceLocation`, so before each element/block-item it flushes the
+source comments / blank lines / `@use` lines that precede it (deep-searching the subtree
+for the line, since statement nodes like `FunctionCall` lack their own location), and a
+trailing inline comment is re-attached to the line it sat on. On the stdlib this preserves
+**498/498 comments** plus `@use` lines and blank-line structure. (Edge: a comment buried
+inside a single multi-line *non-block* expression, or directly before a block's closing
+`}`, may shift to the next statement boundary — preserved, lightly repositioned.)
 
 **Result of a full run over the stdlib:** all 13 `.si` files migrate with 0
 parse/emit failures and balanced delimiters. Representative output:
@@ -413,9 +419,9 @@ no inline return-type syntax and the parser merges `\\` into the def.)
   formatter emits `:Type`, so its output **fails to re-parse on 12/13 stdlib files** —
   a pre-existing formatter bug, independent of ADR 0020. The codemod sidesteps it by
   reconstructing `\\` lines.
-- **`#` line-comments are dropped** (175 interior across the stdlib) — they are
-  lexer-invisible, so an AST codemod cannot see them. The leading header is kept;
-  restoring interior comments needs a comment-attaching pass.
+- **Comments are preserved** (498/498 on the stdlib) via the source-scan + position
+  re-interleave described above — including trailing inline comments and blank-line
+  structure. (Earlier passes dropped them; that limitation is resolved.)
 - **`@local` → `@mut` is conservative** (see Consequences) — a follow-up linter
   should demote never-reassigned locals to bare-immutable.
 - **`@struct` conversion is flagged** for review — the type-context struct grammar

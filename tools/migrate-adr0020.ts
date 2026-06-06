@@ -5,31 +5,33 @@
  * `@mut`/`@type` markers). See docs/adr/0020-odin-inspired-grammar.md.
  *
  * STRATEGY: parse with the production parser, then RE-EMIT in ADR 0020 syntax.
- * This is a fork of compiler/src/fmt/formatter.ts with exactly three behavioural
- * changes (everything else is passed through unchanged):
+ * The transformation is a fork of compiler/src/fmt/formatter.ts with three rules:
  *
- *   1. formatDefinition  — drop @fn/@global (bare); @local/@var -> `@mut`;
- *                          @struct -> `@type Name := { fields }`; keep @type.
- *   2. formatFunctionCall — `&name a, b`  ->  `name(a, b)`  (drop &, add parens).
- *                          Works uniformly for user calls AND `&@if`/`&@loop`/…
- *   3. formatBinOp        — drop the call-operand paren reconstruction (always-
- *                          parens makes `f(x) + y` unambiguous); keep the
- *                          BinaryOp-right-operand parens (no precedence table).
+ *   1. emitDefinition  — drop @fn/@global (bare); @local/@var -> `@mut`;
+ *                        @struct -> `@type Name := { fields }`; keep @type. Types
+ *                        are space-separated; function types are reconstructed onto
+ *                        a `\\` signature line (no inline return-type syntax).
+ *   2. emitCall        — `&name a, b`  ->  `name(a, b)`  (drop &, add parens).
+ *                        Uniform for user calls AND `&@if`/`&@loop`/`&@match`.
+ *   3. emitBinOp       — drop the call-operand paren reconstruction (always-parens
+ *                        makes `f(x) + y` unambiguous); keep the no-precedence
+ *                        grouping parens on a BinaryOp right operand.
  *
- * KNOWN LIMITATIONS (by design — an AST codemod cannot see what the grammar
- * discards):
- *   - Single-line `#` comments are stripped by the lexer and are NOT preserved.
- *     The leading license/doc header block is re-attached verbatim as a
- *     mitigation; interior `#` comments are lost (count reported per file).
- *   - `.` path separators are normalised to `::` (semantically identical).
- *   - `@struct`/`@enum`/`@extern` conversions are best-effort and flagged for
- *     human review (the type-context struct grammar is not yet implemented).
+ * COMMENT PRESERVATION: comments are lexer-stripped (never reach the AST), so they
+ * are scanned from source and re-interleaved by position. Every AST node carries
+ * `sourceLocation` (absolute line/col), so before emitting each element/block-item
+ * we flush the source comments / blank lines / `@use` lines that precede it, and a
+ * trailing inline comment is re-attached to the line it sat on. Result: comments,
+ * blank-line structure, and `@use` lines are preserved in source order.
+ * (Limitation: a comment buried inside a single multi-line *non-block* expression,
+ * or directly before a block's closing `}`, may shift to the next statement
+ * boundary — preserved, lightly repositioned. `.` paths normalise to `::`.)
  *
- * USAGE (always non-destructive — never overwrites sources):
- *   bun run tools/migrate-adr0020.ts                  # migrate the whole stdlib -> build/adr0020/
- *   bun run tools/migrate-adr0020.ts --check          # dry run: parse + report only, write nothing
- *   bun run tools/migrate-adr0020.ts --stdout f.si    # print one file's migration to stdout
- *   bun run tools/migrate-adr0020.ts --out dir a.si b.si
+ * USAGE (non-destructive by default — writes a copy under build/adr0020/):
+ *   bun run tools/migrate-adr0020.ts                  # whole stdlib -> build/adr0020/
+ *   bun run tools/migrate-adr0020.ts --check          # parse + report only, write nothing
+ *   bun run tools/migrate-adr0020.ts --stdout f.si    # print one file's migration
+ *   bun run tools/migrate-adr0020.ts --out dir a.si   # e.g. --out compiler/src/stdlib (in place)
  */
 
 import { parseToAst } from '../compiler/src/parser/handwritten/parser'
@@ -39,9 +41,84 @@ import { join, basename, dirname } from 'node:path'
 const IND = '    '
 const ind = (d: number) => IND.repeat(d)
 
-// Per-run diagnostics surfaced to the operator.
-interface Report { file: string; out: string; elements: number; lineCommentsDropped: number; flags: string[] }
+interface Report { file: string; out: string; elements: number; comments: number; flags: string[] }
 const FLAGS: string[] = [] // current-file flag sink
+
+// ---------------------------------------------------------------------------
+// Preserved non-AST lines — comments, `@use`, and blanks, in source order.
+// These are interleaved into the output by source line number (the AST drops
+// them all). `flushBefore`/`trailingAt` consume them as the emitter walks nodes.
+// ---------------------------------------------------------------------------
+
+interface Pres { line: number; text: string; ownLine: boolean; kind: 'use' | 'comment' | 'blank' }
+let PRES: Pres[] = []
+let PCUR = 0
+
+function scanPreserved(src: string): Pres[] {
+    const out: Pres[] = []
+    const lines = src.split('\n')
+    for (let i = 0; i < lines.length; i++) {
+        const line = lines[i]
+        const ln = i + 1
+        if (line.trim() === '') { out.push({ line: ln, text: '', ownLine: true, kind: 'blank' }); continue }
+        if (/^\s*@use\b/.test(line)) {
+            out.push({ line: ln, text: line.trim().replace(/;?\s*$/, ';'), ownLine: true, kind: 'use' })
+            continue
+        }
+        // first '#' not inside a single-quote string (Silicon strings have no escapes)
+        let inStr = false, idx = -1
+        for (let j = 0; j < line.length; j++) {
+            const c = line[j]
+            if (c === "'") inStr = !inStr
+            else if (c === '#' && !inStr) { idx = j; break }
+        }
+        if (idx >= 0) {
+            out.push({ line: ln, text: line.slice(idx).trimEnd(), ownLine: line.slice(0, idx).trim() === '', kind: 'comment' })
+        }
+    }
+    return out
+}
+
+// Emit every preserved line whose source line is strictly before `line`.
+function flushBefore(line: number, depth: number, acc: string[]): void {
+    while (PCUR < PRES.length && PRES[PCUR].line < line) {
+        const p = PRES[PCUR++]
+        acc.push(p.kind === 'blank' ? '' : ind(depth) + p.text)
+    }
+}
+
+// A trailing inline comment sitting on exactly `line` — consume and return it.
+function trailingAt(line: number): string {
+    const p = PRES[PCUR]
+    if (p && p.line === line && p.kind === 'comment' && !p.ownLine) { PCUR++; return '  ' + p.text }
+    return ''
+}
+
+// Statement-level nodes (FunctionCall, Namespace, …) don't all carry their own
+// sourceLocation, but some descendant always does — so take the min start / max
+// end line over the whole subtree.
+function nodeStart(node: any): number {
+    let min = Infinity
+    const visit = (x: any) => {
+        if (!x || typeof x !== 'object') return
+        if (Array.isArray(x)) { x.forEach(visit); return }
+        if (x.sourceLocation?.startLine != null) min = Math.min(min, x.sourceLocation.startLine)
+        for (const k in x) if (k !== 'sourceLocation' && k !== 'relSpan') visit(x[k])
+    }
+    visit(node)
+    return min
+}
+function nodeEnd(node: any): number {
+    let max = -Infinity
+    const visit = (x: any) => {
+        if (!x || typeof x !== 'object') return
+        if (Array.isArray(x)) { x.forEach(visit); return }
+        if (x.sourceLocation?.endLine != null) max = Math.max(max, x.sourceLocation.endLine)
+        for (const k in x) if (k !== 'sourceLocation' && k !== 'relSpan') visit(x[k])
+    }
+    visit(node)
+    return max
+}
 
 // ---------------------------------------------------------------------------
 // Emitter (forked from compiler/src/fmt/formatter.ts — ADR 0020 rules)
@@ -49,17 +126,13 @@ const FLAGS: string[] = [] // current-file flag sink
 
 function emitProgram(program: any): string {
     const parts: string[] = []
-    for (let i = 0; i < program.elements.length; i++) {
-        const el = program.elements[i]
-        if (i > 0 && el.type === 'Definition') parts.push('')
-        parts.push(emitTop(el, 0))
+    for (const el of program.elements) {
+        const sl = nodeStart(el); if (sl !== Infinity) flushBefore(sl, 0, parts)
+        parts.push(ind(0) + emit(el, 0) + ';' + trailingAt(nodeEnd(el)))
     }
+    flushBefore(Infinity, 0, parts) // any trailing end-of-file comments
+    while (parts.length && parts[parts.length - 1] === '') parts.pop()
     return parts.join('\n') + '\n'
-}
-
-function emitTop(node: any, depth: number): string {
-    if (node.type === 'DocComment') return ind(depth) + '##' + node.content
-    return ind(depth) + emit(node, depth) + ';'
 }
 
 function emit(node: any, depth: number): string {
@@ -163,9 +236,6 @@ function emitFieldSpace(p: any): string {
 }
 
 // CHANGE 2 — calls are always parenthesized; the `&` sigil is gone.
-// Uniform for user calls (`&add 1,2` -> `add(1, 2)`), zero-arg (`&print` ->
-// `print()`), namespaced (`&WASM::i32_store ...`), and intrinsics (`&@if ...`
-// -> `@if(...)`, `&@loop ...` -> `@loop(...)`).
 function emitCall(fc: any, depth: number): string {
     const name = typeof fc.name === 'string' ? fc.name : emitNamespace(fc.name)
     return name + '(' + fc.args.map((a: any) => emit(a, depth)).join(', ') + ')'
@@ -181,12 +251,19 @@ function emitBinOp(b: any, depth: number): string {
     return leftStr + ' ' + b.operator + ' ' + rightStr
 }
 
+// Blocks interleave preserved comments/blanks before each item + trailing expr.
 function emitBlock(b: any, depth: number): string {
-    if (b.items.length === 0 && !b.trailing) return '{}'
     const inner = depth + 1
     const lines: string[] = ['{']
-    for (const item of b.items) lines.push(ind(inner) + emit(item, inner) + ';')
-    if (b.trailing) lines.push(ind(inner) + emit(b.trailing, inner))   // trailing expr: no ';'
+    for (const item of b.items) {
+        const sl = nodeStart(item); if (sl !== Infinity) flushBefore(sl, inner, lines)
+        lines.push(ind(inner) + emit(item, inner) + ';' + trailingAt(nodeEnd(item)))
+    }
+    if (b.trailing) {
+        const sl = nodeStart(b.trailing); if (sl !== Infinity) flushBefore(sl, inner, lines)
+        lines.push(ind(inner) + emit(b.trailing, inner) + trailingAt(nodeEnd(b.trailing)))
+    }
+    if (lines.length === 1) return '{}' // nothing inside (no items, trailing, or comments)
     lines.push(ind(depth) + '}')
     return lines.join('\n')
 }
@@ -223,63 +300,27 @@ function emitVariantDecl(vd: any): string {
 }
 
 // ---------------------------------------------------------------------------
-// Header preservation + comment accounting
-// ---------------------------------------------------------------------------
-
-/** Capture the leading run of comment/blank lines (SPDX + module doc) verbatim. */
-function leadingHeader(src: string): string {
-    const lines = src.split('\n')
-    const head: string[] = []
-    for (const line of lines) {
-        if (/^\s*#/.test(line) || line.trim() === '') head.push(line)
-        else break
-    }
-    // trim a trailing blank so we control spacing
-    while (head.length && head[head.length - 1].trim() === '') head.pop()
-    return head.length ? head.join('\n') + '\n\n' : ''
-}
-
-/** Count single-line `#` comments (not `##`) that the AST drops. */
-function countLineComments(src: string): number {
-    let n = 0
-    for (const line of src.split('\n')) {
-        const t = line.trimStart()
-        if (t.startsWith('##')) continue
-        if (t.startsWith('#')) { n++; continue }
-        // trailing comment after code (rough — ignores '#' inside strings)
-        const i = line.indexOf('#')
-        if (i > 0 && line[i + 1] !== '#') n++
-    }
-    return n
-}
-
-// ---------------------------------------------------------------------------
 // Driver
 // ---------------------------------------------------------------------------
 
 function migrateFile(path: string): { text: string; report: Report } {
     FLAGS.length = 0
-    const src = readFileSync(path, 'utf8')
-    // `@use '...';` is resolved by preprocessing in the real pipeline and is NOT
-    // part of the parser grammar — pull the lines out, parse the rest, and
-    // re-emit them verbatim (ADR 0020 leaves @use unchanged).
-    const useLines: string[] = []
-    const stripped = src.split('\n').map(line => {
-        if (/^\s*@use\b/.test(line)) { useLines.push(line.trim().replace(/;?\s*$/, ';')); return '' }
-        return line
-    }).join('\n')
+    const original = readFileSync(path, 'utf8')
+    // `@use '...';` is resolved by preprocessing, not the grammar — blank the lines
+    // for parsing (preserving line numbers so sourceLocation stays aligned), but
+    // keep them (and all comments + blanks) in the preserved stream for re-emission.
+    const stripped = original.split('\n').map(l => (/^\s*@use\b/.test(l) ? '' : l)).join('\n')
+    PRES = scanPreserved(original)
+    PCUR = 0
     const ast = parseToAst(stripped)
-    const header = leadingHeader(src)
-    const useBlock = useLines.length ? useLines.join('\n') + '\n\n' : ''
-    const text = header + useBlock + emitProgram(ast)
+    const text = emitProgram(ast)
     return {
         text,
         report: {
             file: path,
             out: '',
             elements: ast.elements.length,
-            // exclude comments preserved in the leading header from the drop count
-            lineCommentsDropped: Math.max(0, countLineComments(src) - countLineComments(header)),
+            comments: PRES.filter(p => p.kind === 'comment').length,
             flags: [...new Set(FLAGS)],
         },
     }
@@ -336,18 +377,17 @@ function main() {
 
     if (toStdout) return
 
-    // Summary
-    let totalDropped = 0
+    let totalComments = 0
     console.error('\nADR 0020 migration report')
-    console.error('─'.repeat(60))
+    console.error('─'.repeat(62))
     for (const r of reports) {
-        totalDropped += r.lineCommentsDropped
+        totalComments += r.comments
         const dest = r.out ? ` -> ${r.out}` : ''
-        console.error(`${basename(r.file).padEnd(14)} ${String(r.elements).padStart(3)} defs  ${String(r.lineCommentsDropped).padStart(3)} # dropped${dest}`)
+        console.error(`${basename(r.file).padEnd(14)} ${String(r.elements).padStart(3)} defs  ${String(r.comments).padStart(3)} comments kept${dest}`)
         for (const flag of r.flags) console.error(`   ⚠ ${flag}`)
     }
-    console.error('─'.repeat(60))
-    console.error(`${reports.length} files, ${totalDropped} interior '#' comments not preserved (leading header kept).`)
+    console.error('─'.repeat(62))
+    console.error(`${reports.length} files, ${totalComments} comments preserved (own-line + trailing; @use + blank-line structure kept).`)
     if (check) console.error('(--check: no files written)')
 }
 
