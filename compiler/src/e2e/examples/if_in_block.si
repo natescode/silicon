@@ -1,2 +1,8 @@
 \\ abs (Int)
-@fn abs x := { &@if x < 0, { 0 - x }, { x } };
+@fn abs x := {
+    @if(x < 0, {
+        0 - x
+    }, {
+        x
+    })
+};

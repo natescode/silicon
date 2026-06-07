@@ -14,9 +14,9 @@ I re-ran the load-bearing claims rather than trusting them. **One probe report i
 
 | Claim under test | Probe report said | What I observed | Verdict |
 |---|---|---|---|
-| `model.typeOf` never contains unresolved fresh vars (`?Tn`) | Report 1: "NO unresolved fresh type variables… counter not observable" | `@global x := &None;` (unconstrained no-arg polymorphic constructor) stores `Option[?T1]` **into the typeMap**. Two leading `&None`s shift it to `?T3`. | **FALSE in general.** Counter IS observable and order-dependent. |
+| `model.typeOf` never contains unresolved fresh vars (`?Tn`) | Report 1: "NO unresolved fresh type variables… counter not observable" | `x := None();` (unconstrained no-arg polymorphic constructor) stores `Option[?T1]` **into the typeMap**. Two leading `None()`s shift it to `?T3`. | **FALSE in general.** Counter IS observable and order-dependent. |
 | Counter can be reset per-element without breaking byte-identity | Report 1 implication | Resetting per-element would renumber a later leaking element's `?Tn`, diverging from full. | **UNSAFE** as stated. |
-| Check **order** changes unannotated inference | Report 2 | `@fn a := {&b}; @fn b := {1};` → a-first gives `a=Unknown`, b-first gives `a=Int`. Confirmed at the typeMap level. | **CONFIRMED.** |
+| Check **order** changes unannotated inference | Report 2 | `@fn a := {b()}; @fn b := {1};` → a-first gives `a=Unknown`, b-first gives `a=Int`. Confirmed at the typeMap level. | **CONFIRMED.** |
 | Annotated callee edits localize | Report 2 (4), Report 3 | Editing `@fn b := {1}` → `{2}` with `\\ b () -> Int` leaves the type/diag/symbol digests of callers `a`,`c` identical. | **CONFIRMED.** |
 | Per-element write set is cleanly sliceable | Report 3 | `typeMap` is subtree-local; `symbolToNodes`/`symbolToSpans` accumulate in source order; `functions`/`symbols` are two-phase deterministic from syntax. Matches the code (`checkNode` line 934, `recordSymbolRef` line 1568, `checkDefinition` line 1053). | **CONFIRMED** with caveats below. |
 | Reuse diff `ElementReuse[]` is a reliable cache key | Report 4 | Matches `incremental.ts` (`{kind:'reused', oldGroupIndex, delta}` / `{kind:'fresh'}`) and `incrementalElaborate.ts`. | **CONFIRMED.** |
@@ -24,7 +24,7 @@ I re-ran the load-bearing claims rather than trusting them. **One probe report i
 **Key empirical facts that drive everything:**
 
 1. **Fresh-var leak is real but rare.** 0 of 47 `src/e2e/examples/*.si` leak a `?Tn` into the typeMap. It requires an *unresolved* polymorphic call (no-arg constructor / unconstrained generic result with no pinning annotation).
-2. **The leak number is order-sensitive prefix state.** Three sequential `&None` → `?T1,?T2,?T3`. The number equals the count of *surviving* (unresolved) fresh allocations in elements checked **before**, in source order (a concrete `&Some 42` between two leaks did **not** bump the number — it resolves away). Either way it is a *global, prefix-accumulated* quantity.
+2. **The leak number is order-sensitive prefix state.** Three sequential `None()` → `?T1,?T2,?T3`. The number equals the count of *surviving* (unresolved) fresh allocations in elements checked **before**, in source order (a concrete `Some(42)` between two leaks did **not** bump the number — it resolves away). Either way it is a *global, prefix-accumulated* quantity.
 3. **Order-dependence of unannotated forward refs** is at the typeMap level, not just `functions`. `a=Unknown` vs `a=Int` is stored on `a`'s body nodes.
 
 ---
@@ -217,7 +217,7 @@ Write back `TypeCacheEntry[]` aligned to the *new* group list (reused entries ca
 - Random programs from a small grammar weighted toward the hazards: unannotated forward chains, mutual recursion, `@type[T]` with no-arg constructors (to force leaks), redefinition, shadowing.
 - Random edit operators: byte tweak inside an element, whole-element insert/delete, reorder, rename.
 - Invariant: incremental digest === full digest. Minimize counterexamples.
-- **Targeted leak fuzzer:** generate N sequential unconstrained `&None`/generic results and assert the `?Tn` numbering is identical incrementally — this is the property most likely to break and the one Report 1 missed.
+- **Targeted leak fuzzer:** generate N sequential unconstrained `None()`/generic results and assert the `?Tn` numbering is identical incrementally — this is the property most likely to break and the one Report 1 missed.
 
 **V4 — Performance gate.** Assert incremental typecheck p50 < (e.g.) 0.25 ms on a 100-fn file and that full-fallback rate on a realistic edit trace is below a threshold. (Baselines from Report 4: full typecheck ~0.6 ms/100fn; target ~0.15–0.2 ms.)
 
@@ -258,4 +258,4 @@ The full pass is: seed fresh `ctx` → `preRegisterDefinitions(all)` → `for el
 - Integration point: `/home/natescode/repos/silicon/compiler/src/caas/workspace.ts` (`#elabState` 239, `#compile` 729, typecheck call 782, cache write 789)
 - Model contract: `/home/natescode/repos/silicon/compiler/src/ast/semanticModel.ts` (`typeOf` 146, `allSymbols` 170 — note: an `IterableIterator`, not an array)
 
-**Correction flagged for the human:** Probe Report 1's conclusion ("no fresh vars in `model.typeOf`; counter can be reset per-element") is **empirically false** for unconstrained polymorphic calls (`@global x := &None` stores `Option[?T1]`; the number is order-sensitive prefix state). The design above does **not** rely on per-element counter reset; it preserves the shared monotonic counter via prefix replay / poison flags. All other probe findings reproduced.
+**Correction flagged for the human:** Probe Report 1's conclusion ("no fresh vars in `model.typeOf`; counter can be reset per-element") is **empirically false** for unconstrained polymorphic calls (`x := None()` stores `Option[?T1]`; the number is order-sensitive prefix state). The design above does **not** rely on per-element counter reset; it preserves the shared monotonic counter via prefix replay / poison flags. All other probe findings reproduced.

@@ -119,7 +119,7 @@ function compareAllSurfaces(inc: Document, full: Document, ctx: string): void {
 const EDIT_CHARS = [' ', '1', 'x', 'y', 'q', ';', '\n', '+', 'r', 'z', '&', '{', '}', ',']
 
 function mutate(src: string, rand: () => number): string {
-    if (src.length === 0) return '@global z := 1;'
+    if (src.length === 0) return 'z := 1;'
     const at = Math.floor(rand() * src.length)
     const op = rand()
     const ch = EDIT_CHARS[Math.floor(rand() * EDIT_CHARS.length)]
@@ -149,8 +149,8 @@ const SCEN_FLAT: { recipe: WsRecipe; src: Map<string, string> } = {
     },
     src: new Map([
         ['lib.si', '@fn add x, y := { x + y };\n@fn mul x, y := { x * y };'],
-        ['a.si',   '@global ra := &add 1, 2;'],
-        ['b.si',   '@global rb := &mul 3, 4;\n@global rc := &add 5, 6;'],
+        ['a.si',   'ra := add(1, 2);'],
+        ['b.si',   'rb := mul(3, 4);\nrc := add(5, 6);'],
     ]),
 }
 
@@ -169,8 +169,8 @@ const SCEN_PROJECT: { recipe: WsRecipe; src: Map<string, string> } = {
     },
     src: new Map([
         ['core/math.si', '@fn add x, y := { x + y };\n@fn sub x, y := { x - y };'],
-        ['app/main.si',  '@global r := &add 10, 20;'],
-        ['app/aux.si',   '@global s := &sub 30, 9;'],
+        ['app/main.si',  'r := add(10, 20);'],
+        ['app/aux.si',   's := sub(30, 9);'],
     ]),
 }
 
@@ -192,9 +192,9 @@ const SCEN_DIAMOND: { recipe: WsRecipe; src: Map<string, string> } = {
     },
     src: new Map([
         ['base/b.si',  '@fn one := { 1 };'],
-        ['left/l.si',  '@fn two := { &one + 1 };'],
-        ['right/r.si', '@fn three := { &one + 2 };'],
-        ['top/t.si',   '@global r := &two + &three;\n@global s := &one + 0;'],
+        ['left/l.si',  '@fn two := { one() + 1 };'],
+        ['right/r.si', '@fn three := { one() + 2 };'],
+        ['top/t.si',   'r := two() + three();\ns := one() + 0;'],
     ]),
 }
 
@@ -217,10 +217,10 @@ const SCEN_CHAIN4: { recipe: WsRecipe; src: Map<string, string> } = {
     },
     src: new Map([
         ['a/x.si', '@fn one := { 1 };\n@fn two := { 2 };'],
-        ['b/x.si', '@fn add x, y := { x + y };\n@global bb := &one + 1;'],
-        ['c/x.si', '@global cc := &add 1, 2;\n@global cd := &two + 3;'],
-        ['d/x.si', '@global dd := &add 5, 6;'],
-        ['flat.si', '@global f := 7;'],
+        ['b/x.si', '@fn add x, y := { x + y };\nbb := one() + 1;'],
+        ['c/x.si', 'cc := add(1, 2);\ncd := two() + 3;'],
+        ['d/x.si', 'dd := add(5, 6);'],
+        ['flat.si', 'f := 7;'],
     ]),
 }
 
@@ -280,7 +280,7 @@ describe('ADV multi-doc: cross-doc symbol rename flip ≡ fresh', () => {
         }
         const cur = new Map<string, string>([
             ['lib.si',  '@fn add x, y := { x + y };'],
-            ['main.si', '@global r := &add 1, 2;'],
+            ['main.si', 'r := add(1, 2);'],
         ])
         const ws = buildWorkspace(recipe, cur)
 
@@ -318,17 +318,17 @@ describe('ADV multi-doc: cross-doc symbol rename flip ≡ fresh', () => {
         }
         const cur = new Map<string, string>([
             ['core/c.si', '@fn f x := { x + 1 };'],
-            ['app/a.si',  '@global r := &f 41;'],
+            ['app/a.si',  'r := f(41);'],
         ])
         const ws = buildWorkspace(recipe, cur)
         const rand = mulberry32(0xBADC0DE)
 
         // A sequence of coordinated edits: change producer signature, then consumer.
         const variants = [
-            ['@fn f x := { x + 1 };', '@global r := &f 41;'],
-            ['@fn f x, y := { x + y };', '@global r := &f 41, 1;'],
-            ['@fn f x := { x * 2 };', '@global r := &f 21;'],
-            ['@fn g x := { x };', '@global r := &g 7;'],     // rename producer + consumer
+            ['@fn f x := { x + 1 };', 'r := f(41);'],
+            ['@fn f x, y := { x + y };', 'r := f(41, 1);'],
+            ['@fn f x := { x * 2 };', 'r := f(21);'],
+            ['@fn g x := { x };', 'r := g(7);'],     // rename producer + consumer
         ]
         for (let i = 0; i < variants.length; i++) {
             const [c, a] = variants[i]
@@ -369,8 +369,8 @@ describe('ADV multi-doc: edited doc always ≡ fresh even when others are stale'
         }
         const cur = new Map<string, string>([
             ['lib.si',  '@fn add x, y := { x + y };'],
-            ['use1.si', '@global a := &add 1, 2;'],
-            ['use2.si', '@global b := &add 3, 4;'],
+            ['use1.si', 'a := add(1, 2);'],
+            ['use2.si', 'b := add(3, 4);'],
         ])
         const ws = buildWorkspace(recipe, cur)
         const rand = mulberry32(0x5EED5)
@@ -420,7 +420,7 @@ describe('ADV multi-doc: newline/suffix-shift in producer ≡ fresh', () => {
         // Multi-element producer so suffix elements shift on a newline edit.
         const cur = new Map<string, string>([
             ['lib.si',  '@fn one := { 1 };\n@fn add x, y := { x + y };\n@fn two := { 2 };'],
-            ['main.si', '@global r := &add 1, 2;\n@global s := &one + &two;'],
+            ['main.si', 'r := add(1, 2);\ns := one() + two();'],
         ])
         const ws = buildWorkspace(recipe, cur)
 
@@ -459,7 +459,7 @@ describe('ADV multi-doc: @stratum edit (registry rebuild) ≡ fresh', () => {
         // A doc that defines functions used cross-doc, edited around a normal fn.
         const v0 = new Map<string, string>([
             ['ops.si',  '@fn dbl x := { x + x };'],
-            ['user.si', '@global r := &dbl 21;'],
+            ['user.si', 'r := dbl(21);'],
         ])
         const cur = new Map(v0)
         const ws = buildWorkspace(recipe, cur)
@@ -471,10 +471,10 @@ describe('ADV multi-doc: @stratum edit (registry rebuild) ≡ fresh', () => {
             '@fn trp x := { x + x + x };',   // dbl removed -> consumer should error after its own edit
         ]
         const userVariants = [
-            '@global r := &dbl 21;',
-            '@global r := &dbl 21;',
-            '@global r := &dbl 21;\n@global q := &trp 14;',
-            '@global q := &trp 14;',
+            'r := dbl(21);',
+            'r := dbl(21);',
+            'r := dbl(21);\nq := trp(14);',
+            'q := trp(14);',
         ]
         for (let i = 0; i < opsVariants.length; i++) {
             cur.set('ops.si', opsVariants[i]); ws.editDocument('ops.si', opsVariants[i])

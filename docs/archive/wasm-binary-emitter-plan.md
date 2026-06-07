@@ -1,6 +1,6 @@
 # WASM Binary Emitter Plan
 
-> **Status:** Deferred per [ADR 0006](adr/0006-wasm-emitter-mixed-mode.md) —
+> **Status:** Deferred per [ADR 0006](../adr/0006-wasm-emitter-mixed-mode.md) —
 > v1.0 routes all WASM emission through WAT → binaryen. The slices below
 > describe the original plan; paths reference the historical `boot/` layout
 > and need re-targeting at `src/codegen/` if/when the work resumes.

@@ -7,49 +7,29 @@
 # - `@and` and `@or` keyword forms short-circuit via ir_makeIf.
 
 @stratum Or := {
-    &Compiler::register::operator '||';
-    &Compiler::on::lower '||', Or_lower;
+    Compiler::register::operator('||');
+    Compiler::on::lower('||', Or_lower);
 };
 \\ Or_lower (Int)
-@fn Or_lower node :=
-    &compiler::ir_makeIf
-        (&compiler::compiler_lowerExpr (&compiler::compiler_ast_node_field node, (&compiler::compiler_str_intern 'left', 0))),
-        (&compiler::ir_makeConst 1, (&compiler::compiler_str_intern 'i32', 0)),
-        (&compiler::compiler_lowerExpr (&compiler::compiler_ast_node_field node, (&compiler::compiler_str_intern 'right', 0))),
-        (&compiler::compiler_str_intern 'i32', 0);
+@fn Or_lower node := compiler::ir_makeIf(compiler::compiler_lowerExpr(compiler::compiler_ast_node_field(node, compiler::compiler_str_intern('left', 0))), compiler::ir_makeConst(1, compiler::compiler_str_intern('i32', 0)), compiler::compiler_lowerExpr(compiler::compiler_ast_node_field(node, compiler::compiler_str_intern('right', 0))), compiler::compiler_str_intern('i32', 0));
 
 @stratum Not := {
-    &Compiler::register::expression_keyword '@not';
-    &Compiler::on::lower '@not', Not_lower;
+    Compiler::register::expression_keyword('@not');
+    Compiler::on::lower('@not', Not_lower);
 };
 \\ Not_lower (Int)
-@fn Not_lower node :=
-    &compiler::ir_makeBinOp
-        (&compiler::compiler_str_intern 'i32.eq', 0),
-        (&compiler::compiler_lowerExpr (&compiler::compiler_arg node, 0)),
-        (&compiler::ir_makeConst 0, (&compiler::compiler_str_intern 'i32', 0)),
-        (&compiler::compiler_str_intern 'i32', 0);
+@fn Not_lower node := compiler::ir_makeBinOp(compiler::compiler_str_intern('i32.eq', 0), compiler::compiler_lowerExpr(compiler::compiler_arg(node, 0)), compiler::ir_makeConst(0, compiler::compiler_str_intern('i32', 0)), compiler::compiler_str_intern('i32', 0));
 
 @stratum And := {
-    &Compiler::register::expression_keyword '@and';
-    &Compiler::on::lower '@and', And_lower;
+    Compiler::register::expression_keyword('@and');
+    Compiler::on::lower('@and', And_lower);
 };
 \\ And_lower (Int)
-@fn And_lower node :=
-    &compiler::ir_makeIf
-        (&compiler::compiler_lowerExpr (&compiler::compiler_arg node, 0)),
-        (&compiler::compiler_lowerExpr (&compiler::compiler_arg node, 1)),
-        (&compiler::ir_makeConst 0, (&compiler::compiler_str_intern 'i32', 0)),
-        (&compiler::compiler_str_intern 'i32', 0);
+@fn And_lower node := compiler::ir_makeIf(compiler::compiler_lowerExpr(compiler::compiler_arg(node, 0)), compiler::compiler_lowerExpr(compiler::compiler_arg(node, 1)), compiler::ir_makeConst(0, compiler::compiler_str_intern('i32', 0)), compiler::compiler_str_intern('i32', 0));
 
 @stratum OrKw := {
-    &Compiler::register::expression_keyword '@or';
-    &Compiler::on::lower '@or', OrKw_lower;
+    Compiler::register::expression_keyword('@or');
+    Compiler::on::lower('@or', OrKw_lower);
 };
 \\ OrKw_lower (Int)
-@fn OrKw_lower node :=
-    &compiler::ir_makeIf
-        (&compiler::compiler_lowerExpr (&compiler::compiler_arg node, 0)),
-        (&compiler::ir_makeConst 1, (&compiler::compiler_str_intern 'i32', 0)),
-        (&compiler::compiler_lowerExpr (&compiler::compiler_arg node, 1)),
-        (&compiler::compiler_str_intern 'i32', 0);
+@fn OrKw_lower node := compiler::ir_makeIf(compiler::compiler_lowerExpr(compiler::compiler_arg(node, 0)), compiler::ir_makeConst(1, compiler::compiler_str_intern('i32', 0)), compiler::compiler_lowerExpr(compiler::compiler_arg(node, 1)), compiler::compiler_str_intern('i32', 0));

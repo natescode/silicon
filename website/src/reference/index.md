@@ -24,7 +24,7 @@ The reference docs are organised around what you're looking up:
   how `@stratum` registrations turn into pipeline-phase handlers.
 - [Strata authoring](/reference/strata-authoring) — step-by-step
   walkthrough for adding a new stratum.
-- [Compiler API](/reference/compiler-api) — the `&Compiler::*`
+- [Compiler API](/reference/compiler-api) — the `Compiler::*`
   surface that handlers call: `register::*`, `on::*`, `ir::*`,
   `module::*`, `diag::*`, `ast::*`, `type::*`.
 

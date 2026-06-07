@@ -96,8 +96,8 @@ const FUNCREF = `\\\\ add_one (Int) -> Int
 @fn add_one x := x + 1;
 \\\\ call_via_ref () -> Int
 @fn call_via_ref := {
-    @local cb := &@fnref add_one;
-    &@call_indirect cb, 41
+    @mut cb := @fnref(add_one);
+    @call_indirect(cb, 41)
 };
 @export call_via_ref;`
 

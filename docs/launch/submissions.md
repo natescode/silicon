@@ -121,8 +121,8 @@ function.
 
 ```
 @stratum Plus := {
-    &Compiler::register::operator '+';
-    &Compiler::on::lower '+', Plus_lower;
+    Compiler::register::operator('+');
+    Compiler::on::lower('+', Plus_lower);
 };
 ```
 

@@ -27,12 +27,12 @@ function inMemoryStdlib(modules: Record<string, string>): StdlibHook {
 describe('resolveUses — bundled stdlib (bare-name @use)', () => {
     test("bare name resolves from the stdlib and is prepended", () => {
         const stdlib = inMemoryStdlib({ 'io.si': '\\\\ print (String)\n@fn print s := { 0 };' })
-        const src = "@use 'io';\n&print 'hi';"
+        const src = "@use 'io';\nprint('hi');"
         const { source, visited } = resolveUses(src, P('main.si'), { stdlib })
 
         expect(visited).toEqual(['std:io.si', P('main.si')])
         const ioIdx = source.indexOf('@fn print s')
-        const mainIdx = source.indexOf("&print 'hi'")
+        const mainIdx = source.indexOf("print('hi')")
         expect(ioIdx).toBeGreaterThan(-1)
         expect(mainIdx).toBeGreaterThan(ioIdx)        // stdlib body comes first
         expect(source).not.toContain("@use 'io';")    // directive stripped
@@ -43,7 +43,7 @@ describe('resolveUses — bundled stdlib (bare-name @use)', () => {
             'option.si': '# option module\n@fn none := { 0 };',
             'slice.si': '# slice module\n@fn slice_len s := { 0 };',
         })
-        const src = "@use 'option';\n@use 'slice';\n&slice_len 0;"
+        const src = "@use 'option';\n@use 'slice';\nslice_len(0);"
         const { source, visited } = resolveUses(src, P('main.si'), { stdlib })
 
         expect(visited).toEqual(['std:option.si', 'std:slice.si', P('main.si')])
@@ -99,7 +99,7 @@ describe('resolveUses — bundled stdlib (bare-name @use)', () => {
 
     test('default hook resolves the real bundled io.si (no injection)', () => {
         // No `stdlib` override → uses the swappable stdlibSource module.
-        const { source, visited } = resolveUses("@use 'io';\n&print 'x';", P('main.si'))
+        const { source, visited } = resolveUses("@use 'io';\nprint('x');", P('main.si'))
         expect(visited).toContain('std:io.si')
         expect(source).toContain('fd_write')   // io.si writes via wasi fd_write
         expect(source).toContain('@fn print')

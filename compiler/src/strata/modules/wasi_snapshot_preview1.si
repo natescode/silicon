@@ -22,25 +22,25 @@
 # spec-correct unsigned types can opt in directly.
 
 # ---- I/O ----
-@extern { \\ fd_write (Int, Int, Int, Int) -> Int }
-@extern { \\ fd_read (Int, Int, Int, Int) -> Int }
-@extern { \\ fd_close (Int) -> Int }
-@extern { \\ fd_prestat_get (Int, Int) -> Int }
-@extern { \\ fd_prestat_dir_name (Int, Int, Int) -> Int }
-@extern { \\ path_open (Int, Int, Int, Int, Int, Int64, Int64, Int, Int) -> Int }
+\\ @extern fd_write (Int, Int, Int, Int) -> Int;
+\\ @extern fd_read (Int, Int, Int, Int) -> Int;
+\\ @extern fd_close (Int) -> Int;
+\\ @extern fd_prestat_get (Int, Int) -> Int;
+\\ @extern fd_prestat_dir_name (Int, Int, Int) -> Int;
+\\ @extern path_open (Int, Int, Int, Int, Int, Int64, Int64, Int, Int) -> Int;
 
 # ---- Optional WASI surfaces with i64 fields (declared honestly so
 # future callers can use them without re-typing). ----
-@extern { \\ fd_seek (Int, Int64, Int, Int) -> Int }
-@extern { \\ fd_tell (Int, Int) -> Int }
-@extern { \\ fd_filestat_get (Int, Int) -> Int }
+\\ @extern fd_seek (Int, Int64, Int, Int) -> Int;
+\\ @extern fd_tell (Int, Int) -> Int;
+\\ @extern fd_filestat_get (Int, Int) -> Int;
 
 # ---- Process / args / env ----
-@extern { \\ args_get (Int, Int) -> Int }
-@extern { \\ args_sizes_get (Int, Int) -> Int }
-@extern { \\ environ_get (Int, Int) -> Int }
-@extern { \\ environ_sizes_get (Int, Int) -> Int }
-@extern { \\ proc_exit (Int) -> Void }
+\\ @extern args_get (Int, Int) -> Int;
+\\ @extern args_sizes_get (Int, Int) -> Int;
+\\ @extern environ_get (Int, Int) -> Int;
+\\ @extern environ_sizes_get (Int, Int) -> Int;
+\\ @extern proc_exit (Int) -> Void;
 
 # ---- Clock (optional — compile timings) ----
-@extern { \\ clock_time_get (Int, Int, Int) -> Int }
+\\ @extern clock_time_get (Int, Int, Int) -> Int;

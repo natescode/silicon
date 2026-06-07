@@ -12,17 +12,17 @@ Functions are values:
 \\ sub (Int, Int) -> Int
 @fn sub a, b := { a - b };
 
-\\ apply ($fn (Int, Int) -> Int, Int, Int) -> Int
-@fn apply f, x, y := { &f x, y };
+\\ apply ((Int, Int) -> Int, Int, Int) -> Int
+@fn apply f, x, y := { f(x, y) };
 
 @fn main := {
-    @local s := &apply add, 3, 4;        # 7
-    @local d := &apply sub, 10, 4;       # 6
-    s + d                                  # 13
+    s := apply(add, 3, 4);        # 7
+    d := apply(sub, 10, 4);       # 6
+    s + d                          # 13
 };
 ```
 
-`$fn (Int, Int) -> Int` is the parameter-type annotation — a function
+`(Int, Int) -> Int` is the parameter-type annotation — a function
 taking `(Int, Int)` and returning `Int`.
 
 Indirect calls compile to `call_indirect` over the function reference
@@ -36,8 +36,8 @@ site.
 @fn double n := { n * 2 };
 
 @fn main := {
-    @local v := &Vec::from_array [1, 2, 3, 4];
-    @local doubled := &Vec::map &v, double;
+    v := Vec::from_array($[1, 2, 3, 4]);
+    doubled := Vec::map(v, double);
     0
 };
 ```

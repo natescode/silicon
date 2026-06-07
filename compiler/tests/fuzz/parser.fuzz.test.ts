@@ -131,7 +131,7 @@ describe('parser fuzz: random token streams', () => {
 
 /**
  * Generate small, syntactically-valid Silicon programs.  Each program is a
- * sequence of `@global` and bare-expression statements over integers and a few
+ * sequence of bare `name := expr` bindings and bare-expression statements over integers and a few
  * identifiers.  This is intentionally narrower than the full grammar — the
  * goal is to grow corpus pressure on the most-exercised paths, not to cover
  * every production.
@@ -153,7 +153,7 @@ const exprArb: fc.Arbitrary<string> = fc.letrec((tie) => ({
 })).expr
 
 const stmtArb: fc.Arbitrary<string> = fc.oneof(
-    fc.tuple(identArb, exprArb).map(([n, e]) => `@global ${n} := ${e}`),
+    fc.tuple(identArb, exprArb).map(([n, e]) => `${n} := ${e}`),   // ADR-0020 bare binding
     exprArb,
 )
 

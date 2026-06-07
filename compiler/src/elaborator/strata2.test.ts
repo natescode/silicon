@@ -11,7 +11,7 @@
  * - AST synthesis: ast::capture_template, ast::clone, ast::substitute (§5.5)
  * - Types as data: type::* operations (§5.4)
  * - Diagnostics: diag::error, diag::warn (§6, T-5)
- * - Scope-variable method calls: &stateHandle::set, &stateHandle::get
+ * - Scope-variable method calls: stateHandle::set, stateHandle::get
  * - GENERIC PATTERN: proves @generic-style monomorphization can be expressed in Strata
  * - DERIVE PATTERN: proves @@derive-style annotation-driven code gen works
  */
@@ -85,7 +85,7 @@ function makeTestAPI(registry = createElaboratorRegistry(), stratumName = 'Test'
 describe('Strata 2.0 §3: Tier model', () => {
     test('@stratum unified form is loaded as a stratum definition', () => {
         const src = `@stratum Counter := {
-            &Compiler::register::keyword '@count';
+            Compiler::register::keyword('@count');
         };`
         const prog = parseSource(src)
         const registry = buildStrataRegistry(prog)
@@ -95,7 +95,7 @@ describe('Strata 2.0 §3: Tier model', () => {
 
     test('@stratum in extraSources is loaded at T2 tier', () => {
         const extra = `@stratum ExternalKw := {
-            &Compiler::register::keyword '@external';
+            Compiler::register::keyword('@external');
         };`
         const registry = buildStrataRegistry(ASTFactory.program([]), [extra])
         expect(registry.keywords['@external']).toBeDefined()
@@ -105,7 +105,7 @@ describe('Strata 2.0 §3: Tier model', () => {
 
     test('@stratum inline in program AST is loaded at T1 tier', () => {
         const src = `@stratum InlineKw := {
-            &Compiler::register::keyword '@inline_kw';
+            Compiler::register::keyword('@inline_kw');
         };`
         const prog = parseSource(src)
         const registry = buildStrataRegistry(prog)
@@ -157,10 +157,10 @@ describe('Strata 2.0 §2: on::decl phase handler', () => {
 
     test('on::decl handler from @stratum body is called with node arg', () => {
         const extra = `@stratum WatchFn := {
-            &Compiler::register::keyword '@watched_fn';
-            &Compiler::on::decl '@watched_fn', {
-                &Compiler::diag::warn 'W001', 'span', 'WatchFn saw a definition';
-            };
+            Compiler::register::keyword('@watched_fn');
+            Compiler::on::decl('@watched_fn', {
+                Compiler::diag::warn('W001', 'span', 'WatchFn saw a definition');
+            });
         };`
         const prog = parseSource(`
             \\\\ my_func (Int)
@@ -204,7 +204,8 @@ describe('Strata 2.0 §2: on::callSite phase handler', () => {
         })
 
         const prog = parseSource(`\\\\ add (Int, Int)
-@fn add x, y := x; &add 1, 2;`)
+@fn add x, y := x;
+add(1, 2);`)
         const elab = elaborate(prog, registry)
         const { program: typedProg, functions } = typecheck(elab.program, registry)
         lowerProgram(typedProg, registry, functions)
@@ -297,9 +298,9 @@ describe('Strata 2.0 §2: on::module_finalize phase handler', () => {
 
     test('@stratum on::module_finalize handler from Silicon body is called', () => {
         const extra = `@stratum FinalizeWatcher := {
-            &Compiler::on::module_finalize {
-                &Compiler::diag::warn 'W999', 'span', 'finalize fired';
-            };
+            Compiler::on::module_finalize({
+                Compiler::diag::warn('W999', 'span', 'finalize fired');
+            });
         };`
         const registry = buildStrataRegistry(ASTFactory.program([]), [extra])
         lowerProgram(ASTFactory.program([]), registry, new Map())
@@ -374,11 +375,11 @@ describe('Strata 2.0 §5.7: State buckets', () => {
 
     test.skip('@stratum body can use state via scope-variable method calls', () => {
         const extra = `@stratum StateDemo := {
-            &Compiler::register::keyword '@state_demo';
-            &Compiler::on::decl '@state_demo', {
-                @local s := &Compiler::state 'stratum';
-                &s::set 'seen', @true;
-            };
+            Compiler::register::keyword('@state_demo');
+            Compiler::on::decl('@state_demo', {
+                @mut s := Compiler::state('stratum');
+                s::set('seen', @true);
+            });
         };`
         const prog = parseSource(`@state_demo myDef;`)
         const registry = buildStrataRegistry(prog, [extra])
@@ -608,12 +609,12 @@ describe('Strata 2.0 §6: Diagnostics (T-5)', () => {
         expect(registry.diagnostics.length).toBe(3)
     })
 
-    test('@stratum body: &Compiler::diag::error emits a diagnostic', () => {
+    test('@stratum body: Compiler::diag::error emits a diagnostic', () => {
         const extra = `@stratum ErrorStratum := {
-            &Compiler::register::keyword '@bad_kw';
-            &Compiler::on::decl '@bad_kw', {
-                &Compiler::diag::error 'E100', 'span', 'Bad keyword used';
-            };
+            Compiler::register::keyword('@bad_kw');
+            Compiler::on::decl('@bad_kw', {
+                Compiler::diag::error('E100', 'span', 'Bad keyword used');
+            });
         };`
         const prog = parseSource(`@bad_kw thing;`)
         const registry = buildStrataRegistry(prog, [extra])
@@ -631,13 +632,13 @@ describe('Strata 2.0 §6: Diagnostics (T-5)', () => {
 // ---------------------------------------------------------------------------
 
 describe('strataBody: scope-variable method dispatch', () => {
-    test.skip('&stateHandle::set key, value stores in state', () => {
+    test.skip('stateHandle::set key, value stores in state', () => {
         const extra = `@stratum MethodDispatch := {
-            &Compiler::register::keyword '@method_test';
-            &Compiler::on::decl '@method_test', {
-                @local s := &Compiler::state 'stratum';
-                &s::set 'called', @true;
-            };
+            Compiler::register::keyword('@method_test');
+            Compiler::on::decl('@method_test', {
+                @mut s := Compiler::state('stratum');
+                s::set('called', @true);
+            });
         };`
         const prog = parseSource(`@method_test demo;`)
         const registry = buildStrataRegistry(prog, [extra])
@@ -648,15 +649,15 @@ describe('strataBody: scope-variable method dispatch', () => {
         expect(state.get('called')).toBe(true)
     })
 
-    test.skip('&stateHandle::get key retrieves stored value', () => {
+    test.skip('stateHandle::get key retrieves stored value', () => {
         const extra = `@stratum GetDemo := {
-            &Compiler::register::keyword '@get_demo';
-            &Compiler::on::decl '@get_demo', {
-                @local s := &Compiler::state 'stratum';
-                &s::set 'x', 42;
-                @local v := &s::get 'x';
-                &Compiler::diag::warn 'W_GET', 'span', v;
-            };
+            Compiler::register::keyword('@get_demo');
+            Compiler::on::decl('@get_demo', {
+                @mut s := Compiler::state('stratum');
+                s::set('x', 42);
+                @mut v := s::get('x');
+                Compiler::diag::warn('W_GET', 'span', v);
+            });
         };`
         const prog = parseSource(`@get_demo item;`)
         const registry = buildStrataRegistry(prog, [extra])
@@ -668,18 +669,18 @@ describe('strataBody: scope-variable method dispatch', () => {
         expect(warns[0].message).toBe(42)
     })
 
-    test.skip('&handle::get in module_finalize reads state set by on::decl', () => {
+    test.skip('handle::get in module_finalize reads state set by on::decl', () => {
         const extra = `@stratum Pipeline := {
-            &Compiler::register::keyword '@pipeline_kw';
-            &Compiler::on::decl '@pipeline_kw', {
-                @local s := &Compiler::state 'stratum';
-                &s::set 'saw_decl', @true;
-            };
-            &Compiler::on::module_finalize {
-                @local s := &Compiler::state 'stratum';
-                @local saw := &s::get 'saw_decl';
-                &Compiler::diag::warn 'W_PIPE', 'span', saw;
-            };
+            Compiler::register::keyword('@pipeline_kw');
+            Compiler::on::decl('@pipeline_kw', {
+                @mut s := Compiler::state('stratum');
+                s::set('saw_decl', @true);
+            });
+            Compiler::on::module_finalize({
+                @mut s := Compiler::state('stratum');
+                @mut saw := s::get('saw_decl');
+                Compiler::diag::warn('W_PIPE', 'span', saw);
+            });
         };`
         const prog = parseSource(`@pipeline_kw demo;`)
         const registry = buildStrataRegistry(prog, [extra])
@@ -707,22 +708,22 @@ describe('strataBody: scope-variable method dispatch', () => {
 describe('GENERIC PATTERN: generics implementable in Strata 2.0', () => {
     test.skip('on::decl captures template, on::module_finalize pushes concrete definition', () => {
         const genericStratum = `@stratum Generics := {
-            &Compiler::register::keyword '@generic';
-            &Compiler::on::decl '@generic', {
-                @local s := &Compiler::state 'stratum';
-                @local tmpl := &Compiler::ast::capture_template node, 'pre';
-                &s::set 'template', tmpl;
-            };
-            &Compiler::on::module_finalize {
-                @local s := &Compiler::state 'stratum';
-                @local tmpl := &s::get 'template';
-                @local clone := &Compiler::ast::clone tmpl;
-                &Compiler::module::push_definition clone.ast;
-            };
+            Compiler::register::keyword('@generic');
+            Compiler::on::decl('@generic', {
+                @mut s := Compiler::state('stratum');
+                @mut tmpl := Compiler::ast::capture_template(node, 'pre');
+                s::set('template', tmpl);
+            });
+            Compiler::on::module_finalize({
+                @mut s := Compiler::state('stratum');
+                @mut tmpl := s::get('template');
+                @mut clone := Compiler::ast::clone(tmpl);
+                Compiler::module::push_definition(clone::ast);
+            });
         };`
 
         // @generic is registered via the stratum; use valid Silicon syntax (no parens for params).
-        const prog = parseSource(`@generic my_identity x:Int := x;`)
+        const prog = parseSource(`@generic my_identity x Int := x;`)
         const registry = buildStrataRegistry(prog, [genericStratum])
         const elab = elaborate(prog, registry)
         lowerProgram(elab.program, registry, new Map())
@@ -739,15 +740,15 @@ describe('GENERIC PATTERN: generics implementable in Strata 2.0', () => {
 
     test.skip('generic template capture preserves function name and params', () => {
         const genericStratum = `@stratum GenericCapture := {
-            &Compiler::register::keyword '@generic';
-            &Compiler::on::decl '@generic', {
-                @local s := &Compiler::state 'stratum';
-                @local tmpl := &Compiler::ast::capture_template node, 'pre';
-                &s::set node.name.name, tmpl;
-            };
+            Compiler::register::keyword('@generic');
+            Compiler::on::decl('@generic', {
+                @mut s := Compiler::state('stratum');
+                @mut tmpl := Compiler::ast::capture_template(node, 'pre');
+                s::set(node::name::name, tmpl);
+            });
         };`
 
-        const prog = parseSource(`@generic swap x:Int, y:Int := y;`)
+        const prog = parseSource(`@generic swap x Int, y Int := y;`)
         const registry = buildStrataRegistry(prog, [genericStratum])
         const elab = elaborate(prog, registry)
         lowerProgram(elab.program, registry, new Map())
@@ -968,10 +969,9 @@ describe('Full pipeline integration', () => {
     test('stratum registering a new keyword survives the full compile pipeline', () => {
         const src = `
             @stratum MyAlias := {
-                &Compiler::register::keyword '@my_alias';
+                Compiler::register::keyword('@my_alias');
             };
-            @my_alias x;
-        `
+            @my_alias x;`
         const prog = parseSource(src)
         const registry = buildStrataRegistry(prog)
         // The registry should recognise @my_alias.
@@ -980,10 +980,10 @@ describe('Full pipeline integration', () => {
 
     test('stratum using diag::warn in on::decl does not break compilation', () => {
         const strataSrc = `@stratum WarnOnDecl := {
-            &Compiler::register::keyword '@warn_me';
-            &Compiler::on::decl '@warn_me', {
-                &Compiler::diag::warn 'W_WARN', 'span', 'warn_me was used';
-            };
+            Compiler::register::keyword('@warn_me');
+            Compiler::on::decl('@warn_me', {
+                Compiler::diag::warn('W_WARN', 'span', 'warn_me was used');
+            });
         };`
 
         const userSrc = `@warn_me item;`

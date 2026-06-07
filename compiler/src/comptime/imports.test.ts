@@ -12,7 +12,7 @@
  *
  *   (b) End-to-end WASM-side wiring needs the "compiler" module to be
  *       registered in `moduleRegistry` so the lowerer recognises
- *       `&compiler::ir_makeConst` calls in handler source.  That
+ *       `compiler::ir_makeConst()` calls in handler source.  That
  *       plumbing is a separate story (D-B-* continuation).  The import
  *       surface is well-typed regardless — once wired, identical code
  *       runs.

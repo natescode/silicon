@@ -57,13 +57,13 @@ The `@stratum` keyword is the single entry point for all Strata 2.0 features:
 
 ```silicon
 @stratum Counter := {
-    &Compiler::register::keyword '@count';
-    &Compiler::on::decl '@count', {
-        &state::stratum::set 'seen', (&state::stratum::get 'seen') + 1;
-    };
-    &Compiler::on::module_finalize {
-        &Compiler::diag::warn 'S9999', {}, "definitions seen: ...";
-    };
+    Compiler::register::keyword('@count');
+    Compiler::on::decl('@count', {
+        state::stratum::set('seen', state::stratum::get('seen') + 1);
+    });
+    Compiler::on::module_finalize({
+        Compiler::diag::warn('S9999', {}, "definitions seen: ...");
+    });
 };
 ```
 
@@ -71,16 +71,16 @@ The block body accepts these call forms:
 
 | Call | Effect |
 |------|--------|
-| `&Compiler::register::keyword 'token'` | Register `token` as a valid definition keyword |
-| `&Compiler::register::operator 'sym'` | Register `sym` as a valid operator |
-| `&Compiler::register::annotation '@@tok'` | Register an annotation token |
-| `&Compiler::on::decl 'token', { ... }` | Fire handler on Definition nodes |
-| `&Compiler::on::call_site 'token', { ... }` | Fire handler at call-site expressions |
-| `&Compiler::on::annotation '@@tok', { ... }` | Fire handler when annotation appears |
-| `&Compiler::on::lower 'token', { ... }` | Fire handler during IR lowering |
-| `&Compiler::on::module_finalize { ... }` | Fire handler once at end of module |
-| `&Compiler::before 'OtherStrat'` | Declare ordering constraint |
-| `&Compiler::after 'OtherStrat'` | Declare ordering constraint |
+| `Compiler::register::keyword('token')` | Register `token` as a valid definition keyword |
+| `Compiler::register::operator('sym')` | Register `sym` as a valid operator |
+| `Compiler::register::annotation('@@tok')` | Register an annotation token |
+| `Compiler::on::decl('token', { ... })` | Fire handler on Definition nodes |
+| `Compiler::on::call_site('token', { ... })` | Fire handler at call-site expressions |
+| `Compiler::on::annotation('@@tok', { ... })` | Fire handler when annotation appears |
+| `Compiler::on::lower('token', { ... })` | Fire handler during IR lowering |
+| `Compiler::on::module_finalize({ ... })` | Fire handler once at end of module |
+| `Compiler::before('OtherStrat')` | Declare ordering constraint |
+| `Compiler::after('OtherStrat')` | Declare ordering constraint |
 
 ---
 

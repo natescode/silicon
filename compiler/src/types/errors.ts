@@ -33,6 +33,7 @@ export type TypeErrorKind =
     | 'MvpOnlyIntrospection'  // Phase 9d-5a (E0012) — &rc_count, &heap_used, …
     | 'MvpOnlyPhysicalByte'   // Phase 9d-5b (E0013) — &alloc, &str_ptr, …
     | 'GlobalInFunction'      // @global used inside a function body (E0014)
+    | 'MissingParamType'      // function has parameters but no signature line (E0015)
 
 export interface TypeError {
     kind: TypeErrorKind
@@ -151,6 +152,26 @@ export function globalInFunction(name: string, sourceLocation?: SourceLocation):
         message: `'@global ${name}' is a top-level binding — use '@local ${name}' inside a function body`,
         sourceLocation,
         hint: `@global declares a module-scoped constant; @local declares a function-local`,
+    }
+}
+
+/**
+ * Factory — a function parameter's type could not be inferred. ADR-0020 makes
+ * signatures optional: an unannotated parameter's type is inferred *monomorphically*
+ * from the function's call sites — it must resolve to one concrete type across all
+ * of them. This is inference, NOT monomorphization: no per-call-site specialization
+ * happens, so a function used at two different concrete types is rejected rather
+ * than specialized. Reaching here means that single-type inference failed — the
+ * function has no call sites with concrete arguments, or its call sites disagree on
+ * a concrete type (genuinely polymorphic). Fixes: annotate the parameter, add a
+ * `\\` signature line, or — for a genuinely polymorphic function — make it `[T]`.
+ */
+export function missingParamType(param: string, fn: string, sourceLocation?: SourceLocation): TypeError {
+    return {
+        kind: 'MissingParamType',
+        message: `could not monomorphically infer the type of parameter '${param}' of '${fn}'`,
+        sourceLocation,
+        hint: `monomorphic inference needs one concrete type for '${param}' across every call site — '${fn}' has none with concrete arguments, or its call sites disagree; annotate the parameter, add a \`\\\\ ${fn} (Type, …) -> Ret\` signature, or make it generic with \`[T]\``,
     }
 }
 

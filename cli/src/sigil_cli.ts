@@ -69,8 +69,8 @@ Build / run flags:
   --target=<t>    Compilation target: host (default) | wasix | wasm-gc
                   host / wasix use the linear-memory bump allocator.
                   wasm-gc opts into managed references via the engine GC
-                  (ADR 0009).  Mvp-only primitives (&alloc, &@with_arena,
-                  raw &heap_*, Rc introspection) are rejected at typecheck;
+                  (ADR 0009).  Mvp-only primitives (alloc, @with_arena,
+                  raw heap_*, Rc introspection) are rejected at typecheck;
                   lifecycle primitives (@with_arena, Rc) compile to no-ops.
   --platform=<p>  Host platform: native (default) | web | bun
                   web / bun are JS hosts: enable the externref JSString type +
@@ -280,11 +280,11 @@ const HELLO_WORLD_SI = `# src/main.si — Silicon Hello World
 @use 'io';
 
 @fn main := {
-    &print 'Hello, Silicon!';
+    print('Hello, Silicon!');
     0
 };
 
-&main;
+main();
 `
 
 function tomlTemplate(name: string): string {

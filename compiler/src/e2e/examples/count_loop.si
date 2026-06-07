@@ -1,5 +1,7 @@
-@fn countTo5  := {
-    @local n := 0;
-    &@loop n < 5, { n = n + 1; };
+@fn countTo5 := {
+    @mut n := 0;
+    @loop(n < 5, {
+        n = n + 1;
+    });
     n
 };

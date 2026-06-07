@@ -4,7 +4,7 @@
  * legacy → new-form migration in src/strata/metadata.si.
  *
  * @platform is the simplest stratum to migrate because its handler emits
- * no IR (just `&compiler::ir_null`).  This proves the end-to-end
+ * no IR (just `compiler::ir_null()`).  This proves the end-to-end
  * compile-then-run path: strata file declares a @stratum + @fn handler,
  * the handler is compiled to WASM via the Phase C engine, the lowered
  * user program invokes the compiled handler at lowering time.
@@ -47,7 +47,7 @@ expect(registry.strataHandlerFnNames.has('PlatformDecl_lower')).toBe(true)
         const prog = parseProgram('')
         const registry = buildStrataRegistry(prog)
 await compileStrataHandlers(prog, registry)
-        // The handler body is `&compiler::ir_null` which compiles cleanly
+        // The handler body is `compiler::ir_null()` which compiles cleanly
         // — it's the simplest possible compilable handler.
         expect(registry.compiledHandlers.has('PlatformDecl_lower')).toBe(true)
     })

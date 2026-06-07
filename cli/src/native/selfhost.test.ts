@@ -69,20 +69,20 @@ const COMPILE_OK: string[] = [
     // -- stratum (verifies built-in stratum dispatch) --
     'stratum_definition.si',      // 1 + 2;
     // -- functions --
-    'fn_function.si',             // @fn add x:Int, y:Int := x + y;
-    'function_definition.si',     // @fn add x:Int, y:Int := x + y;
-    'function_call.si',           // @fn add ...; &add 1, 2;
-    'block_trailing_expr.si',     // @fn add x:Int, y:Int := { x + y };
-    'block_stmts_then_expr.si',   // @fn compute x:Int, y:Int := { x = x + 1; x + y };
+    'fn_function.si',             // @fn add x, y := x + y;
+    'function_definition.si',     // @fn add x, y := x + y;
+    'function_call.si',           // @fn add ...; add(1, 2);
+    'block_trailing_expr.si',     // @fn add x, y := { x + y };
+    'block_stmts_then_expr.si',   // @fn compute x, y := { x = x + 1; x + y };
     // -- control flow --
-    'if_else_expr.si',            // @fn choose a:Int, b:Int, flag:Int := { &@if flag, { a }, { b } };
-    'if_in_block.si',             // @fn abs x:Int := { &@if x < 0, { 0 - x }, { x } };
+    'if_else_expr.si',            // @fn choose a, b, flag := { @if(flag, { a }, { b }) };
+    'if_in_block.si',             // @fn abs x := { @if(x < 0, { 0 - x }, { x }) };
     'early_return.si',            // @fn safeDivide ... @return
     // -- loops + variables --
-    'count_loop.si',              // @local n:Int + @loop
-    'var_global.si',              // @local count:Int := 0;
+    'count_loop.si',              // @mut n := 0; + @loop(...)
+    'var_global.si',              // @mut count := 0;
     'var_mutation.si',            // global var mutation
-    'local_set_fix.si',           // @fn inc x:Int := { x = x + 1; x };
+    'local_set_fix.si',           // @fn inc x := { x = x + 1; x };
 ]
 
 // Programs that require features not yet in the QBE lowerer — excluded to
@@ -90,7 +90,7 @@ const COMPILE_OK: string[] = [
 // string_literal.si, multiple_statements.si — string data sections unimplemented
 // struct_basic.si, struct_nested.si        — struct field layout unimplemented
 // cast_to_float.si, cast_to_int.si         — @toFloat/@toInt casts unimplemented
-// let_constant.si                          — @global + call-style access uncertain
+// let_constant.si                          — bare binding + call-style access uncertain
 // user_stratum_add.si                      — compiler API strata
 // path_open_i64.si                         — WASI FFI
 // defer_*.si, int64_extern_call.si         — @extern (no implementations provided)

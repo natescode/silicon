@@ -68,15 +68,15 @@
 
 \\ rc_new (Int)
 @fn rc_new value := {
-    @local p := &alloc 8;
-    &WASM::i32_store p, 1;
-    &WASM::i32_store (p + 4), value;
+    p := alloc(8);
+    WASM::i32_store(p, 1);
+    WASM::i32_store(p + 4, value);
     p
 };
 
 \\ rc_clone (Int)
 @fn rc_clone r := {
-    &WASM::i32_store r, ((&WASM::i32_load r) + 1);
+    WASM::i32_store(r, WASM::i32_load(r) + 1);
     r
 };
 
@@ -84,14 +84,14 @@
 # physical free is the enclosing allocator's job (arena exit / GC).
 \\ rc_drop (Int)
 @fn rc_drop r := {
-    &WASM::i32_store r, ((&WASM::i32_load r) - 1)
+    WASM::i32_store(r, WASM::i32_load(r) - 1)
 };
 
 \\ rc_get (Int)
-@fn rc_get r := &WASM::i32_load (r + 4);
+@fn rc_get r := WASM::i32_load(r + 4);
 
 \\ rc_count (Int)
-@fn rc_count r := &WASM::i32_load r;
+@fn rc_count r := WASM::i32_load(r);
 
 \\ rc_is_unique (Int)
-@fn rc_is_unique r := (&rc_count r) == 1;
+@fn rc_is_unique r := rc_count(r) == 1;

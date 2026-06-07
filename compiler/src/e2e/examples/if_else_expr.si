@@ -1,2 +1,8 @@
 \\ choose (Int, Int, Int)
-@fn choose a, b, flag := { &@if flag, { a }, { b } };
+@fn choose a, b, flag := {
+    @if(flag, {
+        a
+    }, {
+        b
+    })
+};

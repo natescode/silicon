@@ -95,7 +95,7 @@ try {
         // Run a program end-to-end and check console output decodes correctly
         // (guards the UTF-8 string encoding — a UTF-16 mismatch garbles output).
         const printed = await page.evaluate(async () => {
-            const src = "@fn run := { &web::console_log_str 'Hello, Silicon!' };\n@export run;"
+            const src = "@fn run := { web::console_log_str('Hello, Silicon!') };\n@export run;"
             const data = await (window as any).SiliconCompiler.compile({ source: src, platform: 'web', features: [] })
             if (!data.success) return { error: data.error }
             const bytes = Uint8Array.from(atob(data.wasm), (c: string) => c.charCodeAt(0))

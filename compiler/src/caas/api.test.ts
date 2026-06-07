@@ -50,7 +50,7 @@ describe('parse()', () => {
     })
 
     test('tree.source preserves original text', () => {
-        const src = '@global x := 42;'
+        const src = 'x := 42;'
         const { tree } = parse(src)
         expect(tree.source).toBe(src)
     })
@@ -80,7 +80,7 @@ describe('buildRegistry()', () => {
 
 describe('elaborate()', () => {
     test('returns elaborated tree with no diagnostics on valid input', () => {
-        const { tree } = parse('@global x := 1;')
+        const { tree } = parse('x := 1;')
         const reg = buildRegistry(tree)
         const result: ElabResult = elaborate(tree, reg)
         expect(result.diagnostics).toHaveLength(0)
@@ -89,7 +89,7 @@ describe('elaborate()', () => {
     })
 
     test('preserves source in the returned tree', () => {
-        const src = '@global y := 2;'
+        const src = 'y := 2;'
         const { tree } = parse(src)
         const reg = buildRegistry(tree)
         const { tree: elabTree } = elaborate(tree, reg)
@@ -103,7 +103,7 @@ describe('elaborate()', () => {
 
 describe('typecheck()', () => {
     test('returns SemanticModel on valid input', () => {
-        const src = '@global x := 42;'
+        const src = 'x := 42;'
         const { tree } = parse(src)
         const reg = buildRegistry(tree)
         const { tree: elab, registry } = elaborate(tree, reg)
@@ -117,7 +117,7 @@ describe('typecheck()', () => {
     test('captures type errors as diagnostics, never throws', () => {
         // Intentional type mismatch — no implicit coercion in Silicon.
         // We just verify it doesn't throw and returns an object.
-        const src = '@global x := 42;'
+        const src = 'x := 42;'
         const { tree } = parse(src)
         const reg = buildRegistry(tree)
         const { tree: elab, registry } = elaborate(tree, reg)
@@ -175,7 +175,7 @@ describe('compile()', () => {
     })
 
     test('model is defined after a successful compile', () => {
-        const result = compile('@global x := 1;')
+        const result = compile('x := 1;')
         expect(result.model).toBeDefined()
     })
 
@@ -196,40 +196,40 @@ describe('compile()', () => {
 
 describe('SyntaxTree.withText()', () => {
     test('is a method on SyntaxTree instances', () => {
-        const { tree } = parse('@global x := 1;')
+        const { tree } = parse('x := 1;')
         expect(typeof tree.withText).toBe('function')
         expect(tree instanceof SyntaxTree).toBe(true)
     })
 
     test('returns a ParseResult with the new source', () => {
-        const { tree: original } = parse('@global x := 1;')
-        const result = original.withText('@global y := 2;')
+        const { tree: original } = parse('x := 1;')
+        const result = original.withText('y := 2;')
         expect(result.diagnostics).toHaveLength(0)
-        expect(result.tree.source).toBe('@global y := 2;')
+        expect(result.tree.source).toBe('y := 2;')
     })
 
     test('new tree is independent — original source is unchanged', () => {
-        const src = '@global x := 1;'
+        const src = 'x := 1;'
         const { tree: original } = parse(src)
-        original.withText('@global y := 99;')
+        original.withText('y := 99;')
         expect(original.source).toBe(src)
     })
 
     test('preserves the file name from the original tree', () => {
-        const { tree } = parse('@global x := 1;', { file: 'foo.si' })
+        const { tree } = parse('x := 1;', { file: 'foo.si' })
         expect(tree.file).toBe('foo.si')
-        const { tree: reparsed } = tree.withText('@global y := 2;')
+        const { tree: reparsed } = tree.withText('y := 2;')
         expect(reparsed.file).toBe('foo.si')
     })
 
     test('file override in options is respected', () => {
-        const { tree } = parse('@global x := 1;', { file: 'a.si' })
-        const { tree: reparsed } = tree.withText('@global y := 2;', { file: 'b.si' })
+        const { tree } = parse('x := 1;', { file: 'a.si' })
+        const { tree: reparsed } = tree.withText('y := 2;', { file: 'b.si' })
         expect(reparsed.file).toBe('b.si')
     })
 
     test('captures parse errors without throwing', () => {
-        const { tree } = parse('@global x := 1;')
+        const { tree } = parse('x := 1;')
         const result = tree.withText('@@@@invalid')
         expect(result.diagnostics.length).toBeGreaterThan(0)
         expect(result.diagnostics[0].phase).toBe('parse')

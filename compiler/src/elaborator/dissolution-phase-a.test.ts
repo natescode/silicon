@@ -85,22 +85,22 @@ describe('Phase A equivalence: inline-block vs named-handler', () => {
         // The stratum captures the def name into state; the test reads state
         // to confirm the handler fired correctly.
         const inline = `@stratum Inline := {
-            &Compiler::register::keyword '@inline_kw';
-            &Compiler::on::decl '@inline_kw', {
-                @local s := &Compiler::state 'stratum';
-                &s::set 'seen', node.name.name;
-            };
+            Compiler::register::keyword('@inline_kw');
+            Compiler::on::decl('@inline_kw', {
+                @mut s := Compiler::state('stratum');
+                s::set('seen', node::name::name);
+            });
         };
         @inline_kw alpha;`
 
         const named = `@stratum Named := {
-            &Compiler::register::keyword '@named_kw';
-            &Compiler::on::decl '@named_kw', Named_decl;
+            Compiler::register::keyword('@named_kw');
+            Compiler::on::decl('@named_kw', Named_decl);
         };
         \\\\ Named_decl (Int)
         @fn Named_decl node := {
-            @local s := &Compiler::state 'stratum';
-            &s::set 'seen', node.name.name;
+            @mut s := Compiler::state('stratum');
+            s::set('seen', node::name::name);
         };
         @named_kw alpha;`
 
@@ -120,11 +120,13 @@ describe('Phase A equivalence: inline-block vs named-handler', () => {
         // Wildcard registration via Namespace handler — no string token,
         // arg[0] is the function name.
         const src = `@stratum W := {
-            &Compiler::on::call_site W_cs;
+            Compiler::on::call_site(W_cs);
         };
         \\\\ W_cs (Int)
-        @fn W_cs node := { 0 };
-        @fn run  := (&unrelated);`
+        @fn W_cs node := {
+            0
+        };
+        @fn run := unrelated();`
         // Should compile without lookup errors (the handler fires but does
         // nothing observable except not crashing).
         expect(() => compile(src)).not.toThrow()
@@ -132,31 +134,37 @@ describe('Phase A equivalence: inline-block vs named-handler', () => {
 
     test('on::module_finalize accepts a named handler', () => {
         const src = `@stratum F := {
-            &Compiler::on::module_finalize F_finalize;
+            Compiler::on::module_finalize(F_finalize);
         };
         \\\\ F_finalize (Int)
-        @fn F_finalize node := { 0 };
-        @fn main  := 1;`
+        @fn F_finalize node := {
+            0
+        };
+        @fn main := 1;`
         expect(() => compile(src)).not.toThrow()
     })
 
     test('on::annotation accepts a named handler', () => {
         const src = `@stratum A := {
-            &Compiler::register::annotation '@@mark';
-            &Compiler::on::annotation '@@mark', A_ann;
+            Compiler::register::annotation('@@mark');
+            Compiler::on::annotation('@@mark', A_ann);
         };
         \\\\ A_ann (Int)
-        @fn A_ann node := { 0 };`
+        @fn A_ann node := {
+            0
+        };`
         expect(() => compile(src)).not.toThrow()
     })
 
     test('on::comptime accepts a named handler', () => {
         // Define an operator '++' whose comptime semantics live in a named @fn.
         const src = `@stratum C := {
-            &Compiler::on::comptime '++', C_concat;
+            Compiler::on::comptime('++', C_concat);
         };
         \\\\ C_concat (Int)
-        @fn C_concat arg0 := { arg0 };`
+        @fn C_concat arg0 := {
+            arg0
+        };`
         // Compile and check that the comptime handler is registered.
         const prog = addToAstSemantics(siliconGrammar)(parse(src)).toAst() as any
         const registry = buildStrataRegistry(prog)
@@ -172,8 +180,8 @@ describe('Phase A equivalence: inline-block vs named-handler', () => {
 describe('Phase A error reporting', () => {
     test('referencing an undefined @fn name surfaces a clear error at fire time', () => {
         const src = `@stratum Broken := {
-            &Compiler::register::keyword '@broken_kw';
-            &Compiler::on::decl '@broken_kw', NonExistent;
+            Compiler::register::keyword('@broken_kw');
+            Compiler::on::decl('@broken_kw', NonExistent);
         };
         @broken_kw alpha;`
         // The handler is registered at strata-load time without checking
@@ -185,8 +193,8 @@ describe('Phase A error reporting', () => {
 
     test('but no error if the keyword is declared but never used', () => {
         const src = `@stratum Lazy := {
-            &Compiler::register::keyword '@lazy_kw';
-            &Compiler::on::decl '@lazy_kw', NonExistent;
+            Compiler::register::keyword('@lazy_kw');
+            Compiler::on::decl('@lazy_kw', NonExistent);
         };`
         // No @lazy_kw appears in user code → handler never fires → no error.
         expect(() => compile(src)).not.toThrow()
@@ -202,16 +210,16 @@ describe('Phase A forward references', () => {
         // The pre-pass collects @fn bodies before strata registration looks
         // them up, so source-order doesn't matter.
         const src = `@stratum Forward := {
-            &Compiler::register::keyword '@fwd_kw';
-            &Compiler::on::decl '@fwd_kw', Forward_handler;
+            Compiler::register::keyword('@fwd_kw');
+            Compiler::on::decl('@fwd_kw', Forward_handler);
         };
 
         @fwd_kw alpha;
 
         \\\\ Forward_handler (Int)
         @fn Forward_handler node := {
-            @local s := &Compiler::state 'stratum';
-            &s::set 'fired', 1;
+            @mut s := Compiler::state('stratum');
+            s::set('fired', 1);
         };`
         expect(() => compile(src)).not.toThrow()
     })

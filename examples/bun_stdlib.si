@@ -10,15 +10,15 @@
 @use 'str';
 
 @fn main := {
-    @local greeting := 'Silicon' ++ ' on ' ++ 'bun';
-    &web::console_log_str greeting;
-    &web::console_log_str (&int_to_str (&int_pow 2, 16));     # 65536
-    &web::console_log_str (&str_repeat '-', 16);
-    &@if (&str_contains greeting, 'bun'), {
-        &web::console_log_str 'contains "bun": yes';
+    greeting := 'Silicon' ++ ' on ' ++ 'bun';
+    web::console_log_str(greeting);
+    web::console_log_str(int_to_str(int_pow(2, 16)));  # 65536
+    web::console_log_str(str_repeat('-', 16));
+    @if(str_contains(greeting, 'bun'), {
+        web::console_log_str('contains "bun": yes');
     }, {
-        &web::console_log_str 'contains "bun": no';
-    };
+        web::console_log_str('contains "bun": no');
+    });
     0
 };
-&main;
+main();

@@ -71,13 +71,12 @@ describe('Phase 4: @defer keyword registration', () => {
 
 describe('Phase 4: @defer end-of-body cleanup', () => {
     test('single @defer in void function appends cleanup after body', async () => {
-        const { mod } = await compile(`
-            @extern { \\\\ cleanup () -> Void }
-            @fn foo  := {
-                &@defer &cleanup;
+        const { mod } = await compile(`\\\\ @extern cleanup ();
+
+            @fn foo := {
+                @defer(cleanup());
                 42
-            };
-        `)
+            };`)
         const fn = getFn(mod, 'foo')
         expect(fn.body).toBeDefined()
         // The body is wrapped: original body (Block with @defer Nop + trailing 42)
@@ -95,17 +94,16 @@ describe('Phase 4: @defer end-of-body cleanup', () => {
     })
 
     test('multiple @defers run in LIFO order at end of body', async () => {
-        const { mod } = await compile(`
-            @extern { \\\\ first () -> Void }
-            @extern { \\\\ second () -> Void }
-            @extern { \\\\ third () -> Void }
-            @fn foo  := {
-                &@defer &first;
-                &@defer &second;
-                &@defer &third;
+        const { mod } = await compile(`\\\\ @extern first ();
+            \\\\ @extern second ();
+            \\\\ @extern third ();
+
+            @fn foo := {
+                @defer(first());
+                @defer(second());
+                @defer(third());
                 0
-            };
-        `)
+            };`)
         const fn = getFn(mod, 'foo')
         const wrap = fn.body as IRBlock
         expect(wrap.kind).toBe('Block')
@@ -132,14 +130,13 @@ describe('Phase 4: @defer end-of-body cleanup', () => {
     })
 
     test('non-void function with @defer preserves return value via temp local', async () => {
-        const { mod } = await compile(`
-            @extern { \\\\ cleanup () -> Void }
-            \\\\ foo () -> Int
-            @fn foo  := {
-                &@defer &cleanup;
+        const { mod } = await compile(`\\\\ @extern cleanup ();
+
+            \\\\ foo Int
+            @fn foo := {
+                @defer(cleanup());
                 42
-            };
-        `)
+            };`)
         const wat = emitModule(mod, '')
         expect(wat).toContain('__defer_result')
         // Function still returns i32.
@@ -154,14 +151,13 @@ describe('Phase 4: @defer end-of-body cleanup', () => {
 
 describe('Phase 4: @defer with @return', () => {
     test('@return runs pending defers before the return', async () => {
-        const { mod } = await compile(`
-            @extern { \\\\ cleanup () -> Void }
-            \\\\ foo () -> Int
-            @fn foo  := {
-                &@defer &cleanup;
-                &@return 99
-            };
-        `)
+        const { mod } = await compile(`\\\\ @extern cleanup ();
+
+            \\\\ foo Int
+            @fn foo := {
+                @defer(cleanup());
+                @return(99)
+            };`)
         const wat = emitModule(mod, '')
         // Cleanup call must appear before the `(return ...)` in source order.
         const cleanupIdx = wat.indexOf('call $cleanup')
@@ -171,16 +167,15 @@ describe('Phase 4: @defer with @return', () => {
     })
 
     test('multiple @defers + @return: cleanups fire in LIFO order before return', async () => {
-        const { mod } = await compile(`
-            @extern { \\\\ first () -> Void }
-            @extern { \\\\ second () -> Void }
-            \\\\ foo () -> Int
-            @fn foo  := {
-                &@defer &first;
-                &@defer &second;
-                &@return 7
-            };
-        `)
+        const { mod } = await compile(`\\\\ @extern first ();
+            \\\\ @extern second ();
+
+            \\\\ foo Int
+            @fn foo := {
+                @defer(first());
+                @defer(second());
+                @return(7)
+            };`)
         const wat = emitModule(mod, '')
         const secondIdx = wat.indexOf('call $second')
         const firstIdx = wat.indexOf('call $first')

@@ -54,8 +54,8 @@ async function compileAndRun(testFns: Record<string, string>): Promise<Exports> 
 describe('Phase 5a-4: Vec[i32] runtime', () => {
     test('vec_new returns a header with len=0 and the requested capacity', async () => {
         const ex = await compileAndRun({
-            test_len:      `{ @local v := &vec_new 4; &vec_len v }`,
-            test_capacity: `{ @local v := &vec_new 4; &vec_capacity v }`,
+            test_len:      `{ @mut v := vec_new(4); vec_len(v) }`,
+            test_capacity: `{ @mut v := vec_new(4); vec_capacity(v) }`,
         })
         expect(ex.test_len()).toBe(0)
         expect(ex.test_capacity()).toBe(4)
@@ -64,18 +64,18 @@ describe('Phase 5a-4: Vec[i32] runtime', () => {
     test('vec_push_i32 + vec_get_i32 round-trip below capacity', async () => {
         const ex = await compileAndRun({
             test_push_get: `{
-                @local v := &vec_new 4;
-                &vec_push_i32 v, 10;
-                &vec_push_i32 v, 20;
-                &vec_push_i32 v, 30;
-                (&vec_get_i32 v, 0) + (&vec_get_i32 v, 1) + (&vec_get_i32 v, 2)
+                @mut v := vec_new(4);
+                vec_push_i32(v, 10);
+                vec_push_i32(v, 20);
+                vec_push_i32(v, 30);
+                vec_get_i32(v, 0) + vec_get_i32(v, 1) + vec_get_i32(v, 2)
             }`,
             test_len_after_3: `{
-                @local v := &vec_new 4;
-                &vec_push_i32 v, 10;
-                &vec_push_i32 v, 20;
-                &vec_push_i32 v, 30;
-                &vec_len v
+                @mut v := vec_new(4);
+                vec_push_i32(v, 10);
+                vec_push_i32(v, 20);
+                vec_push_i32(v, 30);
+                vec_len(v)
             }`,
         })
         expect(ex.test_push_get()).toBe(60)
@@ -88,32 +88,31 @@ describe('Phase 5a-4: Vec[i32] runtime', () => {
         // reallocs.
         const ex = await compileAndRun({
             test_grow_sum: `{
-                @local v := &vec_new 2;
-                &vec_push_i32 v, 1;
-                &vec_push_i32 v, 2;
-                &vec_push_i32 v, 3;
-                &vec_push_i32 v, 4;
-                &vec_push_i32 v, 5;
-                (&vec_get_i32 v, 0) + (&vec_get_i32 v, 1) + (&vec_get_i32 v, 2)
-                + (&vec_get_i32 v, 3) + (&vec_get_i32 v, 4)
+                @mut v := vec_new(2);
+                vec_push_i32(v, 1);
+                vec_push_i32(v, 2);
+                vec_push_i32(v, 3);
+                vec_push_i32(v, 4);
+                vec_push_i32(v, 5);
+                vec_get_i32(v, 0) + vec_get_i32(v, 1) + vec_get_i32(v, 2) + vec_get_i32(v, 3) + vec_get_i32(v, 4)
             }`,
             test_grow_cap: `{
-                @local v := &vec_new 2;
-                &vec_push_i32 v, 1;
-                &vec_push_i32 v, 2;
-                &vec_push_i32 v, 3;
-                &vec_push_i32 v, 4;
-                &vec_push_i32 v, 5;
-                &vec_capacity v
+                @mut v := vec_new(2);
+                vec_push_i32(v, 1);
+                vec_push_i32(v, 2);
+                vec_push_i32(v, 3);
+                vec_push_i32(v, 4);
+                vec_push_i32(v, 5);
+                vec_capacity(v)
             }`,
             test_grow_len: `{
-                @local v := &vec_new 2;
-                &vec_push_i32 v, 1;
-                &vec_push_i32 v, 2;
-                &vec_push_i32 v, 3;
-                &vec_push_i32 v, 4;
-                &vec_push_i32 v, 5;
-                &vec_len v
+                @mut v := vec_new(2);
+                vec_push_i32(v, 1);
+                vec_push_i32(v, 2);
+                vec_push_i32(v, 3);
+                vec_push_i32(v, 4);
+                vec_push_i32(v, 5);
+                vec_len(v)
             }`,
         })
         expect(ex.test_grow_sum()).toBe(15)
@@ -124,11 +123,11 @@ describe('Phase 5a-4: Vec[i32] runtime', () => {
     test('vec_set_i32 mutates in place', async () => {
         const ex = await compileAndRun({
             test_set: `{
-                @local v := &vec_new 4;
-                &vec_push_i32 v, 10;
-                &vec_push_i32 v, 20;
-                &vec_set_i32 v, 0, 99;
-                (&vec_get_i32 v, 0) + (&vec_get_i32 v, 1)
+                @mut v := vec_new(4);
+                vec_push_i32(v, 10);
+                vec_push_i32(v, 20);
+                vec_set_i32(v, 0, 99);
+                vec_get_i32(v, 0) + vec_get_i32(v, 1)
             }`,
         })
         expect(ex.test_set()).toBe(119)  // 99 + 20
@@ -137,27 +136,27 @@ describe('Phase 5a-4: Vec[i32] runtime', () => {
     test('vec_pop_i32 returns the last element and decrements len', async () => {
         const ex = await compileAndRun({
             test_pop_val: `{
-                @local v := &vec_new 4;
-                &vec_push_i32 v, 10;
-                &vec_push_i32 v, 20;
-                &vec_push_i32 v, 30;
-                &vec_pop_i32 v
+                @mut v := vec_new(4);
+                vec_push_i32(v, 10);
+                vec_push_i32(v, 20);
+                vec_push_i32(v, 30);
+                vec_pop_i32(v)
             }`,
             test_pop_len: `{
-                @local v := &vec_new 4;
-                &vec_push_i32 v, 10;
-                &vec_push_i32 v, 20;
-                &vec_push_i32 v, 30;
-                &vec_pop_i32 v;
-                &vec_len v
+                @mut v := vec_new(4);
+                vec_push_i32(v, 10);
+                vec_push_i32(v, 20);
+                vec_push_i32(v, 30);
+                vec_pop_i32(v);
+                vec_len(v)
             }`,
             test_pop_twice: `{
-                @local v := &vec_new 4;
-                &vec_push_i32 v, 10;
-                &vec_push_i32 v, 20;
-                &vec_push_i32 v, 30;
-                @local a := &vec_pop_i32 v;
-                @local b := &vec_pop_i32 v;
+                @mut v := vec_new(4);
+                vec_push_i32(v, 10);
+                vec_push_i32(v, 20);
+                vec_push_i32(v, 30);
+                @mut a := vec_pop_i32(v);
+                @mut b := vec_pop_i32(v);
                 a + b
             }`,
         })
@@ -171,13 +170,13 @@ describe('Phase 5a-4: Vec[i32] runtime', () => {
         // value `v` (header pointer) is unchanged.
         const ex = await compileAndRun({
             test_stable_header: `{
-                @local v := &vec_new 2;
-                @local before := v;
-                &vec_push_i32 v, 1;
-                &vec_push_i32 v, 2;
-                &vec_push_i32 v, 3;
-                &vec_push_i32 v, 4;
-                &vec_push_i32 v, 5;
+                @mut v := vec_new(2);
+                @mut before := v;
+                vec_push_i32(v, 1);
+                vec_push_i32(v, 2);
+                vec_push_i32(v, 3);
+                vec_push_i32(v, 4);
+                vec_push_i32(v, 5);
                 v - before
             }`,
         })

@@ -10,7 +10,7 @@
 
 @use 'io';
 
-@global name := 'Delfina';
+name := 'Delfina';
 
 ## Print Delfina's name + newline to stdout.
-&print name;
+print(name);

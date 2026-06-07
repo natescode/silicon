@@ -31,7 +31,7 @@ function rng(seed: number) {
 function genFunction(rand: () => number, idx: number, stmts: number): string {
     const lines: string[] = [`\\\\ fn${idx} (Int, Int) -> Int`, `@fn fn${idx} a, b := {`]
     for (let i = 0; i < stmts; i++) {
-        lines.push(`    @local v${i % 8} := ${Math.floor(rand() * 1000)} + b;`)
+        lines.push(`    @mut v${i % 8} := ${Math.floor(rand() * 1000)} + b;`)
     }
     lines.push(`    a + ${Math.floor(rand() * 1000)}`, `};`)
     return lines.join('\n')

@@ -42,7 +42,7 @@ dependency bumps.
 | [0008](0008-memory-management-arenas.md) | Memory management: explicit arenas for 1.0, AllocatorABI for 1.1 | Accepted |
 | [0009](0009-wasm-gc-target.md) | WasmGC target: opt-in `--target=wasm-gc` for v1.0 | Accepted |
 | [0010](0010-grammar-targets-ll1.md) | Silicon's grammar targets LL(1) | Accepted |
-| [0011](0011-borrow-checker-and-rcaps.md) | Borrow checker design: arenas + rcaps + actor isolation | Proposed |
+| [0011](0011-borrow-checker-and-rcaps.md) | Borrow checker design: arenas + rcaps + actor isolation. **+ 2026-06-07 addendum: `Span`/`View`/`Slice` capability surface (Accepted, prioritized)** | Proposed (addendum Accepted) |
 | [0012](0012-capability-driven-optimization.md) | Optimizer consumes rcaps + ocaps as a modular purity certificate | Proposed |
 | [0013](0013-capability-checker-bootstrap.md) | Capability checker: comptime reflection + `@capability` stratum + host-first→in-stratum build order | Proposed |
 | [0014](0014-global-local-bindings.md) | Simplify value bindings to `@global` (immutable) + `@local` (mutable) | Accepted |
@@ -51,3 +51,6 @@ dependency bumps.
 | [0017](0017-ffi-binding-generator.md) | FFI binding generator: machine-generate Web/Node/Bun `@extern` bindings + dual host shims from upstream specs | Proposed |
 | [0018](0018-async-promise-ffi.md) | Async/Promise (+ object-handle + callback) FFI to reach 100% web/bun coverage: Asyncify baseline + JSPI fast path, closures-gated reactor | Proposed |
 | [0019](0019-first-class-closures-and-capture.md) | First-class closures/capture (mode-tiered): zero-cost non-escaping on every mode; escaping/host-callable closures wasm-gc-only (engine-GC'd, leak-free) — v1.0-critical for the 100% gate | Proposed |
+| [0020](0020-odin-inspired-grammar.md) | Odin-inspired grammar: bare definitions, `@fn`-marked functions, always-parens calls, drop the `&` call sigil | Accepted |
+| [0021](0021-bounded-type-inference.md) | Bounded type inference: body-first constraint generation + call-site refinement (`Num`/`Comparable` built-in bounds — the baby-typeclass bridge to traits) | Proposed (draft, not prioritized) |
+| [0022](0022-string-byte-views-and-builder.md) | Strings as byte views: explicit `bytes`/`code_points`/`width` accessors + `StrBuilder` (no coercion; consumes `View`/`Slice` from 0011) | Accepted (prioritized) |

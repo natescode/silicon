@@ -22,118 +22,136 @@
 # allocations (see 'mem').
 \\ write_bytes (Int, Int, Int) -> Int
 @fn write_bytes fd, ptr, len := {
-    &heap_align;
-    @local iovs := &scratch_alloc 8;
-    &WASM::i32_store iovs, ptr;
-    &WASM::i32_store (iovs + 4), len;
-    @local nwritten := &scratch_alloc 4;
-    &wasi_snapshot_preview1::fd_write fd, iovs, 1, nwritten
+    heap_align();
+    iovs := scratch_alloc(8);
+    WASM::i32_store(iovs, ptr);
+    WASM::i32_store(iovs + 4, len);
+    nwritten := scratch_alloc(4);
+    wasi_snapshot_preview1::fd_write(fd, iovs, 1, nwritten)
 };
 
 # write_str(fd, s) — write a Silicon string (length-prefixed UTF-8) to fd.
 # Skips the 4-byte length header and writes only the UTF-8 payload bytes.
 \\ write_str (Int, String) -> Int
 @fn write_str fd, s := {
-    &write_bytes fd, ((&str_ptr s) + 4), (&str_len s)
+    write_bytes(fd, str_ptr(s) + 4, str_len(s))
 };
 
 # write_nl(fd) — write a Unix newline (LF, byte 10) to fd.
 \\ write_nl (Int) -> Int
 @fn write_nl fd := {
-    &heap_align;
-    @local buf := &scratch_alloc 4;
-    &WASM::i32_store8 buf, 10;
-    &write_bytes fd, buf, 1
+    heap_align();
+    buf := scratch_alloc(4);
+    WASM::i32_store8(buf, 10);
+    write_bytes(fd, buf, 1)
 };
 
 # print(s) — write a string followed by a newline to stdout (fd 1).
 \\ print (String) -> Int
 @fn print s := {
-    &write_str 1, s;
-    &write_nl 1
+    write_str(1, s);
+    write_nl(1)
 };
 
 # println(s) — explicit alias of print (string + newline to stdout).
 \\ println (String) -> Int
-@fn println s := { &print s };
+@fn println s := {
+    print(s)
+};
 
 # print_str(s) — write a string to stdout with NO trailing newline.
 \\ print_str (String) -> Int
-@fn print_str s := { &write_str 1, s };
+@fn print_str s := {
+    write_str(1, s)
+};
 
 # eprint(s) — write a string followed by a newline to stderr (fd 2).
 \\ eprint (String) -> Int
 @fn eprint s := {
-    &write_str 2, s;
-    &write_nl 2
+    write_str(2, s);
+    write_nl(2)
 };
 
 # print_int(n) — write the decimal form of `n` and a newline to stdout.
 \\ print_int (Int) -> Int
-@fn print_int n := { &print (&int_to_str n) };
+@fn print_int n := {
+    print(int_to_str(n))
+};
 
 # print_float(f) — write the decimal form of `f` and a newline to stdout.
 \\ print_float (Float) -> Int
-@fn print_float f := { &print (&float_to_str f) };
+@fn print_float f := {
+    print(float_to_str(f))
+};
 
 # print_bool(b) — write "true"/"false" and a newline to stdout.
 \\ print_bool (Bool) -> Int
 @fn print_bool b := {
-    @local s := 'false';
-    &@if b, { s = 'true' }, {};
-    &print s
+    @mut s := 'false';
+    @if(b, {
+        s = 'true'
+    }, {});
+    print(s)
 };
 
 # exit(code) — terminate the process with the given exit code.
-\\ exit (Int) -> Void
+\\ exit (Int)
 @fn exit code := {
-    &wasi_snapshot_preview1::proc_exit code
+    wasi_snapshot_preview1::proc_exit(code)
 };
 
 # ── stdin ──────────────────────────────────────────────────────────────
 
 # read_byte() — read a single byte from stdin (fd 0).  Returns the byte
 # value 0..255, or -1 at end of input.
-\\ read_byte () -> Int
+\\ read_byte Int
 @fn read_byte := {
-    &heap_align;
-    @local buf := &scratch_alloc 4;
-    @local iov := &scratch_alloc 8;
-    &WASM::i32_store iov, buf;
-    &WASM::i32_store (iov + 4), 1;
-    @local nread := &scratch_alloc 4;
-    @local rc := &wasi_snapshot_preview1::fd_read 0, iov, 1, nread;
-    @local result := 0 - 1;
-    &@if rc == 0, {
-        @local got := &WASM::i32_load nread;
-        &@if got > 0, { result = &WASM::i32_load8_u buf }, {};
-    }, {};
+    heap_align();
+    buf := scratch_alloc(4);
+    iov := scratch_alloc(8);
+    WASM::i32_store(iov, buf);
+    WASM::i32_store(iov + 4, 1);
+    nread := scratch_alloc(4);
+    rc := wasi_snapshot_preview1::fd_read(0, iov, 1, nread);
+    @mut result := 0 - 1;
+    @if(rc == 0, {
+        got := WASM::i32_load(nread);
+        @if(got > 0, {
+            result = WASM::i32_load8_u(buf)
+        }, {});
+    }, {});
     result
 };
 
 # read_line() — read a line from stdin (fd 0) up to a newline or EOF.
 # The trailing newline is stripped.  Returns the empty string at EOF.
-\\ read_line () -> String
+\\ read_line String
 @fn read_line := {
-    &heap_align;
-    @local cap := 4096;
-    @local buf := &alloc_string cap;
-    @local buf_ptr := &str_ptr buf;
-    @local base := buf_ptr + 4;
-    @local count := 0;
-    @local go := @true;
-    &@loop go, {
-        @local c := &read_byte;
-        &@if c < 0, { go = @false }, {
-            &@if c == 10, { go = @false }, {
-                &@if count < cap, {
-                    &WASM::i32_store8 (base + count), c;
+    heap_align();
+    cap := 4096;
+    buf := alloc_string(cap);
+    buf_ptr := str_ptr(buf);
+    base := buf_ptr + 4;
+    @mut count := 0;
+    @mut go := @true;
+    @loop(go, {
+        c := read_byte();
+        @if(c < 0, {
+            go = @false
+        }, {
+            @if(c == 10, {
+                go = @false
+            }, {
+                @if(count < cap, {
+                    WASM::i32_store8(base + count, c);
                     count = count + 1;
-                }, { go = @false };
-            };
-        };
-    };
-    &WASM::i32_store buf_ptr, count;
-    &heap_align;
+                }, {
+                    go = @false
+                });
+            });
+        });
+    });
+    WASM::i32_store(buf_ptr, count);
+    heap_align();
     buf
 };

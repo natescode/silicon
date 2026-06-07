@@ -22,7 +22,7 @@
  *     wasm-mvp-only per the two-layer portability split (ADR 0009).
  *     The wasm-mvp-only cliff is verified separately by E0012/E0013
  *     in wasm-gc-portability.test.ts.
- *   - Vec[Int] cross-target source parity.  Under wasm-gc, `@local v`
+ *   - Vec[Int] cross-target source parity.  Under wasm-gc, `@mut v`
  *     must be annotated `:Vec[Int]` so injectLocalRefSlots can mark
  *     the wasm-level local as ref-typed.  Under wasm-mvp, the same
  *     annotation requires vec.si's signatures to also be Vec[Int],
@@ -99,35 +99,41 @@ describe('Phase 9d-9: primitives parity', () => {
 
     test('Int comparisons return the same i32 (0/1) on both targets', async () => {
         await assertParity(`
-            \\\\ run () -> Int
-            @fn run  := &@if 5 > 3, { 1 }, { 0 };
-            @export run;
-        `, 'run', 1)
+            \\\\ run Int
+            @fn run := @if(5 > 3, {
+                1
+            }, {
+                0
+            });
+            @export run;`, 'run', 1)
     })
 
     test('Loop accumulator preserves arithmetic semantics', async () => {
         await assertParity(`
-            \\\\ run () -> Int
-            @fn run  := {
-                @local sum := 0;
-                @local i := 1;
-                &@loop i <= 10, { sum = sum + i; i = i + 1; };
+            \\\\ run Int
+            @fn run := {
+                @mut sum := 0;
+                @mut i := 1;
+                @loop(i <= 10, {
+                    sum = sum + i;
+                    i = i + 1;
+                });
                 sum
             };
-            @export run;
-        `, 'run', 55)
+            @export run;`, 'run', 55)
     })
 
     test('Recursive function compiles + runs the same', async () => {
         await assertParity(`
             \\\\ fib (Int)
-            @fn fib n := &@if n < 2,
-                { n },
-                { (&fib (n - 1)) + (&fib (n - 2)) };
-            \\\\ run () -> Int
-            @fn run  := &fib 10;
-            @export run;
-        `, 'run', 55)
+            @fn fib n := @if(n < 2, {
+                n
+            }, {
+                fib(n - 1) + fib(n - 2)
+            });
+            \\\\ run Int
+            @fn run := fib(10);
+            @export run;`, 'run', 55)
     })
 })
 
@@ -142,14 +148,13 @@ describe('Phase 9d-9: @struct parity', () => {
         // (mvp uses i32.load, gc uses struct.get) but the source program
         // doesn't change — `p.x` lowers correctly under both.
         await assertParity(`
-            @struct Point x Int, y Int;
-            \\\\ run () -> Int
-            @fn run  := {
-                @local p := &Point 3, 4;
-                p.x + p.y
+            @type Point := { x Int, y Int };
+            \\\\ run Int
+            @fn run := {
+                @mut p := Point(3, 4);
+                p::x + p::y
             };
-            @export run;
-        `, 'run', 7)
+            @export run;`, 'run', 7)
     })
 })
 
@@ -161,47 +166,37 @@ describe('Phase 9d-9: sum-type parity', () => {
 
     test('payload-free @type_sum + @match parity', async () => {
         await assertParity(`
-            @type_sum Color := Red | Green | Blue;
-            \\\\ run () -> Int
-            @fn run  := {
-                @local c := Color::Green;
-                &@match c,
-                    Color::Red   => 1,
-                    Color::Green => 2,
-                    Color::Blue  => 3
+            @enum Color := Red | Green | Blue;
+            \\\\ run Int
+            @fn run := {
+                @mut c := Color::Green;
+                @match(c, Color::Red => 1, Color::Green => 2, Color::Blue => 3)
             };
-            @export run;
-        `, 'run', 2)
+            @export run;`, 'run', 2)
     })
 
     test('payload-bearing @type Sum + match arms (Some path)', async () => {
         await assertParity(`
             @type Opt := $Some v Int | $None;
             \\\\ unwrap (Opt)
-            @fn unwrap o := &@match o,
-                $Some v => v,
-                $None => 0;
-            \\\\ run () -> Int
-            @fn run  := &unwrap (&Some 42);
-            @export run;
-        `, 'run', 42)
+            @fn unwrap o := @match(o, $Some v => v, $None => 0);
+            \\\\ run Int
+            @fn run := unwrap(Some(42));
+            @export run;`, 'run', 42)
     })
 
     test('payload-bearing Sum (None path)', async () => {
         // Match-arm bodies with binary expressions need parens; the
-        // zero-arg constructor call to `&None` also needs parens.
+        // zero-arg constructor call to `None()` also needs parens.
         await assertParity(`
             @type Opt := $Some v Int | $None;
             \\\\ unwrap (Opt)
-            @fn unwrap o := &@match o,
-                $Some v => v,
-                $None => (0 - 7);
-            \\\\ make_none () -> Opt
-            @fn make_none  := (&None);
-            \\\\ run () -> Int
-            @fn run  := &unwrap (&make_none);
-            @export run;
-        `, 'run', -7)
+            @fn unwrap o := @match(o, $Some v => v, $None => (0 - 7));
+            \\\\ make_none Opt
+            @fn make_none := None();
+            \\\\ run Int
+            @fn run := unwrap(make_none());
+            @export run;`, 'run', -7)
     })
 })
 
@@ -218,17 +213,14 @@ describe('Phase 9d-9: Option / Result stdlib parity', () => {
         await assertParity(`
             @type Opt := $Some v Int | $None;
             \\\\ unwrap_or (Opt, Int)
-            @fn unwrap_or o, dflt := &@match o,
-                $Some v => v,
-                $None => dflt;
-            \\\\ run () -> Int
-            @fn run  := {
-                @local a := &unwrap_or (&Some 10), 99;
-                @local b := &unwrap_or (&None), 99;
+            @fn unwrap_or o, dflt := @match(o, $Some v => v, $None => dflt);
+            \\\\ run Int
+            @fn run := {
+                @mut a := unwrap_or(Some(10), 99);
+                @mut b := unwrap_or(None(), 99);
                 a + b
             };
-            @export run;
-        `, 'run', 109)
+            @export run;`, 'run', 109)
     })
 
     test('Sum-with-variants + arms returning different magnitudes', async () => {
@@ -238,17 +230,12 @@ describe('Phase 9d-9: Option / Result stdlib parity', () => {
         await assertParity(`
             @type Res := $Ok value Int | $Err code Int;
             \\\\ ok_value (Res)
-            @fn ok_value r := &@match r,
-                $Ok value => value,
-                $Err code => 0;
+            @fn ok_value r := @match(r, $Ok value => value, $Err code => 0);
             \\\\ err_code (Res)
-            @fn err_code r := &@match r,
-                $Ok value => 0,
-                $Err code => code;
-            \\\\ run () -> Int
-            @fn run  := (&ok_value (&Ok 7)) + (&err_code (&Err 3));
-            @export run;
-        `, 'run', 10)
+            @fn err_code r := @match(r, $Ok value => 0, $Err code => code);
+            \\\\ run Int
+            @fn run := ok_value(Ok(7)) + err_code(Err(3));
+            @export run;`, 'run', 10)
     })
 })
 
@@ -276,12 +263,9 @@ describe('Phase 9d-9: programs validate under both targets', () => {
             @type Opt := $Some v Int | $None;
             \\\\ identity (Opt)
             @fn identity o := o;
-            \\\\ run () -> Int
-            @fn run  := &@match (&identity (&Some 5)),
-                $Some v => v,
-                $None => 0;
-            @export run;
-        `)
+            \\\\ run Int
+            @fn run := @match(identity(Some(5)), $Some v => v, $None => 0);
+            @export run;`)
     })
 
     test('Function returning sum + further @match composes cleanly', async () => {
@@ -296,28 +280,24 @@ describe('Phase 9d-9: programs validate under both targets', () => {
         await assertBothValidate(`
             @type Tag := $A x Int | $B y Int;
             \\\\ make_a (Int)
-            @fn make_a v := &A v;
+            @fn make_a v := A(v);
             \\\\ make_b (Int)
-            @fn make_b v := &B v;
+            @fn make_b v := B(v);
             \\\\ classify (Tag)
-            @fn classify t := &@match t,
-                $A x => x,
-                $B y => (0 - y);
-            \\\\ run () -> Int
-            @fn run  := (&classify (&make_a 7)) + (&classify (&make_b 3));
-            @export run;
-        `)
+            @fn classify t := @match(t, $A x => x, $B y => (0 - y));
+            \\\\ run Int
+            @fn run := classify(make_a(7)) + classify(make_b(3));
+            @export run;`)
     })
 
     test('Lifecycle: arena + Rc compose cleanly under both targets', async () => {
         await assertBothValidate(`
             @use 'src/stdlib/rc.si';
-            @fn run := &@with_arena {
-                @local r := &rc_new 42;
-                &@defer &rc_drop r;
-                &rc_get r
-            };
-            @export run;
-        `)
+            @fn run := @with_arena({
+                @mut r := rc_new(42);
+                @defer(rc_drop(r));
+                rc_get(r)
+            });
+            @export run;`)
     })
 })

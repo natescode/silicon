@@ -7,3 +7,9 @@ dist/
 
 # JetBrains IDE project metadata
 .idea/
+
+# Claude Code session/agent state and workflow worktrees
+.claude/
+
+# Compiler debug artifact
+ast.json

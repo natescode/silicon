@@ -68,7 +68,7 @@ call $DrawCubeV(:Vector3 %pos, :Vector3 %size, :Color %c)
 So Silicon does **not** need to implement the eightbyte classifier. It needs to
 (a) emit the right `type :T` declarations and (b) hand QBE aggregate values at
 the call boundary. The current QBE backend emits *zero* aggregate declarations
-([`src/codegen/qbe/lower.ts:267`](../src/codegen/qbe/lower.ts) — `@struct` /
+([`src/codegen/qbe/lower.ts:267`](../compiler/src/codegen/qbe/lower.ts) — `@struct` /
 `@type` produce no top-level QBE output; field access is generated functions
 over a flat blob).
 
@@ -108,10 +108,10 @@ keyword is a stratum, so **no grammar change**, per the project's
 "add a stratum, not grammar" rule):
 
 ```silicon
-@cstruct Color   r:UInt8, g:UInt8, b:UInt8, a:UInt8;     #  4 B
-@cstruct Vector2 x:Float, y:Float;                        #  8 B
-@cstruct Vector3 x:Float, y:Float, z:Float;               # 12 B
-@cstruct Camera3D position:Vector3, target:Vector3, up:Vector3, fovy:Float, projection:Int;
+@cstruct Color   := { r UInt8, g UInt8, b UInt8, a UInt8 };     #  4 B
+@cstruct Vector2 := { x Float, y Float };                        #  8 B
+@cstruct Vector3 := { x Float, y Float, z Float };               # 12 B
+@cstruct Camera3D := { position Vector3, target Vector3, up Vector3, fovy Float, projection Int };
 ```
 
 `@cstruct` semantics:
@@ -132,13 +132,13 @@ keyword is a stratum, so **no grammar change**, per the project's
 ## 4. Codegen wiring (once layout exists)
 
 All on the QBE path; `siliconTypeToQbe`/`siliconTypeToQbeReturn` and `lowerCall`
-in [`src/codegen/qbe/`](../src/codegen/qbe/) are the touch-points.
+in [`src/codegen/qbe/`](../compiler/src/codegen/qbe/) are the touch-points.
 
 1. **Type emission.** For each `@cstruct` reachable from an `@extern` signature,
    emit a QBE `type :T = { … }` (nested types reference other `:T`). New pass in
    `lowerTopLevel`.
 2. **Argument passing.** `lowerCall` currently types each arg by its
-   `inferredType → siliconTypeToQbe` ([`lower.ts:816`](../src/codegen/qbe/lower.ts)).
+   `inferredType → siliconTypeToQbe` ([`lower.ts:816`](../compiler/src/codegen/qbe/lower.ts)).
    When the callee parameter is a `@cstruct`, pass `:T %ptr` (the value is the
    pointer to the C-layout block) and let QBE classify.
 3. **Returns.** Support `function :T $f(...)` and `%r =:T call $f(...)`;
@@ -147,7 +147,7 @@ in [`src/codegen/qbe/`](../src/codegen/qbe/) are the touch-points.
 4. **Extern signatures naming `@cstruct` types.** The parser/typechecker already
    accept type-name params; they need to resolve to `@cstruct` types and carry
    the layout to the lowerer.
-5. **Construction & field access.** Struct literals (`&Color 230,41,55,255`) and
+5. **Construction & field access.** Struct literals (`Color(230, 41, 55, 255)`) and
    `.field` reads/writes already exist for `@struct`; reuse with the C layout
    offsets and sub-word loads/stores (`loadub`/`storeb` for `UInt8`, etc.).
 
@@ -160,23 +160,24 @@ layout metadata threaded to the QBE lowerer, plus the four wiring points above.
 ## 5. Worked example (target state)
 
 ```silicon
-@cstruct Color    r:UInt8, g:UInt8, b:UInt8, a:UInt8;
-@cstruct Vector3  x:Float, y:Float, z:Float;
-@cstruct Camera3D position:Vector3, target:Vector3, up:Vector3, fovy:Float, projection:Int;
+@cstruct Color    := { r UInt8, g UInt8, b UInt8, a UInt8 };
+@cstruct Vector3  := { x Float, y Float, z Float };
+@cstruct Camera3D := { position Vector3, target Vector3, up Vector3, fovy Float, projection Int };
 
-@extern InitWindow width:Int, height:Int, title:String;
-@extern BeginMode3D camera:Camera3D;           # 44 B struct, by value
-@extern DrawCube position:Vector3, w:Float, h:Float, l:Float, color:Color;
+@extern InitWindow width Int, height Int, title String;
+@extern BeginMode3D camera Camera3D;           # 44 B struct, by value
+@extern DrawCube position Vector3, w Float, h Float, l Float, color Color;
 @extern EndMode3D;
 
-@fn main:Int := {
-    &InitWindow 800, 600, '3D cube';
-    @local cam:Camera3D := &Camera3D
-        (&Vector3 10.0, 10.0, 10.0), (&Vector3 0.0, 0.0, 0.0),
-        (&Vector3 0.0, 1.0, 0.0), 45.0, 0;
-    &BeginMode3D cam;
-    &DrawCube (&Vector3 0.0, 0.0, 0.0), 2.0, 2.0, 2.0, (&Color 230, 41, 55, 255);
-    &EndMode3D;
+\\ main Int
+@fn main := {
+    InitWindow(800, 600, '3D cube');
+    cam := Camera3D(
+        Vector3(10.0, 10.0, 10.0), Vector3(0.0, 0.0, 0.0),
+        Vector3(0.0, 1.0, 0.0), 45.0, 0);
+    BeginMode3D(cam);
+    DrawCube(Vector3(0.0, 0.0, 0.0), 2.0, 2.0, 2.0, Color(230, 41, 55, 255));
+    EndMode3D();
     0
 };
 ```

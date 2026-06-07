@@ -18,47 +18,55 @@
 # Half-open range: 0..n covers 0,1,…,n-1.
 \\ sum_range (Int) -> Int
 @fn sum_range n := {
-    @local total := 0;
-    &@loop v, 0..n, { total = total + v };
+    @mut total := 0;
+    @loop(v, 0 .. n, {
+        total = total + v
+    });
     total
 };
 
 # Two binders over a range: position then element (they diverge once lo ≠ 0).
-\\ dot_index (Int) -> Int
+\\ dot_index Int
 @fn dot_index := {
-    @local acc := 0;
-    &@loop i, v, 2..5, { acc = acc + (i * v) };   # 0*2 + 1*3 + 2*4
+    @mut acc := 0;
+    @loop(i, v, 2 .. 5, {
+        acc = acc + (i * v)  # 0*2 + 1*3 + 2*4
+    });
     acc
 };
 
 # i32-element Vec iteration via the vec_len / vec_get_i32 surface.
-\\ sum_vec () -> Int
+\\ sum_vec Int
 @fn sum_vec := {
-    @local xs := &vec_new 4;
-    &vec_push_i32 xs, 10;
-    &vec_push_i32 xs, 20;
-    &vec_push_i32 xs, 30;
-    @local sum := 0;
-    &@loop x, xs, { sum = sum + x };
+    xs := vec_new(4);
+    vec_push_i32(xs, 10);
+    vec_push_i32(xs, 20);
+    vec_push_i32(xs, 30);
+    @mut sum := 0;
+    @loop(x, xs, {
+        sum = sum + x
+    });
     sum
 };
 
 # Infinite loop, exited with @break.
 \\ first_pow2_over (Int) -> Int
 @fn first_pow2_over limit := {
-    @local p := 1;
-    &@loop {
-        &@if p > limit, { &@break };
+    @mut p := 1;
+    @loop({
+        @if(p > limit, {
+            @break()
+        });
         p = p * 2
-    };
+    });
     p
 };
 
 @fn main := {
-    &print_int (&sum_range 5);          # 10
-    &print_int (&dot_index);            # 11
-    &print_int (&sum_vec);              # 60
-    &print_int (&first_pow2_over 100);  # 128
+    print_int(sum_range(5));  # 10
+    print_int(dot_index());  # 11
+    print_int(sum_vec());  # 60
+    print_int(first_pow2_over(100));  # 128
     0
 };
-&main;
+main();

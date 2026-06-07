@@ -11,8 +11,8 @@ import { Workspace } from './workspace'
 const LIB  = '@fn add x, y := { x + y };'
 // 'add' definition: col 5, length 3  (1-based: @=1 f=2 n=3 space=4 a=5)
 
-const MAIN = '@global result := &add 1, 2;'
-// '&add' call: '&' at col 19, 'add' Namespace at col 20
+const MAIN = 'result := add(1, 2);'
+// 'add' call: 'add' at col 11
 
 function twoDocWs() {
     const ws = new Workspace()
@@ -29,7 +29,7 @@ describe('Workspace symbol index', () => {
     test('symbols from all open documents are indexed', () => {
         const ws = twoDocWs()
         // findDefinition succeeds from any document
-        const sym = ws.findDefinition('main.si', 1, 20)
+        const sym = ws.findDefinition('main.si', 1, 11)
         expect(sym).toBeDefined()
         expect(sym!.name).toBe('add')
     })
@@ -37,7 +37,7 @@ describe('Workspace symbol index', () => {
     test('index entry is removed when document is closed', () => {
         const ws = twoDocWs()
         ws.closeDocument('lib.si')
-        const sym = ws.findDefinition('main.si', 1, 20)
+        const sym = ws.findDefinition('main.si', 1, 11)
         expect(sym).toBeUndefined()
     })
 
@@ -87,28 +87,28 @@ describe('Workspace symbol index', () => {
 describe('Workspace.findDefinition() — cross-document', () => {
     test('resolves a symbol defined in a different document', () => {
         const ws = twoDocWs()
-        const sym = ws.findDefinition('main.si', 1, 20)
+        const sym = ws.findDefinition('main.si', 1, 11)
         expect(sym).toBeDefined()
         expect(sym!.name).toBe('add')
     })
 
     test('definitionSpan.file points to the defining document', () => {
         const ws = twoDocWs()
-        const sym = ws.findDefinition('main.si', 1, 20)
+        const sym = ws.findDefinition('main.si', 1, 11)
         expect(sym!.definitionSpan?.file).toBe('lib.si')
     })
 
     test('definitionSpan.line and col point to the name in lib.si', () => {
         const ws = twoDocWs()
-        const sym = ws.findDefinition('main.si', 1, 20)
+        const sym = ws.findDefinition('main.si', 1, 11)
         expect(sym!.definitionSpan?.line).toBe(1)
         expect(sym!.definitionSpan?.col).toBe(5)
     })
 
     test('returns undefined for a position that covers no identifier', () => {
         const ws = twoDocWs()
-        // col 1 is '@' — no symbol
-        expect(ws.findDefinition('main.si', 1, 1)).toBeUndefined()
+        // col 7 is ' ' (space before ':=') — no symbol
+        expect(ws.findDefinition('main.si', 1, 7)).toBeUndefined()
     })
 
     test('same-document resolution still works', () => {
@@ -140,14 +140,14 @@ describe('Workspace.findReferences() — cross-document', () => {
         const refs = ws.findReferences('lib.si', 1, 5)
         const mainRef = refs.find(s => s.file === 'main.si')!
         expect(mainRef.line).toBe(1)
-        expect(mainRef.col).toBe(20)  // 'add' starts at col 20 in MAIN
+        expect(mainRef.col).toBe(11)  // 'add' starts at col 11 in MAIN
     })
 
     test('aggregates references from multiple documents', () => {
         const ws = new Workspace()
         ws.openDocument('lib.si',   LIB)
-        ws.openDocument('main1.si', '@global a := &add 1, 2;')
-        ws.openDocument('main2.si', '@global b := &add 3, 4;')
+        ws.openDocument('main1.si', 'a := add(1, 2);')
+        ws.openDocument('main2.si', 'b := add(3, 4);')
 
         const refs = ws.findReferences('lib.si', 1, 5)
         const files = new Set(refs.map(s => s.file))
@@ -173,11 +173,11 @@ describe('Workspace.findReferences() — cross-document', () => {
     test('findReferences from a call site also finds other call sites', () => {
         const ws = new Workspace()
         ws.openDocument('lib.si',   LIB)
-        ws.openDocument('main1.si', '@global a := &add 1, 2;')
-        ws.openDocument('main2.si', '@global b := &add 3, 4;')
+        ws.openDocument('main1.si', 'a := add(1, 2);')
+        ws.openDocument('main2.si', 'b := add(3, 4);')
 
-        // Start from main1.si's call site ('add' at col 15 in '@global a := &add')
-        const refs = ws.findReferences('main1.si', 1, 15)
+        // Start from main1.si's call site ('add' at col 6 in 'a := add(')
+        const refs = ws.findReferences('main1.si', 1, 6)
         const files = new Set(refs.map(s => s.file))
         expect(files.has('main2.si')).toBe(true)
     })
@@ -200,7 +200,7 @@ describe('SemanticModel.referenceSpansForName()', () => {
 
     test('matches referenceSpans(sym) when sym is locally defined', () => {
         const ws = new Workspace()
-        ws.openDocument('lib.si', '@fn add x, y := { x + y };\n@global r := &add 1, 2;')
+        ws.openDocument('lib.si', '@fn add x, y := { x + y };\nr := add(1, 2);')
         const doc = ws.getDocument('lib.si')!
         const sym = doc.model.symbolNamed('add')!
         expect(doc.model.referenceSpansForName('add')).toEqual(doc.model.referenceSpans(sym))

@@ -6,7 +6,7 @@
  * file proves the push/lower plumbing works but the user code carries
  * concrete types — no substitution actually happens.  Here the user writes
  *
- *   @generic id x:T := x;
+ *   @generic id x T := x;
  *
  * with a real type variable `T`, and the stratum:
  *
@@ -56,55 +56,55 @@ function compileToWat(userSource: string, strataSources: string[]): string {
 //   ast::{capture_template, patch_types, with_keyword, with_name, rewrite_call},
 //   type::{bind_template_args, mangle_suffix},
 //   callee::name, module::push_definition, state.
-// Plus body-language forms: @local, @if, @nil, &not, string '+', scope-method
+// Plus body-language forms: @mut, @if, @nil, not, string '+', scope-method
 // calls — all native interpreter features.
 // ---------------------------------------------------------------------------
 
 const GENERIC_STRATUM = `@stratum Generics := {
-    &Compiler::register::keyword '@generic';
+    Compiler::register::keyword('@generic');
 
     # Step 1: capture the template at decl time.  No code emitted yet —
     # the @generic def has hook='stratum_def' with no on::lower handler,
     # so it produces no WAT.
-    &Compiler::on::decl '@generic', {
-        @local s := &Compiler::state 'stratum';
-        @local tmpl := &Compiler::ast::capture_template node, 'pre';
-        @local tmplKey := 'tmpl::' + node.name.name;
-        &s::set tmplKey, tmpl;
-    };
+    Compiler::on::decl('@generic', {
+        @mut s := Compiler::state('stratum');
+        @mut tmpl := Compiler::ast::capture_template(node, 'pre');
+        @mut tmplKey := 'tmpl::' + node::name::name;
+        s::set(tmplKey, tmpl);
+    });
 
     # Step 2: wildcard call-site handler — fires for every call.
     # Filters by checking whether the callee names a captured template.
-    &Compiler::on::call_site {
-        @local s := &Compiler::state 'stratum';
-        @local callee := &Compiler::callee::name node;
-        @local tmplKey := 'tmpl::' + callee;
-        @local tmpl := &s::get tmplKey;
-        &@if (tmpl != &@nil), {
-            @local bindings := &Compiler::type::bind_template_args tmpl.ast, node;
-            @local suffix := &Compiler::type::mangle_suffix bindings;
-            @local monoName := callee + '$' + suffix;
-            @local monoKey := 'mono::' + monoName;
+    Compiler::on::call_site({
+        @mut s := Compiler::state('stratum');
+        @mut callee := Compiler::callee::name(node);
+        @mut tmplKey := 'tmpl::' + callee;
+        @mut tmpl := s::get(tmplKey);
+        @if(tmpl != @nil(), {
+            @mut bindings := Compiler::type::bind_template_args(tmpl::ast, node);
+            @mut suffix := Compiler::type::mangle_suffix(bindings);
+            @mut monoName := callee + '$' + suffix;
+            @mut monoKey := 'mono::' + monoName;
             # Emit the monomorph once per (template, type-args) pair.
-            &@if (&@not (&s::has monoKey)), {
-                @local patched := &Compiler::ast::patch_types tmpl, bindings;
-                @local renamed := &Compiler::ast::with_name patched, monoName;
-                @local concrete := &Compiler::ast::with_keyword renamed, '@fn';
-                &Compiler::module::push_definition concrete.ast;
-                &s::set monoKey, &@true;
-            };
+            @if(@not(s::has(monoKey)), {
+                @mut patched := Compiler::ast::patch_types(tmpl, bindings);
+                @mut renamed := Compiler::ast::with_name(patched, monoName);
+                @mut concrete := Compiler::ast::with_keyword(renamed, '@fn');
+                Compiler::module::push_definition(concrete::ast);
+                s::set(monoKey, @true());
+            });
             # Redirect this call site to the monomorph.
-            &Compiler::ast::rewrite_call node, monoName;
-        };
-    };
+            Compiler::ast::rewrite_call(node, monoName);
+        });
+    });
 };`
 
 describe('@generic — real per-call monomorphization', () => {
     test.skip('one call with one type produces one monomorph', () => {
         const wat = compileToWat(
-            `@generic id x:T := x;
+            `@generic id x T := x;
              \\\\ run (Int) -> Int
-             @fn run x := { (&id x) };
+             @fn run x := { id(x) };
              @export run;`,
             [GENERIC_STRATUM]
         )
@@ -122,11 +122,11 @@ describe('@generic — real per-call monomorphization', () => {
 
     test.skip('two calls with two different types produce two distinct monomorphs', () => {
         const wat = compileToWat(
-            `@generic id x:T := x;
+            `@generic id x T := x;
              \\\\ run_i () -> Int
-             @fn run_i  := { (&id 42) };
+             @fn run_i  := { id(42) };
              \\\\ run_f () -> Float
-             @fn run_f  := { (&id 3.14) };
+             @fn run_f  := { id(3.14) };
              @export run_i;
              @export run_f;`,
             [GENERIC_STRATUM]
@@ -143,11 +143,11 @@ describe('@generic — real per-call monomorphization', () => {
 
     test.skip('two calls with the same type share one monomorph', () => {
         const wat = compileToWat(
-            `@generic id x:T := x;
+            `@generic id x T := x;
              \\\\ a () -> Int
-             @fn a  := { (&id 1) };
+             @fn a  := { id(1) };
              \\\\ b () -> Int
-             @fn b  := { (&id 2) };
+             @fn b  := { id(2) };
              @export a;
              @export b;`,
             [GENERIC_STRATUM]
@@ -164,11 +164,11 @@ describe('@generic — real per-call monomorphization', () => {
 
     test.skip('the generated WASM actually runs and returns correct values for each monomorph', async () => {
         const wat = compileToWat(
-            `@generic id x:T := x;
+            `@generic id x T := x;
              \\\\ run_i (Int) -> Int
-             @fn run_i x := { (&id x) };
+             @fn run_i x := { id(x) };
              \\\\ run_f (Float) -> Float
-             @fn run_f x := { (&id x) };
+             @fn run_f x := { id(x) };
              @export run_i;
              @export run_f;`,
             [GENERIC_STRATUM]

@@ -30,13 +30,13 @@ Original design proposal dated 2026-05-22.
 ### Phase A — Strata bodies as first-class Silicon programs — ✓ SHIPPED
 
 - Strata can reference top-level `@fn`s as handlers:
-  `&Compiler::on::decl '@token', MyHandler;` paired with
-  `\ MyHandler (Int) -> _ ` + `@fn MyHandler node := { ... };`
+  `Compiler::on::decl('@token', MyHandler);` paired with
+  `\\ MyHandler (Int) -> _ ` + `@fn MyHandler node := { ... };`
 - Body still interpreted (Phase A is the bridge; Phase C compiles it).
 - Pre-pass in `buildStrataRegistry` collects every top-level `@fn` body
   into `registry.namedHandlers` so forward references resolve.
 - `registry.strataHandlerFnNames` tracks which `@fn`s are claimed as
-  handlers; the lowerer skips those (their `&Compiler::*` calls have no
+  handlers; the lowerer skips those (their `Compiler::*()` calls have no
   runtime meaning in the interpreter model).
 - 11 dedicated tests in `src/elaborator/dissolution-phase-a.test.ts`.
 
@@ -85,7 +85,7 @@ Original design proposal dated 2026-05-22.
 
 **All 13 Phase B stories complete.**  Next: D-D per-stratum migrations,
 gated on adding "compiler" to the moduleRegistry so handler-@fn source
-can call `&compiler::*` imports.
+can call `compiler::*()` imports.
 
 ### Phase C — Compile-then-run engine — ✓ SHIPPED (minimum viable)
 
@@ -109,10 +109,10 @@ can call `&compiler::*` imports.
 
 ```silicon
 @stratum Bridge := {
-    &Compiler::register::keyword '@bridge';
-    &Compiler::on::decl '@bridge', Bridge_handler;
+    Compiler::register::keyword('@bridge');
+    Compiler::on::decl('@bridge', Bridge_handler);
 };
-\ Bridge_handler (Int) -> Int
+\\ Bridge_handler (Int) -> Int
 @fn Bridge_handler n := { (n + n) };
 ```
 
@@ -149,15 +149,15 @@ What's unblocked:
   1. Rewrite `@stratum_keyword X ('@foo', Node) = { body }` as:
      ```silicon
      @stratum X := {
-         &Compiler::register::keyword '@foo';
-         &Compiler::on::lower '@foo', X_lower;
+         Compiler::register::keyword('@foo');
+         Compiler::on::lower('@foo', X_lower);
      };
-     \ X_lower (Int) -> _
+     \\ X_lower (Int) -> _
      @fn X_lower node := { body };
      ```
-     For operators: `&Compiler::register::operator '+'` and
-     `&Compiler::on::lower '+', X_lower`.
-  2. Audit the body for every `&Compiler::*` and `&IR::*` call.
+     For operators: `Compiler::register::operator('+')` and
+     `Compiler::on::lower('+', X_lower)`.
+  2. Audit the body for every `Compiler::*()` and `IR::*()` call.
      Each one must have a corresponding host-side import in
      `src/comptime/imports.ts`.  Extend the import surface as needed.
      Most IR builders (`makeIf`, `makeBinOp`, …) need the IR-handle
@@ -173,7 +173,7 @@ What's unblocked:
 | File | Declarations | Body complexity | Effort estimate |
 |---|---|---|---|
 | `metadata.si` | 2 (`@export`, `@platform`) | Low — one is a no-op, one needs `watId`+`isVarName`+`ir::makeExport` | 0.5 day |
-| `defkinds.si` | 10 | High — `@global`/`@fn` use `lowerParams`, `lowerFunctionBody`, `resolveFunctionReturnType`, `ir::makeFunction`. Heavy import-surface adds. | 2 days |
+| `defkinds.si` | 10 | High — bare globals/`@fn` use `lowerParams`, `lowerFunctionBody`, `resolveFunctionReturnType`, `ir::makeFunction`. Heavy import-surface adds. | 2 days |
 | `if.si` | 1 (`@if`) | Medium — `lowerExpr` × 3, `ir::makeIf`.  Cleanest IR-builder migration. | 0.5 day |
 | `loop.si` | 1 | Medium — control-flow IR, loop-id management | 1 day |
 | `match.si` | 1 | High — interacts with `expandMatchChain`, variant tag computation | 1 day |
@@ -193,7 +193,7 @@ The biggest remaining piece.  Migration of any non-trivial stratum
 requires the import surface to cover the methods that stratum's body
 uses.  The structurally heaviest part is the IR-handle ABI:
 
-- **IR-handle table.** Each `&Compiler::ir::make*` host wrapper builds
+- **IR-handle table.** Each `Compiler::ir::make*(...)` host wrapper builds
   the JS IR object and returns an i32 handle into a host-side IR table.
   The firing code unpacks the result handle to recover the JS object
   and emit it into the lowered module.
@@ -280,7 +280,7 @@ Today we have **two evaluators** for Silicon-shaped programs:
    Implicit, free, native to the platform.
 2. **The strata body interpreter** — a small recursive AST walker in
    `src/elaborator/strataBody.ts`. Runs strata-side code at compile time.
-   Knows about `@local`, a few builtins, scope-method dispatch, binary ops.
+   Knows about `@mut`, a few builtins, scope-method dispatch, binary ops.
 
 The two diverge by necessity:
 - The runtime `@if` stratum emits WASM `(if ...)` instructions — it doesn't
@@ -360,7 +360,7 @@ We adopt the same shape:
 |---|---|
 | `comptime expr`     | Strata body, fired at compile time           |
 | Native compiler runs the function | Sigil compiler runs the WASM      |
-| Same `fn` syntax for both phases | Same `@fn`/`@local`/etc. syntax     |
+| Same `fn` syntax for both phases | Same `@fn`/`@mut`/etc. syntax     |
 | Host provides comptime stdlib   | Host exposes CompilerAPI as imports |
 
 What's *specific to us* — and a real complication — is that the Sigil
@@ -439,23 +439,21 @@ Components:
 A strata body that today does:
 
 ```silicon
-@local tmpl := &Compiler::ast::capture_template node, 'pre';
-&Compiler::module::push_definition tmpl.ast;
+tmpl := Compiler::ast::capture_template(node, 'pre');
+Compiler::module::push_definition(tmpl.ast);
 ```
 
 …becomes, after this dissolution, a Silicon program that calls imported
 functions:
 
 ```silicon
-@extern {
-    \ ast_capture_template (i32, i32) -> i32
-    \ module_push_definition (i32) -> i32
-}
+\\ @extern ast_capture_template (Int, Int) -> Int;
+\\ @extern module_push_definition (Int) -> Int;
 
-\ handler (Int) -> _
+\\ handler (Int) -> _
 @fn handler node_id := {
-    @local tmpl_id := &compiler::ast_capture_template node_id, 0; # 0 = 'pre'
-    &compiler::module_push_definition tmpl_id;
+    tmpl_id := compiler::ast_capture_template(node_id, 0); # 0 = 'pre'
+    compiler::module_push_definition(tmpl_id);
 };
 ```
 
@@ -483,28 +481,28 @@ Two design choices to make explicit:
 ## Strata body compilation
 
 Today's `@stratum` body has special forms the interpreter recognises:
-`@local`, `&Compiler::*`, `&handle::method`, `node.field.field`, etc.
+`@mut`, `Compiler::*()`, `handle::method()`, `node.field.field`, etc.
 
 For "compile and run," the body becomes a regular Silicon program with a
 well-known entry point. Each `on::X` handler becomes a `@fn`:
 
 ```silicon
 @stratum Generics := {
-    &Compiler::register::keyword '@generic';
-    &Compiler::on::call_site Generics_call_site;
+    Compiler::register::keyword('@generic');
+    Compiler::on::call_site(Generics_call_site);
 };
 
-\ Generics_call_site (Int) -> _
+\\ Generics_call_site (Int) -> _
 @fn Generics_call_site node_id := {
     # ... body identical to today's, but compiled, not interpreted ...
 };
 ```
 
 Reuses everything:
-- `@local` → real WASM local.
-- `&compiler::*` → WASM import call.
-- `&@if` → the existing `@if` stratum that lowers to WASM `(if ...)`.
-- `node.field` → calls like `&compiler::ast_get_field node_id, 'field'`
+- `@mut x := ...` → real WASM local.
+- `compiler::*()` → WASM import call.
+- `@if(...)` → the existing `@if` stratum that lowers to WASM `(if ...)`.
+- `node.field` → calls like `compiler::ast_get_field(node_id, 'field')`
   returning the child's handle.
 
 The body's WASM is built **once** at registry-build time and cached. Each
@@ -625,10 +623,10 @@ between phases.
   Strata 2.0 `register::*` calls can name as handlers:
   ```silicon
   @stratum Generics := {
-      &Compiler::register::keyword '@generic';
-      &Compiler::on::call_site Generics_call_site;
+      Compiler::register::keyword('@generic');
+      Compiler::on::call_site(Generics_call_site);
   };
-  \ Generics_call_site (Int) -> _
+  \\ Generics_call_site (Int) -> _
   @fn Generics_call_site node := { ... };
   ```
 - These `@fn`s lower to WASM like any other.
@@ -760,12 +758,12 @@ Today (with the interpreter):
 
 ```silicon
 @stratum Generics := {
-    &Compiler::register::keyword '@generic';
-    &Compiler::on::call_site {
-        @local s := &Compiler::state 'stratum';
-        @local callee := &Compiler::callee::name node;
+    Compiler::register::keyword('@generic');
+    Compiler::on::call_site({
+        s := Compiler::state('stratum');
+        callee := Compiler::callee::name(node);
         ...
-    };
+    });
 };
 ```
 
@@ -777,17 +775,17 @@ After the dissolution:
 
 ```silicon
 @stratum Generics := {
-    &Compiler::register::keyword '@generic';
-    &Compiler::on::call_site Generics_call_site;
+    Compiler::register::keyword('@generic');
+    Compiler::on::call_site(Generics_call_site);
 };
 
-\ Generics_call_site (Handle) -> _
+\\ Generics_call_site (Handle) -> _
 @fn Generics_call_site node := {
-    @local s := &compiler::state 'stratum';
-    @local callee := &compiler::callee_name node;
-    &@if (&compiler::state_has s, callee), {
+    s := compiler::state('stratum');
+    callee := compiler::callee_name(node);
+    @if(compiler::state_has(s, callee), {
         ...
-    };
+    });
 };
 ```
 
@@ -795,7 +793,7 @@ After the dissolution:
 - The host instantiates the stratum's compiled WASM at registry-build
   time. At each call site, it calls the exported `Generics_call_site`
   function with a node handle.
-- `&@if` inside the body lowers to a WASM `(if ...)` — the SAME stratum
+- `@if` inside the body lowers to a WASM `(if ...)` — the SAME stratum
   used at runtime, no comptime/runtime split.
 - `+`, `==`, etc. are also the same strata used everywhere else.
 - No interpreter involved at any point.

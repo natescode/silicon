@@ -11,11 +11,11 @@ Payload fields are written `name Type` (no colon):
 @type Shape := $Circle r Int | $Rect w Int, h Int | $Square s Int;
 ```
 
-Each variant becomes a constructor function — call it with `&`:
+Each variant becomes a constructor function — call it normally:
 
 ```silicon
-@local c := &Circle 5;
-@local r := &Rect 4, 7;
+c := Circle(5);
+r := Rect(4, 7);
 ```
 
 `@match` destructures a value, binding the payload fields by name. Each arm is
@@ -28,25 +28,25 @@ Each variant becomes a constructor function — call it with `&`:
 
 \\ longest_side (Shape) -> Int
 @fn longest_side s := {
-    &@match s,
+    @match(s,
         $Circle r   => r,
-        $Rect w, h  => w
+        $Rect w, h  => w)
 };
 
 \\ tag (Shape) -> Int
 @fn tag s := {
-    &@match s,
+    @match(s,
         $Circle r   => 1,
-        $Rect w, h  => 2
+        $Rect w, h  => 2)
 };
 
 @fn main := {
-    &print_int (&longest_side (&Circle 5));   # 5
-    &print_int (&longest_side (&Rect 4, 7));  # 4
-    &print_int (&tag (&Rect 4, 7));           # 2
+    print_int(longest_side(Circle(5)));   # 5
+    print_int(longest_side(Rect(4, 7)));  # 4
+    print_int(tag(Rect(4, 7)));           # 2
     0
 };
-&main;
+main();
 ```
 
 Keep arm bodies simple — bind the payload and return it (or a tag), then do any
@@ -58,9 +58,9 @@ variants:
 
 \\ code (Color) -> Int
 @fn code c := {
-    &@match c,
+    @match(c,
         Color::Red | Color::Green => 1,
-        Color::Blue               => 0
+        Color::Blue               => 0)
 };
 ```
 

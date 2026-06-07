@@ -17,13 +17,13 @@ reference page for the long version.
 @fn square n := { n * n };
 
 @fn main := {
-    &add (&square 3), 1
+    add(square(3), 1)
 };
 
 @export main;
 ```
 
-Calls are prefix with `&`: `&add 1, 2`. Definitions use `:=`. Types go on
+Calls are always parenthesised: `add(1, 2)`. Definitions use `:=`. Types go on
 a preceding signature line: `\\ add (Int, Int) -> Int`.
 
 ## Types
@@ -37,7 +37,7 @@ a preceding signature line: `\\ add (Int, Int) -> Int`.
 | `Bool` | `i32` under the hood; `@true` / `@false`. |
 | `Str` | UTF-8, length-prefixed (4-byte little-endian). |
 
-Conversions are explicit — `&@toInt64 x`, `&@toInt x` (also handles
+Conversions are explicit — `@toInt64(x)`, `@toInt(x)` (also handles
 `Float → Int`). No implicit promotion. See
 [Types reference →](/reference/types).
 
@@ -48,9 +48,9 @@ Conversions are explicit — `&@toInt64 x`, `&@toInt x` (also handles
 
 \\ area (Shape) -> Int
 @fn area s := {
-    &@match s,
+    @match(s,
         $Circle r => r * r * 3,
-        $Rect w h => w * h
+        $Rect w h => w * h)
 };
 ```
 
@@ -67,8 +67,8 @@ Parametric sum types use `@type T[X] := …`. See
 @fn pair a, b := { … };
 
 @fn main := {
-    @local n := &id 42;        # T = Int
-    @local s := &id 'hello';   # T = Str
+    n := id(42);        # T = Int
+    s := id('hello');   # T = Str
     0
 };
 ```
@@ -79,10 +79,10 @@ No explicit `[Int]` at the call site. See
 ## Structs
 
 ```silicon
-@struct Point x Int, y Int;
+@type Point := { x Int, y Int };
 
 @fn main := {
-    @local p := &Point 3, 4;
+    p := Point(3, 4);
     p.x + p.y
 };
 ```
@@ -95,19 +95,19 @@ contiguously.
 ```silicon
 \\ classify (Int) -> Int
 @fn classify n := {
-    &@if n < 0, { &@return -1 };
-    &@if n == 0, { &@return 0  };
+    @if(n < 0, { @return(0 - 1) });
+    @if(n == 0, { @return(0) });
     1
 };
 
 \\ sum_to (Int) -> Int
 @fn sum_to n := {
-    @local total := 0;
-    @local i := 1;
-    &@loop i <= n, {
+    @mut total := 0;
+    @mut i := 1;
+    @loop(i <= n, {
         total = total + i;
         i = i + 1;
-    };
+    });
     total
 };
 ```
@@ -118,9 +118,9 @@ written as a half-open range, and the same keyword iterates a `Vec` or loops
 forever:
 
 ```silicon
-&@loop v, 0..n, { total = total + v };   \\ range: v = 0,1,…,n-1
-&@loop i, x, xs, { … };                  \\ Vec: index + element
-&@loop { … &@break };                    \\ forever, exit with @break
+@loop(v, 0..n, { total = total + v });   \\ range: v = 0,1,…,n-1
+@loop(i, x, xs, { … });                  \\ Vec: index + element
+@loop({ … @break() });                   \\ forever, exit with @break
 ```
 
 `@return`, `@break`, `@continue` exit early. `@defer` runs LIFO at
@@ -128,8 +128,8 @@ every exit:
 
 ```silicon
 @fn main := {
-    &@defer { &println 'bye' };
-    &println 'hi';
+    @defer({ println('bye') });
+    println('hi');
     0
 };
 ```
@@ -139,9 +139,9 @@ every exit:
 ```silicon
 \\ parse_user (Str) -> Result[User, Str]
 @fn parse_user line := {
-    &@try (&parse_name line),     # propagates Err
-    &@try (&parse_age line),
-    &Ok (&User name age)
+    name := @try(parse_name(line));     # propagates Err
+    age := @try(parse_age(line));
+    Ok(User(name, age))
 };
 ```
 
@@ -155,29 +155,29 @@ Default allocation is bump from the heap. Scoped allocation:
 ```silicon
 \\ process (Slice[u8])
 @fn process data := {
-    &@with_arena {
-        @local tmp := &Vec::new;
+    @with_arena({
+        tmp := vec_new(4);
         # … all allocations here go in the arena;
         # heap reset on scope exit
-        &compute &tmp
-    }
+        compute(tmp)
+    })
 };
 ```
 
-To keep a value past the scope, `&move_to_parent_arena value`. See
+To keep a value past the scope, `move_to_parent_arena(value)`. See
 [Memory + arenas →](/guide/memory).
 
 ## Strata — adding a keyword
 
 ```silicon
 @stratum MyKeyword := {
-    &Compiler::register::keyword '@my_keyword';
-    &Compiler::on::lower '@my_keyword', MyKeyword_lower;
+    Compiler::register::keyword('@my_keyword');
+    Compiler::on::lower('@my_keyword', MyKeyword_lower);
 };
 
 \\ MyKeyword_lower (Int)
 @fn MyKeyword_lower node := {
-    # … build IR with &Compiler::ir::* calls
+    # … build IR with Compiler::ir::* calls
 };
 ```
 

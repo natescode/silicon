@@ -15,10 +15,10 @@ is the doc.
 
 ```silicon
 @stratum MyStratum := {
-    &Compiler::register::keyword '@my_kw';
-    &Compiler::on::decl '@my_kw', {
+    Compiler::register::keyword('@my_kw');
+    Compiler::on::decl('@my_kw', {
         ;; what happens when the compiler sees `@my_kw` in source
-    };
+    });
 };
 
 @my_kw foo := 42;       ;; user code; the handler above runs at compile time
@@ -56,8 +56,8 @@ new strata should use the unified form.
 ## Registering keywords and operators
 
 ```silicon
-&Compiler::register::keyword '@my_kw';
-&Compiler::register::operator '<<';
+Compiler::register::keyword('@my_kw');
+Compiler::register::operator('<<');
 ```
 
 After registration the parser will tokenise `@my_kw` as a keyword and `<<` as
@@ -72,17 +72,17 @@ To give the symbol semantics, attach one of the phase handlers below.
 ## The five phase hooks
 
 Strata 2.0 exposes five lifecycle phases. Register handlers via
-`&Compiler::on::<phase>`.
+`Compiler::on::<phase>(...)`.
 
 ### `on::decl` — fires for each definition
 
 ```silicon
-&Compiler::on::decl '@my_kw', {
+Compiler::on::decl('@my_kw', {
     ;; runs for every `@my_kw foo := ...;` declaration the compiler sees.
     ;; you can inspect node.name, node.params, node.binding,
-    ;; emit IR via &Compiler::module::push_definition,
+    ;; emit IR via Compiler::module::push_definition(...),
     ;; or stash state for the module_finalize pass.
-};
+});
 ```
 
 Fires once per `AST_DEFINITION` whose keyword span matches.
@@ -90,21 +90,21 @@ Fires once per `AST_DEFINITION` whose keyword span matches.
 ### `on::callSite` — fires for each call
 
 ```silicon
-&Compiler::on::callSite 'my_fn', {
-    ;; runs for every `&my_fn arg0, arg1;` call.
+Compiler::on::callSite('my_fn', {
+    ;; runs for every `my_fn(arg0, arg1);` call.
     ;; node.args is the arg list (Silicon expressions, not yet lowered).
-    ;; commonly used for &@try / `?`-style desugaring strata.
-};
+    ;; commonly used for @try / `?`-style desugaring strata.
+});
 ```
 
 ### `on::annotation` — fires for each annotation on a definition
 
 ```silicon
-&Compiler::on::annotation '@@derive', {
+Compiler::on::annotation('@@derive', {
     ;; runs for every `@@derive Foo` annotation attached to a definition.
     ;; node.ann.args carries the annotation's arguments;
     ;; node.def is the Definition being annotated.
-};
+});
 ```
 
 The `@@derive` and `@@eq` strata in the standard library work this way.
@@ -112,11 +112,11 @@ The `@@derive` and `@@eq` strata in the standard library work this way.
 ### `on::module_finalize` — fires once at end of compilation
 
 ```silicon
-&Compiler::on::module_finalize {
+Compiler::on::module_finalize({
     ;; runs once after every user definition has been seen.
     ;; this is where generic-style strata emit their monomorphised
-    ;; concrete definitions via &Compiler::module::push_definition.
-};
+    ;; concrete definitions via Compiler::module::push_definition(...).
+});
 ```
 
 No token argument — there is only one finalize phase per stratum.
@@ -124,13 +124,13 @@ No token argument — there is only one finalize phase per stratum.
 ### `on::comptime` — comptime evaluation rule (advanced)
 
 ```silicon
-&Compiler::on::comptime '@if', {
-    ;; defines how `@if cond, then, else` evaluates at compile time
+Compiler::on::comptime('@if', {
+    ;; defines how `@if(cond, then, else)` evaluates at compile time
     ;; when the arms are literal constants.  Per the dissolution plan
     ;; (`docs/comptime-via-compilation.md`), every keyword that has a
     ;; runtime stratum will eventually also have a matching on::comptime
     ;; handler so the body interpreter can be deleted entirely.
-};
+});
 ```
 
 Today this is registration-only; the comptime engine (3-22) routes through the
@@ -158,8 +158,8 @@ This shapes what's allowed inside a handler body.
   `ctx::*`, `lowerExpr`, `arg`, `watId`, `resolveType`, `assertDefined`.
 - Scalar arithmetic and comparisons on `Int` (`+`, `-`, `*`, `/`, `%`,
   `==`, `!=`, `<`, `>`, `<=`, `>=`).
-- `@local name := expr;` bindings (resolved against the body scope).
-- `@if cond, { then }, { else }` — the AST interpreter has this hardcoded.
+- `name := expr;` bindings (resolved against the body scope).
+- `@if(cond, { then }, { else })` — the AST interpreter has this hardcoded.
 - Hardcoded `@return`, `@break`, `@continue` work as expected at the
   outermost handler level (but see limits below).
 
@@ -169,12 +169,12 @@ This shapes what's allowed inside a handler body.
   Workaround: unroll manually, or stash iteration state in
   `state 'stratum'` across multiple `on::decl` firings.
 - **Recursion in handler bodies.** The interpreter has no call stack for
-  user-defined functions invoked from a handler.  You can call `&Compiler::*`
+  user-defined functions invoked from a handler.  You can call `Compiler::*`
   primitives freely; you cannot call your own `@fn foo := { ... }` recursively
   from inside a handler.
 - **Generic user-defined Silicon functions called from a handler.**  Same
   reason as recursion — the interpreter doesn't dispatch arbitrary `@fn`
-  calls.  Stick to `Compiler::*` calls + arithmetic + `@local`.
+  calls.  Stick to `Compiler::*` calls + arithmetic + bare bindings.
 - **`@match` inside a handler body.**  The AST interpreter doesn't lower
   match arms.  Use chained `@if` instead.
 - **Strings other than as literal arguments to `Compiler::*` calls.**
@@ -232,21 +232,21 @@ unchanged.
 Two scopes:
 
 ```silicon
-@local s := &Compiler::state 'stratum';     ;; persists across handler calls
-                                            ;; within THIS stratum
+s := Compiler::state('stratum');     ;; persists across handler calls
+                                     ;; within THIS stratum
 
-@local h := &Compiler::state 'instance';    ;; fresh per handler call
+h := Compiler::state('instance');    ;; fresh per handler call
 ```
 
 Both return a handle that supports:
 
 ```silicon
-&s::set 'key', value;
-@local v := &s::get 'key';
-@local exists := &s::has 'key';
-&s::each {  ;; for each (k, v) in this bucket
+s::set('key', value);
+v := s::get('key');
+exists := s::has('key');
+s::each({  ;; for each (k, v) in this bucket
     ;; ...
-};
+});
 ```
 
 Stratum state is the canonical place for a generic-style stratum to stash a
@@ -258,8 +258,8 @@ captured template AST between `on::decl` (where it's seen) and
 ## Module mutation: `push_definition` / `push_global`
 
 ```silicon
-&Compiler::module::push_definition <ast_def>;
-&Compiler::module::push_global     <name>, <type>, <init>;
+Compiler::module::push_definition(<ast_def>);
+Compiler::module::push_global(<name>, <type>, <init>);
 ```
 
 Both append to a per-compilation accumulator that the lowerer drains AFTER the
@@ -271,10 +271,10 @@ final module exactly once.
 ## AST operations
 
 ```silicon
-@local h := &Compiler::ast::capture_template node, 'pre';
-@local h2 := &Compiler::ast::clone h;
-@local h3 := &Compiler::ast::substitute h, { T = IntType, U = FloatType };
-@local h4 := &Compiler::ast::patch_types h, { T = IntType };
+h := Compiler::ast::capture_template(node, 'pre');
+h2 := Compiler::ast::clone(h);
+h3 := Compiler::ast::substitute(h, ${ T = IntType, U = FloatType });
+h4 := Compiler::ast::patch_types(h, ${ T = IntType });
 ```
 
 The `'pre'` / `'post'` argument marks whether the template was captured before
@@ -290,13 +290,13 @@ typed-IR-carrying nodes.
 The full `type` API is exposed at compile time:
 
 ```silicon
-@local int_t   := &Compiler::type::int;
-@local fn_t    := &Compiler::type::function [int_t, int_t], int_t;
-@local var_t   := &Compiler::type::variable 'T';
-@local arr_int := &Compiler::type::array int_t;
-@local same    := &Compiler::type::equals int_t, int_t;
-@local s_int   := &Compiler::type::substitute fn_t, { T = int_t };
-@local pretty  := &Compiler::type::format fn_t;       ;; "(Int, Int) -> Int"
+int_t   := Compiler::type::int();
+fn_t    := Compiler::type::function([int_t, int_t], int_t);
+var_t   := Compiler::type::variable('T');
+arr_int := Compiler::type::array(int_t);
+same    := Compiler::type::equals(int_t, int_t);
+s_int   := Compiler::type::substitute(fn_t, { T = int_t });
+pretty  := Compiler::type::format(fn_t);       ;; "(Int, Int) -> Int"
 ```
 
 Substitution is single-binding per call; chain calls for multi-binding.
@@ -306,8 +306,8 @@ Substitution is single-binding per call; chain calls for multi-binding.
 ## Diagnostics (T-5)
 
 ```silicon
-&Compiler::diag::error 'E0042', node.span, 'oops', 'try this instead';
-&Compiler::diag::warn  'W0001', node.span, 'this is deprecated';
+Compiler::diag::error('E0042', node.span, 'oops', 'try this instead');
+Compiler::diag::warn('W0001', node.span, 'this is deprecated');
 ```
 
 Diagnostics **accumulate** — `diag::error` does not stop the build. The compiler
@@ -350,17 +350,17 @@ Allowed and intentional — Strata composes via the observer pattern:
 
 ```silicon
 @stratum LogDecl := {
-    &Compiler::register::keyword '@logged';
-    &Compiler::on::decl '@logged', {
-        &Compiler::diag::warn 'L001', node.span, 'logged decl';
-    };
+    Compiler::register::keyword('@logged');
+    Compiler::on::decl('@logged', {
+        Compiler::diag::warn('L001', node.span, 'logged decl');
+    });
 };
 
 @stratum CountDecl := {
-    &Compiler::on::decl '@logged', {  ;; same token, different handler
-        @local s := &Compiler::state 'stratum';
-        &s::set 'count', ((&s::get 'count') + 1);
-    };
+    Compiler::on::decl('@logged', {  ;; same token, different handler
+        s := Compiler::state('stratum');
+        s::set('count', (s::get('count') + 1));
+    });
 };
 ```
 
@@ -389,7 +389,7 @@ The **comptime engine implementation** is *not* part of the stable surface
 — what works inside a handler body grows over time:
 
 - **0.1 (today)**: AST interpreter; `Compiler::*` + scalar arithmetic + `@if` +
-  `@local` (see "The comptime engine in Sigil 0.1" above).
+  bare bindings (see "The comptime engine in Sigil 0.1" above).
 - **Later (after Phase 8 + 8-9)**: wasmtime-backed; full Silicon surface in
   handler bodies — `@loop`, `@match`, recursion, user-defined `@fn` calls.
   Existing handlers written against the 0.1 limits will continue to work

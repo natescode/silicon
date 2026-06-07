@@ -6,20 +6,19 @@
 # from Silicon's default linear-memory `String`.  Operations map 1:1 to the WASM
 # `wasm:js-string` builtins the host (Bun / the browser) provides natively.
 
-\\ main () -> Void
 @fn main := {
     # Build "Hi!" from code points, then concat — all host-native JS strings.
     \\ h JSString
-    @local h := &JSString::fromCodePoint 72;     # 'H'
+    h := JSString::fromCodePoint(72);  # 'H'
     \\ i JSString
-    @local i := &JSString::fromCodePoint 105;    # 'i'
+    i := JSString::fromCodePoint(105);  # 'i'
     \\ bang JSString
-    @local bang := &JSString::fromCodePoint 33;  # '!'
+    bang := JSString::fromCodePoint(33);  # '!'
     \\ hi JSString
-    @local hi := &JSString::concat h, i;
+    hi := JSString::concat(h, i);
     \\ greeting JSString
-    @local greeting := &JSString::concat hi, bang;
-    &console::log greeting
+    greeting := JSString::concat(hi, bang);
+    console::log(greeting)
 };
 
-&main;
+main();

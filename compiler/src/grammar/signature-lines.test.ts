@@ -33,19 +33,16 @@ describe('signature-lines grammar — NEW syntax parses', () => {
         expect(matches(L(`${BS} map[T, U] ((T) -> U, Vec[T]) -> Vec[U]`, '@fn map f, xs := { f };'))).toBe(true)
     })
     test('struct fields by juxtaposition (no colon)', () => {
-        expect(matches('@struct Rect w Int, h Int;')).toBe(true)
+        expect(matches('@type Rect := { w Int, h Int };')).toBe(true)
     })
     test('sum-type variant payloads by juxtaposition', () => {
         expect(matches('@type Shape := $Circle r Int | $Rectangle w Int, h Int;')).toBe(true)
     })
-    test('extern signature block', () => {
-        expect(matches(L('@extern {', `  ${BS} InitWindow (Int, Int, String) -> Void`, `  ${BS} IsKeyDown Int -> Bool`, '}'))).toBe(true)
+    test('extern via `\\ @extern` signature line', () => {
+        expect(matches(`${BS} @extern InitWindow (Int, Int, String) -> Void;`)).toBe(true)
     })
-    test('interface signature block', () => {
-        expect(matches(L('@interface Show[T] {', `  ${BS} show T -> String`, '}'))).toBe(true)
-    })
-    test('expression-level ascription &@as', () => {
-        expect(matches('@global x := &@as Int, 0;')).toBe(true)
+    test('multiple `\\ @extern` lines', () => {
+        expect(matches(L(`${BS} @extern InitWindow (Int, Int, String) -> Void;`, `${BS} @extern IsKeyDown (Int) -> Bool;`))).toBe(true)
     })
 })
 
@@ -60,5 +57,26 @@ describe('signature-lines grammar — OLD syntax rejected', () => {
     })
     test('return-type-on-name (@fn name:Ret) no longer parses', () => {
         expect(matches('@fn add:Int a, b := a;')).toBe(false)
+    })
+    // ADR-0020 retired the `&`-call sigil, `@extern {…}` / `@interface {…}` brace
+    // blocks, the explicit storage keywords, and `&@as` ascription.
+    test('& call sigil no longer parses', () => {
+        expect(matches('y := &add 1, 2;')).toBe(false)
+    })
+    test('@extern { … } brace block no longer parses', () => {
+        expect(matches(L('@extern {', `  ${BS} InitWindow (Int) -> Void`, '}'))).toBe(false)
+    })
+    test('@interface { … } brace block no longer parses', () => {
+        expect(matches(L('@interface Show[T] {', `  ${BS} show T -> String`, '}'))).toBe(false)
+    })
+    test('&@as ascription no longer parses', () => {
+        expect(matches('x := &@as Int, 0;')).toBe(false)
+    })
+    test('@local / @global storage keywords no longer parse', () => {
+        expect(matches('@global x := 1;')).toBe(false)
+        expect(matches('@local y := 2;')).toBe(false)
+    })
+    test('@struct keyword no longer parses', () => {
+        expect(matches('@struct Rect { w Int, h Int };')).toBe(false)
     })
 })

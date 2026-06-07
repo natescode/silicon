@@ -5,35 +5,36 @@
 # `JSString` is a JavaScript string (externref).  `console::log` prints a
 # JSString; `web::console_log` prints an Int.
 
-\\ main () -> Void
 @fn main := {
     \\ fruit JSString
-    @local fruit := &JSString::fromString 'banana';
+    fruit := JSString::fromString('banana');
 
     # length — UTF-16 code units
-    &web::console_log (&JSString::length fruit);              # 6
+    web::console_log(JSString::length(fruit));  # 6
 
     # charCodeAt — 'b' = 98
-    &web::console_log (&JSString::charCodeAt fruit, 0);       # 98
+    web::console_log(JSString::charCodeAt(fruit, 0));  # 98
 
     # substring(start, end)
-    &console::log (&JSString::substring fruit, 0, 3);         # ban
+    console::log(JSString::substring(fruit, 0, 3));  # ban
 
     # concat
-    &console::log (&JSString::concat fruit, (&JSString::fromString ' bread'));   # banana bread
+    console::log(JSString::concat(fruit, JSString::fromString(' bread')));  # banana bread
 
     # equals → Bool, branched on with @if
-    &@if (&JSString::equals fruit, (&JSString::fromString 'banana')),
-        { &console::log (&JSString::fromString 'fruit == "banana": true') },
-        { &console::log (&JSString::fromString 'fruit == "banana": false') };
+    @if(JSString::equals(fruit, JSString::fromString('banana')), {
+        console::log(JSString::fromString('fruit == "banana": true'))
+    }, {
+        console::log(JSString::fromString('fruit == "banana": false'))
+    });
 
     # build a string from a code point
-    &console::log (&JSString::fromCodePoint 65);             # A
+    console::log(JSString::fromCodePoint(65));  # A
 
     # bridge back to a linear-memory String, then measure it with str_len
     \\ back String
-    @local back := &JSString::toString fruit;
-    &web::console_log (&str_len back)                        # 6
+    back := JSString::toString(fruit);
+    web::console_log(str_len(back))  # 6
 };
 
-&main;
+main();

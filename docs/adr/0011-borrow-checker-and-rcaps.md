@@ -1,6 +1,6 @@
 # ADR 0011 — Borrow checker design: scope hierarchy + reference capabilities + actor isolation
 
-- **Status:** Proposed (design exploration; no implementation timeline)
+- **Status:** Proposed (design exploration; no implementation timeline) · **extended 2026-06-07 with the `Span` / `View` / `Slice` addendum below — that addendum is Accepted and prioritized for implementation** (the broader borrow checker remains exploratory)
 - **Date:** 2026-05-28
 - **Deciders:** NatesCode
 - **Related:** ADR 0008 (memory management: explicit arenas) · `src/strata/control.si` (`@with_arena`, `@move_to_parent_arena`) · `src/stdlib/rc.si` · `src/stdlib/gc/rc.si` · planned object-capability system (separate ADR, not yet drafted) · planned actor-model ADR · [[silicon-no-postfix]] memory · prior art: OCaml's `local_` modes (Jane Street stack allocation), Pony's reference capabilities, Cyclone's region polymorphism, Rust's borrow checker
@@ -473,3 +473,95 @@ implementation.
   ABI conversation at implementation time.
 - Mode-polymorphism syntax. The implicit-polymorphism direction is
   picked; what users write at API seams (if anything) is open.
+
+---
+
+## `Span` / `View` / `Slice` (2026-06-07 addendum — Accepted, prioritized)
+
+> This addendum is a **concrete, scoped decision** that rides the capability
+> model above. It names the two reference capabilities everyone reaches for
+> constantly so they're first-class, ergonomic surface types.
+>
+> **Implementation note (2026-06-07).** When the ADR 0022 string-bytes work
+> landed, this `Span`/`View`/`Slice` rename was **deferred**: without the borrow
+> checker there is no *enforced* difference between `View` and `Slice`, so the
+> rename (current `Slice[T]` → `Span[T]`) is cosmetic churn that buys nothing
+> yet. It is now **bundled with the borrow-checker effort** (where `View`/`Slice`
+> gain real aliasing enforcement). Until then, byte views use the existing
+> `Slice[u8]` (e.g. `str_bytes : String -> Slice[u8]`).
+
+### Decision
+
+Introduce one neutral region representation and two capability-named surface
+types over it:
+
+- **`Span[T]`** — the neutral `{ ptr Int, len Int }` region descriptor. Non-owning
+  (a fat pointer into someone else's buffer). **This is today's `Slice[T]`,
+  renamed.** It is the *representation*, not the everyday surface type.
+- **`View[T]`** — a `Span[T]` carrying a **shared read** capability (`&`). Many may
+  exist over the same or overlapping regions; none may mutate. ("Look through the
+  window.")
+- **`Slice[T]`** — a `Span[T]` carrying an **exclusive mutable** capability
+  (`&mut`). At most one is live per region; obtained by **partitioning**. ("Your
+  own slice of pizza.")
+
+`View` / `Slice` are **sugar for a `Span` + one of two of the four rcaps**
+(`&` / `&mut`) defined above — the *type name carries the capability*, so users
+write `View[u8]` / `Slice[u8]` in signatures and **never** `&mut Span[u8]`. This
+is deliberately more readable than Rust's `&[T]` / `&mut [T]`: the intent is in
+the noun.
+
+```silicon
+\\ find (View[u8], u8) -> Int       \\ read-only; may alias the same bytes freely
+\\ fill (Slice[u8], u8) -> Void     \\ exclusive, mutable; no aliasing
+```
+
+### Rules
+
+1. **The capability governs the referent, not a reference-to-`Span`.** A `Span` is
+   already a fat pointer (two ints), so `View` / `Slice` are **not** `&Span` — they
+   are "a span *through which* you may read / exclusively-mutate the pointed-at
+   memory." Spans pass **by value**; the capability rides along and constrains what
+   may be done to the backing buffer. (No pointer-to-fat-pointer.)
+2. **`Span` is the representation; the surface is always `View` or `Slice`.** A
+   naked, capability-less `Span` is an unchecked `{ptr,len}` and is **not** a normal
+   user-facing value — user code always holds it as a `View` or a `Slice`. There is
+   no escape hatch that silently drops the capability.
+3. **Mint vs partition — the load-bearing asymmetry.** `View`s may be minted freely
+   and overlapping (`span.view(a, b)` any time). `Slice`s are obtained only by
+   **partitioning** a span into disjoint pieces (`span.split_at(i) -> (Slice, Slice)`,
+   `chunks`); the checker forbids two live `Slice`s over the same region. So `Span`
+   exposes two op families: *read-subspan* (View-producing, overlap OK) and *split*
+   (Slice-producing, disjoint). "Everyone gets their own" = partition, not arbitrary
+   overlapping ranges.
+4. **No implicit coercion** (Silicon ethos). A `String` does not silently become a
+   `View[u8]`; you call an explicit accessor (`String.bytes` → `View[u8]`, ADR 0022).
+   The *header arithmetic* is hidden inside that accessor; the *conversion* is one
+   visible token.
+5. **Lifetimes reuse R1/R4.** `View` and `Slice` are borrows, so the scope (R1) and
+   escape (R4) rules above already prevent either outliving its backing buffer — no
+   new lifetime machinery.
+
+The remaining two rcaps (`&uniq` / `&val`) stay available in their general form for
+ownership-transfer / by-value cases; `View` / `Slice` simply name the two
+capabilities reached for constantly.
+
+### Consequences
+
+- **Positive:** one representation + one enforcement mechanism (the cap model) — no
+  parallel system that can drift; the names (`View` / `Slice`) are teachable
+  (window vs pizza) and more readable than raw `&` / `&mut`; strings, `Vec`, and
+  arrays all produce the same `Span` currency, so generic byte/element code works
+  across them; no new lifetime machinery.
+- **Negative:** a breaking **rename** of the existing `Slice[T]` → `Span[T]`
+  (pre-1.0, acceptable); three names to learn (mitigated: conceptually it's "one
+  `Span`, two caps"); the partition-to-mutate discipline must be taught.
+- **Migration:** rename `Slice[T]` → `Span[T]`; the current bounds-checked accessor
+  (`Slice::get`) becomes a `Span` / `View` accessor; add `View` / `Slice` as the
+  capability'd surface types; update `slice.si` and the `Str → Slice[u8]` design
+  note in `docs/reference/types.md`.
+
+### Implementation pointer
+
+Once landed: commit SHA / PR. Lands together with ADR 0022 (which consumes
+`View[u8]` / `Slice[u8]` for `String.bytes` and `StrBuilder`).

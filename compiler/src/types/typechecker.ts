@@ -75,6 +75,7 @@ import {
     isNumeric,
     isComparable,
     isEqualityComparable,
+    formatType,
 } from './types'
 import type { ModuleRegistry } from '../modules/registry'
 import {
@@ -87,6 +88,7 @@ import {
     annotationMismatch,
     immutableAssignment,
     globalInFunction,
+    missingParamType,
     arityMismatch,
     missingReturn,
     mvpOnlyIntrospection,
@@ -191,6 +193,19 @@ interface Ctx {
     // name is not found in the local symbol table.  Suppresses "unbound
     // identifier" errors for names defined in other open Workspace documents.
     externalSymbols?: ReadonlyMap<string, SiliconType>
+    // ── Parameter-type inference (ADR-0020: signatures are optional) ──
+    // When set, the checker is running an *inference round*: at each call site
+    // whose callee is in `untypedFnNames`, the observed concrete argument types
+    // are recorded into `captureCallArgs` (name → list of arg-type tuples).
+    // `inferUntypedParams` reads these to back-fill the missing parameter type
+    // annotations, then a final canonical pass runs over the annotated tree.
+    captureCallArgs?: Map<string, SiliconType[][]>
+    // Names of no-signature @fn definitions whose parameter types we're trying
+    // to infer.  Only call sites to these are captured.
+    untypedFnNames?: Set<string>
+    // During inference rounds, suppress the "could not infer parameter type"
+    // diagnostic — intermediate rounds legitimately leave params unresolved.
+    suppressMissingParamType?: boolean
 }
 
 export interface FunctionSig {
@@ -339,6 +354,166 @@ export interface TypeCheckResult {
  *     const { program: typed, errors } = typecheck(elaborated)
  *     if (errors.length) { ... }
  */
+// ───────────────────────────────────────────────────────────────────────────
+// Parameter-type inference (ADR-0020: signatures are optional)
+//
+// A `@fn` whose parameters carry no type annotations and no explicit `[T]`
+// generics has those types INFERRED from its call sites.  We run the canonical
+// checker in "capture mode" to observe the concrete argument types at each call
+// to such a function, then write the inferred types back onto the parameter AST
+// nodes so the final pass (and lowering) see a fully-annotated function — as if
+// the signature had been written by hand.  This is monomorphic inference: a
+// function used at two different concrete types stays unresolved (final pass
+// reports E0015; the user reaches for explicit `[T]` generics).  Nested and
+// recursive calls resolve by iterating to a fixpoint — once a callee's params
+// are pinned, its return type becomes concrete and its callers' arguments do too.
+// ───────────────────────────────────────────────────────────────────────────
+
+/** A no-signature @fn candidate for parameter inference. */
+interface UntypedFn {
+    def: any
+    /** Indices into def.params of the non-literal parameters lacking a type. */
+    paramIdx: number[]
+}
+
+/** Collect top-level @fn definitions with untyped (non-literal, no-annotation)
+ *  parameters and no explicit generics — those are the inference candidates. */
+function collectUntypedFns(program: Program): Map<string, UntypedFn> {
+    const out = new Map<string, UntypedFn>()
+    for (const el of program.elements as any[]) {
+        if (!el || el.type !== 'Definition' || !el.name?.name) continue
+        if (el.generics?.params?.length) continue        // explicit generic — leave to HM
+        const params = el.params || []
+        const idx: number[] = []
+        for (let i = 0; i < params.length; i++) {
+            const p = params[i]
+            if (p.isLiteral) continue
+            // A param is an inference candidate if it has no annotation, OR only a
+            // SYNTHETIC one from a prior inference run.  Counting synthetic keeps a
+            // document that already has inferred functions on the whole-program
+            // path (and re-inferring) — the incremental engine reuses AST nodes
+            // across edits, so a synthetic annotation can be stale.
+            if (!p.typeAnnotation || p.typeAnnotation.synthetic) idx.push(i)
+        }
+        if (idx.length > 0) out.set(el.name.name, { def: el, paramIdx: idx })
+    }
+    return out
+}
+
+/** Cheap predicate: does `program` contain any `@fn` whose parameter types must
+ *  be inferred from call sites (no annotations, no explicit `[T]`)?  Used by the
+ *  incremental engine to route such documents to the whole-program `typecheck()`
+ *  — per-element incremental checking can't see the cross-element call sites that
+ *  inference needs.  No-op-fast: returns on the first untyped function. */
+export function programNeedsParamInference(program: Program): boolean {
+    return collectUntypedFns(program).size > 0
+}
+
+/** Convert a fully-concrete SiliconType into a synthesized TypeAnnotation AST
+ *  node (tagged `synthetic`), or `undefined` if the type isn't representable as
+ *  a written annotation (Unknown, a type variable, a function type, …).  Doubles
+ *  as the "is this type concrete enough to infer from?" test (see `isInferable`). */
+function siliconTypeToAnnotation(t: SiliconType): any | undefined {
+    const ta = siliconTypeToTypeArg(t)
+    if (!ta) return undefined
+    return { type: 'TypeAnnotation', typename: ta.name, typeArgs: ta.args, synthetic: true }
+}
+
+function siliconTypeToTypeArg(t: SiliconType): { type: 'TypeArg'; name: string; args?: any[] } | undefined {
+    switch (t.kind) {
+        case 'Int':      return { type: 'TypeArg', name: 'Int' }
+        case 'Int64':    return { type: 'TypeArg', name: 'Int64' }
+        case 'Float':    return { type: 'TypeArg', name: 'Float' }
+        case 'String':   return { type: 'TypeArg', name: 'String' }
+        case 'Bool':     return { type: 'TypeArg', name: 'Bool' }
+        case 'Distinct': return { type: 'TypeArg', name: t.name }
+        case 'Array': {
+            const e = siliconTypeToTypeArg(t.element); if (!e) return undefined
+            return { type: 'TypeArg', name: 'Array', args: [e] }
+        }
+        case 'Vec': {
+            const e = siliconTypeToTypeArg(t.element); if (!e) return undefined
+            return { type: 'TypeArg', name: 'Vec', args: [e] }
+        }
+        case 'Sum': {
+            if (!t.typeArgs || t.typeArgs.length === 0) return { type: 'TypeArg', name: t.name }
+            const args = t.typeArgs.map(siliconTypeToTypeArg)
+            if (args.some(a => !a)) return undefined
+            return { type: 'TypeArg', name: t.name, args: args as any[] }
+        }
+        default: return undefined  // Unknown, Variable, Void, Function, UInt*, …
+    }
+}
+
+/** True when `t` is concrete enough to write back as a parameter annotation. */
+function isInferable(t: SiliconType | undefined): boolean {
+    return !!t && siliconTypeToAnnotation(t) !== undefined
+}
+
+/** Run capture-mode checks to a fixpoint, writing inferred parameter type
+ *  annotations onto the program's @fn nodes in place.  Mutates `program`. */
+function inferUntypedParams(
+    program: Program,
+    registry?: ElaboratorRegistry,
+    moduleRegistry?: ModuleRegistry,
+    target?: import('../ir/lower').LowerTarget,
+    file = '',
+    externalSymbols?: ReadonlyMap<string, SiliconType>,
+): void {
+    const pending = collectUntypedFns(program)
+    if (pending.size === 0) return
+
+    // Reset any SYNTHETIC annotations from a prior inference run before
+    // recomputing.  The incremental Workspace reuses AST nodes across edits, so a
+    // param annotated in an earlier edit can carry a now-stale type (e.g. a call
+    // site that pinned it to Int was since deleted).  Clearing here makes
+    // inference recompute purely from the CURRENT source — keeping an edited
+    // document byte-identical to a fresh compile.
+    for (const info of pending.values()) {
+        for (const idx of info.paramIdx) {
+            const p = info.def.params[idx]
+            if (p.typeAnnotation?.synthetic) p.typeAnnotation = undefined
+        }
+    }
+
+    // Bounded fixpoint: each round must resolve at least one parameter or we
+    // stop.  The guard caps pathological deep nesting / cycles.
+    for (let round = 0; round < 16 && pending.size > 0; round++) {
+        const ctx = createCheckContext(registry, moduleRegistry, target, file, externalSymbols)
+        ctx.captureCallArgs = new Map()
+        ctx.untypedFnNames = new Set(pending.keys())
+        ctx.suppressMissingParamType = true
+        preRegisterDefinitions(program.elements as any[], ctx)
+        for (const element of program.elements as any[]) checkNode(element, ctx)
+
+        let changed = false
+        for (const [name, info] of [...pending]) {
+            const calls = ctx.captureCallArgs!.get(name) ?? []
+            for (const idx of info.paramIdx) {
+                const param = info.def.params[idx]
+                if (param.typeAnnotation) continue  // resolved in an earlier round
+                const observed = calls.map(tuple => tuple[idx]).filter(isInferable)
+                if (observed.length === 0) continue
+                // Distinct concrete types observed at this position.
+                const distinct = new Map<string, SiliconType>()
+                for (const t of observed) distinct.set(formatType(t), t)
+                if (distinct.size !== 1) continue       // polymorphic — leave for final-pass E0015
+                const ann = siliconTypeToAnnotation([...distinct.values()][0])
+                // Only write an annotation the type resolver can read back.  Some
+                // concrete types (e.g. Array[T] / Vec[T]) have no surface
+                // annotation name, so synthesizing one would make the final pass
+                // fail with a confusing "unknown type 'Array'".  Leaving the param
+                // unresolved instead surfaces the honest E0015 ("could not
+                // monomorphically infer …").
+                if (ann && resolveTypeAnnotation(ann, ctx)) { param.typeAnnotation = ann; changed = true }
+            }
+            // Drop fully-resolved functions so we stop capturing for them.
+            if (info.paramIdx.every((i: number) => info.def.params[i].typeAnnotation)) pending.delete(name)
+        }
+        if (!changed) break  // no progress — remaining params are genuinely uninferable
+    }
+}
+
 export default function typecheck(
     program: Program,
     registry?: ElaboratorRegistry,
@@ -353,6 +528,10 @@ export default function typecheck(
     // tree once, up front, so the rest of the checker reads `node.sourceLocation`
     // unchanged.  Idempotent while the parser still also writes `sourceLocation`.
     if (positions) stampSourceLocations(program, positions)
+    // ADR-0020: back-fill inferred types onto unannotated @fn parameters before
+    // the canonical pass, so signatures are optional.  No-op when every function
+    // is already annotated.
+    inferUntypedParams(program, registry, moduleRegistry, target, file, externalSymbols)
     const ctx = createCheckContext(registry, moduleRegistry, target, file, externalSymbols)
     // Pre-registration pass: seed the function/symbol tables and type alias
     // table from top-level definitions so forward references resolve correctly.
@@ -583,10 +762,14 @@ export function preRegisterDefinitions(elements: any[], ctx: Ctx): void {
         ctx.typeVars = new Set(savedTypeVars)
         for (const tv of def.generics?.params ?? []) ctx.typeVars.add(tv)
 
+        // Count every (non-literal) parameter so the function's declared arity is
+        // correct even when a parameter lacks a type (no `\\` signature line) —
+        // those resolve to Unknown here and the body check reports the missing
+        // signature (E0015) so call sites don't also fail with a spurious arity error.
         const paramTypes: SiliconType[] = []
         for (const p of def.params || []) {
-            if (p.isLiteral || !p.typeAnnotation) continue
-            paramTypes.push(resolveTypeAnnotation(p.typeAnnotation, ctx) ?? TypeUnknown)
+            if (p.isLiteral) continue
+            paramTypes.push(p.typeAnnotation ? (resolveTypeAnnotation(p.typeAnnotation, ctx) ?? TypeUnknown) : TypeUnknown)
         }
 
         let resultType: SiliconType = TypeUnknown
@@ -607,10 +790,15 @@ export function preRegisterDefinitions(elements: any[], ctx: Ctx): void {
             ctx.symbols.set(def.name.name, resultType)
         }
 
-        // Mark immutable for non-mutable definitions. @local / hook==='global'
-        // is mutable; @global (and @fn) are immutable.
+        // Mark immutable for non-mutable definitions. ADR 0020: an explicit
+        // `immutable` flag (set by the new grammar) wins; otherwise fall back to
+        // the legacy heuristic (@local / hook==='global' is mutable; @global/@fn
+        // immutable).
         const hook = def.hook
-        const isMutable = hook === 'global' || kw === '@local'
+        const imm = def.immutable
+        const isMutable = imm === true ? false
+            : imm === false ? true
+            : (hook === 'global' || kw === '@local')
         if (!isMutable) {
             ctx.immutable.add(def.name.name)
         } else {
@@ -1063,6 +1251,20 @@ function checkDefinition(d: any, ctx: Ctx): SiliconType {
                     } else {
                         inner.symbols.set(param.name, pt)
                     }
+                } else {
+                    // ADR-0020: signatures are optional — a parameter with no type
+                    // annotation has its type inferred from the function's call sites
+                    // (see `inferUntypedParams`).  Reaching the final canonical pass
+                    // with the annotation still missing means inference could not pin
+                    // it down (no call sites, or call sites disagree on a concrete
+                    // type).  Report that once, clearly; bind the param as Unknown so
+                    // the body doesn't then cascade "unbound identifier" for every use.
+                    // During inference rounds the diagnostic is suppressed — those
+                    // rounds legitimately leave params unresolved.
+                    if (!ctx.suppressMissingParamType) {
+                        ctx.errors.push(missingParamType(param.name, d.name.name, d.sourceLocation))
+                    }
+                    inner.symbols.set(param.name, TypeUnknown)
                 }
             }
             const binding = Array.isArray(d.binding) ? d.binding[0] : d.binding
@@ -1105,10 +1307,14 @@ function checkDefinition(d: any, ctx: Ctx): SiliconType {
     }
 
     if (d.name && d.name.name) {
+        // Count every non-literal parameter (untyped ones resolve to Unknown) so the
+        // function's arity matches its definition — matching preRegisterDefinitions.
+        // A no-type param is reported as MissingParamType (E0015) above, not via a
+        // spurious arity error at the call site.
         const paramTypes: SiliconType[] = []
         for (const param of d.params || []) {
-            if (param.isLiteral || !param.typeAnnotation) continue
-            paramTypes.push(resolveTypeAnnotation(param.typeAnnotation, ctx) ?? TypeUnknown)
+            if (param.isLiteral) continue
+            paramTypes.push(param.typeAnnotation ? (resolveTypeAnnotation(param.typeAnnotation, ctx) ?? TypeUnknown) : TypeUnknown)
         }
         ctx.functions.set(d.name.name, { params: paramTypes, result: finalType })
 
@@ -1120,10 +1326,15 @@ function checkDefinition(d: any, ctx: Ctx): SiliconType {
             ctx.symbols.set(d.name.name, finalType)
         }
 
-        // Mark immutable. @local and hook==='global'/'local' are mutable;
-        // @global (and @fn) are immutable.
+        // Mark immutable. ADR 0020: an explicit `immutable` flag wins; otherwise
+        // legacy heuristic (@local / hook 'global'|'local' mutable; @global/@fn
+        // immutable). This is the line that previously made EVERY in-function
+        // @local mutable — the flag lets a bare immutable local be enforced.
         const hook = (d as any).hook
-        const isMutable = hook === 'global' || hook === 'local' || keyword === '@local'
+        const imm = (d as any).immutable
+        const isMutable = imm === true ? false
+            : imm === false ? true
+            : (hook === 'global' || hook === 'local' || keyword === '@local')
         if (!isMutable) {
             ctx.immutable.add(d.name.name)
         } else {
@@ -1328,6 +1539,16 @@ function checkFunctionCall(call: any, ctx: Ctx): SiliconType {
     // symbolAtPosition / referenceSpans can navigate to it.
     if (name && call.name && typeof call.name === 'object') {
         recordSymbolRef(call.name, name, ctx)
+    }
+
+    // Parameter-type inference: during an inference round, record the concrete
+    // argument types seen at every call to a no-signature function.  Unknown /
+    // type-variable args are recorded too (filtered later) — the fixpoint loop
+    // re-runs once back-filled annotations make nested results concrete.
+    if (ctx.captureCallArgs && name && ctx.untypedFnNames?.has(name)) {
+        const list = ctx.captureCallArgs.get(name) ?? []
+        list.push(argTypes)
+        ctx.captureCallArgs.set(name, list)
     }
 
     // Phase 9d-5a / 9d-5b — wasm-mvp-only primitive rejection.
@@ -1707,7 +1928,9 @@ function checkPolymorphicCall(
         for (let i = 0; i < sig.params.length; i++) {
             const expected = sig.params[i]
             const actual = argTypes[i]
-            if (actual.kind !== 'Unknown' && !typeEquals(expected, actual)) {
+            // Unknown on either side is a wildcard: a no-type param (already
+            // flagged E0015 at its definition) must not also fail every call site.
+            if (actual.kind !== 'Unknown' && expected.kind !== 'Unknown' && !typeEquals(expected, actual)) {
                 ctx.errors.push(mismatch(expected, actual, `'${name}' arg ${i}`, call.sourceLocation))
             }
         }

@@ -103,24 +103,77 @@ function formatAssignment(a: Assignment, depth: number): string {
 }
 
 function formatDefinition(def: Definition, depth: number): string {
-    let out = def.keyword + ' ' + formatTypedId(def.name)
-    if (def.generics && def.generics.params.length > 0) {
-        out += '[' + def.generics.params.join(', ') + ']'
+    const kw = def.keyword
+    const name = def.name.name
+    const generics = def.generics && def.generics.params.length > 0
+        ? '[' + def.generics.params.join(', ') + ']'
+        : ''
+
+    // @struct Name f T, g U  ->  @type Name := { f T, g U }  (space-separated fields)
+    if (kw === '@struct') {
+        const fields = def.params.map(formatFieldSpace).join(', ')
+        return '@type ' + name + generics + ' := { ' + fields + ' }'
     }
+    // @enum / @type (@type_sum folds into @type) — keep the keyword, RHS as-is.
+    if (kw === '@enum') {
+        return '@enum ' + name + generics + (def.binding ? ' := ' + formatBinding(def.binding, depth) : '')
+    }
+    if (kw === '@type' || kw === '@type_sum') {
+        return '@type ' + name + generics + (def.binding ? ' := ' + formatBinding(def.binding, depth) : '')
+    }
+    // @extern  ->  body-less `\\ @extern name (Types) -> Ret;` signature line.
+    if (kw === '@extern') {
+        const ptypes = def.params.map(p => p.typeAnnotation ? typeExprSource(p.typeAnnotation) : '_')
+        let sig = '\\\\ @extern ' + name + generics + ' (' + ptypes.join(', ') + ')'
+        if (def.name.typeAnnotation) sig += ' -> ' + typeExprSource(def.name.typeAnnotation)
+        return sig
+    }
+
+    // Value / function bindings. ADR-0020: bare = immutable value, `@mut` = mutable,
+    // `@fn` = function. The parsed `immutable` flag (bare ⇒ true, `@mut` ⇒ false)
+    // decides bare vs `@mut`; `@global`/`@let` are always bare.
+    const prefix =
+        kw === '@fn'     ? '@fn ' :
+        kw === '@global' ? '' :
+        kw === '@let'    ? '' :
+        kw === '@local'  ? ((def as { immutable?: boolean }).immutable === false ? '@mut ' : '') :
+        kw === '@var'    ? '@mut ' :
+        kw + ' '   // unknown keyword — keep verbatim
+
+    let defLine = prefix + name + generics
     if (def.params.length > 0) {
-        out += ' ' + def.params.map(p => formatParam(p, depth)).join(', ')
+        defLine += ' ' + def.params.map(p => formatParam(p, depth)).join(', ')
     }
     if (def.binding) {
-        out += ' := ' + formatBinding(def.binding, depth)
+        defLine += ' := ' + formatBinding(def.binding, depth)
     }
-    return out
+
+    // Types live on a reconstructed `\\` signature line — never inline.
+    const retType = def.name.typeAnnotation ? typeExprSource(def.name.typeAnnotation) : ''
+    const paramTypes = def.params.map(p => p.typeAnnotation ? typeExprSource(p.typeAnnotation) : null)
+    const hasTypeInfo = retType !== '' || paramTypes.some(t => t !== null)
+    if (hasTypeInfo) {
+        let sig: string
+        if (def.params.length > 0) {
+            sig = '\\\\ ' + name + generics + ' (' + paramTypes.map(t => t ?? '_').join(', ') + ')'
+            if (retType) sig += ' -> ' + retType
+        } else {
+            sig = '\\\\ ' + name + generics + ' ' + (retType || '_')   // typed value binding
+        }
+        return sig + '\n' + ind(depth) + defLine
+    }
+    return defLine
+}
+
+// struct field / variant payload — `name Type` (space-separated, no colon).
+function formatFieldSpace(p: Parameter): string {
+    return p.name + (p.typeAnnotation ? ' ' + typeExprSource(p.typeAnnotation) : '')
 }
 
 function formatParam(p: Parameter, depth: number): string {
+    // Bare param name in the def line; its type (if any) rides the `\\` sig line.
     if (p.isLiteral && p.value) return formatNode(p.value, depth)
-    let out = p.name
-    if (p.typeAnnotation) out += formatTypeAnnotation(p.typeAnnotation)
-    return out
+    return p.name
 }
 
 function formatBinding(b: Binding, depth: number): string {
@@ -132,26 +185,15 @@ function formatBinding(b: Binding, depth: number): string {
 // ---------------------------------------------------------------------------
 
 function formatBinOp(b: BinaryOp, depth: number): string {
-    const left: any = b.left
-    // A FunctionCall with args as left operand would re-parse as consuming the
-    // operator and right side as its own arguments — add parens to prevent this.
-    // (`&f x + y` re-parses as `f(x+y)`, not `f(x) + y`)
-    const leftNeedsParens = left.type === 'FunctionCall' && (left as FunctionCall).args.length > 0
-    const leftStr = leftNeedsParens
-        ? '(' + formatFunctionCall(left, depth) + ')'
-        : formatNode(left, depth)
-
+    // ADR-0020: calls are always parenthesised (`f(x)`), so `f(x) + y` is
+    // unambiguous — no call-operand parens needed. A BinaryOp right operand was
+    // parenthesised in the source (Silicon has no operator precedence), so it
+    // gets its grouping parens restored.
+    const leftStr = formatNode(b.left as any, depth)
     const right: any = b.right
-    // A BinaryOp right operand was parenthesised in the original.
-    // A FunctionCall-with-args right operand would consume a subsequent binary
-    // operator's tokens as its own args — add parens to prevent this too.
-    const rightNeedsParens =
-        right.type === 'BinaryOp' ||
-        (right.type === 'FunctionCall' && (right as FunctionCall).args.length > 0)
-    const rightStr = rightNeedsParens
+    const rightStr = right.type === 'BinaryOp'
         ? '(' + formatNode(right, depth) + ')'
         : formatNode(right, depth)
-
     return leftStr + ' ' + b.operator + ' ' + rightStr
 }
 
@@ -159,9 +201,7 @@ function formatFunctionCall(fc: FunctionCall, depth: number): string {
     const name = typeof fc.name === 'string'
         ? fc.name
         : formatNamespace(fc.name as Namespace)
-    const prefix = '&' + name
-    if (fc.args.length === 0) return prefix
-    return prefix + ' ' + fc.args.map(a => formatNode(a as any, depth)).join(', ')
+    return name + '(' + fc.args.map(a => formatNode(a as any, depth)).join(', ') + ')'
 }
 
 // ---------------------------------------------------------------------------
@@ -191,20 +231,19 @@ function formatNamespace(ns: Namespace): string {
 }
 
 function formatTypedId(ti: TypedIdentifier): string {
-    let out = ti.name
-    if (ti.typeAnnotation) out += formatTypeAnnotation(ti.typeAnnotation)
-    return out
+    return ti.name + (ti.typeAnnotation ? ' ' + typeExprSource(ti.typeAnnotation) : '')
 }
 
-function formatTypeAnnotation(ta: TypeAnnotation): string {
+// A type rendered as Silicon source: `Int`, `Option[T]`, or a function type
+// `(A, B) -> C`. No leading ':' — ADR-0020 type syntax is positional/space-based.
+function typeExprSource(ta: TypeAnnotation): string {
+    if (!ta) return ''
     if (ta.typename === '$fn') {
-        let out = ':$fn ' + formatTypedId(ta.fnReturn!)
-        if (ta.fnParams && ta.fnParams.length > 0) {
-            out += ' ' + ta.fnParams.map(formatTypedId).join(', ')
-        }
-        return out
+        const ps = (ta.fnParams || []).map(p => typeExprSource(p.typeAnnotation!)).join(', ')
+        const ret = ta.fnReturn ? typeExprSource(ta.fnReturn.typeAnnotation!) : ''
+        return '(' + ps + ')' + (ret ? ' -> ' + ret : '')
     }
-    let out = ':' + ta.typename
+    let out = ta.typename
     if (ta.typeArgs && ta.typeArgs.length > 0) {
         out += '[' + ta.typeArgs.map(formatTypeArg).join(', ') + ']'
     }

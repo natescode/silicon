@@ -4,17 +4,17 @@
 # @break/@continue resolve to this loop, then lowers cond + body and
 # emits IRLoop.  Pop after body lowering so siblings see the right stack.
 @stratum Loop := {
-    &Compiler::register::expression_keyword '@loop';
-    &Compiler::on::lower '@loop', Loop_lower;
+    Compiler::register::expression_keyword('@loop');
+    Compiler::on::lower('@loop', Loop_lower);
 };
 \\ Loop_lower (Int)
 @fn Loop_lower node := {
-    @local condN := &compiler::compiler_arg node, 0;
-    @local bodyN := &compiler::compiler_arg node, 1;
-    @local id    := &compiler::compiler_ctx_nextLoopId;
-    &compiler::compiler_ctx_loopStack_push id;
-    @local cond  := &compiler::compiler_lowerExpr condN;
-    @local body  := &compiler::compiler_lowerExpr bodyN;
-    &compiler::compiler_ctx_loopStack_pop;
-    &compiler::ir_makeLoop id, cond, body
+    condN := compiler::compiler_arg(node, 0);
+    bodyN := compiler::compiler_arg(node, 1);
+    id := compiler::compiler_ctx_nextLoopId();
+    compiler::compiler_ctx_loopStack_push(id);
+    cond := compiler::compiler_lowerExpr(condN);
+    body := compiler::compiler_lowerExpr(bodyN);
+    compiler::compiler_ctx_loopStack_pop();
+    compiler::ir_makeLoop(id, cond, body)
 };

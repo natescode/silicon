@@ -23,12 +23,14 @@ If you're new, start with [`getting-started.md`](getting-started.md).
 |------|--------------|
 | [grammar.ebnf](grammar.ebnf) | ISO/IEC 14977 EBNF grammar (authoritative) |
 | [hm-lite.md](hm-lite.md) | Type inference reference (HM restricted to declared polymorphism) |
+| [optional-signatures-inference.md](optional-signatures-inference.md) | Optional function signatures — monomorphic, call-site inference; per-compilation-unit scope; library-API guidance |
 | [diagnostics.md](diagnostics.md) | Error-code catalogue, caret rendering, hint format |
 | [strata.md](strata.md) | Strata system — how `@stratum` dispatches to pipeline phases |
 | [strata-2.0-spec.html](strata-2.0-spec.html) | Strata 2.0 capability specification (implemented) |
-| [compiler-api.md](compiler-api.md) | The `&Compiler::*` surface that strata bodies call |
+| [compiler-api.md](compiler-api.md) | The `Compiler::*` surface that strata bodies call |
 | [compiler-as-a-service.md](compiler-as-a-service.md) | The library-first compiler API (Roslyn-style) |
 | [caas-roslyn-parity.md](caas-roslyn-parity.md) | CaaS gap tracker — what's left to reach Roslyn-level IDE API coverage |
+| [lsp-completion-plan.md](lsp-completion-plan.md) | Plan: LSP autocomplete for stdlib/modules + third-party libs + snippets (`@fn` stub-out) |
 | [js-string-builtins.md](js-string-builtins.md) | The `JSString` type, WASM JS String Builtins, and the web/bun platform (`--platform`) |
 | [api-boundaries.md](api-boundaries.md) | Per-subsystem import rules; public vs internal |
 | [struct-design.md](struct-design.md) | `@struct` design and layout rules |

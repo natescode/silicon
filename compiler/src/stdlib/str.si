@@ -16,55 +16,57 @@
 
 # Byte length of `s` (O(1) — reads the length header).
 \\ str_byte_len (String) -> Int
-@fn str_byte_len s := &str_len s;
+@fn str_byte_len s := str_len(s);
 
 \\ str_is_empty (String) -> Bool
-@fn str_is_empty s := { (&str_len s) == 0 };
+@fn str_is_empty s := {
+    str_len(s) == 0
+};
 
 # The byte at index `i` (0-based) as an Int.  Caller checks bounds.
 \\ str_byte_at (String, Int) -> Int
 @fn str_byte_at s, i := {
-    @local p := (&str_ptr s) + 4;
-    &WASM::i32_load8_u (p + i)
+    p := str_ptr(s) + 4;
+    WASM::i32_load8_u(p + i)
 };
 
 # Byte-wise equality.
 \\ str_eq (String, String) -> Bool
 @fn str_eq a, b := {
-    @local la := &str_len a;
-    @local lb := &str_len b;
-    @local r := @false;
-    &@if la == lb, {
-        @local pa := (&str_ptr a) + 4;
-        @local pb := (&str_ptr b) + 4;
-        r = &mem_eq pa, pb, la;
-    }, {};
+    la := str_len(a);
+    lb := str_len(b);
+    @mut r := @false;
+    @if(la == lb, {
+        pa := str_ptr(a) + 4;
+        pb := str_ptr(b) + 4;
+        r = mem_eq(pa, pb, la);
+    }, {});
     r
 };
 
 \\ str_starts_with (String, String) -> Bool
 @fn str_starts_with s, prefix := {
-    @local n := &str_len s;
-    @local m := &str_len prefix;
-    @local r := @false;
-    &@if m <= n, {
-        @local sp := (&str_ptr s) + 4;
-        @local pp := (&str_ptr prefix) + 4;
-        r = &mem_eq sp, pp, m;
-    }, {};
+    n := str_len(s);
+    m := str_len(prefix);
+    @mut r := @false;
+    @if(m <= n, {
+        sp := str_ptr(s) + 4;
+        pp := str_ptr(prefix) + 4;
+        r = mem_eq(sp, pp, m);
+    }, {});
     r
 };
 
 \\ str_ends_with (String, String) -> Bool
 @fn str_ends_with s, suffix := {
-    @local n := &str_len s;
-    @local m := &str_len suffix;
-    @local r := @false;
-    &@if m <= n, {
-        @local sp := ((&str_ptr s) + 4) + (n - m);
-        @local pp := (&str_ptr suffix) + 4;
-        r = &mem_eq sp, pp, m;
-    }, {};
+    n := str_len(s);
+    m := str_len(suffix);
+    @mut r := @false;
+    @if(m <= n, {
+        sp := str_ptr(s) + 4 + (n - m);
+        pp := str_ptr(suffix) + 4;
+        r = mem_eq(sp, pp, m);
+    }, {});
     r
 };
 
@@ -72,70 +74,206 @@
 # The empty substring matches at index 0.
 \\ str_index_of (String, String) -> Int
 @fn str_index_of s, sub := {
-    @local n := &str_len s;
-    @local m := &str_len sub;
-    @local sp := (&str_ptr s) + 4;
-    @local subp := (&str_ptr sub) + 4;
-    @local result := 0 - 1;
-    &@if m == 0, { result = 0 }, {};
-    @local i := 0;
-    @local go := @true;
-    &@if m == 0, { go = @false }, {};
-    &@loop go, {
-        &@if i <= (n - m), {
-            &@if (&mem_eq (sp + i), subp, m), { result = i; go = @false; }, { i = i + 1; };
-        }, { go = @false; };
-    };
+    n := str_len(s);
+    m := str_len(sub);
+    sp := str_ptr(s) + 4;
+    subp := str_ptr(sub) + 4;
+    @mut result := 0 - 1;
+    @if(m == 0, {
+        result = 0
+    }, {});
+    @mut i := 0;
+    @mut go := @true;
+    @if(m == 0, {
+        go = @false
+    }, {});
+    @loop(go, {
+        @if(i <= (n - m), {
+            @if(mem_eq(sp + i, subp, m), {
+                result = i;
+                go = @false;
+            }, {
+                i = i + 1;
+            });
+        }, {
+            go = @false;
+        });
+    });
     result
 };
 
 \\ str_contains (String, String) -> Bool
-@fn str_contains s, sub := { (&str_index_of s, sub) >= 0 };
+@fn str_contains s, sub := {
+    str_index_of(s, sub) >= 0
+};
 
 # Substring of the bytes in [start, end).  `start`/`end` are clamped to
 # [0, len]; an empty range yields the empty string.
 \\ str_slice (String, Int, Int) -> String
 @fn str_slice s, start, end := {
-    @local n := &str_len s;
-    @local lo := start;
-    @local hi := end;
-    &@if lo < 0, { lo = 0 }, {};
-    &@if hi > n, { hi = n }, {};
-    &@if hi < lo, { hi = lo }, {};
-    @local count := hi - lo;
-    @local out := &alloc_string count;
-    @local dst := (&str_ptr out) + 4;
-    @local src := ((&str_ptr s) + 4) + lo;
-    @local i := 0;
-    &@loop i < count, {
-        @local c := &WASM::i32_load8_u (src + i);
-        &WASM::i32_store8 (dst + i), c;
+    n := str_len(s);
+    @mut lo := start;
+    @mut hi := end;
+    @if(lo < 0, {
+        lo = 0
+    }, {});
+    @if(hi > n, {
+        hi = n
+    }, {});
+    @if(hi < lo, {
+        hi = lo
+    }, {});
+    count := hi - lo;
+    out := alloc_string(count);
+    dst := str_ptr(out) + 4;
+    src := str_ptr(s) + 4 + lo;
+    @mut i := 0;
+    @loop(i < count, {
+        c := WASM::i32_load8_u(src + i);
+        WASM::i32_store8(dst + i, c);
         i = i + 1;
-    };
-    &heap_align;
+    });
+    heap_align();
     out
 };
 
 # `s` repeated `n` times (n <= 0 yields the empty string).
 \\ str_repeat (String, Int) -> String
 @fn str_repeat s, n := {
-    @local len := &str_len s;
-    @local reps := n;
-    &@if reps < 0, { reps = 0 }, {};
-    @local total := len * reps;
-    @local out := &alloc_string total;
-    @local dst := (&str_ptr out) + 4;
-    @local src := (&str_ptr s) + 4;
-    @local r := 0;
-    &@loop r < reps, {
-        @local i := 0;
-        &@loop i < len, {
-            @local c := &WASM::i32_load8_u (src + i);
-            &WASM::i32_store8 (dst + ((r * len) + i)), c;
+    len := str_len(s);
+    @mut reps := n;
+    @if(reps < 0, {
+        reps = 0
+    }, {});
+    total := len * reps;
+    out := alloc_string(total);
+    dst := str_ptr(out) + 4;
+    src := str_ptr(s) + 4;
+    @mut r := 0;
+    @loop(r < reps, {
+        @mut i := 0;
+        @loop(i < len, {
+            c := WASM::i32_load8_u(src + i);
+            WASM::i32_store8(dst + (r * len + i), c);
             i = i + 1;
-        };
+        });
         r = r + 1;
-    };
-    &heap_align;
+    });
+    heap_align();
     out
+};
+
+# ── Code points (UTF-8) ───────────────────────────────────────────────
+# A string has three different "lengths": bytes (`str_len`), code points,
+# and display columns (`str_width`).  These are NOT interchangeable.
+#
+# Number of Unicode code points in `s` — counts UTF-8 *leading* bytes
+# (every byte that is not a 0x80..0xBF continuation byte starts a new
+# code point).  O(n).
+\\ str_code_point_count (String) -> Int
+@fn str_code_point_count s := {
+    n := str_len(s);
+    p := str_ptr(s) + 4;
+    @mut i := 0;
+    @mut count := 0;
+    @loop(i < n, {
+        b := WASM::i32_load8_u(p + i);
+        @if(b < 128, { count = count + 1 }, {
+            @if(b >= 192, { count = count + 1 }, {})
+        });
+        i = i + 1;
+    });
+    count
+};
+
+# ── Display width (column width) — EXPERIMENTAL, approximate ───────────
+# Inclusive range test.  (Silicon's `&` isn't a binary operator and `&&`
+# isn't an operator, so range tests use a helper or nested `@if`.)
+\\ str_cp_in (Int, Int, Int) -> Bool
+@fn str_cp_in cp, lo, hi := {
+    @if(cp >= lo, { @if(cp <= hi, { @true }, { @false }) }, { @false })
+};
+
+# Wide (2-column) code points — a few major CJK / fullwidth ranges.
+# (Nested `@if` rather than a multi-line `||` chain: Silicon parses lines
+# independently, so a binary expression split across lines does NOT continue
+# — only the last line would be the block's value.)
+\\ str_cp_is_wide (Int) -> Bool
+@fn str_cp_is_wide cp := {
+    @if(str_cp_in(cp, 4352, 4607), { @true }, {
+        @if(str_cp_in(cp, 11904, 42191), { @true }, {
+            @if(str_cp_in(cp, 44032, 55203), { @true }, {
+                @if(str_cp_in(cp, 63744, 64255), { @true }, {
+                    @if(str_cp_in(cp, 65280, 65376), { @true }, {
+                        @if(str_cp_in(cp, 131072, 196605), { @true }, { @false })
+                    })
+                })
+            })
+        })
+    })
+};
+
+# Zero-width code points — combining marks + NUL (approximate).
+\\ str_cp_is_zero_width (Int) -> Bool
+@fn str_cp_is_zero_width cp := {
+    @if(str_cp_in(cp, 768, 879), { @true }, {
+        @if(str_cp_in(cp, 8400, 8447), { @true }, {
+            @if(str_cp_in(cp, 0, 0), { @true }, { @false })
+        })
+    })
+};
+
+# Column width of one code point (0 / 1 / 2).
+\\ str_cp_width (Int) -> Int
+@fn str_cp_width cp := {
+    @if(str_cp_is_zero_width(cp), { 0 }, {
+        @if(str_cp_is_wide(cp), { 2 }, { 1 })
+    })
+};
+
+# Byte length of the UTF-8 sequence starting with leading byte `b0` (1..4).
+\\ str_decode_len (Int) -> Int
+@fn str_decode_len b0 := {
+    @if(b0 < 128, { 1 }, {
+        @if(b0 < 224, { 2 }, {
+            @if(b0 < 240, { 3 }, { 4 })
+        })
+    })
+};
+
+# Decode the Unicode code point starting at byte offset `i` of buffer `p`.
+# Returns the code point; pair with `str_decode_len` to advance.  Arithmetic
+# is FULLY parenthesized — Silicon evaluates operators left-to-right with no
+# precedence, so `a * b + c * d` must be written `((a * b) + (c * d))`.
+\\ str_decode_cp (Int, Int) -> Int
+@fn str_decode_cp p, i := {
+    b0 := WASM::i32_load8_u(p + i);
+    @if(b0 < 128, { b0 }, {
+        @if(b0 < 224, {
+            ((b0 - 192) * 64) + (WASM::i32_load8_u(p + i + 1) - 128)
+        }, {
+            @if(b0 < 240, {
+                (((b0 - 224) * 4096) + ((WASM::i32_load8_u(p + i + 1) - 128) * 64)) + (WASM::i32_load8_u(p + i + 2) - 128)
+            }, {
+                ((((b0 - 240) * 262144) + ((WASM::i32_load8_u(p + i + 1) - 128) * 4096)) + ((WASM::i32_load8_u(p + i + 2) - 128) * 64)) + (WASM::i32_load8_u(p + i + 3) - 128)
+            })
+        })
+    })
+};
+
+# Display (column) width of `s`.  EXPERIMENTAL: an East-Asian-Width
+# approximation — wide CJK/fullwidth = 2, combining/zero-width = 0,
+# else 1.  No grapheme-cluster / ZWJ-emoji handling yet.  O(n).
+\\ str_width (String) -> Int
+@fn str_width s := {
+    n := str_len(s);
+    p := str_ptr(s) + 4;
+    @mut i := 0;
+    @mut w := 0;
+    @loop(i < n, {
+        cp := str_decode_cp(p, i);
+        w = w + str_cp_width(cp);
+        i = i + str_decode_len(WASM::i32_load8_u(p + i));
+    });
+    w
 };

@@ -33,7 +33,7 @@
 @fn rc_clone r := r;
 
 \\ rc_drop (Int)
-@fn rc_drop _r := { };
+@fn rc_drop _r := {};
 
 \\ rc_get (Int)
 @fn rc_get r := r;

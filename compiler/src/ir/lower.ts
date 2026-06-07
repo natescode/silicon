@@ -104,7 +104,7 @@ interface LowerCtx {
     /** Maps local/global variable names to their Silicon struct type name when they hold a struct pointer. */
     structLocals: Map<string, string>
     /** Phase 9d-5c: compile target — `'wasm-gc'` enables lifecycle
-     *  compile-time elision (`&@with_arena` / `&@move_to_parent_arena`
+     *  compile-time elision (`@with_arena` / `@move_to_parent_arena`
      *  collapse to no-ops because the engine GC owns reclamation).
      *  Defaults to 'host' (Phase 9c bump-allocator semantics). */
     target: LowerTarget
@@ -672,7 +672,7 @@ function walkLocalsForRefs(
         let annot = node.name?.typeAnnotation
         // New-design: locals carry no declared `:Type` annotation any more.
         // The ref type now rides on an ascription binding —
-        // `@local v := &@as Vec[Int], &vec_new 4` — so when the slot has no
+        // `@local v := @as Vec[Int], vec_new 4` — so when the slot has no
         // declared annotation, pick it up from an Ascription binding.
         if (!annot) {
             const be = node.binding?.expression ?? node.binding
@@ -1033,7 +1033,7 @@ function lowerExpr(node: any, ctx: LowerCtx): IRExpr {
         case 'Binding':
             return lowerExpr(n.expression, ctx)
 
-        // Ascription (`&@as T, e`) is transparent at runtime — lower inner expr.
+        // Ascription (`@as T, e`) is transparent at runtime — lower inner expr.
         case 'Ascription':
             return lowerExpr(n.expression, ctx)
 
@@ -1576,7 +1576,7 @@ function lowerBuiltinCall(name: string, rawArgs: any[], ctx: LowerCtx, inferredT
 // ── Phase 5 Workstream B — funcref + call_indirect ────────────────────
 
 /**
- * `&@fnref name` — produce the i32 table index for top-level @fn `name`.
+ * `@fnref name` — produce the i32 table index for top-level @fn `name`.
  * Adds the function to ctx.funcrefTable.entries on first reference;
  * returns the existing slot index on subsequent references so
  * `@fnref add_one == @fnref add_one` is true.
@@ -1612,7 +1612,7 @@ function lowerFnRef(rawArgs: any[], ctx: LowerCtx): IRExpr {
 }
 
 /**
- * `&@call_indirect cb, arg` — invoke the function whose table index is
+ * `@call_indirect cb, arg` — invoke the function whose table index is
  * `cb` with one i32 argument, returning i32.  Signature is fixed at
  * i32 → i32 for the 1.0 surface; multi-arg / mixed-type variants are
  * mechanical extensions of the same machinery.
@@ -1637,7 +1637,7 @@ function lowerCallIndirect(rawArgs: any[], ctx: LowerCtx): IRExpr {
 }
 
 /**
- * `&@try r` — Result[T, E] early-return shorthand (Phase 5a-3).
+ * `@try r` — Result[T, E] early-return shorthand (Phase 5a-3).
  *
  * Lowers to the equivalent of:
  *
@@ -1710,8 +1710,8 @@ function lowerTry(rawArgs: any[], ctx: LowerCtx): IRExpr {
 
 // ── Phase 9c (ADR 0008) — explicit-arena memory management ────────────
 //
-// `&@with_arena { body }` saves the heap pointer at entry and resets
-// it at exit.  `&@move_to_parent_arena value` (tail position only)
+// `@with_arena { body }` saves the heap pointer at entry and resets
+// it at exit.  `@move_to_parent_arena value` (tail position only)
 // memcpys a flat heap value to the saved boundary so the block result
 // survives the reset.  v1.0 supports value types and `String`; arrays
 // and sum-with-payloads are recognised but their byte-size computation
@@ -1893,10 +1893,10 @@ function lowerWithArena(rawArgs: any[], ctx: LowerCtx): IRExpr {
     // ── Phase 9d-5c — wasm-gc compile-time elision ───────────────────────
     //
     // Under wasm-gc the engine GC owns reclamation; the save/restore
-    // envelope is unnecessary and `&@move_to_parent_arena` is identity
+    // envelope is unnecessary and `@move_to_parent_arena` is identity
     // (GC keeps the value alive as long as it's reachable from the
     // parent scope).  Lower the body directly, drop the
-    // `&@move_to_parent_arena` wrapper at the tail if present.
+    // `@move_to_parent_arena` wrapper at the tail if present.
     if (ctx.target === 'wasm-gc') {
         const stripped = isMoveToParentArenaCall(bodyNode.trailing)
             ? { ...bodyNode, trailing: unwrap(bodyNode.trailing.args?.[0]) }
@@ -1924,7 +1924,7 @@ function lowerWithArena(rawArgs: any[], ctx: LowerCtx): IRExpr {
     const trailing = bodyNode.trailing
     const tailIsPromote = isMoveToParentArenaCall(trailing)
 
-    // ── Tail-position &@move_to_parent_arena ────────────────────────────
+    // ── Tail-position @move_to_parent_arena ────────────────────────────
     if (tailIsPromote) {
         const promotedExprNode = unwrap(trailing.args?.[0])
         if (!promotedExprNode) {
@@ -1985,11 +1985,11 @@ function lowerWithArena(rawArgs: any[], ctx: LowerCtx): IRExpr {
     const trailingType = inferredTypeOf(trailing, ctx)
     const trailingWasmType: WasmType = (trailingIR as any).wasmType ?? 'i32'
 
-    // Heap-typed return without &@move_to_parent_arena → the pointer would
+    // Heap-typed return without @move_to_parent_arena → the pointer would
     // dangle once heap resets.  Surface the fix explicitly.
     if (trailingType && !isValueType(trailingType)) {
         throw new IRLowerError(
-            `@with_arena: body returns heap type '${trailingType.kind}' — wrap the result in &@move_to_parent_arena to escape it to the parent arena, ` +
+            `@with_arena: body returns heap type '${trailingType.kind}' — wrap the result in @move_to_parent_arena(...) to escape it to the parent arena, ` +
             `or restructure so the block returns a value type (ADR 0008, Phase 9c).`,
         )
     }
@@ -2018,7 +2018,7 @@ function lowerWithArena(rawArgs: any[], ctx: LowerCtx): IRExpr {
 function lowerMoveToParentArena(rawArgs: any[], ctx: LowerCtx): IRExpr {
     // Phase 9d-5c — wasm-gc compile-time elision.
     // Under wasm-gc the engine GC keeps reachable values alive automatically,
-    // so `&@move_to_parent_arena v` is identity.  Allowed anywhere (not just
+    // so `@move_to_parent_arena v` is identity.  Allowed anywhere (not just
     // tail position) because there's no save/restore envelope to subvert.
     if (ctx.target === 'wasm-gc') {
         if (rawArgs.length !== 1) {
@@ -2028,11 +2028,11 @@ function lowerMoveToParentArena(rawArgs: any[], ctx: LowerCtx): IRExpr {
         }
         return lowerExpr(unwrap(rawArgs[0]), ctx)
     }
-    // Reached only when `&@move_to_parent_arena value` appears *outside*
-    // the tail of a `&@with_arena { … }` block — the tail-position case
+    // Reached only when `@move_to_parent_arena value` appears *outside*
+    // the tail of a `@with_arena { … }` block — the tail-position case
     // is short-circuited by lowerWithArena before this dispatch runs.
     throw new IRLowerError(
-        `@move_to_parent_arena may only appear in the tail position of a &@with_arena { … } block ` +
+        `@move_to_parent_arena may only appear in the tail position of a @with_arena({ … }) block ` +
         `(ADR 0008, Phase 9c; v1.1 will lift this restriction via pointer-fixup).` +
         (rawArgs.length === 0 ? ' (no arguments given)' : ''),
     )

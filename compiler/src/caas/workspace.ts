@@ -43,6 +43,7 @@
  */
 
 import { parse, elaborate, typecheck, buildRegistry, SyntaxTree } from './index'
+import { programNeedsParamInference } from '../types/typechecker'
 import {
     incrementalElaborate, elaborateGroupsFull, elabErrorsToDiagnostics, stratumSignature,
     type ElabGroup,
@@ -810,10 +811,19 @@ export class Workspace {
         const externalSig = externalSymbolsSignature(externalSymbols)
         const target = project?.target
 
+        // Parameter-type inference (ADR-0020: signatures are optional) is a
+        // WHOLE-PROGRAM analysis — an unannotated @fn param's type is read off
+        // its call sites, which may live in elements the per-group incremental
+        // engine would replay from cache without re-examining.  When the document
+        // has any such function, fall back to the full `typecheck()` oracle (which
+        // runs the inference pre-pass) instead of the per-group engine, so the LSP
+        // sees inferred types rather than a spurious "could not infer" (E0015).
+        const needsParamInference = programNeedsParamInference(elabTree.program)
+
         let model: SemanticModel
         let typeCache: TypeGroupCache[] | undefined
         let preRegSig: string | undefined
-        if (elabGroups !== undefined) {
+        if (elabGroups !== undefined && !needsParamInference) {
             const reuseType = elabReused
                 && prior !== undefined
                 && prior.externalSig === externalSig
@@ -836,7 +846,10 @@ export class Workspace {
                 this.#verifyTypecheckAgainstOracle(uri, source, elabTree, registry, externalSymbols, target, result)
             }
         } else {
-            // No per-group cache available (parse-error tree) — full oracle path.
+            // Full oracle path — taken when no per-group cache is available (a
+            // parse-error tree) OR when the document needs whole-program parameter
+            // inference (`needsParamInference`).  `typecheck()` runs the inference
+            // pre-pass and back-fills inferred parameter types.
             const checkResult = typecheck(elabTree, registry, { externalSymbols, target })
             model = checkResult.model
             allDiags.push(...checkResult.diagnostics)
@@ -1325,6 +1338,15 @@ function functionCallAtPosition(
         if (ch === '}' || ch === ')') { depth++; i--; continue }
         if (ch === '{' || ch === '(') {
             if (depth > 0) { depth--; i--; continue }
+            // ADR-0020: parenthesized call — `name(args)`. Scan back for identifier.
+            if (ch === '(') {
+                let j = i - 1
+                while (j >= 0 && /[a-zA-Z0-9_:]/.test(lineText[j])) j--
+                const ident = lineText.slice(j + 1, i)
+                if (ident.length > 0 && /^[a-zA-Z_]/.test(ident)) {
+                    return { calleeName: ident.replace(/^.*::/, ''), activeParameter: commas }
+                }
+            }
             break
         }
         if (ch === ';') break
@@ -1365,9 +1387,13 @@ function paramNameForPosition(doc: Document, fnName: string, i: number): string 
 // ---------------------------------------------------------------------------
 
 /** Silicon built-in keywords offered as completion items. */
+// ADR-0020 surface keywords offered as IDE completions. The retired forms
+// (`@global`/`@local`/`@var`/`@let`/`@struct`/`@type_sum`/`@extern{}`) are NOT
+// listed — they no longer parse. Values are bare (`x := v`) or `@mut`; structs and
+// sums are `@type … := { … } / $A | $B`; externals are `\\ @extern …` sig lines.
 const SILICON_KEYWORDS = [
-    '@fn', '@global', '@local', '@type', '@enum', '@extern', '@if', '@loop',
-    '@match', '@return', '@break', '@continue', '@struct', '@use',
+    '@fn', '@mut', '@type', '@enum', '@extern', '@export', '@if', '@loop',
+    '@match', '@return', '@break', '@continue', '@defer', '@try', '@use',
 ]
 
 /**

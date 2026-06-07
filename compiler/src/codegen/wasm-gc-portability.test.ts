@@ -48,10 +48,10 @@ function compile(src: string, target: 'host' | 'wasm-gc') {
 
 describe('Phase 9d-5a: E0012 — introspection primitives under wasm-gc', () => {
     const introspection: Array<{ name: string; call: string }> = [
-        { name: 'heap_get',     call: '&heap_get' },
-        { name: 'heap_set',     call: '&heap_set 0' },
-        { name: 'heap_used',    call: '&heap_used' },
-        { name: 'arena_used',   call: '&arena_used 0' },
+        { name: 'heap_get',     call: 'heap_get()' },
+        { name: 'heap_set',     call: 'heap_set(0)' },
+        { name: 'heap_used',    call: 'heap_used()' },
+        { name: 'arena_used',   call: 'arena_used(0)' },
     ]
 
     for (const { name, call } of introspection) {
@@ -76,8 +76,8 @@ describe('Phase 9d-5a: E0012 — introspection primitives under wasm-gc', () => 
         const src = `${rcSrc}
             \\\\ probe () -> Int
             @fn probe := {
-                @local r := &rc_new 1;
-                &rc_count r
+                @mut r := rc_new(1);
+                rc_count(r)
             };`
         const r = compile(src, 'wasm-gc')
         const e = r.errors.find(e => e.kind === 'MvpOnlyIntrospection' && e.message.includes('rc_count'))
@@ -89,10 +89,10 @@ describe('Phase 9d-5a: E0012 — introspection primitives under wasm-gc', () => 
 
 describe('Phase 9d-5b: E0013 — physical-byte primitives under wasm-gc', () => {
     const physical: Array<{ name: string; call: string }> = [
-        { name: 'alloc',     call: '&alloc 16' },
-        { name: 'realloc',   call: '&realloc 0, 0, 16' },
-        { name: 'mem_copy',  call: '&mem_copy 0, 0, 0' },
-        { name: 'str_ptr',   call: "&str_ptr 'hi'" },
+        { name: 'alloc',     call: 'alloc(16)' },
+        { name: 'realloc',   call: 'realloc(0, 0, 16)' },
+        { name: 'mem_copy',  call: 'mem_copy(0, 0, 0)' },
+        { name: 'str_ptr',   call: "str_ptr('hi')" },
     ]
 
     for (const { name, call } of physical) {
@@ -124,18 +124,22 @@ describe('Phase 9d-5b: E0013 — physical-byte primitives under wasm-gc', () => 
 
 describe('Phase 9d-5c: lifecycle primitives compile-time elision under wasm-gc', () => {
 
-    test('&@with_arena typechecks under wasm-gc (no rejection)', () => {
-        const src = `\\\\ probe () -> Int
-@fn probe  := &@with_arena { 42 };`
+    test('@with_arena typechecks under wasm-gc (no rejection)', () => {
+        const src = `\\\\ probe Int
+@fn probe := @with_arena({
+    42
+});`
         const r = compile(src, 'wasm-gc')
         expect(r.errors).toEqual([])
     })
 
-    test('&@with_arena under wasm-gc emits no save/restore envelope', () => {
+    test('@with_arena under wasm-gc emits no save/restore envelope', () => {
         // Under wasm-mvp the body is wrapped in $heap_get save + $heap
         // restore.  Under wasm-gc both are elided.
-        const src = `\\\\ probe () -> Int
-@fn probe  := &@with_arena { 42 };`
+        const src = `\\\\ probe Int
+@fn probe := @with_arena({
+    42
+});`
         const rMvp = compile(src, 'host')
         const rGc  = compile(src, 'wasm-gc')
         // Mvp emits the save/restore globals access.
@@ -149,23 +153,23 @@ describe('Phase 9d-5c: lifecycle primitives compile-time elision under wasm-gc',
         expect(userFn).not.toContain('global.set $heap')
     })
 
-    test('&@with_arena under wasm-gc emits no $arena_promote call', () => {
+    test('@with_arena under wasm-gc emits no $arena_promote call', () => {
         const src = `
-            \\\\ build () -> String
-            @fn build  := &@with_arena {
-                @local s := 'hello';
-                &@move_to_parent_arena s
-            };`
+            \\\\ build String
+            @fn build := @with_arena({
+                @mut s := 'hello';
+                @move_to_parent_arena(s)
+            });`
         const rGc = compile(src, 'wasm-gc')
         const userFn = extractUserFn(rGc.wat!, 'build')
         expect(userFn).not.toContain('arena_promote')
     })
 
-    test('&@move_to_parent_arena under wasm-gc is identity (allowed anywhere)', () => {
-        // Under wasm-mvp this would error — &@move_to_parent_arena
+    test('@move_to_parent_arena under wasm-gc is identity (allowed anywhere)', () => {
+        // Under wasm-mvp this would error — @move_to_parent_arena
         // outside an arena is rejected.  Under wasm-gc it's just identity.
-        const src = `\\\\ probe () -> Int
-@fn probe  := &@move_to_parent_arena 99;`
+        const src = `\\\\ probe Int
+@fn probe := @move_to_parent_arena(99);`
         const rGc = compile(src, 'wasm-gc')
         expect(rGc.errors).toEqual([])
     })
@@ -174,12 +178,12 @@ describe('Phase 9d-5c: lifecycle primitives compile-time elision under wasm-gc',
         // The whole point of the portability split: any program that
         // uses only lifecycle primitives + value types compiles unchanged.
         const src = `
-            \\\\ portable () -> Int
-            @fn portable  := &@with_arena {
-                @local x := 42;
-                @local y := x + 1;
-                &@move_to_parent_arena y
-            };`
+            \\\\ portable Int
+            @fn portable := @with_arena({
+                @mut x := 42;
+                @mut y := x + 1;
+                @move_to_parent_arena(y)
+            });`
         const rMvp = compile(src, 'host')
         const rGc  = compile(src, 'wasm-gc')
         expect(rMvp.errors).toEqual([])
@@ -191,11 +195,11 @@ describe('Phase 9d-5c: lifecycle primitives compile-time elision under wasm-gc',
 
     test('nested arenas elide cleanly under wasm-gc', () => {
         const src = `
-            \\\\ probe () -> Int
-            @fn probe  := {
-                &@with_arena {
-                    &@with_arena {};
-                };
+            \\\\ probe Int
+            @fn probe := {
+                @with_arena({
+                    @with_arena({});
+                });
                 0
             };`
         const rGc = compile(src, 'wasm-gc')

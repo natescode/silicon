@@ -36,7 +36,7 @@ const send = (msg: any) => {
 const sample = `\\\\ add (Int, Int) -> Int
 @fn add a, b := { a + b };
 
-@fn main := { &add 20, 22 };
+@fn main := { add(20, 22) };
 `
 const uri = pathToFileURL(path.resolve(here, '..', '_sample.si')).href
 let id = 1

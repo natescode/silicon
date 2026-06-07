@@ -45,11 +45,11 @@ Per the bootstrap plan and cleanup plan, the simplest possible rule:
 # main.si
 @use 'helper.si';
 
-@global sum := { &add 1, 2 };
+sum := { add(1, 2) };
 ```
 
 Compiling `main.si` produces a WAT module that contains `$add`, `$sum`, and
-the top-level `&add 1, 2` call inside `$__start`.
+the top-level `add(1, 2)` call inside `$__start`.
 
 ## Implementation
 

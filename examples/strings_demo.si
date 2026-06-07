@@ -9,20 +9,20 @@
 @use 'str';
 
 @fn main := {
-    @local s := 'hello, world';
+    s := 'hello, world';
 
-    &print ('string:   ' ++ s);
-    &print ('length:   ' ++ (&int_to_str (&str_byte_len s)));
-    &print ('upper 5:  ' ++ (&str_slice s, 0, 5));
-    &print ('after , : ' ++ (&str_slice s, 7, (&str_byte_len s)));
-    &print ('index of "world": ' ++ (&int_to_str (&str_index_of s, 'world')));
+    print('string:   ' ++ s);
+    print('length:   ' ++ int_to_str(str_byte_len(s)));
+    print('upper 5:  ' ++ str_slice(s, 0, 5));
+    print('after , : ' ++ str_slice(s, 7, str_byte_len(s)));
+    print('index of "world": ' ++ int_to_str(str_index_of(s, 'world')));
 
-    &print_bool (&str_starts_with s, 'hello');
-    &print_bool (&str_ends_with s, 'world');
-    &print_bool (&str_contains s, 'o, w');
+    print_bool(str_starts_with(s, 'hello'));
+    print_bool(str_ends_with(s, 'world'));
+    print_bool(str_contains(s, 'o, w'));
 
-    &print (&str_repeat '=', 12);
-    &print (&str_repeat 'ab', 4);
+    print(str_repeat('=', 12));
+    print(str_repeat('ab', 4));
     0
 };
-&main;
+main();

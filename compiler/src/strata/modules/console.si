@@ -7,5 +7,5 @@
 #
 #   &console::log (&JSString::fromCodePoint 0x1F389);   # 🎉
 
-@extern { \\ log (JSString) -> Void }
-@extern { \\ error (JSString) -> Void }
+\\ @extern log (JSString) -> Void;
+\\ @extern error (JSString) -> Void;

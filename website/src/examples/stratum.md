@@ -9,19 +9,19 @@ its registered for. Three lines in a `.si` file:
 
 ```silicon
 @stratum CountDecls := {
-    &Compiler::register::keyword '@count';
-    &Compiler::on::decl '@count', CountDecls_on_decl;
-    &Compiler::on::module_finalize CountDecls_on_finalize;
+    Compiler::register::keyword('@count');
+    Compiler::on::decl('@count', CountDecls_on_decl);
+    Compiler::on::module_finalize(CountDecls_on_finalize);
 };
 
 \\ CountDecls_on_decl (Int)
 @fn CountDecls_on_decl _node := {
-    &state::stratum::set 'seen', (&state::stratum::get 'seen') + 1
+    state::stratum::set('seen', state::stratum::get('seen') + 1)
 };
 
 @fn CountDecls_on_finalize := {
-    &Compiler::diag::warn 'S0001', {},
-        (&format "@count saw {} definitions", &state::stratum::get 'seen')
+    Compiler::diag::warn('S0001', {},
+        format('@count saw {} definitions', state::stratum::get('seen')))
 };
 ```
 

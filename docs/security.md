@@ -110,22 +110,22 @@ Positional arguments are passed through to `cmdBuild` / `cmdRun` /
 
 Comptime handlers (stratum bodies) execute in the host TypeScript
 process. They are **not sandboxed.** The host import surface is the
-`&Compiler::*` API documented in `docs/compiler-api.md` and locked down
+`Compiler::*` API documented in `docs/compiler-api.md` and locked down
 in `wit/comptime.wit`.
 
 **What handlers can do:**
 
 - Read source positions, types, IR.
 - Push new definitions, globals, diagnostics.
-- Call the `&Compiler::diag::error` / `warn` surface.
+- Call the `Compiler::diag::error` / `warn` surface.
 
 **What handlers cannot do:**
 
-- Open arbitrary host file paths via `&Compiler::*` (there is no
-  `&Compiler::fs::*` surface).
-- Open network sockets (no `&Compiler::net::*`).
+- Open arbitrary host file paths via `Compiler::*` (there is no
+  `Compiler::fs::*` surface).
+- Open network sockets (no `Compiler::net::*`).
 - Mutate the host process's environment variables (no
-  `&Compiler::env::*`).
+  `Compiler::env::*`).
 
 **Caveat:** the host process running the handler can do all of the
 above — but the handler can only ask for what `wit/comptime.wit`

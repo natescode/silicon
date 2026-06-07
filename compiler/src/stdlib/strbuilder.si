@@ -1,0 +1,84 @@
+# SPDX-License-Identifier: MIT
+# Silicon standard library — string builder (snake_case).
+#
+# A growable buffer for *constructing* a String without manual pointer
+# arithmetic.  The header (4-byte length prefix) + bump-allocator
+# re-alignment ritual is hidden behind `sb_finish`.
+#
+# Backed by a Vec of byte values (one byte per element).  v1 note: the
+# backing Vec stores one byte per 4-byte slot, so building transiently
+# uses ~4× the final string size — acceptable for v1; a packed byte
+# buffer is a future optimization.
+#
+#   @use 'strbuilder';
+#   @local b := &sb_new 16;
+#   &sb_push_str b, 'Hi';
+#   &sb_push_code_point b, 33;     ;; '!'
+#   @local s := &sb_finish b;      ;; "Hi!"
+
+@use 'vec';
+@use 'mem';
+
+# New builder with the given initial capacity (in bytes).
+\\ sb_new (Int) -> Int
+@fn sb_new cap := vec_new(cap);
+
+# Append a single byte (0..255).
+\\ sb_push_byte (Int, Int)
+@fn sb_push_byte b, x := {
+    vec_push_i32(b, x);
+};
+
+# Append every byte of a String.
+\\ sb_push_str (Int, String)
+@fn sb_push_str b, s := {
+    n := str_len(s);
+    p := str_ptr(s) + 4;
+    @mut i := 0;
+    @loop(i < n, {
+        vec_push_i32(b, WASM::i32_load8_u(p + i));
+        i = i + 1;
+    });
+};
+
+# Append one Unicode code point, UTF-8 encoded (1..4 bytes).  Uses only
+# +, /, % (no bitwise intrinsics needed): for a non-negative cp,
+# `cp >> 6 == cp / 64` and `cp & 0x3F == cp % 64`.
+\\ sb_push_code_point (Int, Int)
+@fn sb_push_code_point b, cp := {
+    @if(cp < 128, {
+        vec_push_i32(b, cp);
+    }, {
+        @if(cp < 2048, {
+            vec_push_i32(b, 192 + (cp / 64));
+            vec_push_i32(b, 128 + (cp % 64));
+        }, {
+            @if(cp < 65536, {
+                vec_push_i32(b, 224 + (cp / 4096));
+                vec_push_i32(b, 128 + ((cp / 64) % 64));
+                vec_push_i32(b, 128 + (cp % 64));
+            }, {
+                vec_push_i32(b, 240 + (cp / 262144));
+                vec_push_i32(b, 128 + ((cp / 4096) % 64));
+                vec_push_i32(b, 128 + ((cp / 64) % 64));
+                vec_push_i32(b, 128 + (cp % 64));
+            })
+        })
+    });
+};
+
+# Seal the builder into a String: allocate, copy the bytes packed, set
+# the length header, and re-align the bump pointer.
+\\ sb_finish (Int) -> String
+@fn sb_finish b := {
+    n := vec_len(b);
+    s := alloc_string(n);
+    base := str_ptr(s) + 4;
+    @mut i := 0;
+    @loop(i < n, {
+        WASM::i32_store8(base + i, vec_get_i32(b, i));
+        i = i + 1;
+    });
+    heap_align();
+    s
+};

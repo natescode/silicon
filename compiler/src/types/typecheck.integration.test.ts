@@ -104,47 +104,47 @@ test('all comparison operators on Int clean', () => {
 })
 
 test('type annotation Int matches int literal', () => {
-    // Silicon grammar supports `@global x := 5`
-    const { errors } = check('@global x := 5;')
+    // Silicon grammar supports `x := 5`
+    const { errors } = check('x := 5;')
     expect(errors).toHaveLength(0)
 })
 
 test('type annotation Float on int binding is an error', () => {
-    const { errors } = check('@global x := &@as Float, 5;')
+    const { errors } = check('\\\\ x Float\nx := 5;')
     expect(errors.length).toBeGreaterThan(0)
     expect(errors[0].kind).toBe('Annotation')
 })
 
 test('unknown type annotation errors', () => {
-    const { errors } = check('@global x := &@as Bogus, 5;')
+    const { errors } = check('\\\\ x Bogus\nx := 5;')
     expect(errors.length).toBeGreaterThan(0)
     expect(errors[0].kind).toBe('UnknownType')
 })
 
 test('WASM::i32_add intrinsic type-checks', () => {
-    const { errors } = check('&WASM::i32_add 1, 2;')
+    const { errors } = check('WASM::i32_add(1, 2);')
     expect(errors).toHaveLength(0)
 })
 
 test('alloc_string returns a String buffer', () => {
-    const { errors } = check(`\\\\ one () -> String
+    const { errors } = check(`\\\\ one String
 @fn one := {
-    @local out := &alloc_string 1;
-    &WASM::i32_store8 ((&str_ptr out) + 4), 65;
+    @mut out := alloc_string(1);
+    WASM::i32_store8(str_ptr(out) + 4, 65);
     out
 };`)
     expect(errors).toHaveLength(0)
 })
 
 test('WASM::i32_add with float operand fails', () => {
-    const { errors } = check('&WASM::i32_add 1, 2.5;')
+    const { errors } = check('WASM::i32_add(1, 2.5);')
     expect(errors.length).toBeGreaterThan(0)
     expect(errors[0].kind).toBe('Mismatch')
 })
 
 test('annotation informs inferred types (i32 alias)', () => {
     // Using i32 as annotation is allowed as a low-level escape hatch
-    const { errors, program } = check('@global x := 42;')
+    const { errors, program } = check('x := 42;')
     expect(errors).toHaveLength(0)
     // The definition's type should resolve as Int
     // (we don't introspect beyond "no errors" since Definition node isn't
@@ -156,25 +156,25 @@ test('annotation informs inferred types (i32 alias)', () => {
 // ------------------------------------------------------------------
 
 test('@if with matching branches has no errors', () => {
-    const { errors } = check('\\\\ abs (Int)\n@global abs x := { &@if x < 0, { 0 - x }, { x } };')
+    const { errors } = check('\\\\ abs (Int)\nabs x := {\n    @if(x < 0, {\n        0 - x\n    }, {\n        x\n    })\n};')
     expect(errors).toHaveLength(0)
 })
 
 test('@if result type flows through to caller', () => {
     // &@if flag, { 1 }, { 2 } should infer Int, so 3 + result is valid
-    const { errors } = check('3 + &@if 1, { 1 }, { 2 };')
+    const { errors } = check('3 + @if(1, { 1 }, { 2 });')
     expect(errors).toHaveLength(0)
 })
 
 test('@if with mismatched branch types produces an error', () => {
     // then: Int, else: Float → mismatch
-    const { errors } = check('@global x := { &@if 1, { 1 }, { 2.5 } };')
+    const { errors } = check('x := { @if(1, { 1 }, { 2.5 }) };')
     expect(errors.length).toBeGreaterThan(0)
 })
 
 test('@if without else branch is void (TypeUnknown — no errors)', () => {
     // Void @if should not error; result type Unknown propagates silently
-    const { errors } = check('&@if 1, { 1 };')
+    const { errors } = check('@if(1, { 1 });')
     expect(errors).toHaveLength(0)
 })
 
@@ -183,20 +183,69 @@ test('@if without else branch is void (TypeUnknown — no errors)', () => {
 // ------------------------------------------------------------------
 
 test('return type of user function resolves at call site', () => {
-    const { errors } = check('\\\\ add (Int, Int)\n@global add x, y := x + y; &add 1, 2;')
+    const { errors } = check('\\\\ add (Int, Int)\nadd x, y := x + y;\nadd(1, 2);')
     expect(errors).toHaveLength(0)
 })
 
 test('wrong arg type at user function call site errors', () => {
-    const { errors } = check('\\\\ double (Int)\n@global double x := x + x; &double 1.5;')
+    const { errors } = check('\\\\ double (Int)\ndouble x := x + x;\ndouble(1.5);')
     expect(errors.length).toBeGreaterThan(0)
     expect(errors[0].kind).toBe('Mismatch')
 })
 
 test('wrong arity at user function call site errors', () => {
-    const { errors } = check('\\\\ add (Int, Int)\n@global add x, y := x + y; &add 1;')
+    const { errors } = check('\\\\ add (Int, Int)\nadd x, y := x + y;\nadd(1);')
     expect(errors.length).toBeGreaterThan(0)
     expect(errors[0].kind).toBe('ArityMismatch')
+})
+
+test('@fn with no signature infers parameter types from its call sites', () => {
+    // ADR-0020: signatures are optional — an unannotated parameter's type is
+    // inferred from the function's call sites.  `add(1, 2)` pins a, b to Int, so
+    // `a + b` type-checks with no errors (no MissingParamType, no UnboundIdentifier).
+    const { errors } = check('@fn add a, b := { a + b };\nadd(1, 2);')
+    expect(errors).toHaveLength(0)
+})
+
+test('@fn no-signature inference picks up Float call sites', () => {
+    const { errors } = check('@fn add a, b := { a + b };\nadd(1.0, 2.0);')
+    expect(errors).toHaveLength(0)
+})
+
+test('@fn no-signature inference flows through nested calls', () => {
+    // The inner `add(1, 2)` must resolve to Int before the outer call's argument
+    // type is concrete — the fixpoint loop handles this.
+    const { errors } = check('@fn add a, b := { a + b };\nadd(add(1, 2), 3);')
+    expect(errors).toHaveLength(0)
+})
+
+test('@fn no-signature with no call sites cannot infer params (E0015)', () => {
+    // Nothing to infer from — report a clear "could not infer" (E0015), NOT a
+    // misleading "unbound identifier 'a'" in the body.
+    const { errors } = check('@fn add a, b := { a + b };')
+    expect(errors.some(e => e.kind === 'MissingParamType')).toBe(true)
+    expect(errors.every(e => e.kind !== 'UnboundIdentifier')).toBe(true)
+})
+
+test('@fn no-signature used at two concrete types stays uninferred (E0015)', () => {
+    // Monomorphic inference: Int at one call, Float at another — genuinely
+    // polymorphic, so we do not pick one.  Surface E0015 (reach for `[T]`).
+    const { errors } = check('@fn add a, b := { a + b };\nadd(1, 2);\nadd(1.0, 2.0);')
+    expect(errors.some(e => e.kind === 'MissingParamType')).toBe(true)
+})
+
+test('@fn called with a non-annotatable arg type (Array) is uninferable (E0015, not UnknownType)', () => {
+    // Array[T] has no surface annotation name, so inference must NOT synthesize an
+    // `Array[Int]` annotation (which the resolver would reject as "unknown type
+    // 'Array'"). It leaves the param unresolved → honest E0015.
+    const { errors } = check('@fn f a := { a };\nr := f($[1, 2, 3]);')
+    expect(errors.some(e => e.kind === 'MissingParamType')).toBe(true)
+    expect(errors.every(e => e.kind !== 'UnknownType')).toBe(true)
+})
+
+test('@fn with a signature line types its parameters (no inference needed)', () => {
+    const { errors } = check('\\\\ add (Int, Int) -> Int\n@fn add a, b := { a + b };\nadd(1, 2);')
+    expect(errors).toHaveLength(0)
 })
 
 // ------------------------------------------------------------------
@@ -206,13 +255,13 @@ test('wrong arity at user function call site errors', () => {
 test('forward reference: wrong arg type caught before definition', () => {
     // &add appears before @global add — pre-pass seeds the signature so the
     // call site is type-checked even though the definition comes later.
-    const { errors } = check('&add 1.0, 2.0;\n\\\\ add (Int, Int)\n@global add x, y := x + y;')
+    const { errors } = check('add(1.0, 2.0);\n\\\\ add (Int, Int)\nadd x, y := x + y;')
     expect(errors.length).toBeGreaterThan(0)
     expect(errors[0].kind).toBe('Mismatch')
 })
 
 test('forward reference: correct call before definition has no errors', () => {
-    const { errors } = check('\\\\ add (Int, Int)\n@global add x, y := x + y;')
+    const { errors } = check('\\\\ add (Int, Int)\nadd x, y := x + y;')
     expect(errors).toHaveLength(0)
 })
 
@@ -221,7 +270,7 @@ test('forward reference: correct call before definition has no errors', () => {
 // ------------------------------------------------------------------
 
 test('@global binding cannot be reassigned', () => {
-    const { errors } = check('@global x := 5; x = 10;')
+    const { errors } = check('x := 5; x = 10;')
     expect(errors.length).toBeGreaterThan(0)
     expect(errors[0].kind).toBe('ImmutableAssignment')
 })
@@ -233,27 +282,27 @@ test('@fn binding cannot be reassigned', () => {
 })
 
 test('@local binding can be reassigned', () => {
-    const { errors } = check('@local count := 0; count = 1;')
+    const { errors } = check('@mut count := 0; count = 1;')
     expect(errors).toHaveLength(0)
 })
 
 test('a mutable @local local shadows a same-named top-level @fn for assignment', () => {
     // Regression: a top-level `@fn out` marked `out` immutable globally, so a
-    // later local `@local out` inside another function could not be reassigned.
+    // later local `@mut out` inside another function could not be reassigned.
     const { errors } = check(
         '\\\\ out () -> Int\n@fn out := 0;\n' +
-        '\\\\ build () -> Int\n@fn build := { @local out := 1; out = 2; out };')
+        '\\\\ build Int\n@fn build := {\n    @mut out := 1;\n    out = 2;\n    out\n};')
     expect(errors).toHaveLength(0)
 })
 
-test('@global inside a function body is an error (E0014 — use @local)', () => {
-    const { errors } = check('\\\\ f () -> Int\n@fn f := { @global x := 5; x + 1 };')
-    expect(errors.length).toBeGreaterThan(0)
-    expect(errors[0].kind).toBe('GlobalInFunction')
-})
+// NB: the legacy "@global inside a function body is an error (E0014 — use @local)"
+// test was removed in the ADR-0020 migration. There is no `@global` surface keyword
+// any more, and a bare `x := 5` inside a function body is a valid immutable local
+// (not a GlobalInFunction error), so that diagnostic is no longer reachable from
+// surface syntax.
 
-test('top-level @global is fine and is readable from a function body', () => {
-    const { errors } = check('@global PI := 3;\n\\\\ f () -> Int\n@fn f := { PI + 1 };')
+test('a top-level binding is fine and is readable from a function body', () => {
+    const { errors } = check('PI := 3;\n\\\\ f Int\n@fn f := {\n    PI + 1\n};')
     expect(errors).toHaveLength(0)
 })
 
@@ -287,12 +336,12 @@ test('@type_alias: declaration alone produces no errors', () => {
 })
 
 test('@type_alias: annotation using the alias resolves correctly', () => {
-    const { errors } = check('@type_alias age := Int;\n@global my_age := 34;')
+    const { errors } = check('@type_alias age := Int;\nmy_age := 34;')
     expect(errors).toHaveLength(0)
 })
 
 test('@type_alias: alias is transparent — alias value + Int is valid', () => {
-    const { errors } = check('@type_alias age := Int;\n@global x := 5;\nx + 10;')
+    const { errors } = check('@type_alias age := Int;\nx := 5;\nx + 10;')
     expect(errors).toHaveLength(0)
 })
 
@@ -330,7 +379,7 @@ test('@type_distinct: registered as Distinct kind in typeAliases', () => {
 })
 
 test('@type_distinct: assigning Int to distinct-typed binding is a type error', () => {
-    const { errors } = check('@type_distinct UserId := Int;\n@global id := &@as UserId, 42;')
+    const { errors } = check('@type_distinct UserId := Int;\n\\\\ id UserId\nid := 42;')
     // 42 is Int; UserId is Distinct — they are not equal, so this is a type error.
     expect(errors.length).toBeGreaterThan(0)
     expect(errors[0].kind).toBe('Annotation')
@@ -341,12 +390,12 @@ test('@type_distinct: assigning Int to distinct-typed binding is a type error', 
 // ---------------------------------------------------------------------------
 
 test('@type_sum: declaration alone produces no errors', () => {
-    const { errors } = check('@type_sum Color := Red | Green | Blue;')
+    const { errors } = check('@enum Color := Red | Green | Blue;')
     expect(errors).toHaveLength(0)
 })
 
 test('@type_sum: sum type registered in typeAliases as Sum kind', () => {
-    const { typeAliases } = check('@type_sum Color := Red | Green | Blue;')
+    const { typeAliases } = check('@enum Color := Red | Green | Blue;')
     expect(typeAliases.has('Color')).toBe(true)
     const t = typeAliases.get('Color')!
     expect(t.kind).toBe('Sum')
@@ -357,30 +406,30 @@ test('@type_sum: sum type registered in typeAliases as Sum kind', () => {
 })
 
 test('@type_sum: variant reference Color::Red resolves without error', () => {
-    const { errors } = check('@type_sum Color := Red | Green | Blue;\nColor::Red;')
+    const { errors } = check('@enum Color := Red | Green | Blue;\nColor::Red;')
     expect(errors).toHaveLength(0)
 })
 
 test('@type_sum: variant reference has the sum type', () => {
-    const { errors, program } = check('@type_sum Color := Red | Green | Blue;\nColor::Red;')
+    const { errors, program } = check('@enum Color := Red | Green | Blue;\nColor::Red;')
     expect(errors).toHaveLength(0)
     // The program elements contain the Namespace node annotated with inferredType.
     // We just verify no errors — full type annotation tests live in unit tests.
 })
 
 test('@type_sum: variants are immutable — assigning to Color::Red is a type error', () => {
-    const { errors } = check('@type_sum Color := Red | Green | Blue;\nColor::Red = 99;')
+    const { errors } = check('@enum Color := Red | Green | Blue;\nColor::Red = 99;')
     expect(errors.length).toBeGreaterThan(0)
     expect(errors[0].kind).toBe('ImmutableAssignment')
 })
 
 test('@type_sum: variant == variant comparison is valid (returns Bool)', () => {
-    const { errors } = check('@type_sum Color := Red | Green | Blue;\nColor::Red == Color::Green;')
+    const { errors } = check('@enum Color := Red | Green | Blue;\nColor::Red == Color::Green;')
     expect(errors).toHaveLength(0)
 })
 
 test('@type_sum: single-variant sum type works', () => {
-    const { errors, typeAliases } = check('@type_sum Unit := Only;')
+    const { errors, typeAliases } = check('@enum Unit := Only;')
     expect(errors).toHaveLength(0)
     const t = typeAliases.get('Unit')
     expect(t?.kind).toBe('Sum')
@@ -393,9 +442,9 @@ test('@type_sum: single-variant sum type works', () => {
 
 test('@match: basic sum type matching has no errors', () => {
     const { errors } = check(
-        '@type_sum Color := Red | Green | Blue;\n' +
-        '@local c := Color::Red;\n' +
-        '&@match c, Color::Red, { 1 }, Color::Green, { 2 }, Color::Blue, { 3 };'
+        '@enum Color := Red | Green | Blue;' +
+        '@mut c := Color::Red;' +
+        '@match(c, Color::Red, { 1 }, Color::Green, { 2 }, Color::Blue, { 3 });'
     )
     expect(errors).toHaveLength(0)
 })
@@ -403,9 +452,9 @@ test('@match: basic sum type matching has no errors', () => {
 test('@match: wrong pattern type is a type error', () => {
     // Pattern is Int literal, discriminant is Color — Mismatch
     const { errors } = check(
-        '@type_sum Color := Red | Green | Blue;\n' +
-        '@local c := Color::Red;\n' +
-        '&@match c, 1, { 10 }, 2, { 20 };'
+        '@enum Color := Red | Green | Blue;' +
+        '@mut c := Color::Red;' +
+        '@match(c, 1, { 10 }, 2, { 20 });'
     )
     expect(errors.length).toBeGreaterThan(0)
     expect(errors[0].kind).toBe('Mismatch')
@@ -414,9 +463,9 @@ test('@match: wrong pattern type is a type error', () => {
 test('@match: mismatched arm result types is a type error', () => {
     // First arm returns Int, second returns Float
     const { errors } = check(
-        '@type_sum Color := Red | Green | Blue;\n' +
-        '@local c := Color::Red;\n' +
-        '&@match c, Color::Red, { 1 }, Color::Green, { 2.5 };'
+        '@enum Color := Red | Green | Blue;' +
+        '@mut c := Color::Red;' +
+        '@match(c, Color::Red, { 1 }, Color::Green, { 2.5 });'
     )
     expect(errors.length).toBeGreaterThan(0)
     expect(errors[0].kind).toBe('Mismatch')
@@ -425,9 +474,9 @@ test('@match: mismatched arm result types is a type error', () => {
 test('@match: result type flows through to caller', () => {
     // @match returns Int, so 3 + result should be valid
     const { errors } = check(
-        '@type_sum Color := Red | Green | Blue;\n' +
-        '@local c := Color::Red;\n' +
-        '3 + &@match c, Color::Red, { 1 }, Color::Green, { 2 }, Color::Blue, { 3 };'
+        '@enum Color := Red | Green | Blue;' +
+        '@mut c := Color::Red;' +
+        '3 + @match(c, Color::Red, { 1 }, Color::Green, { 2 }, Color::Blue, { 3 });'
     )
     expect(errors).toHaveLength(0)
 })
@@ -437,29 +486,29 @@ test('@match: result type flows through to caller', () => {
 // ---------------------------------------------------------------------------
 
 test('@local: declaration with matching annotation has no errors', () => {
-    const { errors } = check('\\\\ f (Int)\n@global f x := { @local tmp := x + 1; tmp };')
+    const { errors } = check('\\\\ f (Int)\nf x := {\n    @mut tmp := x + 1;\n    tmp\n};')
     expect(errors).toHaveLength(0)
 })
 
 test('@local: wrong annotation type is a type error', () => {
-    const { errors } = check('\\\\ f (Int)\n@global f x := { @local tmp := &@as Float, x + 1; tmp };')
+    const { errors } = check('\\\\ f (Int)\nf x := { \\\\ tmp Float\n@mut tmp := x + 1; tmp };')
     expect(errors.length).toBeGreaterThan(0)
     expect(errors[0].kind).toBe('Annotation')
 })
 
 test('@local: is mutable — reassignment does not error', () => {
-    const { errors } = check('\\\\ f (Int)\n@global f x := { @local tmp := 0; tmp = x + 1; tmp };')
+    const { errors } = check('\\\\ f (Int)\nf x := {\n    @mut tmp := 0;\n    tmp = x + 1;\n    tmp\n};')
     expect(errors).toHaveLength(0)
 })
 
 test('@local: type flows through to caller', () => {
     // tmp is Int, so tmp + 1 should be valid
-    const { errors } = check('\\\\ f (Int)\n@global f x := { @local tmp := x; tmp + 1 };')
+    const { errors } = check('\\\\ f (Int)\nf x := {\n    @mut tmp := x;\n    tmp + 1\n};')
     expect(errors).toHaveLength(0)
 })
 
 test('@local: wrong type in reassignment is a type error', () => {
-    const { errors } = check('\\\\ f (Int)\n@global f x := { @local tmp := 0; tmp = 3.14; tmp };')
+    const { errors } = check('\\\\ f (Int)\nf x := {\n    @mut tmp := 0;\n    tmp = 3.14;\n    tmp\n};')
     expect(errors.length).toBeGreaterThan(0)
     expect(errors[0].kind).toBe('Mismatch')
 })
@@ -469,18 +518,18 @@ test('@local: wrong type in reassignment is a type error', () => {
 // ---------------------------------------------------------------------------
 
 test('@extern: call with correct arg type has no errors', () => {
-    const { errors } = check("@extern { \\\\ print (String) -> Void }")
+    const { errors } = check('\\\\ @extern print (String) -> Void;')
     expect(errors).toHaveLength(0)
 })
 
 test('@extern: call with wrong arg type is a Mismatch', () => {
-    const { errors } = check('@extern { \\\\ print (String) -> Void }\n&print 42;')
+    const { errors } = check('\\\\ @extern print (String);\nprint(42);')
     expect(errors.length).toBeGreaterThan(0)
     expect(errors[0].kind).toBe('Mismatch')
 })
 
 test('@extern: wrong arity is an ArityMismatch', () => {
-    const { errors } = check('@extern { \\\\ add (Int, Int) -> Void }\n&add 1;')
+    const { errors } = check('\\\\ @extern add (Int, Int);\nadd(1);')
     expect(errors.length).toBeGreaterThan(0)
     expect(errors[0].kind).toBe('ArityMismatch')
 })

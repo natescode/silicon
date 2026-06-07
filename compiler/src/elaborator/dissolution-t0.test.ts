@@ -26,8 +26,8 @@ describe('T0 loader accepts the new @stratum + @fn forms', () => {
         // builtin loader would use if a .si file contained these forms.
         const newFormStrata = `
             @stratum TestStrata := {
-                &Compiler::register::keyword '@test_kw_unique';
-                &Compiler::on::lower '@test_kw_unique', TestStrata_lower;
+                Compiler::register::keyword('@test_kw_unique');
+                Compiler::on::lower('@test_kw_unique', TestStrata_lower);
             };
             \\\\ TestStrata_lower (Int)
             @fn TestStrata_lower node := 0;

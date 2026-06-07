@@ -1,16 +1,15 @@
+\\ @extern puts (String) -> Int;
 # examples/hello_native.si — "Hello, world!" for the QBE native backend.
 #
 #   Build:  sgl build --native examples/hello_native.si
 #   Run:    ./examples/hello_native
 
-@extern { \\ puts (String) -> Int }
 
 \\ print (String) -> Int
 @fn print s := {
-    &puts s
+    puts(s)
 };
 
 #&print 'Hello, world!';
-&puts 'Hello, Silicon!';
-
+puts('Hello, Silicon!');
 0;

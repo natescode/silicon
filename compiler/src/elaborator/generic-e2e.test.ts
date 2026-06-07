@@ -49,19 +49,19 @@ function compileToWat(userSource: string, strataSources: string[]): string {
 // ---------------------------------------------------------------------------
 
 const GENERIC_STRATUM = `@stratum Generics := {
-    &Compiler::register::keyword '@generic';
-    &Compiler::on::decl '@generic', {
-        @local tmpl := &Compiler::ast::capture_template node, 'pre';
-        @local clone := &Compiler::ast::clone tmpl;
-        @local concrete := &Compiler::ast::with_keyword clone, '@fn';
-        &Compiler::module::push_definition concrete.ast;
-    };
+    Compiler::register::keyword('@generic');
+    Compiler::on::decl('@generic', {
+        @mut tmpl := Compiler::ast::capture_template(node, 'pre');
+        @mut clone := Compiler::ast::clone(tmpl);
+        @mut concrete := Compiler::ast::with_keyword(clone, '@fn');
+        Compiler::module::push_definition(concrete::ast);
+    });
 };`
 
 describe('@generic — full pipeline E2E', () => {
     test.skip('a @generic decl alone produces a real $identity function in the WAT', () => {
         const wat = compileToWat(
-            `@generic identity x:Int := x;`,
+            `@generic identity x Int := x;`,
             [GENERIC_STRATUM]
         )
 
@@ -75,9 +75,9 @@ describe('@generic — full pipeline E2E', () => {
 
     test.skip('a @generic decl followed by a call site lowers the call to the synthesised function', () => {
         const wat = compileToWat(
-            `@generic identity x:Int := x;
+            `@generic identity x Int := x;
              \\\\ test () -> Int
-             @fn test  := { (&identity 42) };`,
+             @fn test  := { identity(42) };`,
             [GENERIC_STRATUM]
         )
 
@@ -94,14 +94,14 @@ describe('@generic — full pipeline E2E', () => {
         // so the compiler should reject it.  This pins the demonstration:
         // *only* the Generics stratum makes @generic a legal keyword.
         expect(() =>
-            compileToWat(`@generic identity x:Int := x;`, /* no strata */ [])
+            compileToWat(`@generic identity x Int := x;`, /* no strata */ [])
         ).toThrow()
     })
 
     test.skip('two @generic declarations both emit their own synthesised functions', () => {
         const wat = compileToWat(
-            `@generic id_a x:Int := x;
-             @generic id_b y:Int := y;`,
+            `@generic id_a x Int := x;
+             @generic id_b y Int := y;`,
             [GENERIC_STRATUM]
         )
 
@@ -112,21 +112,21 @@ describe('@generic — full pipeline E2E', () => {
     test.skip('the synthesised function actually runs under WebAssembly and returns the expected value', async () => {
         // Add an export so we can grab the function from JS.
         const stratumWithExport = `@stratum Generics := {
-            &Compiler::register::keyword '@generic';
-            &Compiler::on::decl '@generic', {
-                @local tmpl := &Compiler::ast::capture_template node, 'pre';
-                @local clone := &Compiler::ast::clone tmpl;
-                @local concrete := &Compiler::ast::with_keyword clone, '@fn';
-                &Compiler::module::push_definition concrete.ast;
-            };
+            Compiler::register::keyword('@generic');
+            Compiler::on::decl('@generic', {
+                @mut tmpl := Compiler::ast::capture_template(node, 'pre');
+                @mut clone := Compiler::ast::clone(tmpl);
+                @mut concrete := Compiler::ast::with_keyword(clone, '@fn');
+                Compiler::module::push_definition(concrete::ast);
+            });
         };`
 
         // The user's program: a @generic identity, plus a @fn that exports it.
         // The export is what lets us call the synthesised function from JS.
         const wat = compileToWat(
-            `@generic identity x:Int := x;
+            `@generic identity x Int := x;
              \\\\ run (Int) -> Int
-             @fn run x := { (&identity x) };
+             @fn run x := { identity(x) };
              @export run;`,
             [stratumWithExport]
         )
@@ -153,18 +153,18 @@ describe('@generic — full pipeline E2E', () => {
         // A second stratum that renames the cloned def — what a real
         // monomorphizer would do per (callee, type-args) pair.
         const monoStratum = `@stratum Mono := {
-            &Compiler::register::keyword '@mono';
-            &Compiler::on::decl '@mono', {
-                @local tmpl := &Compiler::ast::capture_template node, 'pre';
-                @local clone := &Compiler::ast::clone tmpl;
-                @local renamed := &Compiler::ast::with_name clone, 'identity__Int';
-                @local concrete := &Compiler::ast::with_keyword renamed, '@fn';
-                &Compiler::module::push_definition concrete.ast;
-            };
+            Compiler::register::keyword('@mono');
+            Compiler::on::decl('@mono', {
+                @mut tmpl := Compiler::ast::capture_template(node, 'pre');
+                @mut clone := Compiler::ast::clone(tmpl);
+                @mut renamed := Compiler::ast::with_name(clone, 'identity__Int');
+                @mut concrete := Compiler::ast::with_keyword(renamed, '@fn');
+                Compiler::module::push_definition(concrete::ast);
+            });
         };`
 
         const wat = compileToWat(
-            `@mono identity x:Int := x;`,
+            `@mono identity x Int := x;`,
             [monoStratum]
         )
 

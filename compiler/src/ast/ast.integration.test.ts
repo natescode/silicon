@@ -101,7 +101,7 @@ test("parse and toAst converts assignment to Assignment node", () => {
 });
 
 test("parse and toAst converts function call to FunctionCall node", () => {
-    const cst = parse("&add 1, 2;");
+    const cst = parse("add(1, 2);");
     const ast = semantics(cst).toAst();
     expect(ast.elements[0].type).toBe("FunctionCall");
 });

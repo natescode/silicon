@@ -18,24 +18,18 @@
 # from the call site.  Multi-arg type annotations like `:Result[T, E]` in
 # parameter position were unblocked by the Phase 5 grammar revision.
 \\ result_unwrap_or[T, E] (Result[T, E], T)
-@fn result_unwrap_or r, dflt := {
-    &@match r,
-        $Ok v   => v,
-        $Err _e => dflt
+@fn result_unwrap_or[T, E] r, dflt := {
+    @match(r, $Ok v => v, $Err _e => dflt)
 };
 
 # True if the result is an Ok.
 \\ result_is_ok[T, E] (Result[T, E])
-@fn result_is_ok r := {
-    &@match r,
-        $Ok _v  => @true,
-        $Err _e => @false
+@fn result_is_ok[T, E] r := {
+    @match(r, $Ok _v => @true, $Err _e => @false)
 };
 
 # True if the result is an Err.
 \\ result_is_err[T, E] (Result[T, E])
-@fn result_is_err r := {
-    &@match r,
-        $Ok _v  => @false,
-        $Err _e => @true
+@fn result_is_err[T, E] r := {
+    @match(r, $Ok _v => @false, $Err _e => @true)
 };

@@ -56,9 +56,8 @@ describe('Phase 9d-7: WasmGC type-section registration for sums', () => {
         // pad-to-max test lives in the dedicated constructor case below.
         const r = compile(`
             @type Pair := $Pair v Int;
-            \\\\ make_pair () -> Pair
-            @fn make_pair  := &Pair 7;
-        `, 'wasm-gc')
+            \\\\ make_pair Pair
+            @fn make_pair := Pair(7);`, 'wasm-gc')
         expect(r.errors).toEqual([])
         expect(r.module).toBeDefined()
         const gc = r.module!.wasmGcTypes ?? []
@@ -77,10 +76,9 @@ describe('Phase 9d-7: WasmGC type-section registration for sums', () => {
 
     test('payload-free sum (@enum-style) registers a one-field struct', () => {
         const r = compile(`
-            @type_sum Color := Red | Green | Blue;
-            \\\\ make_red () -> Color
-            @fn make_red  := Color::Red;
-        `, 'wasm-gc')
+            @enum Color := Red | Green | Blue;
+            \\\\ make_red Color
+            @fn make_red := Color::Red;`, 'wasm-gc')
         // Payload-free sums use the legacy @type_sum path which doesn't
         // hit the record expander — they're emitted as i32 globals.  No
         // WasmGcType entry is registered.  This is the right behavior:
@@ -96,12 +94,11 @@ describe('Phase 9d-7: WasmGC type-section registration for sums', () => {
         // identical.  Under nominal intern they must remain distinct.
         const r = compile(`
             @type Option_Int := $Some_I v Int | $None_I;
-            @type Pair_Int   := $Pair_I a Int;
-            \\\\ s () -> Option_Int
-            @fn s  := &Some_I 1;
-            \\\\ p () -> Pair_Int
-            @fn p  := &Pair_I 2;
-        `, 'wasm-gc')
+            @type Pair_Int := $Pair_I a Int;
+            \\\\ s Option_Int
+            @fn s := Some_I(1);
+            \\\\ p Pair_Int
+            @fn p := Pair_I(2);`, 'wasm-gc')
         expect(r.errors).toEqual([])
         const gc = r.module!.wasmGcTypes ?? []
         const opt  = gc.find(t => t.name === '$Option_Int')
@@ -114,9 +111,8 @@ describe('Phase 9d-7: WasmGC type-section registration for sums', () => {
     test('wasm-mvp emits no WasmGC type entries (regression)', () => {
         const r = compile(`
             @type Shape := $Circle r Int | $Rectangle w Int, h Int;
-            \\\\ make_circle () -> Shape
-            @fn make_circle  := &Circle 7;
-        `, 'host')
+            \\\\ make_circle Shape
+            @fn make_circle := Circle(7);`, 'host')
         expect(r.errors).toEqual([])
         // mvp: wasmGcTypes stays undefined (the snapshot path is skipped
         // when registry size is 0).
@@ -131,9 +127,8 @@ describe('Phase 9d-7: constructor uses struct.new under wasm-gc', () => {
     test('payload-bearing constructor emits (struct.new $Opt (tag) field0 …)', () => {
         const r = compile(`
             @type Opt := $Some v Int | $None;
-            \\\\ make_some () -> Opt
-            @fn make_some  := &Some 7;
-        `, 'wasm-gc')
+            \\\\ make_some Opt
+            @fn make_some := Some(7);`, 'wasm-gc')
         expect(r.errors).toEqual([])
         // Some is the first variant (tag=0), with one payload field.
         expect(r.wat).toContain('(struct.new $Opt')
@@ -146,9 +141,8 @@ describe('Phase 9d-7: constructor uses struct.new under wasm-gc', () => {
     test('mvp constructor still uses alloc+i32.store (no regression)', () => {
         const r = compile(`
             @type Opt := $Some v Int | $None;
-            \\\\ make_some () -> Opt
-            @fn make_some  := &Some 7;
-        `, 'host')
+            \\\\ make_some Opt
+            @fn make_some := Some(7);`, 'host')
         expect(r.errors).toEqual([])
         const ctor = extractUserFn(r.wat!, 'Some')
         expect(ctor).toContain('call $alloc')
@@ -161,9 +155,8 @@ describe('Phase 9d-7: constructor uses struct.new under wasm-gc', () => {
         // $None constructor must pass `tag=1, 0` (one zero-fill slot).
         const r = compile(`
             @type Opt := $Some v Int | $None;
-            \\\\ make_none () -> Opt
-            @fn make_none  := &None;
-        `, 'wasm-gc')
+            \\\\ make_none Opt
+            @fn make_none := None();`, 'wasm-gc')
         expect(r.errors).toEqual([])
         const ctor = extractUserFn(r.wat!, 'None')
         const structNewIdx = ctor.indexOf('struct.new $Opt')
@@ -187,10 +180,7 @@ describe('Phase 9d-7: @match under wasm-gc uses struct.get', () => {
         const r = compile(`
             @type Opt := $Some v Int | $None;
             \\\\ unwrap (Opt)
-            @fn unwrap o := &@match o,
-                $Some v => v,
-                $None => 0;
-        `, 'wasm-gc')
+            @fn unwrap o := @match(o, $Some v => v, $None => 0);`, 'wasm-gc')
         expect(r.errors).toEqual([])
         const unwrap = extractUserFn(r.wat!, 'unwrap')
         // Tag dispatch via struct.get $Opt 0.
@@ -203,10 +193,7 @@ describe('Phase 9d-7: @match under wasm-gc uses struct.get', () => {
         const r = compile(`
             @type Opt := $Some v Int | $None;
             \\\\ unwrap (Opt)
-            @fn unwrap o := &@match o,
-                $Some v => v,
-                $None => 0;
-        `, 'wasm-gc')
+            @fn unwrap o := @match(o, $Some v => v, $None => 0);`, 'wasm-gc')
         const unwrap = extractUserFn(r.wat!, 'unwrap')
         // v is field 0 of $Some → struct.get at index 1 (tag is 0).
         expect(unwrap).toContain('(struct.get $Opt 1')
@@ -216,10 +203,7 @@ describe('Phase 9d-7: @match under wasm-gc uses struct.get', () => {
         const r = compile(`
             @type Opt := $Some v Int | $None;
             \\\\ unwrap (Opt)
-            @fn unwrap o := &@match o,
-                $Some v => v,
-                $None => 0;
-        `, 'host')
+            @fn unwrap o := @match(o, $Some v => v, $None => 0);`, 'host')
         expect(r.errors).toEqual([])
         const unwrap = extractUserFn(r.wat!, 'unwrap')
         expect(unwrap).toContain('i32.load')
@@ -235,14 +219,11 @@ describe('Phase 9d-7: same source compiles cleanly under BOTH targets', () => {
         const src = `
             @type Opt := $Some v Int | $None;
             \\\\ unwrap (Opt)
-            @fn unwrap o := &@match o,
-                $Some v => v,
-                $None => 0;
-            \\\\ test_some () -> Int
-            @fn test_some  := &unwrap (&Some 42);
-            \\\\ test_none () -> Int
-            @fn test_none  := &unwrap (&None);
-        `
+            @fn unwrap o := @match(o, $Some v => v, $None => 0);
+            \\\\ test_some Int
+            @fn test_some := unwrap(Some(42));
+            \\\\ test_none Int
+            @fn test_none := unwrap(None());`
         const rMvp = compile(src, 'host')
         const rGc  = compile(src, 'wasm-gc')
         expect(rMvp.errors).toEqual([])
@@ -276,9 +257,8 @@ describe('Phase 9d-7: emitted modules validate under WebAssembly.compile', () =>
     test('sum + user function returning the sum validates', async () => {
         const r = compile(`
             @type Opt := $Some v Int | $None;
-            \\\\ make_some () -> Opt
-            @fn make_some  := &Some 42;
-        `, 'wasm-gc')
+            \\\\ make_some Opt
+            @fn make_some := Some(42);`, 'wasm-gc')
         expect(r.errors).toEqual([])
         const mod = await WebAssembly.compile(r.binary!)
         expect(mod).toBeDefined()
@@ -288,10 +268,9 @@ describe('Phase 9d-7: emitted modules validate under WebAssembly.compile', () =>
         const r = compile(`
             @type Opt := $Some v Int | $None;
             \\\\ unwrap (Opt)
-            @fn unwrap o := &@match o, $Some v => v, $None => 0;
-            \\\\ test () -> Int
-            @fn test  := &unwrap (&Some 42);
-        `, 'wasm-gc')
+            @fn unwrap o := @match(o, $Some v => v, $None => 0);
+            \\\\ test Int
+            @fn test := unwrap(Some(42));`, 'wasm-gc')
         expect(r.errors).toEqual([])
         const mod = await WebAssembly.compile(r.binary!)
         expect(mod).toBeDefined()
@@ -301,10 +280,9 @@ describe('Phase 9d-7: emitted modules validate under WebAssembly.compile', () =>
         const r = compile(`
             @type Opt := $Some v Int | $None;
             \\\\ unwrap (Opt)
-            @fn unwrap o := &@match o, $Some v => v, $None => 0;
-            \\\\ test () -> Int
-            @fn test  := &unwrap (&Some 42);
-        `, 'host')
+            @fn unwrap o := @match(o, $Some v => v, $None => 0);
+            \\\\ test Int
+            @fn test := unwrap(Some(42));`, 'host')
         expect(r.errors).toEqual([])
         const mod = await WebAssembly.compile(r.binary!)
         expect(mod).toBeDefined()

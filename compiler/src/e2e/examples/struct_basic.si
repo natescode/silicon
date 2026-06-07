@@ -1,6 +1,6 @@
-@struct Point x Int, y Int;
+@type Point := { x Int, y Int };
 
-@fn main  := {
-    @local p := &Point 3, 7;
-    p.x
+@fn main := {
+    p := Point(3, 7);
+    p::x
 };

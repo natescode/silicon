@@ -14,18 +14,18 @@
 # Returns the number of letters printed.
 \\ print_letters (String) -> Int
 @fn print_letters word := {
-    @local len := &str_byte_len word;
-    @local i := 0;
-    &@loop i < len, {
-        &print (&str_slice word, i, (i + 1));
+    len := str_byte_len(word);
+    @mut i := 0;
+    @loop(i < len, {
+        print(str_slice(word, i, i + 1));
         i = i + 1;
-    };
+    });
     len
 };
 
 @fn main := {
-    @local n := &print_letters 'Silicon';
-    &print ('letters: ' ++ (&int_to_str n));
+    n := print_letters('Silicon');
+    print('letters: ' ++ int_to_str(n));
     0
 };
-&main;
+main();

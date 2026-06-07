@@ -1,11 +1,11 @@
-# @struct — Product Types in Silicon
+# `@type` — Product Types in Silicon
 
-Silicon's `@struct` keyword declares a product type (record) with named fields.
+Silicon's `@type Name := { ... }` form declares a product type (record) with named fields.
 
 ## Syntax
 
 ```silicon
-@struct Point x Int, y Int;
+@type Point := { x Int, y Int };
 ```
 
 Fields are declared as the definition's param list — the same positional syntax as `@fn` params, so no new grammar is needed.
@@ -19,7 +19,7 @@ Fields are declared as the definition's param list — the same positional synta
 
 ## Constructor
 
-`@struct Point x Int, y Int;` generates:
+`@type Point := { x Int, y Int };` generates:
 
 ```wat
 (func $Point (param $x i32) (param $y i32) (result i32)
@@ -34,7 +34,7 @@ Fields are declared as the definition's param list — the same positional synta
 ## Field Access
 
 ```silicon
-@local p := &Point 3, 7;
+p := Point(3, 7);
 p.x   ;; reads field x
 p.y   ;; reads field y
 ```
@@ -57,15 +57,15 @@ Lowers to `(i32.store (local.get $p) (i32.const 10))`.
 Struct locals must carry the struct type name in their annotation:
 
 ```silicon
-@local p := &Point 3, 7;   ;; field access resolves via inferred struct type
+p := Point(3, 7);   ;; field access resolves via inferred struct type
 ```
 
 The type system tracks which locals hold which struct type via `structLocals` (in lower.ts) and `ctx.structFields` (in the typechecker). Without the annotation, field access is not resolvable.
 
 ## Type Checking
 
-The typechecker registers each `@struct` as a `DistinctOf(name, TypeInt)` type alias. This means:
-- `@local p := &Point 3, 7` is accepted without an `[UnknownType]` error.
+The typechecker registers each `@type` struct definition as a `DistinctOf(name, TypeInt)` type alias. This means:
+- `p := Point(3, 7)` is accepted without an `[UnknownType]` error.
 - `p.x` is resolved by looking up `p`'s type, extracting the struct name, and finding the field's Silicon type in `ctx.structFields`.
 - The constructor function signature (`Point : (Int, Int) → Point`) is registered for call-site checking.
 
@@ -73,7 +73,7 @@ The typechecker registers each `@struct` as a `DistinctOf(name, TypeInt)` type a
 
 | Layer | File | What it does |
 |---|---|---|
-| Stratum registration | `src/strata/struct.si` | Registers `@struct` keyword and `on_lower` hook |
+| Stratum registration | `src/strata/struct.si` | Registers `@type` struct form and `on_lower` hook |
 | Struct expander | `src/strata/defExpanders.ts` | `structExpander`: builds constructor `IRFunction`, registers `StructLayout` |
 | Layout registry | `src/elaborator/registry.ts` | `StructLayout` / `StructFieldLayout` types; `structTypes` map on `ElaboratorRegistry` |
 | Compiler API | `src/compiler-api/index.ts` | Exposes `ctx.structTypes` to the comptime engine |

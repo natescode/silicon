@@ -6,32 +6,31 @@
 
 @use 'greeting.si';
 
-\\ main () -> Void
 @fn main := {
     # A JS string built from a Silicon String literal (the String↔JSString bridge).
     \\ name JSString
-    @local name := &JSString::fromString 'Silicon';
+    name := JSString::fromString('Silicon');
 
     # Compose with the helpers from greeting.si — all host-native JS strings.
     \\ hi JSString
-    @local hi := &greet name;
-    &console::log hi;                       # Hello, Silicon!
+    hi := greet(name);
+    console::log(hi);  # Hello, Silicon!
 
     \\ loud JSString
-    @local loud := &shout (&greet (&JSString::fromString 'world'));
-    &console::log loud;                     # Hello, world!!!!
+    loud := shout(greet(JSString::fromString('world')));
+    console::log(loud);  # Hello, world!!!!
 
     # Builtins return numbers too: length is UTF-16 code units.
     \\ len Int
-    @local len := &JSString::length hi;
-    &web::console_log len;                  # 15
+    len := JSString::length(hi);
+    web::console_log(len);  # 15
 
     # substring + a code point built directly.
     \\ first5 JSString
-    @local first5 := &JSString::substring hi, 0, 5;
-    &console::log first5;                    # Hello
+    first5 := JSString::substring(hi, 0, 5);
+    console::log(first5);  # Hello
 
-    &console::log (&JSString::fromCodePoint 127881)    # 🎉
+    console::log(JSString::fromCodePoint(127881))  # 🎉
 };
 
-&main;
+main();

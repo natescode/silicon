@@ -32,7 +32,7 @@ definition whose parameters are bare identifiers:
 
 ```silicon
 \\ apply ((Int -> Int), Int) -> Int
-@fn apply func, x := &func x;
+@fn apply func, x := func(x);
 ```
 
 - `\\ name <type>` is a signature line — name then type by **juxtaposition**, no
@@ -50,7 +50,7 @@ This is the conceptual line the whole proposal rests on:
 
 | Kind | Form | Types |
 |---|---|---|
-| **Bindings** — function params, `@global`, `@local` | bare names | inferred; signature line optional (functions only) |
+| **Bindings** — function params, bare globals, `@mut` | bare names | inferred; signature line optional (functions only) |
 | **Declarations** — struct fields, sum-type variant payloads | `name Type` (juxtaposed) | mandatory — the pair *is* the definition |
 
 The type-carrying `name Type` pair is **not** removed globally. It is removed
@@ -63,7 +63,7 @@ type annotation literally defines a data shape, because there is no separate
 ## 2. The function-type syntax
 
 Signature types use an **arrow** with a parenthesized, tuple-style domain that
-matches Silicon's multi-argument call form (`&f a, b`). There is **no
+matches Silicon's multi-argument call form (`f(a, b)`). There is **no
 currying / partial application** — consistent with the current "function
 pointers, not closures" stance.
 
@@ -136,7 +136,7 @@ Generics ride the signature:
     diagnostic: "function params are bare; put the type on a `\\` signature line."
     This is a one-canonical-form choice, *not* a parsing limitation — the
     parenthesized-domain arrow type would parse inline fine.
-  - **`@struct` / `@type` variant** → every entry must be **typed** (`name Type`).
+  - **`@type` struct / variant** → every entry must be **typed** (`name Type`).
     The field declaration has no separable body, so the type is inline (§1, §5).
 
 ### Added
@@ -160,14 +160,12 @@ TypeAtom =
 
 # One shared param/field list; the def-kind constrains each entry (above):
 #   @fn                      → every ParamLiteral BARE  (TypeExpr absent)
-#   @struct / @type variant  → every ParamLiteral TYPED (TypeExpr present)
+#   @type struct / variant   → every ParamLiteral TYPED (TypeExpr present)
 Params       = ListOf<ParamLiteral, ",">     -- no surrounding parens
 ParamLiteral = identifier TypeExpr?          -- juxtaposition; type optional in grammar
 
-# Expression-level ascription is a keyword form (NOT juxtaposition, which is
-# ambiguous after an expression; NOT ":", which is now free). Type comes first
-# so the parser is unambiguously in type position right after the keyword.
-AscribeExpr = "&@as" TypeExpr "," ExpressionStart   # e.g. &@as Option[Int], (&None)
+# Expression-level ascription: use a \\ name Type signature line above the
+# binding (@mut name := expr;). The &@as keyword form was removed in ADR-0020.
 ```
 
 Juxtaposition is LL(1) in declaration position: after a field name, one-token
@@ -224,7 +222,7 @@ Struct fields and sum-type variant payloads keep a `name Type` pair
 (juxtaposed, no `:`), because the annotation *is* the data definition:
 
 ```silicon
-@struct Rect w Int, h Int;
+@type Rect := { w Int, h Int };
 @type Shape := $Circle r Int | $Rectangle w Int, h Int;
 ```
 
@@ -232,8 +230,8 @@ Struct fields and sum-type variant payloads keep a `name Type` pair
 because it once again sits inside a comma-separated list:
 
 ```silicon
-@struct Widget onClick (Int, Int) -> Void, label String;
-#                      └── parens REQUIRED so this comma can't read as a field separator
+@type Widget := { onClick (Int, Int) -> Void, label String };
+#                         └── parens REQUIRED so this comma can't read as a field separator
 ```
 
 So inline function types (in fields / payloads) must use the **parenthesized
@@ -266,7 +264,7 @@ redundancy doubles as a copy-paste check.
 
 ```silicon
 \\ apply ((Int -> Int), Int) -> Int
-@fn apply func, x := &func x;
+@fn apply func, x := func(x);
 ```
 
 ### Extern — `@extern { … }`
@@ -332,7 +330,7 @@ type-annotation-separator decision, §9).
 
 **Parameters are bare-only.** A definition's params are a comma-list of bare
 identifiers — `@fn apply func, x := …` — with no surrounding parens. This
-matches the paren-free call form (`&f a, b`) and preserves the pure-delimiter
+mirrors the parenthesized call form (`f(a, b)`) and preserves the pure-delimiter
 `(` invariant from §2 (optional param parens would resurrect `()` as an empty
 parameter list). It is also the reversible choice: optional parens could be
 added later without breaking code; removing them after use could not.
@@ -343,12 +341,12 @@ added later without breaking code; removing them after use could not.
 
 A separate discussion proposes making `@fn params := body` an anonymous
 function *expression* (lambda), with `@fn name …` as sugar for
-`@global name := @fn …`. These compose cleanly:
+`name := @fn …`. These compose cleanly:
 
 - Signature lines serve **named** functions (the common case — and where the
   collision lived).
 - **Anonymous** `@fn` lambdas lean on inference; the rare case that needs an
-  explicit type uses an arrow type in an ascription `(expr : Int -> Bool)`.
+  explicit type uses a `\\ name Int -> Bool` signature line above the binding.
 - The arrow type from §2 is exactly the inline form lambdas would annotate
   with — but it no longer has to coexist with a parameter list, so it stays
   clean.
@@ -401,8 +399,7 @@ Resolved:
   type-annotation marker, replaced by:
   1. **signatures** → juxtaposition `\\ name type`,
   2. **struct / variant fields** → juxtaposition `name Type`, and
-  3. **ascription** → keyword `&@as Type, expr` (§3; juxtaposition is ambiguous
-     in expression position, and `:` is now free).
+  3. **ascription** → `\\ name Type` signature line above a `@mut name := expr;` binding (§3; `&@as` keyword form was removed; juxtaposition is ambiguous in expression position, and `:` is now free).
   `:` is reserved for a future **expression-land** use (object/map literals,
   labelled args — see the literals note below); it cannot collide with
   juxtaposed types, which live only in declaration/signature position.

@@ -9,8 +9,8 @@ syscalls that return more than a single i32.
 `@extern` declares a single result type:
 
 ```silicon
-@extern { \\ wasi_proc_exit (Int) -> Void }   # void return
-@extern { \\ get_arg_count () -> Int }        # single i32 return
+\\ @extern wasi_proc_exit (Int) -> Void    # void return
+\\ @extern get_arg_count () -> Int         # single i32 return
 ```
 
 But WASI syscalls like `path_open` return an *errno* and write their actual
@@ -38,9 +38,9 @@ arguments, so the out-parameter rides the input arg list.
 
 1. **Declare the extern with an extra `Int` arg per out-pointer.**  Document
    in a comment which arg is the out-pointer.
-2. **Allocate scratch space with `&scratch_alloc n`.**  The helper is
+2. **Allocate scratch space with `scratch_alloc(n)`.**  The helper is
    exported by `std.wat` and returns a writable i32 address.
-3. **Read the result back with `&WASM::i32_load address`**, or with a
+3. **Read the result back with `WASM::i32_load(address)`**, or with a
    per-type variant (`i32_load8_u`, `f32_load`, …).
 4. **Lifetime:** scratch addresses live until the next `arena_reset`.
    Stage 0 has no reset hook (one-shot compile); Stage 1 will reset between
@@ -49,19 +49,17 @@ arguments, so the out-parameter rides the input arg list.
 ## Example: `path_open`
 
 ```silicon
-@extern {
-  # out-pointer (last arg): host writes the new fd there
-  \\ wasi_path_open (Int, Int, Int, Int, Int, Int, Int, Int, Int) -> Int
-}
+# out-pointer (last arg): host writes the new fd there
+\\ @extern wasi_path_open (Int, Int, Int, Int, Int, Int, Int, Int, Int) -> Int;
 
 \\ openFile (Int, Int) -> Int
-@global openFile path_ptr, path_len := {
-  @local fd_out := &scratch_alloc 4;
-  &wasi_path_open
+@fn openFile path_ptr, path_len := {
+  fd_out := scratch_alloc(4);
+  wasi_path_open(
     3, 0, path_ptr, path_len,    # dirfd=3 (first preopen), flags=0
     0, 0xFFFFFFFF, 0xFFFFFFFF, 0,
-    fd_out;
-  &WASM::i32_load fd_out;        # the fd the host wrote
+    fd_out);
+  WASM::i32_load(fd_out)         # the fd the host wrote
 };
 ```
 

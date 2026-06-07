@@ -21,8 +21,8 @@ const MATH: SymbolManifest = {
     ],
 }
 
-// `add` Namespace sits at col 15 in `@global r := &add 1, 2;`
-const USES_ADD = '@global r := &add 1, 2;'
+// `add` Namespace sits at col 6 in `r := add(1, 2);`
+const USES_ADD = 'r := add(1, 2);'
 
 // ---------------------------------------------------------------------------
 // MetadataReference value type
@@ -74,7 +74,7 @@ describe('Workspace.addReference (global)', () => {
         const ws = new Workspace()
         ws.addReference(MATH)
         ws.openDocument('main.si', USES_ADD)
-        const hover = ws.hoverInfo('main.si', 1, 15)
+        const hover = ws.hoverInfo('main.si', 1, 6)
         expect(hover?.symbol.name).toBe('add')
         expect(hover?.typeDisplay.length).toBeGreaterThan(0)
     })
@@ -92,7 +92,7 @@ describe('Workspace.addReference (global)', () => {
         const ws = new Workspace()
         ws.addReference(MATH)
         ws.openDocument('main.si', USES_ADD)
-        const sym = ws.findDefinition('main.si', 1, 15)
+        const sym = ws.findDefinition('main.si', 1, 6)
         expect(sym?.name).toBe('add')
         expect(sym?.definitionSpan).toBeUndefined()
     })
@@ -108,7 +108,7 @@ describe('Workspace.addReference (global)', () => {
         const ws = new Workspace()
         ws.addReference(MATH)
         // local `add` returning a String would change r's type away from the lib's Int
-        const doc = ws.openDocument('main.si', '\\\\ add (Int) -> String\n@fn add x := { \'s\' };\n@global r := &add 1;')
+        const doc = ws.openDocument('main.si', '\\\\ add (Int) -> String\n@fn add x := {\n    \'s\'\n};\nr := add(1);')
         // resolves to the LOCAL add (1 arg), not the library's 2-arg add → no arity error
         expect(doc.diagnostics.filter(d => d.code === 'E0009')).toHaveLength(0)
     })

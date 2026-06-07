@@ -67,7 +67,7 @@ elaborate+typecheck dominate end-to-end edit latency; M3 is its substrate):
   **prefix-reuse engine**. A design-investigation workflow (5 agents probing the
   real typechecker) established that the shared fresh-type-variable counter
   (`ctx.fresh`) leaks order-dependent `?Tn` into `model.typeOf` (e.g.
-  `@global x := &None` stores `Option[?T1]`; a preceding `&None` shifts it to `?T3`),
+  `x := None()` stores `Option[?T1]`; a preceding `None()` shifts it to `?T3`),
   and unannotated forward references make a caller's inferred types depend on
   check **order** — so byte-identical incremental type-checking must
   **reuse the unchanged prefix and replay the suffix in source order**, not

@@ -36,7 +36,7 @@ describe('WorkspaceEdit (4d)', () => {
     function renamingWorkspace(): { ws: Workspace; edit: WorkspaceEdit } {
         const ws = new Workspace()
         ws.openDocument('lib.si', '\\\\ add (Int, Int)\n@fn add x, y := { x + y };')
-        ws.openDocument('main.si', '@global r := &add 1, 2;')
+        ws.openDocument('main.si', 'r := add(1, 2);')
         // rename `add` (its definition is on line 2, col 5 of lib.si)
         const edit = ws.rename('lib.si', 2, 5, 'plus')
         return { ws, edit }
@@ -60,7 +60,7 @@ describe('WorkspaceEdit (4d)', () => {
 
     test('an empty WorkspaceEdit applies to nothing', () => {
         const ws = new Workspace()
-        ws.openDocument('a.si', '@global x := 1;')
+        ws.openDocument('a.si', 'x := 1;')
         expect(new WorkspaceEdit().applyTo(ws)).toEqual([])
     })
 })
@@ -72,7 +72,7 @@ describe('WorkspaceEdit (4d)', () => {
 describe('cancellable queries (4e)', () => {
     test('an already-aborted signal makes the query throw', () => {
         const ws = new Workspace()
-        ws.openDocument('a.si', '\\\\ f (Int)\n@fn f x := { x };\n@global r := &f 1;')
+        ws.openDocument('a.si', '\\\\ f (Int)\n@fn f x := {\n    x\n};\nr := f(1);')
         const ctrl = new AbortController()
         ctrl.abort()
 
@@ -82,7 +82,7 @@ describe('cancellable queries (4e)', () => {
 
     test('a live signal does not interfere', () => {
         const ws = new Workspace()
-        ws.openDocument('a.si', '@global x := 1;')
+        ws.openDocument('a.si', 'x := 1;')
         const ctrl = new AbortController()
         expect(() => ws.getCompletions('a.si', 1, 1, undefined, { cancel: ctrl.signal })).not.toThrow()
         expect(() => ws.findReferences('a.si', 1, 1, { cancel: ctrl.signal })).not.toThrow()
