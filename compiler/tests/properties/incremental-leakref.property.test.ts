@@ -3,7 +3,7 @@
  * Incremental type-check (E2) property: the fresh-var LEAK hazard crossed with
  * reference reordering — the riskiest interaction for prefix-replay soundness.
  *
- * A bare `&None` body leaks an order-dependent `Option[?Tn]` into `model.typeOf`,
+ * A bare `None()` body leaks an order-dependent `Option[?Tn]` into `model.typeOf`,
  * where `n` is a function of how many fresh vars the *prefix* consumed.  The
  * engine replays each reused group's `freshConsumed` count, so a leaking suffix
  * element must land on the identical `?Tn` it would get from a full check.  At
@@ -58,24 +58,29 @@ function assertEquiv(label: string, inc: any, fresh: any, r: any): string | null
     return null
 }
 
-// Each let body is one of: a call chain (refs f/g/q), a bare &None (LEAK), or
-// &Some <chain> (resolves, no leak). Order of &None bodies determines ?Tn.
+// Each let body is one of: a call chain (refs f/g/q), a bare None() (LEAK), or
+// Some(<chain>) (resolves, no leak). Order of None() bodies determines ?Tn.
 type Body = { t: 'call'; calls: string[] } | { t: 'none' } | { t: 'some'; calls: string[] }
 function bodyStr(b: Body): string {
-    if (b.t === 'none') return '&None'
-    if (b.t === 'some') return `&Some ${chainStr(b.calls)}`
+    if (b.t === 'none') return 'None()'
+    if (b.t === 'some') return `Some(${chainStr(b.calls)})`
     return chainStr(b.calls)
 }
 function chainStr(calls: string[]): string {
     if (calls.length === 0) return '1'
     let s = '1'
-    for (let i = calls.length - 1; i >= 0; i--) s = i === calls.length - 1 ? `&${calls[i]} ${s}` : `&${calls[i]} (${s})`
+    for (let i = calls.length - 1; i >= 0; i--) s = `${calls[i]}(${s})`
     return s
 }
 type Elem = { kind: 'fn'; name: string } | { kind: 'let'; name: string; body: Body }
 function elemStr(e: Elem): string {
-    if (e.kind === 'fn') return `@fn ${e.name} x := { x + 1 };`
-    return `@global ${e.name} := ${bodyStr(e.body)};`
+    // Functions carry an explicit `\\` signature.  A no-signature `@fn f x := …`
+    // would infer x from its call sites — a WHOLE-PROGRAM analysis that routes
+    // the document to the full-typecheck oracle and disables the prefix replay
+    // this fuzzer exists to exercise.  (No-sig inference's own incremental
+    // consistency is covered separately, e.g. in lsp/incremental.test.ts.)
+    if (e.kind === 'fn') return `\\\\ ${e.name} (Int)\n@fn ${e.name} x := { x + 1 };`
+    return `${e.name} := ${bodyStr(e.body)};`
 }
 const progStr = (p: Elem[]) => p.map(elemStr).join('\n')
 

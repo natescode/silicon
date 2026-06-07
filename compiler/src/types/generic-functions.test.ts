@@ -61,38 +61,38 @@ function errs(src: string, ...substrings: string[]): void {
 describe('Gap 1: generic-calling-generic chain', () => {
     test('one generic fn calls another generic fn, T flows', () => {
         ok(`\\\\ id[T] (T)
-@fn id x := x;
-            \\\\ double_id[T] (T)
-            @fn double_id x := (&id x);
-            \\\\ use () -> Int
-            @fn use  := (&double_id 42);`)
+@fn id[T] x := x;
+\\\\ double_id[T] (T)
+@fn double_id[T] x := id(x);
+\\\\ use Int
+@fn use := double_id(42);`)
     })
 
     test('three-deep chain', () => {
         ok(`\\\\ id[T] (T)
-@fn id x := x;
-            \\\\ wrap[T] (T)
-            @fn wrap x := (&id x);
-            \\\\ ww[T] (T)
-            @fn ww x := (&wrap x);
-            \\\\ use () -> Int
-            @fn use  := (&ww 42);`)
+@fn id[T] x := x;
+\\\\ wrap[T] (T)
+@fn wrap[T] x := id(x);
+\\\\ ww[T] (T)
+@fn ww[T] x := wrap(x);
+\\\\ use Int
+@fn use := ww(42);`)
     })
 })
 
 describe('Gap 2: same T constraint across params', () => {
     test('@fn pair[T] a:T, b:T := a; — both args must share T', () => {
         ok(`\\\\ pair[T] (T, T)
-@fn pair a, b := a;
-            \\\\ use () -> Int
-            @fn use  := (&pair 1, 2);`)
+@fn pair[T] a, b := a;
+\\\\ use Int
+@fn use := pair(1, 2);`)
     })
 
     test('passing Int and Float for the same T should fail', () => {
         errs(`\\\\ pair[T] (T, T)
-@fn pair a, b := a;
-              \\\\ bad () -> Int
-              @fn bad  := (&pair 1, 1.5);`,
+@fn pair[T] a, b := a;
+\\\\ bad Int
+@fn bad := pair(1, 1.5);`,
             'pair')
     })
 })
@@ -100,11 +100,11 @@ describe('Gap 2: same T constraint across params', () => {
 describe('Gap 3: end-to-end compile (typecheck → lower → emit)', () => {
     test('@fn id[T] x:T := x lowers and emits WAT with the right monotypes per call', () => {
         const { wat, errors } = compileToWat(`\\\\ id[T] (T)
-@fn id x := x;
-            \\\\ use_i () -> Int
-            @fn use_i  := (&id 42);
-            \\\\ use_f () -> Float
-            @fn use_f  := (&id 3.14);`)
+@fn id[T] x := x;
+\\\\ use_i Int
+@fn use_i := id(42);
+\\\\ use_f Float
+@fn use_f := id(3.14);`)
         expect(errors).toEqual([])
         // We expect $id to appear at least once and the two calls to compile.
         expect(wat).toContain('$use_i')
@@ -117,16 +117,15 @@ describe('Gap 3: end-to-end compile (typecheck → lower → emit)', () => {
         const { wat, errors } = compileToWat(`
             @type Option[T] := $Some value T | $None;
             \\\\ unwrap_or[T] (Option[T], T)
-            @fn unwrap_or opt, dflt := {
-                &@match opt, $Some v => v, $None => dflt
+            @fn unwrap_or[T] opt, dflt := {
+                @match(opt, $Some v => v, $None => dflt)
             };
-            \\\\ pick () -> Int
-            @fn pick  := (&unwrap_or (&Some 42), 0);
-            \\\\ miss () -> Int
-            @fn miss  := (&unwrap_or (&None), 7);
+            \\\\ pick Int
+            @fn pick := unwrap_or(Some(42), 0);
+            \\\\ miss Int
+            @fn miss := unwrap_or(None(), 7);
             @export pick;
-            @export miss;
-        `)
+            @export miss;`)
         expect(errors).toEqual([])
         const wasm = await watToWasm(wat)
         const imports = {
@@ -143,32 +142,32 @@ describe('Gap 3: end-to-end compile (typecheck → lower → emit)', () => {
 describe('Gap 4: nested generic types', () => {
     test('Option[Option[Int]] — generic over a generic type', () => {
         ok(`@type Option[T] := $Some value T | $None;
-            \\\\ nested () -> Option[Option[Int]]
-            @fn nested  := (&Some (&Some 42));`)
+            \\\\ nested Option[Option[Int]]
+            @fn nested := Some(Some(42));`)
     })
 
     test('4a: nested with concrete dflt (no &None) — should work', () => {
-        // Dflt is &Some 0 which has type Option[Int]; T is unambiguously Option[Int].
+        // Dflt is Some(0) which has type Option[Int]; T is unambiguously Option[Int].
         ok(`@type Option[T] := $Some value T | $None;
             \\\\ unwrap_or[T] (Option[T], T)
-            @fn unwrap_or opt, dflt := {
-                &@match opt, $Some v => v, $None => dflt
+            @fn unwrap_or[T] opt, dflt := {
+                @match(opt, $Some v => v, $None => dflt)
             };
-            \\\\ nested () -> Option[Int]
-            @fn nested  := {
-                &unwrap_or (&Some (&Some 42)), (&Some 0)
+            \\\\ nested Option[Int]
+            @fn nested := {
+                unwrap_or(Some(Some(42)), Some(0))
             };`)
     })
 
-    test('4b: nested with &None dflt — the failing case', () => {
+    test('4b: nested with None() dflt — the failing case', () => {
         ok(`@type Option[T] := $Some value T | $None;
             \\\\ unwrap_or[T] (Option[T], T)
-            @fn unwrap_or opt, dflt := {
-                &@match opt, $Some v => v, $None => dflt
+            @fn unwrap_or[T] opt, dflt := {
+                @match(opt, $Some v => v, $None => dflt)
             };
-            \\\\ nested () -> Option[Int]
-            @fn nested  := {
-                &unwrap_or (&Some (&Some 42)), (&None)
+            \\\\ nested Option[Int]
+            @fn nested := {
+                unwrap_or(Some(Some(42)), None())
             };`)
     })
 })
@@ -176,17 +175,19 @@ describe('Gap 4: nested generic types', () => {
 describe('Gap 5: generic used inside non-generic context', () => {
     test('non-generic fn calls generic fn with concrete arg', () => {
         ok(`\\\\ id[T] (T)
-@fn id x := x;
-            \\\\ use_in_arith () -> Int
-            @fn use_in_arith  := { (&id 5) + 3 };`)
+@fn id[T] x := x;
+\\\\ use_in_arith Int
+@fn use_in_arith := {
+    id(5) + 3
+};`)
     })
 
     test('generic constructor used in non-generic position', () => {
         ok(`@type Option[T] := $Some value T | $None;
-            \\\\ maybe_int () -> Int
-            @fn maybe_int  := {
-                @local x := (&Some 7);
-                &@match x, $Some v => v, $None => 0
+            \\\\ maybe_int Int
+            @fn maybe_int := {
+                @mut x := Some(7);
+                @match(x, $Some v => v, $None => 0)
             };`)
     })
 })
@@ -195,56 +196,56 @@ describe('Gap 6: generic fn body contains generic call to another fn', () => {
     test('higher: unwrap with explicit inner call', () => {
         ok(`@type Option[T] := $Some value T | $None;
             \\\\ unwrap_or[T] (Option[T], T)
-            @fn unwrap_or opt, dflt := {
-                &@match opt, $Some v => v, $None => dflt
+            @fn unwrap_or[T] opt, dflt := {
+                @match(opt, $Some v => v, $None => dflt)
             };
             # second generic fn that itself calls unwrap_or with its own T
             \\\\ unwrap_double[T] (Option[T], T)
-            @fn unwrap_double opt, dflt := {
-                &unwrap_or opt, dflt
+            @fn unwrap_double[T] opt, dflt := {
+                unwrap_or(opt, dflt)
             };
-            \\\\ use () -> Int
-            @fn use  := (&unwrap_double (&Some 99), 0);`)
+            \\\\ use Int
+            @fn use := unwrap_double(Some(99), 0);`)
     })
 })
 
 describe('stdlib helpers: option_is_some / option_is_none / result_is_err', () => {
     const OPTION = `@type Option[T] := $Some value T | $None;
         \\\\ option_is_some[T] (Option[T])
-        @fn option_is_some opt := {
-            &@match opt, $Some _v => @true, $None => @false
+        @fn option_is_some[T] opt := {
+            @match(opt, $Some _v => @true, $None => @false)
         };
         \\\\ option_is_none[T] (Option[T])
-        @fn option_is_none opt := {
-            &@match opt, $Some _v => @false, $None => @true
+        @fn option_is_none[T] opt := {
+            @match(opt, $Some _v => @false, $None => @true)
         };`
     const RESULT = `@type Result[T, E] := $Ok value T | $Err error E;
         \\\\ result_is_err[T, E] (Result[T, E])
-        @fn result_is_err r := {
-            &@match r, $Ok _v => @false, $Err _e => @true
+        @fn result_is_err[T, E] r := {
+            @match(r, $Ok _v => @false, $Err _e => @true)
         };`
 
     test('option_is_some/some Int → true', () => {
         ok(`${OPTION}
-            @fn check := (&option_is_some (&Some 7));`)
+            @fn check := option_is_some(Some(7));`)
     })
 
     test('option_is_some/none with annotation', () => {
         ok(`${OPTION}
             @fn check := {
-                @local x := (&None);
-                &option_is_some x
+                @mut x := None();
+                option_is_some(x)
             };`)
     })
 
     test('option_is_none over Float', () => {
         ok(`${OPTION}
-            @fn check := (&option_is_none (&Some 1.5));`)
+            @fn check := option_is_none(Some(1.5));`)
     })
 
     test('result_is_err on Ok and Err of distinct types', () => {
         ok(`${RESULT}
-            @fn a := (&result_is_err (&Ok 42));
-            @fn b := (&result_is_err (&Err 'oops'));`)
+            @fn a := result_is_err(Ok(42));
+            @fn b := result_is_err(Err('oops'));`)
     })
 })

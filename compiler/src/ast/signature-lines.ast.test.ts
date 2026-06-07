@@ -49,13 +49,13 @@ describe('signature-lines toAst — signature distributes onto params + return',
     })
 
     test('struct fields keep juxtaposed types', () => {
-        const [s] = defs('@struct Rect w Int, h Int;')
+        const [s] = defs('@type Rect := { w Int, h Int };')
         expect(s.keyword).toBe('@struct')
         expect(s.params.map((p: any) => [p.name, p.typeAnnotation?.typename])).toEqual([['w', 'Int'], ['h', 'Int']])
     })
 
-    test('@extern block expands to one extern definition per signature', () => {
-        const ds = defs(L('@extern {', `  ${BS} InitWindow (Int, Int, String) -> Void`, `  ${BS} IsKeyDown Int -> Bool`, '}'))
+    test('`\\ @extern` lines each produce one extern definition', () => {
+        const ds = defs(L(`${BS} @extern InitWindow (Int, Int, String) -> Void;`, `${BS} @extern IsKeyDown (Int) -> Bool;`))
         expect(ds.length).toBe(2)
         expect(ds[0].keyword).toBe('@extern')
         expect(ds[0].name.name).toBe('InitWindow')

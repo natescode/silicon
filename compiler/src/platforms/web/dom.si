@@ -1,4 +1,4 @@
 # SPDX-License-Identifier: MIT
 # web platform — dom feature: write to a target HTML element.
-@extern { \\ set_html (String) -> Void }
-@extern { \\ clear_html () -> Void }
+\\ @extern set_html (String) -> Void;
+\\ @extern clear_html () -> Void;

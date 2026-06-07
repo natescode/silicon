@@ -1,8 +1,24 @@
 # ADR 0001 — `@generic` monomorphization: ship in 1.0 or defer to 1.1?
 
-- **Status:** Accepted *(revised: original recommendation reversed after investigation showed @fn[T] already ships)*
+- **Status:** Accepted *(revised: original recommendation reversed after investigation showed @fn[T] already ships)* · extended 2026-06-02 with the generics-**strategy** addendum below
 - **Date:** 2026-05-26 · revised after audit + bug fix
-- **Related:** `docs/archive/v1-bootstrap-requirements.html` §2a · `docs/strata-authoring-guide.md` · `docs/hm-lite.md` · `src/types/hm-lite.test.ts` · `src/types/generic-functions.test.ts` · `src/types/typechecker.ts:checkPolymorphicCall`
+- **Related:** `docs/archive/v1-bootstrap-requirements.html` §2a · `docs/strata-authoring-guide.md` · `docs/hm-lite.md` · `src/types/hm-lite.test.ts` · `src/types/generic-functions.test.ts` · `src/types/typechecker.ts:checkPolymorphicCall` · ADR 0012 (optimizer consumes cap/effect signatures) · ADR 0013 (module-granular compilation) · [[silicon-generics-strategy]] memory
+
+> **Update (2026-06-02) — generics *strategy* decided.** This ADR's original question was *which generics feature ships when* (`@fn[T]` ships; the user-authored `@generic` stratum demo defers to G-1). A later design discussion settled the *strategy* underneath — the constraint mechanism, the implementation, and the module-boundary model. **The original decision below stands unchanged; the addendum is additive and does not contradict it.**
+
+## Generics strategy (2026-06-02 addendum)
+
+Two **orthogonal** axes — do not conflate "traits" with "dictionaries": the *constraint mechanism* (how you say "`T` must support compare/hash/print") and the *implementation* (how a generic is compiled).
+
+- **Constraint mechanism: comptime-checked structural constraints (Zig-style).** A generic body uses `T`'s operations directly; a missing operation is a comptime error at instantiation. **No nominal traits/typeclasses** in the language. Traits are **deferred** — addable later as a layer on top (Rust = traits-on-monomorphization), only if real use proves the complexity worth it. The rationale is the asymmetry: traits can be *added* later; a typeclass system cannot be cheaply *removed*.
+- **Implementation: monomorphization via comptime.** Generics lower as comptime functions over types, reusing the Stratum/comptime substrate — exactly the shape of the deferred `@generic` stratum demo (**G-1**). That demo is therefore **recontextualized**: it is not merely a Strata-2.0 expressivity proof, it is the **reference prototype of the chosen generics implementation**. `@fn[T]` remains the surface; comptime monomorphization is the lowering.
+- **Module-boundary handling.** Monomorphization is a cost issue *only* when generics cross a module boundary **and** you want sealed, fully-precompiled module artifacts; *within* a module it is just code-size + codegen time (bounded — the Zig/Odin/Jai reality). **Exported generics ship as bodies/IR** and instantiate per-consumer with build-cache dedup (Zig/Rust model) — compatible with the **module-granular Go/Jai compilation model** (ADR 0013), forgoing only Go's sealed-generic-artifact. A bundled stdlib therefore ships its generics as source/IR, not as sealed binary.
+
+**Why:** keeps Silicon flexible, fast to build (no trait resolution + coherence/orphan rules — the slow part of Rust), and simpler to implement. Consistent with Silicon's identity — a metaprogramming-centric systems language whose expressiveness comes from comptime + capabilities/effects, not the type lattice.
+
+**Tradeoffs accepted:** instantiation-site (not definition-site) generic errors; no first-class dynamic-dispatch idiom (hand-rolled vtables or an `any`/typeid escape hatch); no abstraction over type constructors (HKT).
+
+**Relationship to ADR 0012 / 0013 (no contradiction).** ADR 0012 (the optimizer reads cap/effect classes off *signatures* — module summaries) and ADR 0013 (module-granular compilation; comptime cost open-world) already presuppose exactly this "ship bodies, instantiate per consumer, summarize at the boundary" model. This addendum records the strategy those ADRs assume.
 
 ## Context
 

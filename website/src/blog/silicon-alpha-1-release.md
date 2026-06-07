@@ -54,11 +54,11 @@ On top of that, I've tried to make Silicon lean on the shoulder's of giants. The
 
 ## Resources
 
-[Playground](play.si14.dev)
+[Playground](https://play.si14.dev)
 
-[Website](si14.dev)
+[Website](https://si14.dev)
 
-[Blog](blog.si14.dev)
+[Blog](https://blog.si14.dev)
 
 [VScode extension](https://marketplace.visualstudio.com/items?itemName=natescode.silicon-vscode)
 
@@ -71,13 +71,13 @@ On top of that, I've tried to make Silicon lean on the shoulder's of giants. The
 
 I will post updates to
 
-[Silicon's official blog](blog.si14.dev)
+[Silicon's official blog](https://blog.si14.dev)
 
 [Medium](https://medium.com/@natescode)
 
 [Substack](https://substack.com/@natescode)
 
-[NatesCode blog](natescode.com)
+[NatesCode blog](https://natescode.com)
 
 [Dev.to](https://dev.to/natescode)
 

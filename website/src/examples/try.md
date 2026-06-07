@@ -14,23 +14,23 @@ title: Error handling with @try
 
 \\ add_two_parsed (Str, Str) -> Result[Int, Str]
 @fn add_two_parsed a, b := {
-    @local x := &@try (&parse_int a);   # propagates $Err
-    @local y := &@try (&parse_int b);
-    &Ok (x + y)
+    x := @try(parse_int(a));   # propagates $Err
+    y := @try(parse_int(b));
+    Ok(x + y)
 };
 ```
 
-`&@try expr` evaluates `expr`. On `$Ok v` the expression's value is `v`.
+`@try(expr)` evaluates `expr`. On `$Ok v` the expression's value is `v`.
 On `$Err e` the enclosing function returns `$Err e` immediately.
 
 `@try` is a *prefix-keyword* — Silicon bans postfix operators (see
 [ADR 0010](/stability/adrs)), so there's no Rust-style `expr?`.
 
-For default-on-error, prefer `&unwrap_or`:
+For default-on-error, prefer `unwrap_or`:
 
 ```silicon
 \\ safe_lookup (HashMap, Int) -> Int
 @fn safe_lookup map, key := {
-    &unwrap_or (&HashMap::get &map, key), 0
+    unwrap_or(HashMap::get(map, key), 0)
 };
 ```

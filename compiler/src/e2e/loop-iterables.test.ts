@@ -66,87 +66,97 @@ function elabErrors(src: string): string {
 describe('ADR 0016: range @loop', () => {
     test('arity-1 binder sums 0..n (half-open)', async () => {
         await assertParity(`
-            \\\\ run () -> Int
+            \\\\ run Int
             @fn run := {
-                @local total := 0;
-                &@loop v, 0..5, { total = total + v };
+                @mut total := 0;
+                @loop(v, 0 .. 5, {
+                    total = total + v
+                });
                 total
             };
-            @export run;
-        `, 'run', 10)   // 0+1+2+3+4
+            @export run;`, 'run', 10)   // 0+1+2+3+4
     })
 
     test('arity-2 binds position then element (diverge once a≠0)', async () => {
         await assertParity(`
-            \\\\ run () -> Int
+            \\\\ run Int
             @fn run := {
-                @local acc := 0;
-                &@loop i, v, 2..5, { acc = acc + (i * v) };
+                @mut acc := 0;
+                @loop(i, v, 2 .. 5, {
+                    acc = acc + (i * v)
+                });
                 acc
             };
-            @export run;
-        `, 'run', 11)   // i=0,1,2 ; v=2,3,4 → 0*2+1*3+2*4
+            @export run;`, 'run', 11)   // i=0,1,2 ; v=2,3,4 → 0*2+1*3+2*4
     })
 
     test('empty range a..a runs zero times', async () => {
         await assertParity(`
-            \\\\ run () -> Int
+            \\\\ run Int
             @fn run := {
-                @local r := 99;
-                &@loop v, 3..3, { r = v };
+                @mut r := 99;
+                @loop(v, 3 .. 3, {
+                    r = v
+                });
                 r
             };
-            @export run;
-        `, 'run', 99)
+            @export run;`, 'run', 99)
     })
 
     test('inverted range 5..3 runs zero times (not reversed)', async () => {
         await assertParity(`
-            \\\\ run () -> Int
+            \\\\ run Int
             @fn run := {
-                @local r := 99;
-                &@loop v, 5..3, { r = v };
+                @mut r := 99;
+                @loop(v, 5 .. 3, {
+                    r = v
+                });
                 r
             };
-            @export run;
-        `, 'run', 99)
+            @export run;`, 'run', 99)
     })
 
     test('`_` discard binder iterates without binding the element', async () => {
         await assertParity(`
-            \\\\ run () -> Int
+            \\\\ run Int
             @fn run := {
-                @local hits := 0;
-                &@loop _, 0..7, { hits = hits + 1 };
+                @mut hits := 0;
+                @loop(_, 0 .. 7, {
+                    hits = hits + 1
+                });
                 hits
             };
-            @export run;
-        `, 'run', 7)
+            @export run;`, 'run', 7)
     })
 
     test('nested ranges multiply iteration counts', async () => {
         await assertParity(`
-            \\\\ run () -> Int
+            \\\\ run Int
             @fn run := {
-                @local s := 0;
-                &@loop a, 0..3, { &@loop b, 0..4, { s = s + 1 } };
+                @mut s := 0;
+                @loop(a, 0 .. 3, {
+                    @loop(b, 0 .. 4, {
+                        s = s + 1
+                    })
+                });
                 s
             };
-            @export run;
-        `, 'run', 12)   // 3 * 4
+            @export run;`, 'run', 12)   // 3 * 4
     })
 
     test('the high bound is snapshotted once at entry', async () => {
         await assertParity(`
-            \\\\ run () -> Int
+            \\\\ run Int
             @fn run := {
-                @local hi := 3;
-                @local count := 0;
-                &@loop v, 0..hi, { hi = 99; count = count + 1 };
+                @mut hi := 3;
+                @mut count := 0;
+                @loop(v, 0 .. hi, {
+                    hi = 99;
+                    count = count + 1
+                });
                 count
             };
-            @export run;
-        `, 'run', 3)   // mutating hi mid-loop does not extend the iteration count
+            @export run;`, 'run', 3)   // mutating hi mid-loop does not extend the iteration count
     })
 })
 
@@ -155,32 +165,35 @@ describe('ADR 0016: range @loop', () => {
 // ─────────────────────────────────────────────────────────────────────────
 
 describe('ADR 0016: infinite @loop', () => {
-    test('0-operand `&@loop {body}` loops until @break', async () => {
+    test('0-operand `@loop({ body })` loops until @break', async () => {
         await assertParity(`
-            \\\\ run () -> Int
+            \\\\ run Int
             @fn run := {
-                @local c := 0;
-                &@loop {
-                    &@if c >= 4, { &@break };
+                @mut c := 0;
+                @loop({
+                    @if(c >= 4, {
+                        @break()
+                    });
                     c = c + 1
-                };
+                });
                 c
             };
-            @export run;
-        `, 'run', 4)
+            @export run;`, 'run', 4)
     })
 
-    test('one-operand `&@loop cond, {body}` while form is unchanged', async () => {
+    test('one-operand `@loop(cond, { body })` while form is unchanged', async () => {
         await assertParity(`
-            \\\\ run () -> Int
+            \\\\ run Int
             @fn run := {
-                @local sum := 0;
-                @local i := 1;
-                &@loop i <= 10, { sum = sum + i; i = i + 1 };
+                @mut sum := 0;
+                @mut i := 1;
+                @loop(i <= 10, {
+                    sum = sum + i;
+                    i = i + 1
+                });
                 sum
             };
-            @export run;
-        `, 'run', 55)
+            @export run;`, 'run', 55)
     })
 })
 
@@ -191,12 +204,12 @@ describe('ADR 0016: infinite @loop', () => {
 describe('ADR 0016: indexed Vec @loop', () => {
     const VEC_PRELUDE = `
         @use 'vec';
-        \\\\ build () -> Int
+        \\\\ build Int
         @fn build := {
-            @local v := &vec_new 4;
-            &vec_push_i32 v, 10;
-            &vec_push_i32 v, 20;
-            &vec_push_i32 v, 30;
+            @mut v := vec_new(4);
+            vec_push_i32(v, 10);
+            vec_push_i32(v, 20);
+            vec_push_i32(v, 30);
             v
         };`
 
@@ -204,9 +217,9 @@ describe('ADR 0016: indexed Vec @loop', () => {
         await assertHost(`${VEC_PRELUDE}
             \\\\ run () -> Int
             @fn run := {
-                @local v := &build;
-                @local sum := 0;
-                &@loop x, v, { sum = sum + x };
+                @mut v := build();
+                @mut sum := 0;
+                @loop(x, v, { sum = sum + x });
                 sum
             };
             @export run;
@@ -217,9 +230,9 @@ describe('ADR 0016: indexed Vec @loop', () => {
         await assertHost(`${VEC_PRELUDE}
             \\\\ run () -> Int
             @fn run := {
-                @local v := &build;
-                @local w := 0;
-                &@loop i, x, v, { w = w + (i * x) };
+                @mut v := build();
+                @mut w := 0;
+                @loop(i, x, v, { w = w + (i * x) });
                 w
             };
             @export run;
@@ -229,15 +242,16 @@ describe('ADR 0016: indexed Vec @loop', () => {
     test('iterating an empty Vec runs zero times', async () => {
         await assertHost(`
             @use 'vec';
-            \\\\ run () -> Int
+            \\\\ run Int
             @fn run := {
-                @local v := &vec_new 2;
-                @local hits := 0;
-                &@loop x, v, { hits = hits + 1 };
+                @mut v := vec_new(2);
+                @mut hits := 0;
+                @loop(x, v, {
+                    hits = hits + 1
+                });
                 hits
             };
-            @export run;
-        `, 'run', 0)
+            @export run;`, 'run', 0)
     })
 })
 
@@ -251,19 +265,28 @@ describe('ADR 0016: IterStep convention', () => {
             @use 'iter';
             \\\\ count_next (Int, Int) -> IterStep[Int, Int]
             @fn count_next i, n := {
-                &@if i < n, { &@as IterStep[Int, Int], &Item i }, { &@as IterStep[Int, Int], &Done 0 }
+                @if(i < n, {
+                    \\\\ _r IterStep[Int, Int]
+                    @mut _r := Item(i);
+                    _r
+                }, {
+                    \\\\ _r IterStep[Int, Int]
+                    @mut _r := Done(0);
+                    _r
+                })
             };
             \\\\ run () -> Int
             @fn run := {
-                @local i := 0;
-                @local total := 0;
-                @local running := 1;
-                &@loop running == 1, {
-                    @local s := &count_next i, 5;
-                    &@if (&iter_is_done s),
+                @mut i := 0;
+                @mut total := 0;
+                @mut running := 1;
+                @loop(running == 1, {
+                    @mut s := count_next(i, 5);
+                    @if(iter_is_done(s),
                         { running = 0 },
-                        { total = total + (&iter_item_or s, 0); i = i + 1 }
-                };
+                        { total = total + iter_item_or(s, 0); i = i + 1 }
+                    )
+                });
                 total
             };
             @export run;
@@ -275,9 +298,11 @@ describe('ADR 0016: IterStep convention', () => {
             @use 'iter';
             \\\\ run () -> Int
             @fn run := {
-                @local a := &@as IterStep[Int, Int], &Item 42;
-                @local b := &@as IterStep[Int, Int], &Done 7;
-                (&iter_item_or a, 0) + (&iter_item_or b, 100)
+                \\\\ a IterStep[Int, Int]
+                @mut a := Item(42);
+                \\\\ b IterStep[Int, Int]
+                @mut b := Done(7);
+                iter_item_or(a, 0) + iter_item_or(b, 100)
             };
             @export run;
         `, 'run', 142)   // 42 + 100
@@ -290,17 +315,17 @@ describe('ADR 0016: IterStep convention', () => {
 
 describe('ADR 0016: rejections', () => {
     test('≥4 operands before the body block is rejected', () => {
-        const errs = elabErrors(`@fn run := { &@loop a, b, c, d, 0..3, { a }; 0 };`)
+        const errs = elabErrors(`@fn run := { @loop(a, b, c, d, 0 .. 3, { a }); 0 };`)
         expect(errs).toContain('@loop takes at most 3 operands')
     })
 
     test('a `..` range outside an iterate @loop is rejected', () => {
-        const errs = elabErrors(`@fn run := { @local r := 0..5; r };`)
+        const errs = elabErrors(`@fn run := { @mut r := 0 .. 5; r };`)
         expect(errs).toContain('`..` range is only valid')
     })
 
     test('a non-name element binder is rejected', () => {
-        const errs = elabErrors(`@fn run := { &@loop 1 + 2, 0..3, { 0 }; 0 };`)
+        const errs = elabErrors(`@fn run := { @loop(1 + 2, 0 .. 3, { 0 }); 0 };`)
         expect(errs).toContain('must be a bare name')
     })
 })

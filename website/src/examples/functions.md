@@ -12,10 +12,10 @@ declares the parameter and result types:
 @fn add a, b := { a + b };
 ```
 
-Call a function with a leading `&`; arguments are comma-separated:
+Call a function with parentheses; arguments are comma-separated:
 
 ```silicon
-@local s := &add 2, 3;   # 5
+s := add(2, 3);   # 5
 ```
 
 A single-expression body needs no braces:
@@ -30,25 +30,23 @@ The signature line is also how you type parameters — Silicon has **no inline
 
 ```silicon
 \\ greet (String) -> Int     # required: declares `name : String`
-@fn greet name := { &print ('Hello, ' ++ name ++ '!') };
+@fn greet name := { print(('Hello, ' ++ name ++ '!')) };
 ```
 
 ## A complete program
 
 ```silicon
-@use 'io';
-
 \\ factorial (Int) -> Int
 @fn factorial n := {
-    &@if n <= 1, { &@return 1 }, {};
-    n * (&factorial (n - 1))
+    @if(n <= 1, { @return(1) }, {});
+    n * (factorial(n - 1))
 };
 
 @fn main := {
-    &print_int (&factorial 5);   # 120
+    print_int(factorial(5));   # 120
     0
 };
-&main;
+main();
 ```
 
 ```sh
@@ -63,8 +61,8 @@ Export a function to the host with `@export`, and import a host function with
 ```silicon
 @export factorial;
 
-@extern { \\ puts (String) -> Int }
-&puts 'from libc';
+\\ @extern puts (String) -> Int;
+puts('from libc');
 ```
 
 Functions are first-class — see [First-class functions](/examples/first-class-fns)

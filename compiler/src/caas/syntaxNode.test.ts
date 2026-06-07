@@ -3,11 +3,11 @@ import { describe, test, expect } from 'bun:test'
 import { parse, buildRegistry, elaborate, typecheck } from './index'
 import { SyntaxNode } from './syntaxNode'
 
-// Two top-level definitions: @fn add (with params) + @global result (with call).
-const SRC = '@fn add x, y := { x + y };\n@global result := &add 1, 2;'
+// Two top-level definitions: @fn add (with params) + result binding (with call).
+const SRC = '@fn add x, y := {\n    x + y\n};\nresult := add(1, 2);'
 
 // Single let with a literal binding.
-const SRC_SIMPLE = '@global x := 42;'
+const SRC_SIMPLE = 'x := 42;'
 
 // ---------------------------------------------------------------------------
 // SyntaxTree.root
@@ -36,7 +36,7 @@ describe('SyntaxTree.root', () => {
 
     test('withText() returns a new tree with its own root', () => {
         const { tree } = parse(SRC_SIMPLE)
-        const { tree: tree2 } = tree.withText('@global m := 99;')
+        const { tree: tree2 } = tree.withText('m := 99;')
         expect(tree.root).not.toBe(tree2.root)
     })
 })
@@ -96,7 +96,7 @@ describe('SyntaxNode.isLeaf', () => {
     })
 
     test('Namespace is a leaf', () => {
-        const { tree } = parse('@fn answer := { 42 };\n@global r := &answer;')
+        const { tree } = parse('@fn answer := {\n    42\n};\nr := answer();')
         const ns = tree.root.firstDescendantOfKind('Namespace')
         expect(ns).toBeDefined()
         expect(ns!.isLeaf).toBe(true)
@@ -177,11 +177,11 @@ describe('SyntaxNode.descendantsOfKind()', () => {
     test('finds all Definition nodes at top level', () => {
         const { tree } = parse(SRC)
         const defs = [...tree.root.descendantsOfKind('Definition')]
-        expect(defs.length).toBeGreaterThanOrEqual(2)  // @fn add + @global result
+        expect(defs.length).toBeGreaterThanOrEqual(2)  // @fn add + result binding
     })
 
     test('finds all IntLiteral nodes', () => {
-        const { tree } = parse('@global a := 1; @global b := 2;')
+        const { tree } = parse('a := 1; b := 2;')
         const lits = [...tree.root.descendantsOfKind('IntLiteral')]
         expect(lits.length).toBe(2)
     })
@@ -242,9 +242,9 @@ describe('SyntaxNode.span', () => {
     })
 
     test('Namespace span reflects its position in source', () => {
-        const { tree } = parse('@fn answer := { 42 };\n@global r := &answer;')
-        // The Namespace for 'answer' in the call is on line 2.
-        const ns = [...tree.root.descendantsOfKind('Namespace')].find(n => n.span?.startLine === 2)
+        const { tree } = parse('@fn answer := {\n    42\n};\nr := answer();')
+        // The Namespace for 'answer' in the call is on line 4.
+        const ns = [...tree.root.descendantsOfKind('Namespace')].find(n => n.span?.startLine === 4)
         expect(ns).toBeDefined()
     })
 })
@@ -294,9 +294,9 @@ describe('SemanticModel + SyntaxNode', () => {
     })
 
     test('model.symbolAt(Namespace SyntaxNode) resolves to symbol', () => {
-        const { root, model } = checkedTree('@fn answer := { 42 };\n@global r := &answer;')
-        // The Namespace for 'answer' in the call site is on line 2.
-        const ns = [...root.descendantsOfKind('Namespace')].find(n => n.span?.startLine === 2)!
+        const { root, model } = checkedTree('@fn answer := {\n    42\n};\nr := answer();')
+        // The Namespace for 'answer' in the call site is on line 4.
+        const ns = [...root.descendantsOfKind('Namespace')].find(n => n.span?.startLine === 4)!
         expect(ns).toBeDefined()
         const sym = model.symbolAt(ns)
         expect(sym).toBeDefined()
@@ -304,8 +304,8 @@ describe('SemanticModel + SyntaxNode', () => {
     })
 
     test('model.symbolAt(SyntaxNode) matches model.symbolAt(raw node)', () => {
-        const { root, model } = checkedTree('@fn answer := { 42 };\n@global r := &answer;')
-        const ns = [...root.descendantsOfKind('Namespace')].find(n => n.span?.startLine === 2)!
+        const { root, model } = checkedTree('@fn answer := {\n    42\n};\nr := answer();')
+        const ns = [...root.descendantsOfKind('Namespace')].find(n => n.span?.startLine === 4)!
         expect(model.symbolAt(ns)).toEqual(model.symbolAt(ns._node))
     })
 

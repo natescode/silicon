@@ -33,9 +33,7 @@ print('Hello, Silicon!');   # writes to stdout via WASI fd_write
 If you need raw WASI access, declare the extern yourself:
 
 ```silicon
-@extern {
-    \\ wasi_snapshot_preview1::fd_write (Int, Int, Int, Int) -> Int
-}
+\\ @extern wasi_snapshot_preview1::fd_write (Int, Int, Int, Int) -> Int;
 ```
 
 ### String layout
@@ -77,10 +75,8 @@ sgl setup
 The native binary links against **libc** automatically (the same way any C program does).  Declare any libc function with `@extern` and call it directly:
 
 ```silicon
-@extern {
-    \\ puts (String) -> Int
-    \\ printf (String) -> Int
-}
+\\ @extern puts (String) -> Int;
+\\ @extern printf (String) -> Int;
 
 puts('Hello, world!');
 ```
@@ -104,10 +100,8 @@ The length is found via `strlen` from libc (or by tracking it separately in your
 Use `String` for C string pointer parameters so the typechecker accepts string literals and the lowerer emits a 64-bit pointer (`l` in QBE IR):
 
 ```silicon
-@extern {
-    \\ puts (String) -> Int      # correct — accepts string literals
-    \\ printf (String) -> Int    # correct
-}
+\\ @extern puts (String) -> Int;      # correct — accepts string literals
+\\ @extern printf (String) -> Int;    # correct
 ```
 
 Using `Int` for a string parameter will cause a typecheck error when you pass a string literal.
@@ -129,9 +123,7 @@ The split is handled entirely in the lowerer; Silicon source code is identical o
 ### WASM — wrap WASI
 
 ```silicon
-@extern {
-    \\ wasi_snapshot_preview1::proc_exit (Int) -> Void
-}
+\\ @extern wasi_snapshot_preview1::proc_exit (Int) -> Void;
 
 wasi_snapshot_preview1::proc_exit(0);
 ```
@@ -146,12 +138,10 @@ exit(0);
 ### Native — call libc directly
 
 ```silicon
-@extern {
-    \\ exit (Int) -> Void
-    \\ malloc (Int) -> Int
-    \\ free (Int) -> Void
-    \\ strlen (String) -> Int
-}
+\\ @extern exit (Int) -> Void;
+\\ @extern malloc (Int) -> Int;
+\\ @extern free (Int) -> Void;
+\\ @extern strlen (String) -> Int;
 
 n := strlen('hello');   # 5
 ```

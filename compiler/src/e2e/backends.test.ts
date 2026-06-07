@@ -221,14 +221,14 @@ describe('WAT regression snapshots — known-good function shapes', () => {
     })
 
     test('global var appears in WAT data section', () => {
-        const wat = compileToWatString('@local count := 0;')
+        const wat = compileToWatString('@mut count := 0;')
         expect(wat).toContain('(global')
         expect(wat).toContain('i32')
     })
 
     test('@if lowers to WAT conditional correctly', () => {
         const wat = compileToWatString(
-            '\\\\ choose (Int, Int, Int)\n@fn choose a, b, flag := { &@if flag, { a }, { b } };'
+            '\\\\ choose (Int, Int, Int)\n@fn choose a, b, flag := {\n    @if(flag, {\n        a\n    }, {\n        b\n    })\n};'
         )
         expect(wat).toContain('(if')
         expect(wat).toContain('(then')
@@ -237,7 +237,7 @@ describe('WAT regression snapshots — known-good function shapes', () => {
 
     test('@loop lowers to WAT block/loop pair', () => {
         const wat = compileToWatString(
-            '@fn f  := { @local n := 0; &@loop n < 5, { n = n + 1; }; n };'
+            '@fn f := { @mut n := 0; @loop(n < 5, { n = n + 1; }); n };'
         )
         expect(wat).toContain('(block')
         expect(wat).toContain('(loop')
@@ -258,13 +258,13 @@ describe('QBE IR regression snapshots — known-good function shapes', () => {
     })
 
     test('global var appears in QBE data/thread section', () => {
-        const qbe = toQbeIr('@local count := 0;')
+        const qbe = toQbeIr('@mut count := 0;')
         expect(qbe).toMatch(/\$(count|_count)/)
     })
 
     test('@if lowers to QBE jnz + labels', () => {
         const qbe = toQbeIr(
-            '\\\\ choose (Int, Int, Int)\n@fn choose a, b, flag := { &@if flag, { a }, { b } };'
+            '\\\\ choose (Int, Int, Int)\n@fn choose a, b, flag := {\n    @if(flag, {\n        a\n    }, {\n        b\n    })\n};'
         )
         expect(qbe).toContain('jnz')
         expect(qbe).toContain('jmp')
@@ -272,7 +272,7 @@ describe('QBE IR regression snapshots — known-good function shapes', () => {
 
     test('@loop lowers to QBE head/exit label pair with jnz condition', () => {
         const qbe = toQbeIr(
-            '@fn f  := { @local n := 0; &@loop n < 5, { n = n + 1; }; n };'
+            '@fn f := { @mut n := 0; @loop(n < 5, { n = n + 1; }); n };'
         )
         expect(qbe).toContain('@loop')       // loop head
         expect(qbe).toContain('@loop_exit')  // exit label
@@ -507,28 +507,44 @@ describe('Strata operator parity — WAT vs QBE backends (story 9.5-5)', () => {
 const ARENA_PROGRAMS: { name: string; src: string }[] = [
     {
         name: 'empty arena',
-        src:  `\\\\ probe () -> Int
-@fn probe  := { &@with_arena {}; 0 };`,
+        src:  `\\\\ probe Int
+@fn probe := {
+    @with_arena({});
+    0
+};`,
     },
     {
         name: 'arena with value-type tail',
-        src:  `\\\\ probe () -> Int
-@fn probe  := &@with_arena { 42 };`,
+        src:  `\\\\ probe Int
+@fn probe := @with_arena({
+    42
+});`,
     },
     {
         name: 'arena with String promotion',
-        src:  `\\\\ build () -> String
-@fn build  := &@with_arena { @local s := 'hi'; &@move_to_parent_arena s };`,
+        src:  `\\\\ build String
+@fn build := @with_arena({
+    @mut s := 'hi';
+    @move_to_parent_arena(s)
+});`,
     },
     {
         name: 'arena with Array[Int] promotion',
-        src:  `\\\\ build () -> Int
-@fn build  := &@with_arena { @local a := $[1,2,3]; &@move_to_parent_arena a };`,
+        src:  `\\\\ build Int
+@fn build := @with_arena({
+    @mut a := $[1, 2, 3];
+    @move_to_parent_arena(a)
+});`,
     },
     {
         name: 'nested arenas',
-        src:  `\\\\ probe () -> Int
-@fn probe  := { &@with_arena { &@with_arena {}; }; 0 };`,
+        src:  `\\\\ probe Int
+@fn probe := {
+    @with_arena({
+        @with_arena({});
+    });
+    0
+};`,
     },
 ]
 
@@ -544,20 +560,22 @@ describe('Phase 9c arena: WAT determinism', () => {
 
 describe('Phase 9c arena: WAT envelope shape', () => {
     test('arena body sets/gets the bump pointer via $heap', () => {
-        const wat = compileToWatString(`\\\\ probe () -> Int
-@fn probe  := { &@with_arena {}; 0 };`)
+        const wat = compileToWatString(`\\\\ probe Int
+@fn probe := {
+    @with_arena({});
+    0
+};`)
         expect(wat).toContain('global.get $heap')
         expect(wat).toContain('global.set $heap')
     })
 
     test('String promotion lowers to a $arena_promote call', () => {
         const wat = compileToWatString(`
-            \\\\ build () -> String
-            @fn build  := &@with_arena {
-                @local s := 'hi';
-                &@move_to_parent_arena s
-            };
-        `)
+            \\\\ build String
+            @fn build := @with_arena({
+                @mut s := 'hi';
+                @move_to_parent_arena(s)
+            });`)
         expect(wat).toContain('call $arena_promote')
     })
 
@@ -572,22 +590,29 @@ describe('Phase 9c arena: WAT envelope shape', () => {
 
 describe('Phase 9c arena: QBE rejection (allocator surface deferred)', () => {
     test('&@with_arena throws a structured error on the QBE backend', () => {
-        expect(() => toQbeIr(`\\\\ probe () -> Int
-@fn probe  := { &@with_arena {}; 0 };`))
+        expect(() => toQbeIr(`\\\\ probe Int
+@fn probe := {
+    @with_arena({});
+    0
+};`))
             .toThrow(/not yet supported on the native backend/)
     })
 
     test('&@move_to_parent_arena throws a structured error on the QBE backend', () => {
         expect(() => toQbeIr(`
-            \\\\ build () -> Int
-            @fn build  := &@with_arena { &@move_to_parent_arena 7 };
-        `)).toThrow(/not yet supported on the native backend/)
+            \\\\ build Int
+            @fn build := @with_arena({
+                @move_to_parent_arena(7)
+            });`)).toThrow(/not yet supported on the native backend/)
     })
 
     test('QBE rejection error names Phase 9c-6 follow-up', () => {
         try {
-            toQbeIr(`\\\\ probe () -> Int
-@fn probe  := { &@with_arena {}; 0 };`)
+            toQbeIr(`\\\\ probe Int
+@fn probe := {
+    @with_arena({});
+    0
+};`)
             throw new Error('expected toQbeIr to throw')
         } catch (e) {
             expect(String(e)).toContain('9c-6')

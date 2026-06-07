@@ -61,7 +61,7 @@ The default answer is **add a stratum**, not modify the grammar. The grammar is 
 
 To add a Silicon-side feature:
 1. Add a stratum entry in `src/strata/*.si` (`@stratum_keyword` or `@stratum_operator`).
-2. If the lowering can be expressed with existing `&Compiler::*` calls, write it in the `.si` body — no further change required.
+2. If the lowering can be expressed with existing `Compiler::*` calls, write it in the `.si` body — no further change required.
 3. Only if no API surface fits: extend the body interpreter in `src/elaborator/` with a new `Compiler::*` branch.
 4. Add a `*.test.ts` exercising the new behaviour and run `bun test`.
 
@@ -86,18 +86,18 @@ Silicon has three integer surface types, all mapping to WebAssembly value types:
 
 Conversions are explicit — no implicit coercion between widths:
 
-- `&@toInt64 x` — `Int → Int64` (sign-extend; `i64.extend_i32_s`).
-- `&@toInt x` — `Int64 → Int` (wrap; `i32.wrap_i64`). Typed-dispatch overload; the `Float → Int` variant of `@toInt` still applies for `Float` arguments.
+- `@toInt64(x)` — `Int → Int64` (sign-extend; `i64.extend_i32_s`).
+- `@toInt(x)` — `Int64 → Int` (wrap; `i32.wrap_i64`). Typed-dispatch overload; the `Float → Int` variant of `@toInt` still applies for `Float` arguments.
 
-Arithmetic operators (`+`, `-`, `*`, `/`, `%`) and comparisons (`==`, `!=`, `<`, `>`, `<=`, `>=`) dispatch by operand type via the strata registry. When both operands are `Int64`, the operator resolves to the `i64.*` instruction set. No implicit promotion: `5 + (&@toInt64 1)` is a type error — both sides must be the same width.
+Arithmetic operators (`+`, `-`, `*`, `/`, `%`) and comparisons (`==`, `!=`, `<`, `>`, `<=`, `>=`) dispatch by operand type via the strata registry. When both operands are `Int64`, the operator resolves to the `i64.*` instruction set. No implicit promotion: `5 + @toInt64(1)` is a type error — both sides must be the same width.
 
-No integer-literal suffixes — `42i64` does **not** parse. Use the keyword cast: `&@toInt64 42`.
+No integer-literal suffixes — `42i64` does **not** parse. Use the keyword cast: `@toInt64(42)`.
 
 ## Sum Types Today
 
-- `@enum` — payload-free tagged variants, each variant is an immutable i32 global (`Red := 0`, `Green := 1`, …). `@type_sum` is the legacy spelling; both keywords behave identically.
-- `@type Shape := $Circle r:Int | $Rectangle w:Int, h:Int;` — sum-with-payloads. The `$Variant` form marks a variant declarator (data-shape sigil); each variant becomes a constructor function returning the sum type, with pad-to-max record layout `[tag:i32, field0:i32, ..., field<max-1>:i32]` zero-init in unused slots. Pattern destructure in `@match` binds the fields by name.
-- `@type Option[T] := $Some value:T | $None;` — **parametric** sum types. `:Option[Int]` and `:Option[Float]` are nominally distinct. Variant constructors are polymorphic: `Some : ∀T. T → Option[T]`. See `docs/hm-lite.md` for how inference handles call sites.
+- `@enum` — payload-free tagged variants, each variant is an immutable i32 global (`Red := 0`, `Green := 1`, …). (`@type_sum` was the legacy spelling; it is RETIRED in ADR-0020 — use `@enum`.)
+- `@type Shape := $Circle r Int | $Rectangle w Int, h Int;` — sum-with-payloads (types space-separated, no colon). The `$Variant` form marks a variant declarator (data-shape sigil); each variant becomes a constructor function returning the sum type, with pad-to-max record layout `[tag:i32, field0:i32, ..., field<max-1>:i32]` zero-init in unused slots. Pattern destructure in `@match` binds the fields by name.
+- `@type Option[T] := $Some value T | $None;` — **parametric** sum types. `Option[Int]` and `Option[Float]` are nominally distinct. Variant constructors are polymorphic: `Some : ∀T. T → Option[T]`. See `docs/hm-lite.md` for how inference handles call sites.
 - `@type_alias`, `@type_distinct` — declared and accepted by the typechecker.
 
 ## Type Inference
@@ -105,9 +105,9 @@ No integer-literal suffixes — `42i64` does **not** parse. Use the keyword cast
 Silicon uses **HM-lite** — Hindley-Milner restricted to declared polymorphism
 on `@fn[T]` and `@type[T]`, no let-generalisation. Roc-style trajectory.
 
-- Generic function: `@fn id[T] x:T := x;` — call sites infer `T` automatically; no explicit `[Int]` at the call.
-- Annotation-driven: `:Option[Int] := (&None)` unifies the body's `Option[?T]` with the annotation.
-- Nested inference: `(&unwrap_or (&Some 42), 0)` correctly flows `T = Int` through the chain.
+- Generic function: `@fn id[T] x T := x;` — call sites infer `T` automatically; no explicit `[Int]` at the call.
+- Annotation-driven: a `\\ x Option[Int]` signature line + `x := None()` unifies the body's `Option[?T]` with the annotation.
+- Nested inference: `unwrap_or(Some(42), 0)` correctly flows `T = Int` through the chain.
 
 Implementation: `src/types/unify.ts`, `src/types/typechecker.ts`, ~250 lines + 38 unit tests + 33 integration tests. See `docs/hm-lite.md` for the reference.
 
@@ -116,18 +116,18 @@ Implementation: `src/types/unify.ts`, `src/types/typechecker.ts`, ~250 lines + 3
 Both forms are supported and interchangeable:
 
 ```silicon
-# Legacy flat form
-&@match opt, $Some v, { v }, $None, { dflt }
+# Flat form
+@match(opt, $Some v, { v }, $None, { dflt })
 
-# Arm-expression form (no grammar changes — `=>` and `|` are BinaryOp operators)
-&@match opt,
+# Arm-expression form (`=>` and `|` are BinaryOp operators)
+@match(opt,
     $Some v => v,
-    $None => dflt
+    $None => dflt)
 
 # Per-arm pattern alternation
-&@match c,
+@match(c,
     $Red | $Green => 1,
-    $Blue => 0
+    $Blue => 0)
 ```
 
 `normalizeMatchArgs` in `src/ast/matchArms.ts` flattens the arm-expression

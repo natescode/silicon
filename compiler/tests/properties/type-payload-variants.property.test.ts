@@ -60,10 +60,10 @@ describe('@type payload sum types', () => {
         const src = [
             '@type Shape := $Circle r Int | $Rectangle w Int, h Int;',
             '\\\\ area (Shape) -> Int',
-            '@fn area s := {',
-            '  &@match s,',
+            'area s := {',
+            '  @match(s,',
             '    $Circle r,       { r * r * 3 },',
-            '    $Rectangle w, h, { w * h }',
+            '    $Rectangle w, h, { w * h })',
             '};',
         ].join('\n')
         const wat = compile(src)
@@ -82,16 +82,16 @@ describe('@type payload sum types', () => {
         const src = [
             '@type Shape := $Circle r Int | $Rectangle w Int, h Int;',
             '\\\\ area (Shape) -> Int',
-            '@fn area s := {',
-            '  &@match s,',
+            'area s := {',
+            '  @match(s,',
             '    $Circle r,       { r * r * 3 },',
-            '    $Rectangle w, h, { w * h }',
+            '    $Rectangle w, h, { w * h })',
             '};',
             '\\\\ main () -> Int',
-            '@global main := {',
-            '  @local c := &Circle 5;',
-            '  @local r := &Rectangle 4, 6;',
-            '  (&area c) + (&area r)',
+            'main := {',
+            '  @mut c := Circle(5);',
+            '  @mut r := Rectangle(4, 6);',
+            '  area(c) + area(r)',
             '};',
             '@export main;',
         ].join('\n')
@@ -105,7 +105,7 @@ describe('@type payload sum types', () => {
         try {
             compile([
                 '@type Shape := $Circle r Int | $Rectangle w Int, h Int;',
-                '@global bad := { &Circle 1, 2 };',     // Circle takes 1 arg, not 2
+                'bad := { Circle(1, 2) };',     // Circle takes 1 arg, not 2
             ].join('\n'))
         } catch (e) { err = String(e) }
         expect(err).toMatch(/expects 1 argument|got 2/)
@@ -116,9 +116,9 @@ describe('@type payload sum types', () => {
         const wat = compile([
             '@type Shape := $Circle r Int | $Rectangle w Int, h Int;',
             '\\\\ area (Shape) -> Int',
-            '@fn area s := { &@match s, $Circle r, { r }, $Rectangle w, h, { w } };',
+            'area s := { @match(s, $Circle r, { r }, $Rectangle w, h, { w }) };',
             '\\\\ go () -> Int',
-            '@global go := { &area (&Circle 7) };',
+            'go := { area(Circle(7)) };',
         ].join('\n'))
         expect(wat).toContain('(call $area (call $Circle (i32.const 7)))')
     })

@@ -16,141 +16,141 @@
 # See `src/comptime/IR_HANDLE_ABI.md` for the full calling convention.
 
 # ── Registration (one-shot at strata-load time) ────────────────────────
-@extern { \\ register_keyword (Int) -> Void }
-@extern { \\ register_operator (Int) -> Void }
-@extern { \\ register_annotation (Int) -> Void }
+\\ @extern register_keyword (Int) -> Void;
+\\ @extern register_operator (Int) -> Void;
+\\ @extern register_annotation (Int) -> Void;
 
-@extern { \\ on_decl (Int, Int) -> Void }
-@extern { \\ on_call_site (Int, Int) -> Void }
-@extern { \\ on_annotation (Int, Int) -> Void }
-@extern { \\ on_module_finalize (Int) -> Void }
-@extern { \\ on_comptime (Int, Int) -> Void }
+\\ @extern on_decl (Int, Int) -> Void;
+\\ @extern on_call_site (Int, Int) -> Void;
+\\ @extern on_annotation (Int, Int) -> Void;
+\\ @extern on_module_finalize (Int) -> Void;
+\\ @extern on_comptime (Int, Int) -> Void;
 
 # ── State buckets (per-stratum or per-instance) ────────────────────────
-@extern { \\ state_stratum () -> Int }
-@extern { \\ state_instance () -> Int }
-@extern { \\ state_has (Int, Int) -> Int }
-@extern { \\ state_get (Int, Int) -> Int }
-@extern { \\ state_set (Int, Int, Int) -> Void }
+\\ @extern state_stratum () -> Int;
+\\ @extern state_instance () -> Int;
+\\ @extern state_has (Int, Int) -> Int;
+\\ @extern state_get (Int, Int) -> Int;
+\\ @extern state_set (Int, Int, Int) -> Void;
 
 # ── Array builders (used by IR builders that take arrays) ──────────────
-@extern { \\ compiler_arr_new () -> Int }
-@extern { \\ compiler_arr_push (Int, Int) -> Void }
-@extern { \\ compiler_arr_push_str (Int, Int) -> Void }
-@extern { \\ compiler_arr_len (Int) -> Int }
-@extern { \\ compiler_arr_get (Int, Int) -> Int }
+\\ @extern compiler_arr_new () -> Int;
+\\ @extern compiler_arr_push (Int, Int) -> Void;
+\\ @extern compiler_arr_push_str (Int, Int) -> Void;
+\\ @extern compiler_arr_len (Int) -> Int;
+\\ @extern compiler_arr_get (Int, Int) -> Int;
 
 # ── IR builders — basic ─────────────────────────────────────────────────
-@extern { \\ ir_makeConst (Int, Int) -> Int }
-@extern { \\ ir_makeLocalGet (Int, Int) -> Int }
-@extern { \\ ir_makeLocalSet (Int, Int) -> Int }
-@extern { \\ ir_makeGlobalGet (Int, Int) -> Int }
-@extern { \\ ir_makeGlobalSet (Int, Int) -> Int }
-@extern { \\ ir_makeBinOp (Int, Int, Int, Int) -> Int }
-@extern { \\ ir_makeBlock (Int, Int, Int) -> Int }
-@extern { \\ ir_null () -> Int }
-@extern { \\ ir_makeCall (Int, Int, Int, Int) -> Int }
+\\ @extern ir_makeConst (Int, Int) -> Int;
+\\ @extern ir_makeLocalGet (Int, Int) -> Int;
+\\ @extern ir_makeLocalSet (Int, Int) -> Int;
+\\ @extern ir_makeGlobalGet (Int, Int) -> Int;
+\\ @extern ir_makeGlobalSet (Int, Int) -> Int;
+\\ @extern ir_makeBinOp (Int, Int, Int, Int) -> Int;
+\\ @extern ir_makeBlock (Int, Int, Int) -> Int;
+\\ @extern ir_null () -> Int;
+\\ @extern ir_makeCall (Int, Int, Int, Int) -> Int;
 
 # ── IR builders — control flow ─────────────────────────────────────────
-@extern { \\ ir_makeIf (Int, Int, Int, Int) -> Int }
-@extern { \\ ir_makeLoop (Int, Int, Int) -> Int }
-@extern { \\ ir_makeBreak (Int) -> Int }
-@extern { \\ ir_makeContinue (Int) -> Int }
-@extern { \\ ir_makeReturn (Int) -> Int }
+\\ @extern ir_makeIf (Int, Int, Int, Int) -> Int;
+\\ @extern ir_makeLoop (Int, Int, Int) -> Int;
+\\ @extern ir_makeBreak (Int) -> Int;
+\\ @extern ir_makeContinue (Int) -> Int;
+\\ @extern ir_makeReturn (Int) -> Int;
 
 # ── IR builders — module-level ──────────────────────────────────────────
-@extern { \\ ir_makeExport (Int, Int, Int) -> Int }
-@extern { \\ ir_makeLocal (Int, Int) -> Int }
-@extern { \\ ir_makeParam (Int, Int) -> Int }
-@extern { \\ ir_makeGlobal (Int, Int, Int, Int) -> Int }
-@extern { \\ ir_makeFunction (Int, Int, Int, Int, Int) -> Int }
-@extern { \\ ir_makeImport (Int, Int, Int, Int, Int) -> Int }
+\\ @extern ir_makeExport (Int, Int, Int) -> Int;
+\\ @extern ir_makeLocal (Int, Int) -> Int;
+\\ @extern ir_makeParam (Int, Int) -> Int;
+\\ @extern ir_makeGlobal (Int, Int, Int, Int) -> Int;
+\\ @extern ir_makeFunction (Int, Int, Int, Int, Int) -> Int;
+\\ @extern ir_makeImport (Int, Int, Int, Int, Int) -> Int;
 
 # ── AST field accessor — tagged i32 returns ────────────────────────────
-@extern { \\ compiler_ast_field (Int, Int) -> Int }
-@extern { \\ compiler_tag_kind (Int) -> Int }
-@extern { \\ compiler_tag_value (Int) -> Int }
+\\ @extern compiler_ast_field (Int, Int) -> Int;
+\\ @extern compiler_tag_kind (Int) -> Int;
+\\ @extern compiler_tag_value (Int) -> Int;
 # Convenience: walk a dotted path and unbox directly to a string-pool id
 # (returns 0 if not string-shaped) or a node handle (returns 0 if not a
 # node-shaped value).  Cuts boilerplate for migrations.
-@extern { \\ compiler_ast_str_field (Int, Int) -> Int }
-@extern { \\ compiler_ast_node_field (Int, Int) -> Int }
+\\ @extern compiler_ast_str_field (Int, Int) -> Int;
+\\ @extern compiler_ast_node_field (Int, Int) -> Int;
 
 # ── AST manipulation — templates ───────────────────────────────────────
-@extern { \\ ast_capture_template (Int, Int) -> Int }
-@extern { \\ ast_clone (Int) -> Int }
-@extern { \\ ast_with_keyword (Int, Int) -> Int }
-@extern { \\ ast_with_name (Int, Int) -> Int }
-@extern { \\ ast_rewrite_call (Int, Int) -> Void }
-@extern { \\ ast_patch_types (Int, Int) -> Int }
+\\ @extern ast_capture_template (Int, Int) -> Int;
+\\ @extern ast_clone (Int) -> Int;
+\\ @extern ast_with_keyword (Int, Int) -> Int;
+\\ @extern ast_with_name (Int, Int) -> Int;
+\\ @extern ast_rewrite_call (Int, Int) -> Void;
+\\ @extern ast_patch_types (Int, Int) -> Int;
 
 # ── Types-as-data ───────────────────────────────────────────────────────
-@extern { \\ type_int () -> Int }
-@extern { \\ type_int64 () -> Int }
-@extern { \\ type_float () -> Int }
-@extern { \\ type_bool () -> Int }
-@extern { \\ type_string () -> Int }
-@extern { \\ type_void () -> Int }
-@extern { \\ type_variable (Int) -> Int }
-@extern { \\ type_array (Int) -> Int }
-@extern { \\ type_equals (Int, Int) -> Int }
-@extern { \\ type_format (Int) -> Int }
-@extern { \\ type_substitute (Int, Int) -> Int }
-@extern { \\ type_mangle_suffix (Int) -> Int }
+\\ @extern type_int () -> Int;
+\\ @extern type_int64 () -> Int;
+\\ @extern type_float () -> Int;
+\\ @extern type_bool () -> Int;
+\\ @extern type_string () -> Int;
+\\ @extern type_void () -> Int;
+\\ @extern type_variable (Int) -> Int;
+\\ @extern type_array (Int) -> Int;
+\\ @extern type_equals (Int, Int) -> Int;
+\\ @extern type_format (Int) -> Int;
+\\ @extern type_substitute (Int, Int) -> Int;
+\\ @extern type_mangle_suffix (Int) -> Int;
 
 # ── Diagnostics (T-5 accumulator model) ────────────────────────────────
-@extern { \\ diag_error (Int, Int, Int, Int) -> Void }
-@extern { \\ diag_warn (Int, Int, Int, Int) -> Void }
+\\ @extern diag_error (Int, Int, Int, Int) -> Void;
+\\ @extern diag_warn (Int, Int, Int, Int) -> Void;
 
 # ── Utility helpers (pure) ──────────────────────────────────────────────
 # Read UTF-8 bytes from the handler's exported memory; intern in StringPool.
 # Pass `lenOrZero=0` for the Silicon string-literal layout (4-byte LE
 # length header at ptr, body at ptr+4).  Pass an explicit `len` for a raw
 # (ptr, len) range.
-@extern { \\ compiler_str_intern (Int, Int) -> Int }
-@extern { \\ compiler_watId (Int) -> Int }
-@extern { \\ compiler_freshId (Int) -> Int }
-@extern { \\ compiler_arg (Int, Int) -> Int }
-@extern { \\ compiler_choose (Int, Int, Int) -> Int }
-@extern { \\ compiler_isVarName (Int) -> Int }
+\\ @extern compiler_str_intern (Int, Int) -> Int;
+\\ @extern compiler_watId (Int) -> Int;
+\\ @extern compiler_freshId (Int) -> Int;
+\\ @extern compiler_arg (Int, Int) -> Int;
+\\ @extern compiler_choose (Int, Int, Int) -> Int;
+\\ @extern compiler_isVarName (Int) -> Int;
 
 # ── Ctx accessors (require env.ctx — set per firing by the wrapper) ────
-@extern { \\ compiler_ctx_locals_set (Int, Int) -> Void }
-@extern { \\ compiler_ctx_locals_get (Int) -> Int }
-@extern { \\ compiler_ctx_globals_set (Int, Int) -> Void }
-@extern { \\ compiler_ctx_globals_get (Int) -> Int }
-@extern { \\ compiler_ctx_varNames_add (Int) -> Void }
-@extern { \\ compiler_ctx_varNames_has (Int) -> Int }
-@extern { \\ compiler_ctx_pendingLocals_push (Int) -> Void }
-@extern { \\ compiler_ctx_loopStack_push (Int) -> Void }
-@extern { \\ compiler_ctx_loopStack_pop () -> Int }
-@extern { \\ compiler_ctx_loopStack_peek () -> Int }
-@extern { \\ compiler_ctx_nextLoopId () -> Int }
+\\ @extern compiler_ctx_locals_set (Int, Int) -> Void;
+\\ @extern compiler_ctx_locals_get (Int) -> Int;
+\\ @extern compiler_ctx_globals_set (Int, Int) -> Void;
+\\ @extern compiler_ctx_globals_get (Int) -> Int;
+\\ @extern compiler_ctx_varNames_add (Int) -> Void;
+\\ @extern compiler_ctx_varNames_has (Int) -> Int;
+\\ @extern compiler_ctx_pendingLocals_push (Int) -> Void;
+\\ @extern compiler_ctx_loopStack_push (Int) -> Void;
+\\ @extern compiler_ctx_loopStack_pop () -> Int;
+\\ @extern compiler_ctx_loopStack_peek () -> Int;
+\\ @extern compiler_ctx_nextLoopId () -> Int;
 
 # ── Module accumulators ─────────────────────────────────────────────────
-@extern { \\ module_push_definition (Int) -> Void }
-@extern { \\ module_push_global (Int, Int, Int) -> Void }
+\\ @extern module_push_definition (Int) -> Void;
+\\ @extern module_push_global (Int, Int, Int) -> Void;
 
 # ── Lowering helpers (require env.api — set per firing) ────────────────
-@extern { \\ compiler_lowerExpr (Int) -> Int }
-@extern { \\ compiler_lowerExprIfDefined (Int) -> Int }
-@extern { \\ compiler_registerDefer (Int) -> Int }
-@extern { \\ compiler_emitReturn (Int) -> Int }
-@extern { \\ compiler_lowerParams (Int) -> Int }
-@extern { \\ compiler_lowerFunctionBody (Int, Int) -> Int }
-@extern { \\ compiler_funcResult_body (Int) -> Int }
-@extern { \\ compiler_funcResult_locals (Int) -> Int }
-@extern { \\ compiler_resolveFunctionReturnType (Int, Int, Int) -> Int }
-@extern { \\ compiler_resolveType (Int) -> Int }
-@extern { \\ compiler_expandMatchChain (Int, Int) -> Int }
-@extern { \\ compiler_lowerGlobalInit (Int, Int) -> Int }
-@extern { \\ compiler_globalInit_init (Int) -> Int }
-@extern { \\ compiler_globalInit_wasmType (Int) -> Int }
-@extern { \\ compiler_lowerExternParams (Int) -> Int }
-@extern { \\ compiler_lowerExternResult (Int) -> Int }
-@extern { \\ compiler_expandSumType (Int) -> Int }
-@extern { \\ compiler_expandTypeRecord (Int) -> Int }
-@extern { \\ compiler_expandStruct (Int) -> Int }
+\\ @extern compiler_lowerExpr (Int) -> Int;
+\\ @extern compiler_lowerExprIfDefined (Int) -> Int;
+\\ @extern compiler_registerDefer (Int) -> Int;
+\\ @extern compiler_emitReturn (Int) -> Int;
+\\ @extern compiler_lowerParams (Int) -> Int;
+\\ @extern compiler_lowerFunctionBody (Int, Int) -> Int;
+\\ @extern compiler_funcResult_body (Int) -> Int;
+\\ @extern compiler_funcResult_locals (Int) -> Int;
+\\ @extern compiler_resolveFunctionReturnType (Int, Int, Int) -> Int;
+\\ @extern compiler_resolveType (Int) -> Int;
+\\ @extern compiler_expandMatchChain (Int, Int) -> Int;
+\\ @extern compiler_lowerGlobalInit (Int, Int) -> Int;
+\\ @extern compiler_globalInit_init (Int) -> Int;
+\\ @extern compiler_globalInit_wasmType (Int) -> Int;
+\\ @extern compiler_lowerExternParams (Int) -> Int;
+\\ @extern compiler_lowerExternResult (Int) -> Int;
+\\ @extern compiler_expandSumType (Int) -> Int;
+\\ @extern compiler_expandTypeRecord (Int) -> Int;
+\\ @extern compiler_expandStruct (Int) -> Int;
 
 # ── Test-only ───────────────────────────────────────────────────────────
-@extern { \\ test_observe (Int) -> Void }
+\\ @extern test_observe (Int) -> Void;

@@ -748,7 +748,7 @@ test("E2E: @type_alias compiles without error and emits no WAT for the declarati
 });
 
 test("E2E: @type_alias used as annotation compiles cleanly", () => {
-    const result = compileSource("@type_alias Metres := Int;\n@global distance := 100;");
+    const result = compileSource("@type_alias Metres := Int;\ndistance := 100;");
 
     expect(result.success).toBe(true);
     expect(result.wat).toBeDefined();
@@ -770,7 +770,7 @@ test("E2E: @type_distinct compiles without error and emits no WAT for the declar
 // ---------------------------------------------------------------------------
 
 test("E2E: @type_sum emits an immutable i32 global for each variant", () => {
-    const result = compileSource("@type_sum Color := Red | Green | Blue;");
+    const result = compileSource("@enum Color := Red | Green | Blue;");
 
     expect(result.success).toBe(true);
     expect(result.wat).toBeDefined();
@@ -781,7 +781,7 @@ test("E2E: @type_sum emits an immutable i32 global for each variant", () => {
 });
 
 test("E2E: @type_sum variant reference resolves via global.get", () => {
-    const result = compileSource("@type_sum Color := Red | Green | Blue;\nColor::Red;");
+    const result = compileSource("@enum Color := Red | Green | Blue;\nColor::Red;");
 
     expect(result.success).toBe(true);
     expect(result.wat).toBeDefined();
@@ -794,9 +794,9 @@ test("E2E: @type_sum variant reference resolves via global.get", () => {
 
 test("E2E: @match emits nested (if ...) chain with i32.eq comparisons", () => {
     const src = [
-        "@type_sum Color := Red | Green | Blue;",
-        "@local c := Color::Red;",
-        "&@match c, Color::Red, { 1 }, Color::Green, { 2 }, Color::Blue, { 3 };",
+        "@enum Color := Red | Green | Blue;",
+        "@mut c := Color::Red;",
+        "@match(c, Color::Red, { 1 }, Color::Green, { 2 }, Color::Blue, { 3 });",
     ].join("\n");
     const result = compileSource(src);
 
@@ -816,7 +816,7 @@ test("E2E: @match emits nested (if ...) chain with i32.eq comparisons", () => {
 // ---------------------------------------------------------------------------
 
 test("E2E: @local emits (local ...) in function preamble", () => {
-    const src = "\\\\ f (Int)\n@global f x := { @local tmp := x + 1; tmp };";
+    const src = "\\\\ f (Int)\nf x := {\n    @mut tmp := x + 1;\n    tmp\n};";
     const result = compileSource(src);
 
     expect(result.success).toBe(true);
@@ -825,7 +825,7 @@ test("E2E: @local emits (local ...) in function preamble", () => {
 });
 
 test("E2E: @local binding emits local.set at the binding site", () => {
-    const src = "\\\\ f (Int)\n@global f x := { @local tmp := x + 1; tmp };";
+    const src = "\\\\ f (Int)\nf x := {\n    @mut tmp := x + 1;\n    tmp\n};";
     const result = compileSource(src);
 
     expect(result.success).toBe(true);
@@ -833,7 +833,7 @@ test("E2E: @local binding emits local.set at the binding site", () => {
 });
 
 test("E2E: @local reference emits local.get", () => {
-    const src = "\\\\ f (Int)\n@global f x := { @local tmp := x + 1; tmp };";
+    const src = "\\\\ f (Int)\nf x := {\n    @mut tmp := x + 1;\n    tmp\n};";
     const result = compileSource(src);
 
     expect(result.success).toBe(true);
@@ -843,7 +843,7 @@ test("E2E: @local reference emits local.get", () => {
 
 test("E2E: @local is reassignable via assignment", () => {
     // After @local tmp := 0; reassign tmp = x; the assignment emits local.set.
-    const src = "\\\\ f (Int)\n@global f x := { @local tmp := 0; tmp = x; tmp };";
+    const src = "\\\\ f (Int)\nf x := {\n    @mut tmp := 0;\n    tmp = x;\n    tmp\n};";
     const result = compileSource(src);
 
     expect(result.success).toBe(true);
@@ -853,7 +853,7 @@ test("E2E: @local is reassignable via assignment", () => {
 });
 
 test("E2E: multiple @local variables each get their own WAT local", () => {
-    const src = "\\\\ f (Int)\n@global f x := { @local a := x; @local b := a + 1; b };";
+    const src = "\\\\ f (Int)\nf x := {\n    @mut a := x;\n    @mut b := a + 1;\n    b\n};";
     const result = compileSource(src);
 
     expect(result.success).toBe(true);
@@ -866,7 +866,7 @@ test("E2E: multiple @local variables each get their own WAT local", () => {
 // ---------------------------------------------------------------------------
 
 test("E2E: zero-param @global emits a function and references use (call ...)", () => {
-    const src = "@global five := 5; five + 1;";
+    const src = "five := 5; five + 1;";
     const result = compileSource(src);
 
     expect(result.success).toBe(true);
@@ -881,7 +881,7 @@ test("E2E: zero-param @global emits a function and references use (call ...)", (
 // ---------------------------------------------------------------------------
 
 test("E2E: @if strata has StrataType.Control via registry", () => {
-    const src = "&@if 1, { 2 }, { 3 };";
+    const src = "@if(1, { 2 }, { 3 });";
     const result = compileSource(src);
     // If StrataType tagging is wrong the elaborator would still register @if
     // correctly in the keywords bucket; we verify compilation succeeds and
@@ -896,9 +896,9 @@ test("E2E: @if strata has StrataType.Control via registry", () => {
 
 test("E2E: @match in expression position emits (if (result i32) ...)", () => {
     const src = [
-        "@type_sum Color := Red | Green | Blue;",
-        "@local c := Color::Red;",
-        "@global label := { &@match c, Color::Red, { 1 }, Color::Green, { 2 }, Color::Blue, { 3 } };",
+        "@enum Color := Red | Green | Blue;",
+        "@mut c := Color::Red;",
+        "label := { @match(c, Color::Red, { 1 }, Color::Green, { 2 }, Color::Blue, { 3 }) };",
     ].join("\n");
     const result = compileSource(src);
 
@@ -922,7 +922,7 @@ test("E2E: || emits short-circuit WAT (if (result i32) ...)", () => {
 });
 
 test("E2E: @not emits i32.eqz", () => {
-    const result = compileSource("&@not @true;");
+    const result = compileSource("@not(@true);");
 
     expect(result.success).toBe(true);
     expect(result.wat).toBeDefined();
@@ -930,7 +930,7 @@ test("E2E: @not emits i32.eqz", () => {
 });
 
 test("E2E: @and emits short-circuit AND WAT (if (result i32) ...)", () => {
-    const result = compileSource("&@and @true, @false;");
+    const result = compileSource("@and(@true, @false);");
 
     expect(result.success).toBe(true);
     expect(result.wat).toBeDefined();
@@ -939,7 +939,7 @@ test("E2E: @and emits short-circuit AND WAT (if (result i32) ...)", () => {
 });
 
 test("E2E: || with variables produces correct short-circuit structure", () => {
-    const src = "@local a := 1; @local b := 0; a || b;";
+    const src = "@mut a := 1; @mut b := 0; a || b;";
     const result = compileSource(src);
 
     expect(result.success).toBe(true);
@@ -949,7 +949,7 @@ test("E2E: || with variables produces correct short-circuit structure", () => {
 });
 
 test("E2E: @not of zero is 1 (i32.eqz (i32.const 0))", () => {
-    const result = compileSource("&@not 0;");
+    const result = compileSource("@not(0);");
 
     expect(result.success).toBe(true);
     expect(result.wat).toContain("i32.eqz");
@@ -957,7 +957,7 @@ test("E2E: @not of zero is 1 (i32.eqz (i32.const 0))", () => {
 });
 
 test("E2E: chained || short-circuits left to right", () => {
-    const src = "@local x := 0; @local y := 0; @local z := 1; x || y || z;";
+    const src = "@mut x := 0; @mut y := 0; @mut z := 1; x || y || z;";
     const result = compileSource(src);
 
     expect(result.success).toBe(true);
@@ -967,7 +967,7 @@ test("E2E: chained || short-circuits left to right", () => {
 });
 
 test("E2E: || in function body with typed result", () => {
-    const src = "\\\\ check (Int, Int)\n@global check a, b := { a || b };";
+    const src = "\\\\ check (Int, Int)\ncheck a, b := {\n    a || b\n};";
     const result = compileSource(src);
 
     expect(result.success).toBe(true);
@@ -976,7 +976,7 @@ test("E2E: || in function body with typed result", () => {
 });
 
 test("E2E: @and with both true returns right side", () => {
-    const src = "\\\\ f (Int, Int)\n@global f a, b := { &@and a, b };";
+    const src = "\\\\ f (Int, Int)\nf a, b := {\n    @and(a, b)\n};";
     const result = compileSource(src);
 
     expect(result.success).toBe(true);
@@ -990,7 +990,7 @@ test("E2E: @and with both true returns right side", () => {
 // ---------------------------------------------------------------------------
 
 test.skip("Schema: @local with parameters is rejected (D-D-11c regression — new register::keyword always allowsParams=true)", () => {
-    const result = compileSource("\\\\ count (Int)\n@local count x := 0;");
+    const result = compileSource("\\\\ count (Int)\n@mut count x := 0;");
     expect(result.success).toBe(false);
     expect(result.error).toContain("'@local' does not accept parameters");
 });
@@ -1002,21 +1002,21 @@ test.skip("Schema: @extern with a binding is rejected (D-D-11c regression — ne
 });
 
 test("Schema: @global with parameters and binding is accepted", () => {
-    const result = compileSource("\\\\ add (Int, Int)\n@global add x, y := { x + y };");
+    const result = compileSource("\\\\ add (Int, Int)\nadd x, y := {\n    x + y\n};");
 
     expect(result.success).toBe(true);
     expect(result.wat).toContain("(func $add");
 });
 
 test("Schema: @local with binding and no params is accepted", () => {
-    const result = compileSource("@local count := 0;");
+    const result = compileSource("@mut count := 0;");
 
     expect(result.success).toBe(true);
     expect(result.wat).toContain("(global $count");
 });
 
 test("Schema: @extern with params and no binding is accepted", () => {
-    const result = compileSource("@extern { \\\\ print (Int) -> Void }");
+    const result = compileSource("\\\\ @extern print (Int) -> Void;");
 
     expect(result.success).toBe(true);
     expect(result.wat).toContain("(import");
@@ -1040,7 +1040,7 @@ test("Schema: unknown def-kind keyword is rejected", () => {
 });
 
 test.skip("Schema: @local with generic params is rejected (D-D-11c regression — new register::keyword always allowsGenerics=true)", () => {
-    const result = compileSource("@local count[T] := 0;");
+    const result = compileSource("@mut count[T] := 0;");
     expect(result.success).toBe(false);
     expect(result.error).toContain("'@local' does not accept generic parameters");
 });
@@ -1067,7 +1067,7 @@ function userWat(wat: string): string {
 }
 
 test("Round 23: float params use f32.add not i32.add", () => {
-    const result = compileSource("\\\\ add (Float, Float)\n@global add a, b := { a + b };");
+    const result = compileSource("\\\\ add (Float, Float)\nadd a, b := {\n    a + b\n};");
     expect(result.success).toBe(true);
     const uw = userWat(result.wat!)
     expect(uw).toContain("f32.add");
@@ -1075,7 +1075,7 @@ test("Round 23: float params use f32.add not i32.add", () => {
 });
 
 test("Round 23: int params use i32.add not f32.add", () => {
-    const result = compileSource("\\\\ add (Int, Int)\n@global add a, b := { a + b };");
+    const result = compileSource("\\\\ add (Int, Int)\nadd a, b := {\n    a + b\n};");
     expect(result.success).toBe(true);
     const uw = userWat(result.wat!)
     expect(uw).toContain("i32.add");
@@ -1083,7 +1083,7 @@ test("Round 23: int params use i32.add not f32.add", () => {
 });
 
 test("Round 23: float comparison uses f32.gt", () => {
-    const result = compileSource("\\\\ greater (Float, Float)\n@global greater a, b := { a > b };");
+    const result = compileSource("\\\\ greater (Float, Float)\ngreater a, b := {\n    a > b\n};");
     expect(result.success).toBe(true);
     const uw = userWat(result.wat!)
     expect(uw).toContain("f32.gt");
@@ -1091,7 +1091,7 @@ test("Round 23: float comparison uses f32.gt", () => {
 });
 
 test("Round 23: float comparison uses f32.lt", () => {
-    const result = compileSource("\\\\ lesser (Float, Float)\n@global lesser a, b := { a < b };");
+    const result = compileSource("\\\\ lesser (Float, Float)\nlesser a, b := {\n    a < b\n};");
     expect(result.success).toBe(true);
     const uw = userWat(result.wat!)
     expect(uw).toContain("f32.lt");
@@ -1100,13 +1100,13 @@ test("Round 23: float comparison uses f32.lt", () => {
 
 test("Round 23: mixed int+float without cast is a type error", () => {
     // With the type checker active, Int + Float is a strict mismatch — no implicit promotion.
-    const result = compileSource("\\\\ mixed (Int, Float)\n@global mixed a, b := { a + b };");
+    const result = compileSource("\\\\ mixed (Int, Float)\nmixed a, b := {\n    a + b\n};");
     expect(result.success).toBe(false);
     expect(result.error).toMatch(/mismatch|Int|Float/i);
 });
 
 test("Round 23: float global resolves to f32 in expressions", () => {
-    const result = compileSource("@local x := 1.5; @global getX := { x + 0.0 };");
+    const result = compileSource("@mut x := 1.5; getX := { x + 0.0 };");
     expect(result.success).toBe(true);
     const uw = userWat(result.wat!)
     expect(uw).toContain("f32.add");
@@ -1114,7 +1114,7 @@ test("Round 23: float global resolves to f32 in expressions", () => {
 
 test("Round 23: float call return type drives arithmetic (f32.add in caller)", () => {
     // &double takes a Float and returns Float; two calls added together should use f32.add
-    const src = "\\\\ double (Float)\n@global double x := { x + x };\n\\\\ quad (Float)\n@global quad y := { &double y + &double y };";
+    const src = "\\\\ double (Float)\ndouble x := {\n    x + x\n};\n\\\\ quad (Float)\nquad y := {\n    double(y + double(y))\n};";
     const result = compileSource(src);
     expect(result.success).toBe(true);
     const uw = userWat(result.wat!)
@@ -1122,7 +1122,7 @@ test("Round 23: float call return type drives arithmetic (f32.add in caller)", (
 });
 
 test("Round 23: float subtraction uses f32.sub", () => {
-    const result = compileSource("\\\\ sub (Float, Float)\n@global sub a, b := { a - b };");
+    const result = compileSource("\\\\ sub (Float, Float)\nsub a, b := {\n    a - b\n};");
     expect(result.success).toBe(true);
     const uw = userWat(result.wat!)
     expect(uw).toContain("f32.sub");
@@ -1130,7 +1130,7 @@ test("Round 23: float subtraction uses f32.sub", () => {
 });
 
 test("Round 23: float multiplication uses f32.mul", () => {
-    const result = compileSource("\\\\ mul (Float, Float)\n@global mul a, b := { a * b };");
+    const result = compileSource("\\\\ mul (Float, Float)\nmul a, b := {\n    a * b\n};");
     expect(result.success).toBe(true);
     const uw = userWat(result.wat!)
     expect(uw).toContain("f32.mul");
@@ -1144,7 +1144,7 @@ test("Round 23: float multiplication uses f32.mul", () => {
 test("Round 24: @loop emits block/loop WAT structure", () => {
     // Body ends with &@break so br $cont_ appears as unreachable dead code (valid WAT).
     // { 0 } would leave a value on the stack before br $cont_, producing invalid WASM.
-    const src = "@global count := { &@loop 1, { &@break }; 42 };";
+    const src = "count := { @loop(1, { @break() }); 42 };";
     const result = compileSource(src);
     expect(result.success).toBe(true);
     const uw = userWat(result.wat!)
@@ -1155,7 +1155,7 @@ test("Round 24: @loop emits block/loop WAT structure", () => {
 });
 
 test("Round 24: @break emits br to block label", () => {
-    const src = "@global run := { &@loop 1, { &@break }; 0 };";
+    const src = "run := { @loop(1, { @break() }); 0 };";
     const result = compileSource(src);
     expect(result.success).toBe(true);
     const uw = userWat(result.wat!)
@@ -1163,7 +1163,7 @@ test("Round 24: @break emits br to block label", () => {
 });
 
 test("Round 24: @continue emits br to loop label", () => {
-    const src = "@global run := { &@loop 1, { &@continue }; 0 };";
+    const src = "run := { @loop(1, { @continue() }); 0 };";
     const result = compileSource(src);
     expect(result.success).toBe(true);
     const uw = userWat(result.wat!)
@@ -1172,7 +1172,7 @@ test("Round 24: @continue emits br to loop label", () => {
 
 test("Round 24: @break label matches enclosing @loop label", () => {
     // The $brk_N in @break must equal the $brk_N in the enclosing block
-    const src = "@global run := { &@loop 1, { &@break }; 0 };";
+    const src = "run := { @loop(1, { @break() }); 0 };";
     const result = compileSource(src);
     expect(result.success).toBe(true);
     const uw = userWat(result.wat!)
@@ -1184,7 +1184,7 @@ test("Round 24: @break label matches enclosing @loop label", () => {
 });
 
 test("Round 24: @continue label matches enclosing @loop label", () => {
-    const src = "@global run := { &@loop 1, { &@continue }; 0 };";
+    const src = "run := { @loop(1, { @continue() }); 0 };";
     const result = compileSource(src);
     expect(result.success).toBe(true);
     const uw = userWat(result.wat!)
@@ -1197,7 +1197,7 @@ test("Round 24: @continue label matches enclosing @loop label", () => {
 
 test("Round 24: nested @loop — inner @break uses inner label", () => {
     // Outer body ends with &@continue (so outer br $cont_ is unreachable dead code).
-    const src = "@global run := { &@loop 1, { &@loop 1, { &@break }; &@continue }; 0 };";
+    const src = "run := { @loop(1, { @loop(1, { @break() }); @continue() }); 0 };";
     const result = compileSource(src);
     expect(result.success).toBe(true);
     const uw = userWat(result.wat!)
@@ -1241,7 +1241,7 @@ test("Round 24: count_loop.si example compiles successfully", () => {
 });
 
 test("Round 24: condition-based loop — condition embedded in br_if check", () => {
-    const src = "@global run := { @local n := 0; &@loop n < 5, { n = n + 1; }; n };";
+    const src = "run := { @mut n := 0; @loop(n < 5, { n = n + 1; }); n };";
     const result = compileSource(src);
     expect(result.success).toBe(true);
     const uw = userWat(result.wat!)
@@ -1257,7 +1257,7 @@ test("Round 24: condition-based loop — condition embedded in br_if check", () 
 test("Round 24: loop body with mutation-as-item is void — local.set before br $cont_", () => {
     // The loop body { n = n + 1; } ends with a semicolon → no trailing expression.
     // local.set $n leaves nothing on the stack, so br $cont_ is reached with empty stack.
-    const src = "@global run := { @local n := 0; &@loop n < 5, { n = n + 1; }; n };";
+    const src = "run := { @mut n := 0; @loop(n < 5, { n = n + 1; }); n };";
     const result = compileSource(src);
     expect(result.success).toBe(true);
     const uw = userWat(result.wat!)
@@ -1269,7 +1269,7 @@ test("Round 24: loop body with mutation-as-item is void — local.set before br 
 });
 
 test("Round 24: loop with @if-break pattern — conditional exit inside body", () => {
-    const src = "@global run := { @local n := 0; &@loop 1, { n = n + 1; &@if n >= 3, { &@break }; }; n };";
+    const src = "run := { @mut n := 0; @loop(1, { n = n + 1; @if(n >= 3, { @break() }); }); n };";
     const result = compileSource(src);
     expect(result.success).toBe(true);
     const uw = userWat(result.wat!)
@@ -1314,7 +1314,7 @@ test("Round 26: >> emits i32.shr_s", () => {
 });
 
 test("Round 26: | in function body uses i32.or not f32.or", () => {
-    const result = compileSource("\\\\ mask (Int, Int)\n@global mask a, b := { a | b };");
+    const result = compileSource("\\\\ mask (Int, Int)\nmask a, b := {\n    a | b\n};");
     expect(result.success).toBe(true);
     const uw = userWat(result.wat!)
     expect(uw).toContain("i32.or");
@@ -1322,28 +1322,28 @@ test("Round 26: | in function body uses i32.or not f32.or", () => {
 });
 
 test("Round 26: ^ in function body uses i32.xor", () => {
-    const result = compileSource("\\\\ toggle (Int, Int)\n@global toggle a, b := { a ^ b };");
+    const result = compileSource("\\\\ toggle (Int, Int)\ntoggle a, b := {\n    a ^ b\n};");
     expect(result.success).toBe(true);
     const uw = userWat(result.wat!)
     expect(uw).toContain("i32.xor");
 });
 
 test("Round 26: << with literal shift amount", () => {
-    const result = compileSource("\\\\ double (Int)\n@global double a := { a << 1 };");
+    const result = compileSource("\\\\ double (Int)\ndouble a := {\n    a << 1\n};");
     expect(result.success).toBe(true);
     const uw = userWat(result.wat!)
     expect(uw).toContain("i32.shl");
 });
 
 test("Round 26: >> with literal shift amount", () => {
-    const result = compileSource("\\\\ half (Int)\n@global half a := { a >> 1 };");
+    const result = compileSource("\\\\ half (Int)\nhalf a := {\n    a >> 1\n};");
     expect(result.success).toBe(true);
     const uw = userWat(result.wat!)
     expect(uw).toContain("i32.shr_s");
 });
 
 test("Round 26: bitwise ops combined with arithmetic", () => {
-    const result = compileSource("\\\\ f (Int, Int)\n@global f a, b := { (a + b) | (a ^ b) };");
+    const result = compileSource("\\\\ f (Int, Int)\nf a, b := {\n    a + b | (a ^ b)\n};");
     expect(result.success).toBe(true);
     const uw = userWat(result.wat!)
     expect(uw).toContain("i32.add");
@@ -1352,7 +1352,7 @@ test("Round 26: bitwise ops combined with arithmetic", () => {
 });
 
 test("Round 26: bitwise | does not promote to f32 (always emits i32.or)", () => {
-    const result = compileSource("\\\\ f (Int)\n@global f a := { a | 255 };");
+    const result = compileSource("\\\\ f (Int)\nf a := {\n    a | 255\n};");
     expect(result.success).toBe(true);
     const uw = userWat(result.wat!)
     expect(uw).toContain("i32.or");
@@ -1388,7 +1388,7 @@ test("Round 26: >> operator registered (D-D-4 migrated)", () => {
 
 test("Round 26: | and || are distinct operators", () => {
     // Bitwise OR and logical OR must coexist without conflict
-    const src = "@local x := 5; @local y := 3; x | y; x || y;";
+    const src = "@mut x := 5; @mut y := 3; x | y; x || y;";
     const result = compileSource(src);
     expect(result.success).toBe(true);
     expect(result.wat).toContain("i32.or");
@@ -1421,7 +1421,7 @@ test("Round 27: @return inside @if — fallthrough code also emits", () => {
 });
 
 test("Round 27: @return with value emits value then return", () => {
-    const result = compileSource("@global zero := { &@return 0 };");
+    const result = compileSource("zero := { @return(0) };");
     expect(result.success).toBe(true);
     const uw = userWat(result.wat!)
     expect(uw).toContain("(i32.const 0)");
@@ -1430,7 +1430,7 @@ test("Round 27: @return with value emits value then return", () => {
 
 test("Round 27: @return with no arg emits bare return", () => {
     // A @global with no binding just returns the default (empty @return)
-    const result = compileSource("@global earlyExit := { &@return };");
+    const result = compileSource("earlyExit := { @return() };");
     expect(result.success).toBe(true);
     const uw = userWat(result.wat!)
     expect(uw).toContain("return");
@@ -1494,9 +1494,10 @@ test("Phase 4: defer_with_return.si — early @return runs cleanup before return
 test("Phase 4: @defer site itself produces no inline IR", () => {
     // A function whose only statement is @defer should not call any function
     // at the defer site — the cleanup is only materialised at function exit.
-    const src = `@extern { \\\\ cleanup () -> Void }
-\\\\ f () -> Void
-@fn f := { &@defer &cleanup };`
+    const src = `\\\\ @extern cleanup ();
+@fn f := {
+    @defer(cleanup())
+};`
     const result = compileSource(src);
     expect(result.success).toBe(true);
     const uw = userWat(result.wat!)
@@ -1517,7 +1518,7 @@ test("Round 27: @toFloat emits f32.convert_i32_s", () => {
 });
 
 test("Round 27: @toFloat on an Int param emits f32.convert_i32_s", () => {
-    const result = compileSource("\\\\ cast (Int)\n@global cast x := { &@toFloat x };");
+    const result = compileSource("\\\\ cast (Int)\ncast x := {\n    @toFloat(x)\n};");
     expect(result.success).toBe(true);
     const uw = userWat(result.wat!)
     expect(uw).toContain("f32.convert_i32_s");
@@ -1526,7 +1527,7 @@ test("Round 27: @toFloat on an Int param emits f32.convert_i32_s", () => {
 test("Round 27: @toFloat promotes type — explicit cast then float add", () => {
     // &@toFloat x + y parses as @toFloat(x + y) which is Int+Float → type error.
     // Parentheses are needed: (&@toFloat x) converts to Float, then + y:Float is f32.add.
-    const result = compileSource("\\\\ mixAdd (Int, Float)\n@global mixAdd x, y := { (&@toFloat x) + y };");
+    const result = compileSource("\\\\ mixAdd (Int, Float)\nmixAdd x, y := {\n    @toFloat(x) + y\n};");
     expect(result.success).toBe(true);
     const uw = userWat(result.wat!)
     expect(uw).toContain("f32.convert_i32_s");
@@ -1552,7 +1553,7 @@ test("Round 27: @toInt emits i32.trunc_f32_s", () => {
 });
 
 test("Round 27: @toInt on a Float param emits i32.trunc_f32_s", () => {
-    const result = compileSource("\\\\ cast (Float)\n@global cast x := { &@toInt x };");
+    const result = compileSource("\\\\ cast (Float)\ncast x := {\n    @toInt(x)\n};");
     expect(result.success).toBe(true);
     const uw = userWat(result.wat!)
     expect(uw).toContain("i32.trunc_f32_s");
@@ -1565,7 +1566,7 @@ test("Round 27: @toInt registered in registry as keyword stratum (D-D-5 migrated
 });
 
 test("Round 27: @toInt result type is i32 — can add with int param", () => {
-    const result = compileSource("\\\\ roundAdd (Float, Int)\n@global roundAdd x, y := { (&@toInt x) + y };");
+    const result = compileSource("\\\\ roundAdd (Float, Int)\nroundAdd x, y := {\n    @toInt(x) + y\n};");
     expect(result.success).toBe(true);
     const uw = userWat(result.wat!)
     expect(uw).toContain("i32.trunc_f32_s");
@@ -1573,7 +1574,7 @@ test("Round 27: @toInt result type is i32 — can add with int param", () => {
 });
 
 test("Round 27: @toFloat and @toInt round-trip in a function", () => {
-    const result = compileSource("\\\\ roundTrip (Int)\n@global roundTrip x := { &@toInt &@toFloat x };");
+    const result = compileSource("\\\\ roundTrip (Int)\nroundTrip x := {\n    @toInt(@toFloat(x))\n};");
     expect(result.success).toBe(true);
     const uw = userWat(result.wat!)
     expect(uw).toContain("f32.convert_i32_s");
@@ -1585,67 +1586,67 @@ test("Round 27: @toFloat and @toInt round-trip in a function", () => {
 // ============================================================================
 
 test("Round 28: Int + Float without cast is a type error", () => {
-    const result = compileSource("\\\\ f (Int, Float)\n@global f a, b := { a + b };");
+    const result = compileSource("\\\\ f (Int, Float)\nf a, b := {\n    a + b\n};");
     expect(result.success).toBe(false);
     expect(result.error).toMatch(/mismatch|Int|Float/i);
 });
 
 test("Round 28: Float + Float compiles successfully", () => {
-    const result = compileSource("\\\\ f (Float, Float)\n@global f a, b := { a + b };");
+    const result = compileSource("\\\\ f (Float, Float)\nf a, b := {\n    a + b\n};");
     expect(result.success).toBe(true);
     expect(result.wat).toContain("f32.add");
 });
 
-test("Round 28: annotation mismatch — @global x := &@as Int, 3.14 is a type error", () => {
-    const result = compileSource("@global x := &@as Int, 3.14;");
+test("Round 28: annotation mismatch — typed binding x Int with float value is a type error", () => {
+    const result = compileSource("\\\\ x Int\nx := 3.14;");
     expect(result.success).toBe(false);
     expect(result.error).toMatch(/mismatch|annotation|Int|Float/i);
 });
 
 test("Round 28: assignment to immutable @global is a type error", () => {
-    const result = compileSource("@global x := 5; x = 10;");
+    const result = compileSource("x := 5; x = 10;");
     expect(result.success).toBe(false);
     expect(result.error).toMatch(/immutable|x/i);
 });
 
 test("Round 28: wrong arg type in function call is a type error", () => {
-    const result = compileSource("\\\\ double (Int)\n@global double x := { x + x }; @global run := { &double 3.14 };");
+    const result = compileSource("\\\\ double (Int)\ndouble x := {\n    x + x\n};\nrun := {\n    double(3.14)\n};");
     expect(result.success).toBe(false);
     expect(result.error).toMatch(/mismatch|Int|Float/i);
 });
 
 test("Round 28: @toInt on a Float param returns Int — no type error", () => {
-    const result = compileSource("\\\\ f (Float)\n@global f x := { &@toInt x };");
+    const result = compileSource("\\\\ f (Float)\nf x := {\n    @toInt(x)\n};");
     expect(result.success).toBe(true);
     expect(result.wat).toContain("i32.trunc_f32_s");
 });
 
 test("Round 28: @toInt on an Int param is a type error", () => {
-    const result = compileSource("\\\\ f (Int)\n@global f x := { &@toInt x };");
+    const result = compileSource("\\\\ f (Int)\nf x := {\n    @toInt(x)\n};");
     expect(result.success).toBe(false);
     expect(result.error).toMatch(/mismatch|Float|Int/i);
 });
 
 test("Round 28: @toFloat on an Int param returns Float — no type error", () => {
-    const result = compileSource("\\\\ f (Int)\n@global f x := { &@toFloat x };");
+    const result = compileSource("\\\\ f (Int)\nf x := {\n    @toFloat(x)\n};");
     expect(result.success).toBe(true);
     expect(result.wat).toContain("f32.convert_i32_s");
 });
 
 test("Round 28: @toFloat on a Float param is a type error", () => {
-    const result = compileSource("\\\\ f (Float)\n@global f x := { &@toFloat x };");
+    const result = compileSource("\\\\ f (Float)\nf x := {\n    @toFloat(x)\n};");
     expect(result.success).toBe(false);
     expect(result.error).toMatch(/mismatch|Float|Int/i);
 });
 
 test("Round 28: well-typed function with @if compiles successfully", () => {
-    const result = compileSource("\\\\ safeDivide (Int, Int)\n@global safeDivide x, y := { &@if y == 0, { &@return 0 }; x / y };");
+    const result = compileSource("\\\\ safeDivide (Int, Int)\nsafeDivide x, y := {\n    @if(y == 0, {\n        @return(0)\n    });\n    x / y\n};");
     expect(result.success).toBe(true);
     expect(result.wat).toContain("i32.div_s");
 });
 
 test("Round 28: heterogeneous comparison types is a type error", () => {
-    const result = compileSource("\\\\ f (Int, Float)\n@global f x, y := { x < y };");
+    const result = compileSource("\\\\ f (Int, Float)\nf x, y := {\n    x < y\n};");
     expect(result.success).toBe(false);
     expect(result.error).toMatch(/mismatch|Int|Float/i);
 });
@@ -1657,7 +1658,7 @@ test("Round 28: heterogeneous comparison types is a type error", () => {
 // ============================================================================
 
 test("Round 34: single-step strata body still works (regression)", () => {
-    const result = compileSource("\\\\ f (Int, Int)\n@global f a, b := { a + b };")
+    const result = compileSource("\\\\ f (Int, Int)\nf a, b := {\n    a + b\n};")
     expect(result.success).toBe(true)
     expect(userWat(result.wat!)).toContain("i32.add")
 })
@@ -1679,7 +1680,9 @@ test("Round 34: '+' dispatches via on::lower handler (D-D-7a migrated)", () => {
 test("Round 35: unknown operator without registering strata causes elaboration error", () => {
     // Compiling '***' without loading the strata that defines it should fail.
     const result = compileSource(`\\\\ f (Int, Int)
-@global f a, b := { a *** b };`)
+f a, b := {
+    a *** b
+};`)
     expect(result.success).toBe(false)
 })
 
@@ -1689,7 +1692,9 @@ test("Round 35: unknown operator without registering strata causes elaboration e
 
 test("Round 36: Float addition uses f32.add, not i32.add", () => {
     const result = compileSource(`\\\\ add (Float, Float)
-@global add a, b := { a + b };`)
+add a, b := {
+    a + b
+};`)
     expect(result.success).toBe(true)
     const uw = userWat(result.wat!)
     expect(uw).toContain('f32.add')
@@ -1698,7 +1703,9 @@ test("Round 36: Float addition uses f32.add, not i32.add", () => {
 
 test("Round 36: Int addition uses i32.add, not f32.add (regression)", () => {
     const result = compileSource(`\\\\ add (Int, Int)
-@global add a, b := { a + b };`)
+add a, b := {
+    a + b
+};`)
     expect(result.success).toBe(true)
     const uw = userWat(result.wat!)
     expect(uw).toContain('i32.add')
@@ -1707,14 +1714,18 @@ test("Round 36: Int addition uses i32.add, not f32.add (regression)", () => {
 
 test("Round 36: Float comparison uses f32.lt", () => {
     const result = compileSource(`\\\\ cmp (Float, Float)
-@global cmp a, b := { a < b };`)
+cmp a, b := {
+    a < b
+};`)
     expect(result.success).toBe(true)
     expect(userWat(result.wat!)).toContain('f32.lt')
 })
 
 test("Round 36: Float division uses f32.div", () => {
     const result = compileSource(`\\\\ div (Float, Float)
-@global div a, b := { a / b };`)
+div a, b := {
+    a / b
+};`)
     expect(result.success).toBe(true)
     expect(userWat(result.wat!)).toContain('f32.div')
 })
@@ -1731,7 +1742,9 @@ test("Round 37: || produces short-circuit WAT driven by WASM::control_or intrins
     // || must be lowered via the strata registry (WASM::control_or → IRIf),
     // not via a hardcoded symbol check. Verify the emitted structure.
     const result = compileSource(`\\\\ f (Int, Int)
-@global f a, b := { a || b };`)
+f a, b := {
+    a || b
+};`)
     expect(result.success).toBe(true)
     const uw = userWat(result.wat!)
     // Short-circuit OR emits as (if (result i32) cond (then i32.const 1) (else rhs)).
@@ -1742,7 +1755,7 @@ test("Round 37: || produces short-circuit WAT driven by WASM::control_or intrins
 })
 
 test("Round 37: @export emits explicit WAT export for a global", () => {
-    const result = compileSource(`@local counter := 0;
+    const result = compileSource(`@mut counter := 0;
 @export counter;`)
     expect(result.success).toBe(true)
     expect(result.wat).toContain('(export "counter" (global $counter))')
@@ -1750,7 +1763,9 @@ test("Round 37: @export emits explicit WAT export for a global", () => {
 
 test("Round 37: @export on a function emits explicit WAT export for the function", () => {
     const result = compileSource(`\\\\ add (Int, Int)
-@global add a, b := { a + b };
+add a, b := {
+    a + b
+};
 @export add;`)
     expect(result.success).toBe(true)
     expect(result.wat).toContain('(export "add" (func $add))')
@@ -1759,7 +1774,7 @@ test("Round 37: @export on a function emits explicit WAT export for the function
 test("Round 37: @export unknown keyword is an elaboration error without grammar changes", () => {
     // @export is registered via metadata.si strata — not a grammar keyword.
     // Verifies the mechanism works end-to-end (no parse error).
-    const result = compileSource(`@local n := 1;
+    const result = compileSource(`@mut n := 1;
 @export n;`)
     expect(result.success).toBe(true)
 })
@@ -1775,9 +1790,9 @@ test("Round 37: @export unknown keyword is an elaboration error without grammar 
 test("Round 43: @match trailing default emits no i32.eq for the default arm", () => {
     // Even arg count: last arg is the catch-all default, no comparison emitted for it.
     const src = [
-        "@type_sum Color := Red | Green | Blue;",
-        "@local c := Color::Red;",
-        "&@match c, Color::Red, { 1 }, { 0 };",
+        "@enum Color := Red | Green | Blue;",
+        "@mut c := Color::Red;",
+        "@match(c, Color::Red, { 1 }, { 0 });",
     ].join("\n")
     const result = compileSource(src)
 
@@ -1794,9 +1809,9 @@ test("Round 43: @match trailing default emits no i32.eq for the default arm", ()
 
 test("Round 43: @match two explicit arms + trailing default", () => {
     const src = [
-        "@type_sum Status := Ok | Warn | Error;",
-        "@local s := Status::Warn;",
-        "&@match s, Status::Ok, { 0 }, Status::Error, { 2 }, { 1 };",
+        "@enum Status := Ok | Warn | Error;",
+        "@mut s := Status::Warn;",
+        "@match(s, Status::Ok, { 0 }, Status::Error, { 2 }, { 1 });",
     ].join("\n")
     const result = compileSource(src)
 
@@ -1810,9 +1825,9 @@ test("Round 43: @match two explicit arms + trailing default", () => {
 
 test("Round 43: type checker accepts trailing default @match without errors", () => {
     const src = [
-        "@type_sum Bool2 := Yes | No;",
-        "@local b := Bool2::Yes;",
-        "&@match b, Bool2::Yes, { 1 }, { 0 };",
+        "@enum Bool2 := Yes | No;",
+        "@mut b := Bool2::Yes;",
+        "@match(b, Bool2::Yes, { 1 }, { 0 });",
     ].join("\n")
     const result = compileSource(src)
 
@@ -1822,9 +1837,9 @@ test("Round 43: type checker accepts trailing default @match without errors", ()
 test("Round 43: @match trailing default type mismatch is a type error", () => {
     // Default is Float but arm result is Int — should error.
     const src = [
-        "@type_sum Color := Red | Green;",
-        "@local c := Color::Red;",
-        "&@match c, Color::Red, { 1 }, { 2.5 };",
+        "@enum Color := Red | Green;",
+        "@mut c := Color::Red;",
+        "@match(c, Color::Red, { 1 }, { 2.5 });",
     ].join("\n")
     const result = compileSource(src)
 
@@ -1835,7 +1850,7 @@ test("Round 43: @match trailing default type mismatch is a type error", () => {
 test("Round 43: @type_sum lowering uses def expander (sum-type globals still emit correctly)", () => {
     // Regression: type_sum globals must still emit even after removing the
     // hardcoded lowerSumType — the def expander must produce the same output.
-    const result = compileSource("@type_sum Direction := North | South | East | West;")
+    const result = compileSource("@enum Direction := North | South | East | West;")
 
     expect(result.success).toBe(true)
     expect(result.wat).toContain("(global $Direction_North i32 (i32.const 0))")
@@ -1852,10 +1867,9 @@ test("Round 46: web::console_log_str auto-generates WASM import from module regi
     const result = compileSource(`
         \\\\ greet (String)
         @fn greet msg := {
-            &web::console_log_str msg;
+            web::console_log_str(msg);
             msg
-        };
-    `)
+        };`)
     expect(result.success).toBe(true)
     expect(result.wat).toContain('(import "web" "console_log_str" (func $web__console_log_str (param i32)))')
     expect(result.wat).toContain('(call $web__console_log_str')
@@ -1865,9 +1879,8 @@ test("Round 46: web::math_sqrt auto-generates float import", () => {
     const result = compileSource(`
         \\\\ root (Float)
         @fn root x := {
-            &web::math_sqrt x
-        };
-    `)
+            web::math_sqrt(x)
+        };`)
     expect(result.success).toBe(true)
     expect(result.wat).toContain('(import "web" "math_sqrt" (func $web__math_sqrt (param f32) (result f32)))')
     expect(result.wat).toContain('(call $web__math_sqrt')
@@ -1877,9 +1890,8 @@ test("Round 46: web::math_pow with two Float args is deduplicated across multipl
     const result = compileSource(`
         \\\\ hyp (Float, Float)
         @fn hyp a, b := {
-            &web::math_sqrt ((&web::math_pow a, 2.0) + (&web::math_pow b, 2.0))
-        };
-    `)
+            web::math_sqrt(web::math_pow(a, 2.0) + web::math_pow(b, 2.0))
+        };`)
     expect(result.success).toBe(true)
     // Import should appear exactly once even though math_pow is called twice.
     const importMatches = result.wat!.match(/\(import "web" "math_pow"/g) ?? []
@@ -1891,10 +1903,9 @@ test("Round 46: no @extern declaration needed for module functions", () => {
     const result = compileSource(`
         \\\\ log (Int)
         @fn log v := {
-            &web::console_log v;
+            web::console_log(v);
             v
-        };
-    `)
+        };`)
     expect(result.success).toBe(true)
     expect(result.wat).toContain('(import "web" "console_log"')
     expect(result.wat).not.toContain('@extern')
@@ -1904,9 +1915,8 @@ test("Round 46: unknown module throws a meaningful error", () => {
     const result = compileSource(`
         \\\\ bad (Int)
         @fn bad v := {
-            &nonexistent::foo v
-        };
-    `)
+            nonexistent::foo(v)
+        };`)
     expect(result.success).toBe(false)
     expect(result.error).toContain("Unknown module 'nonexistent'")
 })
@@ -1930,7 +1940,7 @@ test("Phase A i64: @toInt64 emits i64.extend_i32_s and the call passes an i64 ar
 })
 
 test("Phase A i64: Int64 parameter on a Silicon function compiles", () => {
-    const result = compileSource("\\\\ identity64 (Int64)\n@global identity64 x := { x };")
+    const result = compileSource("\\\\ identity64 (Int64)\nidentity64 x := {\n    x\n};")
     expect(result.success).toBe(true)
     expect(result.wat).toContain('(param $x i64)')
     expect(result.wat).toContain('(result i64)')
@@ -1938,8 +1948,8 @@ test("Phase A i64: Int64 parameter on a Silicon function compiles", () => {
 
 test("Phase A i64: @toInt overload on Int64 emits i32.wrap_i64", () => {
     const result = compileSource(
-        "\\\\ extend (Int)\n@global extend x := { &@toInt64 x };" +
-        "\\\\ narrow (Int64)\n@global narrow x := { &@toInt x };"
+        "\\\\ extend (Int)\nextend x := {\n    @toInt64(x)\n};" +
+        "\\\\ narrow (Int64)\nnarrow x := {\n    @toInt(x)\n};"
     )
     expect(result.success).toBe(true)
     expect(result.wat).toContain('i64.extend_i32_s')
@@ -1948,8 +1958,8 @@ test("Phase A i64: @toInt overload on Int64 emits i32.wrap_i64", () => {
 
 test("Phase A i64: passing an Int where Int64 is expected is a type error", () => {
     const result = compileSource(
-        "\\\\ take64 (Int64)\n@global take64 x := { x };" +
-        "@global run := { &take64 5 };"
+        "\\\\ take64 (Int64)\ntake64 x := {\n    x\n};" +
+        "run := { take64(5) };"
     )
     expect(result.success).toBe(false)
     expect(result.error).toMatch(/mismatch|Int|Int64/i)
@@ -1957,7 +1967,7 @@ test("Phase A i64: passing an Int where Int64 is expected is a type error", () =
 
 test("Phase A i64: Int32 is recognised as a type name (alias for Int on wasm32)", () => {
     // Int32 should resolve to the same type as Int on the current target.
-    const result = compileSource("\\\\ id32 (Int32)\n@global id32 x := { x };")
+    const result = compileSource("\\\\ id32 (Int32)\nid32 x := {\n    x\n};")
     expect(result.success).toBe(true)
     expect(result.wat).toContain('(param $x i32)')
 })
@@ -1965,8 +1975,8 @@ test("Phase A i64: Int32 is recognised as a type name (alias for Int on wasm32)"
 test("Phase A i64: @toInt64 result type is Int64 — propagates to extern arg position", () => {
     // The @toInt64 cast must yield Int64 so the extern call typechecks.
     const result = compileSource(
-        "@extern { \\\\ wants64 (Int64) -> Int64 }" +
-        "\\\\ run (Int)\n@global run x := { &wants64 (&@toInt64 x) };"
+        "\\\\ @extern wants64 (Int64) -> Int64;" +
+        "\\\\ run (Int)\nrun x := {\n    wants64(@toInt64(x))\n};"
     )
     expect(result.success).toBe(true)
     expect(result.wat).toContain('i64.extend_i32_s')
@@ -1974,7 +1984,7 @@ test("Phase A i64: @toInt64 result type is Int64 — propagates to extern arg po
 
 test("Phase A i64: i64 escape hatch (lowercase) parses as Int64", () => {
     // The :i64 / :i32 / :f32 surface forms are documented escape hatches.
-    const result = compileSource("\\\\ id (i64)\n@global id x := { x };")
+    const result = compileSource("\\\\ id (i64)\nid x := {\n    x\n};")
     expect(result.success).toBe(true)
     expect(result.wat).toContain('(param $x i64)')
 })
@@ -1985,7 +1995,7 @@ test("Phase A i64: i64 escape hatch (lowercase) parses as Int64", () => {
 // ============================================================================
 
 test("Phase C i64: Int64 + Int64 emits i64.add", () => {
-    const result = compileSource("\\\\ add64 (Int64, Int64)\n@global add64 x, y := { x + y };")
+    const result = compileSource("\\\\ add64 (Int64, Int64)\nadd64 x, y := {\n    x + y\n};")
     expect(result.success).toBe(true)
     const uw = userWat(result.wat!)
     expect(uw).toContain('i64.add')
@@ -1993,7 +2003,7 @@ test("Phase C i64: Int64 + Int64 emits i64.add", () => {
 })
 
 test("Phase C i64: Int64 < Int64 emits i64.lt_s and returns Bool", () => {
-    const result = compileSource("\\\\ cmp64 (Int64, Int64)\n@global cmp64 x, y := { x < y };")
+    const result = compileSource("\\\\ cmp64 (Int64, Int64)\ncmp64 x, y := {\n    x < y\n};")
     expect(result.success).toBe(true)
     expect(result.wat).toContain('i64.lt_s')
     // Comparison result is i32 (Bool) — the function's result reflects that.
@@ -2002,7 +2012,7 @@ test("Phase C i64: Int64 < Int64 emits i64.lt_s and returns Bool", () => {
 
 test("Phase C i64: full set of arithmetic ops dispatches to i64 variants", () => {
     const result = compileSource(
-        "\\\\ arith (Int64, Int64)\n@global arith x, y := { ((x + y) - (x * y)) / (x % y) };"
+        "\\\\ arith (Int64, Int64)\narith x, y := {\n    x + y - (x * y) / (x % y)\n};"
     )
     expect(result.success).toBe(true)
     expect(result.wat).toContain('i64.add')
@@ -2013,7 +2023,7 @@ test("Phase C i64: full set of arithmetic ops dispatches to i64 variants", () =>
 })
 
 test("Phase C i64: @toInt64 cast + i64 arithmetic compose", () => {
-    const result = compileSource("\\\\ chain (Int)\n@global chain x := { (&@toInt64 x) + (&@toInt64 1) };")
+    const result = compileSource("\\\\ chain (Int)\nchain x := {\n    @toInt64(x) + @toInt64(1)\n};")
     expect(result.success).toBe(true)
     expect(result.wat).toContain('i64.extend_i32_s')
     expect(result.wat).toContain('i64.add')
@@ -2021,11 +2031,11 @@ test("Phase C i64: @toInt64 cast + i64 arithmetic compose", () => {
 
 test("Phase C i64: comparison ops (==, !=, >, <=, >=) all dispatch to i64", () => {
     const result = compileSource(
-        "\\\\ eq (Int64, Int64)\n@global eq x, y := { x == y };" +
-        "\\\\ ne (Int64, Int64)\n@global ne x, y := { x != y };" +
-        "\\\\ gt (Int64, Int64)\n@global gt x, y := { x > y };" +
-        "\\\\ le (Int64, Int64)\n@global le x, y := { x <= y };" +
-        "\\\\ ge (Int64, Int64)\n@global ge x, y := { x >= y };"
+        "\\\\ eq (Int64, Int64)\neq x, y := {\n    x == y\n};" +
+        "\\\\ ne (Int64, Int64)\nne x, y := {\n    x != y\n};" +
+        "\\\\ gt (Int64, Int64)\ngt x, y := {\n    x > y\n};" +
+        "\\\\ le (Int64, Int64)\nle x, y := {\n    x <= y\n};" +
+        "\\\\ ge (Int64, Int64)\nge x, y := {\n    x >= y\n};"
     )
     expect(result.success).toBe(true)
     expect(result.wat).toContain('i64.eq')
@@ -2036,7 +2046,7 @@ test("Phase C i64: comparison ops (==, !=, >, <=, >=) all dispatch to i64", () =
 })
 
 test("Phase C i64: i32 arithmetic still dispatches to i32 (no regression)", () => {
-    const result = compileSource("\\\\ add (Int, Int)\n@global add x, y := { x + y };")
+    const result = compileSource("\\\\ add (Int, Int)\nadd x, y := {\n    x + y\n};")
     expect(result.success).toBe(true)
     const uw = userWat(result.wat!)
     expect(uw).toContain('i32.add')
@@ -2066,12 +2076,8 @@ test("Phase D i64: wasi_snapshot_preview1.path_open module registry declares i64
     const result = compileSource(`
         \\\\ try_open (Int, Int, Int, Int)
         @fn try_open dir, p, l, out := {
-            &wasi_snapshot_preview1::path_open
-                dir, 0, p, l, 0,
-                (&@toInt64 0), (&@toInt64 0),
-                0, out
-        };
-    `)
+            wasi_snapshot_preview1::path_open(dir, 0, p, l, 0, @toInt64(0), @toInt64(0), 0, out)
+        };`)
     expect(result.success).toBe(true)
     // Five i32 params, two i64 params for rights, two more i32 — total signature shape.
     expect(result.wat).toMatch(
@@ -2085,12 +2091,11 @@ test("Phase D i64: wasi_snapshot_preview1.path_open module registry declares i64
 
 test("Phase 1a @struct: generates constructor function", () => {
     const result = compileSource(`
-        @struct Point x Int, y Int;
-        @fn main  := {
-            @local p := &Point 3, 7;
-            p.x
-        };
-    `)
+        @type Point := { x Int, y Int };
+        @fn main := {
+            @mut p := Point(3, 7);
+            p::x
+        };`)
     expect(result.success).toBe(true)
     // Constructor function named $Point
     expect(result.wat).toContain('(func $Point')
@@ -2100,12 +2105,11 @@ test("Phase 1a @struct: generates constructor function", () => {
 
 test("Phase 1a @struct: constructor stores fields at correct offsets", () => {
     const result = compileSource(`
-        @struct Point x Int, y Int;
-        @fn main  := {
-            @local p := &Point 3, 7;
-            p.x
-        };
-    `)
+        @type Point := { x Int, y Int };
+        @fn main := {
+            @mut p := Point(3, 7);
+            p::x
+        };`)
     expect(result.success).toBe(true)
     // x stored at offset 0, y at offset 4
     expect(result.wat).toContain('i32.store')
@@ -2120,22 +2124,20 @@ test("Phase 1a @struct: field read generates i32.load", () => {
 
 test("Phase 1a @struct: typechecker recognises struct type annotation", () => {
     const result = compileSource(`
-        @struct Point x Int, y Int;
-        @fn main  := {
-            @local p := &Point 3, 7;
-            p.x
-        };
-    `)
+        @type Point := { x Int, y Int };
+        @fn main := {
+            @mut p := Point(3, 7);
+            p::x
+        };`)
     expect(result.success).toBe(true)
     expect(result.error).toBeNull()
 })
 
 test("Phase 1a @struct: typechecker resolves field type for p.x as Int", () => {
     const result = compileSource(`
-        @struct Point x Int, y Int;
+        @type Point := { x Int, y Int };
         \\\\ get_x (Point)
-        @fn get_x p := p.x;
-    `)
+        @fn get_x p := p::x;`)
     expect(result.success).toBe(true)
     expect(result.error).toBeNull()
 })
@@ -2146,14 +2148,13 @@ test("Phase 1a @struct: typechecker resolves field type for p.x as Int", () => {
 
 test("Phase 1a-6 nested @struct: field read on outer struct compiles", () => {
     const result = compileSource(`
-        @struct Point x Int, y Int;
-        @struct Rect origin Point, width Int, height Int;
-        @fn main  := {
-            @local p := &Point 3, 7;
-            @local r := &Rect p, 100, 50;
-            r.width
-        };
-    `)
+        @type Point := { x Int, y Int };
+        @type Rect := { origin Point, width Int, height Int };
+        @fn main := {
+            @mut p := Point(3, 7);
+            @mut r := Rect(p, 100, 50);
+            r::width
+        };`)
     expect(result.success).toBe(true)
     expect(result.wat).toContain('(func $Point')
     expect(result.wat).toContain('(func $Rect')
@@ -2168,25 +2169,23 @@ test("Phase 1a-6 nested @struct: struct example file compiles", () => {
 
 test("Phase 1a-6 nested @struct: typechecker resolves outer field type", () => {
     const result = compileSource(`
-        @struct Point x Int, y Int;
-        @struct Rect origin Point, width Int, height Int;
+        @type Point := { x Int, y Int };
+        @type Rect := { origin Point, width Int, height Int };
         \\\\ get_width (Rect)
-        @fn get_width r := r.width;
-    `)
+        @fn get_width r := r::width;`)
     expect(result.success).toBe(true)
     expect(result.error).toBeNull()
 })
 
 test("Phase 1a-6 nested @struct: field write on nested struct compiles", () => {
     const result = compileSource(`
-        @struct Point x Int, y Int;
-        @struct Rect origin Point, width Int, height Int;
+        @type Point := { x Int, y Int };
+        @type Rect := { origin Point, width Int, height Int };
         \\\\ update_width (Rect, Int)
         @fn update_width r, w := {
-            r.width = w;
-            r.width
-        };
-    `)
+            r::width = w;
+            r::width
+        };`)
     expect(result.success).toBe(true)
     expect(result.wat).toContain('i32.store')
     expect(result.wat).toContain('i32.load')
@@ -2198,16 +2197,15 @@ test("Phase 1a-6 nested @struct: field write on nested struct compiles", () => {
 
 test("Phase 1a-7 struct aggregates: Token struct models compiler data", () => {
     const result = compileSource(`
-        @struct Token kind Int, start Int, len Int;
+        @type Token := { kind Int, start Int, len Int };
         \\\\ make_token (Int, Int, Int)
-        @fn make_token kind, start, len := &Token kind, start, len;
+        @fn make_token kind, start, len := Token(kind, start, len);
         \\\\ token_kind (Token)
-        @fn token_kind t := t.kind;
+        @fn token_kind t := t::kind;
         \\\\ token_start (Token)
-        @fn token_start t := t.start;
+        @fn token_start t := t::start;
         \\\\ token_len (Token)
-        @fn token_len t := t.len;
-    `)
+        @fn token_len t := t::len;`)
     expect(result.success).toBe(true)
     expect(result.wat).toContain('(func $Token')
     expect(result.wat).toContain('(func $make_token')
@@ -2217,15 +2215,14 @@ test("Phase 1a-7 struct aggregates: Token struct models compiler data", () => {
 
 test("Phase 1a-7 struct aggregates: Span struct with read/write", () => {
     const result = compileSource(`
-        @struct Span start Int, end Int;
+        @type Span := { start Int, end Int };
         \\\\ span_len (Span)
-        @fn span_len s := s.end - s.start;
+        @fn span_len s := s::end - s::start;
         \\\\ span_shift (Span, Int)
         @fn span_shift s, delta := {
-            s.start = s.start + delta;
-            s.end = s.end + delta
-        };
-    `)
+            s::start = s::start + delta;
+            s::end = s::end + delta
+        };`)
     expect(result.success).toBe(true)
     expect(result.wat).toContain('(func $Span')
     expect(result.wat).toContain('i32.store')
@@ -2234,13 +2231,12 @@ test("Phase 1a-7 struct aggregates: Span struct with read/write", () => {
 
 test("Phase 1a-7 struct aggregates: nested node models AST-like structure", () => {
     const result = compileSource(`
-        @struct Span start Int, end Int;
-        @struct ASTNode kind Int, span Span, value Int;
+        @type Span := { start Int, end Int };
+        @type ASTNode := { kind Int, span Span, value Int };
         \\\\ node_kind (ASTNode)
-        @fn node_kind n := n.kind;
+        @fn node_kind n := n::kind;
         \\\\ node_value (ASTNode)
-        @fn node_value n := n.value;
-    `)
+        @fn node_value n := n::value;`)
     expect(result.success).toBe(true)
     expect(result.wat).toContain('(func $Span')
     expect(result.wat).toContain('(func $ASTNode')

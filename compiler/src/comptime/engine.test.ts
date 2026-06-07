@@ -63,7 +63,13 @@ describe('Phase C — compile a handler @fn to WASM and run it', () => {
 
     test('handler with branching @if returns expected value', async () => {
         const src = `\\\\ abs (Int)
-@fn abs n := { &@if (n < 0), { (0 - n) }, { n } };`
+@fn abs n := {
+    @if(n < 0, {
+        0 - n
+    }, {
+        n
+    })
+};`
         const prog = parseProgram(src)
         const registry = buildStrataRegistry(prog)
         registry.strataHandlerFnNames.add('abs')
@@ -79,7 +85,7 @@ describe('Phase C — compile a handler @fn to WASM and run it', () => {
         // Build a handler that ignores its node arg and constructs an IR
         // Const 42 via the host import.  Returns the IR-handle id.
         const src = `\\\\ build_const (Int)
-@fn build_const n := &compiler::ir_makeConst 42, 0;`
+@fn build_const n := compiler::ir_makeConst(42, 0);`
         const prog = parseProgram(src)
         const registry = buildStrataRegistry(prog)
         registry.strataHandlerFnNames.add('build_const')
@@ -103,9 +109,7 @@ describe('Phase C — compile a handler @fn to WASM and run it', () => {
         // construct a Const with any explicit wasmType.
         const src = `
             \\\\ build_f32_const (Int)
-            @fn build_f32_const n :=
-                &compiler::ir_makeConst 7, (&compiler::compiler_str_intern 'f32', 0);
-        `
+            @fn build_f32_const n := compiler::ir_makeConst(7, compiler::compiler_str_intern('f32', 0));`
         const prog = parseProgram(src)
         const registry = buildStrataRegistry(prog)
         registry.strataHandlerFnNames.add('build_f32_const')
@@ -125,12 +129,7 @@ describe('Phase C — compile a handler @fn to WASM and run it', () => {
         // needing a string-pool argument.
         const src = `
             \\\\ build_x_plus_42 (Int)
-            @fn build_x_plus_42 n :=
-                &compiler::ir_makeBinOp 0,
-                    (&compiler::ir_makeLocalGet 0, 0),
-                    (&compiler::ir_makeConst 42, 0),
-                    0;
-        `
+            @fn build_x_plus_42 n := compiler::ir_makeBinOp(0, compiler::ir_makeLocalGet(0, 0), compiler::ir_makeConst(42, 0), 0);`
         const prog = parseProgram(src)
         const registry = buildStrataRegistry(prog)
         registry.strataHandlerFnNames.add('build_x_plus_42')
@@ -172,8 +171,9 @@ describe('Phase C — bridge: compileStrataHandlers caches compiled handlers', (
             \\\\ Simple_handler (Int)
             @fn Simple_handler n := 1;
             \\\\ Complex_handler (Int)
-            @fn Complex_handler n := { (&Compiler::state 'stratum') };
-        `
+            @fn Complex_handler n := {
+                Compiler::state('stratum')
+            };`
         const prog = parseProgram(src)
         const registry = buildStrataRegistry(prog)
         registry.strataHandlerFnNames.add('Simple_handler')
@@ -193,13 +193,12 @@ describe('Phase C — bridge wrapper invokes compiled handler over interpreter',
         // injecting a spy into the cache and observing it gets called.
         const src = `
             @stratum Spy := {
-                &Compiler::register::keyword '@spy_kw';
-                &Compiler::on::decl '@spy_kw', Spy_handler;
+                Compiler::register::keyword('@spy_kw');
+                Compiler::on::decl('@spy_kw', Spy_handler);
             };
             \\\\ Spy_handler (Int)
             @fn Spy_handler node := 42;
-            @spy_kw target;
-        `
+            @spy_kw target;`
         const prog = parseProgram(src)
         const registry = buildStrataRegistry(prog)
 
@@ -239,7 +238,9 @@ describe('Phase C — fallback behavior', () => {
         // that the engine doesn't yet generate.  Instantiation will fail;
         // tryCompileHandler swallows that as null so callers fall back.
         const src = `\\\\ weird (Int)
-@fn weird n := { (&Compiler::state 'stratum') };`
+@fn weird n := {
+    Compiler::state('stratum')
+};`
         const prog = parseProgram(src)
         const registry = buildStrataRegistry(prog)
         registry.strataHandlerFnNames.add('weird')

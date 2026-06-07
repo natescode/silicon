@@ -183,7 +183,7 @@ Export functions to the host with `@export`, and import host functions with
 ```silicon
 @export add;
 
-@extern { \\ puts (String) -> Int }
+\\ @extern puts (String) -> Int;
 puts('from C');
 ```
 
@@ -223,14 +223,14 @@ size(Circle(10));               # constructors are Circle / Square
 An **enum** is a set of payload-free variants:
 
 ```silicon
-@type Color := $Red | $Green | $Blue;
+@enum Color := Red | Green | Blue;
 
 \\ code (Color) -> Int
 @fn code c := {
     @match(c,
-        $Red   => 1,
-        $Green => 2,
-        $Blue  => 3)
+        Color::Red   => 1,
+        Color::Green => 2,
+        Color::Blue  => 3)
 };
 ```
 
@@ -348,7 +348,7 @@ or `sgl.toml [build] platform`.
 The pure stdlib modules (`mem`, `num`, `str`) compile on **all** platforms;
 only I/O differs. On the JS host, JavaScript strings are the `JSString` type
 (WASM JS String Builtins) with a `String` ↔ `JSString` bridge — see
-[`js-string-builtins.md`](js-string-builtins.md).
+[`platforms.md`](platforms.md).
 
 ```silicon
 # bun platform — the portable stdlib + the JS console
@@ -361,7 +361,7 @@ web::console_log_str(int_to_str(int_pow(2, 16)));     # 65536
 ## 15. Strata — Silicon's metaprogramming
 
 Silicon's grammar is intentionally tiny and stable. Almost every "keyword" and
-"operator" — `@if`, `@loop`, `@local`, `+`, `==`, `++` — is **not** baked into the
+"operator" — `@if`, `@loop`, `@mut`, `+`, `==`, `++` — is **not** baked into the
 grammar. They are defined as **strata**: data-driven Silicon declarations,
 loaded into the compiler, that say how a construct lowers.
 
@@ -377,7 +377,7 @@ This means you can add your own keywords and operators **without touching the
 grammar or the compiler's TypeScript** — you write a stratum that lowers to
 existing `Compiler::*` calls. The built-in language is itself a library of
 strata under `src/strata/`. See the
-[Strata authoring guide](strata-authoring-guide.md) and
+[Strata authoring guide](../reference/strata-authoring.md) and
 [`strata.md`](strata.md).
 
 Why this matters: it keeps the core language small and bootstrappable while
@@ -391,8 +391,8 @@ standard library wrapping WASI.
 - **[Getting Started](getting-started.md)** — install + first project.
 - **[Standard Library](stdlib.md)** — every shipped module.
 - **[Memory model](memory.md)** — arenas, escape, `Rc[T]`.
-- **[JS String Builtins](js-string-builtins.md)** — the JS-host string story.
-- **[Strata authoring](strata-authoring-guide.md)** — add your own syntax.
-- **[Grammar](grammar.ebnf)** — the authoritative EBNF.
-- **Examples** — [`examples/`](../examples/): fizzbuzz, calculator, strings,
-  floats, web letters, and the bun/web demos.
+- **[Platforms](platforms.md)** — WASM / native / web-bun targets and the JS-host string story.
+- **[Strata authoring](../reference/strata-authoring.md)** — add your own syntax.
+- **[Grammar](../reference/grammar.md)** — the authoritative grammar reference.
+- **Examples** — [`examples/`](../examples/index.md): arenas, generics, sum types,
+  first-class functions, strata, and the bun/web demos.

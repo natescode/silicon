@@ -4,9 +4,9 @@
  *
  * Proves the first-class-function machinery (5d-1 + 5d-2):
  *
- *   - `&@fnref name` resolves to a stable i32 table index for a
+ *   - `@fnref(name)` resolves to a stable i32 table index for a
  *     top-level @fn.
- *   - `&@call_indirect cb, x` invokes the function at table index cb
+ *   - `@call_indirect(cb, x)` invokes the function at table index cb
  *     with one i32 arg, returning i32.
  *   - Multiple distinct functions can be referenced via @fnref and
  *     dispatched by index — proves the table populates correctly.
@@ -42,10 +42,9 @@ describe('Phase 5 Workstream B: @fnref + @call_indirect', () => {
         const ex = await compileAndRun(`
             \\\\ add_one (Int) -> Int
             @fn add_one x := x + 1;
-            \\\\ test_idx () -> Int
-            @fn test_idx  := &@fnref add_one;
-            @export test_idx;
-        `)
+            \\\\ test_idx Int
+            @fn test_idx := @fnref(add_one);
+            @export test_idx;`)
         // First @fnref to a function gets table slot 0.
         expect(ex.test_idx()).toBe(0)
     })
@@ -54,14 +53,13 @@ describe('Phase 5 Workstream B: @fnref + @call_indirect', () => {
         const ex = await compileAndRun(`
             \\\\ add_one (Int) -> Int
             @fn add_one x := x + 1;
-            \\\\ test_same () -> Int
-            @fn test_same  := {
-                @local a := &@fnref add_one;
-                @local b := &@fnref add_one;
+            \\\\ test_same Int
+            @fn test_same := {
+                @mut a := @fnref(add_one);
+                @mut b := @fnref(add_one);
                 a - b
             };
-            @export test_same;
-        `)
+            @export test_same;`)
         expect(ex.test_same()).toBe(0)
     })
 
@@ -71,14 +69,13 @@ describe('Phase 5 Workstream B: @fnref + @call_indirect', () => {
             @fn add_one x := x + 1;
             \\\\ double (Int) -> Int
             @fn double x := x * 2;
-            \\\\ test_distinct () -> Int
-            @fn test_distinct  := {
-                @local a := &@fnref add_one;
-                @local b := &@fnref double;
+            \\\\ test_distinct Int
+            @fn test_distinct := {
+                @mut a := @fnref(add_one);
+                @mut b := @fnref(double);
                 b - a
             };
-            @export test_distinct;
-        `)
+            @export test_distinct;`)
         expect(ex.test_distinct()).toBe(1)
     })
 
@@ -86,13 +83,12 @@ describe('Phase 5 Workstream B: @fnref + @call_indirect', () => {
         const ex = await compileAndRun(`
             \\\\ add_one (Int) -> Int
             @fn add_one x := x + 1;
-            \\\\ call_via_ref () -> Int
-            @fn call_via_ref  := {
-                @local cb := &@fnref add_one;
-                &@call_indirect cb, 41
+            \\\\ call_via_ref Int
+            @fn call_via_ref := {
+                @mut cb := @fnref(add_one);
+                @call_indirect(cb, 41)
             };
-            @export call_via_ref;
-        `)
+            @export call_via_ref;`)
         expect(ex.call_via_ref()).toBe(42)
     })
 
@@ -102,19 +98,18 @@ describe('Phase 5 Workstream B: @fnref + @call_indirect', () => {
             @fn add_one x := x + 1;
             \\\\ double (Int) -> Int
             @fn double x := x * 2;
-            \\\\ dispatch_add () -> Int
-            @fn dispatch_add  := {
-                @local cb := &@fnref add_one;
-                &@call_indirect cb, 10
+            \\\\ dispatch_add Int
+            @fn dispatch_add := {
+                @mut cb := @fnref(add_one);
+                @call_indirect(cb, 10)
             };
-            \\\\ dispatch_double () -> Int
-            @fn dispatch_double  := {
-                @local cb := &@fnref double;
-                &@call_indirect cb, 10
+            \\\\ dispatch_double Int
+            @fn dispatch_double := {
+                @mut cb := @fnref(double);
+                @call_indirect(cb, 10)
             };
             @export dispatch_add;
-            @export dispatch_double;
-        `)
+            @export dispatch_double;`)
         expect(ex.dispatch_add()).toBe(11)
         expect(ex.dispatch_double()).toBe(20)
     })

@@ -21,23 +21,23 @@ const HEADER = `# SPDX-License-Identifier: MIT
 
 function emit(funcCount: number): string {
     const out: string[] = [HEADER]
-    out.push('@struct Pair lo Int, hi Int;\n')
-    out.push('@type Maybe[T] := $Just v:T | $Nothing;\n\n')
+    out.push('@type Pair := { lo Int, hi Int };\n')
+    out.push('@type Maybe[T] := $Just v T | $Nothing;\n\n')
 
     for (let i = 0; i < funcCount; i++) {
         const a = (i * 17) % 257
         const b = (i * 31 + 5) % 257
         out.push(`\\\\ f${i} (Int) -> Int`)
         out.push(`@fn f${i} x := {`)
-        out.push(`    @let p := &Pair x, ${a};`)
-        out.push(`    @let r := p.lo + p.hi * ${b};`)
+        out.push(`    p := Pair(x, ${a});`)
+        out.push(`    r := p.lo + p.hi * ${b};`)
         if (i % 5 === 0) {
-            out.push(`    &@if r < 0, { &@return 0 };`)
+            out.push(`    @if(r < 0, { @return(0) });`)
         }
         if (i % 7 === 0) {
-            out.push(`    @var acc := 0;`)
-            out.push(`    @var k := 1;`)
-            out.push(`    &@loop k <= 10, { acc = acc + k * ${a}; k = k + 1; };`)
+            out.push(`    @mut acc := 0;`)
+            out.push(`    @mut k := 1;`)
+            out.push(`    @loop(k <= 10, { acc = acc + k * ${a}; k = k + 1; });`)
             out.push(`    r + acc`)
         } else {
             out.push(`    r`)
@@ -46,9 +46,9 @@ function emit(funcCount: number): string {
     }
 
     out.push('@fn bench_main := {')
-    out.push('    @var total := 0;')
+    out.push('    @mut total := 0;')
     for (let i = 0; i < Math.min(funcCount, 50); i++) {
-        out.push(`    total = total + (&f${i} ${i});`)
+        out.push(`    total = total + f${i}(${i});`)
     }
     out.push('    total')
     out.push('};')

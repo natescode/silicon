@@ -438,15 +438,15 @@ button:disabled { opacity: 0.4; cursor: not-allowed; }
     <button class="cheatsheet-toggle" id="cheatsheet-toggle" title="Toggle cheatsheet">◧ Cheatsheet</button>
     <div class="cheatsheet-body">
       <div class="cheat-title">Cheatsheet</div>
-      <p class="cheat-note">APIs &amp; stdlib functions you can use here. The examples menu (top-left) follows the <b>language overview</b>. <code>&amp;</code> calls, <code>@</code> defines.</p>
+      <p class="cheat-note">APIs &amp; stdlib functions you can use here. The examples menu (top-left) follows the <b>language overview</b>. <code>name()</code> calls, <code>@</code> defines.</p>
 
-      <details class="cheat-section" open><summary>Output (web)</summary><pre>&amp;<b>web::console_log_str</b> 'hi'   <i># → console</i>
-&amp;<b>web::console_log</b> 42       <i># Int</i>
-&amp;<b>web::set_html</b> '&lt;b&gt;x&lt;/b&gt;'  <i># HTML panel</i></pre></details>
+      <details class="cheat-section" open><summary>Output (web)</summary><pre><b>web::console_log_str</b>('hi')   <i># → console</i>
+<b>web::console_log</b>(42)         <i># Int</i>
+<b>web::set_html</b>('&lt;b&gt;x&lt;/b&gt;')   <i># HTML panel</i></pre></details>
 
-      <details class="cheat-section"><summary>Variables</summary><pre>@global PI := 5;   <i># immutable constant</i>
-@local count := 0; <i># mutable</i>
-count = count + 1; <i># reassign (only @local)</i></pre></details>
+      <details class="cheat-section"><summary>Variables</summary><pre>PI := 5;            <i># immutable</i>
+@mut count := 0;    <i># mutable</i>
+count = count + 1;  <i># reassign (@mut only)</i></pre></details>
 
       <details class="cheat-section"><summary>Operators</summary><pre>+  -  *  /  %     <i># arithmetic</i>
 == != &lt; &lt;= &gt; &gt;=    <i># compare → Bool</i>
@@ -454,53 +454,53 @@ count = count + 1; <i># reassign (only @local)</i></pre></details>
 &amp; | ^ &lt;&lt; &gt;&gt;        <i># bitwise</i>
 'a' ++ 'b'        <i># concat</i></pre></details>
 
-      <details class="cheat-section"><summary>Control flow</summary><pre>&amp;@if c, { … }, { … };
-&amp;@loop c, { … };          <i># while</i>
-&amp;@loop v, 0..n, { … };    <i># range (n excluded)</i>
-&amp;@loop i, v, 0..n, { … }; <i># index + element</i>
-&amp;@loop x, xs, { … };      <i># Vec elements</i>
-&amp;@loop { … &amp;@break };     <i># forever</i>
-&amp;@return v;
-&amp;@match s, $A v =&gt; v, $B =&gt; 0</pre></details>
+      <details class="cheat-section"><summary>Control flow</summary><pre>@if(c, { … }, { … });
+@loop(c, { … });            <i># while</i>
+@loop(v, 0..n, { … });      <i># range (n excluded)</i>
+@loop(i, v, 0..n, { … });   <i># index + element</i>
+@loop(x, xs, { … });        <i># Vec elements</i>
+@loop({ … @break() });      <i># forever</i>
+@return(v);
+@match(s, $A v =&gt; v, $B =&gt; 0)</pre></details>
 
       <details class="cheat-section"><summary>Functions</summary><pre>\\ add (Int, Int) -&gt; Int
 @fn add a, b := { a + b };
-&amp;add 2, 3;
+add(2, 3);
 @export add;</pre></details>
 
-      <details class="cheat-section"><summary>Structs &amp; sum types</summary><pre>@struct Point x Int, y Int;
-@local p := &amp;Point 3, 4;  p.x
+      <details class="cheat-section"><summary>Types &amp; sum types</summary><pre>@type Point := { x Int, y Int };
+p := Point(3, 4);  p.x
 
 @type Shape := $Circle r Int | $Sq s Int;
 @enum Color := Red | Green | Blue;</pre></details>
 
       <details class="cheat-section"><summary>stdlib: <code>num</code></summary><pre><i># @use 'num';</i>
-&amp;<b>int_to_str</b> 42        <i># "42"</i>
-&amp;<b>str_to_int</b> '42'      <i># 42</i>
-&amp;<b>int_min</b> a,b  &amp;<b>int_max</b> a,b
-&amp;<b>int_abs</b> n  &amp;<b>int_clamp</b> x,lo,hi
-&amp;<b>int_pow</b> 2,10        <i># 1024</i>
-&amp;<b>float_sqrt</b> f  &amp;<b>float_to_str</b> f</pre></details>
+<b>int_to_str</b>(42)        <i># "42"</i>
+<b>str_to_int</b>('42')      <i># 42</i>
+<b>int_min</b>(a,b)  <b>int_max</b>(a,b)
+<b>int_abs</b>(n)  <b>int_clamp</b>(x,lo,hi)
+<b>int_pow</b>(2,10)         <i># 1024</i>
+<b>float_sqrt</b>(f)  <b>float_to_str</b>(f)</pre></details>
 
       <details class="cheat-section"><summary>stdlib: <code>str</code></summary><pre><i># @use 'str';</i>
-&amp;<b>str_eq</b> a,b   &amp;<b>str_byte_len</b> s
-&amp;<b>str_contains</b> s,sub
-&amp;<b>str_starts_with</b> s,p
-&amp;<b>str_ends_with</b> s,p
-&amp;<b>str_index_of</b> s,sub   <i># or -1</i>
-&amp;<b>str_slice</b> s,0,5
-&amp;<b>str_repeat</b> '=',10</pre></details>
+<b>str_eq</b>(a,b)   <b>str_byte_len</b>(s)
+<b>str_contains</b>(s,sub)
+<b>str_starts_with</b>(s,p)
+<b>str_ends_with</b>(s,p)
+<b>str_index_of</b>(s,sub)   <i># or -1</i>
+<b>str_slice</b>(s,0,5)
+<b>str_repeat</b>('=',10)</pre></details>
 
-      <details class="cheat-section"><summary>Web math &amp; canvas</summary><pre>&amp;<b>web::math_sqrt</b> x  <b>math_pow</b> a,b
-&amp;<b>web::math_sin</b>/<b>cos</b>/<b>log</b> x
-&amp;<b>web::math_random</b>
-&amp;<b>web::canvas_set_fill</b> r,g,b
-&amp;<b>web::canvas_fill_rect</b> x,y,w,h</pre></details>
+      <details class="cheat-section"><summary>Web math &amp; canvas</summary><pre><b>web::math_sqrt</b>(x)  <b>web::math_pow</b>(a,b)
+<b>web::math_sin</b>(x)/<b>cos</b>(x)/<b>log</b>(x)
+<b>web::math_random</b>()
+<b>web::canvas_set_fill</b>(r,g,b)
+<b>web::canvas_fill_rect</b>(x,y,w,h)</pre></details>
 
-      <details class="cheat-section"><summary>Builtins</summary><pre>&amp;<b>alloc_string</b> n  &amp;<b>str_ptr</b> s  &amp;<b>str_len</b> s
-&amp;<b>WASM::i32_load8_u</b> p
-&amp;<b>WASM::i32_store8</b> p, b
-@true   @false   &amp;@toInt f   &amp;@toFloat n</pre></details>
+      <details class="cheat-section"><summary>Builtins</summary><pre><b>alloc_string</b>(n)  <b>str_ptr</b>(s)  <b>str_len</b>(s)
+<b>WASM::i32_load8_u</b>(p)
+<b>WASM::i32_store8</b>(p, b)
+@true   @false   @toInt(f)   @toFloat(n)</pre></details>
     </div>
   </div>
 
@@ -587,19 +587,15 @@ const silicon = StreamLanguage.define({
             return 'string'
         }
 
-        // @ keywords  (@global, @fn, @export, @local, @extern, @match, ...)
+        // @ keywords  (@mut, @fn, @export, @extern, @match, @if, @loop, @return, @break, ...)
         if (stream.peek() === '@') {
             stream.next()
             stream.match(/^\w+/)
             return 'keyword'
         }
 
-        // & function / namespace call  (&web::foo, &bar)
-        if (stream.peek() === '&') {
-            stream.next()
-            stream.match(/^\w+(?:::\w+)*/)
-            return 'fn'
-        }
+        // & bitwise operator or namespace separator — not a call prefix in ADR-0020
+        // Leave '&' to fall through to the single-char operator branch below.
 
         // Float before int
         if (stream.match(/^\d+\.\d*/)) return 'number'
@@ -779,11 +775,11 @@ const EXAMPLES = {
 
 \\\\ demo () -> Int
 @fn demo := {
-    &web::console_log_str (&int_to_str (&int_pow 2, 10));   # 1024
-    &web::console_log_str (&int_to_str (&int_max 3, 99));   # 99
-    &web::console_log_str (&int_to_str (&str_to_int '-42')); # -42
-    &web::console_log_str (&float_to_str (&float_sqrt 2.0)); # 1.414…
-    &int_pow 2, 10
+    web::console_log_str(int_to_str(int_pow(2, 10)));   # 1024
+    web::console_log_str(int_to_str(int_max(3, 99)));   # 99
+    web::console_log_str(int_to_str(str_to_int('-42'))); # -42
+    web::console_log_str(float_to_str(float_sqrt(2.0))); # 1.414…
+    int_pow(2, 10)
 };
 
 @export demo;`,
@@ -796,13 +792,13 @@ const EXAMPLES = {
 
 \\\\ demo () -> Int
 @fn demo := {
-    @local s := 'hello, playground';
-    &web::console_log_str (&str_slice s, 0, 5);            # hello
-    &@if (&str_contains s, 'play'), {
-        &web::console_log_str 'contains "play"';
-    }, {};
-    &web::console_log_str (&str_repeat '=', 12);
-    &str_index_of s, 'play'
+    s := 'hello, playground';
+    web::console_log_str(str_slice(s, 0, 5));            # hello
+    @if(str_contains(s, 'play'), {
+        web::console_log_str('contains "play"');
+    }, {});
+    web::console_log_str(str_repeat('=', 12));
+    str_index_of(s, 'play')
 };
 
 @export demo;`,
@@ -815,13 +811,13 @@ const EXAMPLES = {
 
 \\\\ run () -> Int
 @fn run := {
-    @local word := 'Silicon';
-    @local n := &str_byte_len word;
-    @local i := 0;
-    &@loop i < n, {
-        &web::console_log_str (&str_slice word, i, (i + 1));
+    word := 'Silicon';
+    n := str_byte_len(word);
+    @mut i := 0;
+    @loop(i < n, {
+        web::console_log_str(str_slice(word, i, (i + 1)));
         i = i + 1;
-    };
+    });
     n
 };
 
@@ -833,8 +829,8 @@ const EXAMPLES = {
 
 \\\\ greet (String)
 @fn greet msg := {
-    @local result := ('Hello, ' ++ msg);
-    &web::console_log_str result;
+    result := ('Hello, ' ++ msg);
+    web::console_log_str(result);
     result
 };
 
@@ -846,10 +842,10 @@ const EXAMPLES = {
 
 \\\\ hypotenuse (Float, Float)
 @fn hypotenuse a, b := {
-    &web::math_sqrt ((&web::math_pow a, 2.0) + (&web::math_pow b, 2.0))
+    web::math_sqrt((web::math_pow(a, 2.0)) + (web::math_pow(b, 2.0)))
 };
 
-@fn roll := { &web::math_random };
+@fn roll := { web::math_random() };
 
 @export hypotenuse;
 @export roll;`,
@@ -860,8 +856,8 @@ const EXAMPLES = {
 
 \\\\ fib (Int)
 @fn fib n := {
-    &@if n <= 1, { &@return n };
-    (&fib (n - 1)) + (&fib (n - 2))
+    @if(n <= 1, { @return(n) });
+    fib(n - 1) + fib(n - 2)
 };
 
 @export fib;`,
@@ -872,8 +868,8 @@ const EXAMPLES = {
 
 \\\\ factorial (Int)
 @fn factorial n := {
-    &@if n <= 1, { &@return 1 };
-    n * (&factorial (n - 1))
+    @if(n <= 1, { @return(1) });
+    n * factorial(n - 1)
 };
 
 @export factorial;`,
@@ -884,7 +880,7 @@ const EXAMPLES = {
 
 \\\\ safeDivide (Int, Int)
 @fn safeDivide x, y := {
-    &@if y == 0, { &@return 0 };
+    @if(y == 0, { @return(0) });
     x / y
 };
 
@@ -896,8 +892,8 @@ const EXAMPLES = {
 
 \\\\ countTo (Int)
 @fn countTo n := {
-    @local i := 0;
-    &@loop i < n, { i = i + 1; };
+    @mut i := 0;
+    @loop(i < n, { i = i + 1; });
     i
 };
 
@@ -911,31 +907,31 @@ const EXAMPLES = {
 
 \\\\ sum_range (Int) -> Int
 @fn sum_range n := {
-    @local total := 0;
-    &@loop v, 0..n, { total = total + v };        # range: v = 0,1,…,n-1
+    @mut total := 0;
+    @loop(v, 0..n, { total = total + v });        # range: v = 0,1,…,n-1
     total
 };
 
 \\\\ dot_index () -> Int
 @fn dot_index := {
-    @local acc := 0;
-    &@loop i, v, 2..5, { acc = acc + (i * v) };    # index + element: i=0,1,2 ; v=2,3,4
+    @mut acc := 0;
+    @loop(i, v, 2..5, { acc = acc + (i * v) });    # index + element: i=0,1,2 ; v=2,3,4
     acc
 };
 
 \\\\ sum_vec () -> Int
 @fn sum_vec := {
-    @local xs := &vec_new 4;
-    &vec_push_i32 xs, 10;  &vec_push_i32 xs, 20;  &vec_push_i32 xs, 30;
-    @local s := 0;
-    &@loop x, xs, { s = s + x };                   # iterate a Vec (i32 elements)
+    @mut xs := vec_new(4);
+    vec_push_i32(xs, 10);  vec_push_i32(xs, 20);  vec_push_i32(xs, 30);
+    @mut s := 0;
+    @loop(x, xs, { s = s + x });                   # iterate a Vec (i32 elements)
     s
 };
 
 \\\\ first_pow2_over (Int) -> Int
 @fn first_pow2_over limit := {
-    @local p := 1;
-    &@loop { &@if p > limit, { &@break }; p = p * 2 };   # infinite + @break
+    @mut p := 1;
+    @loop({ @if(p > limit, { @break() }); p = p * 2 });   # infinite + @break
     p
 };
 
@@ -947,14 +943,14 @@ const EXAMPLES = {
     color_match:
 `# Algebraic sum type with exhaustive pattern matching.
 
-@type_sum Color := Red | Green | Blue;
+@enum Color := Red | Green | Blue;
 
 \\\\ colorCode (Color)
 @fn colorCode c := {
-    &@match c,
+    @match(c,
         Color::Red,   { 1 },
         Color::Green, { 2 },
-        { 3 }
+        { 3 })
 };
 
 @export colorCode;`,
@@ -979,13 +975,13 @@ const EXAMPLES = {
     math_sampler:
 `# Web math API sampler — trig, log, and random.
 
-@fn roll := { &web::math_random };
+@fn roll := { web::math_random() };
 \\\\ sinWave (Float)
-@fn sinWave x := { &web::math_sin x };
+@fn sinWave x := { web::math_sin(x) };
 \\\\ cosWave (Float)
-@fn cosWave x := { &web::math_cos x };
+@fn cosWave x := { web::math_cos(x) };
 \\\\ logNat (Float)
-@fn logNat x := { &web::math_log x };
+@fn logNat x := { web::math_log(x) };
 
 @export roll;
 @export sinWave;
@@ -1001,144 +997,88 @@ const EXAMPLES = {
 
 \\\\ factorial (Int)
 @fn factorial n := {
-    &@if n <= 1, { &@return 1 };
-    n * (&factorial (n - 1))
+    @if(n <= 1, { @return(1) });
+    n * factorial(n - 1)
 };
 
 @fn main := {
-    @local sum   := (&add 10, 32);
-    @local fac10 := (&factorial 10);
-    &web::console_log sum;
-    &web::console_log fac10
+    sum   := add(10, 32);
+    fac10 := factorial(10);
+    web::console_log(sum);
+    web::console_log(fac10)
 };
 
 @export main;`,
 
     html_todo:
-`# TODO list rendered into the HTML panel via web::set_html.
+`# String-building TODO list — console output via web::console_log_str.
 # Enable "run main" and compile.
 
-\\\\ done_item (String)
-@fn done_item label := {
-    '<li style="padding:8px 12px;margin:4px 0;border-radius:6px;'
-    ++ 'background:#21262d;color:#3fb950;text-decoration:line-through">'
-    ++ label ++ '</li>'
-};
+\\\\ done_item (String) -> String
+@fn done_item label := { '[x] ' ++ label };
 
-\\\\ todo_item (String)
-@fn todo_item label := {
-    '<li style="padding:8px 12px;margin:4px 0;border-radius:6px;'
-    ++ 'background:#21262d;color:#e6edf3">'
-    ++ label ++ '</li>'
-};
+\\\\ todo_item (String) -> String
+@fn todo_item label := { '[ ] ' ++ label };
 
 @fn main := {
-    &web::set_html (
-        '<div style="font:14px system-ui,sans-serif;padding:16px;background:#0d1117;min-height:100%">'
-        ++ '<h2 style="color:#e6edf3;margin:0 0 12px">Sigil Milestones</h2>'
-        ++ '<ul style="list-style:none;padding:0">'
-        ++ (&done_item '@fn keyword')
-        ++ (&done_item 'web:: module system')
-        ++ (&done_item 'Syntax highlighting')
-        ++ (&todo_item 'HTML render panel')
-        ++ (&todo_item 'Snake in Silicon')
-        ++ '</ul></div>'
-    )
+    web::console_log_str('Sigil Milestones');
+    web::console_log_str(done_item('@fn keyword'));
+    web::console_log_str(done_item('web:: module system'));
+    web::console_log_str(done_item('Syntax highlighting'));
+    web::console_log_str(todo_item('HTML render panel'));
+    web::console_log_str(todo_item('Snake in Silicon'))
 };
 
 @export main;`,
 
     snake:
-`# Snake — uses the tick + handle_key export convention.
-# Enable "run main" and compile. Use arrow keys to steer.
+`# Snake counter — mutable globals, tick/handle_key export convention.
+# Enable "run main" and compile. Call tick() repeatedly to advance.
 
-@global GRID   := 20;
-@global CELL   := 16;
-@global MAXLEN := 400;
+GRID := 20;
 
-@local head_x     := 10;
-@local head_y     := 10;
-@local dir        := 0;
-@local food_x     := 5;
-@local food_y     := 15;
-@local alive      := 1;
-@local length     := 3;
-@local body_x_ptr := 0;
-@local body_y_ptr := 0;
-@local ring_head  := 0;
-@local draw_i     := 0;
-@local draw_bi    := 0;
-
-\\\\ cell (Int, Int, Int, Int, Int)
-@fn cell x, y, r, g, b := {
-    &web::canvas_set_fill r, g, b;
-    &web::canvas_fill_rect
-        (&@toFloat (x * CELL)), (&@toFloat (y * CELL)),
-        15.0, 15.0
-};
-
-@fn draw_body := {
-    draw_i = 0;
-    &@loop (draw_i < length), {
-        draw_bi = (ring_head - length + draw_i + MAXLEN) % MAXLEN;
-        &cell (&arr_load_i32 body_x_ptr, draw_bi),
-              (&arr_load_i32 body_y_ptr, draw_bi),
-              63, 185, 80;
-        draw_i = draw_i + 1;
-    }
-};
-
-@fn draw := {
-    &web::canvas_set_fill 13, 17, 23;
-    &web::canvas_fill_rect 0.0, 0.0,
-        (&@toFloat (GRID * CELL)), (&@toFloat (GRID * CELL));
-    &draw_body;
-    &cell food_x, food_y, 248, 81, 73
-};
+@mut head_x := 10;
+@mut head_y := 10;
+@mut dir    := 0;   # 0=right 1=down 2=left 3=up
+@mut alive  := 1;
+@mut length := 3;
+@mut score  := 0;
+@mut food_x := 5;
+@mut food_y := 15;
 
 @fn main := {
-    body_x_ptr = &alloc_array MAXLEN, 4;
-    body_y_ptr = &alloc_array MAXLEN, 4;
     head_x = 10; head_y = 10;
-    dir = 0; alive = 1; length = 3; ring_head = 3;
-    &arr_store_i32 body_x_ptr, 0, 10;
-    &arr_store_i32 body_x_ptr, 1, 10;
-    &arr_store_i32 body_x_ptr, 2, 10;
-    &arr_store_i32 body_y_ptr, 0, 10;
-    &arr_store_i32 body_y_ptr, 1, 10;
-    &arr_store_i32 body_y_ptr, 2, 10;
-    &draw
+    dir = 0; alive = 1; length = 3; score = 0;
+    food_x = 5; food_y = 15;
+    web::console_log_str('Snake started')
 };
 
 @fn tick := {
-    &@if alive == 0, { &@return 0 };
-    &@if dir == 0, { head_x = head_x + 1; };
-    &@if dir == 1, { head_y = head_y + 1; };
-    &@if dir == 2, { head_x = head_x - 1; };
-    &@if dir == 3, { head_y = head_y - 1; };
-    &@if (head_x < 0) || (head_x >= GRID), { alive = 0; };
-    &@if (head_y < 0) || (head_y >= GRID), { alive = 0; };
-    &@if alive == 0, { &@return 0 };
-    &arr_store_i32 body_x_ptr, ring_head, head_x;
-    &arr_store_i32 body_y_ptr, ring_head, head_y;
-    ring_head = (ring_head + 1) % MAXLEN;
-    &@if head_x == food_x, {
-        &@if head_y == food_y, {
+    @if(alive == 0, { @return(0) });
+    @if(dir == 0, { head_x = head_x + 1; });
+    @if(dir == 1, { head_y = head_y + 1; });
+    @if(dir == 2, { head_x = head_x - 1; });
+    @if(dir == 3, { head_y = head_y - 1; });
+    @if((head_x < 0) || (head_x >= GRID), { alive = 0; });
+    @if((head_y < 0) || (head_y >= GRID), { alive = 0; });
+    @if(alive == 0, { @return(0) });
+    @if(head_x == food_x, {
+        @if(head_y == food_y, {
             length = length + 1;
+            score = score + 10;
             food_x = (food_x + 7) % GRID;
             food_y = (food_y + 13) % GRID;
-        }
-    };
-    &draw;
-    0
+        })
+    });
+    score
 };
 
 \\\\ handle_key (Int)
 @fn handle_key key := {
-    &@if key == 37, { dir = 2; };
-    &@if key == 38, { dir = 3; };
-    &@if key == 39, { dir = 0; };
-    &@if key == 40, { dir = 1; };
+    @if(key == 37, { dir = 2; });
+    @if(key == 38, { dir = 3; });
+    @if(key == 39, { dir = 0; });
+    @if(key == 40, { dir = 1; });
     0
 };
 
@@ -1147,19 +1087,19 @@ const EXAMPLES = {
 @export handle_key;`,
 
     structs:
-`# @struct — a product type. Construct with &Point x, y; read fields with p.x.
+`# @type — a product type. Construct with Point(x, y); read fields with p.x.
 # Call demo() in the exports panel (→ 40).
 
-@struct Point x Int, y Int;
+@type Point := { x Int, y Int };
 
 \\\\ sum_coords (Point) -> Int
 @fn sum_coords p := (p.x) + (p.y);
 
 \\\\ demo () -> Int
 @fn demo := {
-    @local a := &Point 3, 7;
-    @local b := &Point 10, 20;
-    (&sum_coords a) + (&sum_coords b)
+    a := Point(3, 7);
+    b := Point(10, 20);
+    sum_coords(a) + sum_coords(b)
 };
 
 @export demo;`,
@@ -1171,35 +1111,36 @@ const EXAMPLES = {
 @type Opt := $Some v Int | $None;
 
 \\\\ unwrap_or (Opt, Int)
-@fn unwrap_or o, dflt := &@match o, $Some v => v, $None => dflt;
+@fn unwrap_or o, dflt := @match(o, $Some v => v, $None => dflt);
 
 \\\\ demo () -> Int
-@fn demo := &unwrap_or (&Some 42), 0;
+@fn demo := unwrap_or(Some(42), 0);
 
 @export demo;`,
 
     gc_vec:
-`# WasmGC Vec[Int] — a growable, garbage-collected array (no manual alloc/free).
-# Compiled with --target=wasm-gc. Call sum_squares() in the exports panel (→ 55).
+`# Vec[Int] — a growable array. Call sum_squares() in the exports panel (→ 55).
+
+@use 'vec';
 
 \\\\ sum_squares () -> Int
 @fn sum_squares := {
-    @local v := &@as Vec[Int], &vec_new 4;
+    v := vec_new(4);
 
     # Push 1², 2², … 5² into the GC-managed vector.
-    @local i := 1;
-    &@loop i <= 5, {
-        &vec_push_i32 v, (i * i);
+    @mut i := 1;
+    @loop(i <= 5, {
+        vec_push_i32(v, (i * i));
         i = i + 1;
-    };
+    });
 
     # Read them back and sum.
-    @local total := 0;
-    @local j := 0;
-    &@loop j < (&vec_len v), {
-        total = total + (&vec_get_i32 v, j);
+    @mut total := 0;
+    @mut j := 0;
+    @loop(j < vec_len(v), {
+        total = total + vec_get_i32(v, j);
         j = j + 1;
-    };
+    });
     total
 };
 

@@ -162,3 +162,118 @@
     heap_align();
     out
 };
+
+# ── Code points (UTF-8) ───────────────────────────────────────────────
+# A string has three different "lengths": bytes (`str_len`), code points,
+# and display columns (`str_width`).  These are NOT interchangeable.
+#
+# Number of Unicode code points in `s` — counts UTF-8 *leading* bytes
+# (every byte that is not a 0x80..0xBF continuation byte starts a new
+# code point).  O(n).
+\\ str_code_point_count (String) -> Int
+@fn str_code_point_count s := {
+    n := str_len(s);
+    p := str_ptr(s) + 4;
+    @mut i := 0;
+    @mut count := 0;
+    @loop(i < n, {
+        b := WASM::i32_load8_u(p + i);
+        @if(b < 128, { count = count + 1 }, {
+            @if(b >= 192, { count = count + 1 }, {})
+        });
+        i = i + 1;
+    });
+    count
+};
+
+# ── Display width (column width) — EXPERIMENTAL, approximate ───────────
+# Inclusive range test.  (Silicon's `&` isn't a binary operator and `&&`
+# isn't an operator, so range tests use a helper or nested `@if`.)
+\\ str_cp_in (Int, Int, Int) -> Bool
+@fn str_cp_in cp, lo, hi := {
+    @if(cp >= lo, { @if(cp <= hi, { @true }, { @false }) }, { @false })
+};
+
+# Wide (2-column) code points — a few major CJK / fullwidth ranges.
+# (Nested `@if` rather than a multi-line `||` chain: Silicon parses lines
+# independently, so a binary expression split across lines does NOT continue
+# — only the last line would be the block's value.)
+\\ str_cp_is_wide (Int) -> Bool
+@fn str_cp_is_wide cp := {
+    @if(str_cp_in(cp, 4352, 4607), { @true }, {
+        @if(str_cp_in(cp, 11904, 42191), { @true }, {
+            @if(str_cp_in(cp, 44032, 55203), { @true }, {
+                @if(str_cp_in(cp, 63744, 64255), { @true }, {
+                    @if(str_cp_in(cp, 65280, 65376), { @true }, {
+                        @if(str_cp_in(cp, 131072, 196605), { @true }, { @false })
+                    })
+                })
+            })
+        })
+    })
+};
+
+# Zero-width code points — combining marks + NUL (approximate).
+\\ str_cp_is_zero_width (Int) -> Bool
+@fn str_cp_is_zero_width cp := {
+    @if(str_cp_in(cp, 768, 879), { @true }, {
+        @if(str_cp_in(cp, 8400, 8447), { @true }, {
+            @if(str_cp_in(cp, 0, 0), { @true }, { @false })
+        })
+    })
+};
+
+# Column width of one code point (0 / 1 / 2).
+\\ str_cp_width (Int) -> Int
+@fn str_cp_width cp := {
+    @if(str_cp_is_zero_width(cp), { 0 }, {
+        @if(str_cp_is_wide(cp), { 2 }, { 1 })
+    })
+};
+
+# Byte length of the UTF-8 sequence starting with leading byte `b0` (1..4).
+\\ str_decode_len (Int) -> Int
+@fn str_decode_len b0 := {
+    @if(b0 < 128, { 1 }, {
+        @if(b0 < 224, { 2 }, {
+            @if(b0 < 240, { 3 }, { 4 })
+        })
+    })
+};
+
+# Decode the Unicode code point starting at byte offset `i` of buffer `p`.
+# Returns the code point; pair with `str_decode_len` to advance.  Arithmetic
+# is FULLY parenthesized — Silicon evaluates operators left-to-right with no
+# precedence, so `a * b + c * d` must be written `((a * b) + (c * d))`.
+\\ str_decode_cp (Int, Int) -> Int
+@fn str_decode_cp p, i := {
+    b0 := WASM::i32_load8_u(p + i);
+    @if(b0 < 128, { b0 }, {
+        @if(b0 < 224, {
+            ((b0 - 192) * 64) + (WASM::i32_load8_u(p + i + 1) - 128)
+        }, {
+            @if(b0 < 240, {
+                (((b0 - 224) * 4096) + ((WASM::i32_load8_u(p + i + 1) - 128) * 64)) + (WASM::i32_load8_u(p + i + 2) - 128)
+            }, {
+                ((((b0 - 240) * 262144) + ((WASM::i32_load8_u(p + i + 1) - 128) * 4096)) + ((WASM::i32_load8_u(p + i + 2) - 128) * 64)) + (WASM::i32_load8_u(p + i + 3) - 128)
+            })
+        })
+    })
+};
+
+# Display (column) width of `s`.  EXPERIMENTAL: an East-Asian-Width
+# approximation — wide CJK/fullwidth = 2, combining/zero-width = 0,
+# else 1.  No grapheme-cluster / ZWJ-emoji handling yet.  O(n).
+\\ str_width (String) -> Int
+@fn str_width s := {
+    n := str_len(s);
+    p := str_ptr(s) + 4;
+    @mut i := 0;
+    @mut w := 0;
+    @loop(i < n, {
+        cp := str_decode_cp(p, i);
+        w = w + str_cp_width(cp);
+        i = i + str_decode_len(WASM::i32_load8_u(p + i));
+    });
+    w
+};

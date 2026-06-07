@@ -4,7 +4,7 @@
  *
  * One keyword, syntactic/arity dispatch at elaboration time.  This pass runs
  * BEFORE operator elaboration and typechecking and rewrites the iterate / range
- * / infinite forms of `@loop` into the plain `while`-shaped `&@loop cond, {body}`
+ * / infinite forms of `@loop` into the plain `while`-shaped `@loop cond, {body}`
  * the bootstrap already lowers — so there is zero new IR, zero new typechecker
  * rule, and `..` never survives into a context that would try to resolve it as
  * an operator (ranges are syntactic-only inside `@loop`).
@@ -15,10 +15,10 @@
  *
  *   | N | k | form        | meaning                                            |
  *   |---|---|-------------|----------------------------------------------------|
- *   | 1 | 0 | infinite    | `&@loop {body}` → `&@loop 1, {body}` (loop forever)|
- *   | 2 | 1 | while       | `&@loop cond, {body}` — unchanged (backward-compat)|
- *   | 3 | 2 | iterate     | `&@loop v, subj, {body}`   — v ← element            |
- *   | 4 | 3 | iterate     | `&@loop i, v, subj, {body}` — i ← position, v ← elem|
+ *   | 1 | 0 | infinite    | `@loop {body}` → `@loop 1, {body}` (loop forever)|
+ *   | 2 | 1 | while       | `@loop cond, {body}` — unchanged (backward-compat)|
+ *   | 3 | 2 | iterate     | `@loop v, subj, {body}`   — v ← element            |
+ *   | 4 | 3 | iterate     | `@loop i, v, subj, {body}` — i ← position, v ← elem|
  *   | ≥5| ≥4| reserved    | rejected                                            |
  *
  * The subject (args[N−2]) selects the desugar by syntactic shape:
@@ -75,7 +75,7 @@ function bodyParts(body: any): { items: any[]; trailing: any } {
     if (body && body.type === 'Block') {
         return { items: Array.isArray(body.items) ? body.items : [], trailing: body.trailing }
     }
-    // Non-block body (`&@loop v, 0..n, &print v`) — treat as a lone expression.
+    // Non-block body (`@loop v, 0..n, print v`) — treat as a lone expression.
     return { items: [], trailing: body }
 }
 
@@ -100,10 +100,10 @@ function transformLoop(call: any, ctx: Ctx): any {
     // N=2 while — the existing form; leave it for Loop_lower untouched.
     if (N === 2) return call
 
-    // N=1 infinite — `&@loop {body}` ≡ `&@loop 1, {body}` (loop forever).
+    // N=1 infinite — `@loop {body}` ≡ `@loop 1, {body}` (loop forever).
     if (N === 1) return loopCall(intLit(1), args[0])
 
-    // N=0 — `&@loop` with no body; leave it to error downstream as before.
+    // N=0 — `@loop` with no body; leave it to error downstream as before.
     if (N === 0) return call
 
     if (N >= 5) {
@@ -124,7 +124,7 @@ function transformLoop(call: any, ctx: Ctx): any {
         const hiN = `__loop${id}_hi`
 
         if (N === 3) {
-            // &@loop v, lo..hi, {body}
+            // @loop v, lo..hi, {body}
             const vName = binderName(args[0])
             if (vName === null) { err(ctx, 'the element binder of an iterate @loop must be a bare name (or `_`)'); return call }
             const inner: any[] = []
@@ -135,7 +135,7 @@ function transformLoop(call: any, ctx: Ctx): any {
                 loopCall(binop(ns(iN), '<', ns(hiN)), block(inner)),
             )
         }
-        // N === 4 — &@loop idx, v, lo..hi, {body}
+        // N === 4 — @loop idx, v, lo..hi, {body}
         const idxName = binderName(args[0])
         const vName = binderName(args[1])
         if (idxName === null || vName === null) { err(ctx, 'the binders of an iterate @loop must be bare names (or `_`)'); return call }
@@ -157,7 +157,7 @@ function transformLoop(call: any, ctx: Ctx): any {
     const get = (): any => userCall('vec_get_i32', [ns(xsN), ns(iN)])
 
     if (N === 3) {
-        // &@loop item, xs, {body}
+        // @loop item, xs, {body}
         const itemName = binderName(args[0])
         if (itemName === null) { err(ctx, 'the element binder of an iterate @loop must be a bare name (or `_`)'); return call }
         const inner: any[] = []
@@ -168,7 +168,7 @@ function transformLoop(call: any, ctx: Ctx): any {
             loopCall(binop(ns(iN), '<', ns(nN)), block(inner)),
         )
     }
-    // N === 4 — &@loop idx, item, xs, {body}
+    // N === 4 — @loop idx, item, xs, {body}
     const idxName = binderName(args[0])
     const itemName = binderName(args[1])
     if (idxName === null || itemName === null) { err(ctx, 'the binders of an iterate @loop must be bare names (or `_`)'); return call }
@@ -229,7 +229,7 @@ function walk(node: any, ctx: Ctx): any {
     // not supported in v1 (ranges are syntactic-only inside @loop).
     if (result.type === 'BinaryOp' && result.operator === '..') {
         err(ctx, 'a `..` range is only valid as the subject of an iterate `@loop` ' +
-            '(e.g. `&@loop v, 0..n, { … }`); ranges are not first-class values in v1')
+            '(e.g. `@loop(v, 0..n, { … })`); ranges are not first-class values in v1')
     }
     return result
 }

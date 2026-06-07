@@ -6,7 +6,7 @@ title: "Standard library"
 > Status: **shipping** (v0.1.2). This is the reference for the modules that
 > ship with `sgl` today. The long-term, aspirational surface (async, JSON,
 > HTTP, collections beyond `Vec`/`HashMap`, capability gating) is sketched in
-> [`silicon_standard_library_v_1.md`](silicon_standard_library_v_1.md); this
+> [`silicon_standard_library_v_1.md`](https://github.com/NatesCode/silicon/blob/main/docs/silicon_standard_library_v_1.md); this
 > page documents only what is implemented and tested.
 
 ## Goal
@@ -175,8 +175,8 @@ platform-specific:
 | **bun** (`--platform=bun`) | `console::log` / `web::console_log_f` | `JSString` (JS strings) + `String` bridge |
 | **web** (`--platform=web`) | `web::canvas_*`, `web::set_html`, `console::log` | `JSString` + `String` |
 
-See [`js-string-builtins.md`](js-string-builtins.md) for the `JSString` type and
-the `console` / `web` modules, and [`targets.md`](targets.md) for the wasm
+See [`platforms.md`](platforms.md) for the `JSString` type and
+the `console` / `web` modules, and [`platforms.md`](platforms.md) for the wasm
 memory-model targets (`wasm-mvp` vs `wasm-gc`), which are orthogonal to platform.
 
 ---

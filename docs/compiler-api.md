@@ -1,6 +1,6 @@
-# `&Compiler::*` — Sigil Compiler API for Strata
+# `Compiler::*` — Sigil Compiler API for Strata
 
-This is the reference for the `&Compiler::*` namespace exposed to Silicon
+This is the reference for the `Compiler::*` namespace exposed to Silicon
 strata bodies. The API is the only seam between user-defined strata and the
 compiler's internal lowering machinery; every definition kind and every
 control-flow keyword in the standard library is implemented on top of it.
@@ -25,19 +25,19 @@ marker, and (optionally) a rich body.
 };
 ```
 
-1. **Dispatch marker** — the first `&IR::xxx` or `&WASM::xxx` call. The
+1. **Dispatch marker** — the first `IR::xxx()` or `WASM::xxx()` call. The
    strata loader uses it to identify the codegen kind (`function`, `global`,
    `local`, `export`, …) or the intrinsic this body handles. It is a
    *runtime no-op*; it carries no semantics during body execution.
 
-2. **Rich body** — any sequence of `@local := …` bindings and
-   `&Compiler::*` calls. The final expression's value is the result the
-   compiler stores (typically an IR node from `&Compiler::ir::*`, or
-   `&IR::null` for definitions that emit no WAT).
+2. **Rich body** — any sequence of bare `:=` bindings and
+   `Compiler::*()` calls. The final expression's value is the result the
+   compiler stores (typically an IR node from `Compiler::ir::*`, or
+   `IR::null()` for definitions that emit no WAT).
 
 The body interpreter evaluates statements top-to-bottom. There is **no
 control flow inside a body** — no `@if`, no `@loop`, no recursion. When you
-need branching, use `&Compiler::choose`; when you need iteration, call one
+need branching, use `Compiler::choose(...)`; when you need iteration, call one
 of the helpers that does the iteration internally
 (`lowerParams`, `lowerExternParams`, `expandMatchChain`, …).
 
@@ -56,7 +56,7 @@ What it is bound to depends on the strata type:
 | Strata header                          | `Node` is …                                |
 | -------------------------------------- | ------------------------------------------ |
 | `@stratum_keyword`  (def-kind body)    | the `Definition` AST node                  |
-| `@stratum_keyword`  (builtin-call body)| the rawArgs array (use `&Compiler::arg`)   |
+| `@stratum_keyword`  (builtin-call body)| the rawArgs array (use `Compiler::arg(...)`)   |
 | `@stratum_operator` (rich body — rare) | the rawArgs array                          |
 
 For builtin-call expanders the body interpreter also exposes
@@ -67,7 +67,7 @@ for the call site.
 
 ## 3. API reference
 
-All APIs live under `&Compiler::*`. Nested namespaces (`Compiler::ctx::*`,
+All APIs live under `Compiler::*`. Nested namespaces (`Compiler::ctx::*`,
 `Compiler::ir::*`) are how the surface is organised; they are dispatched
 by walking the path against the JS API object.
 
@@ -83,7 +83,7 @@ the rest of the module.
 | `Compiler::ctx::locals::set(name, type)`       | Record a local in the locals map.                                       |
 | `Compiler::ctx::globals::get(name)`            | Read a global's WASM type, or undefined.                                |
 | `Compiler::ctx::globals::set(name, type)`      | Record a global in the globals map.                                     |
-| `Compiler::ctx::varNames::has(name)`           | True if `name` is a real WAT global (a `@local` / sum-type variant).      |
+| `Compiler::ctx::varNames::has(name)`           | True if `name` is a real WAT global (a `@mut` binding / sum-type variant).      |
 | `Compiler::ctx::varNames::add(name)`           | Mark `name` as a real WAT global.                                       |
 | `Compiler::ctx::pendingLocals::push(local)`    | Hoist an `IRLocal` to the current function's preamble.                  |
 | `Compiler::ctx::loopStack::push(id)`           | Push a loop ID — needed when nesting `@break` / `@continue` targets.    |
@@ -129,7 +129,7 @@ either passed explicitly or inferred from the inputs.
 | `Compiler::lowerParams(node)`              | Iterate `node.params`, lower each entry, return the `IRParam[]`.                                    |
 | `Compiler::lowerExprIfDefined(node)`       | Like `lowerExpr` but returns `undefined` when `node` itself is null/undefined.                      |
 | `Compiler::lowerFunctionBody(node, params)` | Create a child scope with `params` added to locals, lower `node.binding`, return `{body, locals}`. |
-| `Compiler::lowerGlobalInit(node, defaultType)` | Lower a `@local` initialiser or fall back to `(const 0 : defaultType)`; refines wasmType from init. |
+| `Compiler::lowerGlobalInit(node, defaultType)` | Lower a `@mut` initialiser or fall back to `(const 0 : defaultType)`; refines wasmType from init. |
 | `Compiler::lowerExternParams(node)`        | Extract the WASM param types of an `@extern`.                                                       |
 | `Compiler::lowerExternResult(node)`        | Extract the WASM result type of an `@extern`, or undefined.                                         |
 | `Compiler::expandMatchChain(args, type)`   | Build the nested `if`/`else` chain for `@match`. Used by `match.si`.                                |
@@ -221,7 +221,7 @@ downstream `makeReturn` correctly emits a `return` with no value.
 ```
 
 `choose` is eager — both branches must be safe to evaluate. For lazy
-branching, pre-bind both branches as `@local` values first, then choose
+branching, pre-bind both branches with bare `:=` first, then choose
 between the bindings.
 
 ### 5.4 Child-context lowering
@@ -255,22 +255,22 @@ through `pendingLocals::push` inside the body).
 - **Booleans** are `@true` / `@false`, not `true` / `false`.
   `true` parses as a namespace lookup and throws "Unknown identifier".
 - **Strings** use single quotes: `'global'`, `'@break outside @loop'`.
-- **Argument parsing has no parens by default.** `&Compiler::watId
-  Node.name.name` works because the call ends at `;`. When passing a
-  function-call result as an argument, bind it to an `@local` first to
-  avoid the comma in `args, n` being read as the *outer* call's separator.
+- **Calls are always parenthesized.** `Compiler::watId(Node.name.name)`
+  passes a field-access expression as an argument. When passing a
+  function-call result as an argument, bind it to a bare `:=` first to
+  keep each call's argument list unambiguous.
 - **Field access** uses `.` — `Node.name.typeAnnotation`. Index access
-  on arrays uses `&Compiler::arg Node, i` because the grammar does not
+  on arrays uses `Compiler::arg(Node, i)` because the grammar does not
   allow numeric segments in a namespace path.
-- **`&IR::xxx` and `&WASM::xxx`** calls inside a rich body are silent
+- **`IR::xxx()` and `WASM::xxx()`** calls inside a rich body are silent
   dispatch markers. They are *not* invokable at runtime; build IR with
-  `&Compiler::ir::*` instead.
+  `Compiler::ir::*` instead.
 
 ---
 
-## 7. Worked example: `@local`
+## 7. Worked example: `@mut`
 
-The complete strata, end to end, for the `@local` definition kind:
+The complete strata, end to end, for the `@mut` / mutable-binding definition kind:
 
 ```silicon
 @stratum_keyword LocalDef ('@local', Node) = {
@@ -284,14 +284,14 @@ The complete strata, end to end, for the `@local` definition kind:
 };
 ```
 
-What happens when a `\\ x Int` annotated `@local x := 5;` is encountered:
+What happens when a `\\ x Int` annotated `@mut x := 5;` is encountered:
 
-1. `Node` is the `Definition` AST node (`{type: 'Definition', keyword: '@local', name: {name: 'x', typeAnnotation: {typename: 'Int'}}, binding: …}`).
+1. `Node` is the `Definition` AST node (`{type: 'Definition', keyword: '@mut', name: {name: 'x', typeAnnotation: {typename: 'Int'}}, binding: …}`).
 2. `wasmType` ← `'i32'` (from `resolveType` of the `Int` annotation).
 3. `sname` ← `'x'` (no `::` to sanitise).
 4. `decl` ← `{ name: 'x', wasmType: 'i32' }`.
 5. The pending-locals list and locals map are updated — `x` is now a known local for the rest of the current function body.
-6. `&IR::null` returns `null` — the definition itself emits no top-level WAT node. The initialiser (`5`) is emitted as an `IRLocalSet` statement when the surrounding block is lowered.
+6. `IR::null()` returns `null` — the definition itself emits no top-level WAT node. The initialiser (`5`) is emitted as an `IRLocalSet` statement when the surrounding block is lowered.
 
 ---
 

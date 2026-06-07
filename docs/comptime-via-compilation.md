@@ -36,7 +36,7 @@ Original design proposal dated 2026-05-22.
 - Pre-pass in `buildStrataRegistry` collects every top-level `@fn` body
   into `registry.namedHandlers` so forward references resolve.
 - `registry.strataHandlerFnNames` tracks which `@fn`s are claimed as
-  handlers; the lowerer skips those (their `&Compiler::*` calls have no
+  handlers; the lowerer skips those (their `Compiler::*()` calls have no
   runtime meaning in the interpreter model).
 - 11 dedicated tests in `src/elaborator/dissolution-phase-a.test.ts`.
 
@@ -85,7 +85,7 @@ Original design proposal dated 2026-05-22.
 
 **All 13 Phase B stories complete.**  Next: D-D per-stratum migrations,
 gated on adding "compiler" to the moduleRegistry so handler-@fn source
-can call `&compiler::*` imports.
+can call `compiler::*()` imports.
 
 ### Phase C — Compile-then-run engine — ✓ SHIPPED (minimum viable)
 
@@ -157,7 +157,7 @@ What's unblocked:
      ```
      For operators: `Compiler::register::operator('+')` and
      `Compiler::on::lower('+', X_lower)`.
-  2. Audit the body for every `&Compiler::*` and `&IR::*` call.
+  2. Audit the body for every `Compiler::*()` and `IR::*()` call.
      Each one must have a corresponding host-side import in
      `src/comptime/imports.ts`.  Extend the import surface as needed.
      Most IR builders (`makeIf`, `makeBinOp`, …) need the IR-handle
@@ -173,7 +173,7 @@ What's unblocked:
 | File | Declarations | Body complexity | Effort estimate |
 |---|---|---|---|
 | `metadata.si` | 2 (`@export`, `@platform`) | Low — one is a no-op, one needs `watId`+`isVarName`+`ir::makeExport` | 0.5 day |
-| `defkinds.si` | 10 | High — `@global`/`@fn` use `lowerParams`, `lowerFunctionBody`, `resolveFunctionReturnType`, `ir::makeFunction`. Heavy import-surface adds. | 2 days |
+| `defkinds.si` | 10 | High — bare globals/`@fn` use `lowerParams`, `lowerFunctionBody`, `resolveFunctionReturnType`, `ir::makeFunction`. Heavy import-surface adds. | 2 days |
 | `if.si` | 1 (`@if`) | Medium — `lowerExpr` × 3, `ir::makeIf`.  Cleanest IR-builder migration. | 0.5 day |
 | `loop.si` | 1 | Medium — control-flow IR, loop-id management | 1 day |
 | `match.si` | 1 | High — interacts with `expandMatchChain`, variant tag computation | 1 day |
@@ -193,7 +193,7 @@ The biggest remaining piece.  Migration of any non-trivial stratum
 requires the import surface to cover the methods that stratum's body
 uses.  The structurally heaviest part is the IR-handle ABI:
 
-- **IR-handle table.** Each `&Compiler::ir::make*` host wrapper builds
+- **IR-handle table.** Each `Compiler::ir::make*(...)` host wrapper builds
   the JS IR object and returns an i32 handle into a host-side IR table.
   The firing code unpacks the result handle to recover the JS object
   and emit it into the lowered module.
@@ -280,7 +280,7 @@ Today we have **two evaluators** for Silicon-shaped programs:
    Implicit, free, native to the platform.
 2. **The strata body interpreter** — a small recursive AST walker in
    `src/elaborator/strataBody.ts`. Runs strata-side code at compile time.
-   Knows about `@local`, a few builtins, scope-method dispatch, binary ops.
+   Knows about `@mut`, a few builtins, scope-method dispatch, binary ops.
 
 The two diverge by necessity:
 - The runtime `@if` stratum emits WASM `(if ...)` instructions — it doesn't
@@ -360,7 +360,7 @@ We adopt the same shape:
 |---|---|
 | `comptime expr`     | Strata body, fired at compile time           |
 | Native compiler runs the function | Sigil compiler runs the WASM      |
-| Same `fn` syntax for both phases | Same `@fn`/`@local`/etc. syntax     |
+| Same `fn` syntax for both phases | Same `@fn`/`@mut`/etc. syntax     |
 | Host provides comptime stdlib   | Host exposes CompilerAPI as imports |
 
 What's *specific to us* — and a real complication — is that the Sigil
@@ -447,10 +447,8 @@ Compiler::module::push_definition(tmpl.ast);
 functions:
 
 ```silicon
-@extern {
-    \ ast_capture_template (i32, i32) -> i32
-    \ module_push_definition (i32) -> i32
-}
+\\ @extern ast_capture_template (Int, Int) -> Int;
+\\ @extern module_push_definition (Int) -> Int;
 
 \\ handler (Int) -> _
 @fn handler node_id := {
@@ -483,7 +481,7 @@ Two design choices to make explicit:
 ## Strata body compilation
 
 Today's `@stratum` body has special forms the interpreter recognises:
-`@local`, `&Compiler::*`, `&handle::method`, `node.field.field`, etc.
+`@mut`, `Compiler::*()`, `handle::method()`, `node.field.field`, etc.
 
 For "compile and run," the body becomes a regular Silicon program with a
 well-known entry point. Each `on::X` handler becomes a `@fn`:
@@ -501,9 +499,9 @@ well-known entry point. Each `on::X` handler becomes a `@fn`:
 ```
 
 Reuses everything:
-- `@local` → real WASM local.
-- `&compiler::*` → WASM import call.
-- `@if` → the existing `@if` stratum that lowers to WASM `(if ...)`.
+- `@mut x := ...` → real WASM local.
+- `compiler::*()` → WASM import call.
+- `@if(...)` → the existing `@if` stratum that lowers to WASM `(if ...)`.
 - `node.field` → calls like `compiler::ast_get_field(node_id, 'field')`
   returning the child's handle.
 

@@ -59,6 +59,10 @@ let PCUR = 0
 // scope-aware) on purpose: it can only OVER-mark @mut across shadowed names, never
 // under-mark a genuinely-mutable binding as immutable (which would break enforcement).
 let REASSIGNED = new Set<string>()
+
+// When true, `@local`/`@var` always map to `@mut` (exact semantics) instead of
+// demoting unreassigned ones to bare. Set by migrateSource's opts for embedded snippets.
+let PRESERVE_MUTABLE = false
 function collectReassigned(root: any): Set<string> {
     const s = new Set<string>()
     const visit = (x: any) => {
@@ -177,6 +181,11 @@ function emit(node: any, depth: number): string {
         case 'Statement':
         case 'Item':           return emit(node.value, depth)
         case 'Element':        return node.kind === 'docComment' ? '##' + node.value.content : emit(node.value, depth)
+        // Ascription (`&@as Type, expr`) is being RETIRED, not migrated (ADR-0020 has no
+        // `@as` form). Throw so the embedded codemod SKIPS the snippet (rather than
+        // silently emitting broken `x := ;`); those snippets are hand-rewritten as typed
+        // bindings (`\\ name Type`).
+        case 'Ascription':     throw new Error('ascription (&@as) is retired — rewrite snippet as a typed binding')
         default:               return ''
     }
 }
@@ -207,8 +216,17 @@ function emitDefinition(def: any, depth: number): string {
         return out
     }
     if (kw === '@type' || kw === '@type_sum') {
-        // @type_sum is the legacy spelling of a sum — fold into @type (RHS unchanged).
-        let out = '@type ' + namePlain + generics
+        // @type_sum is the legacy spelling of a sum. Its variants determine the target:
+        //   payload-free bare names (`Red | Green | Blue`)  -> @enum (i32-global variants)
+        //   $-tagged / payload variants (`$Some v | $None`) -> @type (constructor sum)
+        // A plain `@type` keeps @type. (Bare names under @type are invalid in ADR-0020 —
+        // they would lower to unknown type refs — so payload-free @type_sum MUST be @enum.)
+        const hasVariantDecl = (n: any): boolean =>
+            !!n && typeof n === 'object' && (n.type === 'VariantDecl'
+                || Object.keys(n).some(k => k !== 'sourceLocation' && k !== 'relSpan' && hasVariantDecl(n[k])))
+        const targetKw = (kw === '@type_sum' && def.binding && !hasVariantDecl(def.binding.expression))
+            ? '@enum' : '@type'
+        let out = targetKw + ' ' + namePlain + generics
         if (def.binding) out += ' := ' + emit(def.binding.expression, depth)
         return out
     }
@@ -226,12 +244,17 @@ function emitDefinition(def: any, depth: number): string {
     // @fn = function, @type = type. @local/@global are dropped. A current @local/@var
     // (which was mutable-capable) becomes @mut only if it is actually reassigned in the
     // file; otherwise it demotes to a bare immutable binding.
-    const mutable = (n: string) => REASSIGNED.has(n) ? '@mut ' : ''
+    // PRESERVE_MUTABLE (set for embedded test/doc snippets): `@local`/`@var` were
+    // mutable-capable, so map them to `@mut` UNCONDITIONALLY — demoting an unreassigned
+    // one to bare is semantically lossy (a mutable global emits `data`/`(mut …)`, an
+    // immutable one constant-folds), which breaks codegen-shape assertions. Without the
+    // flag (source migration) keep the cleaner reassignment-based demotion.
+    const mutable = (n: string) => (PRESERVE_MUTABLE || REASSIGNED.has(n)) ? '@mut ' : ''
     const prefix =
         kw === '@fn'     ? '@fn ' :      // function (kept)
         kw === '@global' ? '' :          // immutable value -> bare
         kw === '@let'    ? '' :          // immutable (legacy) -> bare
-        kw === '@local'  ? mutable(namePlain) :   // @mut if reassigned, else bare immutable
+        kw === '@local'  ? mutable(namePlain) :   // @mut (preserve) or demote-if-unreassigned
         kw === '@var'    ? mutable(namePlain) :   // (legacy)
         (FLAGS.push(`unmapped definition keyword '${kw}' kept verbatim — review`), kw + ' ')
 
@@ -335,9 +358,12 @@ function emitVariantDecl(vd: any): string {
 // Driver
 // ---------------------------------------------------------------------------
 
-function migrateFile(path: string): { text: string; report: Report } {
+// Core string→string migration: parse with the production parser, re-emit in
+// ADR 0020 syntax. Reused by the file driver below and by the embedded-snippet
+// codemod (tools/migrate-embedded-adr0020.ts) for `.md` / `.test.ts` blocks.
+export function migrateSource(original: string, opts: { preserveMutable?: boolean } = {}): { text: string; elements: number; comments: number; flags: string[] } {
     FLAGS.length = 0
-    const original = readFileSync(path, 'utf8')
+    PRESERVE_MUTABLE = opts.preserveMutable === true
     // `@use '...';` is resolved by preprocessing, not the grammar — blank the lines
     // for parsing (preserving line numbers so sourceLocation stays aligned), but
     // keep them (and all comments + blanks) in the preserved stream for re-emission.
@@ -349,13 +375,18 @@ function migrateFile(path: string): { text: string; report: Report } {
     const text = emitProgram(ast)
     return {
         text,
-        report: {
-            file: path,
-            out: '',
-            elements: ast.elements.length,
-            comments: PRES.filter(p => p.kind === 'comment').length,
-            flags: [...new Set(FLAGS)],
-        },
+        elements: ast.elements.length,
+        comments: PRES.filter(p => p.kind === 'comment').length,
+        flags: [...new Set(FLAGS)],
+    }
+}
+
+function migrateFile(path: string): { text: string; report: Report } {
+    const original = readFileSync(path, 'utf8')
+    const r = migrateSource(original)
+    return {
+        text: r.text,
+        report: { file: path, out: '', elements: r.elements, comments: r.comments, flags: r.flags },
     }
 }
 
@@ -424,4 +455,5 @@ function main() {
     if (check) console.error('(--check: no files written)')
 }
 
-main()
+// Only run the CLI driver when executed directly, not when imported for migrateSource.
+if (import.meta.main) main()

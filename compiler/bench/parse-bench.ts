@@ -48,20 +48,20 @@ function genExpr(rand: () => number, depth: number): string {
     if (r < 0.7) {
         const argc = 1 + Math.floor(rand() * 3)
         const args = Array.from({ length: argc }, () => genExpr(rand, depth - 1))
-        return `&fn${Math.floor(rand() * 16)} ${args.join(', ')}`
+        return `fn${Math.floor(rand() * 16)}(${args.join(', ')})`
     }
     if (r < 0.85) {
         const kw = KW_CALLS[Math.floor(rand() * KW_CALLS.length)]
-        return `&${kw} ${genExpr(rand, depth - 1)}, ${genExpr(rand, depth - 1)}`
+        return `${kw}(${genExpr(rand, depth - 1)}, ${genExpr(rand, depth - 1)})`
     }
-    return `&@if ${genExpr(rand, depth - 1)}, { ${genExpr(rand, depth - 1)} }, { ${genExpr(rand, depth - 1)} }`
+    return `@if(${genExpr(rand, depth - 1)}, { ${genExpr(rand, depth - 1)} }, { ${genExpr(rand, depth - 1)} })`
 }
 
 function genFunction(rand: () => number, idx: number, stmts: number): string {
     const lines: string[] = [`\\\\ fn${idx} (Int, Int) -> Int`, `@fn fn${idx} a, b := {`]
     for (let i = 0; i < stmts; i++) {
         const r = rand()
-        if (r < 0.45) lines.push(`    @local v${i % 8} := ${genExpr(rand, 3)};`)
+        if (r < 0.45) lines.push(`    @mut v${i % 8} := ${genExpr(rand, 3)};`)
         else if (r < 0.7) lines.push(`    v${i % 8} = ${genExpr(rand, 3)};`)
         else lines.push(`    ${genExpr(rand, 3)};`)
     }

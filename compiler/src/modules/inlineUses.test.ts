@@ -4,7 +4,8 @@ import { inlineStdlibUses } from './inlineUses'
 
 describe('inlineStdlibUses', () => {
     test('inlines a bare-name stdlib module and strips the @use line', () => {
-        const out = inlineStdlibUses(`@use 'num';\n@fn main := &int_to_str 42;`)
+        const out = inlineStdlibUses(`@use 'num';
+@fn main := int_to_str(42);`)
         expect(out).not.toContain(`@use 'num'`)
         expect(out).toContain('int_to_str')          // num's body is present
         expect(out).toContain('@fn main')            // user body preserved

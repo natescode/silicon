@@ -20,16 +20,16 @@ top of them.
 
 Conversions are explicit:
 
-- `&@toInt64 x` — `Int → Int64` (sign-extend; `i64.extend_i32_s`).
-- `&@toInt x` — `Int64 → Int` (wrap; `i32.wrap_i64`). Typed-dispatch
+- `@toInt64(x)` — `Int → Int64` (sign-extend; `i64.extend_i32_s`).
+- `@toInt(x)` — `Int64 → Int` (wrap; `i32.wrap_i64`). Typed-dispatch
   overload; the `Float → Int` variant of `@toInt` still applies for
   `Float` arguments.
 
-No implicit promotion: `5 + (&@toInt64 1)` is a type error — both sides
+No implicit promotion: `5 + @toInt64(1)` is a type error — both sides
 must be the same width.
 
 No integer-literal suffixes — `42i64` does **not** parse. Use the
-keyword cast: `&@toInt64 42`.
+keyword cast: `@toInt64(42)`.
 
 ## Float
 
@@ -55,11 +55,11 @@ generalisation lands.
 ## Slice[T]
 
 A `Slice[T]` is `{ ptr Int, len Int }` — bounds-checked at runtime by
-`&Slice::get`. The slice does not own its memory.
+`Slice::get(...)`. The slice does not own its memory.
 
 ## Structs
 
-`@struct Point x Int, y Int;` lays out fields contiguously. The
+`@type Point := { x Int, y Int };` lays out fields contiguously. The
 constructor function `$Point` returns a pointer to the heap-allocated
 struct. Nested structs compute their size at compile time
 (`size_of(T)` is a comptime constant).
@@ -69,6 +69,8 @@ struct. Nested structs compute their size at compile time
 `@type Shape := $Circle r Int | $Rect w Int, h Int;` pads each variant
 to the max payload width. Layout: `[tag:i32, field0:i32, …,
 field<max-1>:i32]` with zero-init in unused slots.
+
+Payload-free sum types (enums): `@enum Color := Red | Green | Blue;`.
 
 Parametric sum types: `@type Option[T] := $Some value T | $None;`.
 `Option[Int]` and `Option[Float]` are nominally distinct.
@@ -82,6 +84,6 @@ table; calls go through `call_indirect`.
 
 ## Type aliases / distinct types
 
-- `@type_alias UserId := Int;` — transparent renaming.
+- `@type UserId := Int;` — transparent alias (when RHS is a bare `TypeExpr`).
 - `@type_distinct UserId := Int;` — nominally distinct from `Int`;
   explicit conversion required at the boundary.

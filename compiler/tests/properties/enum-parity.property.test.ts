@@ -1,12 +1,15 @@
 /**
- * @enum / @type_sum parity tests — partial WS 3 of Stage 0 Cleanup Plan.
+ * @enum / @type (constructor-sum) contrast tests — ADR-0020 follow-up.
  *
- * `@enum` is the modern name for today's payload-free `@type_sum`.
- * Both keywords must produce identical compiled output so existing code
- * keeps working while new code adopts the cleaner spelling.
+ * ADR-0020 retired `@type_sum`; the two sum-type forms in ADR-0020 are:
+ *   @enum Color := Red | Green | Blue       — payload-free, each variant is an
+ *                                              immutable i32 global (tag = index).
+ *   @type Color := $Red | $Green | $Blue    — constructor-sum, each variant is a
+ *                                              heap-allocated struct with a tag field.
  *
- * Payload-bearing sum types (the `@type` form in the cleanup plan)
- * require grammar work and land in a follow-up commit.
+ * These tests verify the structural contract of each form: `@enum` is the
+ * lightweight tag-only form; `@type` with $-variants is the full tagged-struct form.
+ * They deliberately produce *different* WAT, which is the correct behaviour.
  */
 
 import { test, expect, describe } from 'bun:test'
@@ -21,13 +24,24 @@ function userPart(wat: string): string {
     return afterPrint >= 0 ? wat.slice(afterPrint) : wat.slice(idx)
 }
 
-describe('@enum / @type_sum parity', () => {
-    test('multi-variant enum compiles to the same WAT as @type_sum', () => {
-        const enumSrc    = '@enum Color := Red | Green | Blue;'
-        const sumSrc     = '@type_sum Color := Red | Green | Blue;'
-        const enumWat    = userPart(compileToWatString(enumSrc))
-        const sumWat     = userPart(compileToWatString(sumSrc))
-        expect(enumWat).toBe(sumWat)
+describe('@enum / @type (constructor-sum) contrast', () => {
+    test('@enum emits tag globals; @type constructor-sum emits constructor funcs', () => {
+        // @enum: payload-free — each variant is an immutable i32 global.
+        const enumWat = userPart(compileToWatString('@enum Color := Red | Green | Blue;'))
+        expect(enumWat).toContain('(global $Color_Red')
+        expect(enumWat).toContain('(global $Color_Green')
+        expect(enumWat).toContain('(global $Color_Blue')
+        expect(enumWat).not.toContain('(func $Red')
+
+        // @type constructor-sum: heap-allocated tagged structs with constructor fns.
+        const sumWat = userPart(compileToWatString('@type Color := $Red | $Green | $Blue;'))
+        expect(sumWat).toContain('(func $Red')
+        expect(sumWat).toContain('(func $Green')
+        expect(sumWat).toContain('(func $Blue')
+        expect(sumWat).not.toContain('(global $Color_Red')
+
+        // The two forms produce structurally different WAT — that is by design.
+        expect(enumWat).not.toBe(sumWat)
     })
 
     test('single-variant enum compiles cleanly', () => {
@@ -51,7 +65,7 @@ describe('@enum / @type_sum parity', () => {
 
     test.skip('enum without params (D-D-11d regression — new register::keyword always allowsParams=true)', () => {
         let err = ''
-        try { compileToWatString('@enum Color x:Int := Red | Green;') }
+        try { compileToWatString('@enum Color x Int := Red | Green;') }
         catch (e) { err = String(e) }
         expect(err).toMatch(/does not accept parameters|@enum|param/i)
     })

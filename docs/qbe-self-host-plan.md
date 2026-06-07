@@ -65,11 +65,11 @@ work on the WASM backend. The gap is the native emitter, not Silicon.
 
 A compiler written in Silicon must, to compile *other* programs, run the strata
 system (operators, `@if`, `@loop`, `@match`, `@struct`, …) whose bodies call the
-`&Compiler::*` API. Today that has two execution paths:
+`Compiler::*` API. Today that has two execution paths:
 
 1. **WASM compile-then-run** (`engine.ts`) — compiles a handler body to WASM and
    instantiates it. A *performance optimization* (the "T0 fast path").
-2. **AST-walking interpreter** (`compileHandlerBlock` + the `&Compiler::*`
+2. **AST-walking interpreter** (`compileHandlerBlock` + the `Compiler::*`
    interpreter surface) — the functional fallback.
 
 **The native compiler implements path 2 only.** It walks the handler AST in native
@@ -146,7 +146,7 @@ text) until byte-identical, then switch authority to the Silicon version.
    user of Phase 1.4.
 3. **Strata loader + registry** (`elaborator/strataLoader.ts`, `registry.ts`).
 4. **Elaborator + comptime** (`elaborator/elaborator.ts`, `comptime/imports.ts`):
-   port the **AST-walking interpreter** and the `&Compiler::*` surface. Largest and
+   port the **AST-walking interpreter** and the `Compiler::*` surface. Largest and
    riskiest subsystem; the comptime unlock above makes it tractable.
 5. **Typechecker + unify** (`types/*`): HM-lite; diff inferred types against the
    oracle.
@@ -231,7 +231,7 @@ no GC inside the compiler.
 | Bootstrap non-determinism breaks the fixpoint | medium | determinism tests already enforce byte-stable IR; pin iteration order, no hash-order maps in codegen |
 | Float / ABI mismatches via QBE→cc | medium | runtime diff tests (exit code + stdout) catch behavioral divergence |
 | macOS cross-build / codesigning | low | build per-OS in CI |
-| `&Compiler::*` surface is large to port | medium | port incrementally behind the oracle; trim dead API while porting |
+| `Compiler::*` surface is large to port | medium | port incrementally behind the oracle; trim dead API while porting |
 | WASM-emitter port (3,547 LOC) doubles backend work | medium | it's a port, not new design; the byte-for-byte `Silicon→WASM == TS→WASM` diff makes it self-verifying, and it powers the playground swap |
 | Browser host: compiler-as-wasm needs no-fs platform shim | medium | port the existing `.native`/`.browser` asset+I/O split into Silicon; headless smoke test gates the playground swap (Phase 4.1) |
 

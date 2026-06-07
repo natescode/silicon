@@ -1,11 +1,11 @@
 # SPDX-License-Identifier: MIT
 # web platform — canvas feature: 2D drawing surface.
-@extern { \\ canvas_set_fill (Int, Int, Int) -> Void }
-@extern { \\ canvas_set_stroke (Int, Int, Int) -> Void }
-@extern { \\ canvas_fill_rect (Float, Float, Float, Float) -> Void }
-@extern { \\ canvas_stroke_rect (Float, Float, Float, Float) -> Void }
-@extern { \\ canvas_clear_rect (Float, Float, Float, Float) -> Void }
-@extern { \\ canvas_fill_text (String, Float, Float) -> Void }
-@extern { \\ canvas_set_font (String) -> Void }
-@extern { \\ canvas_width () -> Int }
-@extern { \\ canvas_height () -> Int }
+\\ @extern canvas_set_fill (Int, Int, Int) -> Void;
+\\ @extern canvas_set_stroke (Int, Int, Int) -> Void;
+\\ @extern canvas_fill_rect (Float, Float, Float, Float) -> Void;
+\\ @extern canvas_stroke_rect (Float, Float, Float, Float) -> Void;
+\\ @extern canvas_clear_rect (Float, Float, Float, Float) -> Void;
+\\ @extern canvas_fill_text (String, Float, Float) -> Void;
+\\ @extern canvas_set_font (String) -> Void;
+\\ @extern canvas_width () -> Int;
+\\ @extern canvas_height () -> Int;

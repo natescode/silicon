@@ -144,3 +144,11 @@
     n := str_len(s);
     Slice(p + 4, n)
 };
+
+# Canonical name for the byte view of a String (alias of string_as_slice).
+# This is the read-side "bytes" accessor: it hides the 4-byte length-header
+# arithmetic so callers never write `str_ptr(s) + 4` themselves.  (Becomes
+# `String.bytes -> View[u8]` once the Span/View/Slice capability surface from
+# ADR 0011 lands; today it returns the existing Slice[u8].)
+\\ str_bytes (String) -> Slice[u8]
+@fn str_bytes s := string_as_slice(s);

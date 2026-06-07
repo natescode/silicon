@@ -213,11 +213,29 @@ export class Lexer {
     }
 
     private lexNumber(start: number): Token {
-        // ohm's `intLiteral` tries `decLiteral` first, so prefixed bases
-        // (0x/0b/0c) are dead — a leading digit is always decimal. A `.digits`
-        // fractional part makes it a float (frac is `digit+`, no underscores).
         const s = this.src
         const len = s.length
+        // Prefixed non-decimal bases: 0x / 0b / 0o (case-insensitive prefix).
+        // `this.i` is at the leading '0'.  Underscores may separate digits.
+        if (s.charCodeAt(this.i) === 48 /* '0' */ && this.i + 1 < len) {
+            const p = s.charCodeAt(this.i + 1)
+            const isHex = (k: number) => DIGIT[k] === 1 || (k >= 65 && k <= 70) || (k >= 97 && k <= 102)
+            const isBin = (k: number) => k === 48 || k === 49
+            const isOct = (k: number) => k >= 48 && k <= 55
+            const scanBase = (ok: (k: number) => boolean, base: 'hexadecimal' | 'binary' | 'octal'): Token => {
+                this.i += 2  // skip the 0x / 0b / 0o prefix
+                const digitsStart = this.i
+                while (this.i < len && (ok(s.charCodeAt(this.i))
+                    || (s.charCodeAt(this.i) === 95 /* _ */ && this.i + 1 < len && ok(s.charCodeAt(this.i + 1))))) this.i++
+                if (this.i === digitsStart) this.lexFail(`${base} literal needs at least one digit`, start)
+                return this.tok('int', start, { base })
+            }
+            if (p === 120 || p === 88) return scanBase(isHex, 'hexadecimal')  // x / X
+            if (p === 98  || p === 66) return scanBase(isBin, 'binary')       // b / B
+            if (p === 111 || p === 79) return scanBase(isOct, 'octal')        // o / O
+        }
+        // Decimal (or float): a `.digits` fractional part makes it a float
+        // (frac is `digit+`, no underscores).
         const moreDigits = (i: number) => i < len && DIGIT[s.charCodeAt(i)] === 1
         while (this.i < len && (DIGIT[s.charCodeAt(this.i)] === 1
             || (s.charCodeAt(this.i) === 95 /* _ */ && moreDigits(this.i + 1)))) this.i++

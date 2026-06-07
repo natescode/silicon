@@ -1,39 +1,39 @@
 # SPDX-License-Identifier: MIT
-@extern { \\ console_log (Int) -> Void }
-@extern { \\ console_log_f (Float) -> Void }
-@extern { \\ console_log_str (String) -> Void }
-@extern { \\ console_error (Int) -> Void }
-@extern { \\ console_warn (Int) -> Void }
-@extern { \\ console_info (Int) -> Void }
+\\ @extern console_log (Int) -> Void;
+\\ @extern console_log_f (Float) -> Void;
+\\ @extern console_log_str (String) -> Void;
+\\ @extern console_error (Int) -> Void;
+\\ @extern console_warn (Int) -> Void;
+\\ @extern console_info (Int) -> Void;
 
-@extern { \\ math_random () -> Float }
-@extern { \\ math_sin (Float) -> Float }
-@extern { \\ math_cos (Float) -> Float }
-@extern { \\ math_tan (Float) -> Float }
-@extern { \\ math_sqrt (Float) -> Float }
-@extern { \\ math_log (Float) -> Float }
-@extern { \\ math_exp (Float) -> Float }
-@extern { \\ math_pow (Float, Float) -> Float }
-@extern { \\ math_atan2 (Float, Float) -> Float }
-@extern { \\ math_floor (Float) -> Float }
-@extern { \\ math_ceil (Float) -> Float }
-@extern { \\ math_round (Float) -> Float }
-@extern { \\ math_abs (Float) -> Float }
-@extern { \\ math_min (Float, Float) -> Float }
-@extern { \\ math_max (Float, Float) -> Float }
+\\ @extern math_random () -> Float;
+\\ @extern math_sin (Float) -> Float;
+\\ @extern math_cos (Float) -> Float;
+\\ @extern math_tan (Float) -> Float;
+\\ @extern math_sqrt (Float) -> Float;
+\\ @extern math_log (Float) -> Float;
+\\ @extern math_exp (Float) -> Float;
+\\ @extern math_pow (Float, Float) -> Float;
+\\ @extern math_atan2 (Float, Float) -> Float;
+\\ @extern math_floor (Float) -> Float;
+\\ @extern math_ceil (Float) -> Float;
+\\ @extern math_round (Float) -> Float;
+\\ @extern math_abs (Float) -> Float;
+\\ @extern math_min (Float, Float) -> Float;
+\\ @extern math_max (Float, Float) -> Float;
 
-@extern { \\ performance_now () -> Float }
-@extern { \\ date_now () -> Float }
+\\ @extern performance_now () -> Float;
+\\ @extern date_now () -> Float;
 
-@extern { \\ canvas_set_fill (Int, Int, Int) -> Void }
-@extern { \\ canvas_set_stroke (Int, Int, Int) -> Void }
-@extern { \\ canvas_fill_rect (Float, Float, Float, Float) -> Void }
-@extern { \\ canvas_stroke_rect (Float, Float, Float, Float) -> Void }
-@extern { \\ canvas_clear_rect (Float, Float, Float, Float) -> Void }
-@extern { \\ canvas_fill_text (String, Float, Float) -> Void }
-@extern { \\ canvas_set_font (String) -> Void }
-@extern { \\ canvas_width () -> Int }
-@extern { \\ canvas_height () -> Int }
+\\ @extern canvas_set_fill (Int, Int, Int) -> Void;
+\\ @extern canvas_set_stroke (Int, Int, Int) -> Void;
+\\ @extern canvas_fill_rect (Float, Float, Float, Float) -> Void;
+\\ @extern canvas_stroke_rect (Float, Float, Float, Float) -> Void;
+\\ @extern canvas_clear_rect (Float, Float, Float, Float) -> Void;
+\\ @extern canvas_fill_text (String, Float, Float) -> Void;
+\\ @extern canvas_set_font (String) -> Void;
+\\ @extern canvas_width () -> Int;
+\\ @extern canvas_height () -> Int;
 
-@extern { \\ set_html (String) -> Void }
-@extern { \\ clear_html () -> Void }
+\\ @extern set_html (String) -> Void;
+\\ @extern clear_html () -> Void;

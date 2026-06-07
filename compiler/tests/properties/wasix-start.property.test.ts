@@ -36,32 +36,32 @@ function compile(source: string, target: 'host' | 'wasix' = 'host'): string {
 
 describe('WASIX _start export', () => {
     test('default host target: no _start export emitted', () => {
-        const wat = compile('@global main := { 42 };')
+        const wat = compile('main := { 42 };')
         expect(wat).not.toContain('(export "_start"')
     })
 
     test('wasix target: always emits (export "_start" (func $__start))', () => {
         // Even with no top-level statements, $__start exists as a no-op
         // so the WASIX runner has something to invoke.
-        const wat = compile('@global main := { 42 };', 'wasix')
+        const wat = compile('main := { 42 };', 'wasix')
         expect(wat).toContain('(export "_start" (func $__start))')
         expect(wat).toMatch(/\(func \$__start\b/)
     })
 
     test('wasix target with top-level statements: $__start contains them', () => {
         const wat = compile([
-            '@global helper := { 7 };',
-            '&helper;',
+            'helper := { 7 };',
+            'helper();',
         ].join('\n'), 'wasix')
         expect(wat).toContain('(export "_start" (func $__start))')
-        // Top-level &helper call appears in $__start's body.
+        // Top-level helper() call appears in $__start's body.
         const startIdx = wat.indexOf('(func $__start')
         expect(startIdx).toBeGreaterThan(-1)
         expect(wat.slice(startIdx)).toContain('call $helper')
     })
 
     test('wasix target without top-level statements: $__start body is empty', () => {
-        const wat = compile('@global lonely := { 1 };', 'wasix')
+        const wat = compile('lonely := { 1 };', 'wasix')
         const startIdx = wat.indexOf('(func $__start')
         expect(startIdx).toBeGreaterThan(-1)
         // No calls inside $__start.

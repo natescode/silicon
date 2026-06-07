@@ -633,7 +633,7 @@ function lowerBuiltinCall(callee: string, args: any[], fn: QbeFnCtx): string {
         case '@move_to_parent_arena':
             throw new Error(
                 `[QBE lower] '${callee}' is not yet supported on the native backend. ` +
-                `Phase 9c shipped &@with_arena / &@move_to_parent_arena for the WASM ` +
+                `Phase 9c shipped @with_arena / @move_to_parent_arena for the WASM ` +
                 `backend only; QBE allocator wiring is a follow-up story (tracked under ` +
                 `Phase 9c-6 in docs/v1-user-stories.html).  Build with the default ` +
                 `(WASM) backend, or omit the arena strata for --native builds.`,

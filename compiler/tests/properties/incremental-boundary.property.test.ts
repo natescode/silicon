@@ -120,14 +120,14 @@ function reportFail(initial: string, edits: string[], fail: { idx: number; src: 
 
 // Base sources with >= 2 top-level elements, varied kinds.
 const BASES = [
-    '@global a := 1;\n@global b := 2;\n@global c := 3;',
-    '@fn add x, y := { x + y };\n@global r := &add 1, 2;',
-    '@global a := 1;\n@fn f x := { x + a };\n@global b := &f 10;',
-    '@type Pt := $Pt x:Int, y:Int;\n@global p := &Pt 1, 2;',
-    '@global a := 1;\n\n## a comment between\n\n@global b := 2;',
-    '@enum Color := Red | Green | Blue;\n@global c := Green;\n@global d := Red;',
-    '@fn id[T] x:T := x;\n@global n := &id 5;\n@global m := &id 7;',
-    '@global a := 1; @global b := 2; @global c := 3;',  // all on one line
+    'a := 1;\nb := 2;\nc := 3;',
+    '@fn add x, y := { x + y };\nr := add(1, 2);',
+    'a := 1;\n@fn f x := { x + a };\nb := f(10);',
+    '@type Pt := $Pt x Int, y Int;\np := Pt(1, 2);',
+    'a := 1;\n\n## a comment between\n\nb := 2;',
+    '@enum Color := Red | Green | Blue;\nc := Green;\nd := Red;',
+    '@fn id[T] x T := x;\nn := id(5);\nm := id(7);',
+    'a := 1; b := 2; c := 3;',  // all on one line
 ]
 
 // ── element-boundary index of a source ──────────────────────────────────────
@@ -148,108 +148,108 @@ describe('ADV: structured element merge/split/delete/whitespace/comment edits', 
     const scenarios: { name: string; initial: string; edits: string[] }[] = [
         {
             name: 'delete first ; (merge a+b → parse error)',
-            initial: '@global a := 1;\n@global b := 2;\n@global c := 3;',
-            edits: ['@global a := 1\n@global b := 2;\n@global c := 3;'],
+            initial: 'a := 1;\nb := 2;\nc := 3;',
+            edits: ['a := 1\nb := 2;\nc := 3;'],
         },
         {
             name: 'delete middle ; then restore',
-            initial: '@global a := 1;\n@global b := 2;\n@global c := 3;',
+            initial: 'a := 1;\nb := 2;\nc := 3;',
             edits: [
-                '@global a := 1;\n@global b := 2\n@global c := 3;',
-                '@global a := 1;\n@global b := 2;\n@global c := 3;',
+                'a := 1;\nb := 2\nc := 3;',
+                'a := 1;\nb := 2;\nc := 3;',
             ],
         },
         {
             name: 'split: insert ; in the middle of a binding',
-            initial: '@global a := 1 + 2;\n@global b := 5;',
-            edits: ['@global a := 1 +; 2;\n@global b := 5;', '@global a := 1; 2;\n@global b := 5;'],
+            initial: 'a := 1 + 2;\nb := 5;',
+            edits: ['a := 1 +; 2;\nb := 5;', 'a := 1; 2;\nb := 5;'],
         },
         {
             name: 'delete a whole middle element (incl its ;)',
-            initial: '@global a := 1;\n@global b := 2;\n@global c := 3;',
-            edits: ['@global a := 1;\n@global c := 3;'],
+            initial: 'a := 1;\nb := 2;\nc := 3;',
+            edits: ['a := 1;\nc := 3;'],
         },
         {
             name: 'delete the last element',
-            initial: '@global a := 1;\n@global b := 2;\n@global c := 3;',
-            edits: ['@global a := 1;\n@global b := 2;\n'],
+            initial: 'a := 1;\nb := 2;\nc := 3;',
+            edits: ['a := 1;\nb := 2;\n'],
         },
         {
             name: 'delete the first element',
-            initial: '@global a := 1;\n@global b := 2;\n@global c := 3;',
-            edits: ['@global b := 2;\n@global c := 3;'],
+            initial: 'a := 1;\nb := 2;\nc := 3;',
+            edits: ['b := 2;\nc := 3;'],
         },
         {
             name: 'insert a ## comment between elements',
-            initial: '@global a := 1;\n@global b := 2;\n@global c := 3;',
-            edits: ['@global a := 1;\n## inserted\n@global b := 2;\n@global c := 3;'],
+            initial: 'a := 1;\nb := 2;\nc := 3;',
+            edits: ['a := 1;\n## inserted\nb := 2;\nc := 3;'],
         },
         {
             name: 'delete a ## comment between elements',
-            initial: '@global a := 1;\n## a comment\n@global b := 2;\n@global c := 3;',
-            edits: ['@global a := 1;\n@global b := 2;\n@global c := 3;'],
+            initial: 'a := 1;\n## a comment\nb := 2;\nc := 3;',
+            edits: ['a := 1;\nb := 2;\nc := 3;'],
         },
         {
             name: 'edit text INSIDE a gap comment only',
-            initial: '@global a := 1;\n## hello\n@global b := 2;',
-            edits: ['@global a := 1;\n## hxllo\n@global b := 2;', '@global a := 1;\n## hello world\n@global b := 2;'],
+            initial: 'a := 1;\n## hello\nb := 2;',
+            edits: ['a := 1;\n## hxllo\nb := 2;', 'a := 1;\n## hello world\nb := 2;'],
         },
         {
             name: 'insert blank lines between elements (ΔLines)',
-            initial: '@global a := 1;\n@global b := 2;\n@global c := 3;',
-            edits: ['@global a := 1;\n\n\n@global b := 2;\n@global c := 3;'],
+            initial: 'a := 1;\nb := 2;\nc := 3;',
+            edits: ['a := 1;\n\n\nb := 2;\nc := 3;'],
         },
         {
             name: 'delete blank lines between elements',
-            initial: '@global a := 1;\n\n\n@global b := 2;\n@global c := 3;',
-            edits: ['@global a := 1;\n@global b := 2;\n@global c := 3;'],
+            initial: 'a := 1;\n\n\nb := 2;\nc := 3;',
+            edits: ['a := 1;\nb := 2;\nc := 3;'],
         },
         {
             name: 'merge two-on-one-line by deleting the inner ;',
-            initial: '@global a := 1; @global b := 2; @global c := 3;',
-            edits: ['@global a := 1 @global b := 2; @global c := 3;'],
+            initial: 'a := 1; b := 2; c := 3;',
+            edits: ['a := 1 b := 2; c := 3;'],
         },
         {
             name: 'split inline by adding a ;',
-            initial: '@global a := 1; @global b := 2;',
-            edits: ['@global a := 1; @global b := 2;; @global c := 3;'],
+            initial: 'a := 1; b := 2;',
+            edits: ['a := 1; b := 2;; c := 3;'],
         },
         {
             name: 'edit at exact boundary: insert space right before a ;',
-            initial: '@global a := 1;\n@global b := 2;',
-            edits: ['@global a := 1 ;\n@global b := 2;'],
+            initial: 'a := 1;\nb := 2;',
+            edits: ['a := 1 ;\nb := 2;'],
         },
         {
             name: 'edit at exact boundary: insert right after a ;',
-            initial: '@global a := 1;\n@global b := 2;',
-            edits: ['@global a := 1; \n@global b := 2;'],
+            initial: 'a := 1;\nb := 2;',
+            edits: ['a := 1; \nb := 2;'],
         },
         {
             name: 'change a referenced symbol then merge (cross-element type flow)',
-            initial: '@global a := 1;\n@fn f x := { x + a };\n@global b := &f 10;',
+            initial: 'a := 1;\n@fn f x := { x + a };\nb := f(10);',
             edits: [
-                '@global a := 1;\n@fn f x := { x + a }\n@global b := &f 10;',  // merge f+b (drop ;)
-                '@global a := 1;\n@fn f x := { x + a };\n@global b := &f 10;', // restore
+                'a := 1;\n@fn f x := { x + a }\nb := f(10);',  // merge f+b (drop ;)
+                'a := 1;\n@fn f x := { x + a };\nb := f(10);', // restore
             ],
         },
         {
             name: 'redefine a name used downstream by merge/split cycling',
-            initial: '@fn add x, y := { x + y };\n@global r := &add 1, 2;',
+            initial: '@fn add x, y := { x + y };\nr := add(1, 2);',
             edits: [
-                '@fn add x, y := { x + y }\n@global r := &add 1, 2;',    // merge
-                '@fn add x, y := { x + y };\n@global r := &add 1, 2;',   // restore (split)
-                '@fn add x, y := { x - y };\n@global r := &add 1, 2;',   // edit body
+                '@fn add x, y := { x + y }\nr := add(1, 2);',    // merge
+                '@fn add x, y := { x + y };\nr := add(1, 2);',   // restore (split)
+                '@fn add x, y := { x - y };\nr := add(1, 2);',   // edit body
             ],
         },
         {
             name: 'delete trailing ; on last element (no merge target)',
-            initial: '@global a := 1;\n@global b := 2;',
-            edits: ['@global a := 1;\n@global b := 2'],
+            initial: 'a := 1;\nb := 2;',
+            edits: ['a := 1;\nb := 2'],
         },
         {
             name: 'comment-out an element by prefixing ##',
-            initial: '@global a := 1;\n@global b := 2;\n@global c := 3;',
-            edits: ['@global a := 1;\n## @global b := 2;\n@global c := 3;'],
+            initial: 'a := 1;\nb := 2;\nc := 3;',
+            edits: ['a := 1;\n## b := 2;\nc := 3;'],
         },
         // ── MINIMAL REPRODUCERS of the comment-absorbs-suffix bug ───────────
         {
@@ -258,8 +258,8 @@ describe('ADV: structured element merge/split/delete/whitespace/comment edits', 
             // element `b` is reused as an unchanged suffix — but the `## ` now
             // comments it out, so a fresh parse drops `b`. Incremental keeps it.
             name: 'MINREPRO: ## prefix on 2nd element leaks symbol b',
-            initial: '@global a := 1;\n@global b := 2;',
-            edits: ['@global a := 1;\n## @global b := 2;'],
+            initial: 'a := 1;\nb := 2;',
+            edits: ['a := 1;\n## b := 2;'],
         },
         {
             // Same defect with a single `#` (still a comment marker) and at the
@@ -268,16 +268,16 @@ describe('ADV: structured element merge/split/delete/whitespace/comment edits', 
             // whole program is reused verbatim and the commented-out `Color`
             // element survives in the incremental tree.
             name: 'MINREPRO: # prefix on first element leaks (offset-0)',
-            initial: '@enum Color := Red | Green | Blue;\n@global c := Green;',
-            edits: ['#@enum Color := Red | Green | Blue;\n@global c := Green;'],
+            initial: '@enum Color := Red | Green | Blue;\nc := Green;',
+            edits: ['#@enum Color := Red | Green | Blue;\nc := Green;'],
         },
         {
             name: 'collapse two elements then re-split at a different point',
-            initial: '@global a := 1;\n@global b := 2;',
+            initial: 'a := 1;\nb := 2;',
             edits: [
-                '@global a := 1\n@global b := 2;',          // merge
-                '@global a :=; 1\n@global b := 2;',         // split at a weird spot
-                '@global a := 1;\n@global b := 2;',         // back to clean
+                'a := 1\nb := 2;',          // merge
+                'a :=; 1\nb := 2;',         // split at a weird spot
+                'a := 1;\nb := 2;',         // back to clean
             ],
         },
     ]
@@ -300,7 +300,7 @@ const OPS = ['delSemi', 'insSemi', 'delElem', 'blankLine', 'comment', 'ws', 'del
 const INS_CHARS = [';', '\n', ' ', '#', 'x', '1', '+']
 
 function applyOp(src: string, rand: () => number): string {
-    if (src.length === 0) return '@global x := 1;'
+    if (src.length === 0) return 'x := 1;'
     const offs = boundaryOffsets(src)
     const at = offs[Math.floor(rand() * offs.length)]
     const op = OPS[Math.floor(rand() * OPS.length)]

@@ -100,7 +100,7 @@ test("compile array literals are supported", () => {
 })
 
 test("compile @global definition emits func with params", () => {
-    const wat = compile("\\\\ add (Int, Int)\n@global add x, y := x + y;")
+    const wat = compile("\\\\ add (Int, Int)\nadd x, y := x + y;")
     expect(wat).toContain("(func $add")
     expect(wat).toContain("(param $x i32)")
     expect(wat).toContain("(param $y i32)")
@@ -112,19 +112,19 @@ test("compile unknown definition keyword throws", () => {
 })
 
 test("compile if-else as binding emits (result i32)", () => {
-    const wat = compile("\\\\ pick (Int, Int, Int)\n@global pick a, b, c := { &@if c, { a }, { b } };")
+    const wat = compile("\\\\ pick (Int, Int, Int)\npick a, b, c := {\n    @if(c, {\n        a\n    }, {\n        b\n    })\n};")
     expect(wat).toContain("(if (result i32)")
     expect(wat).toContain("(then")
     expect(wat).toContain("(else")
 })
 
 test("compile if without else does not emit result type", () => {
-    const wat = compile("\\\\ doIf (Int)\n@global doIf x := { &@if x, { x = x + 1; }; x };")
+    const wat = compile("\\\\ doIf (Int)\ndoIf x := {\n    @if(x, {\n        x = x + 1;\n    });\n    x\n};")
     expect(wat).not.toContain("(if (result")
 })
 
 test("compile @global function without @export is not exported", () => {
-    const wat = compile("\\\\ add (Int, Int)\n@global add x, y := x + y;")
+    const wat = compile("\\\\ add (Int, Int)\nadd x, y := x + y;")
     expect(wat).toContain("(func $add")
     expect(wat).not.toContain('(export "add"')
 })
@@ -136,20 +136,20 @@ test("compile @fn definition emits func with params", () => {
 })
 
 test("compile @local definition emits mutable global", () => {
-    const wat = compile("@local count := 0;")
+    const wat = compile("@mut count := 0;")
     expect(wat).toContain("(global $count")
     expect(wat).toContain("(mut i32)")
     expect(wat).toContain("(i32.const 0)")
 })
 
 test("compile assignment to parameter uses local.set", () => {
-    const wat = compile("\\\\ inc (Int)\n@global inc x := { x = x + 1; x };")
+    const wat = compile("\\\\ inc (Int)\ninc x := {\n    x = x + 1;\n    x\n};")
     expect(wat).toContain("local.set $x")
     expect(wat).toContain("local.get $x")
 })
 
 test("compile @extern with no return type emits void import", () => {
-    const wat = compile("@extern { \\\\ print (Int) -> Void }")
+    const wat = compile("\\\\ @extern print (Int) -> Void;")
     expect(wat).toContain('(import "env" "print"')
     expect(wat).toContain("(param i32)")
     const importLine = wat.split('\n').find(l => l.includes('(import "env" "print"')) ?? ''
@@ -157,13 +157,13 @@ test("compile @extern with no return type emits void import", () => {
 })
 
 test("compile @extern with return type emits result declaration", () => {
-    const wat = compile("@extern { \\\\ readInt () -> Int }")
+    const wat = compile("\\\\ @extern readInt () -> Int;")
     expect(wat).toContain('(import "env" "readInt"')
     expect(wat).toContain("(result i32)")
 })
 
 test("compile @extern appears before function definitions in module", () => {
-    const wat = compile("@extern { \\\\ print (Int) -> Void }\n@global greet := { &print 42 };")
+    const wat = compile("\\\\ @extern print (Int);\ngreet := {\n    print(42)\n};")
     const importPos = wat.indexOf("(import")
     const funcPos = wat.indexOf("(func $greet")
     expect(importPos).toBeGreaterThan(-1)
@@ -172,7 +172,7 @@ test("compile @extern appears before function definitions in module", () => {
 })
 
 test("compile @extern with multiple params", () => {
-    const wat = compile("@extern { \\\\ add (Int, Int) -> Void }")
+    const wat = compile("\\\\ @extern add (Int, Int) -> Void;")
     expect(wat).toContain('(import "env" "add"')
     // IR emitter uses unnamed params in import declarations
     expect(wat).toContain("(param i32) (param i32)")
@@ -194,7 +194,7 @@ test("compileToWasm returns a valid WASM binary", () => {
 
 test("compileToWasm direct emitter is byte-equal to WAT round-trip", async () => {
     const { watToWasm } = await import("./toWasm")
-    const source = "\\\\ add (Int, Int)\n@global add x, y := x + y;"
+    const source = "\\\\ add (Int, Int)\nadd x, y := x + y;"
     const viaWat = await watToWasm(compile(source))
     const viaDirect = compileBinary(source)
     expect(viaDirect.byteLength).toBe(viaWat.byteLength)

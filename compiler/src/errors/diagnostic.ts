@@ -73,6 +73,7 @@ export const TYPE_ERROR_CODES: Record<TypeErrorKind, string> = {
     MvpOnlyIntrospection:  'E0012',  // wasm-mvp-only introspection primitive under wasm-gc (Phase 9d-5a)
     MvpOnlyPhysicalByte:   'E0013',  // wasm-mvp-only raw-memory primitive under wasm-gc (Phase 9d-5b)
     GlobalInFunction:      'E0014',  // @global used inside a function body (use @local)
+    MissingParamType:      'E0015',  // function has parameters but no signature line
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

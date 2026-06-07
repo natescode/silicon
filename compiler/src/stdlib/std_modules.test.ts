@@ -62,88 +62,94 @@ async function runStr(body: string): Promise<string> {
 
 describe('stdlib/mem', () => {
     test('align_up rounds up to the next multiple', async () => {
-        expect(await runInt(`@use 'mem';\n\\\\ probe () -> Int\n@fn probe := &align_up 13, 4;`)).toBe(16)
-        expect(await runInt(`@use 'mem';\n\\\\ probe () -> Int\n@fn probe := &align_up 16, 4;`)).toBe(16)
-        expect(await runInt(`@use 'mem';\n\\\\ probe () -> Int\n@fn probe := &align_up 1, 8;`)).toBe(8)
+        expect(await runInt(`@use 'mem';
+\\\\ probe Int
+@fn probe := align_up(13, 4);`)).toBe(16)
+        expect(await runInt(`@use 'mem';
+\\\\ probe Int
+@fn probe := align_up(16, 4);`)).toBe(16)
+        expect(await runInt(`@use 'mem';
+\\\\ probe Int
+@fn probe := align_up(1, 8);`)).toBe(8)
     })
 })
 
 describe('stdlib/num — integer helpers', () => {
     const P = `@use 'num';`
     test('int_max / int_min', async () => {
-        expect(await runInt(`${P}\n\\\\ probe () -> Int\n@fn probe := &int_max 3, 9;`)).toBe(9)
-        expect(await runInt(`${P}\n\\\\ probe () -> Int\n@fn probe := &int_min 3, 9;`)).toBe(3)
+        expect(await runInt(`${P}\n\\\\ probe () -> Int\n@fn probe := int_max(3, 9);`)).toBe(9)
+        expect(await runInt(`${P}\n\\\\ probe () -> Int\n@fn probe := int_min(3, 9);`)).toBe(3)
     })
     test('int_abs of a negative', async () => {
-        expect(await runInt(`${P}\n\\\\ probe () -> Int\n@fn probe := &int_abs (0 - 42);`)).toBe(42)
+        expect(await runInt(`${P}\n\\\\ probe () -> Int\n@fn probe := int_abs(0 - 42);`)).toBe(42)
     })
     test('int_clamp below / inside / above', async () => {
-        expect(await runInt(`${P}\n\\\\ probe () -> Int\n@fn probe := &int_clamp (0 - 5), 0, 10;`)).toBe(0)
-        expect(await runInt(`${P}\n\\\\ probe () -> Int\n@fn probe := &int_clamp 5, 0, 10;`)).toBe(5)
-        expect(await runInt(`${P}\n\\\\ probe () -> Int\n@fn probe := &int_clamp 15, 0, 10;`)).toBe(10)
+        expect(await runInt(`${P}\n\\\\ probe () -> Int\n@fn probe := int_clamp(0 - 5, 0, 10);`)).toBe(0)
+        expect(await runInt(`${P}\n\\\\ probe () -> Int\n@fn probe := int_clamp(5, 0, 10);`)).toBe(5)
+        expect(await runInt(`${P}\n\\\\ probe () -> Int\n@fn probe := int_clamp(15, 0, 10);`)).toBe(10)
     })
     test('int_pow', async () => {
-        expect(await runInt(`${P}\n\\\\ probe () -> Int\n@fn probe := &int_pow 2, 10;`)).toBe(1024)
-        expect(await runInt(`${P}\n\\\\ probe () -> Int\n@fn probe := &int_pow 5, 0;`)).toBe(1)
+        expect(await runInt(`${P}\n\\\\ probe () -> Int\n@fn probe := int_pow(2, 10);`)).toBe(1024)
+        expect(await runInt(`${P}\n\\\\ probe () -> Int\n@fn probe := int_pow(5, 0);`)).toBe(1)
     })
     test('int_digits', async () => {
-        expect(await runInt(`${P}\n\\\\ probe () -> Int\n@fn probe := &int_digits 0;`)).toBe(1)
-        expect(await runInt(`${P}\n\\\\ probe () -> Int\n@fn probe := &int_digits 12345;`)).toBe(5)
+        expect(await runInt(`${P}\n\\\\ probe () -> Int\n@fn probe := int_digits(0);`)).toBe(1)
+        expect(await runInt(`${P}\n\\\\ probe () -> Int\n@fn probe := int_digits(12345);`)).toBe(5)
     })
 })
 
 describe('stdlib/num — number <-> string', () => {
     const P = `@use 'num';`
     test('int_to_str', async () => {
-        expect(await runStr(`${P}\n\\\\ probe () -> String\n@fn probe := &int_to_str 0;`)).toBe('0')
-        expect(await runStr(`${P}\n\\\\ probe () -> String\n@fn probe := &int_to_str 42;`)).toBe('42')
-        expect(await runStr(`${P}\n\\\\ probe () -> String\n@fn probe := &int_to_str (0 - 12345);`)).toBe('-12345')
+        expect(await runStr(`${P}\n\\\\ probe () -> String\n@fn probe := int_to_str(0);`)).toBe('0')
+        expect(await runStr(`${P}\n\\\\ probe () -> String\n@fn probe := int_to_str(42);`)).toBe('42')
+        expect(await runStr(`${P}\n\\\\ probe () -> String\n@fn probe := int_to_str(0 - 12345);`)).toBe('-12345')
     })
     test('str_to_int', async () => {
-        expect(await runInt(`${P}\n\\\\ probe () -> Int\n@fn probe := &str_to_int '12345';`)).toBe(12345)
-        expect(await runInt(`${P}\n\\\\ probe () -> Int\n@fn probe := &str_to_int '-9';`)).toBe(-9)
-        expect(await runInt(`${P}\n\\\\ probe () -> Int\n@fn probe := &str_to_int 'abc';`)).toBe(0)
+        expect(await runInt(`${P}\n\\\\ probe () -> Int\n@fn probe := str_to_int('12345');`)).toBe(12345)
+        expect(await runInt(`${P}\n\\\\ probe () -> Int\n@fn probe := str_to_int('-9');`)).toBe(-9)
+        expect(await runInt(`${P}\n\\\\ probe () -> Int\n@fn probe := str_to_int('abc');`)).toBe(0)
     })
     test('round-trip int_to_str . str_to_int', async () => {
-        expect(await runInt(`${P}\n\\\\ probe () -> Int\n@fn probe := &str_to_int (&int_to_str (0 - 678));`)).toBe(-678)
+        expect(await runInt(`${P}\n\\\\ probe () -> Int\n@fn probe := str_to_int(int_to_str(0 - 678));`)).toBe(-678)
     })
     test('float_to_str (exact halves)', async () => {
-        expect(await runStr(`${P}\n\\\\ probe () -> String\n@fn probe := &float_to_str 3.0;`)).toBe('3.000000')
-        expect(await runStr(`${P}\n\\\\ probe () -> String\n@fn probe := &float_to_str 2.5;`)).toBe('2.500000')
-        expect(await runStr(`${P}\n\\\\ probe () -> String\n@fn probe := &float_to_str (0.0 - 2.5);`)).toBe('-2.500000')
+        expect(await runStr(`${P}\n\\\\ probe () -> String\n@fn probe := float_to_str(3.0);`)).toBe('3.000000')
+        expect(await runStr(`${P}\n\\\\ probe () -> String\n@fn probe := float_to_str(2.5);`)).toBe('2.500000')
+        expect(await runStr(`${P}\n\\\\ probe () -> String\n@fn probe := float_to_str(0.0 - 2.5);`)).toBe('-2.500000')
     })
 })
 
 describe('stdlib/str', () => {
     const P = `@use 'str';`
     test('str_eq', async () => {
-        expect(await runInt(`${P}\n\\\\ probe () -> Int\n@fn probe := &@if (&str_eq 'abc', 'abc'), { 1 }, { 0 };`)).toBe(1)
-        expect(await runInt(`${P}\n\\\\ probe () -> Int\n@fn probe := &@if (&str_eq 'abc', 'abd'), { 1 }, { 0 };`)).toBe(0)
-        expect(await runInt(`${P}\n\\\\ probe () -> Int\n@fn probe := &@if (&str_eq 'ab', 'abc'), { 1 }, { 0 };`)).toBe(0)
+        expect(await runInt(`${P}\n\\\\ probe () -> Int\n@fn probe := @if(str_eq('abc', 'abc'), { 1 }, { 0 });`)).toBe(1)
+        expect(await runInt(`${P}\n\\\\ probe () -> Int\n@fn probe := @if(str_eq('abc', 'abd'), { 1 }, { 0 });`)).toBe(0)
+        expect(await runInt(`${P}\n\\\\ probe () -> Int\n@fn probe := @if(str_eq('ab', 'abc'), { 1 }, { 0 });`)).toBe(0)
     })
     test('str_starts_with / str_ends_with', async () => {
-        expect(await runInt(`${P}\n\\\\ probe () -> Int\n@fn probe := &@if (&str_starts_with 'hello world', 'hello'), { 1 }, { 0 };`)).toBe(1)
-        expect(await runInt(`${P}\n\\\\ probe () -> Int\n@fn probe := &@if (&str_ends_with 'hello world', 'world'), { 1 }, { 0 };`)).toBe(1)
-        expect(await runInt(`${P}\n\\\\ probe () -> Int\n@fn probe := &@if (&str_ends_with 'hello world', 'hell'), { 1 }, { 0 };`)).toBe(0)
+        expect(await runInt(`${P}\n\\\\ probe () -> Int\n@fn probe := @if(str_starts_with('hello world', 'hello'), { 1 }, { 0 });`)).toBe(1)
+        expect(await runInt(`${P}\n\\\\ probe () -> Int\n@fn probe := @if(str_ends_with('hello world', 'world'), { 1 }, { 0 });`)).toBe(1)
+        expect(await runInt(`${P}\n\\\\ probe () -> Int\n@fn probe := @if(str_ends_with('hello world', 'hell'), { 1 }, { 0 });`)).toBe(0)
     })
     test('str_index_of / str_contains', async () => {
-        expect(await runInt(`${P}\n\\\\ probe () -> Int\n@fn probe := &str_index_of 'hello world', 'world';`)).toBe(6)
-        expect(await runInt(`${P}\n\\\\ probe () -> Int\n@fn probe := &str_index_of 'hello world', 'xyz';`)).toBe(-1)
-        expect(await runInt(`${P}\n\\\\ probe () -> Int\n@fn probe := &@if (&str_contains 'hello world', 'o w'), { 1 }, { 0 };`)).toBe(1)
+        expect(await runInt(`${P}\n\\\\ probe () -> Int\n@fn probe := str_index_of('hello world', 'world');`)).toBe(6)
+        expect(await runInt(`${P}\n\\\\ probe () -> Int\n@fn probe := str_index_of('hello world', 'xyz');`)).toBe(-1)
+        expect(await runInt(`${P}\n\\\\ probe () -> Int\n@fn probe := @if(str_contains('hello world', 'o w'), { 1 }, { 0 });`)).toBe(1)
     })
     test('str_slice', async () => {
-        expect(await runStr(`${P}\n\\\\ probe () -> String\n@fn probe := &str_slice 'hello world', 0, 5;`)).toBe('hello')
-        expect(await runStr(`${P}\n\\\\ probe () -> String\n@fn probe := &str_slice 'hello world', 6, 11;`)).toBe('world')
-        expect(await runStr(`${P}\n\\\\ probe () -> String\n@fn probe := &str_slice 'hi', 0, 99;`)).toBe('hi')
+        expect(await runStr(`${P}\n\\\\ probe () -> String\n@fn probe := str_slice('hello world', 0, 5);`)).toBe('hello')
+        expect(await runStr(`${P}\n\\\\ probe () -> String\n@fn probe := str_slice('hello world', 6, 11);`)).toBe('world')
+        expect(await runStr(`${P}\n\\\\ probe () -> String\n@fn probe := str_slice('hi', 0, 99);`)).toBe('hi')
     })
     test('str_repeat', async () => {
-        expect(await runStr(`${P}\n\\\\ probe () -> String\n@fn probe := &str_repeat 'ab', 3;`)).toBe('ababab')
-        expect(await runStr(`${P}\n\\\\ probe () -> String\n@fn probe := &str_repeat '=', 10;`)).toBe('==========')
-        expect(await runStr(`${P}\n\\\\ probe () -> String\n@fn probe := &str_repeat 'x', 0;`)).toBe('')
+        expect(await runStr(`${P}\n\\\\ probe () -> String\n@fn probe := str_repeat('ab', 3);`)).toBe('ababab')
+        expect(await runStr(`${P}\n\\\\ probe () -> String\n@fn probe := str_repeat('=', 10);`)).toBe('==========')
+        expect(await runStr(`${P}\n\\\\ probe () -> String\n@fn probe := str_repeat('x', 0);`)).toBe('')
     })
     test('str_byte_len / str_is_empty', async () => {
-        expect(await runInt(`${P}\n\\\\ probe () -> Int\n@fn probe := &str_byte_len 'hello';`)).toBe(5)
-        expect(await runInt(`${P}\n\\\\ probe () -> Int\n@fn probe := &@if (&str_is_empty ''), { 1 }, { 0 };`)).toBe(1)
+        expect(await runInt(`${P}\n\\\\ probe () -> Int\n@fn probe := str_byte_len('hello');`)).toBe(5)
+        expect(await runInt(`${P}\n\\\\ probe () -> Int\n@fn probe := @if(str_is_empty(''), { 1 }, { 0 });`)).toBe(1)
     })
 })
 
@@ -153,14 +159,14 @@ describe('stdlib/io', () => {
         // The whole module (plus its num/mem deps) must resolve,
         // typecheck, and lower to a valid binary.
         const bin = compileBinary(`@use 'io';
-            \\\\ probe () -> Int
+            \\\\ probe Int
             @fn probe := {
-                &print 'hi';
-                &print_int 42;
-                &print_bool @true;
-                &print_float 1.5;
-                &print_str 'no-newline';
-                &eprint 'err';
+                print('hi');
+                print_int(42);
+                print_bool(@true);
+                print_float(1.5);
+                print_str('no-newline');
+                eprint('err');
                 0
             };
             @export probe;`, 'wasix')

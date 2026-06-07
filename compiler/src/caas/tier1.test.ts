@@ -13,8 +13,8 @@ import { Workspace } from './workspace'
 // 'add' definition is on line 1, col 5 (1-based: @=1 f=2 n=3 space=4 a=5)
 const LIB_SOURCE = '@fn add x, y := { x + y };'
 
-const MAIN_SOURCE = '@global result := &add 1, 2;'
-// 'add' reference: '&' at col 16, 'add' Namespace at col 17
+const MAIN_SOURCE = 'result := add(1, 2);'
+// 'add' reference: 'add' Namespace at col 11
 
 function twoDocWs() {
     const ws = new Workspace()
@@ -50,8 +50,8 @@ describe('Symbol.displayString', () => {
 
     test('variable symbol shows its type', () => {
         const ws = new Workspace()
-        ws.openDocument('f.si', '@global x := 42;')
-        const sym = ws.findDefinition('f.si', 1, 9)
+        ws.openDocument('f.si', 'x := 42;')
+        const sym = ws.findDefinition('f.si', 1, 1)
         expect(sym).toBeDefined()
         expect(sym!.displayString).toContain('let x')
     })
@@ -84,8 +84,8 @@ describe('Workspace.hoverInfo()', () => {
 
     test('cross-document: resolves a symbol defined in another document', () => {
         const ws = twoDocWs()
-        // col 20 is 'add' in '@global result := &add 1, 2'
-        const info = ws.hoverInfo('main.si', 1, 20)
+        // col 11 is 'add' in 'result := add(1, 2)'
+        const info = ws.hoverInfo('main.si', 1, 11)
         expect(info).toBeDefined()
         expect(info!.symbol.name).toBe('add')
     })
@@ -135,7 +135,11 @@ describe('Workspace.getCompletions()', () => {
         const items = ws.getCompletions('f.si', 1, 1)
         const labels = items.map(i => i.label)
         expect(labels).toContain('@fn')
-        expect(labels).toContain('@global')
+        expect(labels).toContain('@mut')
+        // retired surface keywords must NOT be suggested (they no longer parse)
+        expect(labels).not.toContain('@global')
+        expect(labels).not.toContain('@local')
+        expect(labels).not.toContain('@struct')
     })
 
     test('returns empty array for unopened document', () => {
@@ -155,7 +159,7 @@ describe('Workspace.getCompletions()', () => {
 
     test('each item has a valid kind', () => {
         const ws = new Workspace()
-        ws.openDocument('f.si', '@fn foo := { 1 };\n@global x := 0;')
+        ws.openDocument('f.si', '@fn foo := { 1 };\nx := 0;')
         const items = ws.getCompletions('f.si', 1, 1)
         const VALID = new Set(['function', 'variable', 'type', 'parameter', 'keyword'])
         for (const item of items) {
@@ -172,10 +176,10 @@ describe('Workspace.signatureHelp()', () => {
     test('returns SignatureHelp inside a function call argument list', () => {
         const ws = new Workspace()
         // \\ signature line gives 'add' a Function type with Int params
-        ws.openDocument('f.si', '\\\\ add (Int, Int)\n@fn add x, y := { x + y };\n@global r := &add 1, 2;')
-        // line 3: '@global r := &add 1, 2;'
-        // '@'=1 'l'=2 'e'=3 't'=4 ' '=5 'r'=6 ' '=7 ':'=8 '='=9 ' '=10 '&'=11 'a'=12 'd'=13 'd'=14 ' '=15 '1'=16
-        const help = ws.signatureHelp('f.si', 3, 16)
+        ws.openDocument('f.si', '\\\\ add (Int, Int)\n@fn add x, y := { x + y };\nr := add(1, 2);')
+        // line 3: 'r := add(1, 2);'
+        // 'r'=1 ' '=2 ':'=3 '='=4 ' '=5 'a'=6 'd'=7 'd'=8 '('=9 '1'=10 ','=11
+        const help = ws.signatureHelp('f.si', 3, 10)
         expect(help).toBeDefined()
         expect(help!.name).toBe('add')
         expect(help!.parameters.length).toBeGreaterThanOrEqual(1)
@@ -183,8 +187,8 @@ describe('Workspace.signatureHelp()', () => {
 
     test('parameters have type strings when typed via signature line', () => {
         const ws = new Workspace()
-        ws.openDocument('f.si', '\\\\ add (Int, Int)\n@fn add x, y := { x + y };\n@global r := &add 1, 2;')
-        const help = ws.signatureHelp('f.si', 3, 16)
+        ws.openDocument('f.si', '\\\\ add (Int, Int)\n@fn add x, y := { x + y };\nr := add(1, 2);')
+        const help = ws.signatureHelp('f.si', 3, 10)
         expect(help).toBeDefined()
         for (const p of help!.parameters) {
             if (p.type) expect(p.type).toContain('Int')
@@ -230,7 +234,7 @@ describe('Workspace.rename()', () => {
     test('cross-document: call site in another document is included', () => {
         const ws = twoDocWs()
         const edits = ws.rename('lib.si', 1, 5, 'sum')
-        // main.si calls &add — should appear in edits
+        // main.si calls add(1, 2) — should appear in edits
         expect(edits.has('main.si')).toBe(true)
     })
 
@@ -254,7 +258,7 @@ describe('Workspace.rename()', () => {
 describe('Workspace.formatDocument()', () => {
     test('returns empty array when source is already normalized', () => {
         const ws = new Workspace()
-        const src = '@fn add x:Int, y:Int := { x + y };\n'
+        const src = '@fn add x Int, y Int := { x + y };\n'
         ws.openDocument('f.si', src)
         const edits = ws.formatDocument('f.si')
         // May already be clean — accept 0 or a no-op edit.
@@ -281,7 +285,7 @@ describe('Workspace.formatDocument()', () => {
 
     test('returned edit newText produces valid-looking Silicon', () => {
         const ws = new Workspace()
-        ws.openDocument('f.si', '@global  x  :=  42;')
+        ws.openDocument('f.si', 'x  :=  42;')
         const edits = ws.formatDocument('f.si')
         expect(edits.length).toBeGreaterThan(0)
         expect(edits[0].newText).toContain(':=')
@@ -296,7 +300,7 @@ describe('Workspace.formatDocument()', () => {
 describe('Workspace.formatRange()', () => {
     test('formats only the selected lines', () => {
         const ws = new Workspace()
-        const src = '@fn add x := { x };\n@global  result :=  &add 1;'
+        const src = '@fn add x := { x };\nresult :=  add(1);'
         ws.openDocument('f.si', src)
         const edits = ws.formatRange('f.si', {
             startLine: 2, startCol: 1,

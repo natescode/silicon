@@ -203,14 +203,14 @@ function buildPair(sigTypes: string, body: string, callArgs: string): string {
         `${SIG} add (${sigTypes})`,
         `@fn add x, y := ${body};`,
         `${SIG} caller (Int)`,
-        `@fn caller z := &add ${callArgs};`,
+        `@fn caller z := add(${callArgs});`,
     ].join('\n')
 }
 
 // The space of signatures/bodies we flip between.  Each flip changes add's
 // type; the REUSED `caller` element depends on it.
 const SIG_VARIANTS = ['Int, Int', 'Float, Int', 'Int, Float', 'Float, Float']
-const BODY_VARIANTS = ['x + y', 'x * y', 'x - y', '{ x + y }', '{ @local t := x; t + y }']
+const BODY_VARIANTS = ['x + y', 'x * y', 'x - y', '{ x + y }', '{ @mut t := x; t + y }']
 const CALL_VARIANTS = ['z, 1', 'z, 2', '1, z', 'z, z']
 
 describe('ADV typeflip: add-signature edits, caller reused', () => {
@@ -255,10 +255,10 @@ describe('ADV typeflip: add-signature edits, caller reused', () => {
  */
 function buildLetChain(firstExpr: string): string {
     return [
-        `@global a := ${firstExpr};`,
-        '@global b := a + 1;',
-        '@global c := b + 2;',
-        '@global d := c + 3;',
+        `a := ${firstExpr};`,
+        'b := a + 1;',
+        'c := b + 2;',
+        'd := c + 3;',
     ].join('\n')
 }
 
@@ -344,7 +344,7 @@ function buildWithOptionalMiddle(pSig: string, hasMiddle: boolean): string {
     if (hasMiddle) {
         lines.push(`${SIG} mid (Int)`, '@fn mid w := w * 2;')
     }
-    lines.push(`${SIG} c (Int)`, '@fn c z := &p z, 1;')
+    lines.push(`${SIG} c (Int)`, '@fn c z := p(z, 1);')
     return lines.join('\n')
 }
 
@@ -434,7 +434,7 @@ function buildShifting(leadBlanks: number, multilineBody: boolean, pSig: string)
     lines.push(`${SIG} prod (${pSig})`)
     if (multilineBody) lines.push('@fn prod x, y := {', '  x + y', '};')
     else lines.push('@fn prod x, y := x + y;')
-    lines.push(`${SIG} cons (Int)`, '@fn cons z := &prod z, 1;')
+    lines.push(`${SIG} cons (Int)`, '@fn cons z := prod(z, 1);')
     return lines.join('\n')
 }
 

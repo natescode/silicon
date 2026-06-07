@@ -65,7 +65,7 @@ describe('Symbol.definitionSpan', () => {
 
     test('multi-line: definitionSpan.line reflects actual line number', () => {
         const src = [
-            '@global x := 1;',
+            'x := 1;',
             '@fn answer  := { 42 };',
         ].join('\n')
         const model = modelFor(src)
@@ -82,7 +82,7 @@ describe('SemanticModel.referenceSpans()', () => {
     test('returns spans for each call site', () => {
         const src = [
             '\\\\ add (Int, Int)\n@fn add x, y := { x + y };',
-            '@global r := &add 1, 2;',
+            'r := add(1, 2);',
         ].join('\n')
         const model = modelFor(src)
         const sym = model.symbolNamed('add')!
@@ -91,7 +91,7 @@ describe('SemanticModel.referenceSpans()', () => {
     })
 
     test('each returned span has file/line/col/length', () => {
-        const src = '@fn f  := { 1 };\n@global r := &f;'
+        const src = '@fn f  := { 1 };\nr := f();'
         const model = modelFor(src)
         const sym = model.symbolNamed('f')!
         const spans = model.referenceSpans(sym)
@@ -141,10 +141,10 @@ describe('SemanticModel.symbolAtPosition()', () => {
     })
 
     test('finds symbol at a reference site', () => {
-        const src = '@fn f := { 1 };\n@global r := &f;'
+        const src = '@fn f := { 1 };\nr := f();'
         const model = modelFor(src)
-        // line 2: '@global r := &f;'  → '&f' reference, 'f' at col 15.
-        const sym = model.symbolAtPosition(2, 15)
+        // line 2: 'r := f();'  → 'f()' call, 'f' at col 6.
+        const sym = model.symbolAtPosition(2, 6)
         expect(sym).toBeDefined()
         expect(sym!.name).toBe('f')
     })
@@ -179,7 +179,7 @@ describe('Workspace.findDefinition()', () => {
 
 describe('Workspace.findReferences()', () => {
     test('returns spans from a reference site', () => {
-        const src = '@fn f  := { 1 };\n@global r := &f;'
+        const src = '@fn f  := { 1 };\nr := f();'
         const ws = new Workspace()
         ws.openDocument('main.si', src)
         // Ask for references starting from the definition of 'f'

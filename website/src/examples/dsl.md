@@ -12,22 +12,22 @@ Example. Suppose you want a `@table` keyword for declaring lookup
 tables that lower to constant globals:
 
 ```silicon
-@table Days := { Mon = 1, Tue = 2, Wed = 3, Thu = 4, Fri = 5, Sat = 6, Sun = 7 };
+@table Days := ${ Mon = 1, Tue = 2, Wed = 3, Thu = 4, Fri = 5, Sat = 6, Sun = 7 };
 ```
 
 That's not in the language. You write the stratum:
 
 ```silicon
 @stratum Table := {
-    &Compiler::register::keyword '@table';
-    &Compiler::on::decl '@table', Table_on_decl;
+    Compiler::register::keyword('@table');
+    Compiler::on::decl('@table', Table_on_decl);
 };
 
 \\ Table_on_decl (Int) -> Void
 @fn Table_on_decl node := {
     # Walk the node's body, for each "key = value" entry:
-    #   &Compiler::module::push_global key, IR_const(value);
-    # … using &Compiler::ast::* to read the body shape.
+    #   Compiler::module::push_global(key, IR_const(value));
+    # … using Compiler::ast::* to read the body shape.
 };
 ```
 

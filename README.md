@@ -16,7 +16,7 @@ not hard-coded into the parser.
 @fn add a, b := { a + b };
 
 \\ main () -> Int
-@fn main := &add 2, 3;
+@fn main := add(2, 3);
 @export main;
 ```
 

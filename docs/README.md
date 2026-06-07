@@ -26,7 +26,7 @@ If you're new, start with [`getting-started.md`](getting-started.md).
 | [diagnostics.md](diagnostics.md) | Error-code catalogue, caret rendering, hint format |
 | [strata.md](strata.md) | Strata system — how `@stratum` dispatches to pipeline phases |
 | [strata-2.0-spec.html](strata-2.0-spec.html) | Strata 2.0 capability specification (implemented) |
-| [compiler-api.md](compiler-api.md) | The `&Compiler::*` surface that strata bodies call |
+| [compiler-api.md](compiler-api.md) | The `Compiler::*` surface that strata bodies call |
 | [compiler-as-a-service.md](compiler-as-a-service.md) | The library-first compiler API (Roslyn-style) |
 | [caas-roslyn-parity.md](caas-roslyn-parity.md) | CaaS gap tracker — what's left to reach Roslyn-level IDE API coverage |
 | [js-string-builtins.md](js-string-builtins.md) | The `JSString` type, WASM JS String Builtins, and the web/bun platform (`--platform`) |

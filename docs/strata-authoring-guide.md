@@ -270,8 +270,8 @@ final module exactly once.
 ```silicon
 h := Compiler::ast::capture_template(node, 'pre');
 h2 := Compiler::ast::clone(h);
-h3 := Compiler::ast::substitute(h, { T = IntType, U = FloatType });
-h4 := Compiler::ast::patch_types(h, { T = IntType });
+h3 := Compiler::ast::substitute(h, ${ T = IntType, U = FloatType });
+h4 := Compiler::ast::patch_types(h, ${ T = IntType });
 ```
 
 The `'pre'` / `'post'` argument marks whether the template was captured before

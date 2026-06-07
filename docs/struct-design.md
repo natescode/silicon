@@ -1,6 +1,6 @@
-# @struct — Product Types in Silicon
+# `@type` — Product Types in Silicon
 
-Silicon's `@struct` keyword declares a product type (record) with named fields.
+Silicon's `@type Name := { ... }` form declares a product type (record) with named fields.
 
 ## Syntax
 
@@ -64,7 +64,7 @@ The type system tracks which locals hold which struct type via `structLocals` (i
 
 ## Type Checking
 
-The typechecker registers each `@struct` as a `DistinctOf(name, TypeInt)` type alias. This means:
+The typechecker registers each `@type` struct definition as a `DistinctOf(name, TypeInt)` type alias. This means:
 - `p := Point(3, 7)` is accepted without an `[UnknownType]` error.
 - `p.x` is resolved by looking up `p`'s type, extracting the struct name, and finding the field's Silicon type in `ctx.structFields`.
 - The constructor function signature (`Point : (Int, Int) → Point`) is registered for call-site checking.
@@ -73,7 +73,7 @@ The typechecker registers each `@struct` as a `DistinctOf(name, TypeInt)` type a
 
 | Layer | File | What it does |
 |---|---|---|
-| Stratum registration | `src/strata/struct.si` | Registers `@struct` keyword and `on_lower` hook |
+| Stratum registration | `src/strata/struct.si` | Registers `@type` struct form and `on_lower` hook |
 | Struct expander | `src/strata/defExpanders.ts` | `structExpander`: builds constructor `IRFunction`, registers `StructLayout` |
 | Layout registry | `src/elaborator/registry.ts` | `StructLayout` / `StructFieldLayout` types; `structTypes` map on `ElaboratorRegistry` |
 | Compiler API | `src/compiler-api/index.ts` | Exposes `ctx.structTypes` to the comptime engine |

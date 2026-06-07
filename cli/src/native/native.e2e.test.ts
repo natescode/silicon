@@ -129,7 +129,7 @@ describe('native — control flow', () => {
         if (SKIP) { skip(); return }
         const tmpDir = await fsp.mkdtemp(path.join(os.tmpdir(), 'sgl-e2e-'))
         try {
-            const src = '\\\\ main () -> Int\n@fn main  := &@if @true, { 10 }, { 20 };'
+            const src = '\\\\ main () -> Int\n@fn main  := @if(@true, { 10 }, { 20 });'
             const exe = await compileNative(src, tmpDir)
             expect(runExe(exe)).toBe(10)
         } finally { fs.rmSync(tmpDir, { recursive: true, force: true }) }
@@ -139,7 +139,7 @@ describe('native — control flow', () => {
         if (SKIP) { skip(); return }
         const tmpDir = await fsp.mkdtemp(path.join(os.tmpdir(), 'sgl-e2e-'))
         try {
-            const src = '\\\\ main () -> Int\n@fn main  := &@if @false, { 10 }, { 20 };'
+            const src = '\\\\ main () -> Int\n@fn main  := @if(@false, { 10 }, { 20 });'
             const exe = await compileNative(src, tmpDir)
             expect(runExe(exe)).toBe(20)
         } finally { fs.rmSync(tmpDir, { recursive: true, force: true }) }
@@ -149,7 +149,7 @@ describe('native — control flow', () => {
         if (SKIP) { skip(); return }
         const tmpDir = await fsp.mkdtemp(path.join(os.tmpdir(), 'sgl-e2e-'))
         try {
-            const src = '\\\\ main () -> Int\n@fn main  := &@if 3 > 2, { 42 }, { 0 };'
+            const src = '\\\\ main () -> Int\n@fn main  := @if(3 > 2, { 42 }, { 0 });'
             const exe = await compileNative(src, tmpDir)
             expect(runExe(exe)).toBe(42)
         } finally { fs.rmSync(tmpDir, { recursive: true, force: true }) }
@@ -167,7 +167,7 @@ describe('native — function calls', () => {
         try {
             const src = [
                 '\\\\ answer () -> Int\n@fn answer  := 42;',
-                '\\\\ main () -> Int\n@fn main  := (&answer);',
+                '\\\\ main () -> Int\n@fn main  := answer();',
             ].join('\n')
             const exe = await compileNative(src, tmpDir)
             expect(runExe(exe)).toBe(42)
@@ -180,7 +180,7 @@ describe('native — function calls', () => {
         try {
             const src = [
                 '\\\\ double (Int) -> Int\n@fn double x := x * 2;',
-                '\\\\ main () -> Int\n@fn main  := (&double 21);',
+                '\\\\ main () -> Int\n@fn main  := double(21);',
             ].join('\n')
             const exe = await compileNative(src, tmpDir)
             expect(runExe(exe)).toBe(42)
@@ -193,8 +193,8 @@ describe('native — function calls', () => {
         try {
             // fib(7) = 13, fib(8) = 21, fib(9) = 34
             const src = [
-                '\\\\ fib (Int) -> Int\n@fn fib n := &@if n <= 1, { n }, { (&fib n - 1) + (&fib n - 2) };',
-                '\\\\ main () -> Int\n@fn main  := (&fib 9);',
+                '\\\\ fib (Int) -> Int\n@fn fib n := @if(n <= 1, { n }, { fib(n - 1) + fib(n - 2) });',
+                '\\\\ main () -> Int\n@fn main  := fib(9);',
             ].join('\n')
             const exe = await compileNative(src, tmpDir)
             expect(runExe(exe)).toBe(34)
@@ -207,14 +207,14 @@ describe('native — function calls', () => {
 // ---------------------------------------------------------------------------
 
 describe('native — variables', () => {
-    test('@local variable read', async () => {
+    test('@mut variable read', async () => {
         if (SKIP) { skip(); return }
         const tmpDir = await fsp.mkdtemp(path.join(os.tmpdir(), 'sgl-e2e-'))
         try {
             const src = [
                 '\\\\ main () -> Int',
                 '@fn main := {',
-                '  @local x := 42;',
+                '  @mut x := 42;',
                 '  x',
                 '};',
             ].join('\n')
@@ -223,14 +223,14 @@ describe('native — variables', () => {
         } finally { fs.rmSync(tmpDir, { recursive: true, force: true }) }
     })
 
-    test('@local variable mutation', async () => {
+    test('@mut variable mutation', async () => {
         if (SKIP) { skip(); return }
         const tmpDir = await fsp.mkdtemp(path.join(os.tmpdir(), 'sgl-e2e-'))
         try {
             const src = [
                 '\\\\ main () -> Int',
                 '@fn main := {',
-                '  @local x := 0;',
+                '  @mut x := 0;',
                 '  x = x + 42;',
                 '  x',
                 '};',

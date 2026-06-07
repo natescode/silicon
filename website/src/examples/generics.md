@@ -8,17 +8,15 @@ Declare a type parameter in brackets on the signature line and the `@fn`. The
 call site infers it — no explicit `[Int]` needed:
 
 ```silicon
-@use 'io';
-
 \\ id[T] (T) -> T
 @fn id x := x;
 
 @fn main := {
-    @local n := &id 42;        # T = Int — inferred
-    &print_int n;              # 42
+    n := id(42);        # T = Int — inferred
+    print_int(n);       # 42
     0
 };
-&main;
+main();
 ```
 
 Silicon uses **HM-lite** — Hindley–Milner restricted to declared polymorphism
@@ -30,17 +28,14 @@ The standard library's `Option[T]` is a parametric sum type. `@use 'option'` to
 get it and its helpers:
 
 ```silicon
-@use 'io';
-@use 'option';
-
 @fn main := {
-    @local picked := &option_unwrap_or (&Some 7), 0;    # T = Int → 7
-    @local fallen := &option_unwrap_or (&None), 99;     # T = Int → 99
-    &print_int picked;
-    &print_int fallen;
+    picked := option_unwrap_or($Some 7, 0);    # T = Int → 7
+    fallen := option_unwrap_or($None, 99);     # T = Int → 99
+    print_int(picked);
+    print_int(fallen);
     0
 };
-&main;
+main();
 ```
 
 Defining your own:
@@ -50,9 +45,9 @@ Defining your own:
 
 \\ unwrap_or[T] (Option[T], T) -> T
 @fn unwrap_or opt, dflt := {
-    &@match opt,
+    @match(opt,
         $Some v => v,
-        $None   => dflt
+        $None   => dflt)
 };
 ```
 

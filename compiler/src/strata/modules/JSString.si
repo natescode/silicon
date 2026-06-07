@@ -11,31 +11,31 @@
 # Lengths / indices are UTF-16 code units (JS semantics).  Call as
 # `&JSString::concat a, b`, `&JSString::fromCodePoint 0x1F389`, etc.
 
-@extern { \\ length (JSString) -> Int }
-@extern { \\ charCodeAt (JSString, Int) -> Int }
-@extern { \\ codePointAt (JSString, Int) -> Int }
-@extern { \\ equals (JSString, JSString) -> Bool }
-@extern { \\ compare (JSString, JSString) -> Int }
-@extern { \\ test (JSString) -> Bool }
+\\ @extern length (JSString) -> Int;
+\\ @extern charCodeAt (JSString, Int) -> Int;
+\\ @extern codePointAt (JSString, Int) -> Int;
+\\ @extern equals (JSString, JSString) -> Bool;
+\\ @extern compare (JSString, JSString) -> Int;
+\\ @extern test (JSString) -> Bool;
 
-@extern { \\ concat (JSString, JSString) -> JSString }
-@extern { \\ substring (JSString, Int, Int) -> JSString }
-@extern { \\ fromCharCode (Int) -> JSString }
-@extern { \\ fromCodePoint (Int) -> JSString }
+\\ @extern concat (JSString, JSString) -> JSString;
+\\ @extern substring (JSString, Int, Int) -> JSString;
+\\ @extern fromCharCode (Int) -> JSString;
+\\ @extern fromCodePoint (Int) -> JSString;
 
 # Bridge to/from Silicon's linear-memory UTF-8 `String` (host-provided, module
 # `"js-bridge"`).  `fromString` copies linear bytes into a JS string; `toString`
 # encodes a JS string back into a fresh linear-memory `String`.
-@extern { \\ fromString (String) -> JSString }
-@extern { \\ toString (JSString) -> String }
+\\ @extern fromString (String) -> JSString;
+\\ @extern toString (JSString) -> String;
 
 # CharCodeArray — a WASM-GC `(array (mut i16))` of UTF-16 code units.  The
 # `codeArray`/`getCode`/`setCode`/`codeLen` ops lower to inline `array.*`
 # instructions (no host call); `fromCharCodeArray`/`intoCharCodeArray` are the
 # standardized `wasm:js-string` builtins that consume / fill one host-natively.
-@extern { \\ codeArray (Int) -> CharCodeArray }
-@extern { \\ getCode (CharCodeArray, Int) -> Int }
-@extern { \\ setCode (CharCodeArray, Int, Int) -> Void }
-@extern { \\ codeLen (CharCodeArray) -> Int }
-@extern { \\ fromCharCodeArray (CharCodeArray, Int, Int) -> JSString }
-@extern { \\ intoCharCodeArray (JSString, CharCodeArray, Int) -> Int }
+\\ @extern codeArray (Int) -> CharCodeArray;
+\\ @extern getCode (CharCodeArray, Int) -> Int;
+\\ @extern setCode (CharCodeArray, Int, Int) -> Void;
+\\ @extern codeLen (CharCodeArray) -> Int;
+\\ @extern fromCharCodeArray (CharCodeArray, Int, Int) -> JSString;
+\\ @extern intoCharCodeArray (JSString, CharCodeArray, Int) -> Int;

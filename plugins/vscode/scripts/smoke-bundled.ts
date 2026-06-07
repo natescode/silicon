@@ -56,7 +56,7 @@ async function waitFor(predicate: () => boolean, ms = 5000): Promise<void> {
         params: {
             textDocument: {
                 uri, languageId: 'silicon', version: 1,
-                text: '@fn add a:Int, b:Int := { (a + b) };\n',
+                text: '@fn add a, b := { (a + b) };\n',
             },
         },
     })

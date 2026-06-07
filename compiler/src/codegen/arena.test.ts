@@ -3,13 +3,13 @@
  * Phase 9c (ADR 0008) — explicit-arena memory management.
  *
  * Exercises:
- *   - `&@with_arena { body }` resets the bump heap pointer on exit so
+ *   - `@with_arena({ body })` resets the bump heap pointer on exit so
  *     allocations inside the body don't leak.
- *   - `&@move_to_parent_arena value` in tail position survives the
+ *   - `@move_to_parent_arena(value)` in tail position survives the
  *     reset (String case + value-type case).
  *   - Heap-returning bodies without a tail promotion are rejected at
  *     IR-lowering time with a useful diagnostic.
- *   - `&@move_to_parent_arena` outside an arena is rejected.
+ *   - `@move_to_parent_arena()` outside an arena is rejected.
  *
  * Lifecycle:
  *   Programs export a probe (`heap_now`) so the test can read the
@@ -70,19 +70,18 @@ function readString(memory: WebAssembly.Memory, ptr: number): string {
     return new TextDecoder('utf-8').decode(bytes)
 }
 
-describe('Phase 9c: &@with_arena + &@move_to_parent_arena', () => {
+describe('Phase 9c: @with_arena + @move_to_parent_arena', () => {
 
     test('empty arena resets heap to entry-point value', async () => {
         const r = await compileAndRun(`
-            \\\\ probe () -> Int
-            @fn probe  := {
-                @local before := &heap_get;
-                &@with_arena {};
-                @local after := &heap_get;
+            \\\\ probe Int
+            @fn probe := {
+                @mut before := heap_get();
+                @with_arena({});
+                @mut after := heap_get();
                 after - before
             };
-            @export probe;
-        `)
+            @export probe;`)
         if (!r.ok) throw new Error(r.error)
         // Heap should be unchanged after an empty arena.
         expect(r.exports.probe()).toBe(0)
@@ -90,17 +89,16 @@ describe('Phase 9c: &@with_arena + &@move_to_parent_arena', () => {
 
     test('arena reset frees inside-arena allocations', async () => {
         const r = await compileAndRun(`
-            \\\\ probe () -> Int
-            @fn probe  := {
-                @local before := &heap_get;
-                &@with_arena {
-                    @local s := 'scratch allocation here';
-                };
-                @local after := &heap_get;
+            \\\\ probe Int
+            @fn probe := {
+                @mut before := heap_get();
+                @with_arena({
+                    @mut s := 'scratch allocation here';
+                });
+                @mut after := heap_get();
                 after - before
             };
-            @export probe;
-        `)
+            @export probe;`)
         if (!r.ok) throw new Error(r.error)
         // Inside-arena String is allocated and then freed at exit.
         expect(r.exports.probe()).toBe(0)
@@ -108,21 +106,20 @@ describe('Phase 9c: &@with_arena + &@move_to_parent_arena', () => {
 
     test('repeated arenas do not leak memory', async () => {
         const r = await compileAndRun(`
-            \\\\ probe () -> Int
-            @fn probe  := {
-                @local before := &heap_get;
-                @local i := 0;
-                &@loop i < 100, {
-                    &@with_arena {
-                        @local s := 'scratch';
-                    };
+            \\\\ probe Int
+            @fn probe := {
+                @mut before := heap_get();
+                @mut i := 0;
+                @loop(i < 100, {
+                    @with_arena({
+                        @mut s := 'scratch';
+                    });
                     i = i + 1;
-                };
-                @local after := &heap_get;
+                });
+                @mut after := heap_get();
                 after - before
             };
-            @export probe;
-        `)
+            @export probe;`)
         if (!r.ok) throw new Error(r.error)
         // 100 iterations × scratch String, all freed.
         expect(r.exports.probe()).toBe(0)
@@ -130,48 +127,45 @@ describe('Phase 9c: &@with_arena + &@move_to_parent_arena', () => {
 
     test('value-type tail (Int) survives arena reset', async () => {
         const r = await compileAndRun(`
-            \\\\ probe () -> Int
-            @fn probe  := &@with_arena {
-                @local s := 'throwaway';
+            \\\\ probe Int
+            @fn probe := @with_arena({
+                @mut s := 'throwaway';
                 42
-            };
-            @export probe;
-        `)
+            });
+            @export probe;`)
         if (!r.ok) throw new Error(r.error)
         expect(r.exports.probe()).toBe(42)
     })
 
     test('value-type tail does not leak the scratch allocation', async () => {
         const r = await compileAndRun(`
-            \\\\ probe () -> Int
-            @fn probe  := {
-                @local before := &heap_get;
-                @local _ignored := &@with_arena {
-                    @local s := 'throwaway';
+            \\\\ probe Int
+            @fn probe := {
+                @mut before := heap_get();
+                @mut _ignored := @with_arena({
+                    @mut s := 'throwaway';
                     7
-                };
-                @local after := &heap_get;
+                });
+                @mut after := heap_get();
                 after - before
             };
-            @export probe;
-        `)
+            @export probe;`)
         if (!r.ok) throw new Error(r.error)
         expect(r.exports.probe()).toBe(0)
     })
 
-    test('&@move_to_parent_arena promotes a String to the parent arena', async () => {
+    test('@move_to_parent_arena promotes a String to the parent arena', async () => {
         const r = await compileAndRun(`
-            \\\\ build () -> String
-            @fn build  := &@with_arena {
-                @local scratch := 'scratch garbage';
-                @local out := 'hello, world';
-                &@move_to_parent_arena out
-            };
+            \\\\ build String
+            @fn build := @with_arena({
+                @mut scratch := 'scratch garbage';
+                @mut out := 'hello, world';
+                @move_to_parent_arena(out)
+            });
             @export build;
-            \\\\ heap_now () -> Int
-            @fn heap_now  := &heap_get;
-            @export heap_now;
-        `)
+            \\\\ heap_now Int
+            @fn heap_now := heap_get();
+            @export heap_now;`)
         if (!r.ok) throw new Error(r.error)
         const ptr: number = r.exports.build()
         // The promoted String is at the saved boundary, and the heap
@@ -184,37 +178,35 @@ describe('Phase 9c: &@with_arena + &@move_to_parent_arena', () => {
         expect(heapAfter - ptr).toBe(16)
     })
 
-    test('&@move_to_parent_arena with Int (value type) is a passthrough', async () => {
-        // For value types &@move_to_parent_arena is a no-op alias for
+    test('@move_to_parent_arena with Int (value type) is a passthrough', async () => {
+        // For value types @move_to_parent_arena is a no-op alias for
         // returning the value — bytes-to-copy is 0 and the heap unwinds
         // to the saved boundary.
         const r = await compileAndRun(`
-            \\\\ probe () -> Int
-            @fn probe  := {
-                @local before := &heap_get;
-                @local v := &@with_arena {
-                    @local scratch := 'throwaway';
-                    &@move_to_parent_arena 99
-                };
-                @local after := &heap_get;
+            \\\\ probe Int
+            @fn probe := {
+                @mut before := heap_get();
+                @mut v := @with_arena({
+                    @mut scratch := 'throwaway';
+                    @move_to_parent_arena(99)
+                });
+                @mut after := heap_get();
                 v + (after - before)
             };
-            @export probe;
-        `)
+            @export probe;`)
         if (!r.ok) throw new Error(r.error)
         // v == 99, heap restored → after - before == 0.
         expect(r.exports.probe()).toBe(99)
     })
 
-    test('heap-returning body without &@move_to_parent_arena is a compile error', async () => {
+    test('heap-returning body without @move_to_parent_arena is a compile error', async () => {
         const r = await compileAndRun(`
-            \\\\ build () -> String
-            @fn build  := &@with_arena {
-                @local out := 'would dangle';
+            \\\\ build String
+            @fn build := @with_arena({
+                @mut out := 'would dangle';
                 out
-            };
-            @export build;
-        `)
+            });
+            @export build;`)
         expect(r.ok).toBe(false)
         if (!r.ok) {
             expect(r.error).toContain('@with_arena')
@@ -222,12 +214,11 @@ describe('Phase 9c: &@with_arena + &@move_to_parent_arena', () => {
         }
     })
 
-    test('&@move_to_parent_arena outside &@with_arena is a compile error', async () => {
+    test('@move_to_parent_arena outside @with_arena is a compile error', async () => {
         const r = await compileAndRun(`
-            \\\\ probe () -> Int
-            @fn probe  := &@move_to_parent_arena 1;
-            @export probe;
-        `)
+            \\\\ probe Int
+            @fn probe := @move_to_parent_arena(1);
+            @export probe;`)
         expect(r.ok).toBe(false)
         if (!r.ok) {
             expect(r.error).toContain('@move_to_parent_arena')
@@ -237,41 +228,39 @@ describe('Phase 9c: &@with_arena + &@move_to_parent_arena', () => {
 
     test('nested arenas: inner reset restores to inner entry, outer to outer entry', async () => {
         const r = await compileAndRun(`
-            \\\\ probe () -> Int
-            @fn probe  := {
-                @local before := &heap_get;
-                &@with_arena {
-                    @local a := 'outer scratch';
-                    &@with_arena {
-                        @local b := 'inner scratch';
-                    };
-                    @local c := 'more outer scratch';
-                };
-                @local after := &heap_get;
+            \\\\ probe Int
+            @fn probe := {
+                @mut before := heap_get();
+                @with_arena({
+                    @mut a := 'outer scratch';
+                    @with_arena({
+                        @mut b := 'inner scratch';
+                    });
+                    @mut c := 'more outer scratch';
+                });
+                @mut after := heap_get();
                 after - before
             };
-            @export probe;
-        `)
+            @export probe;`)
         if (!r.ok) throw new Error(r.error)
         expect(r.exports.probe()).toBe(0)
     })
 
-    test('&@move_to_parent_arena promotes a flat-payload Sum type', async () => {
+    test('@move_to_parent_arena promotes a flat-payload Sum type', async () => {
         // @type Pair := $Pair x:Int, y:Int — pad-to-max layout is
         // [tag:i32, field0:i32, field1:i32] = 12 bytes.
         const r = await compileAndRun(`
             @type Pair := $Pair x Int, y Int;
-            \\\\ build () -> Pair
-            @fn build  := &@with_arena {
-                @local scratch := 'noise';
-                @local p := &Pair 11, 22;
-                &@move_to_parent_arena p
-            };
+            \\\\ build Pair
+            @fn build := @with_arena({
+                @mut scratch := 'noise';
+                @mut p := Pair(11, 22);
+                @move_to_parent_arena(p)
+            });
             @export build;
-            \\\\ heap_now () -> Int
-            @fn heap_now  := &heap_get;
-            @export heap_now;
-        `)
+            \\\\ heap_now Int
+            @fn heap_now := heap_get();
+            @export heap_now;`)
         if (!r.ok) throw new Error(r.error)
         const ptr: number = r.exports.build()
         const view = new DataView(r.memory.buffer)
@@ -288,16 +277,15 @@ describe('Phase 9c: &@with_arena + &@move_to_parent_arena', () => {
         // occupies 12 bytes (4 + 2*4 pad-to-max).
         const r = await compileAndRun(`
             @type Shape := $Circle r Int | $Rectangle w Int, h Int;
-            \\\\ build () -> Shape
-            @fn build  := &@with_arena {
-                @local c := &Circle 7;
-                &@move_to_parent_arena c
-            };
+            \\\\ build Shape
+            @fn build := @with_arena({
+                @mut c := Circle(7);
+                @move_to_parent_arena(c)
+            });
             @export build;
-            \\\\ heap_now () -> Int
-            @fn heap_now  := &heap_get;
-            @export heap_now;
-        `)
+            \\\\ heap_now Int
+            @fn heap_now := heap_get();
+            @export heap_now;`)
         if (!r.ok) throw new Error(r.error)
         const ptr: number = r.exports.build()
         const view = new DataView(r.memory.buffer)
@@ -310,36 +298,34 @@ describe('Phase 9c: &@with_arena + &@move_to_parent_arena', () => {
     test('Sum with String-typed payload is rejected as nested heap', async () => {
         const r = await compileAndRun(`
             @type Tagged := $Named s String;
-            \\\\ build () -> Tagged
-            @fn build  := &@with_arena {
-                @local t := &Named 'hello';
-                &@move_to_parent_arena t
-            };
-            @export build;
-        `)
+            \\\\ build Tagged
+            @fn build := @with_arena({
+                @mut t := Named('hello');
+                @move_to_parent_arena(t)
+            });
+            @export build;`)
         expect(r.ok).toBe(false)
         if (!r.ok) {
             expect(r.error).toContain('not implemented')
         }
     })
 
-    test('&@move_to_parent_arena promotes an Array[Int]', async () => {
+    test('@move_to_parent_arena promotes an Array[Int]', async () => {
         // [count=3][1][2][3] = 4 + 3*4 = 16 bytes laid out contiguously.
         // Promotion memcpys those 16 bytes to the saved boundary.
         // Array element type is inferred — surface annotations for
         // Array[T] aren't part of the v1.0 grammar.
         const r = await compileAndRun(`
-            \\\\ build () -> Int
-            @fn build  := &@with_arena {
-                @local scratch := 'noise';
-                @local arr := $[10, 20, 30];
-                &@move_to_parent_arena arr
-            };
+            \\\\ build Int
+            @fn build := @with_arena({
+                @mut scratch := 'noise';
+                @mut arr := $[10, 20, 30];
+                @move_to_parent_arena(arr)
+            });
             @export build;
-            \\\\ heap_now () -> Int
-            @fn heap_now  := &heap_get;
-            @export heap_now;
-        `)
+            \\\\ heap_now Int
+            @fn heap_now := heap_get();
+            @export heap_now;`)
         if (!r.ok) throw new Error(r.error)
         const ptr: number = r.exports.build()
         const view = new DataView(r.memory.buffer)
@@ -357,21 +343,20 @@ describe('Phase 9c: &@with_arena + &@move_to_parent_arena', () => {
         // calls memory.grow which returns -1, then traps via
         // `unreachable` — wasmtime surfaces a clean trap reason.
         const r = await compileAndRun(`
-            \\\\ fifty_kb_blob () -> String
-            @fn fifty_kb_blob  := {
-                @local s := 'pad-this-up';
-                # &str_concat doubles ~ish each call; 100 iterations
+            \\\\ fifty_kb_blob String
+            @fn fifty_kb_blob := {
+                @mut s := 'pad-this-up';
+                # str_concat() doubles ~ish each call; 100 iterations
                 # well exceeds 2 pages.
-                @local i := 0;
-                @local acc := 'x';
-                &@loop i < 1000, {
-                    acc = &str_concat acc, s;
+                @mut i := 0;
+                @mut acc := 'x';
+                @loop(i < 1000, {
+                    acc = str_concat(acc, s);
                     i = i + 1;
-                };
+                });
                 acc
             };
-            @export fifty_kb_blob;
-        `, { maxHeapPages: 2 })
+            @export fifty_kb_blob;`, { maxHeapPages: 2 })
         if (!r.ok) throw new Error(r.error)
         let trapped = false
         try {
@@ -393,77 +378,72 @@ describe('Phase 9c: &@with_arena + &@move_to_parent_arena', () => {
 
     test('&heap_used is 0 immediately at program start', async () => {
         const r = await compileAndRun(`
-            \\\\ probe () -> Int
-            @fn probe  := &heap_used;
-            @export probe;
-        `)
+            \\\\ probe Int
+            @fn probe := heap_used();
+            @export probe;`)
         if (!r.ok) throw new Error(r.error)
         expect(r.exports.probe()).toBe(0)
     })
 
     test('&heap_used grows by exactly the runtime String allocation cost', async () => {
         // String literals are static data — they don't bump the heap.
-        // `&str_concat` forces a runtime allocation: 'ab' + 'cd' →
+        // `str_concat()` forces a runtime allocation: 'ab' + 'cd' →
         // [len=4][a][b][c][d] = 4 + 4 = 8 bytes consumed.
         const r = await compileAndRun(`
-            \\\\ probe () -> Int
-            @fn probe  := {
-                @local _s := &str_concat 'ab', 'cd';
-                &heap_used
+            \\\\ probe Int
+            @fn probe := {
+                @mut _s := str_concat('ab', 'cd');
+                heap_used()
             };
-            @export probe;
-        `)
+            @export probe;`)
         if (!r.ok) throw new Error(r.error)
         expect(r.exports.probe()).toBe(8)
     })
 
-    test('&heap_used resets back when &@with_arena unwinds', async () => {
+    test('&heap_used resets back when @with_arena unwinds', async () => {
         const r = await compileAndRun(`
-            \\\\ probe () -> Int
-            @fn probe  := {
-                @local before := &heap_used;
-                &@with_arena {
-                    @local _s := 'scratch';
-                };
-                @local after := &heap_used;
+            \\\\ probe Int
+            @fn probe := {
+                @mut before := heap_used();
+                @with_arena({
+                    @mut _s := 'scratch';
+                });
+                @mut after := heap_used();
                 after - before
             };
-            @export probe;
-        `)
+            @export probe;`)
         if (!r.ok) throw new Error(r.error)
         expect(r.exports.probe()).toBe(0)
     })
 
     test('&arena_used tracks the current arena bump distance', async () => {
         const r = await compileAndRun(`
-            \\\\ probe () -> Int
-            @fn probe  := &@with_arena {
-                @local saved := &heap_get;
-                @local _s := &str_concat 'hel', 'lo';
-                &arena_used saved
-            };
-            @export probe;
-        `)
+            \\\\ probe Int
+            @fn probe := @with_arena({
+                @mut saved := heap_get();
+                @mut _s := str_concat('hel', 'lo');
+                arena_used(saved)
+            });
+            @export probe;`)
         if (!r.ok) throw new Error(r.error)
-        // `&str_concat` allocates a new String: 4 + 5 = 9 bytes since `saved`.
+        // `str_concat()` allocates a new String: 4 + 5 = 9 bytes since `saved`.
         expect(r.exports.probe()).toBe(9)
     })
 
     test('promoted String persists across many arena iterations', async () => {
         const r = await compileAndRun(`
-            \\\\ build () -> String
-            @fn build  := &@with_arena {
-                @local s := 'loop result';
-                &@move_to_parent_arena s
-            };
+            \\\\ build String
+            @fn build := @with_arena({
+                @mut s := 'loop result';
+                @move_to_parent_arena(s)
+            });
             @export build;
-            \\\\ heap_now () -> Int
-            @fn heap_now  := &heap_get;
-            @export heap_now;
-        `)
+            \\\\ heap_now Int
+            @fn heap_now := heap_get();
+            @export heap_now;`)
         if (!r.ok) throw new Error(r.error)
         // Repeated calls — each promotes 4+11 = 15 bytes to the outer
-        // arena, accumulating linearly (the outer scope has no &@with_arena,
+        // arena, accumulating linearly (the outer scope has no @with_arena,
         // so promoted bytes are kept).  This proves the inside-arena
         // scratch is freed each call (otherwise heap growth would be
         // larger than 15 per iteration).

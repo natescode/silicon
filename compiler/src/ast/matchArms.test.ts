@@ -2,7 +2,7 @@
 /**
  * Tests for the @match arm-expression form normalisation.
  *
- * The new form is `&@match disc, pat => body, pat => body, …` with
+ * The new form is `@match(disc, pat => body, pat => body, …)` with
  * optional pattern alternation via `pat | pat | pat => body`.
  * normalizeMatchArgs flattens this into the legacy `[disc, pat, body, …]`
  * shape so the existing match-lowering / typechecking machinery works

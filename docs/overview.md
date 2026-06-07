@@ -180,7 +180,7 @@ Export functions to the host with `@export`, and import host functions with
 ```silicon
 @export add;
 
-@extern { \\ puts (String) -> Int }
+\\ @extern puts (String) -> Int;
 puts('from C');
 ```
 
@@ -358,7 +358,7 @@ web::console_log_str(int_to_str(int_pow(2, 16)));     # 65536
 ## 15. Strata — Silicon's metaprogramming
 
 Silicon's grammar is intentionally tiny and stable. Almost every "keyword" and
-"operator" — `@if`, `@loop`, `@local`, `+`, `==`, `++` — is **not** baked into the
+"operator" — `@if`, `@loop`, `@mut`, `+`, `==`, `++` — is **not** baked into the
 grammar. They are defined as **strata**: data-driven Silicon declarations,
 loaded into the compiler, that say how a construct lowers.
 
@@ -371,8 +371,8 @@ loaded into the compiler, that say how a construct lowers.
 ```
 
 This means you can add your own keywords and operators **without touching the
-grammar or the compiler's TypeScript** — you write a stratum that lowers to
-existing `Compiler::*` calls. The built-in language is itself a library of
+grammar or the compiler's TypeScript** — you write a stratum that calls
+`Compiler::*(…)` to register and lower the new construct. The built-in language is itself a library of
 strata under `src/strata/`. See the
 [Strata authoring guide](strata-authoring-guide.md) and
 [`strata.md`](strata.md).

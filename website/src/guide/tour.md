@@ -139,8 +139,8 @@ every exit:
 ```silicon
 \\ parse_user (Str) -> Result[User, Str]
 @fn parse_user line := {
-    @try(parse_name(line)),     # propagates Err
-    @try(parse_age(line)),
+    name := @try(parse_name(line));     # propagates Err
+    age := @try(parse_age(line));
     Ok(User(name, age))
 };
 ```

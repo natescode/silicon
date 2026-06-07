@@ -49,6 +49,22 @@ function ohmFloatValue(text: string): string {
 
 const ZERO_LOC: SourceLocation = { startLine: 0, startColumn: 0, endLine: 0, endColumn: 0 }
 
+// Binary-operator precedence (higher binds tighter).  Operators NOT listed here
+// (user-defined operators, the match-arm `=>` / `|`) fall to DEFAULT_BIN_PREC —
+// the loosest level — so arithmetic/comparison/logic group before they do, and
+// equal-precedence operators left-fold exactly as before.  This replaces the old
+// flat left-to-right fold (which made `2 + 3 * 4` parse as `(2 + 3) * 4`).
+const BIN_PREC: Record<string, number> = {
+    '*': 7, '/': 7, '%': 7,
+    '+': 6, '-': 6, '++': 6,
+    '<': 5, '>': 5, '<=': 5, '>=': 5,
+    '==': 4, '!=': 4,
+    '&&': 3,
+    '||': 2,
+}
+const DEFAULT_BIN_PREC = 1
+const binPrec = (op: string): number => BIN_PREC[op] ?? DEFAULT_BIN_PREC
+
 class Parser {
     private readonly toks: Token[]
     private readonly lineStarts: number[]
@@ -233,10 +249,9 @@ class Parser {
         // A def-kw followed by '(' is an ADR-0020 intrinsic CALL (`@if(...)`,
         // `@loop(...)`), not a definition — let it fall through to parseItem.
         if (this.isDefKw(t) && this.peek(1).kind !== 'lparen') {
-            const r = this.parseDefOrBlockDef()
-            if (Array.isArray(r)) return r          // BlockDef — no trailing ';'
+            const def = this.parseDefOrBlockDef()
             this.expect('semi')
-            return r
+            return def
         }
         const item = this.parseItem()
         this.expect('semi')
@@ -248,18 +263,34 @@ class Parser {
         return t.kind === 'kw' && t.text !== '@true' && t.text !== '@false'
     }
 
+    // ADR-0020: surface definition keywords that have been RETIRED. They are no
+    // longer accepted as user syntax (the parser still uses some of these strings
+    // internally as AST keywords, synthesized from bare/`@mut`/`@type`/`\\ @extern`).
+    private static readonly RETIRED_DEFKW: Record<string, string> = {
+        '@local':    'use a bare `name := v` (immutable) or `@mut name := v`',
+        '@global':   'use a bare `name := v`',
+        '@var':      'use `@mut name := v`',
+        '@let':      'use a bare `name := v`',
+        '@struct':   'use `@type Name := { field Type, … }`',
+        '@type_sum': 'use `@type Name := $A | $B` (or `@enum` for payload-free variants)',
+        '@extern':   'use a `\\ @extern name (Types) -> Ret;` signature line',
+        '@interface':'use `\\ @extern …` signature lines',
+    }
+    private checkRetiredKw(kw: string, tok: Token): void {
+        const hint = Parser.RETIRED_DEFKW[kw]
+        if (hint) this.fail(`'${kw}' is retired in ADR-0020 — ${hint}`, tok)
+    }
+
     // ── Definitions ───────────────────────────────────────────────────────────
     // Shared prefix `defKw identifier? generics?` then either a SignatureBlock
-    // (BlockDef) or Params+Binding (Definition).
-    private parseDefOrBlockDef(): Definition | Definition[] {
+    // Params+Binding (Definition). (ADR-0020 retired the `@extern {…}` /
+    // `@interface {…}` SignatureBlock brace form — externals use `\\ @extern …`.)
+    private parseDefOrBlockDef(): Definition {
+        const kwTok = this.peek()
         const kw = this.next().text                     // defKw, includes '@'
+        this.checkRetiredKw(kw, kwTok)
         const identTok = this.at('ident') ? this.next() : undefined
         const generics = this.at('lbrack') ? this.parseGenericParams() : undefined
-
-        if (this.at('lbrace')) {
-            const sigs = this.parseSignatureBlock()
-            return this.buildBlockDef(kw, generics, sigs)
-        }
 
         if (!identTok) this.fail('definition requires a name')
 
@@ -309,6 +340,7 @@ class Parser {
         const kwTok = this.peek()
         if (this.isDefKw(kwTok)) {
             const kw = this.next().text
+            this.checkRetiredKw(kw, kwTok)
             const identTok = this.expect('ident')
             const generics = this.at('lbrack') ? this.parseGenericParams() : undefined
             const params = this.parseParams()
@@ -357,12 +389,6 @@ class Parser {
         return ASTFactory.definition('@extern', name, params, sig.generics, undefined)
     }
 
-    // BlockDef → Definition[].  @interface = stub (no defs); @extern expands each sig.
-    private buildBlockDef(kw: string, _generics: GenericParams | undefined, sigs: SigInfo[]): Definition[] {
-        if (kw === '@interface') return []
-        return sigs.map((sig) => this.buildExternDef(sig))
-    }
-
     // Distribute an attached signature's domain/range onto bare params + return,
     // exactly as toAst's Definition action does.
     private buildDefinition(
@@ -405,13 +431,6 @@ class Parser {
         return node
     }
 
-    private parseSignatureBlock(): SigInfo[] {
-        this.expect('lbrace')
-        const sigs: SigInfo[] = []
-        while (this.at('attachedSig')) sigs.push(this.parseAttachedSig())
-        this.expect('rbrace')
-        return sigs
-    }
 
     private parseBinding(): Binding {
         this.expect('bind')
@@ -462,11 +481,7 @@ class Parser {
         if (t.kind === 'attachedSig') return this.parseDefinitionWithSig()
         // def-kw followed by '(' is an intrinsic call (`@if(...)`), not a def.
         if (this.isDefKw(t) && this.peek(1).kind !== 'lparen') {
-            const r = this.parseDefOrBlockDef()
-            // A BlockDef cannot appear as a block Item in valid programs; only a
-            // Definition reaches here in practice.
-            if (Array.isArray(r)) this.fail('signature block not allowed here', t)
-            return r as Definition
+            return this.parseDefOrBlockDef()
         }
         if (t.kind === 'ident') {
             const ns = this.parseNamespace()
@@ -503,17 +518,27 @@ class Parser {
         return ASTFactory.functionCall(callee, false, args as ExpressionStart[])
     }
 
-    // ExpressionStart = ExpressionEnd (BinOp ExpressionEnd)*
+    // ExpressionStart = ExpressionEnd (BinOp ExpressionEnd)*  — parsed with
+    // precedence climbing (left-associative) so operators bind per BIN_PREC.
     private parseExpressionStart(): ASTNode {
-        return this.parseBinOpChain(this.parseExpressionEnd())
+        return this.parseBinOpChain(this.parseExpressionEnd(), 0)
     }
 
-    private parseBinOpChain(left: ASTNode): ASTNode {
+    /** Precedence-climbing binary-expression parser.  `left` is the already-parsed
+     *  left operand; only operators with precedence >= `minPrec` are folded in. */
+    private parseBinOpChain(left: ASTNode, minPrec: number): ASTNode {
         let result = left
         while (this.at('op')) {
-            const operator = this.next().text
-            const right = this.parseExpressionEnd()
-            result = ASTFactory.binOp(result as ExpressionStart, operator, right as any)
+            const op = this.peek().text
+            const prec = binPrec(op)
+            if (prec < minPrec) break
+            this.next()  // consume the operator
+            let right = this.parseExpressionEnd()
+            // Left-associative: fold any strictly-tighter operators into the RHS.
+            while (this.at('op') && binPrec(this.peek().text) > prec) {
+                right = this.parseBinOpChain(right, prec + 1)
+            }
+            result = ASTFactory.binOp(result as ExpressionStart, op, right as any)
         }
         return result
     }
@@ -537,8 +562,6 @@ class Parser {
                 }
                 this.fail(`unexpected keyword '${t.text}' in expression`, t)
             }
-            case 'amp':
-                return this.parseAmp()
             case 'dollar':
                 return this.parseVariantDecl()
             case 'ident':
@@ -556,55 +579,9 @@ class Parser {
         }
     }
 
-    // '&' → AscribeExpr ("&@as" …) | FunctionCall
-    private parseAmp(): ASTNode {
-        this.expect('amp')
-        const head = this.peek()
-        if (head.kind === 'kw' && head.text === '@as') {
-            this.next()                                   // '@as'
-            const typeExpr = this.parseTypeExpr()
-            this.expect('comma')
-            const expr = this.parseExpressionStart()
-            return ASTFactory.ascription(expr, typeExpr)
-        }
-        if (head.kind === 'kw') {
-            const name = this.next().text                 // keyword incl '@'
-            const args = this.parseCallArgs()
-            return ASTFactory.functionCall(name, true, args as ExpressionStart[])
-        }
-        if (head.kind === 'ident') {
-            const ns = this.parseNamespace()
-            const args = this.parseCallArgs()
-            return ASTFactory.functionCall(ns, false, args as ExpressionStart[])
-        }
-        this.fail(`expected a keyword or name after '&'`, head)
-    }
-
-    // CallArgsOrEnd = CallArgs | CallNoArgs.  Args present iff the next token can
-    // begin an expression (argStart); empty iff it's a call terminator.
-    private parseCallArgs(): ASTNode[] {
-        if (this.startsArg(this.peek())) {
-            const args = [this.parseExpressionStart()]
-            while (this.at('comma')) { this.next(); args.push(this.parseExpressionStart()) }
-            return args
-        }
-        const t = this.peek()
-        if (t.kind === 'semi' || t.kind === 'rparen' || t.kind === 'rbrace'
-            || t.kind === 'comma' || t.kind === 'eof') return []
-        this.fail(`unexpected ${t.kind} '${t.text}' after call`, t)
-    }
-
-    // argStart = digit | "'" | "$" | "@" | "{" | "(" | "&" | letter | "_"
-    private startsArg(t: Token): boolean {
-        switch (t.kind) {
-            case 'int': case 'float': case 'string': case 'kw':
-            case 'dollar': case 'arrOpen': case 'objOpen': case 'tupOpen':
-            case 'lbrace': case 'lparen': case 'amp': case 'ident':
-                return true
-            default:
-                return false
-        }
-    }
+    // (ADR-0020) The legacy `&`-call sigil, its `&@as` ascription form, and the
+    // paren-free CallArgs/startsArg machinery were removed here — calls are always
+    // parenthesised (`name(args)` / `@kw(args)`) via applyCallSuffix / parseExpressionEnd.
 
     // VariantDecl = "$" identifier ListOf<ParamLiteral, ",">
     private parseVariantDecl(): ASTNode {
@@ -688,7 +665,14 @@ class Parser {
         const t = this.peek()
         switch (t.kind) {
             case 'string': { this.next(); return ASTFactory.stringLiteral(this.src.slice(t.start + 1, t.end - 1)) }
-            case 'int': { this.next(); return ASTFactory.intLiteral(ohmDecValue(t.text), t.base!) }
+            case 'int': {
+                this.next()
+                // Non-decimal literals keep their raw text (e.g. `0x4E2D`);
+                // parseIntLiteral converts by prefix.  ohmDecValue only handles
+                // decimal underscore separators.
+                const value = t.base === 'decimal' ? ohmDecValue(t.text) : t.text
+                return ASTFactory.intLiteral(value, t.base!)
+            }
             case 'float': { this.next(); return ASTFactory.floatLiteral(ohmFloatValue(t.text)) }
             case 'kw': { this.next(); return ASTFactory.booleanLiteral(t.text === '@true') }
             case 'arrOpen': return this.parseArrayLiteral()

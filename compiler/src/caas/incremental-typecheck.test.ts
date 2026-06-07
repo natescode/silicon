@@ -39,7 +39,7 @@ function fresh(source: string): Document { return new Workspace().openDocument('
 // the final binding's literal leaves the first ten elements a verbatim prefix.
 const TEN = Array.from({ length: 10 }, (_, i) =>
     `\\\\ f${i} (Int)\n@fn f${i} x := { x + ${i} };`).join('\n')
-const DOC = `${TEN}\n@global r := &f9 100;`
+const DOC = `${TEN}\nr := f9(100);`
 
 describe('E2 incremental type-check actually reuses the prefix', () => {
     test('editing the last element replays the unchanged prefix (reused > 0)', () => {
@@ -48,7 +48,7 @@ describe('E2 incremental type-check actually reuses the prefix', () => {
         const total = ws._lastTypecheckReuse!.total
         expect(ws._lastTypecheckReuse).toEqual({ reused: 0, total })   // first open = full capture
 
-        const edited = DOC.replace('&f9 100', '&f9 12345')
+        const edited = DOC.replace('f9(100)', 'f9(12345)')
         const doc = ws.editDocument('m.si', edited)
         // The 11 prior elements minus the edited one (and its window) are replayed.
         expect(ws._lastTypecheckReuse!.reused).toBeGreaterThanOrEqual(total - 1)
@@ -74,10 +74,10 @@ describe('E2 incremental type-check actually reuses the prefix', () => {
     })
 
     test('a fresh-var-leaking suffix is renumbered correctly after a prefix replay', () => {
-        // `&None` with no pinning annotation leaks an order-dependent ?Tn into the
+        // `None()` with no pinning annotation leaks an order-dependent ?Tn into the
         // typeMap. A prefix replay must advance the shared counter so the suffix's
         // ?Tn matches a full check exactly.
-        const base = `${TEN}\n@global a := &None;\n@global b := &None;`
+        const base = `${TEN}\na := None();\nb := None();`
         const ws = new Workspace()
         ws.openDocument('m.si', base)
         const edited = base.replace('x + 5', 'x + 55')   // edit a middle annotated fn
@@ -86,27 +86,35 @@ describe('E2 incremental type-check actually reuses the prefix', () => {
     })
 
     test('a prefix element that forward-references a renamed suffix def is NOT stale-reused', () => {
-        // element 0 (`@global r`) forward-references `gg`, defined in element 1.
+        // element 0 (`r`) forward-references `gg`, defined in element 1.
         // Renaming gg→hh changes a DECLARATION, so a fresh check makes element 0's
-        // `&gg` unbound. The prefix must NOT be replayed (its result depends on the
+        // `gg()` unbound. The prefix must NOT be replayed (its result depends on the
         // changed declaration) — the preRegSig gate forces a full re-check.
-        const base = `@global r := &gg 1;\n\\\\ gg (Int)\n@fn gg x := { x };`
+        const base = `r := gg(1);
+\\\\ gg (Int)
+@fn gg x := {
+    x
+};`
         const ws = new Workspace()
         ws.openDocument('m.si', base)
         const edited = base.replace(/gg/g, 'hh')   // rename the def (and its sig line)
         const doc = ws.editDocument('m.si', edited)
         expect(ws._lastTypecheckReuse!.reused).toBe(0)   // gate engaged: declaration changed
         const full = fresh(edited)
-        expect(diagKey(doc)).toEqual(diagKey(full))      // `&gg` now unbound, identically
+        expect(diagKey(doc)).toEqual(diagKey(full))      // `gg()` now unbound, identically
         expect(symKey(doc)).toEqual(symKey(full))
         expect(typeKey(doc)).toBe(typeKey(full))
     })
 
     test('changing a forward-referenced annotation stays equivalent (gate falls back)', () => {
-        const base = `@global r := &add 1, 2;\n\\\\ add (Int, Int)\n@fn add x, y := { x + y };`
+        const base = `r := add(1, 2);
+\\\\ add (Int, Int)
+@fn add x, y := {
+    x + y
+};`
         const ws = new Workspace()
         ws.openDocument('m.si', base)
-        const edited = base.replace('(Int, Int)', '(Float, Float)').replace('x + y', '&toFloat x')
+        const edited = base.replace('(Int, Int)', '(Float, Float)').replace('x + y', 'toFloat(x)')
         const doc = ws.editDocument('m.si', edited)
         const full = fresh(edited)
         expect(diagKey(doc)).toEqual(diagKey(full))
@@ -118,7 +126,7 @@ describe('E2 incremental type-check actually reuses the prefix', () => {
         ws.openDocument('m.si', DOC)
         let cur = DOC
         for (let i = 0; i < 5; i++) {
-            cur = cur.replace(/&f9 \d+/, `&f9 ${1000 + i}`)
+            cur = cur.replace(/f9\(\d+\)/, `f9(${1000 + i})`)
             const doc = ws.editDocument('m.si', cur)
             expect(ws._lastTypecheckReuse!.reused).toBeGreaterThan(0)
             expect(typeKey(doc)).toBe(typeKey(fresh(cur)))

@@ -56,17 +56,17 @@ Definition  = def-kw [ identifier ] [ GenericParams ]
 (*
   Types are NOT written inline on a definition's name or params.  Instead a
   `\\` SignatureLine on the preceding element carries the function/value type
-  (see Element).  The `@extern` / `@interface` brace form carries a
-  SignatureBlock in place of Params + Binding.
+  (see Element).  `@extern` externs are declared as signature lines with the
+  `@extern` modifier — the brace form `@extern { \\ … }` is RETIRED (rejected).
     \\ add (Int, Int) -> Int
     @fn add a, b := { a + b };
-    @extern { \\ puts (String) -> Int }
+    \\ @extern puts (String) -> Int
 *)
 
 SignatureLine  = "\\" Namespace [ GenericParams ] TypeExpr ;
 SignatureBlock = "{" { SignatureLine } "}" ;
 
-def-kw      = "@" identifier ;   (* e.g. @fn, @global, @local, @type, @struct *)
+def-kw      = "@" identifier ;   (* e.g. @fn, @mut, @type, @enum — RETIRED: @global, @local, @var, @let, @struct, @type_sum, @extern{}, @interface{} *)
 
 Binding     = ":=" Expression ;
 
@@ -76,7 +76,7 @@ GenericParams = "[" identifier { "," identifier } "]" ;
   Function parameters are bare identifiers — their types come from the `\\`
   signature line.  Struct fields and variant payloads write the type after the
   name, space-separated (no colon):
-    @fn add a, b          @struct Point x Int, y Int          $Circle r Int
+    @fn add a, b          @type Point := { x Int, y Int }          $Circle r Int
 *)
 Params      = "(" [ Param { "," Param } ] ")"
             | [ Param { "," Param } ]                 (* bare form *)
@@ -111,11 +111,13 @@ operator-char
             = "=" | "<" | ">" | "!" | "+" | "-" | "*" | "/" | "%"
             | "^" | "|" | "~" | "?"
             ;
-            (* Note: "&", "@", "$", "." are NOT valid operator characters — they
-               are reserved for call sigils, keyword sigils, variant sigils, and
-               namespace separators.  ":" appears only in ":=" (binding) and
-               "::" (namespace), never as a type-annotation sigil.  "->" (an
-               operator string) denotes a function type inside a TypeExpr.
+            (* Note: "&", "@", "$", "." are NOT valid operator characters — "&"
+               is retired (no longer a call sigil; rejected by the parser);
+               "@" prefixes keyword/intrinsic identifiers; "$" is the variant
+               sigil and literal opener; "." is the namespace separator.
+               ":" appears only in ":=" (binding) and "::" (namespace), never
+               as a type-annotation sigil.  "->" (an operator string) denotes
+               a function type inside a TypeExpr.
 
                ".." is a distinct two-character token the lexer recognises
                ahead of the single "." namespace separator (ADR 0016).  It is a
@@ -126,16 +128,23 @@ operator-char
 
 (* ── Function calls ─────────────────────────────────────────────────────── *)
 
-FunctionCall = "&" FunctionCallBody ;
+(*
+  ADR-0020: calls are ALWAYS parenthesized.  The `&`-sigil prefix is RETIRED
+  (the parser rejects `&` as an unexpected token).  Both user functions and
+  built-in `@`-keywords use the same parenthesized call form:
+    add(1, 2)          user-defined function call
+    @if(cond, t, f)    built-in keyword call
+    None()             zero-argument call (parentheses required)
+*)
+
+FunctionCall = FunctionCallBody "(" [ CallArgs ] ")" ;
 
 FunctionCallBody
-            = Keyword CallArgs       (* built-in keyword call *)
-            | Namespace CallArgs     (* user-defined function call *)
+            = Keyword              (* built-in keyword call — "@" identifier *)
+            | Namespace            (* user-defined function call *)
             ;
 
-CallArgs    = Expression { "," Expression }   (* at least one argument *)
-            | (* empty — when followed by ";", ")", "}", ",", or EOF *)
-            ;
+CallArgs    = Expression { "," Expression } ;
 
 Keyword     = "@" identifier ;
 
@@ -346,8 +355,7 @@ doc-comment   = "##" { (* any char except line-end *) } line-end ;
   This appendix does NOT change the language — every program that parses
   under the natural form parses identically under the left-factored form.
   It only documents the parser shape a strict LL(1) implementation must
-  follow.  No surface-level "purity for purity's sake" changes (e.g.
-  requiring `@global x := ...` instead of `x = ...`) are implied.
+  follow.  No surface-level "purity for purity's sake" changes are implied.
 *)
 
 (* ── Strata boundary ─────────────────────────────────────────────────────── *)
@@ -359,16 +367,19 @@ doc-comment   = "##" { (* any char except line-end *) } line-end ;
   All keywords other than those built into the grammar skeleton (@true, @false)
   are resolved at elaboration time via the strata registry.  This means:
 
-    - @fn, @global, @local, @type, @struct, @enum, @if, @loop, @match, @return,
+    - @fn, @mut, @type, @enum, @if, @loop, @match, @return,
       @defer, @try, @extern, @use — all are elaborated keywords, not grammar
       reserved words.
 
+      RETIRED (parser rejects with ADR-0020 hints): @global, @local, @var, @let,
+      @struct, @type_sum, @extern{} brace form, @interface{} brace form.
+
     - @loop is one keyword whose meaning is chosen at elaboration by the count
       of comma-operands before the trailing { body } block (ADR 0016):
-          &@loop { body }                infinite (≡ &@loop 1, { body })
-          &@loop cond, { body }          while — cond re-checked each iteration
-          &@loop v, subject, { body }    iterate: v ← each element
-          &@loop i, v, subject, { body } iterate: i ← position, v ← element
+          @loop({ body })                infinite (≡ @loop(1, { body }))
+          @loop(cond, { body })          while — cond re-checked each iteration
+          @loop(v, subject, { body })    iterate: v ← each element
+          @loop(i, v, subject, { body }) iterate: i ← position, v ← element
       `subject` is a `lo..hi` range or an i32-element Vec; `_` discards a binder;
       ≥ 4 operands are rejected.  Every form desugars to the while shape, so the
       grammar needs no new production — it is an ordinary FunctionCall.
@@ -382,7 +393,7 @@ doc-comment   = "##" { (* any char except line-end *) } line-end ;
       via new strata entries.
 
   See docs/strata.md for authoring strata; docs/strata-authoring-guide.md for
-  the &Compiler::* API; docs/stability.md §1 for the language stability rules.
+  the Compiler::* API; docs/stability.md §1 for the language stability rules.
 *)
 
 ```

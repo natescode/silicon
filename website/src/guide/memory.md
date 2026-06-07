@@ -244,7 +244,7 @@ collapses to one iteration's allocations.
 
 ## Under `--target=wasm-gc` — portable lifecycle, no runtime cost
 
-[ADR 0009](adr/0009-wasm-gc-target.md) adds an opt-in WebAssembly GC
+[ADR 0009](https://github.com/NatesCode/silicon/blob/main/docs/adr/0009-wasm-gc-target.md) adds an opt-in WebAssembly GC
 target. The same source that uses arenas and `Rc` under
 `--target=wasm-mvp` (the default) compiles cleanly under
 `--target=wasm-gc`, with every lifecycle primitive collapsing to a
@@ -305,7 +305,7 @@ size will catch any regression that leaks per-iteration allocations.
 
 ## Post-0.1 outlook
 
-Phase 9c ships the v0.1 instantiation of [ADR 0008](adr/0008-memory-management-arenas.md).
+Phase 9c ships the v0.1 instantiation of [ADR 0008](https://github.com/NatesCode/silicon/blob/main/docs/adr/0008-memory-management-arenas.md).
 A later release extends the same surface without changing 0.1 program semantics:
 
 - **Mark-sweep GC stratum.** Implements the same `wit/allocator.wit`
@@ -319,17 +319,17 @@ A later release extends the same surface without changing 0.1 program semantics:
   promotion call becomes legal mid-block; the runtime tracks the
   in-flight pointer locals and rewrites them when the arena unwinds.
 
-See [`docs/v1.1-user-stories.html`](v1.1-user-stories.html) for the
+See [`docs/v1.1-user-stories.html`](https://github.com/NatesCode/silicon/blob/main/docs/v1.1-user-stories.html) for the
 detailed milestones (M-6 through M-8 in ADR 0008's follow-up section).
 
 ---
 
 ## Cross-references
 
-- [ADR 0008 — Memory management: explicit arenas for 1.0, AllocatorABI for 1.1](adr/0008-memory-management-arenas.md)
-- [`wit/allocator.wit`](../wit/allocator.wit) — the ABI surface every
+- [ADR 0008 — Memory management: explicit arenas for 1.0, AllocatorABI for 1.1](https://github.com/NatesCode/silicon/blob/main/docs/adr/0008-memory-management-arenas.md)
+- [`wit/allocator.wit`](https://github.com/NatesCode/silicon/blob/main/compiler/wit/allocator.wit) — the ABI surface every
   Sigil allocator conforms to.
-- [Phase 9c in `v1-user-stories.html`](v1-user-stories.html#phase-9c) —
+- [Phase 9c in `v1-user-stories.html`](https://github.com/NatesCode/silicon/blob/main/docs/v1-user-stories.html#phase-9c) —
   per-story acceptance bars.
 - Source: `src/strata/control.si` (stratum declarations),
   `src/ir/lower.ts:lowerWithArena` (lowering),

@@ -21,12 +21,12 @@ describe('LSP rides the incremental compiler Workspace', () => {
         // `\\ f (Int)` signature lines bind the param types (Silicon HM-lite).
         const TEN = Array.from({ length: 10 }, (_, i) =>
             `\\\\ f${i} (Int)\n@fn f${i} x := { x + ${i} };`).join('\n')
-        const src = `${TEN}\n@global r := &f9 100;`
+        const src = `${TEN}\nr := f9(100);`
         const first = ws.update(u, src)!
         expect(first.diagnostics.length).toBe(0)
         expect(ws.compiler._lastTypecheckReuse!.reused).toBe(0)   // first open = full
 
-        const edited = src.replace('&f9 100', '&f9 12345')
+        const edited = src.replace('f9(100)', 'f9(12345)')
         const doc = ws.update(u, edited)!
         expect(ws.compiler._lastTypecheckReuse!.reused).toBeGreaterThan(0)
         expect(doc.diagnostics.length).toBe(0)
@@ -41,7 +41,7 @@ describe('LSP rides the incremental compiler Workspace', () => {
         const b = uri('b.si')
         // No real file on disk for the @use target, but a.si is already open in
         // the workspace under its URI, so externalSymbols resolves `helper`.
-        const doc = ws.update(b, `@global r := &helper 41;`)!
+        const doc = ws.update(b, `r := helper(41);`)!
         // `helper` is visible cross-document → no E0004 unbound identifier.
         expect(doc.diagnostics.find(d => d.code === 'E0004')).toBeUndefined()
     })
@@ -49,16 +49,16 @@ describe('LSP rides the incremental compiler Workspace', () => {
     test('definition + references + hover resolve through the model', () => {
         const ws = new Workspace()
         const u = uri('nav.si')
-        //              1         2
-        //    0123456789012345678901234567
+        //              1
+        //    01234567890123456
         // 1: @fn add x, y := { x + y };
-        // 2: @global s := &add 1, 2;
-        ws.update(u, `@fn add x, y := { x + y };\n@global s := &add 1, 2;`)
+        // 2: s := add(1, 2);
+        ws.update(u, `@fn add x, y := { x + y };\ns := add(1, 2);`)
 
-        // cursor on `add` in the call (line 2 = LSP line 1; '&add' → 'add' at
-        // 1-based col 15 in '@global s := &add 1, 2;', so 0-based char 14)
+        // cursor on `add` in the call (line 2 = LSP line 1; 'add' starts at
+        // 0-based col 5 in 's := add(1, 2);', so callCol = 5)
         const callLine = 1
-        const callCol = 14
+        const callCol = 5
         const def = ws.compiler.findDefinition(u, callLine + 1, callCol + 1)
         expect(def?.name).toBe('add')
         expect(def?.definitionSpan?.line).toBe(1)   // defined on source line 1
@@ -73,7 +73,7 @@ describe('LSP rides the incremental compiler Workspace', () => {
     test('completion includes local definitions', () => {
         const ws = new Workspace()
         const u = uri('comp.si')
-        ws.update(u, `@fn greet x := { x };\n@global g := &greet 1;`)
+        ws.update(u, `@fn greet x := { x };\ng := greet(1);`)
         const items = ws.compiler.getCompletions(u, 2, 13, 'gr')
         expect(items.some(it => it.label === 'greet')).toBe(true)
     })
@@ -81,17 +81,17 @@ describe('LSP rides the incremental compiler Workspace', () => {
     test('rename rewrites the definition and all references', () => {
         const ws = new Workspace()
         const u = uri('ren.si')
-        ws.update(u, `@fn add x, y := { x + y };\n@global s := &add 1, 2;`)
-        const edit = ws.compiler.rename(u, 2, 15, 'plus')   // cursor on `add` in the call
+        ws.update(u, `@fn add x, y := { x + y };\ns := add(1, 2);`)
+        const edit = ws.compiler.rename(u, 2, 6, 'plus')   // cursor on `add` in the call
         expect(edit.changeCount).toBeGreaterThanOrEqual(2)   // def + call site
     })
 
     test('signature help reports the active parameter inside a call', () => {
         const ws = new Workspace()
         const u = uri('sig.si')
-        //  3: @global s := &add 1, 2;  — cursor on the 2nd arg ('2' at col 22)
-        ws.update(u, `\\\\ add (Int, Int) -> Int\n@fn add x, y := { x + y };\n@global s := &add 1, 2;`)
-        const help = ws.compiler.signatureHelp(u, 3, 22)
+        //  3: s := add(1, 2);  — cursor on the 2nd arg ('2' at col 13)
+        ws.update(u, `\\\\ add (Int, Int) -> Int\n@fn add x, y := { x + y };\ns := add(1, 2);`)
+        const help = ws.compiler.signatureHelp(u, 3, 13)
         expect(help?.name).toBe('add')
         expect(help?.parameters.length).toBe(2)
         expect(help?.activeParameter).toBe(1)
@@ -103,7 +103,7 @@ describe('LSP rides the incremental compiler Workspace', () => {
         // An unbound identifier with a near-miss in scope carries a
         // "did you mean 'X'?" hint, which the code-action provider turns into a
         // rename quick-fix.
-        const doc = ws.update(u, `@fn greet x := { x };\n@global g := 1;`)!
+        const doc = ws.update(u, `@fn greet x := { x };\ng := 1;`)!
         const typo = doc.diagnostics.find(d => d.code === 'E0004' && /did you mean/i.test(d.hint ?? ''))
         expect(typo).toBeDefined()
         const actions = getCodeActions(typo!, doc.source)
@@ -114,7 +114,7 @@ describe('LSP rides the incremental compiler Workspace', () => {
     test('semantic-token source data: symbols carry definition + reference spans', () => {
         const ws = new Workspace()
         const u = uri('tok.si')
-        const doc = ws.update(u, `\\\\ add (Int, Int) -> Int\n@fn add x, y := { x + y };\n@global s := &add 1, 2;`)!
+        const doc = ws.update(u, `\\\\ add (Int, Int) -> Int\n@fn add x, y := { x + y };\ns := add(1, 2);`)!
         const add = doc.model.symbolNamed('add')!
         expect(add.definitionSpan).toBeDefined()
         // the call site on the last line is a reference
@@ -128,11 +128,11 @@ describe('LSP rides the incremental compiler Workspace', () => {
         // prefix survives, so completion/nav keep working while you type.
         const ws = new Workspace()
         const u = uri('typing.si')
-        ws.update(u, `@fn greet x := { x };\n@global g := 1;`)
+        ws.update(u, `@fn greet x := { x };\ng := 1;`)
         expect([...ws.getDoc(u)!.model.allSymbols].map(s => s.name)).toContain('greet')
 
         // edit: start a new, incomplete line (a parse error)
-        const doc = ws.update(u, `@fn greet x := { x };\n@global g := 1;\n@global h := &gr`)!
+        const doc = ws.update(u, `@fn greet x := { x };\ng := 1;\nh := gr`)!
         expect(doc.diagnostics.some(d => d.code === 'E0000')).toBe(true)      // error surfaced
         expect([...doc.model.allSymbols].map(s => s.name)).toContain('greet') // …but model alive
         expect(ws.compiler.getCompletions(u, 3, 14, 'gr').some(i => i.label === 'greet')).toBe(true)

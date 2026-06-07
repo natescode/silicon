@@ -29,13 +29,13 @@ describe('W2/W3: JSString via wasm:js-string builtins (Bun)', () => {
     test('build + concat + length runs host-native', async () => {
         const bin = buildBun(`\\\\ hi (Int) -> Int
 @fn hi n := {
-  \\\\ h JSString
-  @local h := &JSString::fromCodePoint 72;
-  \\\\ i JSString
-  @local i := &JSString::fromCodePoint 105;
-  \\\\ both JSString
-  @local both := &JSString::concat h, i;
-  &JSString::length both
+    \\\\ h JSString
+    @mut h := JSString::fromCodePoint(72);
+    \\\\ i JSString
+    @mut i := JSString::fromCodePoint(105);
+    \\\\ both JSString
+    @mut both := JSString::concat(h, i);
+    JSString::length(both)
 };
 @export hi;`)
         const inst = await instantiate(bin, () => {})
@@ -43,15 +43,14 @@ describe('W2/W3: JSString via wasm:js-string builtins (Bun)', () => {
     })
 
     test('console::log prints a JS string through _start', async () => {
-        const bin = buildBun(`\\\\ main () -> Void
-@fn main := {
-  \\\\ h JSString
-  @local h := &JSString::fromCodePoint 72;
-  \\\\ i JSString
-  @local i := &JSString::fromCodePoint 105;
-  &console::log (&JSString::concat h, i)
+        const bin = buildBun(`@fn main := {
+    \\\\ h JSString
+    @mut h := JSString::fromCodePoint(72);
+    \\\\ i JSString
+    @mut i := JSString::fromCodePoint(105);
+    console::log(JSString::concat(h, i))
 };
-&main;`)
+main();`)
         let out = ''
         const inst = await instantiate(bin, s => { out += s })
         expect(typeof (inst.exports as any)._start).toBe('function')   // web/bun exports _start
@@ -60,13 +59,13 @@ describe('W2/W3: JSString via wasm:js-string builtins (Bun)', () => {
     })
 
     test('String↔JSString bridge round-trips', async () => {
-        const bin = buildBun(`\\\\ rt () -> Int
+        const bin = buildBun(`\\\\ rt Int
 @fn rt := {
-  \\\\ js JSString
-  @local js := &JSString::fromString 'hi there';
-  \\\\ back String
-  @local back := &JSString::toString js;
-  &str_len back
+    \\\\ js JSString
+    @mut js := JSString::fromString('hi there');
+    \\\\ back String
+    @mut back := JSString::toString(js);
+    str_len(back)
 };
 @export rt;`)
         const state: any = {}
@@ -80,8 +79,8 @@ describe('W2/W3: JSString via wasm:js-string builtins (Bun)', () => {
 
     test('JSString on platform=native is a clean error (not a silent miscompile)', () => {
         const mods = loadModules(ROOT)
-        const r = compile(`\\\\ f () -> Int
-@fn f := &JSString::length (&JSString::fromCodePoint 65);
+        const r = compile(`\\\\ f Int
+@fn f := JSString::length(JSString::fromCodePoint(65));
 @export f;`, { file: 'm.si', moduleRegistry: mods, target: 'host', platform: 'native', emitBinary: true } as any)
         expect(r.diagnostics.length).toBeGreaterThan(0)
         expect(r.diagnostics.some((d: any) => /JSString|--platform/.test(d.message))).toBe(true)
@@ -90,21 +89,21 @@ describe('W2/W3: JSString via wasm:js-string builtins (Bun)', () => {
     test('CharCodeArray ↔ JSString via fromCharCodeArray / intoCharCodeArray (GC i16 array)', async () => {
         // Build "Hi" from code units through a GC `(array (mut i16))`, then read a
         // JSString's units back out — both host-native under the js-string builtins.
-        const bin = buildBun(`\\\\ probe () -> Int
+        const bin = buildBun(`\\\\ probe Int
 @fn probe := {
-  \\\\ arr CharCodeArray
-  @local arr := &JSString::codeArray 2;
-  &JSString::setCode arr, 0, 72;
-  &JSString::setCode arr, 1, 105;
-  \\\\ hi JSString
-  @local hi := &JSString::fromCharCodeArray arr, 0, 2;
-  \\\\ back CharCodeArray
-  @local back := &JSString::codeArray 8;
-  \\\\ n Int
-  @local n := &JSString::intoCharCodeArray hi, back, 0;
-  \\\\ result Int
-  @local result := (&JSString::length hi) * 1000;
-  result + ((&JSString::getCode back, 1) + ((&JSString::codeLen back) * 100000))
+    \\\\ arr CharCodeArray
+    @mut arr := JSString::codeArray(2);
+    JSString::setCode(arr, 0, 72);
+    JSString::setCode(arr, 1, 105);
+    \\\\ hi JSString
+    @mut hi := JSString::fromCharCodeArray(arr, 0, 2);
+    \\\\ back CharCodeArray
+    @mut back := JSString::codeArray(8);
+    \\\\ n Int
+    @mut n := JSString::intoCharCodeArray(hi, back, 0);
+    \\\\ result Int
+    @mut result := JSString::length(hi) * 1000;
+    result + (JSString::getCode(back, 1) + (JSString::codeLen(back) * 100000))
 };
 @export probe;`)
         const inst = await instantiate(bin, () => {})
@@ -115,7 +114,7 @@ describe('W2/W3: JSString via wasm:js-string builtins (Bun)', () => {
     test('emits the wasm:js-string import module + externref signature', () => {
         const mods = loadModules(ROOT)
         const r = compile(`\\\\ f (Int) -> Int
-@fn f n := &JSString::length (&JSString::fromCodePoint n);
+@fn f n := JSString::length(JSString::fromCodePoint(n));
 @export f;`, { file: 'm.si', moduleRegistry: mods, target: 'host', platform: 'bun' } as any)
         expect(r.wat).toContain('(import "wasm:js-string" "fromCodePoint" (func $JSString__fromCodePoint (param i32) (result (ref extern))))')
         expect(r.wat).toContain('(import "wasm:js-string" "length" (func $JSString__length (param externref) (result i32)))')

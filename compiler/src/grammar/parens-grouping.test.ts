@@ -127,10 +127,10 @@ describe('parens-optional-grouping: backward compatibility', () => {
     })
 
     test('existing bare $fn types still parse', () => {
-        expect(parseOk(`@global cb := 0;`)).toBe(true)
+        expect(parseOk(`cb := 0;`)).toBe(true)
     })
 
     test('existing nullary bare $fn types still parse', () => {
-        expect(parseOk(`@global thunk := 0;`)).toBe(true)
+        expect(parseOk(`thunk := 0;`)).toBe(true)
     })
 })

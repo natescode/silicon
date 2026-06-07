@@ -4,8 +4,8 @@
  *
  * The capstone test for Workstream B: a Silicon-side stdlib helper
  * (`vec_map_i32_i32`) accepts a first-class function value (an i32
- * obtained via `&@fnref name`), iterates over the source Vec,
- * dispatches to the callback via `&@call_indirect cb, x`, and pushes
+ * obtained via `@fnref(name)`), iterates over the source Vec,
+ * dispatches to the callback via `@call_indirect(cb, x)`, and pushes
  * the results into a new Vec.  Confirms the entire chain works
  * end-to-end:
  *
@@ -57,12 +57,12 @@ describe('Phase 5a-5 + 5d-4: Vec.map proof', () => {
     test('vec_map_i32_i32 applies the callback to each element', async () => {
         const ex = await compileAndRun({
             test_double_sum: `{
-                @local v := &vec_new 4;
-                &vec_push_i32 v, 1;
-                &vec_push_i32 v, 2;
-                &vec_push_i32 v, 3;
-                @local doubled := &vec_map_i32_i32 v, (&@fnref double);
-                (&vec_get_i32 doubled, 0) + (&vec_get_i32 doubled, 1) + (&vec_get_i32 doubled, 2)
+                @mut v := vec_new(4);
+                vec_push_i32(v, 1);
+                vec_push_i32(v, 2);
+                vec_push_i32(v, 3);
+                @mut doubled := vec_map_i32_i32(v, @fnref(double));
+                vec_get_i32(doubled, 0) + vec_get_i32(doubled, 1) + vec_get_i32(doubled, 2)
             }`,
         }, `\\\\ double (Int) -> Int
 @fn double x := x * 2;`)
@@ -72,12 +72,12 @@ describe('Phase 5a-5 + 5d-4: Vec.map proof', () => {
     test('vec_map_i32_i32 preserves length', async () => {
         const ex = await compileAndRun({
             test_len: `{
-                @local v := &vec_new 4;
-                &vec_push_i32 v, 10;
-                &vec_push_i32 v, 20;
-                &vec_push_i32 v, 30;
-                @local out := &vec_map_i32_i32 v, (&@fnref identity);
-                &vec_len out
+                @mut v := vec_new(4);
+                vec_push_i32(v, 10);
+                vec_push_i32(v, 20);
+                vec_push_i32(v, 30);
+                @mut out := vec_map_i32_i32(v, @fnref(identity));
+                vec_len(out)
             }`,
         }, `\\\\ identity (Int) -> Int
 @fn identity x := x;`)
@@ -87,11 +87,11 @@ describe('Phase 5a-5 + 5d-4: Vec.map proof', () => {
     test('vec_map_i32_i32 returns a new Vec (source unchanged)', async () => {
         const ex = await compileAndRun({
             test_source_unchanged: `{
-                @local v := &vec_new 4;
-                &vec_push_i32 v, 5;
-                &vec_push_i32 v, 6;
-                &vec_map_i32_i32 v, (&@fnref add_one);
-                (&vec_get_i32 v, 0) + (&vec_get_i32 v, 1)
+                @mut v := vec_new(4);
+                vec_push_i32(v, 5);
+                vec_push_i32(v, 6);
+                vec_map_i32_i32(v, @fnref(add_one));
+                vec_get_i32(v, 0) + vec_get_i32(v, 1)
             }`,
         }, `\\\\ add_one (Int) -> Int
 @fn add_one x := x + 1;`)
@@ -103,13 +103,12 @@ describe('Phase 5a-5 + 5d-4: Vec.map proof', () => {
         // is data-driven (the table index), not codegen-fixed.
         const ex = await compileAndRun({
             test_two_maps: `{
-                @local v := &vec_new 4;
-                &vec_push_i32 v, 10;
-                &vec_push_i32 v, 20;
-                @local doubled := &vec_map_i32_i32 v, (&@fnref double);
-                @local incremented := &vec_map_i32_i32 v, (&@fnref add_one);
-                (&vec_get_i32 doubled, 0) + (&vec_get_i32 doubled, 1)
-                + (&vec_get_i32 incremented, 0) + (&vec_get_i32 incremented, 1)
+                @mut v := vec_new(4);
+                vec_push_i32(v, 10);
+                vec_push_i32(v, 20);
+                @mut doubled := vec_map_i32_i32(v, @fnref(double));
+                @mut incremented := vec_map_i32_i32(v, @fnref(add_one));
+                vec_get_i32(doubled, 0) + vec_get_i32(doubled, 1) + vec_get_i32(incremented, 0) + vec_get_i32(incremented, 1)
             }`,
         }, `\\\\ double (Int) -> Int
 @fn double x := x * 2;
@@ -122,9 +121,9 @@ describe('Phase 5a-5 + 5d-4: Vec.map proof', () => {
     test('vec_map_i32_i32 of an empty Vec returns an empty Vec', async () => {
         const ex = await compileAndRun({
             test_empty: `{
-                @local v := &vec_new 4;
-                @local mapped := &vec_map_i32_i32 v, (&@fnref add_one);
-                &vec_len mapped
+                @mut v := vec_new(4);
+                @mut mapped := vec_map_i32_i32(v, @fnref(add_one));
+                vec_len(mapped)
             }`,
         }, `\\\\ add_one (Int) -> Int
 @fn add_one x := x + 1;`)

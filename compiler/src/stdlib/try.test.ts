@@ -2,10 +2,10 @@
 /**
  * Phase 5a-3 — `@try` unwrap shorthand for Result.
  *
- * Compiles a Silicon program that uses `&@try r` inside a function that
+ * Compiles a Silicon program that uses `@try(r)` inside a function that
  * itself returns Result[U, E], and verifies the runtime behaviour:
- *   - When r is Ok(v), `&@try r` evaluates to v and execution continues.
- *   - When r is Err(e), `&@try r` short-circuits the enclosing function,
+ *   - When r is Ok(v), `@try(r)` evaluates to v and execution continues.
+ *   - When r is Err(e), `@try(r)` short-circuits the enclosing function,
  *     propagating the original Err pointer unchanged.
  */
 
@@ -43,16 +43,15 @@ describe('Phase 5a-3: @try unwrap shorthand', () => {
         const ex = await compileAndRun(`
             \\\\ double (Result[Int, Int]) -> Result[Int, Int]
             @fn double r := {
-                @local v := &@try r;
-                &Ok (v * 2)
+                @mut v := @try(r);
+                Ok(v * 2)
             };
-            \\\\ test_ok () -> Int
-            @fn test_ok  := {
-                @local r := &double (&Ok 21);
-                &result_unwrap_or r, 0
+            \\\\ test_ok Int
+            @fn test_ok := {
+                @mut r := double(Ok(21));
+                result_unwrap_or(r, 0)
             };
-            @export test_ok;
-        `)
+            @export test_ok;`)
         expect(ex.test_ok()).toBe(42)
     })
 
@@ -64,22 +63,21 @@ describe('Phase 5a-3: @try unwrap shorthand', () => {
         const ex = await compileAndRun(`
             \\\\ double (Result[Int, Int]) -> Result[Int, Int]
             @fn double r := {
-                @local v := &@try r;
-                &Ok (v * 2)
+                @mut v := @try(r);
+                Ok(v * 2)
             };
-            \\\\ test_err_unwrap () -> Int
-            @fn test_err_unwrap  := {
-                @local r := &double (&Err 99);
-                &result_unwrap_or r, 1234
+            \\\\ test_err_unwrap Int
+            @fn test_err_unwrap := {
+                @mut r := double(Err(99));
+                result_unwrap_or(r, 1234)
             };
-            \\\\ test_err_is_ok () -> Int
-            @fn test_err_is_ok  := {
-                @local r := &double (&Err 99);
-                &result_is_ok r
+            \\\\ test_err_is_ok Int
+            @fn test_err_is_ok := {
+                @mut r := double(Err(99));
+                result_is_ok(r)
             };
             @export test_err_unwrap;
-            @export test_err_is_ok;
-        `)
+            @export test_err_is_ok;`)
         expect(ex.test_err_unwrap()).toBe(1234)  // default used → Err
         expect(ex.test_err_is_ok()).toBe(0)      // result_is_ok == false
     })
@@ -92,18 +90,17 @@ describe('Phase 5a-3: @try unwrap shorthand', () => {
         const ex = await compileAndRun(`
             \\\\ double (Result[Int, Int]) -> Result[Int, Int]
             @fn double r := {
-                @local v := &@try r;
-                &Ok (v * 2)
+                @mut v := @try(r);
+                Ok(v * 2)
             };
-            \\\\ test_err_value () -> Int
-            @fn test_err_value  := {
-                @local r := &double (&Err 7777);
+            \\\\ test_err_value Int
+            @fn test_err_value := {
+                @mut r := double(Err(7777));
                 # Err's error field is at offset +4 (same slot as Ok's value
                 # under @struct's pad-to-max layout).
-                &WASM::i32_load (r + 4)
+                WASM::i32_load(r + 4)
             };
-            @export test_err_value;
-        `)
+            @export test_err_value;`)
         expect(ex.test_err_value()).toBe(7777)
     })
 
@@ -111,26 +108,29 @@ describe('Phase 5a-3: @try unwrap shorthand', () => {
         const ex = await compileAndRun(`
             \\\\ inner (Int) -> Result[Int, Int]
             @fn inner x := {
-                &@if x > 0, { &Ok (x * 10) }, { &Err x }
+                @if(x > 0, {
+                    Ok(x * 10)
+                }, {
+                    Err(x)
+                })
             };
             \\\\ outer (Int) -> Result[Int, Int]
             @fn outer x := {
-                @local v := &@try (&inner x);
-                &Ok (v + 1)
+                @mut v := @try(inner(x));
+                Ok(v + 1)
             };
-            \\\\ test_chained_ok () -> Int
-            @fn test_chained_ok  := {
-                @local r := &outer 4;
-                &result_unwrap_or r, 0
+            \\\\ test_chained_ok Int
+            @fn test_chained_ok := {
+                @mut r := outer(4);
+                result_unwrap_or(r, 0)
             };
-            \\\\ test_chained_err () -> Int
-            @fn test_chained_err  := {
-                @local r := &outer (0 - 5);
-                &result_unwrap_or r, 999
+            \\\\ test_chained_err Int
+            @fn test_chained_err := {
+                @mut r := outer(0 - 5);
+                result_unwrap_or(r, 999)
             };
             @export test_chained_ok;
-            @export test_chained_err;
-        `)
+            @export test_chained_err;`)
         expect(ex.test_chained_ok()).toBe(41)   // 4 * 10 + 1
         expect(ex.test_chained_err()).toBe(999) // Err propagated through both fns
     })
@@ -139,13 +139,12 @@ describe('Phase 5a-3: @try unwrap shorthand', () => {
         let threw = false
         try {
             await compileAndRun(`
-                \\\\ bad () -> Result[Int, Int]
-                @fn bad  := {
-                    @local v := &@try (&Ok 1), (&Ok 2);
-                    &Ok v
+                \\\\ bad Result[Int, Int]
+                @fn bad := {
+                    @mut v := @try(Ok(1), Ok(2));
+                    Ok(v)
                 };
-                @export bad;
-            `)
+                @export bad;`)
         } catch (e) {
             threw = true
             expect((e as Error).message).toContain('@try expects exactly 1 argument')

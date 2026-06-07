@@ -10,18 +10,18 @@ GC, `Rc<T>` (single-threaded reference count) is in the stdlib:
 ```silicon
 @use 'rc';
 
-@struct Node value Int, next Rc[Node];
+@type Node := { value Int, next Rc[Node] };
 
 @fn main := {
-    @local tail := &Rc::new (&Node 3, &Rc::nil);
-    @local mid  := &Rc::new (&Node 2, &Rc::clone &tail);
-    @local head := &Rc::new (&Node 1, &Rc::clone &mid);
+    @mut tail := Rc::new(Node(3, Rc::nil()));
+    @mut mid  := Rc::new(Node(2, Rc::clone(tail)));
+    @mut head := Rc::new(Node(1, Rc::clone(mid)));
     # head, mid, tail all share ownership of tail
     0
 };
 ```
 
-`&Rc::clone` bumps the refcount; the Rc decrements on drop and frees
+`Rc::clone` bumps the refcount; the Rc decrements on drop and frees
 the payload when the count reaches zero.
 
 Under `--target=wasm-gc` the Rc identity shim is used (host GC

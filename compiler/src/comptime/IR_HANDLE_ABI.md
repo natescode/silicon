@@ -238,18 +238,18 @@ After migration (`src/strata/if.si`):
 
 ```silicon
 @stratum IfStmt := {
-    &Compiler::register::keyword '@if';
-    &Compiler::on::lower '@if', IfStmt_lower;
+    Compiler::register::keyword('@if');
+    Compiler::on::lower('@if', IfStmt_lower);
 };
 
-@fn IfStmt_lower node:Int := {
-    @let condN := &compiler_arg(node, 0);
-    @let thenN := &compiler_arg(node, 1);
-    @let elseN := &compiler_arg(node, 2);
-    @let cond  := &compiler_lowerExpr(condN);
-    @let then  := &compiler_lowerExpr(thenN);
-    @let else_ := &compiler_lowerExprIfDefined(elseN);
-    &compiler_ir_makeIf(cond, then, else_, 0)   # 0 = wasmType inferred
+@fn IfStmt_lower node Int := {
+    condN := compiler_arg(node, 0);
+    thenN := compiler_arg(node, 1);
+    elseN := compiler_arg(node, 2);
+    cond  := compiler_lowerExpr(condN);
+    then  := compiler_lowerExpr(thenN);
+    else_ := compiler_lowerExprIfDefined(elseN);
+    compiler_ir_makeIf(cond, then, else_, 0)   # 0 = wasmType inferred
 };
 ```
 
@@ -286,7 +286,7 @@ the function's i32 result.  *Chosen.*
 **B.  `set_result` import.**  Handler calls `compiler_set_result(h)`
 to record its result; export returns void.
 
-Reason for A: simpler, lines up with how `@fn handler n:Int := { ... }`
+Reason for A: simpler, lines up with how `@fn handler n Int := { ... }`
 naturally compiles.  The trailing expression of the handler body lowers
 to a return value already.  No side-channel needed.
 

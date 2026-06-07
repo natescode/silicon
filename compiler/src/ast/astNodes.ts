@@ -226,10 +226,10 @@ export interface Block {
     sourceLocation?: SourceLocation
 }
 
-/** `&@as Type, expr` — compile-time type ascription.  Transparent at runtime
- *  (lowers to `expr`); pins the expression's type to `typeAnnotation` and
- *  errors on mismatch.  The escape hatch for the rare expression inference
- *  can't pin (e.g. `&None`, raw `&alloc` pointers). */
+/** Compile-time type ascription (RETIRED in ADR-0020 — the surface `&@as` form
+ *  no longer parses; this node type is retained only for legacy AST compatibility).
+ *  Was transparent at runtime (lowers to `expr`); pinned the expression's type to
+ *  `typeAnnotation`. ADR-0020 uses a typed binding instead: a `\\ name Type` line. */
 export interface Ascription {
     type: 'Ascription'
     expression: ASTNode
