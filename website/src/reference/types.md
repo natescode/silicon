@@ -35,10 +35,10 @@ keyword cast: `@toInt64(42)`.
 case-insensitive; `_` digit separators allowed) — e.g. `0xFF` (255), `0b1010`
 (10), `0o17` (15).
 
-**Operator precedence** is conventional (no longer flat left-to-right): `*` `/`
-`%` bind tighter than `+` `-` `++`, which bind tighter than the comparisons
-(`< > <= >=`, then `== !=`), then `&&`, then `||`. So `2 + 3 * 4` is `14`.
-Operators are left-associative; parenthesize to override.
+**No operator precedence** (by design): binary operators fold strictly
+left-to-right, so `2 + 3 * 4` is `20` (`(2 + 3) * 4`), **not** `14`. There is no
+precedence table — express precedence with **parentheses**: `2 + (3 * 4)`. This
+keeps the parser trivially simple and bootstrappable (Pony/Smalltalk lineage).
 
 ## Float
 

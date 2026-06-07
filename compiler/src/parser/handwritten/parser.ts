@@ -49,22 +49,6 @@ function ohmFloatValue(text: string): string {
 
 const ZERO_LOC: SourceLocation = { startLine: 0, startColumn: 0, endLine: 0, endColumn: 0 }
 
-// Binary-operator precedence (higher binds tighter).  Operators NOT listed here
-// (user-defined operators, the match-arm `=>` / `|`) fall to DEFAULT_BIN_PREC —
-// the loosest level — so arithmetic/comparison/logic group before they do, and
-// equal-precedence operators left-fold exactly as before.  This replaces the old
-// flat left-to-right fold (which made `2 + 3 * 4` parse as `(2 + 3) * 4`).
-const BIN_PREC: Record<string, number> = {
-    '*': 7, '/': 7, '%': 7,
-    '+': 6, '-': 6, '++': 6,
-    '<': 5, '>': 5, '<=': 5, '>=': 5,
-    '==': 4, '!=': 4,
-    '&&': 3,
-    '||': 2,
-}
-const DEFAULT_BIN_PREC = 1
-const binPrec = (op: string): number => BIN_PREC[op] ?? DEFAULT_BIN_PREC
-
 class Parser {
     private readonly toks: Token[]
     private readonly lineStarts: number[]
@@ -518,27 +502,23 @@ class Parser {
         return ASTFactory.functionCall(callee, false, args as ExpressionStart[])
     }
 
-    // ExpressionStart = ExpressionEnd (BinOp ExpressionEnd)*  — parsed with
-    // precedence climbing (left-associative) so operators bind per BIN_PREC.
+    // ExpressionStart = ExpressionEnd (BinOp ExpressionEnd)*
+    //
+    // By design Silicon has NO operator precedence table: binary operators form a
+    // flat, left-to-right chain (`2 + 3 * 4` is `(2 + 3) * 4`).  Precedence is
+    // expressed with parentheses or nested calls.  This keeps the parser trivially
+    // simple/bootstrappable (Pony/Smalltalk lineage).  Do NOT reintroduce a
+    // precedence table — see docs/grammar.ebnf.
     private parseExpressionStart(): ASTNode {
-        return this.parseBinOpChain(this.parseExpressionEnd(), 0)
+        return this.parseBinOpChain(this.parseExpressionEnd())
     }
 
-    /** Precedence-climbing binary-expression parser.  `left` is the already-parsed
-     *  left operand; only operators with precedence >= `minPrec` are folded in. */
-    private parseBinOpChain(left: ASTNode, minPrec: number): ASTNode {
+    private parseBinOpChain(left: ASTNode): ASTNode {
         let result = left
         while (this.at('op')) {
-            const op = this.peek().text
-            const prec = binPrec(op)
-            if (prec < minPrec) break
-            this.next()  // consume the operator
-            let right = this.parseExpressionEnd()
-            // Left-associative: fold any strictly-tighter operators into the RHS.
-            while (this.at('op') && binPrec(this.peek().text) > prec) {
-                right = this.parseBinOpChain(right, prec + 1)
-            }
-            result = ASTFactory.binOp(result as ExpressionStart, op, right as any)
+            const operator = this.next().text
+            const right = this.parseExpressionEnd()
+            result = ASTFactory.binOp(result as ExpressionStart, operator, right as any)
         }
         return result
     }

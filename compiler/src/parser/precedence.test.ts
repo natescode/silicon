@@ -1,11 +1,12 @@
 // SPDX-License-Identifier: MIT
 /**
- * Operator precedence + non-decimal integer literals.
+ * Expression evaluation (flat, no precedence) + non-decimal integer literals.
  *
- * Silicon used to fold binary operators flat left-to-right (`2 + 3 * 4` == 20).
- * The parser now uses precedence climbing.  And the lexer used to reject prefixed
- * bases (`0x..` lexed as `0` + identifier `x..`); it now accepts hex/binary/octal.
- * Each case compiles a `probe` and runs it under the host target.
+ * BY DESIGN Silicon has NO operator precedence table: binary operators fold
+ * strictly left-to-right (`2 + 3 * 4` == 20, i.e. `(2 + 3) * 4`).  Precedence is
+ * expressed with parentheses.  These tests LOCK that behaviour so a precedence
+ * table can't be reintroduced silently (see docs/grammar.ebnf).  The lexer also
+ * accepts prefixed bases (0x/0b/0o).  Each case compiles a `probe` and runs it.
  */
 import { describe, test, expect } from 'bun:test'
 import { compile } from '../caas/index'
@@ -18,18 +19,19 @@ async function evalInt(expr: string): Promise<number> {
     return (mod.instance.exports as any).probe() as number
 }
 
-describe('operator precedence (climbing, left-associative)', () => {
-    test('multiplicative binds tighter than additive', async () => {
-        expect(await evalInt('2 + 3 * 4')).toBe(14)
-        expect(await evalInt('2 * 3 + 4')).toBe(10)
-        expect(await evalInt('1 + 2 * 3 - 4')).toBe(3)
+describe('flat left-to-right evaluation (NO precedence table — by design)', () => {
+    test('operators fold strictly left-to-right, ignoring arithmetic precedence', async () => {
+        expect(await evalInt('2 + 3 * 4')).toBe(20)      // ((2 + 3) * 4), NOT 14
+        expect(await evalInt('1 + 2 * 3 - 4')).toBe(5)   // (((1 + 2) * 3) - 4)
+        expect(await evalInt('2 * 3 + 4')).toBe(10)      // ((2 * 3) + 4)
     })
-    test('left-associativity for same precedence', async () => {
+    test('same-shape left-folds', async () => {
         expect(await evalInt('10 - 2 - 3')).toBe(5)
         expect(await evalInt('20 / 2 / 5')).toBe(2)
     })
-    test('parentheses override precedence', async () => {
+    test('parentheses are how you express precedence', async () => {
         expect(await evalInt('(2 + 3) * 4')).toBe(20)
+        expect(await evalInt('2 + (3 * 4)')).toBe(14)
     })
 })
 

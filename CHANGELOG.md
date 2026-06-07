@@ -3,11 +3,17 @@
 All notable changes to `sgl` (the Silicon compiler CLI) are recorded here.
 This project aims for [Semantic Versioning](https://semver.org/).
 
-## 0.1.4
+## 0.1.5
 
 Lands the **ADR-0020 grammar redesign** — a breaking change to Silicon's surface
-syntax — plus optional function signatures, a richer string stdlib, real operator
-precedence, and non-decimal integer literals.
+syntax — plus optional function signatures, a richer string stdlib, and
+non-decimal integer literals.
+
+> **0.1.4 was yanked.** It mistakenly added an operator-precedence table, which
+> contradicts Silicon's deliberate *no-precedence* design (binary operators fold
+> left-to-right; precedence is expressed with parentheses — see `docs/grammar.ebnf`).
+> 0.1.5 is 0.1.4 with that change reverted; the literal-prefix and other features
+> are retained.
 
 ### Changed — ⚠️ breaking grammar ([ADR 0020](docs/adr/0020-odin-inspired-grammar.md))
 
@@ -18,9 +24,7 @@ precedence, and non-decimal integer literals.
   paren-free call form are removed.
 - **Types are space-separated** (no colon): params and fields are `name Type`;
   function types live on a `\\` signature line (`\\ add (Int, Int) -> Int`).
-- **Operator precedence** is now conventional (precedence climbing), replacing the
-  flat left-to-right fold: `2 + 3 * 4` is `14` (was `20`). Left-associative;
-  parenthesize to override. Existing sources migrate via `tools/migrate-adr0020.ts`.
+- Existing sources migrate via `tools/migrate-adr0020.ts`.
 
 ### Added
 

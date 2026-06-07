@@ -172,18 +172,9 @@ Assignment  = Namespace "=" Expression ;
 (* ── Expressions ────────────────────────────────────────────────────────── *)
 
 (*
-  Expressions are left-associative binary chains over a postfix-called primary,
-  parsed with PRECEDENCE CLIMBING.  Precedence (tightest -> loosest):
-      *  /  %                          (multiplicative)
-      +  -  ++                         (additive / concat)
-      <  >  <=  >=                     (relational)
-      ==  !=                           (equality)
-      &&                              (logical and)
-      ||                              (logical or)
-      everything else                 (user operators, match `=>` / `|`)
-  All operators are left-associative; parentheses override.  (Historical note:
-  the parser once folded flat left-to-right, so `2 + 3 * 4` was `(2+3)*4`; it
-  now correctly yields `14`.)
+  Expressions are left-associative binary chains over a postfix-called primary.
+  There is no precedence table: all operators associate left-to-right.
+  Precedence is expressed via parentheses or nested calls.
 *)
 
 Expression  = ExprEnd { BinOp ExprEnd } ;
