@@ -3,6 +3,52 @@
 All notable changes to `sgl` (the Silicon compiler CLI) are recorded here.
 This project aims for [Semantic Versioning](https://semver.org/).
 
+## 0.1.4
+
+Lands the **ADR-0020 grammar redesign** — a breaking change to Silicon's surface
+syntax — plus optional function signatures, a richer string stdlib, real operator
+precedence, and non-decimal integer literals.
+
+### Changed — ⚠️ breaking grammar ([ADR 0020](docs/adr/0020-odin-inspired-grammar.md))
+
+- **Bare definitions.** `name := value` is an immutable binding; `@mut name := …`
+  is mutable; `@fn name params := …` is a function; `@type` / `@enum` declare
+  types. Removed `@local`, `@global`, `@var`, `@let`, `@struct`, `@type_sum`.
+- **Always-parenthesized calls.** `add(2, 3)`. The `&` call sigil and every
+  paren-free call form are removed.
+- **Types are space-separated** (no colon): params and fields are `name Type`;
+  function types live on a `\\` signature line (`\\ add (Int, Int) -> Int`).
+- **Operator precedence** is now conventional (precedence climbing), replacing the
+  flat left-to-right fold: `2 + 3 * 4` is `14` (was `20`). Left-associative;
+  parenthesize to override. Existing sources migrate via `tools/migrate-adr0020.ts`.
+
+### Added
+
+- **Optional function signatures.** A `@fn` whose parameters have no `\\`
+  signature has its parameter types **inferred monomorphically from its call
+  sites**; a clear `E0015` fires only when inference genuinely can't decide
+  (no concrete call sites, or call sites disagree — reach for `[T]`).
+- **Non-decimal integer literals:** `0x` hexadecimal, `0b` binary, `0o` octal
+  (case-insensitive prefix, `_` digit separators).
+- **String stdlib** ([ADR 0022](docs/adr/0022-string-byte-views-and-builder.md)):
+  - `str_bytes(s) -> Slice[u8]` — byte view that hides the length-header
+    arithmetic (no manual `str_ptr(s) + 4`).
+  - `str_code_point_count(s)` — Unicode code-point count (≠ byte length).
+  - `str_width(s)` — display **column** width (experimental, East-Asian-Width
+    approximation; no grapheme/ZWJ handling yet).
+  - `StrBuilder` (`@use 'strbuilder'`): `sb_new` / `sb_push_byte` / `sb_push_str`
+    / `sb_push_code_point` (UTF-8 encode) / `sb_finish` — build a `String` without
+    pointer math.
+
+### Docs
+
+- New: [ADR 0021](docs/adr/0021-bounded-type-inference.md) (bounded inference,
+  draft), [ADR 0022](docs/adr/0022-string-byte-views-and-builder.md), the
+  `Span`/`View`/`Slice` addendum to ADR 0011, the optional-signatures-inference
+  reference, the LSP-completion plan, and an Arrays-vs-Vecs reference.
+- The docs→site sync now rewrites repo-relative links (to intra-site routes or
+  absolute GitHub URLs), so the website has no dead links.
+
 ## 0.1.3
 
 ### Added
