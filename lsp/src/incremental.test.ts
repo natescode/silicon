@@ -97,13 +97,30 @@ describe('LSP rides the incremental compiler Workspace', () => {
         expect(help?.activeParameter).toBe(1)
     })
 
+    test('no-signature inference stays consistent across edits (no stale annotation)', () => {
+        const ws = new Workspace()
+        const u = uri('inf.si')
+        // No call site → x can't be inferred → E0015.
+        let doc = ws.update(u, `@fn add a, b := { a + b };\n@export add;`)!
+        expect(doc.diagnostics.some(d => d.code === 'E0015')).toBe(true)
+        // Add a concrete call → a,b infer to Int → E0015 clears.
+        doc = ws.update(u, `@fn add a, b := { a + b };\ns := add(1, 2);\n@export add;`)!
+        expect(doc.diagnostics.some(d => d.code === 'E0015')).toBe(false)
+        // Remove the call again → the earlier-inferred annotation must NOT linger;
+        // E0015 returns (matches a fresh compile of the same source).
+        doc = ws.update(u, `@fn add a, b := { a + b };\n@export add;`)!
+        expect(doc.diagnostics.some(d => d.code === 'E0015')).toBe(true)
+        const fresh = new Workspace().update(uri('inf2.si'), `@fn add a, b := { a + b };\n@export add;`)!
+        expect(doc.diagnostics.map(d => d.code).sort()).toEqual(fresh.diagnostics.map(d => d.code).sort())
+    })
+
     test('a typo diagnostic yields a "did you mean" code action', () => {
         const ws = new Workspace()
         const u = uri('fix.si')
         // An unbound identifier with a near-miss in scope carries a
         // "did you mean 'X'?" hint, which the code-action provider turns into a
-        // rename quick-fix.
-        const doc = ws.update(u, `@fn greet x := { x };\ng := 1;`)!
+        // rename quick-fix.  `gg` is a typo of the in-scope global `g`.
+        const doc = ws.update(u, `@fn greet := { gg };\ng := 1;`)!
         const typo = doc.diagnostics.find(d => d.code === 'E0004' && /did you mean/i.test(d.hint ?? ''))
         expect(typo).toBeDefined()
         const actions = getCodeActions(typo!, doc.source)
