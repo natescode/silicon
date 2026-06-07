@@ -38,10 +38,11 @@ export default defineConfig({
             { ...ebnfGrammar, name: 'ebnf' },
         ],
     },
-    // Synced docs (from repo docs/) carry relative links that point at
-    // sibling repo files (ADRs, .wit, user-stories HTML) which don't
-    // exist on the site.  We warn during sync and ignore at build.
-    // External links and intra-site links still work.
+    // Synced docs (from repo docs/) carry repo-relative links.  sync-docs.ts now
+    // REWRITES them: links to other synced docs become intra-site routes, and
+    // links to repo files the site doesn't host (ADRs, .wit, source, archive
+    // HTML) become absolute GitHub URLs — so synced pages have no dead links.
+    // `ignoreDeadLinks` stays as a safety net (e.g. a not-yet-merged file path).
     ignoreDeadLinks: true,
 
     head: [
@@ -141,6 +142,7 @@ export default defineConfig({
                         { text: 'First-class functions', link: '/examples/first-class-fns' },
                         // Systems & platforms
                         { text: 'C interop (@extern)', link: '/examples/native' },
+                        { text: 'Rotating cube (raylib FFI)', link: '/examples/cube' },
                         { text: 'Arena allocation', link: '/examples/arena' },
                         { text: 'Rc smart pointer', link: '/examples/rc' },
                         // Metaprogramming

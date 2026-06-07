@@ -68,7 +68,7 @@ call $DrawCubeV(:Vector3 %pos, :Vector3 %size, :Color %c)
 So Silicon does **not** need to implement the eightbyte classifier. It needs to
 (a) emit the right `type :T` declarations and (b) hand QBE aggregate values at
 the call boundary. The current QBE backend emits *zero* aggregate declarations
-([`src/codegen/qbe/lower.ts:267`](../src/codegen/qbe/lower.ts) — `@struct` /
+([`src/codegen/qbe/lower.ts:267`](../compiler/src/codegen/qbe/lower.ts) — `@struct` /
 `@type` produce no top-level QBE output; field access is generated functions
 over a flat blob).
 
@@ -132,13 +132,13 @@ keyword is a stratum, so **no grammar change**, per the project's
 ## 4. Codegen wiring (once layout exists)
 
 All on the QBE path; `siliconTypeToQbe`/`siliconTypeToQbeReturn` and `lowerCall`
-in [`src/codegen/qbe/`](../src/codegen/qbe/) are the touch-points.
+in [`src/codegen/qbe/`](../compiler/src/codegen/qbe/) are the touch-points.
 
 1. **Type emission.** For each `@cstruct` reachable from an `@extern` signature,
    emit a QBE `type :T = { … }` (nested types reference other `:T`). New pass in
    `lowerTopLevel`.
 2. **Argument passing.** `lowerCall` currently types each arg by its
-   `inferredType → siliconTypeToQbe` ([`lower.ts:816`](../src/codegen/qbe/lower.ts)).
+   `inferredType → siliconTypeToQbe` ([`lower.ts:816`](../compiler/src/codegen/qbe/lower.ts)).
    When the callee parameter is a `@cstruct`, pass `:T %ptr` (the value is the
    pointer to the C-layout block) and let QBE classify.
 3. **Returns.** Support `function :T $f(...)` and `%r =:T call $f(...)`;

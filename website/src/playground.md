@@ -7,7 +7,7 @@ footer: false
 ---
 
 <iframe
-  src="/play/"
+  src="/play/index.html"
   title="Silicon Playground"
   style="position:fixed;left:0;top:var(--vp-nav-height);width:100vw;height:calc(100vh - var(--vp-nav-height));border:0"
 ></iframe>

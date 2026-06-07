@@ -12,7 +12,7 @@ memory, the standard library, platforms, and Silicon's metaprogramming system,
 
 Silicon compiles to WebAssembly (and, via QBE, to native binaries). Everything
 below runs with the `sgl` compiler — install it from
-[Getting Started](getting-started.md).
+[Getting Started](/guide/getting-started).
 
 > Convention: a value binding is **bare** (`name := value`, immutable); `@mut`
 > marks a mutable binding, `@fn` a function, and `@type` a type. Calls are
@@ -223,14 +223,14 @@ size(Circle(10));               # constructors are Circle / Square
 An **enum** is a set of payload-free variants:
 
 ```silicon
-@enum Color := Red | Green | Blue;
+@type Color := $Red | $Green | $Blue;
 
 \\ code (Color) -> Int
 @fn code c := {
     @match(c,
-        Color::Red   => 1,
-        Color::Green => 2,
-        Color::Blue  => 3)
+        $Red   => 1,
+        $Green => 2,
+        $Blue  => 3)
 };
 ```
 
@@ -272,7 +272,7 @@ picked := option_unwrap_or(Some(42), 0);     # 42
 fallen := option_unwrap_or(None(), 7);       # 7
 
 r := Ok(42);
-v := result_unwrap_or(r, 0);                 # 42
+v := result_unwrap_or(r, 0);                  # 42
 ```
 
 Helpers: `option_is_some`, `option_is_none`, `result_is_ok`, `result_is_err`.
@@ -295,7 +295,7 @@ response := @with_arena({
 ```
 
 `Rc[T]` (reference counting) is available via `@use 'rc'`. See
-[`memory.md`](memory.md) for the full model.
+[`memory.md`](/guide/memory) for the full model.
 
 ---
 
@@ -303,7 +303,7 @@ response := @with_arena({
 
 The stdlib wraps low-level WASI and intrinsics behind ergonomic `snake_case`
 functions, so basic programs read like a high-level language. Full reference:
-[`stdlib.md`](stdlib.md).
+[`stdlib.md`](/guide/stdlib).
 
 ```silicon
 @use 'io';      # print, println, print_int/float/bool, eprint, read_line, exit
@@ -348,7 +348,7 @@ or `sgl.toml [build] platform`.
 The pure stdlib modules (`mem`, `num`, `str`) compile on **all** platforms;
 only I/O differs. On the JS host, JavaScript strings are the `JSString` type
 (WASM JS String Builtins) with a `String` ↔ `JSString` bridge — see
-[`platforms.md`](platforms.md).
+[`js-string-builtins.md`](https://github.com/NatesCode/silicon/blob/main/docs/js-string-builtins.md).
 
 ```silicon
 # bun platform — the portable stdlib + the JS console
@@ -374,11 +374,11 @@ loaded into the compiler, that say how a construct lowers.
 ```
 
 This means you can add your own keywords and operators **without touching the
-grammar or the compiler's TypeScript** — you write a stratum that lowers to
-existing `Compiler::*` calls. The built-in language is itself a library of
+grammar or the compiler's TypeScript** — you write a stratum that calls
+`Compiler::*(…)` to register and lower the new construct. The built-in language is itself a library of
 strata under `src/strata/`. See the
-[Strata authoring guide](../reference/strata-authoring.md) and
-[`strata.md`](strata.md).
+[Strata authoring guide](/reference/strata-authoring) and
+[`strata.md`](/reference/strata).
 
 Why this matters: it keeps the core language small and bootstrappable while
 letting the surface syntax grow as a library — the same philosophy as the
@@ -388,11 +388,11 @@ standard library wrapping WASI.
 
 ## Where to go next
 
-- **[Getting Started](getting-started.md)** — install + first project.
-- **[Standard Library](stdlib.md)** — every shipped module.
-- **[Memory model](memory.md)** — arenas, escape, `Rc[T]`.
-- **[Platforms](platforms.md)** — WASM / native / web-bun targets and the JS-host string story.
-- **[Strata authoring](../reference/strata-authoring.md)** — add your own syntax.
-- **[Grammar](../reference/grammar.md)** — the authoritative grammar reference.
-- **Examples** — [`examples/`](../examples/index.md): arenas, generics, sum types,
-  first-class functions, strata, and the bun/web demos.
+- **[Getting Started](/guide/getting-started)** — install + first project.
+- **[Standard Library](/guide/stdlib)** — every shipped module.
+- **[Memory model](/guide/memory)** — arenas, escape, `Rc[T]`.
+- **[JS String Builtins](https://github.com/NatesCode/silicon/blob/main/docs/js-string-builtins.md)** — the JS-host string story.
+- **[Strata authoring](/reference/strata-authoring)** — add your own syntax.
+- **[Grammar](/reference/grammar)** — the authoritative EBNF.
+- **Examples** — [`examples/`](https://github.com/NatesCode/silicon/tree/main/examples): fizzbuzz, calculator, strings,
+  floats, web letters, and the bun/web demos.

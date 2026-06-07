@@ -169,7 +169,7 @@ class SemanticModel {
 
 ### `Symbol`
 
-A definition site — a name introduced by `@fn`, `@type`, `@mut`, a bare binding, etc.
+A definition site — a name introduced by a bare binding (`name := value`), `@fn`, `@type`, `@mut`, etc.
 
 ```typescript
 interface Symbol {
@@ -471,7 +471,7 @@ const core = ws.addProject('core')
 const app  = ws.addProject('app', { target: 'wasm-gc' })
 app.addDependency(core)                         // app → core
 
-core.addDocument('core/math.si', '\\ add (Int, Int) -> Int\n@fn add x, y := { x + y };')
+core.addDocument('core/math.si', '\\ add (Int, Int)\n@fn add x, y := { x + y };')
 const main = app.addDocument('app/main.si', 'r := add(1, 2);')
 
 main.projectName                                // 'app'
@@ -576,7 +576,7 @@ return new objects — they never mutate existing ones.
 The CaaS API is part of the surface Silicon intends to stabilize; the 1.0
 stability promise takes effect at the first `1.0.0` tag (Silicon is currently
 at 0.1 / pre-1.0).  The authoritative policy is in
-[`docs/stability.md`](../stability/index.md); this section is a summary.
+[`docs/stability.md`](/stability/index); this section is a summary.
 
 ### What is stable
 

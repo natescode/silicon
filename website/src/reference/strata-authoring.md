@@ -80,7 +80,7 @@ Strata 2.0 exposes five lifecycle phases. Register handlers via
 Compiler::on::decl('@my_kw', {
     ;; runs for every `@my_kw foo := ...;` declaration the compiler sees.
     ;; you can inspect node.name, node.params, node.binding,
-    ;; emit IR via Compiler::module::push_definition,
+    ;; emit IR via Compiler::module::push_definition(...),
     ;; or stash state for the module_finalize pass.
 });
 ```
@@ -91,7 +91,7 @@ Fires once per `AST_DEFINITION` whose keyword span matches.
 
 ```silicon
 Compiler::on::callSite('my_fn', {
-    ;; runs for every `my_fn(arg0, arg1)` call.
+    ;; runs for every `my_fn(arg0, arg1);` call.
     ;; node.args is the arg list (Silicon expressions, not yet lowered).
     ;; commonly used for @try / `?`-style desugaring strata.
 });
@@ -115,7 +115,7 @@ The `@@derive` and `@@eq` strata in the standard library work this way.
 Compiler::on::module_finalize({
     ;; runs once after every user definition has been seen.
     ;; this is where generic-style strata emit their monomorphised
-    ;; concrete definitions via Compiler::module::push_definition.
+    ;; concrete definitions via Compiler::module::push_definition(...).
 });
 ```
 
@@ -125,7 +125,7 @@ No token argument — there is only one finalize phase per stratum.
 
 ```silicon
 Compiler::on::comptime('@if', {
-    ;; defines how @if(cond, then, else) evaluates at compile time
+    ;; defines how `@if(cond, then, else)` evaluates at compile time
     ;; when the arms are literal constants.  Per the dissolution plan
     ;; (`docs/comptime-via-compilation.md`), every keyword that has a
     ;; runtime stratum will eventually also have a matching on::comptime
@@ -158,9 +158,9 @@ This shapes what's allowed inside a handler body.
   `ctx::*`, `lowerExpr`, `arg`, `watId`, `resolveType`, `assertDefined`.
 - Scalar arithmetic and comparisons on `Int` (`+`, `-`, `*`, `/`, `%`,
   `==`, `!=`, `<`, `>`, `<=`, `>=`).
-- Immutable and `@mut` bindings (resolved against the body scope).
+- `name := expr;` bindings (resolved against the body scope).
 - `@if(cond, { then }, { else })` — the AST interpreter has this hardcoded.
-- `@return`, `@break`, `@continue` work as expected at the
+- Hardcoded `@return`, `@break`, `@continue` work as expected at the
   outermost handler level (but see limits below).
 
 ### What doesn't work yet
@@ -174,7 +174,7 @@ This shapes what's allowed inside a handler body.
   from inside a handler.
 - **Generic user-defined Silicon functions called from a handler.**  Same
   reason as recursion — the interpreter doesn't dispatch arbitrary `@fn`
-  calls.  Stick to `Compiler::*` calls + arithmetic + immutable / `@mut` bindings.
+  calls.  Stick to `Compiler::*` calls + arithmetic + bare bindings.
 - **`@match` inside a handler body.**  The AST interpreter doesn't lower
   match arms.  Use chained `@if` instead.
 - **Strings other than as literal arguments to `Compiler::*` calls.**
@@ -232,23 +232,19 @@ unchanged.
 Two scopes:
 
 ```silicon
-\\ s StateHandle
-s := Compiler::state('stratum');            ;; persists across handler calls
-                                            ;; within THIS stratum
+s := Compiler::state('stratum');     ;; persists across handler calls
+                                     ;; within THIS stratum
 
-\\ h StateHandle
-h := Compiler::state('instance');           ;; fresh per handler call
+h := Compiler::state('instance');    ;; fresh per handler call
 ```
 
 Both return a handle that supports:
 
 ```silicon
 s::set('key', value);
-\\ v Any
 v := s::get('key');
-\\ exists Bool
 exists := s::has('key');
-s::each({   ;; for each (k, v) in this bucket
+s::each({  ;; for each (k, v) in this bucket
     ;; ...
 });
 ```
@@ -275,13 +271,9 @@ final module exactly once.
 ## AST operations
 
 ```silicon
-\\ h ASTHandle
 h := Compiler::ast::capture_template(node, 'pre');
-\\ h2 ASTHandle
 h2 := Compiler::ast::clone(h);
-\\ h3 ASTHandle
 h3 := Compiler::ast::substitute(h, ${ T = IntType, U = FloatType });
-\\ h4 ASTHandle
 h4 := Compiler::ast::patch_types(h, ${ T = IntType });
 ```
 
@@ -298,20 +290,13 @@ typed-IR-carrying nodes.
 The full `type` API is exposed at compile time:
 
 ```silicon
-\\ int_t SiliconType
 int_t   := Compiler::type::int();
-\\ fn_t SiliconType
 fn_t    := Compiler::type::function([int_t, int_t], int_t);
-\\ var_t SiliconType
 var_t   := Compiler::type::variable('T');
-\\ arr_int SiliconType
 arr_int := Compiler::type::array(int_t);
-\\ same Bool
 same    := Compiler::type::equals(int_t, int_t);
-\\ s_int SiliconType
-s_int   := Compiler::type::substitute(fn_t, ${ T = int_t });
-\\ pretty Str
-pretty  := Compiler::type::format(fn_t);               ;; "(Int, Int) -> Int"
+s_int   := Compiler::type::substitute(fn_t, { T = int_t });
+pretty  := Compiler::type::format(fn_t);       ;; "(Int, Int) -> Int"
 ```
 
 Substitution is single-binding per call; chain calls for multi-binding.
@@ -372,10 +357,9 @@ Allowed and intentional — Strata composes via the observer pattern:
 };
 
 @stratum CountDecl := {
-    Compiler::on::decl('@logged', {     ;; same token, different handler
-        \\ s StateHandle
+    Compiler::on::decl('@logged', {  ;; same token, different handler
         s := Compiler::state('stratum');
-        s::set('count', (s::get('count')) + 1);
+        s::set('count', (s::get('count') + 1));
     });
 };
 ```
@@ -391,21 +375,21 @@ The `Compiler::*` surface is the **intended-stable** strata API; the promise
 takes effect at 1.0 and is meant to hold across Sigil 1.x (Silicon is currently
 at 0.1 / pre-1.0). Specifically:
 
-- `register::keyword(...)` / `register::operator(...)` — stable contract.
-- `on::decl(...)` / `on::callSite(...)` / `on::annotation(...)` / `on::module_finalize(...)` /
-  `on::comptime(...)` — stable phase names; new phases may be added; existing
+- `register::keyword` / `register::operator` — stable contract.
+- `on::decl` / `on::callSite` / `on::annotation` / `on::module_finalize` /
+  `on::comptime` — stable phase names; new phases may be added; existing
   phases will not be removed without a major version bump.
-- `state('stratum')` / `state('instance')` — stable scopes; new scopes may be
+- `state 'stratum'` / `state 'instance'` — stable scopes; new scopes may be
   added.
-- `module::push_definition(...)` / `module::push_global(...)` — stable accumulator.
+- `module::push_definition` / `module::push_global` — stable accumulator.
 - `ast::*` and `type::*` — stable APIs; new operations may be added.
-- `diag::error(...)` / `diag::warn(...)` — stable; never throws (T-5).
+- `diag::error` / `diag::warn` — stable; never throws (T-5).
 
 The **comptime engine implementation** is *not* part of the stable surface
 — what works inside a handler body grows over time:
 
-- **0.1 (today)**: AST interpreter; `Compiler::*` + scalar arithmetic + `@if(...)` +
-  immutable / `@mut` bindings (see "The comptime engine in Sigil 0.1" above).
+- **0.1 (today)**: AST interpreter; `Compiler::*` + scalar arithmetic + `@if` +
+  bare bindings (see "The comptime engine in Sigil 0.1" above).
 - **Later (after Phase 8 + 8-9)**: wasmtime-backed; full Silicon surface in
   handler bodies — `@loop`, `@match`, recursion, user-defined `@fn` calls.
   Existing handlers written against the 0.1 limits will continue to work

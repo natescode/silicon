@@ -160,7 +160,7 @@ sgl run
 
 For the full tour — types, control flow, structs, sum types, generics, error
 handling, the standard library, platforms, and strata — read the
-[**Language Overview**](overview.md). A quick reference:
+[**Language Overview**](/guide/overview). A quick reference:
 
 | Feature | Example |
 |---|---|
@@ -201,7 +201,7 @@ when the iteration produces a value the parent scope keeps:
 };
 ```
 
-See [`docs/memory.md`](memory.md) for the full picture: rules, type
+See [`docs/memory.md`](/guide/memory) for the full picture: rules, type
 restrictions, the `--max-heap=N` flag for heap-exhaustion testing, and
 the v1.1 roadmap.
 
@@ -209,8 +209,8 @@ the v1.1 roadmap.
 
 ## Next steps
 
-- **Language overview:** [`docs/overview.md`](overview.md) — the full tour.
-- **Standard library:** [`docs/stdlib.md`](stdlib.md) — `io` (`print`,
+- **Language overview:** [`docs/overview.md`](/guide/overview) — the full tour.
+- **Standard library:** [`docs/stdlib.md`](/guide/stdlib) — `io` (`print`,
   `print_int`, `read_line`, …), `num`, `str`, `mem`, and the data structures.
 - **Language reference:** the EBNF grammar is in `docs/grammar.ebnf`; built-in
   keywords and operators are defined as strata in `src/strata/`.

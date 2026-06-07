@@ -324,7 +324,7 @@ detailed milestones (M-6 through M-8 in ADR 0008's follow-up section).
 ## Cross-references
 
 - [ADR 0008 — Memory management: explicit arenas for 1.0, AllocatorABI for 1.1](adr/0008-memory-management-arenas.md)
-- [`wit/allocator.wit`](../wit/allocator.wit) — the ABI surface every
+- [`wit/allocator.wit`](../compiler/wit/allocator.wit) — the ABI surface every
   Sigil allocator conforms to.
 - [Phase 9c in `v1-user-stories.html`](v1-user-stories.html#phase-9c) —
   per-story acceptance bars.

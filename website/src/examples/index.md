@@ -12,8 +12,8 @@ is self-contained — copy the source into `src/main.si`, `sgl run`.
 | Example | Teaches |
 |---------|---------|
 | [Hello world](/examples/hello) | Project scaffold, `@fn main`, `@use 'io'` |
-| [Variables](/examples/variables) | `@global` (immutable) vs `@local` (mutable), inference |
-| [Functions](/examples/functions) | `@fn`, `\\` signature lines, `&` calls, `@export` |
+| [Variables](/examples/variables) | bare (immutable) vs `@mut` (mutable), inference |
+| [Functions](/examples/functions) | `@fn`, `\\` signature lines, parenthesised calls, `@export` |
 | [Conditions & loops](/examples/control-flow) | `@if`, `@loop`, `@return`, FizzBuzz |
 | [Sum types + `@match`](/examples/sum-types) | `@type`, variant constructors, arm-expression form |
 | [Generics](/examples/generics) | `@fn[T]`, parametric sum types, HM-lite inference |
@@ -25,6 +25,7 @@ is self-contained — copy the source into `src/main.si`, `sgl run`.
 | Example | Teaches |
 |---------|---------|
 | [C interop (`@extern`)](/examples/native) | `@extern`, libc, `sgl build --native` |
+| [Rotating cube (raylib FFI)](/examples/cube) | `\\ @extern`, native lib linking, scalar-only FFI |
 | [Arena allocation](/examples/arena) | `with_arena`, parent-arena escape |
 | [Rc smart pointer](/examples/rc) | Shared ownership, refcount semantics |
 

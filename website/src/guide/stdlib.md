@@ -134,8 +134,42 @@ prelude views.
 | `str_contains` | `(String, String) -> Bool` | |
 | `str_slice` | `(String, Int, Int) -> String` | bytes `[start, end)`, clamped |
 | `str_repeat` | `(String, Int) -> String` | `s` repeated `n` times |
+| `str_code_point_count` | `(String) -> Int` | number of Unicode code points (≠ byte length) |
+| `str_width` | `(String) -> Int` | display **column** width (experimental, East-Asian-Width approximation) |
+
+A string has **three different "lengths"** — bytes (`str_byte_len`), code points
+(`str_code_point_count`), and display columns (`str_width`) — and they are not
+interchangeable (`'中'` is 3 bytes, 1 code point, 2 columns). `str_width` is
+experimental: wide CJK/fullwidth = 2, combining/zero-width = 0, else 1; no
+grapheme-cluster / ZWJ-emoji handling yet.
 
 Concatenation is the built-in operator: `'foo' ++ '-' ++ int_to_str(99)`.
+
+### Byte view — `str_bytes`
+
+`str_bytes(s) -> Slice[u8]` (in the `slice` module) is the read view over a
+string's bytes — it hides the 4-byte length-header arithmetic, so you index
+through `slice_get_byte` instead of writing `str_ptr(s) + 4` by hand.
+
+### Building strings — `StrBuilder`
+
+```silicon
+@use 'strbuilder';
+
+@mut b := sb_new(16);            # initial capacity (bytes)
+sb_push_str(b, 'Hi');
+sb_push_byte(b, 33);             # '!'
+sb_push_code_point(b, 20013);    # 中 (UTF-8 encoded to 3 bytes)
+s := sb_finish(b);               # "Hi!中"
+```
+
+| Function | Signature | Notes |
+|----------|-----------|-------|
+| `sb_new` | `(Int) -> StrBuilder` | new builder, initial byte capacity |
+| `sb_push_byte` | `(StrBuilder, Int)` | append one byte (0..255) |
+| `sb_push_str` | `(StrBuilder, String)` | append a string's bytes |
+| `sb_push_code_point` | `(StrBuilder, Int)` | append a code point (UTF-8 encoded) |
+| `sb_finish` | `(StrBuilder) -> String` | seal into a `String` (sets header, re-aligns heap) |
 
 ---
 
@@ -172,11 +206,11 @@ platform-specific:
 | Platform | Output | Strings |
 |----------|--------|---------|
 | **native / WASI** (default) | `@use 'io'` → `print`, `read_line` (WASI `fd_write`/`fd_read`) | linear-memory `String` |
-| **bun** (`--platform=bun`) | `console::log` / `web::console_log_f` | `JSString` (JS strings) + `String` bridge |
-| **web** (`--platform=web`) | `web::canvas_*`, `web::set_html`, `console::log` | `JSString` + `String` |
+| **bun** (`--platform=bun`) | `console::log(...)` / `web::console_log_f(...)` | `JSString` (JS strings) + `String` bridge |
+| **web** (`--platform=web`) | `web::canvas_*(...)`, `web::set_html(...)`, `console::log(...)` | `JSString` + `String` |
 
-See [`platforms.md`](platforms.md) for the `JSString` type and
-the `console` / `web` modules, and [`platforms.md`](platforms.md) for the wasm
+See [`js-string-builtins.md`](https://github.com/NatesCode/silicon/blob/main/docs/js-string-builtins.md) for the `JSString` type and
+the `console` / `web` modules, and [`targets.md`](/guide/platforms) for the wasm
 memory-model targets (`wasm-mvp` vs `wasm-gc`), which are orthogonal to platform.
 
 ---
@@ -190,8 +224,9 @@ own sources and tests):
 |--------|------|
 | `option` | `Option[T]` sum type + `option_unwrap_or`, `option_is_some/none` |
 | `result` | `Result[T, E]` sum type + `result_unwrap_or`, `result_is_ok/err` |
-| `vec` | `Vec[Int]` growable array (`vec_new`, `vec_push_i32`, `vec_get_i32`, …) |
-| `slice` | bounds-checked views |
+| `vec` | `Vec[T]` — the growable, general-purpose collection (`vec_new`, `vec_push_i32`, `vec_get_i32`, …). Prefer it over `$[…]` array literals, which aren't first-class yet (no in-language indexing/iteration/params). |
+| `slice` | bounds-checked views (`Slice[T]` = `{ptr, len}`); also `str_bytes` / `string_as_slice` for a string's byte view |
+| `strbuilder` | `StrBuilder` — build a `String` without pointer math (`sb_new`/`sb_push_*`/`sb_finish`) |
 | `hashmap` | hash map |
 | `rc` | reference counting (`gc/` shadow under `--target=wasm-gc`) |
 
@@ -202,7 +237,7 @@ own sources and tests):
 1. **`snake_case` everywhere.** Function names read like C / Rust / Go stdlib.
 2. **Portable-first.** Pure computation (`mem`/`num`/`str`) has no host
    dependency and compiles on every target. I/O is isolated in `io`.
-3. **Wrap WASI, don't expose it.** User code calls `print()`, not `fd_write`
+3. **Wrap WASI, don't expose it.** User code calls `print(...)`, not `fd_write`
    with hand-built iovecs.
 4. **Small and correct over large and clever.** This is the 80% surface; the
    aspirational stdlib (async, JSON, HTTP, capabilities) is tracked separately.

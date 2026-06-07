@@ -72,7 +72,7 @@ To give the symbol semantics, attach one of the phase handlers below.
 ## The five phase hooks
 
 Strata 2.0 exposes five lifecycle phases. Register handlers via
-`Compiler::on::<phase>`.
+`Compiler::on::<phase>(...)`.
 
 ### `on::decl` — fires for each definition
 
@@ -80,7 +80,7 @@ Strata 2.0 exposes five lifecycle phases. Register handlers via
 Compiler::on::decl('@my_kw', {
     ;; runs for every `@my_kw foo := ...;` declaration the compiler sees.
     ;; you can inspect node.name, node.params, node.binding,
-    ;; emit IR via Compiler::module::push_definition(),
+    ;; emit IR via Compiler::module::push_definition(...),
     ;; or stash state for the module_finalize pass.
 });
 ```
@@ -91,9 +91,9 @@ Fires once per `AST_DEFINITION` whose keyword span matches.
 
 ```silicon
 Compiler::on::callSite('my_fn', {
-    ;; runs for every `my_fn(arg0, arg1)` call.
+    ;; runs for every `my_fn(arg0, arg1);` call.
     ;; node.args is the arg list (Silicon expressions, not yet lowered).
-    ;; commonly used for @try() / `?`-style desugaring strata.
+    ;; commonly used for @try / `?`-style desugaring strata.
 });
 ```
 
@@ -115,7 +115,7 @@ The `@@derive` and `@@eq` strata in the standard library work this way.
 Compiler::on::module_finalize({
     ;; runs once after every user definition has been seen.
     ;; this is where generic-style strata emit their monomorphised
-    ;; concrete definitions via Compiler::module::push_definition().
+    ;; concrete definitions via Compiler::module::push_definition(...).
 });
 ```
 
@@ -174,7 +174,7 @@ This shapes what's allowed inside a handler body.
   from inside a handler.
 - **Generic user-defined Silicon functions called from a handler.**  Same
   reason as recursion — the interpreter doesn't dispatch arbitrary `@fn`
-  calls.  Stick to `Compiler::*` calls + arithmetic + `:=` bindings.
+  calls.  Stick to `Compiler::*` calls + arithmetic + bare bindings.
 - **`@match` inside a handler body.**  The AST interpreter doesn't lower
   match arms.  Use chained `@if` instead.
 - **Strings other than as literal arguments to `Compiler::*` calls.**
@@ -389,7 +389,7 @@ The **comptime engine implementation** is *not* part of the stable surface
 — what works inside a handler body grows over time:
 
 - **0.1 (today)**: AST interpreter; `Compiler::*` + scalar arithmetic + `@if` +
-  `:=` bindings (see "The comptime engine in Sigil 0.1" above).
+  bare bindings (see "The comptime engine in Sigil 0.1" above).
 - **Later (after Phase 8 + 8-9)**: wasmtime-backed; full Silicon surface in
   handler bodies — `@loop`, `@match`, recursion, user-defined `@fn` calls.
   Existing handlers written against the 0.1 limits will continue to work

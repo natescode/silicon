@@ -32,7 +32,7 @@ For programs that allocate, do their work, and exit, this is the right
 answer:
 
 - **Zero per-allocation overhead.** No headers, no bookkeeping.
-- **Predictable.** The bump pointer is observable via `heap_get`.
+- **Predictable.** The bump pointer is observable via `heap_get()`.
 - **Simple to reason about.** Every allocation strictly comes after the
   previous one.
 
@@ -149,7 +149,7 @@ Two restrictions, both enforced at compile time:
 body's last expression — not buried mid-block. The compiler enforces
 this and surfaces:
 
-> `@move_to_parent_arena may only appear in the tail position of an @with_arena({ … }) block (ADR 0008, Phase 9c; v1.1 will lift this restriction via pointer-fixup).`
+> `@move_to_parent_arena may only appear in the tail position of a @with_arena({ … }) block (ADR 0008, Phase 9c; v1.1 will lift this restriction via pointer-fixup).`
 
 If you need promotion mid-block, restructure so the work after the
 promotion lives in an outer scope.
@@ -184,7 +184,7 @@ observe the bump pointer:
   (`heap - heap_base`). Resets when something lowers `heap` — most
   commonly an `@with_arena` exit.
 - `arena_used(saved)` — bytes since a caller-supplied entry pointer.
-  Pair with `heap_get` to size the current arena without per-arena
+  Pair with `heap_get()` to size the current arena without per-arena
   handles:
 
 ```silicon
@@ -215,8 +215,8 @@ pointers.
 @fn share := {
     r := rc_new(42);
     @defer(rc_drop(r));          # auto-decrement on every return path
-    r2 := rc_clone(r);            # bumps count to 2
-    @defer(rc_drop(r2));          # LIFO: drops in reverse declaration order
+    r2 := rc_clone(r);           # bumps count to 2
+    @defer(rc_drop(r2));         # LIFO: drops in reverse declaration order
     rc_get(r) + rc_get(r2)
 };
 ```

@@ -109,6 +109,14 @@ already do; note that the current `sgl fmt` formatter emits `:Type` (which the p
 rejects, so its output does not re-parse) — that is a pre-existing formatter bug, not
 the canonical form. See §Migration.
 
+**Signatures are optional.** A `@fn` whose parameters have no `\\` line has its
+parameter types **inferred** — currently *monomorphically*, from the function's call
+sites within the compilation unit (a convenience for demos / app-internal code, not a
+substitute for annotating a library's public API). See
+[`docs/optional-signatures-inference.md`](../optional-signatures-inference.md) for the
+inference model, its per-compilation-unit scope, the deliberately-deferred follow-ups
+(body-based inference, CLI↔LSP consistency), and library-API guidance.
+
 The **line-independence foundation is reframed** from "byte-1 O(1) line
 classification" to **statement-local, single-pass, no-backtrack, no-symbol-table
 classification** (the property that actually enables sharded/incremental

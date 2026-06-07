@@ -6,7 +6,7 @@ title: "Security"
 This document is Silicon / Sigil's 0.1 security posture. It is **not** a
 third-party penetration-test report; it's the "did we ship anything
 obviously bad" pass that backs the (pre-1.0) stability intent (see
-[`stability.md`](./index.md), story 10b-4 in
+[`stability.md`](/stability/index), story 10b-4 in
 [`v1-user-stories.html`](https://github.com/NatesCode/silicon/blob/main/docs/v1-user-stories.html)).
 
 ## Reporting vulnerabilities
@@ -120,15 +120,15 @@ in `wit/comptime.wit`.
 
 - Read source positions, types, IR.
 - Push new definitions, globals, diagnostics.
-- Call the `Compiler::diag::error(…)` / `Compiler::diag::warn(…)` surface.
+- Call the `Compiler::diag::error` / `warn` surface.
 
 **What handlers cannot do:**
 
-- Open arbitrary host file paths via `Compiler::*(…)` (there is no
-  `Compiler::fs::*(…)` surface).
-- Open network sockets (no `Compiler::net::*(…)`).
+- Open arbitrary host file paths via `Compiler::*` (there is no
+  `Compiler::fs::*` surface).
+- Open network sockets (no `Compiler::net::*`).
 - Mutate the host process's environment variables (no
-  `Compiler::env::*(…)`).
+  `Compiler::env::*`).
 
 **Caveat:** the host process running the handler can do all of the
 above — but the handler can only ask for what `wit/comptime.wit`
@@ -146,7 +146,7 @@ Three targets, 60-second budget per target (configurable via
 - **Random token streams** — sequences of valid tokens joined by
   spaces. Default 800 runs.
 - **Generative round-trip** — generates small valid Silicon over the
-  Int / bare-binding / bin-op subset; parses, pretty-prints, re-parses.
+  Int / `@global` / bin-op subset; parses, pretty-prints, re-parses.
   Default 400 runs.
 
 **Acceptance:** Parser **must not** throw an unstructured exception,

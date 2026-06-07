@@ -156,7 +156,7 @@ Default allocation is bump from the heap. Scoped allocation:
 \\ process (Slice[u8])
 @fn process data := {
     @with_arena({
-        tmp := Vec::new();
+        tmp := vec_new(4);
         # … all allocations here go in the arena;
         # heap reset on scope exit
         compute(tmp)

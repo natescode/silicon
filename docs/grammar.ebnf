@@ -168,9 +168,18 @@ Assignment  = Namespace "=" Expression ;
 (* ── Expressions ────────────────────────────────────────────────────────── *)
 
 (*
-  Expressions are left-associative binary chains over a postfix-called primary.
-  There is no precedence table: all operators associate left-to-right.
-  Precedence is expressed via parentheses or nested calls.
+  Expressions are left-associative binary chains over a postfix-called primary,
+  parsed with PRECEDENCE CLIMBING.  Precedence (tightest -> loosest):
+      *  /  %                          (multiplicative)
+      +  -  ++                         (additive / concat)
+      <  >  <=  >=                     (relational)
+      ==  !=                           (equality)
+      &&                              (logical and)
+      ||                              (logical or)
+      everything else                 (user operators, match `=>` / `|`)
+  All operators are left-associative; parentheses override.  (Historical note:
+  the parser once folded flat left-to-right, so `2 + 3 * 4` was `(2+3)*4`; it
+  now correctly yields `14`.)
 *)
 
 Expression  = ExprEnd { BinOp ExprEnd } ;
@@ -264,9 +273,12 @@ KeyValuePair  = identifier "=" Expression ;
 StringLiteral = "'" { string-char } "'" ;
 string-char   = (* any character except "'", "\", and line terminators *) ;
 
-IntLiteral    = DecLiteral ;          (* decimal only — no 0x/0b/0c prefixes *)
+IntLiteral    = HexLiteral | BinLiteral | OctLiteral | DecLiteral ;
 
 DecLiteral    = digit { digit } { "_" digit { digit } } ;
+HexLiteral    = ("0x" | "0X") hexdigit { hexdigit | "_" hexdigit } ;
+BinLiteral    = ("0b" | "0B") bindigit { bindigit | "_" bindigit } ;
+OctLiteral    = ("0o" | "0O") octdigit { octdigit | "_" octdigit } ;
 FloatLiteral  = digit { digit } "." digit { digit } ;
 
 BooleanLiteral = "@true" | "@false" ;
@@ -303,6 +315,9 @@ identifier  = "_"                                   (* discard — no binding *)
 
 letter      = "a".."z" | "A".."Z" ;
 digit       = "0".."9" ;
+hexdigit    = digit | "a".."f" | "A".."F" ;
+bindigit    = "0" | "1" ;
+octdigit    = "0".."7" ;
 
 (* ── Whitespace and comments ─────────────────────────────────────────────── *)
 

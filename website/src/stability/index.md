@@ -35,7 +35,7 @@ on the first `1.0.0` tag.  Pre-1.0 tags (`0.x.y`, including 0.1) are development
 
 | Feature | Notes |
 |---|---|
-| Definition keywords | `@fn`, `@mut`, `@type`, `@enum`, `@extern`, `@use` |
+| Definition keywords | `@fn`, `@mut`, `@type`, `@extern`, `@use` |
 | Control-flow keywords | `@if`, `@loop`, `@match`, `@return`, `@defer`, `@try` |
 | Literal syntax | integers (decimal, hex `0x`, binary `0b`, octal `0o`), floats, booleans (`@true`/`@false`), strings, arrays `[…]`, tuples `(…)`, objects `{…}` |
 | Type surface | `Int`, `Int32`, `Int64`, `Float`, `Bool`, `Str`, `Option[T]`, `Result[T,E]`, `Slice[T]` |
@@ -46,7 +46,7 @@ on the first `1.0.0` tag.  Pre-1.0 tags (`0.x.y`, including 0.1) are development
 | `@match` forms | flat form and arm-expression (`$A v => expr`) forms |
 | Namespace paths | `Module::name` |
 | Semicolon rules | trailing semicolons required on definitions; expressions inside blocks are semicolon-separated |
-| Comment syntax | `#` line comments, `##` doc comments |
+| Comment syntax | `;;` line comments, `##` doc comments |
 
 ### Stable with caveats
 
@@ -156,9 +156,9 @@ body.  Full reference in `docs/strata-authoring-guide.md`.
 | `Compiler::on::call('@kw', { … })` | Handler for each call site |
 | `Compiler::on::operator('op', { … })` | Handler for each operator use |
 | `Compiler::emit::ir(node)` | Emit an IR node |
-| `Compiler::node::name()` | Read the declaration name |
-| `Compiler::node::params()` | Read the parameter list |
-| `Compiler::node::binding()` | Read the binding expression |
+| `Compiler::node::name` | Read the declaration name |
+| `Compiler::node::params` | Read the parameter list |
+| `Compiler::node::binding` | Read the binding expression |
 | `Compiler::format(str, …args)` | Diagnostic message formatting |
 | `Compiler::error(msg)` | Emit a diagnostic and halt elaboration |
 | `Compiler::substitute(template, env)` | Text substitution for IR templates |
@@ -167,13 +167,13 @@ body.  Full reference in `docs/strata-authoring-guide.md`.
 
 | Call | Caveat |
 |---|---|
-| `Compiler::module::push_definition(…)` | Signature may grow optional fields in a minor release |
-| `Compiler::on::derive(…)` | `@@derive` handler; stable syntax but derive trait registry is additive-only |
+| `Compiler::module::push_definition` | Signature may grow optional fields in a minor release |
+| `Compiler::on::derive` | `@@derive` handler; stable syntax but derive trait registry is additive-only |
 | `Compiler::state('stratum')` | State keys other than `'stratum'` are not yet stable |
 
 ### Not stable
 
-- Raw IR builder calls other than `Compiler::emit::ir(…)` — these are internal
+- Raw IR builder calls other than `Compiler::emit::ir` — these are internal
   and subject to change as the IR evolves.
 - The execution engine for strata bodies — currently an interpreter; will be
   replaced by the comptime-via-compilation approach documented in
@@ -181,7 +181,7 @@ body.  Full reference in `docs/strata-authoring-guide.md`.
 
 ### Extension rule
 
-Strata authors can add new `Compiler::register::*(…)` calls in a minor release.
+Strata authors can add new `Compiler::register::*` calls in a minor release.
 Calling an unrecognised `Compiler::*` path emits a warning (not an error) so
 that strata written against a newer compiler version degrade gracefully on older
 toolchains.

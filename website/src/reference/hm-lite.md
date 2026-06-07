@@ -256,7 +256,7 @@ field as `TypeInt`.  This worked for `Option[Int]` by accident but broke
 
 ## What's deliberately NOT in HM-lite
 
-- **Let-generalisation.**  `id := \x. x; …` (a bare binding) would NOT make `id`
+- **Let-generalisation.**  `id := \x => x; …` would NOT make `id`
   polymorphic.  Schemes only come from syntactic `[T]` declarations.
 - **Rank-N polymorphism.**  No `(∀T. T → T) → Int`-style higher-rank.
 - **Polymorphic recursion.**  A recursive call inside `@fn foo[T] …`
