@@ -123,6 +123,21 @@ export interface Definition {
      * Left `undefined` by the legacy grammar, which keeps the old behaviour.
      */
     readonly immutable?: boolean
+    /**
+     * ADR-0024 module visibility. `true` ⇒ this top-level def is marked `@pub`
+     * on its `\\` signature line and is callable across the module boundary as
+     * `mod::name`. Absent/`false` ⇒ module-private (visible only within its own
+     * module's files). Set by the parser; consumed by the component assembler
+     * for `E-PRIV` enforcement. Confers NO WASM/host export (see `export`).
+     */
+    pub?: boolean
+    /**
+     * ADR-0024 / ADR-0020 decision-8: this def carried the `\\ @export` modifier
+     * (the signature-line export form). Equivalent to the transitional
+     * `@export name;` statement — emits a WASM/host export and (post-v1.0)
+     * contributes to the component's WIT world. Orthogonal to `pub`.
+     */
+    export?: boolean
 }
 
 export interface ExpressionStart {
