@@ -87,6 +87,7 @@ export default defineConfig({
                     text: 'Guide',
                     items: [
                         { text: 'Getting started', link: '/guide/getting-started' },
+                        { text: 'Positioning', link: '/guide/positioning' },
                         { text: 'Install', link: '/guide/install' },
                         { text: 'Language overview', link: '/guide/overview' },
                         { text: 'Standard library', link: '/guide/stdlib' },

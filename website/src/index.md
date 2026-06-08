@@ -3,12 +3,15 @@ layout: home
 
 hero:
   name: Silicon
-  text: A WebAssembly-targeting systems language where features are data.
-  tagline: The compiler core never switches on keyword names. Every operator and control-flow construct is a stratum defined in Silicon source.
+  text: A systems language built for WebAssembly.
+  tagline: Zig-level control, ML-level ergonomics (sum types, pattern matching, inference), and a gradual memory model that's no-GC when you need speed and garbage-collected (wasm-gc) when you don't — with first-class JavaScript/host interop.
   actions:
     - theme: brand
       text: Get started in 15 minutes
       link: /guide/getting-started
+    - theme: alt
+      text: Why Silicon?
+      link: /guide/positioning
     - theme: alt
       text: View on GitHub
       link: https://github.com/NatesCode/silicon

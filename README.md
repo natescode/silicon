@@ -1,5 +1,10 @@
 # Silicon
 
+> **A systems language built for WebAssembly.** Zig-level control, ML-level
+> ergonomics (sum types, pattern matching, inference), and a gradual memory model
+> that's no-GC when you need speed and garbage-collected (wasm-gc) when you don't —
+> with first-class JavaScript/host interop. ([Why Silicon? →](docs/positioning.md))
+
 **Silicon** is a small, multi-paradigm programming language that compiles to
 WebAssembly (WAT/WASM) and — via [QBE](https://c9x.me/compile/) — to native
 binaries. Its compiler is named **Sigil** and is written in TypeScript, run
