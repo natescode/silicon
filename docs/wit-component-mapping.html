@@ -1,0 +1,208 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>WIT ↔ Silicon — components, worlds, interfaces &amp; capabilities</title>
+<style>
+  :root{
+    --accent:#6c8ef7; --accent-dark:#3f63c9; --ink:#1c2330; --muted:#5b6676;
+    --line:#d6dce6; --soft:#eef2fb; --band:#f4f6fb; --good:#1f9d6b;
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0; padding:2.2rem clamp(1rem,4vw,3rem);
+    font:15px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    color:var(--ink); background:#fff; max-width:1040px; margin-inline:auto;
+  }
+  h1{font-size:1.5rem; margin:0 0 .3rem}
+  h2{font-size:1.05rem; margin:2rem 0 .6rem; padding-bottom:.25rem; border-bottom:2px solid var(--soft)}
+  .lede{color:var(--muted); margin:0 0 1.4rem; max-width:75ch}
+  .lede b{color:var(--ink)}
+  figure{margin:1.5rem 0; text-align:center}
+  svg{max-width:100%; height:auto}
+  table{border-collapse:collapse; width:100%; font-size:14px; margin:.4rem 0}
+  th,td{border:1px solid var(--line); padding:.5rem .65rem; text-align:left; vertical-align:top}
+  th{background:var(--soft); font-weight:600}
+  td code,th code,p code,li code{background:var(--band); padding:.05em .35em; border-radius:4px;
+    font:13px/1.4 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+  ul{margin:.4rem 0 .4rem; padding-left:1.2rem}
+  li{margin:.35rem 0}
+  li b{color:var(--accent-dark)}
+  .grid{display:flex; gap:1rem; flex-wrap:wrap}
+  .grid > div{flex:1 1 340px; min-width:300px}
+  .grid h3{font-size:.8rem; text-transform:uppercase; letter-spacing:.04em; color:var(--muted); margin:0 0 .3rem}
+  pre{background:var(--band); border:1px solid var(--line); border-radius:8px;
+    padding:.75rem .9rem; overflow:auto; margin:0;
+    font:12.5px/1.5 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+  pre .c{color:var(--muted)}      /* comment */
+  pre .k{color:var(--accent-dark); font-weight:600}  /* keyword */
+  pre .r{color:var(--good); font-weight:600}          /* resource / cap */
+  .note{margin-top:1.6rem; padding:.8rem 1rem; background:var(--band);
+    border-left:3px solid var(--accent); border-radius:0 8px 8px 0; font-size:13.5px; color:var(--muted)}
+  .note b{color:var(--ink)}
+  footer{margin-top:2rem; color:var(--muted); font-size:12.5px; border-top:1px solid var(--line); padding-top:.8rem}
+</style>
+</head>
+<body>
+
+<h1>WIT&nbsp;↔&nbsp;Silicon: components, worlds, interfaces &amp; capabilities</h1>
+<p class="lede">
+A Silicon <b>component</b> is a WIT <b>package</b>; its single <b>world</b> is the contract —
+<b>imports = required capabilities</b>, <b>exports = what it provides</b>. <b>Interfaces</b> are named
+bundles of functions and types. Capabilities cross the boundary as unforgeable
+<b>resource</b> handles: <b>comptime-checked inside</b> the component, <b>runtime-enforced at the edge</b>.
+</p>
+
+<figure>
+<svg viewBox="0 0 960 560" role="img" aria-label="Diagram mapping WIT packages, worlds, interfaces and capabilities onto a Silicon component">
+  <defs>
+    <marker id="ah" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto">
+      <path d="M0,0 L9,4.5 L0,9 Z" fill="#3f63c9"/>
+    </marker>
+  </defs>
+
+  <!-- IMPORTS column -->
+  <text x="110" y="138" text-anchor="middle" font-size="13" font-weight="700" fill="#1c2330">IMPORTS</text>
+  <text x="110" y="156" text-anchor="middle" font-size="11" fill="#5b6676">required capabilities</text>
+  <g font-size="12" fill="#1c2330">
+    <rect x="25" y="185" width="170" height="46" rx="8" fill="#eafaf2" stroke="#1f9d6b"/>
+    <text x="110" y="206" text-anchor="middle">wasi:filesystem</text>
+    <text x="110" y="221" text-anchor="middle" font-size="10" fill="#5b6676">descriptor resource</text>
+    <rect x="25" y="248" width="170" height="46" rx="8" fill="#eafaf2" stroke="#1f9d6b"/>
+    <text x="110" y="269" text-anchor="middle">wasi:clocks</text>
+    <text x="110" y="284" text-anchor="middle" font-size="10" fill="#5b6676">clock resource</text>
+  </g>
+  <line x1="196" y1="208" x2="255" y2="190" stroke="#3f63c9" stroke-width="2" marker-end="url(#ah)"/>
+  <line x1="196" y1="271" x2="255" y2="250" stroke="#3f63c9" stroke-width="2" marker-end="url(#ah)"/>
+  <text x="208" y="232" font-size="9.5" fill="#3f63c9" transform="rotate(-16 208 232)">granted in</text>
+
+  <!-- WORLD (dashed contract) -->
+  <rect x="230" y="80" width="500" height="372" rx="14" fill="none" stroke="#6c8ef7" stroke-width="2" stroke-dasharray="7 5"/>
+  <text x="480" y="101" text-anchor="middle" font-size="12.5" font-weight="700" fill="#3f63c9">world textstats — the component's contract</text>
+
+  <!-- COMPONENT (= WIT package) -->
+  <rect x="258" y="118" width="444" height="318" rx="11" fill="#ffffff" stroke="#1c2330" stroke-width="1.5"/>
+  <text x="480" y="138" text-anchor="middle" font-size="11.5" font-weight="600" fill="#1c2330">component = WIT package &#160;acme:textstats@0.1.0&#160; (the sgl.toml dir)</text>
+
+  <!-- root module -->
+  <rect x="280" y="156" width="400" height="52" rx="8" fill="#dfe8ff" stroke="#3f63c9"/>
+  <text x="298" y="178" font-size="12.5" font-weight="600" fill="#1c2330">root module — src/*.si</text>
+  <text x="298" y="196" font-size="11" fill="#3f63c9">@export surface &#160;→&#160; the world's exports</text>
+
+  <!-- sub-modules -->
+  <rect x="280" y="222" width="192" height="52" rx="8" fill="#f4f6fb" stroke="#aab6cc"/>
+  <text x="296" y="244" font-size="12" fill="#1c2330">module&#160; strings</text>
+  <text x="296" y="261" font-size="10.5" fill="#5b6676">internal — not in world</text>
+  <rect x="488" y="222" width="192" height="52" rx="8" fill="#f4f6fb" stroke="#aab6cc"/>
+  <text x="504" y="244" font-size="12" fill="#1c2330">module&#160; fmt</text>
+  <text x="504" y="261" font-size="10.5" fill="#5b6676">→ interface (re-exposed)</text>
+
+  <!-- mint-site -->
+  <rect x="280" y="290" width="400" height="50" rx="8" fill="#fff" stroke="#1f9d6b" stroke-dasharray="4 4"/>
+  <text x="298" y="311" font-size="11.5" fill="#1c2330">capability mint-site: <tspan font-family="ui-monospace,Menlo,Consolas,monospace">@type Cap := { … }</tspan></text>
+  <text x="298" y="328" font-size="10.5" fill="#5b6676">constructor not @pub ⇒ unforgeable · comptime-checked (ADR-0013 on::check / ADR-0015)</text>
+
+  <!-- file note -->
+  <text x="480" y="362" text-anchor="middle" font-size="10.5" fill="#5b6676" font-style="italic">files (.si) collapse into the module — no runtime unit</text>
+
+  <!-- EXPORTS column -->
+  <text x="852" y="138" text-anchor="middle" font-size="13" font-weight="700" fill="#1c2330">EXPORTS</text>
+  <text x="852" y="156" text-anchor="middle" font-size="11" fill="#5b6676">interface + cap handles</text>
+  <line x1="730" y1="190" x2="762" y2="206" stroke="#3f63c9" stroke-width="2" marker-end="url(#ah)"/>
+  <line x1="730" y1="262" x2="762" y2="278" stroke="#3f63c9" stroke-width="2" marker-end="url(#ah)"/>
+  <text x="724" y="232" font-size="9.5" fill="#3f63c9" text-anchor="end" transform="rotate(16 724 232)">handed out</text>
+  <g font-size="12" fill="#1c2330">
+    <rect x="765" y="184" width="175" height="50" rx="8" fill="#dfe8ff" stroke="#3f63c9"/>
+    <text x="852" y="205" text-anchor="middle">interface&#160; words</text>
+    <text x="852" y="221" text-anchor="middle" font-size="10" fill="#5b6676">count-words: func</text>
+    <rect x="765" y="256" width="175" height="50" rx="8" fill="#eafaf2" stroke="#1f9d6b"/>
+    <text x="852" y="277" text-anchor="middle">🔑 resource&#160; session</text>
+    <text x="852" y="293" text-anchor="middle" font-size="10" fill="#5b6676">own / borrow handle</text>
+  </g>
+
+  <!-- legend key -->
+  <text x="25" y="462" font-size="11" fill="#5b6676">🔑 = unforgeable WIT resource handle = a capability that may safely cross the boundary</text>
+
+  <!-- bottom band: comptime vs runtime -->
+  <rect x="25" y="474" width="910" height="68" rx="10" fill="#f4f6fb" stroke="#d6dce6"/>
+  <line x1="480" y1="484" x2="480" y2="532" stroke="#aab6cc" stroke-width="1.5" stroke-dasharray="4 4"/>
+  <text x="45" y="500" font-size="12" font-weight="700" fill="#3f63c9">Inside the component</text>
+  <text x="45" y="518" font-size="11.5" fill="#1c2330">capabilities are Silicon <tspan font-weight="700">values</tspan> · checked at <tspan font-weight="700">COMPTIME</tspan> · zero runtime cost</text>
+  <text x="500" y="500" font-size="12" font-weight="700" fill="#1f9d6b">At a real component boundary</text>
+  <text x="500" y="518" font-size="11.5" fill="#1c2330">capabilities become WIT <tspan font-weight="700">resources</tspan> · enforced at <tspan font-weight="700">RUNTIME</tspan> (handle table)</text>
+  <text x="500" y="533" font-size="10.5" fill="#5b6676">…and must be a <tspan font-weight="700">resource</tspan>, never a <tspan font-style="italic">record</tspan> (a record is readable ⇒ forgeable)</text>
+</svg>
+</figure>
+
+<h2>The mapping</h2>
+<table>
+  <tr><th>WIT</th><th>Silicon</th><th>Role</th></tr>
+  <tr><td><b>package</b> <code>ns:name@ver</code></td><td><b>component</b> — the <code>sgl.toml</code> dir</td><td>what you ship, version, and depend on</td></tr>
+  <tr><td><b>world</b> (one per package)</td><td>the component's public <b>contract</b></td><td>its <b>imports</b> (required capabilities) + <b>exports</b></td></tr>
+  <tr><td><b>interface</b></td><td>the root module's <code>@export</code> surface <i>is</i> the world's exports; a re-exposed sub-module becomes its own interface</td><td>a named bundle of functions + types</td></tr>
+  <tr><td><b>resource</b> (<code>own&lt;T&gt;</code>/<code>borrow&lt;T&gt;</code>)</td><td>a <b>capability</b> at the boundary — an unforgeable handle</td><td>authority that can cross safely</td></tr>
+  <tr><td><b>func</b></td><td>an <code>@export</code>'d <code>@fn</code></td><td>callable across the boundary</td></tr>
+</table>
+
+<h2>Capabilities, specifically</h2>
+<ul>
+  <li><b>Imports are the authority manifest.</b> <code>world { import wasi:filesystem; }</code> means "this component must be <i>granted</i> filesystem access." No import ⇒ no authority — there is no ambient <code>open()</code>. This is ADR-0015's "you must be handed a capability," lifted to the component level.</li>
+  <li><b>Mint &amp; hand out = export a <code>resource</code> + a factory</b> <code>func(…) -&gt; own&lt;cap&gt;</code>. The mint-site stays inside (its constructor isn't <code>@pub</code>); only an opaque handle crosses.</li>
+  <li><b><code>own</code> vs <code>borrow</code> = ADR-0011 rcaps</b> — a consumed capability lowers to <code>own&lt;T&gt;</code>, a borrowed one to <code>borrow&lt;T&gt;</code>.</li>
+  <li><b>A capability must be a <code>resource</code>, never a <code>record</code></b> — a record's fields are readable and reconstructable, so it would be forgeable. WIT has no separate "capability" concept (and no effect rows, matching ADR-0015): resources + the no-ambient-imports model <i>are</i> the mechanism. Reuse them; don't invent a parallel encoding.</li>
+  <li><b>The boundary is the comptime→runtime handoff.</b> Comptime mint-site checking only reaches within one compilation unit, so across separately-built components unforgeability must become runtime (the handle table). The same <code>FsCap</code> is a free comptime value inside, a tracked resource handle at the edge.</li>
+</ul>
+
+<h2>One example, both sides</h2>
+<div class="grid">
+  <div>
+    <h3>Silicon (the component)</h3>
+<pre><span class="c"># sgl.toml
+#   [package] namespace="acme"
+#             name="textstats" version="0.1.0"
+#   [dependencies]  # wasi caps the world imports</span>
+
+<span class="c"># src/main.si — ROOT module = the world</span>
+\\ <span class="k">@pub @export</span> count_words (Str) -> Int
+<span class="k">@fn</span> count_words text := { word_count(text) };
+
+<span class="c"># a capability VALUE is passed in — never ambient</span>
+\\ <span class="k">@pub</span> read_all (FsCap, Str) -> Str
+<span class="k">@fn</span> read_all cap, path := { fs_read(cap, path) };</pre>
+  </div>
+  <div>
+    <h3>Generated WIT</h3>
+<pre><span class="k">package</span> acme:textstats@0.1.0;
+
+<span class="k">world</span> textstats {
+  <span class="k">import</span> wasi:filesystem/types@0.2.0;   <span class="c">// authority IN</span>
+  <span class="k">export</span> count-words: <span class="k">func</span>(text: string) -&gt; u32;
+}
+
+<span class="c">// a minted, handed-out capability:</span>
+<span class="k">interface</span> sessions {
+  <span class="r">resource</span> session;                       <span class="c">// 🔑 unforgeable</span>
+  open: <span class="k">func</span>(key: string) -&gt; <span class="r">own</span>&lt;session&gt;;  <span class="c">// factory</span>
+  rows: <span class="k">func</span>(s: <span class="r">borrow</span>&lt;session&gt;) -&gt; u32; <span class="c">// rcap</span>
+}</pre>
+  </div>
+</div>
+
+<div class="note">
+<b>v1.0 status.</b> The default build statically merges every module — and, by default, dependency
+components — into <b>one core <code>.wasm</code></b>, because neither browsers nor Bun load Component-Model
+components natively yet. So at v1.0 there is no runtime boundary in the shipped artifact: capabilities
+are enforced <b>at comptime only</b> (ADR-0013/0015), and statically-merged deps stay in that same
+comptime-trust regime. The WIT/resource encoding above is the forward-looking <code>--emit=component</code>
+design (deferred past v1.0); <code>--emit=wit</code> can <i>declare</i> these shapes as forward-compat
+metadata before anything enforces them at runtime.
+</div>
+
+<footer>
+See <b>ADR-0024</b> (component / module / file) · <b>ADR-0015</b> (object capabilities) ·
+<b>ADR-0013</b> (capability checker) · <b>ADR-0011</b> (rcaps / borrow). Self-contained page — open in any browser.
+</footer>
+
+</body>
+</html>
