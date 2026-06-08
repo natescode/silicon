@@ -37,14 +37,10 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
-      - name: Build QBE from source
-        # No reliable `qbe` brew formula; clone from the c9x.me git repo at the
-        # v1.2 tag (the release tarballs were removed). clang + make + git ship
-        # with the macOS runner image.
-        run: |
-          git clone --depth 1 --branch v1.2 https://c9x.me/git/qbe.git /tmp/qbe
-          make -C /tmp/qbe -j4
-          sudo make -C /tmp/qbe install
+      - name: Install QBE
+        # Homebrew now has a qbe formula; clang ships with the macOS runner.
+        # (c9x.me removed its release tarballs and its git is dumb-HTTP-only.)
+        run: brew install qbe
 
       - name: Verify toolchain
         run: |

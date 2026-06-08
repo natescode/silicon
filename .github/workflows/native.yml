@@ -37,16 +37,13 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
-      - name: Install GCC + build QBE from source
-        # `qbe` isn't an apt package; clone it from the c9x.me git repo at the
-        # v1.2 tag (the release tarballs were removed) so the native backend
-        # has a linker.
+      - name: Install GCC + QBE
+        # qbe now ships in the Ubuntu universe repo (24.04+), so install it
+        # directly — no source build. (c9x.me removed its release tarballs and
+        # its git is dumb-HTTP-only, which can't be cloned reliably.)
         run: |
           sudo apt-get update -qq
-          sudo apt-get install -y gcc make git
-          git clone --depth 1 --branch v1.2 https://c9x.me/git/qbe.git /tmp/qbe
-          make -C /tmp/qbe -j4
-          sudo make -C /tmp/qbe install
+          sudo apt-get install -y gcc qbe
 
       - name: Verify toolchain
         run: |
