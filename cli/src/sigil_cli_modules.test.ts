@@ -93,6 +93,34 @@ describe('ADR-0024 CLI — multi-module component', () => {
         expect(r.stderr).toContain('E-NO-MAIN')
     })
 
+    test('a path: dependency component is resolved, merged, and callable via alias', () => {
+        const root = fs.mkdtempSync(path.join(os.tmpdir(), 'sgl-dep-'))
+        tmpDirs.push(root)
+        // dependency component `mathlib`
+        const lib = path.join(root, 'mathlib')
+        fs.mkdirSync(path.join(lib, 'src'), { recursive: true })
+        fs.writeFileSync(path.join(lib, 'sgl.toml'), '[package]\nname = "mathlib"\nentry = "src/main.si"\n[dependencies]\n')
+        fs.writeFileSync(path.join(lib, 'src', 'main.si'),
+            `\\\\ @export @pub clamp (Int, Int, Int) -> Int\n@fn clamp lo, hi, x := { x };`)
+        // consumer app depending on it
+        const app = path.join(root, 'app')
+        fs.mkdirSync(path.join(app, 'src'), { recursive: true })
+        fs.writeFileSync(path.join(app, 'sgl.toml'),
+            '[package]\nname = "app"\nentry = "src/main.si"\n[dependencies]\nmathlib = "path:../mathlib"\n')
+        fs.writeFileSync(path.join(app, 'src', 'main.si'),
+            `\\\\ @use mathlib as ml;\n\\\\ @export run () -> Int\n@fn run := { ml::clamp(0, 10, 42) };`)
+
+        const r = runSgl(['build', '--wat'], app)
+        expect(r.stderr + r.stdout).not.toContain('error')
+        expect(r.code).toBe(0)
+        const wat = fs.readFileSync(path.join(app, 'main.wat'), 'utf-8')
+        expect(wat).toContain('mathlib__clamp')
+        expect(wat).toContain('(export "run"')
+        // the dependency's own export must NOT leak into the merged world
+        expect(wat).not.toContain('(export "clamp"')
+        expect(wat).not.toContain('(export "mathlib__clamp"')
+    })
+
     test('standalone file outside a project keeps single-file behaviour (no auto-include)', () => {
         // No sgl.toml: a bare file in a dir with an unrelated sibling must NOT
         // pull the sibling in (legacy `@use`-only semantics).

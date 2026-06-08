@@ -197,5 +197,59 @@ describe('ADR-0024 assembler — @use scoping', () => {
         })
         const r = assembleComponent('/p/src/lib.si', opts)
         expect(r.hasMain).toBe(false)
+        expect(r.rootExports).toEqual(['add'])
+    })
+})
+
+describe('ADR-0024 assembler — cross-component dependencies', () => {
+    const depFiles = {
+        '/app/src/main.si': `\\\\ @use mathlib as ml;\n\\\\ @export run () -> Int\n@fn run := { ml::clamp(0, 10, 42) };`,
+        '/mathlib/src/lib.si':
+            `\\\\ @export @pub clamp (Int, Int, Int) -> Int\n@fn clamp lo, hi, x := { x };\n` +
+            `\\\\ secret (Int) -> Int\n@fn secret x := { x };`,
+    }
+    const depOpts = (extra?: Record<string, string>) => ({
+        ...vfs({ ...depFiles, ...extra }),
+        dependencies: [{ name: 'mathlib', entryFile: '/mathlib/src/lib.si' }],
+    })
+
+    test('an aliased dependency call merges + prefixes under the dep name', () => {
+        const r = assembleComponent('/app/src/main.si', depOpts())
+        expect(r.diagnostics.filter(d => d.severity === 'error')).toEqual([])
+        expect(r.source).toContain('mathlib__clamp')      // dep member, prefixed + merged
+        expect(r.source).not.toContain('ml::')             // alias resolved away
+        expect(r.source).not.toContain('@export clamp')    // dep export stripped (not in consumer's world)
+    })
+
+    test('calling a non-exported dependency member is E-PRIV', () => {
+        const opts = depOpts({
+            '/app/src/main.si': `\\\\ @use mathlib as ml;\n\\\\ @export run () -> Int\n@fn run := { ml::secret(1) };`,
+        })
+        const r = assembleComponent('/app/src/main.si', opts)
+        expect(r.diagnostics.some(d => d.code === 'E-PRIV')).toBe(true)
+    })
+
+    test('an unresolved dependency is E-DEP-UNRESOLVED', () => {
+        const opts = vfs({
+            '/app/src/main.si': `\\\\ @use missing as mz;\n@fn main := { mz::f(1) };`,
+        })
+        const r = assembleComponent('/app/src/main.si', opts)
+        expect(r.diagnostics.some(d => d.code === 'E-DEP-UNRESOLVED')).toBe(true)
+    })
+
+    test('a dependency cycle is E-DEP-CYCLE', () => {
+        const opts = {
+            ...vfs({
+                '/app/src/main.si': `\\\\ @use a;\n\\\\ @export run () -> Int\n@fn run := { a::f(1) };`,
+                '/a/src/lib.si': `\\\\ @use b;\n\\\\ @export @pub f (Int) -> Int\n@fn f x := { b::g(x) };`,
+                '/b/src/lib.si': `\\\\ @use a;\n\\\\ @export @pub g (Int) -> Int\n@fn g x := { a::f(x) };`,
+            }),
+            dependencies: [
+                { name: 'a', entryFile: '/a/src/lib.si' },
+                { name: 'b', entryFile: '/b/src/lib.si' },
+            ],
+        }
+        const r = assembleComponent('/app/src/main.si', opts)
+        expect(r.diagnostics.some(d => d.code === 'E-DEP-CYCLE')).toBe(true)
     })
 })

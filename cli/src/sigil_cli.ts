@@ -295,6 +295,35 @@ function componentDiagToDiagnostic(d: ComponentDiagnostic): Diagnostic {
     }
 }
 
+/** Resolve a dependency component's entry file from its directory. */
+function resolveDepEntry(depDir: string): string | null {
+    const t = readSglToml(depDir)
+    if (t?.package.entry) {
+        const e = path.join(depDir, t.package.entry)
+        if (fs.existsSync(e)) return e
+    }
+    const main = path.join(depDir, 'src', 'main.si')
+    if (fs.existsSync(main)) return main
+    return anySourceFileIn(path.join(depDir, 'src')) ?? anySourceFileIn(depDir)
+}
+
+/** Flatten the (possibly transitive) `[dependencies]` graph into the flat
+ *  name → entry-file map the assembler consumes. `path:<rel>` is resolved
+ *  relative to the declaring component (ADR-0024 / lockfile-format.md). */
+function collectDependencies(componentRoot: string, into: { name: string; entryFile: string }[], seen: Set<string>): void {
+    const toml = readSglToml(componentRoot)
+    if (!toml) return
+    for (const [name, srcSpec] of Object.entries(toml.dependencies)) {
+        const rel = srcSpec.startsWith('path:') ? srcSpec.slice('path:'.length) : srcSpec
+        const depDir = path.resolve(componentRoot, rel)
+        if (seen.has(depDir)) continue
+        seen.add(depDir)
+        const entry = resolveDepEntry(depDir)
+        if (entry && !into.some(d => d.name === name)) into.push({ name, entryFile: entry })
+        collectDependencies(depDir, into, seen)   // transitive
+    }
+}
+
 /**
  * Resolve the entry into one source string + module registry.
  *
@@ -310,7 +339,9 @@ function assembleEntry(entryAbs: string, opts: CompileOptions): { source: string
     const componentRoot = findComponentRoot(path.dirname(entryAbs))
     if (componentRoot) {
         const reserved = new Set(moduleReg.keys())
-        const asm = assembleComponent(entryAbs, { target: opts.target, reservedModuleNames: reserved })
+        const dependencies: { name: string; entryFile: string }[] = []
+        collectDependencies(componentRoot, dependencies, new Set())
+        const asm = assembleComponent(entryAbs, { target: opts.target, reservedModuleNames: reserved, dependencies })
         for (const w of asm.diagnostics) {
             if (w.severity !== 'warning') continue
             process.stderr.write(`warning [${w.code}] ${w.message}${w.file ? `\n  --> ${w.file}` : ''}\n`)
@@ -330,7 +361,9 @@ function assertRunnable(entryAbs: string, opts: CompileOptions): void {
     const componentRoot = findComponentRoot(path.dirname(entryAbs))
     if (!componentRoot) return
     const reserved = new Set(loadModules(path.dirname(entryAbs)).keys())
-    const asm = assembleComponent(entryAbs, { target: opts.target, reservedModuleNames: reserved })
+    const dependencies: { name: string; entryFile: string }[] = []
+    collectDependencies(componentRoot, dependencies, new Set())
+    const asm = assembleComponent(entryAbs, { target: opts.target, reservedModuleNames: reserved, dependencies })
     if (asm.diagnostics.some(d => d.severity === 'error')) return   // a real error is reported by the compile path
     if (!asm.hasMain) {
         emitDiagnostics([componentDiagToDiagnostic({

@@ -64,6 +64,18 @@ export interface AssembledComponent {
     moduleNames: string[]
     /** Whether the root module defines `main` (false ⇒ library component). */
     hasMain: boolean
+    /** The root module's `@export`'d member names — the component's WIT-world
+     *  surface and the only names a consumer of this component can call. */
+    rootExports: string[]
+}
+
+/** A cross-component dependency, pre-resolved by the CLI from `sgl.toml`
+ *  `[dependencies] name = "path:<rel>"` to its on-disk entry file. */
+export interface ResolvedDependency {
+    /** Canonical dependency component name (the `[dependencies]` key). */
+    name: string
+    /** Absolute path to the dependency's entry `.si` file. */
+    entryFile: string
 }
 
 export interface AssembleOptions {
@@ -71,6 +83,10 @@ export interface AssembleOptions {
     /** Env + user-wrapper module names (registry) — a source module colliding
      *  with one of these is `E-DUP-MOD`. */
     reservedModuleNames?: Set<string>
+    /** Declared cross-component dependencies (ADR-0024 §Dependencies). Referenced
+     *  via `\\ @use name [as alias];` then `alias::fn` / `name::fn`; only the
+     *  dependency's root `@export`'d surface is reachable (2-segment at v1.0). */
+    dependencies?: ResolvedDependency[]
     stdlib?: StdlibHook
     // Injectable filesystem (defaults to node fs) — used by tests.
     readFile?: (abs: string) => string | undefined
@@ -91,6 +107,8 @@ interface ModuleInfo {
     defs: Set<string>
     /** Subset of `defs` marked `@pub`. */
     pub: Set<string>
+    /** Names exported to the host/WIT world (`@export` statement or modifier). */
+    exports: Set<string>
     /** Module names this module references via `other::`. */
     refs: Set<string>
 }
@@ -110,6 +128,23 @@ function defaultListDir(abs: string): { name: string; isDir: boolean }[] | undef
 // Entry point
 // ---------------------------------------------------------------------------
 
+/** Result of merging a component's own modules (no stdlib bundled). */
+interface CoreResult {
+    /** Sub-module + root sources (rewritten), excluding stdlib. */
+    modulesSource: string
+    /** bare stdlib + out-of-component path `@use`s, for the caller to resolve. */
+    externalUses: string[]
+    /** Dependency sources, already re-prefixed under their dep name. */
+    depSources: string[]
+    diagnostics: ComponentDiagnostic[]
+    moduleNames: string[]
+    /** All top-level def names across this component's own modules (for a parent
+     *  consuming it as a dependency — visibility is gated separately by exports). */
+    allDefs: Set<string>
+    rootExports: Set<string>
+    hasMain: boolean
+}
+
 /**
  * Assemble the component rooted at the entry file's directory.
  *
@@ -117,83 +152,146 @@ function defaultListDir(abs: string): { name: string; isDir: boolean }[] | undef
  *                  Its directory is the ROOT module; sub-directories are modules.
  */
 export function assembleComponent(entryFile: string, opts: AssembleOptions = {}): AssembledComponent {
-    const readFile = opts.readFile ?? ((p: string) => (existsSync(p) ? readFileSync(p, 'utf-8') : undefined))
-    const fileExists = opts.fileExists ?? existsSync
-    const listDir = opts.listDir ?? defaultListDir
     const diagnostics: ComponentDiagnostic[] = []
+    const depMap = new Map<string, string>()
+    for (const d of opts.dependencies ?? []) depMap.set(d.name, d.entryFile)
 
+    const core = assembleCore(entryFile, opts, diagnostics, depMap, new Set())
     const rootDir = dirname(resolve(entryFile))
 
-    // 1. Discover modules: root dir + every descendant dir with >=1 .si file.
-    const { rootFiles, subDirs } = discoverModules(rootDir, listDir, diagnostics, opts.reservedModuleNames)
-    const sourceModuleNames = new Set(subDirs.map(s => s.name))
-
-    // 2. Build each module's auto-included chunk (files concatenated, @use handled).
-    const autoIncludedPaths = new Set<string>([
-        ...rootFiles,
-        ...subDirs.flatMap(s => s.files),
-    ].map(p => resolve(p)))
-
-    const externalUses: string[] = []   // bare stdlib + out-of-component path @use, fed to resolveUses
-    const buildChunk = (dir: string, files: string[]): string => {
-        const parts: string[] = []
-        for (const f of files) {
-            const raw = readFile(f)
-            if (raw === undefined) continue
-            parts.push(stripAndCollectUses(raw, f, autoIncludedPaths, externalUses, diagnostics))
-        }
-        return parts.join('\n\n')
-    }
-
-    const root: ModuleInfo = blankModule('', rootDir, buildChunk(rootDir, rootFiles))
-    const subs: ModuleInfo[] = subDirs.map(s => blankModule(s.name, s.dir, buildChunk(s.dir, s.files)))
-
-    // 3. Pass 1 — parse every chunk; collect defs / pub / top-level diagnostics.
-    parseModule(root, diagnostics, /*isRoot*/ true)
-    for (const m of subs) parseModule(m, diagnostics, /*isRoot*/ false)
-
-    const pubByModule = new Map<string, ModuleInfo>()
-    for (const m of subs) pubByModule.set(m.name, m)
-
-    // 4. Pass 2 — rewrite each chunk (prefix sub-module defs/refs, cross-module
-    //    refs everywhere, with E-PRIV enforcement) and record cross-module edges.
-    const rootRewritten = rewriteRoot(root, sourceModuleNames, pubByModule, diagnostics)
-    const subsRewritten = subs.map(m => rewriteSub(m, sourceModuleNames, pubByModule, diagnostics))
-
-    // 5. Cycle ban (E-MOD-CYCLE) over the observed cross-module graph.
-    detectCycles(root, subs, diagnostics)
-
-    // 6. Stdlib + out-of-component includes via the shipped resolver (dedup,
-    //    cycle detection, wasm-gc shadow swap all preserved verbatim).
+    // Resolve stdlib + out-of-component includes via the shipped resolver (dedup,
+    // cycle detection, wasm-gc shadow swap all preserved verbatim). Dependency
+    // stdlib `@use`s are folded into the same pool so the stdlib is shared once.
     let stdlibSource = ''
-    if (externalUses.length > 0) {
-        const synthetic = dedupe(externalUses).map(u => `@use '${u}';`).join('\n') + '\n'
-        const syntheticPath = join(rootDir, '__component_uses__.si')
+    if (core.externalUses.length > 0) {
+        const synthetic = dedupe(core.externalUses).map(u => `@use '${u}';`).join('\n') + '\n'
         try {
-            stdlibSource = resolveUses(synthetic, syntheticPath, {
-                target: opts.target,
-                stdlib: opts.stdlib,
-                readFile: opts.readFile,
-                fileExists: opts.fileExists,
+            stdlibSource = resolveUses(synthetic, join(rootDir, '__component_uses__.si'), {
+                target: opts.target, stdlib: opts.stdlib,
+                readFile: opts.readFile, fileExists: opts.fileExists,
             }).source
         } catch (e: any) {
             diagnostics.push({ code: 'E-USE', severity: 'error', message: String(e?.message ?? e) })
         }
     }
 
-    // 7. Concatenate: stdlib, then sub-modules, then root (root last so its
-    //    trailing top-level `main();` stays at the end, matching today).
-    const merged = [
-        stdlibSource,
-        ...subsRewritten.map((src, i) => regionWrap(subs[i].name, src)),
-        regionWrap('<root>', rootRewritten),
-    ].filter(s => s.trim().length > 0).join('\n')
+    // Concatenate: stdlib, dependencies, then this component's own modules.
+    const merged = [stdlibSource, ...core.depSources, core.modulesSource]
+        .filter(s => s.trim().length > 0).join('\n')
 
     return {
         source: merged,
         diagnostics,
+        moduleNames: core.moduleNames,
+        hasMain: core.hasMain,
+        rootExports: [...core.rootExports],
+    }
+}
+
+/**
+ * Merge one component's own modules (root + sub-modules) plus its dependency
+ * components, returning the merged source WITHOUT stdlib (the caller pools and
+ * resolves stdlib once across the whole graph). Recurses through dependencies;
+ * `visiting` guards against `E-DEP-CYCLE`.
+ */
+function assembleCore(
+    entryFile: string,
+    opts: AssembleOptions,
+    diagnostics: ComponentDiagnostic[],
+    depMap: Map<string, string>,
+    visiting: Set<string>,
+): CoreResult {
+    const readFile = opts.readFile ?? ((p: string) => (existsSync(p) ? readFileSync(p, 'utf-8') : undefined))
+    const listDir = opts.listDir ?? defaultListDir
+    const rootDir = dirname(resolve(entryFile))
+
+    // 1. Discover modules: root dir + every descendant dir with >=1 .si file.
+    const { rootFiles, subDirs } = discoverModules(rootDir, listDir, diagnostics, opts.reservedModuleNames)
+    const sourceModuleNames = new Set(subDirs.map(s => s.name))
+
+    // 2. Build each module's auto-included chunk (files concatenated; per-file
+    //    dependency aliases resolved; `@use` directives handled).
+    const autoIncludedPaths = new Set<string>([...rootFiles, ...subDirs.flatMap(s => s.files)].map(p => resolve(p)))
+    const externalUses: string[] = []
+    const referencedDeps = new Set<string>()
+    const buildChunk = (files: string[]): string => {
+        const parts: string[] = []
+        for (const f of files) {
+            const raw = readFile(f)
+            if (raw === undefined) continue
+            const aliased = processImports(raw, f, referencedDeps, diagnostics)
+            parts.push(stripAndCollectUses(aliased, f, autoIncludedPaths, externalUses, diagnostics))
+        }
+        return parts.join('\n\n')
+    }
+
+    const root = blankModule('', rootDir, buildChunk(rootFiles))
+    const subs = subDirs.map(s => blankModule(s.name, s.dir, buildChunk(s.files)))
+
+    // 3. Resolve referenced dependency components FIRST so their export surfaces
+    //    are known before the consumer's cross-module rewrite runs.
+    const depSources: string[] = []
+    const pubByModule = new Map<string, ModuleInfo>()
+    for (const m of subs) pubByModule.set(m.name, m)
+
+    for (const depName of referencedDeps) {
+        if (sourceModuleNames.has(depName) || opts.reservedModuleNames?.has(depName)) {
+            diagnostics.push({ code: 'E-DUP-MOD', severity: 'error',
+                message: `dependency '${depName}' collides with a local module of the same name.` })
+            continue
+        }
+        const entry = depMap.get(depName)
+        if (!entry) {
+            diagnostics.push({ code: 'E-DEP-UNRESOLVED', severity: 'error',
+                message: `unresolved dependency '${depName}' — add \`${depName} = "path:<rel>"\` under [dependencies] in sgl.toml.` })
+            continue
+        }
+        if (visiting.has(depName)) {
+            diagnostics.push({ code: 'E-DEP-CYCLE', severity: 'error',
+                message: `component dependency cycle through '${depName}' — the dependency graph must be a DAG.` })
+            continue
+        }
+        visiting.add(depName)
+        const depCore = assembleCore(entry, opts, diagnostics, depMap, visiting)
+        visiting.delete(depName)
+        // Re-prefix the dependency's entire merged source as one module named by
+        // the dep, so `dep::fn` -> `dep__fn` and its symbols never collide.
+        const prefixed = prefixDependency(depName, depCore.modulesSource, diagnostics)
+        depSources.push(...depCore.depSources)
+        depSources.push(regionWrap(`dep ${depName}`, prefixed))
+        externalUses.push(...depCore.externalUses)
+        // Register the dep as a pseudo source-module: callable members are its
+        // ROOT @export'd surface; private members trip E-PRIV (E-NOEXPORT).
+        const depMod = blankModule(depName, entry, '')
+        depCore.allDefs.forEach(d => depMod.defs.add(d))
+        depCore.rootExports.forEach(d => depMod.pub.add(d))
+        pubByModule.set(depName, depMod)
+        sourceModuleNames.add(depName)
+    }
+
+    // 4. Pass 1 — parse own chunks; collect defs / pub / exports / diagnostics.
+    parseModule(root, diagnostics, /*isRoot*/ true)
+    for (const m of subs) parseModule(m, diagnostics, /*isRoot*/ false)
+
+    // 5. Pass 2 — rewrite (prefix sub-module defs/refs, cross-module refs, E-PRIV).
+    const rootRewritten = rewriteRoot(root, sourceModuleNames, pubByModule, diagnostics)
+    const subsRewritten = subs.map(m => rewriteSub(m, sourceModuleNames, pubByModule, diagnostics))
+
+    // 6. Cycle ban (E-MOD-CYCLE) over the observed intra-component graph.
+    detectCycles(root, subs, diagnostics)
+
+    const modulesSource = [
+        ...subsRewritten.map((src, i) => regionWrap(subs[i].name, src)),
+        regionWrap('<root>', rootRewritten),
+    ].filter(s => s.trim().length > 0).join('\n')
+
+    const allDefs = new Set<string>(root.defs)
+    for (const m of subs) for (const d of m.defs) allDefs.add(m.name ? `${m.name}__${d}` : d)
+
+    return {
+        modulesSource, externalUses, depSources, diagnostics,
         moduleNames: subs.map(m => m.name),
-        hasMain: root.defs.has('main'),
+        allDefs, rootExports: root.exports, hasMain: root.defs.has('main'),
     }
 }
 
@@ -297,13 +395,68 @@ function stripAndCollectUses(
 }
 
 // ---------------------------------------------------------------------------
+// Dependency import directives (ADR-0024 §Dependencies)
+// ---------------------------------------------------------------------------
+
+// `\\ @use mathlib;` or `\\ @use mathlib as ml;` — the one explicit import in
+// the language (a per-file cross-component alias). Handled here as a pre-parse
+// directive (consistent with the shipped `@use` model): the alias is rewritten
+// to the canonical dependency name and the directive is stripped before parse.
+const IMPORT_RE = /^[ \t]*\\\\[ \t]*@use[ \t]+([A-Za-z_]\w*)(?:[ \t]+as[ \t]+([A-Za-z_]\w*))?[ \t]*;[ \t]*(?:#[^\n\r]*)?$/gm
+
+function escapeRe(s: string): string { return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') }
+
+/** Resolve per-file dependency aliases: record referenced deps, rewrite
+ *  `alias::` to the canonical `depName::`, and strip the import directives. */
+function processImports(src: string, _filePath: string, referencedDeps: Set<string>, _diagnostics: ComponentDiagnostic[]): string {
+    const aliases: [string, string][] = []
+    IMPORT_RE.lastIndex = 0
+    let m: RegExpExecArray | null
+    while ((m = IMPORT_RE.exec(src)) !== null) {
+        const depName = m[1], alias = m[2]
+        referencedDeps.add(depName)
+        if (alias && alias !== depName) aliases.push([alias, depName])
+    }
+    let out = src.replace(IMPORT_RE, '')
+    for (const [alias, depName] of aliases) {
+        out = out.replace(new RegExp(`(^|[^\\w.])${escapeRe(alias)}::`, 'g'), (_mm, p1) => `${p1}${depName}::`)
+    }
+    return out
+}
+
+/** Re-prefix a dependency component's whole merged source as a single module
+ *  named by the dependency, so `dep::fn` -> `dep__fn` and its symbols never
+ *  collide with the consumer's. The dependency's own `@export`s are stripped —
+ *  only the consumer's root `@export`s form the merged binary's world. */
+function prefixDependency(depName: string, source: string, diagnostics: ComponentDiagnostic[]): string {
+    if (source.trim().length === 0) return ''
+    let ast: any
+    try { ast = parseToAst(source) } catch (e: any) {
+        diagnostics.push({ code: 'E-DEP-PARSE', severity: 'error', message: `dependency '${depName}': ${String(e?.message ?? e)}` })
+        return source
+    }
+    const m = blankModule(depName, '', source)
+    m.ast = ast
+    for (const el of ast.elements ?? []) {
+        const n = unwrap(el)
+        if (!n || n.type !== 'Definition') continue
+        if (!RENAMEABLE_KW.has(n.keyword)) continue
+        if (n.name?.name) m.defs.add(n.name.name)
+    }
+    const prefixed = rewriteSub(m, new Set(), new Map(), diagnostics)
+    return prefixed
+        .replace(/^[ \t]*@export[ \t]+[A-Za-z_]\w*[ \t]*;[ \t]*$/gm, '')
+        .replace(/(^[ \t]*\\\\[ \t]*(?:@\w+[ \t]+)*?)@export[ \t]+/gm, '$1')
+}
+
+// ---------------------------------------------------------------------------
 // Parsing + collection (pass 1)
 // ---------------------------------------------------------------------------
 
 const RENAMEABLE_KW = new Set(['@fn', '@global', '@local', '@let', '@var', '@type', '@type_sum', '@enum', '@struct'])
 
 function blankModule(name: string, dir: string, chunk: string): ModuleInfo {
-    return { name, dir, chunk, ast: null, defs: new Set(), pub: new Set(), refs: new Set() }
+    return { name, dir, chunk, ast: null, defs: new Set(), pub: new Set(), exports: new Set(), refs: new Set() }
 }
 
 function unwrap(node: any): any {
@@ -343,7 +496,10 @@ function parseModule(m: ModuleInfo, diagnostics: ComponentDiagnostic[], isRoot: 
             }
             continue
         }
-        if (n.keyword === '@export' || n.keyword === '@extern') continue   // not renameable module members
+        // `@export name;` statements + the `\\ @export` modifier define the
+        // component's host/WIT-world surface (consumed by the root module).
+        if (n.keyword === '@export') { if (n.name?.name) m.exports.add(n.name.name); continue }
+        if (n.keyword === '@extern') continue   // host import — not a renameable member
         const name: string | undefined = n.name?.name
         if (!name) continue
         if (seenDef.has(name)) {
@@ -355,6 +511,7 @@ function parseModule(m: ModuleInfo, diagnostics: ComponentDiagnostic[], isRoot: 
         seenDef.set(name, true)
         m.defs.add(name)
         if (n.pub === true) m.pub.add(name)
+        if (n.export === true) m.exports.add(name)
     }
 }
 
