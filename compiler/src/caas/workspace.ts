@@ -102,6 +102,15 @@ export interface CancellableOptions {
     readonly cancel?: AbortSignal
 }
 
+/** Options for {@link Workspace.getCompletions}. */
+export interface CompletionOptions extends CancellableOptions {
+    /**
+     * ADR-0024 — when the cursor follows a `mod::` qualifier, restrict
+     * suggestions to module `mod`'s public (`@pub`) members.
+     */
+    readonly module?: string
+}
+
 /** Result of a signature-help query (cursor is inside a function call argument list). */
 export interface SignatureHelp {
     readonly name: string
@@ -484,18 +493,20 @@ export class Workspace {
         //    cross-resolve.
         const nspath = namespacePathAtPosition(doc, line, col)
         if (!nspath || nspath.length === 0) return undefined
-        return this.#resolveIndexed(nspath)?.symbol
+        return this.#resolveIndexed(nspath, uri)?.symbol
     }
 
     /**
-     * Resolve a `Namespace` path to a single indexed symbol. For a qualified
-     * `mod::name`, prefer a candidate whose document lives in module `mod`;
-     * otherwise (or if no module matches) fall back to the first candidate.
+     * Resolve a `Namespace` path to a single indexed symbol, honouring project
+     * visibility (so an unrelated component never cross-resolves). For a
+     * qualified `mod::name`, prefer a candidate whose document lives in module
+     * `mod`; otherwise fall back to the first visible candidate.
      */
-    #resolveIndexed(nspath: string[]): IndexEntry | undefined {
+    #resolveIndexed(nspath: string[], currentUri: string): IndexEntry | undefined {
         const name = nspath[nspath.length - 1]
-        const candidates = this.#symbolIndex.get(name)
-        if (!candidates || candidates.length === 0) return undefined
+        const candidates = (this.#symbolIndex.get(name) ?? [])
+            .filter(e => this.#isEntryVisible(e.uri, currentUri))
+        if (candidates.length === 0) return undefined
         if (nspath.length >= 2) {
             const mod = nspath[nspath.length - 2]
             const inModule = candidates.find(e => moduleOfUri(e.uri) === mod)
@@ -518,12 +529,14 @@ export class Workspace {
         if (!doc) return []
 
         const local = doc.model.symbolAtPosition(line, col)
-        if (local) return (this.#symbolIndex.get(local.name) ?? []).map(e => e.symbol)
+        const visible = (name: string) => (this.#symbolIndex.get(name) ?? [])
+            .filter(e => this.#isEntryVisible(e.uri, uri))
+        if (local) return visible(local.name).map(e => e.symbol)
         const nspath = namespacePathAtPosition(doc, line, col)
         if (!nspath || nspath.length === 0) return []
         // A qualified `mod::name` yields the module-matched candidate first.
-        const preferred = this.#resolveIndexed(nspath)
-        const all = this.#symbolIndex.get(nspath[nspath.length - 1]) ?? []
+        const preferred = this.#resolveIndexed(nspath, uri)
+        const all = visible(nspath[nspath.length - 1])
         if (!preferred) return all.map(e => e.symbol)
         return [preferred.symbol, ...all.filter(e => e !== preferred).map(e => e.symbol)]
     }
@@ -562,8 +575,9 @@ export class Workspace {
             spans.push(span)
         }
 
-        for (const d of this.#docs.values()) {
+        for (const [docUri, d] of this.#docs) {
             options.cancel?.throwIfAborted()
+            if (!this.#isEntryVisible(docUri, uri)) continue   // scope to the active project
             // Typechecker-resolved references (accurate for same-doc, and for
             // any doc compiled with the symbol in scope).
             for (const span of d.model.referenceSpansForName(name)) add(span)
@@ -610,7 +624,7 @@ export class Workspace {
      *
      * Returns an empty array when the document is not open.
      */
-    getCompletions(uri: string, _line: number, _col: number, prefix?: string, options: CancellableOptions = {}): CompletionItem[] {
+    getCompletions(uri: string, _line: number, _col: number, prefix?: string, options: CompletionOptions = {}): CompletionItem[] {
         options.cancel?.throwIfAborted()
         const doc = this.#docs.get(uri)
         if (!doc) return []
@@ -627,6 +641,23 @@ export class Workspace {
                 detail:     sym.displayString,
                 docComment: docStr ? docCommentForName(docStr, sym.name) : undefined,
             })
+        }
+
+        // ADR-0024: a qualified `mod::` context offers ONLY module `mod`'s public
+        // (`@pub`) members — no locals, no keywords, no other modules.
+        if (options.module) {
+            for (const [, entries] of this.#symbolIndex) {
+                options.cancel?.throwIfAborted()
+                for (const entry of entries) {
+                    if (moduleOfUri(entry.uri) !== options.module) continue
+                    if (!this.#isEntryVisible(entry.uri, uri)) continue
+                    if ((entry.symbol.definitionNode as { pub?: boolean })?.pub !== true) continue
+                    add(entry.symbol, this.#docs.get(entry.uri))
+                }
+            }
+            if (!prefix) return items
+            const lpm = prefix.toLowerCase()
+            return items.filter(it => it.label.toLowerCase().includes(lpm))
         }
 
         // Local symbols first (highest priority).

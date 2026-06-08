@@ -20,7 +20,7 @@
 
 import * as path from 'node:path'
 import * as fs from 'node:fs'
-import { Workspace as CompilerWorkspace, type Document } from '@silicon/compiler'
+import { Workspace as CompilerWorkspace, type Document, type Project } from '@silicon/compiler'
 import { uriToPath, pathToUri } from './lsp-convert.ts'
 
 export type { Document }
@@ -34,6 +34,11 @@ export class Workspace {
      *  every keystroke). */
     readonly #scannedComponents = new Map<string, string[]>()
 
+    /** CaaS Project per component root (Stage 3): groups a component's documents
+     *  so cross-document visibility is scoped to the component — two unrelated
+     *  projects open in one editor window never cross-resolve. */
+    readonly #componentProjects = new Map<string, Project>()
+
     /** Open (or update) a document and return its compiled state.
      *  Opens any `@use` dependencies AND, inside an `sgl.toml` project, every
      *  sibling source file (ADR-0024 directory=module) into the same workspace
@@ -43,29 +48,37 @@ export class Workspace {
         // offset-preserving whitespace before the compiler sees it.
         const source = stripUseDirectives(text)
 
-        // Ensure dependencies are open first (best-effort; missing files surface
-        // as the elaborator's own diagnostic once @use is supported end-to-end).
-        for (const depUri of extractUses(text, uriToPath(uri))) {
-            if (depUri === uri || this.compiler.getDocument(depUri)) continue
-            this.#openFromDisk(depUri)
-        }
-
         // ADR-0024: inside a project, a module's files auto-include (no `@use`),
         // so open every component source file too — this is what makes a bare
         // intra-module call (`mul` defined in ops.si, used in helpers.si) and a
-        // cross-module `math::square` resolve. Compiling the active document
-        // LAST means its `externalSymbols` already sees every sibling.
-        this.#ensureComponentOpen(uri)
+        // cross-module `math::square` resolve. The component's docs are grouped
+        // into one CaaS Project (Stage 3) so visibility stays component-scoped.
+        const project = this.#ensureComponentOpen(uri)
 
-        return this.compile(uri, source)
+        // Ensure `@use` dependencies are open too (legacy / standalone files).
+        // These ride the same project as the active document when it has one.
+        for (const depUri of extractUses(text, uriToPath(uri))) {
+            if (depUri === uri || this.compiler.getDocument(depUri)) continue
+            this.#openFromDisk(depUri, project)
+        }
+
+        // Compiling the active document LAST means its `externalSymbols` already
+        // sees every sibling.
+        return this.compile(uri, source, project)
     }
 
     /** Open every source file of the `sgl.toml` component that owns `uri`
-     *  (excluding the active document). No-op for a standalone file. */
-    #ensureComponentOpen(activeUri: string): void {
+     *  (excluding the active document) into the component's CaaS Project, and
+     *  return that Project. No-op (returns undefined) for a standalone file. */
+    #ensureComponentOpen(activeUri: string): Project | undefined {
         const filePath = uriToPath(activeUri)
         const root = findComponentRoot(path.dirname(filePath))
-        if (!root) return                       // standalone file — keep @use-only behaviour
+        if (!root) return undefined             // standalone file — keep @use-only behaviour
+        let project = this.#componentProjects.get(root)
+        if (!project) {
+            project = this.compiler.addProject(`component:${root}`)
+            this.#componentProjects.set(root, project)
+        }
         let files = this.#scannedComponents.get(root)
         if (!files) {
             files = listComponentSiFiles(root)
@@ -74,16 +87,19 @@ export class Workspace {
         for (const f of files) {
             const fileUri = pathToUri(f)
             if (fileUri === activeUri || this.compiler.getDocument(fileUri)) continue
-            this.#openFromDisk(fileUri)
+            this.#openFromDisk(fileUri, project)
         }
+        return project
     }
 
     /** Read a file from disk and open it (background) into the compiler
-     *  workspace. Best-effort: unreadable / malformed files are skipped. */
-    #openFromDisk(fileUri: string): void {
+     *  workspace — into `project` when given. Best-effort: unreadable /
+     *  malformed files are skipped. */
+    #openFromDisk(fileUri: string, project: Project | undefined): void {
         try {
-            const text = fs.readFileSync(uriToPath(fileUri), 'utf-8')
-            this.compiler.openDocument(fileUri, stripUseDirectives(text))
+            const src = stripUseDirectives(fs.readFileSync(uriToPath(fileUri), 'utf-8'))
+            if (project) project.addDocument(fileUri, src)
+            else this.compiler.openDocument(fileUri, src)
         } catch {
             // Unreadable target — skip; not fatal to the active document.
         }
@@ -95,18 +111,57 @@ export class Workspace {
         this.#scannedComponents.delete(componentRoot)
     }
 
-    /** Compile already-stripped source via open- or edit-document. */
-    private compile(uri: string, source: string): Document | undefined {
+    /**
+     * React to a watched-file change (Stage 3): a created/deleted `.si` file or
+     * an edited `sgl.toml` invalidates the owning component's cached file list
+     * and refreshes its open document set, so cross-file navigation stays
+     * correct without the user re-editing.
+     */
+    handleWatchedChange(fileUri: string, kind: 'created' | 'changed' | 'deleted'): void {
+        const filePath = uriToPath(fileUri)
+        const isToml = path.basename(filePath) === 'sgl.toml'
+        const root = isToml ? path.dirname(filePath) : findComponentRoot(path.dirname(filePath))
+        if (!root) {
+            if (kind === 'deleted') this.compiler.closeDocument(fileUri)
+            return
+        }
+        this.invalidateComponentScan(root)
+        if (kind === 'deleted' && !isToml) {
+            try { this.compiler.closeDocument(fileUri) } catch { /* not open */ }
+        }
+        // If this component is already active (has a Project), re-open its files
+        // so a newly-added module file is immediately resolvable.
+        if (this.#componentProjects.has(root)) this.#refreshComponent(root)
+    }
+
+    /** Re-scan a component and open any not-yet-open source files into its
+     *  Project. Used after a watched-file change. */
+    #refreshComponent(root: string): void {
+        const project = this.#componentProjects.get(root)
+        if (!project) return
+        const files = listComponentSiFiles(root)
+        this.#scannedComponents.set(root, files)
+        for (const f of files) {
+            const fileUri = pathToUri(f)
+            if (this.compiler.getDocument(fileUri)) continue
+            this.#openFromDisk(fileUri, project)
+        }
+    }
+
+    /** Compile already-stripped source via open- or edit-document, into the
+     *  given component `project` on first open (Stage 3). */
+    private compile(uri: string, source: string, project?: Project): Document | undefined {
+        const fresh = () => (project ? project.addDocument(uri, source) : this.compiler.openDocument(uri, source))
         try {
             return this.compiler.getDocument(uri)
                 ? this.compiler.editDocument(uri, source)
-                : this.compiler.openDocument(uri, source)
+                : fresh()
         } catch {
             // A compiler-internal throw (not a user error — those come back as
             // diagnostics).  Recover by reopening fresh; give up gracefully.
             try {
                 if (this.compiler.getDocument(uri)) this.compiler.closeDocument(uri)
-                return this.compiler.openDocument(uri, source)
+                return fresh()
             } catch {
                 return undefined
             }

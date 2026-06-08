@@ -107,6 +107,58 @@ describe('ADR-0024 LSP cross-file go-to-definition', () => {
         expect(unbound).toEqual([])
     })
 
+    test('Stage 3: two unrelated components do not cross-resolve a same-named symbol', () => {
+        const a = project({ 'src/main.si': `\\\\ @export foo () -> Int\n@fn foo := { 1 };\nfoo();` })
+        const b = project({ 'src/main.si': `\\\\ @export foo () -> Int\n@fn foo := { 2 };\nfoo();` })
+        const ws = new Workspace()
+        const aMain = path.join(a, 'src', 'main.si')
+        const bMain = path.join(b, 'src', 'main.si')
+        const aText = fs.readFileSync(aMain, 'utf-8')
+        ws.update(pathToUri(aMain), aText)
+        ws.update(pathToUri(bMain), fs.readFileSync(bMain, 'utf-8'))
+        // `foo()` call on the trailing line of component A.
+        const idx = aText.lastIndexOf('foo(')
+        const before = aText.slice(0, idx)
+        const sym = ws.compiler.findDefinition(pathToUri(aMain), before.split('\n').length, idx - before.lastIndexOf('\n'))
+        expect(sym).toBeTruthy()
+        // Must be component A's foo, never component B's (project-scoped index).
+        expect(sym!.definitionSpan?.file).toBe(pathToUri(aMain))
+    })
+
+    test('Stage 3: `mod::` completion offers the module\'s @pub members only', () => {
+        const ws = new Workspace()
+        const { uri } = open(ws, path.join('text', 'text.si'))
+        const items = ws.compiler.getCompletions(uri, 1, 1, undefined, { module: 'math' })
+        const labels = items.map(i => i.label)
+        // math's @pub surface:
+        expect(labels).toContain('square')
+        expect(labels).toContain('add')
+        expect(labels).toContain('cube')
+        // private (non-@pub) member must NOT be offered cross-module:
+        expect(labels).not.toContain('mul')
+        // and nothing from other modules / root:
+        expect(labels).not.toContain('score')
+        expect(labels).not.toContain('banner')
+    })
+
+    test('Stage 3: a newly-added module file becomes resolvable after a watched-file event', () => {
+        const dir = project({
+            'src/main.si': `\\\\ @export run () -> Int\n@fn run := { 0 };`,
+        })
+        const ws = new Workspace()
+        const mainPath = path.join(dir, 'src', 'main.si')
+        ws.update(pathToUri(mainPath), fs.readFileSync(mainPath, 'utf-8'))
+        // Add a new module file on disk after the component was first scanned.
+        const newFile = path.join(dir, 'src', 'extra', 'e.si')
+        fs.mkdirSync(path.dirname(newFile), { recursive: true })
+        fs.writeFileSync(newFile, `\\\\ @pub gadget () -> Int\n@fn gadget := { 7 };`)
+        ws.handleWatchedChange(pathToUri(newFile), 'created')
+        // It is now open and its definition is resolvable cross-module.
+        expect(ws.getDoc(pathToUri(newFile))).toBeTruthy()
+        const defs = ws.compiler.findDefinitions(pathToUri(newFile), 2, 6) // on `gadget` def
+        expect(defs.some(s => s.name === 'gadget')).toBe(true)
+    })
+
     test('standalone file (no sgl.toml) does not pull in unrelated siblings', () => {
         // A bare temp file: findDefinition on an unknown name returns nothing,
         // and no project scan happens.

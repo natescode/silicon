@@ -28,6 +28,7 @@ import { registerSignatureHelp } from './handlers/signature-help.ts'
 import { registerFormatting } from './handlers/formatting.ts'
 import { registerSemanticTokens } from './handlers/semantic-tokens.ts'
 import { registerCodeActions } from './handlers/code-action.ts'
+import { registerWatchedFiles, registerFileWatchers } from './handlers/watched-files.ts'
 
 // Default to stdio when no transport flag is passed.  VS Code's
 // LanguageClient supplies --stdio explicitly; CLI / smoke tests don't.
@@ -42,28 +43,38 @@ const connection = process.argv.includes('--stdio') ||
 const documents = new TextDocuments(TextDocument)
 const workspace = new Workspace()
 
-connection.onInitialize(() => ({
-    capabilities: {
-        textDocumentSync: TextDocumentSyncKind.Incremental,
-        documentSymbolProvider: true,
-        definitionProvider: true,
-        hoverProvider: true,
-        completionProvider: { triggerCharacters: ['&', '@', ':'] },
-        referencesProvider: true,
-        renameProvider: true,
-        signatureHelpProvider: { triggerCharacters: ['(', ',', ' '] },
-        documentFormattingProvider: true,
-        codeActionProvider: true,
-        semanticTokensProvider: {
-            legend: { tokenTypes: SEMANTIC_TOKEN_TYPES, tokenModifiers: [] },
-            full: true,
+/** Whether the client supports dynamic registration of file watchers. */
+let canWatchFiles = false
+
+connection.onInitialize((params) => {
+    // Only register file watchers (Stage 3) if the client supports it — sending
+    // an unsolicited `client/registerCapability` to a client that doesn't would
+    // be a protocol violation.
+    canWatchFiles = params.capabilities?.workspace?.didChangeWatchedFiles?.dynamicRegistration === true
+    return {
+        capabilities: {
+            textDocumentSync: TextDocumentSyncKind.Incremental,
+            documentSymbolProvider: true,
+            definitionProvider: true,
+            hoverProvider: true,
+            completionProvider: { triggerCharacters: ['&', '@', ':'] },
+            referencesProvider: true,
+            renameProvider: true,
+            signatureHelpProvider: { triggerCharacters: ['(', ',', ' '] },
+            documentFormattingProvider: true,
+            codeActionProvider: true,
+            semanticTokensProvider: {
+                legend: { tokenTypes: SEMANTIC_TOKEN_TYPES, tokenModifiers: [] },
+                full: true,
+            },
         },
-    },
-    serverInfo: { name: 'silicon-lsp', version: '0.2.0' },
-}))
+        serverInfo: { name: 'silicon-lsp', version: '0.2.0' },
+    }
+})
 
 connection.onInitialized(() => {
     connection.console.info('silicon-lsp initialised (incremental engine)')
+    if (canWatchFiles) registerFileWatchers(connection)
 })
 
 // Wire up handlers.  Each registration attaches its own document /
@@ -79,6 +90,7 @@ registerSignatureHelp(connection, documents, workspace)
 registerFormatting(connection, documents, workspace)
 registerSemanticTokens(connection, documents, workspace)
 registerCodeActions(connection, documents, workspace)
+registerWatchedFiles(connection, workspace)
 
 documents.listen(connection)
 connection.listen()
