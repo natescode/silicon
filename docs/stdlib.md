@@ -35,36 +35,59 @@ bare name: `@use 'io';` loads `io.si`. They split into two tiers:
 
 | Tier | Modules | Portability |
 |------|---------|-------------|
-| **Pure compute** | `mem`, `num`, `str` | Every target — no host imports, only linear memory + intrinsics. Compile under native/WASI, `--platform=bun`, and `--platform=web`. |
+| **Pure compute** | `mem`, `heap`, `num`, `str` | No host imports — only linear memory + intrinsics. Compile under native/WASI, `--platform=bun`, and `--platform=web`. |
 | **Host I/O** | `io` | Native/WASI (`sgl run`, any WASI host). Uses `wasi_snapshot_preview1`. On bun/web, use `console` / `web` instead (see [Platforms](#platforms)). |
 
-Dependency direction: `io → num → mem`, `str → mem`. `@use` deduplicates, so
-pulling in `io` transitively brings `num` and `mem`.
+Across the *memory-mode* axis: `mem` (pure byte ops) also compiles under
+`--target=wasm-gc`; `heap`/`num`/`str` use the wasm-mvp-only bump-pointer helper
+`heap_align`, so they target wasm-mvp (their `--platform=bun`/`web` builds, which
+are mvp-based, are unaffected).
+
+Dependency direction: `io → num → heap → mem` and `str → heap → mem` (`heap`
+re-exposes `mem`). `@use` deduplicates, so pulling in `io` transitively brings
+`num`, `heap`, and `mem`.
 
 A note on memory: the default allocator is a bump allocator that never frees
 and does **not** align allocations. Building odd-length strings at runtime
 leaves the bump pointer on an odd address, which makes the next WASI iovec
 store trap under strict runtimes (wasmtime). Every stdlib string builder calls
-`heap_align()` before returning, and `io`'s write path re-aligns defensively, so
-this is invisible to user code.
+`heap_align()` (from `heap`) before returning, and `io`'s write path re-aligns
+defensively, so this is invisible to user code.
 
 ---
 
-## `mem` — memory & alignment
+## `mem` — portable byte operations
 
 ```silicon
 @use 'mem';
 ```
 
+Pure address/arithmetic ops over linear memory — core + bulk-memory instructions
+only, so `mem` compiles under **both** wasm-mvp and `--target=wasm-gc`.
+
 | Function | Signature | Notes |
 |----------|-----------|-------|
 | `align_up` | `(Int, Int) -> Int` | Round `n` up to the next multiple of `a`. |
-| `heap_align` | `() -> Int` | Round the bump pointer up to a 4-byte boundary. No-op when already aligned. |
-| `mem_fill` | `(Int, Int, Int) -> Int` | Write `n` copies of byte `b` from `ptr`. |
+| `mem_fill` | `(Int, Int, Int) -> Int` | Write `n` copies of byte `b` from `ptr` (one `memory.fill`). |
 | `mem_eq` | `(Int, Int, Int) -> Bool` | Compare `n` bytes at two addresses. |
 
-`mem_copy` is already available as a runtime prelude function (`mem_copy(dst,
-src, n)`).
+`mem_copy(dst, src, n)` is a runtime prelude function (one `memory.copy`), always
+available without a `@use`.
+
+## `heap` — bump-pointer alignment (wasm-mvp only)
+
+```silicon
+@use 'heap';
+```
+
+| Function | Signature | Notes |
+|----------|-----------|-------|
+| `heap_align` | `() -> Int` | Round the bump pointer up to a 4-byte boundary. No-op when already aligned. |
+
+`heap_align` reads/rewrites the allocator pointer via the prelude's `heap_get` /
+`heap_set` — wasm-mvp-only introspection primitives with no honest wasm-gc
+semantics, so `@use 'heap'` under `--target=wasm-gc` is an `E0012` error. The
+portable byte ops live in [`mem`](#mem-portable-byte-operations).
 
 ---
 

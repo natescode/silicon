@@ -309,7 +309,8 @@ functions, so basic programs read like a high-level language. Full reference:
 @use 'io';      # print, println, print_int/float/bool, eprint, read_line, exit
 @use 'num';     # int_to_str, str_to_int, int_abs/min/max/clamp/pow, float_*
 @use 'str';     # str_eq, str_contains, str_slice, str_repeat, str_index_of, …
-@use 'mem';     # heap_align, align_up, mem_fill, mem_eq
+@use 'mem';     # align_up, mem_fill, mem_eq  (portable; also wasm-gc)
+@use 'heap';    # heap_align  (bump-pointer alignment; wasm-mvp only)
 ```
 
 A taste:
