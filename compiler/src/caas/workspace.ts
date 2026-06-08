@@ -478,10 +478,30 @@ export class Workspace {
         if (local) return local
 
         // 2. Walk the elaborated SyntaxNode tree to find a Namespace at the
-        //    position, then look the name up in the workspace symbol index.
-        const name = namespaceNameAtPosition(doc, line, col)
-        if (!name) return undefined
-        return this.#symbolIndex.get(name)?.[0]?.symbol
+        //    position, then look the name up in the workspace symbol index. A
+        //    qualified `mod::name` is resolved to the matching MODULE (ADR-0024
+        //    directory=module), so two modules with a same-named member don't
+        //    cross-resolve.
+        const nspath = namespacePathAtPosition(doc, line, col)
+        if (!nspath || nspath.length === 0) return undefined
+        return this.#resolveIndexed(nspath)?.symbol
+    }
+
+    /**
+     * Resolve a `Namespace` path to a single indexed symbol. For a qualified
+     * `mod::name`, prefer a candidate whose document lives in module `mod`;
+     * otherwise (or if no module matches) fall back to the first candidate.
+     */
+    #resolveIndexed(nspath: string[]): IndexEntry | undefined {
+        const name = nspath[nspath.length - 1]
+        const candidates = this.#symbolIndex.get(name)
+        if (!candidates || candidates.length === 0) return undefined
+        if (nspath.length >= 2) {
+            const mod = nspath[nspath.length - 2]
+            const inModule = candidates.find(e => moduleOfUri(e.uri) === mod)
+            if (inModule) return inModule
+        }
+        return candidates[0]
     }
 
     /**
@@ -498,9 +518,14 @@ export class Workspace {
         if (!doc) return []
 
         const local = doc.model.symbolAtPosition(line, col)
-        const name = local?.name ?? namespaceNameAtPosition(doc, line, col)
-        if (!name) return []
-        return (this.#symbolIndex.get(name) ?? []).map(e => e.symbol)
+        if (local) return (this.#symbolIndex.get(local.name) ?? []).map(e => e.symbol)
+        const nspath = namespacePathAtPosition(doc, line, col)
+        if (!nspath || nspath.length === 0) return []
+        // A qualified `mod::name` yields the module-matched candidate first.
+        const preferred = this.#resolveIndexed(nspath)
+        const all = this.#symbolIndex.get(nspath[nspath.length - 1]) ?? []
+        if (!preferred) return all.map(e => e.symbol)
+        return [preferred.symbol, ...all.filter(e => e !== preferred).map(e => e.symbol)]
     }
 
     /**
@@ -946,9 +971,16 @@ export class Workspace {
         for (const [uri, doc] of this.#docs) {
             if (uri === currentUri) continue
             if (visible && !visible.has(uri)) continue
+            const module = moduleOfUri(uri)
             for (const sym of doc.model.allSymbols) {
-                if (sym.type && !ext.has(sym.name)) {
-                    ext.set(sym.name, sym.type)
+                if (!sym.type) continue
+                if (!ext.has(sym.name)) ext.set(sym.name, sym.type)
+                // ADR-0024: also expose the module-qualified spelling so a
+                // cross-module `mod::name` reference type-resolves (and does
+                // not raise a spurious "unbound" diagnostic).
+                if (module) {
+                    const qualified = `${module}::${sym.name}`
+                    if (!ext.has(qualified)) ext.set(qualified, sym.type)
                 }
             }
         }
@@ -1226,14 +1258,35 @@ export class Project {
  * returns nothing (the typechecker didn't have visibility into the definition).
  */
 function namespaceNameAtPosition(doc: Document, line: number, col: number): string | undefined {
+    return namespacePathAtPosition(doc, line, col)?.at(-1)
+}
+
+/**
+ * Like {@link namespaceNameAtPosition} but returns the full `Namespace` path
+ * (`['math','square']` for `math::square`) so a caller can disambiguate a
+ * cross-module reference by its module qualifier (ADR-0024).
+ */
+function namespacePathAtPosition(doc: Document, line: number, col: number): string[] | undefined {
     for (const node of doc.elabTree.root.descendantsOfKind('Namespace')) {
         const span = node.span   // SourceRange | undefined
         if (!span) continue
         if (!rangeContainsPos(span, line, col)) continue
         const path: string[] = (node._node as any).path ?? []
-        return path.at(-1)
+        return path
     }
     return undefined
+}
+
+/**
+ * The module a document belongs to under ADR-0024's directory=module rule: the
+ * base name of the file's containing directory (`…/math/ops.si` → `math`).
+ * Returns `''` for metadata/synthetic URIs and unparseable inputs.
+ */
+function moduleOfUri(uri: string): string {
+    const noFile = uri.replace(/\/[^/]*$/, '')          // drop the filename segment
+    if (noFile === uri) return ''                       // no '/', e.g. metadata:<name>
+    const seg = noFile.replace(/^.*\//, '')             // last directory segment
+    return seg
 }
 
 /**
