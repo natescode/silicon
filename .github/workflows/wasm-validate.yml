@@ -1,0 +1,69 @@
+name: WASM validate gate
+
+# Opt into Node 24 for JS actions ahead of the 2026-06-16 forced cutoff
+# (actions/checkout, setup-bun still ship Node 20).
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
+# Validates every emitted .wasm (both targets/modes) against the canonical,
+# engine-independent `wasm-tools validate` spec oracle (Tier-1, ADR-0024).
+# The validator falls back to the host engine when wasm-tools is absent, but
+# CI installs it so the gate is the reference check, not the run engine.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'compiler/src/codegen/**'
+      - 'compiler/src/ir/**'
+      - 'compiler/src/intrinsics/**'
+      - 'compiler/src/stdlib/**'
+      - 'compiler/src/e2e/wasm-validate.test.ts'
+      - 'compiler/src/e2e/examples/**'
+      - '.github/workflows/wasm-validate.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'compiler/src/codegen/**'
+      - 'compiler/src/ir/**'
+      - 'compiler/src/intrinsics/**'
+      - 'compiler/src/stdlib/**'
+      - 'compiler/src/e2e/wasm-validate.test.ts'
+      - 'compiler/src/e2e/examples/**'
+      - '.github/workflows/wasm-validate.yml'
+
+jobs:
+  wasm-validate:
+    name: wasm validate (linux-x64)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      # Pinned for reproducibility; bump deliberately.
+      WASM_TOOLS_VERSION: 1.251.0
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Install wasm-tools (canonical spec validator)
+        run: |
+          ver="${WASM_TOOLS_VERSION}"
+          name="wasm-tools-${ver}-x86_64-linux"
+          curl -fsSL -o wt.tar.gz \
+            "https://github.com/bytecodealliance/wasm-tools/releases/download/v${ver}/${name}.tar.gz"
+          tar xzf wt.tar.gz
+          sudo install -m 0755 "${name}/wasm-tools" /usr/local/bin/wasm-tools
+          rm -rf "${name}" wt.tar.gz
+          wasm-tools --version
+
+      - name: Run wasm validate gate
+        working-directory: compiler
+        run: bun run test:wasm-validate

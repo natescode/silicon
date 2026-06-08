@@ -17,7 +17,7 @@ import { readFileSync } from 'fs'
 import { join } from 'path'
 import { compile } from '../caas'
 import { loadModules } from '../modules'
-import { validateWasmBinary } from '../codegen/wasm-validator'
+import { validateWasmBinary, wasmToolsAvailable } from '../codegen/wasm-validator'
 
 const moduleRegistry = loadModules(join(import.meta.dirname, '../..'))
 const EXAMPLES_DIR = join(import.meta.dirname, 'examples')
@@ -99,7 +99,17 @@ describe('wasm validate gate — aggregates (wasm-gc)', () => {
 })
 
 // Sanity: the validator must actually reject garbage (guards against a
-// vacuously-passing gate).
+// vacuously-passing gate). Garbage must be rejected by whichever oracle ran.
 test('validator rejects a non-wasm byte sequence', () => {
-    expect(validateWasmBinary(new Uint8Array([1, 2, 3, 4])).ok).toBe(false)
+    const r = validateWasmBinary(new Uint8Array([1, 2, 3, 4]))
+    expect(r.ok).toBe(false)
+})
+
+// Wiring: the gate prefers the canonical wasm-tools oracle when it's on PATH,
+// and falls back to the host engine otherwise. Either way a valid binary passes.
+test('uses wasm-tools as the oracle when installed (engine fallback otherwise)', () => {
+    const r = compileBinary(readFileSync(join(EXAMPLES_DIR, 'fn_function.si'), 'utf-8'))
+    const v = validateWasmBinary(r.binary!)
+    expect(v.ok).toBe(true)
+    expect(v.via).toBe(wasmToolsAvailable() ? 'wasm-tools' : 'engine')
 })
