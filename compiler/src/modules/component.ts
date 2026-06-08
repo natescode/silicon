@@ -216,6 +216,11 @@ function discoverModules(
     const subDirs: { name: string; dir: string; files: string[] }[] = []
     const seen = new Map<string, string>()   // module name -> dir (E-DUP-MOD)
 
+    // Directories that are never source modules: the host-wrapper dir
+    // (`modules/`, the registry layer), tooling dirs, and dotfiles.
+    const isExcludedDir = (name: string): boolean =>
+        name === 'modules' || name === 'node_modules' || name.startsWith('.')
+
     // Recursively visit descendant directories; each dir with >=1 direct .si is
     // a module named by its base name. On-disk nesting adds NO namespace depth
     // (ADR §Directory-to-module rule — flat).
@@ -240,7 +245,7 @@ function discoverModules(
                 subDirs.push({ name, dir, files })
             }
         }
-        for (const e of es) if (e.isDir) visit(join(dir, e.name))
+        for (const e of es) if (e.isDir && !isExcludedDir(e.name)) visit(join(dir, e.name))
     }
     visit(rootDir)
 

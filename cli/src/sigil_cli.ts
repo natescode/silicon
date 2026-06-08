@@ -25,6 +25,7 @@ import { spawnSync } from 'node:child_process'
 import {
     parse, compile, check,
     resolveUses, loadModules,
+    assembleComponent, type ComponentDiagnostic,
     renderJson, renderPretty, formatProgram,
     type LowerTarget, type Diagnostic,
 } from '@silicon/compiler'
@@ -245,17 +246,69 @@ function emitDiagnostics(diags: readonly Diagnostic[], opts: CompileOptions): ne
     process.exit(1)
 }
 
+// ---------------------------------------------------------------------------
+// ADR-0024 — component assembly front-end
+// ---------------------------------------------------------------------------
+
+/** Walk up from `dir` to the nearest `sgl.toml`-rooted component dir, or null
+ *  when the entry is a standalone file (no enclosing project). */
+function findComponentRoot(dir: string): string | null {
+    let cur = path.resolve(dir)
+    for (;;) {
+        if (fs.existsSync(path.join(cur, 'sgl.toml'))) return cur
+        const parent = path.dirname(cur)
+        if (parent === cur) return null
+        cur = parent
+    }
+}
+
+function componentDiagToDiagnostic(d: ComponentDiagnostic): Diagnostic {
+    return {
+        phase: 'elaborate',
+        code: d.code,
+        span: { file: d.file ?? '', line: d.line ?? 0, col: 0, length: 0 },
+        message: d.message,
+    }
+}
+
+/**
+ * Resolve the entry into one source string + module registry.
+ *
+ * Inside a project (an `sgl.toml` governs the entry) this runs the ADR-0024
+ * component assembler: every directory under the source root is a module, all
+ * `.si` files in a module are auto-included, `mod::name` calls cross the module
+ * boundary, and `@pub` gates visibility. A standalone file (no enclosing
+ * `sgl.toml`) keeps the legacy single-file `@use` behaviour — no sibling
+ * auto-include — so ad-hoc scripts and the `examples/` files are unaffected.
+ */
+function assembleEntry(entryAbs: string, opts: CompileOptions): { source: string; moduleReg: ReturnType<typeof loadModules> } {
+    const moduleReg = loadModules(path.dirname(entryAbs))
+    const componentRoot = findComponentRoot(path.dirname(entryAbs))
+    if (componentRoot) {
+        const reserved = new Set(moduleReg.keys())
+        const asm = assembleComponent(entryAbs, { target: opts.target, reservedModuleNames: reserved })
+        for (const w of asm.diagnostics) {
+            if (w.severity !== 'warning') continue
+            process.stderr.write(`warning [${w.code}] ${w.message}${w.file ? `\n  --> ${w.file}` : ''}\n`)
+        }
+        const errors = asm.diagnostics.filter(d => d.severity === 'error')
+        if (errors.length) emitDiagnostics(errors.map(componentDiagToDiagnostic), opts)
+        return { source: asm.source, moduleReg }
+    }
+    const raw = fs.readFileSync(entryAbs, 'utf-8')
+    const { source } = resolveUses(raw, entryAbs, { target: opts.target })
+    return { source, moduleReg }
+}
+
 async function compileFile(
     filename: string,
     opts: CompileOptions,
 ): Promise<{ wat: string; binary: Uint8Array }> {
-    const rawSource = await fsp.readFile(filename, 'utf-8')
     const entryAbs  = path.resolve(filename)
-    const { source } = resolveUses(rawSource, entryAbs, { target: opts.target })
+    const { source, moduleReg } = assembleEntry(entryAbs, opts)
     const extraSources: string[] = await Promise.all(
         opts.strataFiles.map(f => fsp.readFile(f, 'utf-8'))
     )
-    const moduleReg = loadModules(path.dirname(entryAbs))
 
     const result = compile(source, {
         file: entryAbs, extraSources, moduleRegistry: moduleReg,
@@ -369,13 +422,11 @@ async function cmdBuild(positional: string | undefined, opts: CompileOptions): P
  * Returns QBE IR text with a main wrapper injected when needed.
  */
 async function compileToQbeIr(entry: string, opts: CompileOptions): Promise<string> {
-    const rawSource = await fsp.readFile(entry, 'utf-8')
     const entryAbs  = path.resolve(entry)
-    const { source } = resolveUses(rawSource, entryAbs, { target: opts.target })
+    const { source, moduleReg } = assembleEntry(entryAbs, opts)
     const extraSources: string[] = await Promise.all(
         opts.strataFiles.map(f => fsp.readFile(f, 'utf-8'))
     )
-    const moduleReg = loadModules(path.dirname(entryAbs))
 
     const result = compileToQbe(source, {
         file: entryAbs, extraSources, moduleRegistry: moduleReg, target: opts.target,
@@ -519,13 +570,11 @@ async function cmdRunNative(entry: string, opts: CompileOptions): Promise<void> 
 
 async function cmdCheck(positional: string | undefined, opts: CompileOptions): Promise<void> {
     const entry     = resolveEntry(positional, process.cwd())
-    const rawSource = await fsp.readFile(entry, 'utf-8')
     const entryAbs  = path.resolve(entry)
-    const { source } = resolveUses(rawSource, entryAbs, { target: opts.target })
+    const { source, moduleReg } = assembleEntry(entryAbs, opts)
     const extraSources: string[] = await Promise.all(
         opts.strataFiles.map(f => fsp.readFile(f, 'utf-8'))
     )
-    const moduleReg = loadModules(path.dirname(entryAbs))
 
     const { diagnostics } = check(source, {
         file: entryAbs, extraSources, moduleRegistry: moduleReg, target: opts.target,
