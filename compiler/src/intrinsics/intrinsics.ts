@@ -151,6 +151,10 @@ export const wasmIntrinsics: Record<string, WasmIntrinsic> = {
     data_memory: { name: 'WASM::data_memory', wasmInstr: 'memory.size', description: 'Current memory size in pages' },
     mem_grow:    { name: 'WASM::mem_grow',    wasmInstr: 'memory.grow', description: 'Grow memory by N pages' },
 
+    // Bulk memory (0xFC prefix) — single-instruction copy/fill.
+    memory_copy: { name: 'WASM::memory_copy', wasmInstr: 'memory.copy', description: 'Bulk copy n bytes (dst, src, n)' },
+    memory_fill: { name: 'WASM::memory_fill', wasmInstr: 'memory.fill', description: 'Bulk fill n bytes (dst, byte, n)' },
+
     // -------------------------------------------------------------------------
     // Logical Short-Circuit (emitted as IRIf by lowerBinaryOp / lowerBuiltinCall)
     // -------------------------------------------------------------------------

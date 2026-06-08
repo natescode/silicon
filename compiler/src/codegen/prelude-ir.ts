@@ -47,6 +47,9 @@ function instr1(callee: string, type: VoidableType, arg: IRExpr): IRExpr {
 function instr2(callee: string, type: VoidableType, a: IRExpr, b: IRExpr): IRExpr {
     return { kind: 'Call', wasmType: type, callee, callKind: 'instr', args: [a, b] }
 }
+function instr3(callee: string, type: VoidableType, a: IRExpr, b: IRExpr, d: IRExpr): IRExpr {
+    return { kind: 'Call', wasmType: type, callee, callKind: 'instr', args: [a, b, d] }
+}
 function ucall(callee: string, type: VoidableType, ...args: IRExpr[]): IRExpr {
     return { kind: 'Call', wasmType: type, callee, callKind: 'user', args }
 }
@@ -184,24 +187,15 @@ function buildScratchAlloc(): IRFunction {
 // portability; a `memory.copy` (bulk-memory proposal) variant is a
 // post-1.0 optimization.
 function buildMemCopy(): IRFunction {
-    const LOOP_ID = 200001
+    // Single bulk-memory `memory.copy` (dst, src, n) — replaces the former
+    // byte-wise loop. Benefits every caller: `realloc` and Vec/HashMap shifts.
     const body = vblock(
-        ls('i', c(0)),
-        stmtExpr(loop(LOOP_ID,
-            binop('i32_lt_s', lg('i'), lg('n_bytes')),
-            vblock(
-                stmtExpr(instr2('i32.store8', void_,
-                    binop('i32_add', lg('dst'), lg('i')),
-                    instr1('i32.load8_u', i32,
-                        binop('i32_add', lg('src'), lg('i'))))),
-                ls('i', binop('i32_add', lg('i'), c(1))),
-            ),
-        )),
+        stmtExpr(instr3('memory.copy', void_, lg('dst'), lg('src'), lg('n_bytes'))),
     )
     return fn('mem_copy',
         [['dst', i32], ['src', i32], ['n_bytes', i32]],
         void_,
-        [['i', i32]],
+        [],
         body)
 }
 

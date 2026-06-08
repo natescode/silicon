@@ -192,11 +192,30 @@ test("compileToWasm returns a valid WASM binary", () => {
     expect(bin.byteLength).toBeGreaterThan(8)
 })
 
-test("compileToWasm direct emitter is byte-equal to WAT round-trip", async () => {
+// Strip every custom section (id 0) so we compare only the CORE module
+// (sections 1–11). The direct emitter and wabt both now emit `name`/`producers`
+// custom metadata, which legitimately differs between a hand-emitter and wabt;
+// the invariant under test is that the two backends produce the same *core* module.
+function stripCustomSections(bytes: Uint8Array): Uint8Array {
+    const out: number[] = []
+    for (let i = 0; i < 8; i++) out.push(bytes[i])   // \0asm + version header
+    let p = 8
+    while (p < bytes.length) {
+        const id = bytes[p]
+        let len = 0, shift = 0, q = p + 1
+        for (;;) { const b = bytes[q++]; len |= (b & 0x7f) << shift; if ((b & 0x80) === 0) break; shift += 7 }
+        const end = q + len
+        if (id !== 0) for (let i = p; i < end; i++) out.push(bytes[i])
+        p = end
+    }
+    return new Uint8Array(out)
+}
+
+test("compileToWasm direct emitter is byte-equal to WAT round-trip (core sections)", async () => {
     const { watToWasm } = await import("./toWasm")
     const source = "\\\\ add (Int, Int)\nadd x, y := x + y;"
-    const viaWat = await watToWasm(compile(source))
-    const viaDirect = compileBinary(source)
+    const viaWat = stripCustomSections(await watToWasm(compile(source)))
+    const viaDirect = stripCustomSections(compileBinary(source))
     expect(viaDirect.byteLength).toBe(viaWat.byteLength)
     for (let i = 0; i < viaWat.byteLength; i++) {
         expect(viaDirect[i]).toBe(viaWat[i])

@@ -101,6 +101,10 @@ export function intrinsicSignature(fullName: string): TypeSig | undefined {
     if (short === 'mem_grow') {
         return { params: [TypeInt], result: TypeInt }
     }
+    // Bulk memory: (dst, src|byte, n) → void.
+    if (short === 'memory_copy' || short === 'memory_fill') {
+        return { params: [TypeInt, TypeInt, TypeInt], result: TypeUnknown }
+    }
 
     // Control-flow, def, and other structured ops have no surface type sig.
     return undefined

@@ -261,6 +261,7 @@ async function compileFile(
         file: entryAbs, extraSources, moduleRegistry: moduleReg,
         target: opts.target, platform: opts.platform,
         maxHeapPages: opts.maxHeapPages, emitBinary: true,
+        compilerVersion: SGL_VERSION,
     })
     if (result.diagnostics.length) emitDiagnostics(result.diagnostics, opts)
     return { wat: result.wat, binary: result.binary! }

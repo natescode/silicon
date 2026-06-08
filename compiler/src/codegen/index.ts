@@ -169,5 +169,5 @@ export function compileToWasm(
 export function irModuleToWasm(irModule: IRModule, options: LowerOptions = {}): Uint8Array {
     const heapBase = computeHeapBase(irModule)
     const prelude = buildPrelude(heapBase, options.target !== 'wasix', options.maxHeapPages)
-    return emitWasmBinary(prelude, irModule)
+    return emitWasmBinary(prelude, irModule, { compilerVersion: options.compilerVersion })
 }

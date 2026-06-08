@@ -31,7 +31,9 @@ export async function watToWasm(wat: string): Promise<Uint8Array> {
         _wabt = await WabtFactory()
     }
     const m = _wabt.parseWat('module.wat', wat, { mutableGlobals: true })
-    const { buffer } = m.toBinary({})
+    // write_debug_names preserves the WAT `$func`/`$local` symbols into the
+    // binary's `name` custom section, matching the direct emitter (Tier-1 DX).
+    const { buffer } = m.toBinary({ write_debug_names: true })
     m.destroy()
     return new Uint8Array(buffer)
 }

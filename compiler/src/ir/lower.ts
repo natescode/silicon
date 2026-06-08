@@ -251,6 +251,10 @@ export interface LowerOptions {
      *  flag for exercising heap-exhaustion paths in tests.  Undefined
      *  → unbounded (existing default). */
     maxHeapPages?: number
+    /** Compiler/toolchain version stamped into the emitted `producers`
+     *  custom section (`processed-by: sigilc/<version>`). The CLI passes
+     *  `SGL_VERSION`; when absent the version field is left empty. */
+    compilerVersion?: string
 }
 
 export function lowerProgram(
@@ -1383,6 +1387,7 @@ function lowerFunctionCall(n: any, ctx: LowerCtx): IRExpr {
         const instr = resolvedInstr ?? name
         const isVoidInstr = instr === 'i32.store' || instr === 'i32.store8'
             || instr === 'f32.store' || instr === 'drop'
+            || instr === 'memory.copy' || instr === 'memory.fill'
         const wt = isVoidInstr ? 'void' : resolveWasmType(inferT, 'i32')
         return { kind: 'Call', wasmType: wt, callee: instr, callKind: 'instr', args }
     }

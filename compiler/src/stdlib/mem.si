@@ -37,13 +37,10 @@
 };
 
 # Write `n` copies of byte `b` starting at address `ptr`.
+# Uses the bulk-memory `memory.fill` instruction (single op, no loop).
 \\ mem_fill (Int, Int, Int) -> Int
 @fn mem_fill ptr, b, n := {
-    @mut i := 0;
-    @loop(i < n, {
-        WASM::i32_store8(ptr + i, b);
-        i = i + 1;
-    });
+    WASM::memory_fill(ptr, b, n);
     0
 };
 

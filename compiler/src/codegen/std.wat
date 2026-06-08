@@ -144,21 +144,13 @@
 (export "scratch_alloc" (func $scratch_alloc))
 
 ;; ------------------------------------------------------------------
-;; $mem_copy — byte-wise copy from $src to $dst for $n_bytes.  Used by
+;; $mem_copy — copy $n_bytes from $src to $dst via the bulk-memory
+;; `memory.copy` instruction (handles overlap correctly).  Used by
 ;; $realloc and directly by growable-container code (Vec / HashMap)
-;; for element shifts.  Loop-based for portability; `memory.copy`
-;; (bulk-memory proposal) is a post-1.0 optimization.
+;; for element shifts.
 ;; ------------------------------------------------------------------
 (func $mem_copy (param $dst i32) (param $src i32) (param $n_bytes i32)
-  (local $i i32)
-  (local.set $i (i32.const 0))
-  (block $brk_200001 (loop $cont_200001
-    (br_if $brk_200001 (i32.eqz (i32.lt_s (local.get $i) (local.get $n_bytes))))
-    (i32.store8
-      (i32.add (local.get $dst) (local.get $i))
-      (i32.load8_u (i32.add (local.get $src) (local.get $i))))
-    (local.set $i (i32.add (local.get $i) (i32.const 1)))
-    (br $cont_200001))))
+  (memory.copy (local.get $dst) (local.get $src) (local.get $n_bytes)))
 (export "mem_copy" (func $mem_copy))
 
 ;; ------------------------------------------------------------------

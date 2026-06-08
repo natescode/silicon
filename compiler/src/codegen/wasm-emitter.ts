@@ -142,6 +142,8 @@ const OPCODES: Record<string, number[]> = {
     'f32.load':    [0x2A, 2, 0], 'f32.store':    [0x38, 2, 0],
     'i64.load':    [0x29, 3, 0], 'i64.store':    [0x37, 3, 0],
     'memory.size': [0x3F, 0], 'memory.grow': [0x40, 0],
+    // Bulk-memory (0xFC prefix). copy: dst memidx 0, src memidx 0. fill: memidx 0.
+    'memory.copy': [0xFC, 0x0A, 0x00, 0x00], 'memory.fill': [0xFC, 0x0B, 0x00],
     'drop': [0x1A], 'unreachable': [0x00], 'select': [0x1B],
 }
 
@@ -834,10 +836,94 @@ function decodeWatString(encoded: string): number[] {
 }
 
 // ---------------------------------------------------------------------------
+// Custom sections (metadata — ignored by engines, zero runtime cost)
+// ---------------------------------------------------------------------------
+
+/** Drop a leading `$` from a Sigil-side label so debug names read cleanly. */
+function debugName(s: string): string {
+    return s.startsWith('$') ? s.slice(1) : s
+}
+
+/**
+ * Build the body of the `name` custom section (WASM spec, "Name Section"):
+ * subsection 1 = function names (imports first, then defined functions),
+ * subsection 2 = local names (params then declared locals, per function),
+ * subsection 4 = type names (WasmGC structs/arrays). Subsections must appear
+ * in ascending id order. Makes `@fn`/local/struct names show up in web/Bun
+ * stack traces and DevTools at zero runtime cost.
+ */
+function buildNameSection(
+    imports: IRImport[],
+    functions: IRFunction[],
+    gcTypes: WasmGcType[],
+): WasmBuffer {
+    const inner = new WasmBuffer()
+    inner.name('name')
+    const importCount = imports.length
+
+    // Subsection 1 — function names (namemap: vec of (funcidx, name)).
+    const fnNames = new WasmBuffer()
+    fnNames.u32(importCount + functions.length)
+    for (let i = 0; i < imports.length; i++) {
+        fnNames.u32(i); fnNames.name(debugName(imports[i].name))
+    }
+    for (let i = 0; i < functions.length; i++) {
+        fnNames.u32(importCount + i); fnNames.name(debugName(functions[i].name))
+    }
+    inner.u8(1); inner.prefixed(fnNames)
+
+    // Subsection 2 — local names (indirectnamemap: vec of (funcidx, namemap)).
+    // WASM local index space is params first, then declared locals.
+    const withLocals = functions
+        .map((f, i) => ({ idx: importCount + i, names: [...f.params.map(p => p.name), ...f.locals.map(l => l.name)] }))
+        .filter(e => e.names.length > 0)
+    if (withLocals.length > 0) {
+        const locNames = new WasmBuffer()
+        locNames.u32(withLocals.length)
+        for (const e of withLocals) {
+            locNames.u32(e.idx)
+            locNames.u32(e.names.length)
+            for (let j = 0; j < e.names.length; j++) { locNames.u32(j); locNames.name(debugName(e.names[j])) }
+        }
+        inner.u8(2); inner.prefixed(locNames)
+    }
+
+    // Subsection 4 — type names. GC types occupy type indices [0, gcCount).
+    if (gcTypes.length > 0) {
+        const tyNames = new WasmBuffer()
+        tyNames.u32(gcTypes.length)
+        for (let i = 0; i < gcTypes.length; i++) { tyNames.u32(i); tyNames.name(debugName(gcTypes[i].name)) }
+        inner.u8(4); inner.prefixed(tyNames)
+    }
+
+    return inner
+}
+
+/**
+ * Build the body of the `producers` custom section (the WebAssembly
+ * tool-conventions "producers" section): `language=Silicon` and
+ * `processed-by=sigilc/<version>`. A good-citizen / supply-chain marker.
+ */
+function buildProducersSection(version: string): WasmBuffer {
+    const inner = new WasmBuffer()
+    inner.name('producers')
+    inner.u32(2)                                   // field count
+    inner.name('language')
+    inner.u32(1); inner.name('Silicon'); inner.name('')
+    inner.name('processed-by')
+    inner.u32(1); inner.name('sigilc'); inner.name(version)
+    return inner
+}
+
+// ---------------------------------------------------------------------------
 // Main entry point
 // ---------------------------------------------------------------------------
 
-export function emitWasmBinary(prelude: PreludeSpec, userMod: IRModule): Uint8Array {
+export function emitWasmBinary(
+    prelude: PreludeSpec,
+    userMod: IRModule,
+    opts: { compilerVersion?: string } = {},
+): Uint8Array {
     // ── 1. Collect all imports + functions in emission order ──────────────
     const allImports: IRImport[] = [...prelude.imports, ...userMod.imports]
     const prelFunctions: IRFunction[] = prelude.functions
@@ -971,6 +1057,10 @@ export function emitWasmBinary(prelude: PreludeSpec, userMod: IRModule): Uint8Ar
     if (userMod.dataSegments.length > 0) {
         out.section(11, buildDataSection(userMod.dataSegments))
     }
+
+    // Custom sections (id 0) — metadata, ignored by engines, emitted last.
+    out.section(0, buildNameSection(allImports, allFunctions, userMod.wasmGcTypes ?? []))
+    out.section(0, buildProducersSection(opts.compilerVersion ?? ''))
 
     return out.toUint8Array()
 }
