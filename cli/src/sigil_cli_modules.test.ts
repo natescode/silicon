@@ -84,6 +84,15 @@ describe('ADR-0024 CLI — multi-module component', () => {
         expect(r.stderr).toContain('E-MOD-TOPSTMT')
     })
 
+    test('`sgl run` on a library component (no main) is E-NO-MAIN', () => {
+        const dir = project({
+            'src/main.si': `\\\\ @export add (Int, Int) -> Int\n@fn add a, b := { a + b };`,
+        })
+        const r = runSgl(['run'], dir)
+        expect(r.code).not.toBe(0)
+        expect(r.stderr).toContain('E-NO-MAIN')
+    })
+
     test('standalone file outside a project keeps single-file behaviour (no auto-include)', () => {
         // No sgl.toml: a bare file in a dir with an unrelated sibling must NOT
         // pull the sibling in (legacy `@use`-only semantics).

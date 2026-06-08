@@ -125,6 +125,10 @@ interface SglToml {
         name?: string
         version?: string
         entry?: string
+        /** ADR-0024 — WIT package namespace (`namespace:name@version`).
+         *  Defaults to `local` until a registry/org story exists; gates
+         *  well-formed `--emit=wit` output (post-v1.0). */
+        namespace?: string
     }
     /** Phase 9d-4 — `[build]` section.  CLI flags win over toml. */
     build: {
@@ -204,13 +208,33 @@ function parseMaxHeap(raw: string): number {
 function resolveEntry(positional: string | undefined, cwd: string): string {
     if (positional) return path.resolve(positional)
     const toml = readSglToml(cwd)
-    if (toml?.package.entry) return path.resolve(cwd, toml.package.entry)
-    // Fall back to src/main.si
+    if (toml?.package.entry) {
+        const entry = path.resolve(cwd, toml.package.entry)
+        if (fs.existsSync(entry)) return entry
+        // ADR-0024: `entry` names the root-module DIRECTORY + a conventional
+        // file; `main` may actually live in any root-module file (all are
+        // auto-included). If the named file is absent, fall back to any `.si`
+        // in its directory so assembly can still find the root module + main.
+        const alt = anySourceFileIn(path.dirname(entry))
+        if (alt) return alt
+        return entry   // let the missing-file error surface downstream
+    }
+    // Fall back to src/main.si (or any src/ source file).
     const fallback = path.join(cwd, 'src', 'main.si')
     if (fs.existsSync(fallback)) return fallback
+    const srcAlt = anySourceFileIn(path.join(cwd, 'src'))
+    if (srcAlt) return srcAlt
     console.error('sgl: no source file given and no sgl.toml found')
     console.error('  Run `sgl init` to scaffold a project, or pass a .si file.')
     process.exit(1)
+}
+
+/** First `.si` file (lexical order) directly inside `dir`, or null. */
+function anySourceFileIn(dir: string): string | null {
+    try {
+        const f = fs.readdirSync(dir).filter(n => n.endsWith('.si')).sort()[0]
+        return f ? path.join(dir, f) : null
+    } catch { return null }
 }
 
 // ---------------------------------------------------------------------------
@@ -300,6 +324,22 @@ function assembleEntry(entryAbs: string, opts: CompileOptions): { source: string
     return { source, moduleReg }
 }
 
+/** `sgl run` on a library component (no root `main`) is `E-NO-MAIN` — it builds
+ *  and exports its surface, but there is nothing to execute (ADR-0024). */
+function assertRunnable(entryAbs: string, opts: CompileOptions): void {
+    const componentRoot = findComponentRoot(path.dirname(entryAbs))
+    if (!componentRoot) return
+    const reserved = new Set(loadModules(path.dirname(entryAbs)).keys())
+    const asm = assembleComponent(entryAbs, { target: opts.target, reservedModuleNames: reserved })
+    if (asm.diagnostics.some(d => d.severity === 'error')) return   // a real error is reported by the compile path
+    if (!asm.hasMain) {
+        emitDiagnostics([componentDiagToDiagnostic({
+            code: 'E-NO-MAIN', severity: 'error', file: entryAbs,
+            message: 'no `main` in the root module — this is a library component (it builds and exports its surface, but cannot run). Define `@fn main := { … };` to make it runnable.',
+        })], opts)
+    }
+}
+
 async function compileFile(
     filename: string,
     opts: CompileOptions,
@@ -343,9 +383,15 @@ main();
 
 function tomlTemplate(name: string): string {
     return `[package]
-name    = "${name}"
-version = "0.1.0"
-entry   = "src/main.si"
+name      = "${name}"
+version   = "0.1.0"
+entry     = "src/main.si"
+# WIT package namespace (ADR-0024); used by post-v1.0 \`--emit=wit\`.
+namespace = "local"
+
+# Files in src/ are the ROOT module (callable unqualified). A sub-directory
+# src/<name>/ is a sibling module — call its \`@pub\` members as \`<name>::fn\`
+# (no import line needed). See ADR-0024.
 
 [dependencies]
 `
@@ -489,6 +535,7 @@ async function cmdSetup(): Promise<void> {
 
 async function cmdRun(positional: string | undefined, opts: CompileOptions): Promise<void> {
     const entry = resolveEntry(positional, process.cwd())
+    assertRunnable(path.resolve(entry), opts)
 
     // Native backend: compile to a temp executable and run it directly.
     if (opts.native) {
