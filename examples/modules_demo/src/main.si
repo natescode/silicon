@@ -1,0 +1,21 @@
+# ROOT module (named `modules_demo`). Files directly in src/ are the root module
+# and are callable unqualified from anywhere in the component. Sibling modules
+# (`math`, `text`) are AMBIENT — no import line, just `mod::name`.
+
+# A root-module helper, auto-included from util.si below — called bare.
+
+\\ @export run () -> Int
+@fn run := {
+    # math:: and text:: are sibling modules; only their @pub members are visible.
+    \\ a Int
+    a := math::square(4);          # 16
+    \\ b Int
+    b := math::cube(2);            # 8  (cube uses math's private `mul`)
+    \\ c Int
+    c := text::score(3);           # 3*3 + 1 = 10
+    math::add(banner(a, b), c)     # banner() is a bare root-module call
+};
+
+@fn main := { run() };
+
+main();

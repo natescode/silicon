@@ -25,6 +25,7 @@ import { spawnSync } from 'node:child_process'
 import {
     parse, compile, check,
     resolveUses, loadModules,
+    assembleComponent, type ComponentDiagnostic,
     renderJson, renderPretty, formatProgram,
     type LowerTarget, type Diagnostic,
 } from '@silicon/compiler'
@@ -56,6 +57,7 @@ Commands:
   add   <pkg>     Add a dependency (1.0: --path <local> only; registry pending)
   resolve         Generate sgl.lock from sgl.toml (stub at 1.0)
   fmt   [file]    Format Silicon source files (normalises whitespace + style)
+  fix   [file]    Codemod: remove redundant intra-component @use (ADR-0024)
   help            Show this help
   version         Print the sgl version (also --version, -v)
 
@@ -124,6 +126,10 @@ interface SglToml {
         name?: string
         version?: string
         entry?: string
+        /** ADR-0024 — WIT package namespace (`namespace:name@version`).
+         *  Defaults to `local` until a registry/org story exists; gates
+         *  well-formed `--emit=wit` output (post-v1.0). */
+        namespace?: string
     }
     /** Phase 9d-4 — `[build]` section.  CLI flags win over toml. */
     build: {
@@ -203,13 +209,33 @@ function parseMaxHeap(raw: string): number {
 function resolveEntry(positional: string | undefined, cwd: string): string {
     if (positional) return path.resolve(positional)
     const toml = readSglToml(cwd)
-    if (toml?.package.entry) return path.resolve(cwd, toml.package.entry)
-    // Fall back to src/main.si
+    if (toml?.package.entry) {
+        const entry = path.resolve(cwd, toml.package.entry)
+        if (fs.existsSync(entry)) return entry
+        // ADR-0024: `entry` names the root-module DIRECTORY + a conventional
+        // file; `main` may actually live in any root-module file (all are
+        // auto-included). If the named file is absent, fall back to any `.si`
+        // in its directory so assembly can still find the root module + main.
+        const alt = anySourceFileIn(path.dirname(entry))
+        if (alt) return alt
+        return entry   // let the missing-file error surface downstream
+    }
+    // Fall back to src/main.si (or any src/ source file).
     const fallback = path.join(cwd, 'src', 'main.si')
     if (fs.existsSync(fallback)) return fallback
+    const srcAlt = anySourceFileIn(path.join(cwd, 'src'))
+    if (srcAlt) return srcAlt
     console.error('sgl: no source file given and no sgl.toml found')
     console.error('  Run `sgl init` to scaffold a project, or pass a .si file.')
     process.exit(1)
+}
+
+/** First `.si` file (lexical order) directly inside `dir`, or null. */
+function anySourceFileIn(dir: string): string | null {
+    try {
+        const f = fs.readdirSync(dir).filter(n => n.endsWith('.si')).sort()[0]
+        return f ? path.join(dir, f) : null
+    } catch { return null }
 }
 
 // ---------------------------------------------------------------------------
@@ -245,17 +271,118 @@ function emitDiagnostics(diags: readonly Diagnostic[], opts: CompileOptions): ne
     process.exit(1)
 }
 
+// ---------------------------------------------------------------------------
+// ADR-0024 — component assembly front-end
+// ---------------------------------------------------------------------------
+
+/** Walk up from `dir` to the nearest `sgl.toml`-rooted component dir, or null
+ *  when the entry is a standalone file (no enclosing project). */
+function findComponentRoot(dir: string): string | null {
+    let cur = path.resolve(dir)
+    for (;;) {
+        if (fs.existsSync(path.join(cur, 'sgl.toml'))) return cur
+        const parent = path.dirname(cur)
+        if (parent === cur) return null
+        cur = parent
+    }
+}
+
+function componentDiagToDiagnostic(d: ComponentDiagnostic): Diagnostic {
+    return {
+        phase: 'elaborate',
+        code: d.code,
+        span: { file: d.file ?? '', line: d.line ?? 0, col: 0, length: 0 },
+        message: d.message,
+    }
+}
+
+/** Resolve a dependency component's entry file from its directory. */
+function resolveDepEntry(depDir: string): string | null {
+    const t = readSglToml(depDir)
+    if (t?.package.entry) {
+        const e = path.join(depDir, t.package.entry)
+        if (fs.existsSync(e)) return e
+    }
+    const main = path.join(depDir, 'src', 'main.si')
+    if (fs.existsSync(main)) return main
+    return anySourceFileIn(path.join(depDir, 'src')) ?? anySourceFileIn(depDir)
+}
+
+/** Flatten the (possibly transitive) `[dependencies]` graph into the flat
+ *  name → entry-file map the assembler consumes. `path:<rel>` is resolved
+ *  relative to the declaring component (ADR-0024 / lockfile-format.md). */
+function collectDependencies(componentRoot: string, into: { name: string; entryFile: string }[], seen: Set<string>): void {
+    const toml = readSglToml(componentRoot)
+    if (!toml) return
+    for (const [name, srcSpec] of Object.entries(toml.dependencies)) {
+        const rel = srcSpec.startsWith('path:') ? srcSpec.slice('path:'.length) : srcSpec
+        const depDir = path.resolve(componentRoot, rel)
+        if (seen.has(depDir)) continue
+        seen.add(depDir)
+        const entry = resolveDepEntry(depDir)
+        if (entry && !into.some(d => d.name === name)) into.push({ name, entryFile: entry })
+        collectDependencies(depDir, into, seen)   // transitive
+    }
+}
+
+/**
+ * Resolve the entry into one source string + module registry.
+ *
+ * Inside a project (an `sgl.toml` governs the entry) this runs the ADR-0024
+ * component assembler: every directory under the source root is a module, all
+ * `.si` files in a module are auto-included, `mod::name` calls cross the module
+ * boundary, and `@pub` gates visibility. A standalone file (no enclosing
+ * `sgl.toml`) keeps the legacy single-file `@use` behaviour — no sibling
+ * auto-include — so ad-hoc scripts and the `examples/` files are unaffected.
+ */
+function assembleEntry(entryAbs: string, opts: CompileOptions): { source: string; moduleReg: ReturnType<typeof loadModules> } {
+    const moduleReg = loadModules(path.dirname(entryAbs))
+    const componentRoot = findComponentRoot(path.dirname(entryAbs))
+    if (componentRoot) {
+        const reserved = new Set(moduleReg.keys())
+        const dependencies: { name: string; entryFile: string }[] = []
+        collectDependencies(componentRoot, dependencies, new Set())
+        const asm = assembleComponent(entryAbs, { target: opts.target, reservedModuleNames: reserved, dependencies })
+        for (const w of asm.diagnostics) {
+            if (w.severity !== 'warning') continue
+            process.stderr.write(`warning [${w.code}] ${w.message}${w.file ? `\n  --> ${w.file}` : ''}\n`)
+        }
+        const errors = asm.diagnostics.filter(d => d.severity === 'error')
+        if (errors.length) emitDiagnostics(errors.map(componentDiagToDiagnostic), opts)
+        return { source: asm.source, moduleReg }
+    }
+    const raw = fs.readFileSync(entryAbs, 'utf-8')
+    const { source } = resolveUses(raw, entryAbs, { target: opts.target })
+    return { source, moduleReg }
+}
+
+/** `sgl run` on a library component (no root `main`) is `E-NO-MAIN` — it builds
+ *  and exports its surface, but there is nothing to execute (ADR-0024). */
+function assertRunnable(entryAbs: string, opts: CompileOptions): void {
+    const componentRoot = findComponentRoot(path.dirname(entryAbs))
+    if (!componentRoot) return
+    const reserved = new Set(loadModules(path.dirname(entryAbs)).keys())
+    const dependencies: { name: string; entryFile: string }[] = []
+    collectDependencies(componentRoot, dependencies, new Set())
+    const asm = assembleComponent(entryAbs, { target: opts.target, reservedModuleNames: reserved, dependencies })
+    if (asm.diagnostics.some(d => d.severity === 'error')) return   // a real error is reported by the compile path
+    if (!asm.hasMain) {
+        emitDiagnostics([componentDiagToDiagnostic({
+            code: 'E-NO-MAIN', severity: 'error', file: entryAbs,
+            message: 'no `main` in the root module — this is a library component (it builds and exports its surface, but cannot run). Define `@fn main := { … };` to make it runnable.',
+        })], opts)
+    }
+}
+
 async function compileFile(
     filename: string,
     opts: CompileOptions,
 ): Promise<{ wat: string; binary: Uint8Array }> {
-    const rawSource = await fsp.readFile(filename, 'utf-8')
     const entryAbs  = path.resolve(filename)
-    const { source } = resolveUses(rawSource, entryAbs, { target: opts.target })
+    const { source, moduleReg } = assembleEntry(entryAbs, opts)
     const extraSources: string[] = await Promise.all(
         opts.strataFiles.map(f => fsp.readFile(f, 'utf-8'))
     )
-    const moduleReg = loadModules(path.dirname(entryAbs))
 
     const result = compile(source, {
         file: entryAbs, extraSources, moduleRegistry: moduleReg,
@@ -290,9 +417,15 @@ main();
 
 function tomlTemplate(name: string): string {
     return `[package]
-name    = "${name}"
-version = "0.1.0"
-entry   = "src/main.si"
+name      = "${name}"
+version   = "0.1.0"
+entry     = "src/main.si"
+# WIT package namespace (ADR-0024); used by post-v1.0 \`--emit=wit\`.
+namespace = "local"
+
+# Files in src/ are the ROOT module (callable unqualified). A sub-directory
+# src/<name>/ is a sibling module — call its \`@pub\` members as \`<name>::fn\`
+# (no import line needed). See ADR-0024.
 
 [dependencies]
 `
@@ -369,13 +502,11 @@ async function cmdBuild(positional: string | undefined, opts: CompileOptions): P
  * Returns QBE IR text with a main wrapper injected when needed.
  */
 async function compileToQbeIr(entry: string, opts: CompileOptions): Promise<string> {
-    const rawSource = await fsp.readFile(entry, 'utf-8')
     const entryAbs  = path.resolve(entry)
-    const { source } = resolveUses(rawSource, entryAbs, { target: opts.target })
+    const { source, moduleReg } = assembleEntry(entryAbs, opts)
     const extraSources: string[] = await Promise.all(
         opts.strataFiles.map(f => fsp.readFile(f, 'utf-8'))
     )
-    const moduleReg = loadModules(path.dirname(entryAbs))
 
     const result = compileToQbe(source, {
         file: entryAbs, extraSources, moduleRegistry: moduleReg, target: opts.target,
@@ -438,6 +569,7 @@ async function cmdSetup(): Promise<void> {
 
 async function cmdRun(positional: string | undefined, opts: CompileOptions): Promise<void> {
     const entry = resolveEntry(positional, process.cwd())
+    assertRunnable(path.resolve(entry), opts)
 
     // Native backend: compile to a temp executable and run it directly.
     if (opts.native) {
@@ -519,13 +651,11 @@ async function cmdRunNative(entry: string, opts: CompileOptions): Promise<void> 
 
 async function cmdCheck(positional: string | undefined, opts: CompileOptions): Promise<void> {
     const entry     = resolveEntry(positional, process.cwd())
-    const rawSource = await fsp.readFile(entry, 'utf-8')
     const entryAbs  = path.resolve(entry)
-    const { source } = resolveUses(rawSource, entryAbs, { target: opts.target })
+    const { source, moduleReg } = assembleEntry(entryAbs, opts)
     const extraSources: string[] = await Promise.all(
         opts.strataFiles.map(f => fsp.readFile(f, 'utf-8'))
     )
-    const moduleReg = loadModules(path.dirname(entryAbs))
 
     const { diagnostics } = check(source, {
         file: entryAbs, extraSources, moduleRegistry: moduleReg, target: opts.target,
@@ -744,6 +874,61 @@ async function cmdFmt(
 }
 
 // ---------------------------------------------------------------------------
+// sgl fix — ADR-0024 codemod: delete redundant intra-component path @use
+// ---------------------------------------------------------------------------
+
+/** All `.si` files under `dir` (recursive), skipping host-wrapper/tooling dirs. */
+function collectSiFiles(dir: string): string[] {
+    const out: string[] = []
+    let entries: fs.Dirent[]
+    try { entries = fs.readdirSync(dir, { withFileTypes: true }) } catch { return out }
+    for (const e of entries.sort((a, b) => a.name.localeCompare(b.name))) {
+        if (e.isDirectory()) {
+            if (e.name === 'modules' || e.name === 'node_modules' || e.name.startsWith('.')) continue
+            out.push(...collectSiFiles(path.join(dir, e.name)))
+        } else if (e.name.endsWith('.si')) {
+            out.push(path.join(dir, e.name))
+        }
+    }
+    return out
+}
+
+async function cmdFix(positional: string | undefined): Promise<void> {
+    const entry = path.resolve(resolveEntry(positional, process.cwd()))
+    const componentRoot = findComponentRoot(path.dirname(entry))
+    if (!componentRoot) {
+        console.error('sgl fix: not inside a project (no sgl.toml found). `sgl fix` operates on a component.')
+        process.exit(1)
+    }
+    const srcRoot = path.dirname(entry)             // the root-module directory
+    const allSi = collectSiFiles(srcRoot)
+    const autoSet = new Set(allSi.map(p => path.resolve(p)))
+    // `@use '<path>';` — drop when it points at an auto-included component file;
+    // bare-name stdlib includes (`@use 'io';`) are retained verbatim.
+    const USE = /^[ \t]*@use[ \t]+'([^'\n\r]+)'[ \t]*;[ \t]*(?:#[^\n\r]*)?\r?\n?/gm
+    const BARE = /^[A-Za-z_][A-Za-z0-9_-]*$/
+    let changedFiles = 0
+    for (const f of allSi) {
+        const src = await fsp.readFile(f, 'utf-8')
+        let removed = 0
+        const out = src.replace(USE, (full, raw: string) => {
+            if (BARE.test(raw)) return full
+            const abs = path.isAbsolute(raw) ? raw : path.resolve(path.dirname(f), raw)
+            if (autoSet.has(path.resolve(abs))) { removed++; return '' }
+            return full
+        })
+        if (removed > 0) {
+            await fsp.writeFile(f, out, 'utf-8')
+            changedFiles++
+            console.log(`  fixed  ${path.relative(process.cwd(), f)}  (removed ${removed} redundant @use)`)
+        }
+    }
+    console.log(changedFiles > 0
+        ? `sgl fix: updated ${changedFiles} file(s) — sibling files are auto-included (ADR-0024).`
+        : 'sgl fix: nothing to fix.')
+}
+
+// ---------------------------------------------------------------------------
 // Arg parsing
 // ---------------------------------------------------------------------------
 
@@ -921,6 +1106,9 @@ try {
             break
         case 'fmt':
             await cmdFmt(positional, fmtCheck, fmtStdout, opts)
+            break
+        case 'fix':
+            await cmdFix(positional)
             break
         default:
             console.error(`sgl: unknown subcommand '${subcommand}'`)

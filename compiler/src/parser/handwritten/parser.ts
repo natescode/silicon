@@ -27,7 +27,7 @@ import { Lexer, computeLineStarts, lineColumnAt, type Token } from './lexer'
 import { astChildren } from '../../ast/astChildren'
 
 /** Internal shape produced by AttachedSig (mirrors toAst's anonymous object). */
-interface SigInfo { name: string; generics?: GenericParams; type: any; extern?: boolean }
+interface SigInfo { name: string; generics?: GenericParams; type: any; extern?: boolean; pub?: boolean; export?: boolean }
 
 /**
  * Reproduce toAst's decLiteral value reconstruction, including its quirk: ohm's
@@ -228,6 +228,17 @@ class Parser {
         if (t.kind === 'attachedSig') {
             const def = this.parseDefinitionWithSig()
             this.expect('semi')
+            // ADR-0020 decision-8 / ADR-0024: the `\\ @export` MODIFIER form is
+            // sugar for the def plus the shipped `@export name;` STATEMENT, which
+            // drives the existing export lowering. Synthesize that statement so a
+            // single `\\ @export run () -> Int` line both defines and exports.
+            // (Not for `@extern`, which is itself import-only and cannot export.)
+            if ((def as any).export && def.keyword !== '@extern' && def.keyword !== '@export') {
+                const exportName = ASTFactory.typedIdentifier(def.name.name, undefined)
+                const exportDecl = ASTFactory.definition('@export', exportName, [], undefined, undefined)
+                exportDecl.sourceLocation = def.sourceLocation
+                return [def, exportDecl]
+            }
             return def
         }
         // A def-kw followed by '(' is an ADR-0020 intrinsic CALL (`@if(...)`,
@@ -343,18 +354,31 @@ class Parser {
         return node
     }
 
-    // AttachedSig = "\\" [ "@extern" ] namespace generics? TypeExpr
+    // AttachedSig = "\\" { Modifier } namespace generics? TypeExpr
+    // Modifier    = "@extern" | "@export" | "@pub"   (ADR-0020 §decision-8, amended by ADR-0024)
+    //
+    // The modifier set is a pure prefix-token loop (each distinguished by its
+    // leading `@kw`), so it stays LL(1): adding `@pub`/`@export` introduces no new
+    // grammatical position. `@pub` = module-visibility (ADR-0024); `@export` =
+    // WASM/host export (the signature-line form of the shipped `@export name;`
+    // statement); `@extern` = body-less external. They may appear in any order.
     private parseAttachedSig(): SigInfo {
         this.expect('attachedSig')
-        // ADR-0020: an optional leading `@extern` modifier marks a body-less external.
-        let extern = false
-        if (this.at('kw') && this.peek().text === '@extern') { this.next(); extern = true }
+        let extern = false, pub = false, exportMod = false
+        loop: while (this.at('kw')) {
+            switch (this.peek().text) {
+                case '@extern': this.next(); extern = true; break
+                case '@pub':    this.next(); pub = true; break
+                case '@export': this.next(); exportMod = true; break
+                default: break loop
+            }
+        }
         const nsStart = this.peek().start
         const nsEnd = this.parseNamespaceRawEnd()       // consumes the namespace; returns end offset
         const name = this.src.slice(nsStart, nsEnd)     // raw text (keeps '::')
         const generics = this.at('lbrack') ? this.parseGenericParams() : undefined
         const type = this.parseTypeExpr()
-        return { name, generics, type, extern }
+        return { name, generics, type, extern, pub, export: exportMod }
     }
 
     // Build a body-less `@extern` Definition from one signature (params get the
@@ -370,7 +394,9 @@ class Parser {
         let ret = fnType?.fnReturn?.typeAnnotation
         if (ret?.typename === 'Void') ret = undefined
         const name = ASTFactory.typedIdentifier(sig.name, ret)
-        return ASTFactory.definition('@extern', name, params, sig.generics, undefined)
+        const node = ASTFactory.definition('@extern', name, params, sig.generics, undefined)
+        if (sig.pub) (node as any).pub = true
+        return node
     }
 
     // Distribute an attached signature's domain/range onto bare params + return,
@@ -410,6 +436,9 @@ class Parser {
         const resolved = this.resolveDefKind(kw)
         const node = ASTFactory.definition(resolved.keyword, name, paramList, genericParams, binding)
         if (resolved.immutable !== undefined) (node as any).immutable = resolved.immutable
+        // ADR-0024 / ADR-0020 decision-8 signature-line modifiers.
+        if (sig?.pub) (node as any).pub = true
+        if (sig?.export) (node as any).export = true
         node.sourceLocation = this.loc(identTok.start, identTok.end)
         node.relSpan = { start: identTok.start, end: identTok.end }   // absolute now; relativized per element (M3)
         return node

@@ -114,6 +114,8 @@ export {
 // Module-graph resolution (front-end: `@use` includes + module registry).
 export { resolveUses } from './modules/useResolver'
 export { loadModules } from './modules'
+// ADR-0024 component assembler (directory = module static merge).
+export { assembleComponent, type ComponentDiagnostic, type AssembledComponent } from './modules/component'
 
 // Diagnostic rendering.
 export { renderJson, renderPretty } from './errors/diagnostic'

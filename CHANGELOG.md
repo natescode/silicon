@@ -3,6 +3,30 @@
 All notable changes to `sgl` (the Silicon compiler CLI) are recorded here.
 This project aims for [Semantic Versioning](https://semver.org/).
 
+## Unreleased
+
+### Added — module / component system ([ADR 0024](docs/adr/0024-module-and-component-system.md))
+
+- **Directory = module.** Inside a project (an `sgl.toml`-rooted component),
+  files in `src/` are the ROOT module (callable unqualified); each `.si`-bearing
+  sub-directory is a sibling module called as `mod::name`. All files in a module
+  are **auto-included** (one Go-style package-block scope) — no `@use` between
+  them. Modules statically merge into one core `.wasm` (zero runtime cost).
+- **`@pub` visibility.** Module-private by default; mark a definition `@pub` on
+  its `\\` signature line to make it callable across the module boundary
+  (`E-PRIV` otherwise). `@export` (statement or new `\\ @export` modifier) is the
+  host/WIT-world surface.
+- **Dependencies.** `\\ @use name [as alias];` imports a `[dependencies]` `path:`
+  component; its root `@export` surface is callable as `alias::fn` (statically
+  merged, 2-segment at v1.0).
+- **Diagnostics:** `E-DUP-MOD`, `E-DUP-DEF`, `E-MOD-TOPSTMT`, `E-MOD-CYCLE`,
+  `E-PRIV`, `E-NO-MAIN`, `E-DEP-UNRESOLVED`, `E-DEP-CYCLE`, and a
+  `W-USE-REDUNDANT` deprecation for intra-component path `@use`.
+- **`sgl fix`** — codemod that removes redundant intra-component `@use`
+  (keeps bare-name stdlib includes). `sgl init` scaffolds `[package].namespace`.
+- Standalone files compiled outside a project keep the classic single-file
+  `@use` behaviour unchanged.
+
 ## 0.1.5
 
 Lands the **ADR-0020 grammar redesign** — a breaking change to Silicon's surface

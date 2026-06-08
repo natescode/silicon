@@ -146,13 +146,19 @@ Param       = identifier [ TypeExpr ] ;
     \\ add (Int, Int) -> Int
     add a, b := { a + b };
 
-  NOT YET IMPLEMENTED: ADR-0020 decision 8 designs signature-line modifiers
-  (`\\ @extern name … ;` body-less external; `\\ @export …` / `\\ @platform(…) …`
-  linkage/target) — these are NOT parsed yet.  Until they land, externals use the
-  transitional brace form `@extern { \\ … }` and `@export name;` statements (see
-  §Legacy).
+  SIGNATURE-LINE MODIFIERS (ADR-0020 decision 8, amended by ADR-0024): the `\\`
+  line may carry leading modifiers.  IMPLEMENTED: `@extern` (body-less external),
+  `@export` (host/WIT-world export — the signature-line form of the `@export name;`
+  statement), and `@pub` (ADR-0024 module visibility: callable across the module
+  boundary as `mod::name`).  They appear in any order and are a pure prefix-token
+  loop (LL(1)).  `@platform(…)` is still designed-only.
+
+  DEPENDENCY IMPORT (ADR-0024): `\\ @use name [as alias];` binds a dependency
+  component for the file (then call `alias::fn` / `name::fn`).  Implemented as a
+  pre-parse directive (like `@use 'path';`), not a SignatureLine production.
 *)
-SignatureLine = "\\" Namespace [ GenericParams ] TypeExpr ;
+SignatureLine = "\\" { Modifier } Namespace [ GenericParams ] TypeExpr ;
+Modifier      = "@extern" | "@export" | "@pub" | "@platform" "(" identifier ")" ;
 
 (* ── Assignments (reassignment) ─────────────────────────────────────────── *)
 

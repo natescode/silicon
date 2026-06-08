@@ -97,6 +97,9 @@ Concretely:
    line.** `\\ @extern puts (String) -> Int;` is a complete, body-less
    declaration; `@extern` documents that the implementation is supplied
    externally. `@export`/`@platform(...)` prefix a normal signature.
+   *(Amended by ADR-0024: the `Modifier` set also includes `@pub` for module
+   visibility; `@extern`/`@export`/`@pub` are implemented as a prefix-token loop.
+   ADR-0024 also adds the `\\ @use name [as alias];` dependency import line.)*
 9. **Indexing uses `[]`.** `xs[i]` reads; `xs[i] = v` assigns. This gives
    element/map assignment a home that does not collide with call syntax.
 

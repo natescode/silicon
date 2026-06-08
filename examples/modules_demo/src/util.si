@@ -1,0 +1,5 @@
+# Another ROOT-module file (sibling of main.si) — auto-included, shares scope.
+# `banner` is callable unqualified from main.si.
+
+\\ banner (Int, Int) -> Int
+@fn banner a, b := { math::add(a, b) };
