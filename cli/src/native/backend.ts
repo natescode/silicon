@@ -11,6 +11,7 @@
  */
 
 import { spawnSync, execFileSync } from 'node:child_process'
+import { createHash } from 'node:crypto'
 import * as fs   from 'node:fs'
 import * as fsp  from 'node:fs/promises'
 import * as path from 'node:path'
@@ -23,8 +24,11 @@ import * as os   from 'node:os'
 /** Default user-local install directory for sgl-managed tools. */
 export const SGL_BIN_DIR = path.join(os.homedir(), '.sgl', 'bin')
 
-/** QBE source tarball URL pattern — update when QBE cuts a new release. */
-const QBE_SRC_URL = 'https://c9x.me/compile/release/qbe-1.2.tar.gz'
+/** Canonical QBE 1.2 source. Upstream (c9x.me) removed its release tarballs and
+ *  its git is dumb-HTTP-only, so we pin Debian's permanently archived orig
+ *  tarball, verified against the hash below. Update both together on a bump. */
+const QBE_SRC_URL = 'https://deb.debian.org/debian/pool/main/q/qbe/qbe_1.2.orig.tar.xz'
+const QBE_SRC_SHA256 = 'a6d50eb952525a234bf76ba151861f73b7a382ac952d985f2b9af1df5368225d'
 
 export const QBE_INSTALL_HINT = `\
 qbe not found on PATH.
@@ -165,7 +169,7 @@ export async function downloadAndBuildQbe(log: (msg: string) => void = console.l
     await fsp.mkdir(SGL_BIN_DIR, { recursive: true })
 
     const tmpDir = await fsp.mkdtemp(path.join(os.tmpdir(), 'sgl-qbe-'))
-    const tarPath = path.join(tmpDir, 'qbe.tar.gz')
+    const tarPath = path.join(tmpDir, 'qbe.tar.xz')
     const outBin  = path.join(SGL_BIN_DIR, 'qbe')
 
     try {
@@ -174,10 +178,18 @@ export async function downloadAndBuildQbe(log: (msg: string) => void = console.l
         const resp = await fetch(QBE_SRC_URL)
         if (!resp.ok) throw new Error(`HTTP ${resp.status} fetching ${QBE_SRC_URL}`)
         const buf = Buffer.from(await resp.arrayBuffer())
+
+        // Verify the download against the pinned hash before trusting it.
+        const digest = createHash('sha256').update(buf).digest('hex')
+        if (digest !== QBE_SRC_SHA256) {
+            throw new Error(
+                `QBE source checksum mismatch:\n  expected ${QBE_SRC_SHA256}\n  got      ${digest}`)
+        }
         await fsp.writeFile(tarPath, buf)
 
         log('Extracting …')
-        const tarResult = spawnSync('tar', ['xzf', tarPath, '-C', tmpDir], { stdio: 'pipe' })
+        // `tar xf` auto-detects xz (GNU tar ≥ 1.22 and bsdtar/macOS).
+        const tarResult = spawnSync('tar', ['xf', tarPath, '-C', tmpDir], { stdio: 'pipe' })
         if (tarResult.status !== 0) {
             throw new Error(`tar failed: ${tarResult.stderr?.toString().trim()}`)
         }

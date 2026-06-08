@@ -37,10 +37,17 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
-      - name: Install QBE
-        # Homebrew now has a qbe formula; clang ships with the macOS runner.
-        # (c9x.me removed its release tarballs and its git is dumb-HTTP-only.)
-        run: brew install qbe
+      - name: Build QBE 1.2
+        # Homebrew's qbe is 1.3, whose output the macOS assembler rejects; build
+        # the pinned 1.2 from Debian's archived orig tarball (clang + make + tar
+        # ship with the macOS runner), verified by shasum.
+        run: |
+          curl -fsSL --retry 3 -o /tmp/qbe.tar.xz \
+            https://deb.debian.org/debian/pool/main/q/qbe/qbe_1.2.orig.tar.xz
+          echo "a6d50eb952525a234bf76ba151861f73b7a382ac952d985f2b9af1df5368225d  /tmp/qbe.tar.xz" | shasum -a 256 -c -
+          mkdir -p /tmp/qbe && tar xf /tmp/qbe.tar.xz -C /tmp/qbe --strip-components=1
+          make -C /tmp/qbe -j4
+          sudo make -C /tmp/qbe install
 
       - name: Verify toolchain
         run: |

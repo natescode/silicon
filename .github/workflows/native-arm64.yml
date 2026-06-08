@@ -37,13 +37,19 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
-      - name: Install GCC + QBE
-        # qbe now ships in the Ubuntu universe repo (24.04+), so install it
-        # directly — no source build. (c9x.me removed its release tarballs and
-        # its git is dumb-HTTP-only, which can't be cloned reliably.)
+      - name: Install GCC + build QBE 1.2
+        # qbe isn't in Ubuntu apt and upstream c9x.me removed its release
+        # tarballs (its git is dumb-HTTP-only). Build the pinned 1.2 from
+        # Debian's permanently archived orig tarball, verified by sha256.
         run: |
           sudo apt-get update -qq
-          sudo apt-get install -y gcc qbe
+          sudo apt-get install -y gcc make xz-utils
+          curl -fsSL --retry 3 -o /tmp/qbe.tar.xz \
+            https://deb.debian.org/debian/pool/main/q/qbe/qbe_1.2.orig.tar.xz
+          echo "a6d50eb952525a234bf76ba151861f73b7a382ac952d985f2b9af1df5368225d  /tmp/qbe.tar.xz" | sha256sum -c -
+          mkdir -p /tmp/qbe && tar xf /tmp/qbe.tar.xz -C /tmp/qbe --strip-components=1
+          make -C /tmp/qbe -j4
+          sudo make -C /tmp/qbe install
 
       - name: Verify toolchain
         run: |
