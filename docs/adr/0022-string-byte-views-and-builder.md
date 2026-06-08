@@ -31,28 +31,35 @@ ADR 0011 addendum.
 
 ## Decision
 
-A `String` exposes **three explicit accessors**, each naming a different notion of
-"length/content" (conflating them is the classic bug), plus a **builder** for the
-construction side. **No implicit coercion** — consistent with Silicon's ethos
-(explicit casts, no hidden promotion).
+A `String` gets **three explicit accessor functions**, each naming a different
+notion of "length/content" (conflating them is the classic bug), plus a **builder**
+for the construction side. **No implicit coercion** — consistent with Silicon's
+ethos (explicit casts, no hidden promotion).
 
-1. **`String.bytes` → `View[u8]`.** A zero-cost read view over the data region
+> **Note on syntax.** Silicon has **no methods / UFCS** — these are free
+> `snake_case` functions called `f(s)`, not `s.f()`. The names below are the
+> shipped function names.
+
+1. **`str_bytes(s) -> View[u8]`.** A zero-cost read view over the data region
    (`ptr + 4`, `len`). O(1). This is the *one* place the `+4` header arithmetic
-   lives; all byte reading/searching/slicing goes through the `View` (and its
+   lives; all byte reading/searching/slicing goes through the view (and its
    bounds-checked accessors) — no downstream code touches the header again.
-   `str.si` is rewritten to derive everything from `String.bytes`.
-2. **`String.code_points` → an iterator/decoder of `Int` Unicode scalar values.**
-   O(n) UTF-8 decode. Used for char-level iteration (`@loop(i, cp, s.code_points,
-   { … })`). Distinct from `bytes` so callers never accidentally index into the
-   middle of a multi-byte character.
-3. **`String.width` → `Int` (display column width).** O(n). **Experimental v0:**
+   `str.si` is rewritten to derive everything from `str_bytes(s)`.
+   *(Implemented today returning `Slice[u8]`; becomes `View[u8]` once the ADR-0011
+   `Span`/`View`/`Slice` surface lands.)*
+2. **`str_code_point_count(s) -> Int`**, plus `str_decode_cp(p, i)` /
+   `str_decode_len(b0)` for decoding individual code points. O(n) UTF-8 decode.
+   Distinct from the byte view so callers never accidentally index into the middle
+   of a multi-byte character. (A higher-level code-point iterator can layer on top
+   later.)
+3. **`str_width(s) -> Int` (display column width).** O(n). **Experimental v0:**
    an East-Asian-Width approximation (wide = 2, default = 1, zero-width/combining
    = 0); documented as *approximate* — no grapheme-cluster / ZWJ-emoji handling
    yet. The API is stable; the implementation refines over time.
 
-4. **`StrBuilder`** — a growable byte buffer (backed by a `Vec[u8]`) for
-   *constructing* strings without pointer math:
-   - `str_builder(cap)` → a builder,
+4. **`StrBuilder`** — a growable byte buffer (Vec-backed) for *constructing*
+   strings without pointer math:
+   - `sb_new(cap)` → a builder,
    - `sb_push_byte(b, x)`, `sb_push_code_point(b, cp)` (UTF-8 encode),
      `sb_push_str(b, s)`,
    - `sb_finish(b)` → `String` (seals the buffer, sets the length header, and
@@ -62,9 +69,9 @@ construction side. **No implicit coercion** — consistent with Silicon's ethos
 
 ### Symmetry
 
-`String.bytes` → `View[u8]` (read, may overlap) and `StrBuilder` → `Slice[u8]`
-(exclusive, mutable) are the read/write halves of the same `Span` story. An
-immutable `String` yields a `View`; a mutable builder hands out a `Slice`. Same
+`str_bytes(s)` → `View[u8]` (read, may overlap) and the builder's `sb_finish(b)`
+fill a `Slice[u8]` (exclusive, mutable) — the read/write halves of the same `Span`
+story. An immutable `String` yields a `View`; a mutable builder hands out a `Slice`. Same
 split as everywhere else.
 
 ## Options considered
@@ -90,14 +97,14 @@ are O(n) and `width` drags in Unicode data.
 ## Consequences
 
 - **Positive:** no user/stdlib code does `+ 4` ever again (it's inside
-  `String.bytes`); building a string is a clean `StrBuilder` flow; byte routines
+  `str_bytes(s)`); building a string is a clean `StrBuilder` flow; byte routines
   written against `View[u8]`/`Slice[u8]` work uniformly on strings, `Vec`s, and
   arrays; the three "lengths" are named and their costs are explicit.
-- **Negative:** `str.si` is rewritten on top of `String.bytes` (mechanical);
+- **Negative:** `str.si` is rewritten on top of `str_bytes(s)` (mechanical);
   `code_points` and `width` add UTF-8 decode + a Unicode width table; `width` is
   explicitly approximate at v0.
 - **Depends on:** the ADR 0011 `Span`/`View`/`Slice` addendum landing first (or
-  together) — `String.bytes` returns a `View[u8]`, `StrBuilder` fills a
+  together) — `str_bytes(s)` returns a `View[u8]`, `StrBuilder` fills a
   `Slice[u8]`.
 - **Follow-up:** grapheme-cluster segmentation for an accurate `width`; possibly a
   `chars`/`graphemes` distinction; revisiting the `Str` ≅ `View[u8]`
@@ -106,5 +113,5 @@ are O(n) and `width` drags in Unicode data.
 ## Implementation pointer
 
 Once landed: commit SHA / PR. Order: (1) ADR 0011 addendum (`Span`/`View`/`Slice`,
-rename `Slice` → `Span`); (2) `String.bytes → View[u8]`, rewrite `str.si` to
-derive from it; (3) `StrBuilder`; (4) `code_points`; (5) experimental `width`.
+rename `Slice` → `Span`); (2) `str_bytes(s) -> View[u8]`, rewrite `str.si` to
+derive from it; (3) `StrBuilder`; (4) `str_code_point_count`; (5) experimental `str_width`.

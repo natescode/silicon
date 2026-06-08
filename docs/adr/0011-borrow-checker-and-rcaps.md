@@ -528,14 +528,15 @@ the noun.
    user-facing value — user code always holds it as a `View` or a `Slice`. There is
    no escape hatch that silently drops the capability.
 3. **Mint vs partition — the load-bearing asymmetry.** `View`s may be minted freely
-   and overlapping (`span.view(a, b)` any time). `Slice`s are obtained only by
-   **partitioning** a span into disjoint pieces (`span.split_at(i) -> (Slice, Slice)`,
-   `chunks`); the checker forbids two live `Slice`s over the same region. So `Span`
-   exposes two op families: *read-subspan* (View-producing, overlap OK) and *split*
-   (Slice-producing, disjoint). "Everyone gets their own" = partition, not arbitrary
-   overlapping ranges.
+   and overlapping (`span_view(sp, a, b)` any time). `Slice`s are obtained only by
+   **partitioning** a span into disjoint pieces (`span_split_at(sp, i) -> (Slice, Slice)`,
+   `span_chunks(sp, n)`); the checker forbids two live `Slice`s over the same region.
+   So `Span` exposes two op families: *read-subspan* (View-producing, overlap OK) and
+   *split* (Slice-producing, disjoint). "Everyone gets their own" = partition, not
+   arbitrary overlapping ranges. (These are free `snake_case` functions —
+   Silicon has no methods.)
 4. **No implicit coercion** (Silicon ethos). A `String` does not silently become a
-   `View[u8]`; you call an explicit accessor (`String.bytes` → `View[u8]`, ADR 0022).
+   `View[u8]`; you call an explicit accessor (`str_bytes(s) -> View[u8]`, ADR 0022).
    The *header arithmetic* is hidden inside that accessor; the *conversion* is one
    visible token.
 5. **Lifetimes reuse R1/R4.** `View` and `Slice` are borrows, so the scope (R1) and
@@ -564,4 +565,4 @@ capabilities reached for constantly.
 ### Implementation pointer
 
 Once landed: commit SHA / PR. Lands together with ADR 0022 (which consumes
-`View[u8]` / `Slice[u8]` for `String.bytes` and `StrBuilder`).
+`View[u8]` / `Slice[u8]` for `str_bytes(s)` and `StrBuilder`).

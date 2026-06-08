@@ -54,3 +54,4 @@ dependency bumps.
 | [0020](0020-odin-inspired-grammar.md) | Odin-inspired grammar: bare definitions, `@fn`-marked functions, always-parens calls, drop the `&` call sigil | Accepted |
 | [0021](0021-bounded-type-inference.md) | Bounded type inference: body-first constraint generation + call-site refinement (`Num`/`Comparable` built-in bounds — the baby-typeclass bridge to traits) | Proposed (draft, not prioritized) |
 | [0022](0022-string-byte-views-and-builder.md) | Strings as byte views: explicit `bytes`/`code_points`/`width` accessors + `StrBuilder` (no coercion; consumes `View`/`Slice` from 0011) | Accepted (prioritized) |
+| [0023](0023-language-identity-and-non-goals.md) | Language identity & non-goals: a multi-mode systems language with ML ergonomics (not functional) — no GC-default, no traits, no methods, no precedence; the decision rule for type-system forks | Accepted |
