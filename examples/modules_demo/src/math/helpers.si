@@ -1,0 +1,5 @@
+# Same module `math`, a second file — auto-included, shares one package-block
+# scope with ops.si: `cube` calls the private `mul` directly (no @use, no `::`).
+
+\\ @pub cube (Int) -> Int
+@fn cube n := { mul(mul(n, n), n) };

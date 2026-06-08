@@ -1,0 +1,14 @@
+# Module `math` — call its @pub members from other modules as `math::name`.
+
+# @pub: callable across the module boundary.
+\\ @pub square (Int) -> Int
+@fn square n := { mul(n, n) };
+
+# @pub: also part of the cross-module surface.
+\\ @pub add (Int, Int) -> Int
+@fn add a, b := { a + b };
+
+# No @pub => module-private. Visible to sibling files in `math` (see helpers.si),
+# but referencing it as `math::mul` from another module is E-PRIV.
+\\ mul (Int, Int) -> Int
+@fn mul a, b := { a * b };

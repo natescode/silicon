@@ -1,0 +1,5 @@
+# Module `text` — depends on module `math` via `math::`. The cross-module graph
+# (text -> math) is a DAG, so it is allowed; a cycle would be E-MOD-CYCLE.
+
+\\ @pub score (Int) -> Int
+@fn score n := { math::add(math::square(n), 1) };
