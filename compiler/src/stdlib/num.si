@@ -11,7 +11,7 @@
 #   @local n := &str_to_int '123';         ;; 123
 #   @local m := &int_max 3, 9;             ;; 9
 
-@use 'mem';
+@use 'heap';
 
 # ── Integer helpers ────────────────────────────────────────────────────
 

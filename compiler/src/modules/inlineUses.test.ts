@@ -17,7 +17,8 @@ describe('inlineStdlibUses', () => {
         expect(out).toContain('align_up')
         expect(out).toContain('int_to_str')
         expect(out).toContain('write_bytes')
-        // de-duplicated: mem's heap_align defined exactly once.
+        // de-duplicated: heap_align (now in 'heap', reached via io → heap) is
+        // defined exactly once despite the io → heap and io → num → heap diamond.
         const defs = out.match(/@fn heap_align/g) ?? []
         expect(defs.length).toBe(1)
     })

@@ -12,7 +12,7 @@
 #   &print_int 42;              ;; number to stdout
 #   @local name := &read_line;  ;; a line from stdin (newline stripped)
 
-@use 'mem';
+@use 'heap';
 @use 'num';
 
 # write_bytes(fd, ptr, len) — write `len` raw bytes from `ptr` to `fd`.

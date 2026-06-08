@@ -17,7 +17,7 @@
 #   @local s := &sb_finish b;      ;; "Hi!"
 
 @use 'vec';
-@use 'mem';
+@use 'heap';
 
 # New builder with the given initial capacity (in bytes).
 \\ sb_new (Int) -> Int

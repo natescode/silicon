@@ -12,7 +12,7 @@
 #   @local head := &str_slice 'hello', 0, 2;          ;; "he"
 #   @local line := &str_repeat '=', 10;               ;; "=========="
 
-@use 'mem';
+@use 'heap';
 
 # Byte length of `s` (O(1) — reads the length header).
 \\ str_byte_len (String) -> Int

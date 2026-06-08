@@ -47,15 +47,16 @@ describe('bulk-memory lowering', () => {
         expect(validateWasmBinary(r.binary!).ok).toBe(true)
     })
 
-    test('the prelude memory.copy validates under wasm-gc', () => {
-        // The `mem` module is wasm-mvp-only (its heap_align uses heap_get/heap_set,
-        // which have no wasm-gc semantics), so mem_fill under wasm-gc is out of
-        // scope. memory.copy ships in the always-emitted prelude and rides every
-        // wasm-gc binary, so that's the honest wasm-gc bulk-memory check.
-        const r = compileSrc(`\\\\ id (Int) -> Int
-@fn id x := x;
-@export id;`, 'wasm-gc')
-        expect(r.wat).toContain('memory.copy')
+    test('mem_fill + the prelude memory.copy validate under wasm-gc', () => {
+        // After the module split, `mem` holds only portable byte ops (no
+        // heap_get/heap_set), so `@use 'mem'` — and thus mem_fill — now compiles
+        // under wasm-gc too. (The mvp-only bump-pointer helper lives in 'heap'.)
+        const r = compileSrc(`@use 'mem';
+\\\\ go (Int) -> Int
+@fn go p := { mem_fill(p, 0, 8) };
+@export go;`, 'wasm-gc')
+        expect(r.wat).toContain('memory.fill')
+        expect(r.wat).toContain('memory.copy')   // always-emitted prelude
         expect(validateWasmBinary(r.binary!).ok).toBe(true)
     })
 })

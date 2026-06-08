@@ -1,0 +1,31 @@
+# SPDX-License-Identifier: MIT
+# Silicon standard library — bump-allocator heap pointer (snake_case).
+#
+# Helpers that read/rewrite the wasm-mvp bump-allocator pointer.  They rely
+# on the prelude's `heap_get` / `heap_set`, which are wasm-mvp-only
+# introspection primitives with no honest wasm-gc semantics (ADR 0009's
+# two-layer portability split) — so this module is wasm-mvp-ONLY: `@use 'heap'`
+# under `--target=wasm-gc` is an E0012 error.  The portable byte ops
+# (`align_up` / `mem_fill` / `mem_eq`) live in 'mem', which compiles under
+# both targets.
+#
+# Why this exists: a value built at runtime via `&alloc_string` can leave the
+# bump pointer on an odd address; the next WASI out-pointer store (an i32 write
+# into scratch space, e.g. an iovec) then traps under strict runtimes such as
+# wasmtime ("Pointer not aligned to 4").  `&heap_align` rounds the bump pointer
+# back up to a 4-byte boundary so the following allocation is safe.
+#
+#   @use 'heap';
+#   heap_align();    ;; re-align the bump pointer after an odd-length alloc
+
+@use 'mem';
+
+# Round the bump-allocator pointer up to a 4-byte boundary so the next
+# i32 store (iovec / WASI out-pointer) lands on an aligned address.
+# A no-op when the pointer is already aligned.
+\\ heap_align Int
+@fn heap_align := {
+    h := heap_get();
+    heap_set(align_up(h, 4));
+    0
+};
