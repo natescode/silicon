@@ -1,12 +1,24 @@
-name: Docs site
+name: Docs site build
 
 # Opt into Node 24 for JS actions ahead of the 2026-06-16 forced cutoff
-# (actions/checkout, upload-artifact, configure-pages still ship Node 20).
+# (actions/checkout still ships Node 20).
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
 
+# Build-only gate: verifies the VitePress docs site still builds (catches broken
+# docs / dead links before merge). Deployment is handled by Vercel
+# (website/vercel.json), NOT GitHub Pages — so there is no Pages config or
+# deploy step here.
+
 on:
   push:
+    branches: [main]
+    paths:
+      - 'docs/**'
+      - 'compiler/etc/sigil.api.md'
+      - 'website/**'
+      - '.github/workflows/docs.yml'
+  pull_request:
     branches: [main]
     paths:
       - 'docs/**'
@@ -17,12 +29,6 @@ on:
 
 permissions:
   contents: read
-  pages: write
-  id-token: write
-
-concurrency:
-  group: 'pages'
-  cancel-in-progress: false
 
 jobs:
   build:
@@ -43,28 +49,6 @@ jobs:
       - name: Sync docs from repo
         run: bun run sync
 
-      - name: Build
-        env:
-          SILICON_DOCS_BASE: /sigil/
+      - name: Build (VitePress)
+        # Same command Vercel runs (website/vercel.json); no Pages base override.
         run: bun run build
-
-      - uses: actions/configure-pages@v5
-        with:
-          # Auto-enable Pages (Actions source) so the run doesn't fail with
-          # "Get Pages site failed" when Pages isn't yet enabled in Settings.
-          enablement: true
-
-      - uses: actions/upload-pages-artifact@v3
-        with:
-          # Artifact paths are relative to the repo root, not the job cwd.
-          path: website/src/.vitepress/dist
-
-  deploy:
-    needs: build
-    runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    steps:
-      - id: deployment
-        uses: actions/deploy-pages@v4

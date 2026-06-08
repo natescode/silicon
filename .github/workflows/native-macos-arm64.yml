@@ -38,11 +38,11 @@ jobs:
         run: bun install --frozen-lockfile
 
       - name: Build QBE from source
-        # No reliable `qbe` brew formula; build from the c9x.me release
-        # (clang + make ship with the macOS runner image).
+        # No reliable `qbe` brew formula; clone from the c9x.me git repo at the
+        # v1.2 tag (the release tarballs were removed). clang + make + git ship
+        # with the macOS runner image.
         run: |
-          curl -fsSL https://c9x.me/compile/release/qbe-1.2.tar.gz -o /tmp/qbe.tar.gz
-          mkdir -p /tmp/qbe && tar xzf /tmp/qbe.tar.gz -C /tmp/qbe --strip-components=1
+          git clone --depth 1 --branch v1.2 https://c9x.me/git/qbe.git /tmp/qbe
           make -C /tmp/qbe -j4
           sudo make -C /tmp/qbe install
 
