@@ -121,6 +121,20 @@ describe('ADR-0024 CLI — multi-module component', () => {
         expect(wat).not.toContain('(export "mathlib__clamp"')
     })
 
+    test('`sgl fix` removes redundant intra-component @use but keeps bare stdlib @use', () => {
+        const dir = project({
+            'src/main.si': `@use 'greeting.si';\n@use 'num';\n\\\\ @export run () -> Int\n@fn run := { greet() };`,
+            'src/greeting.si': `\\\\ greet () -> Int\n@fn greet := { 42 };`,
+        })
+        const r = runSgl(['fix'], dir)
+        expect(r.code).toBe(0)
+        const fixed = fs.readFileSync(path.join(dir, 'src', 'main.si'), 'utf-8')
+        expect(fixed).not.toContain("@use 'greeting.si'")   // redundant path @use removed
+        expect(fixed).toContain("@use 'num'")                // bare stdlib @use kept
+        // and it still builds afterwards
+        expect(runSgl(['check'], dir).code).toBe(0)
+    })
+
     test('standalone file outside a project keeps single-file behaviour (no auto-include)', () => {
         // No sgl.toml: a bare file in a dir with an unrelated sibling must NOT
         // pull the sibling in (legacy `@use`-only semantics).

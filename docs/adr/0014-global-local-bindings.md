@@ -3,7 +3,7 @@
 - **Status:** Accepted
 - **Date:** 2026-06-05
 - **Deciders:** NatesCode
-- **Related:** ADR 0011 (borrow checker: scopes + rcaps — the future capability model) · `src/strata/defkinds.si` · `src/ir/lower.ts` · `src/types/typechecker.ts` · `src/codegen/qbe/lower.ts` · [[silicon-mutability-capability-model]] memory · `docs/overview.md` §4
+- **Related:** ADR 0011 (borrow checker: scopes + rcaps — the future capability model) · ADR 0024 (module/component system — **establishes** the global init order this ADR left unspecified: module-level `@global`/top-level `@local` initialize in dependency-then-declaration order; init cycles are an error) · `src/strata/defkinds.si` · `src/ir/lower.ts` · `src/types/typechecker.ts` · `src/codegen/qbe/lower.ts` · [[silicon-mutability-capability-model]] memory · `docs/overview.md` §4
 
 ## Context
 

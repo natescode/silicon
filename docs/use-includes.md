@@ -3,6 +3,19 @@
 Phase −1.C of `docs/archive/bootstrap-plan.html`. Lets a Silicon source file pull
 in other Silicon files at compile time.
 
+> **Scoped down by ADR-0024 (module/component system, implemented).** Inside a
+> project (an `sgl.toml`-rooted component) `@use` is **no longer needed for
+> intra-component code**: all `.si` files in a module directory are
+> auto-included, and other modules are called as `mod::name`. A path `@use` that
+> points at a same-component file is now **redundant** — it emits a
+> `W-USE-REDUNDANT` deprecation warning and `sgl fix` removes it. The bare-name
+> **stdlib** include (`@use 'io';`) is **retained verbatim** — that is the one
+> surviving role at v1.0. Cross-component dependencies use the import line
+> `\\ @use name [as alias];` (see ADR-0024). Everything below still describes the
+> underlying concatenation engine, which now also powers stdlib resolution for
+> the component assembler. Standalone files compiled outside a project keep the
+> classic `@use`-only behaviour described here.
+
 ## Syntax
 
 ```silicon

@@ -2,9 +2,9 @@
 #
 #   cd examples/greeter && sgl run          # platform = "bun" from sgl.toml
 #
-# Splits across files with `@use`; greeting.si provides the JSString helpers.
+# Splits across files in the ROOT module: greeting.si sits beside this file in
+# src/, so its helpers (greet, shout) are auto-included — no `@use` (ADR-0024).
 
-@use 'greeting.si';
 
 @fn main := {
     # A JS string built from a Silicon String literal (the String↔JSString bridge).

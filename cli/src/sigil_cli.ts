@@ -57,6 +57,7 @@ Commands:
   add   <pkg>     Add a dependency (1.0: --path <local> only; registry pending)
   resolve         Generate sgl.lock from sgl.toml (stub at 1.0)
   fmt   [file]    Format Silicon source files (normalises whitespace + style)
+  fix   [file]    Codemod: remove redundant intra-component @use (ADR-0024)
   help            Show this help
   version         Print the sgl version (also --version, -v)
 
@@ -873,6 +874,61 @@ async function cmdFmt(
 }
 
 // ---------------------------------------------------------------------------
+// sgl fix — ADR-0024 codemod: delete redundant intra-component path @use
+// ---------------------------------------------------------------------------
+
+/** All `.si` files under `dir` (recursive), skipping host-wrapper/tooling dirs. */
+function collectSiFiles(dir: string): string[] {
+    const out: string[] = []
+    let entries: fs.Dirent[]
+    try { entries = fs.readdirSync(dir, { withFileTypes: true }) } catch { return out }
+    for (const e of entries.sort((a, b) => a.name.localeCompare(b.name))) {
+        if (e.isDirectory()) {
+            if (e.name === 'modules' || e.name === 'node_modules' || e.name.startsWith('.')) continue
+            out.push(...collectSiFiles(path.join(dir, e.name)))
+        } else if (e.name.endsWith('.si')) {
+            out.push(path.join(dir, e.name))
+        }
+    }
+    return out
+}
+
+async function cmdFix(positional: string | undefined): Promise<void> {
+    const entry = path.resolve(resolveEntry(positional, process.cwd()))
+    const componentRoot = findComponentRoot(path.dirname(entry))
+    if (!componentRoot) {
+        console.error('sgl fix: not inside a project (no sgl.toml found). `sgl fix` operates on a component.')
+        process.exit(1)
+    }
+    const srcRoot = path.dirname(entry)             // the root-module directory
+    const allSi = collectSiFiles(srcRoot)
+    const autoSet = new Set(allSi.map(p => path.resolve(p)))
+    // `@use '<path>';` — drop when it points at an auto-included component file;
+    // bare-name stdlib includes (`@use 'io';`) are retained verbatim.
+    const USE = /^[ \t]*@use[ \t]+'([^'\n\r]+)'[ \t]*;[ \t]*(?:#[^\n\r]*)?\r?\n?/gm
+    const BARE = /^[A-Za-z_][A-Za-z0-9_-]*$/
+    let changedFiles = 0
+    for (const f of allSi) {
+        const src = await fsp.readFile(f, 'utf-8')
+        let removed = 0
+        const out = src.replace(USE, (full, raw: string) => {
+            if (BARE.test(raw)) return full
+            const abs = path.isAbsolute(raw) ? raw : path.resolve(path.dirname(f), raw)
+            if (autoSet.has(path.resolve(abs))) { removed++; return '' }
+            return full
+        })
+        if (removed > 0) {
+            await fsp.writeFile(f, out, 'utf-8')
+            changedFiles++
+            console.log(`  fixed  ${path.relative(process.cwd(), f)}  (removed ${removed} redundant @use)`)
+        }
+    }
+    console.log(changedFiles > 0
+        ? `sgl fix: updated ${changedFiles} file(s) — sibling files are auto-included (ADR-0024).`
+        : 'sgl fix: nothing to fix.')
+}
+
+// ---------------------------------------------------------------------------
 // Arg parsing
 // ---------------------------------------------------------------------------
 
@@ -1050,6 +1106,9 @@ try {
             break
         case 'fmt':
             await cmdFmt(positional, fmtCheck, fmtStdout, opts)
+            break
+        case 'fix':
+            await cmdFix(positional)
             break
         default:
             console.error(`sgl: unknown subcommand '${subcommand}'`)

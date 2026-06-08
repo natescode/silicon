@@ -1,7 +1,7 @@
 # ADR 0024 — Component / module / file: a three-tier system named in WASM Component-Model vocabulary
 
-- **Status:** Proposed
-- **Date:** 2026-06-07
+- **Status:** Accepted — **implemented** (Stage A + Stage B; post-v1.0 items deferred, see *Implementation status*)
+- **Date:** 2026-06-07 (implemented 2026-06-08)
 - **Deciders:** NatesCode
 - **Related:** ADR 0023 ([0023-language-identity-and-non-goals.md](0023-language-identity-and-non-goals.md) — `::` is namespacing only, no methods/UFCS, low-ceremony) · ADR 0020 ([0020-odin-inspired-grammar.md](0020-odin-inspired-grammar.md) — "bare = common, `@` = reserved"; the §decision-8 signature-line modifier slot this **amends**) · ADR 0010 ([0010-grammar-targets-ll1.md](0010-grammar-targets-ll1.md) — LL(1)) · ADR 0014 ([0014-global-local-bindings.md](0014-global-local-bindings.md) — `@global`/`@local`; this ADR **extends** it with init order) · ADR 0015 ([0015-object-capabilities.md](0015-object-capabilities.md) — no ambient authority) · ADR 0013 ([0013-capability-checker-bootstrap.md](0013-capability-checker-bootstrap.md) — `on::check`, mint-site restriction, `symbol_module`) · ADR 0008/0009 ([0008-memory-management-arenas.md](0008-memory-management-arenas.md), [0009-wasm-gc-target.md](0009-wasm-gc-target.md) — whole-program memory mode) · ADR 0001 ([0001-generic-monomorphization-scope.md](0001-generic-monomorphization-scope.md) — monomorphization, a prerequisite for WIT type-mapping) · `../use-includes.md` (the shipped `@use` concatenation model) · `../lockfile-format.md` (`sgl.lock` / `[dependencies]`) · `../grammar.ebnf` (the contract this honors)
 
@@ -726,14 +726,57 @@ the entire reason this ADR exists.
 - **Flat-namespace back-compat mode** for projects relying on cross-file unqualified
   references that will land in different modules, or is `sgl fix` + `E-PRIV` the sole path?
 
+## Implementation status
+
+**Implemented (2026-06-08).** The model ships as a **source-level static-merge front-end**
+(`compiler/src/modules/component.ts`, `assembleComponent`) invoked by the CLI before the
+unchanged `compile()` pipeline — the prescribed "name-prefixing before the source/IR-level
+merge." A component is assembled by prefixing every sub-module `M`'s top-level defs and their
+references to plain `M__name` identifiers (scope-aware, via AST-driven text-edits, so a
+local/param/`@match`/`@loop` binding that shadows a def name is left alone), and rewriting every
+cross-module `M::f` to `M__f`. The result is one flat program the shipped compiler accepts
+verbatim (`watId` leaves `M__name` untouched — it never routes through the import-only
+`lowerModuleCall`), so modules/files cost **zero** runtime, exactly as designed.
+
+What landed, by stage:
+
+- **Stage A** — directory = module discovery (root files = ROOT module; every `.si`-bearing
+  sub-directory = a flat sibling module; `modules/`, `node_modules/`, dot-dirs excluded);
+  sibling-file auto-inclusion in lexical order; `mod::name` cross-module calls into the merged
+  source; cycle ban (`E-MOD-CYCLE`, actionable); entry-from-root + `main` discovery in any
+  root-module file (`E-NO-MAIN` for libraries); `E-DUP-MOD` / `E-DUP-DEF` / `E-MOD-TOPSTMT`;
+  the `@export` **statement** as the host/WIT-world surface; `W-USE-REDUNDANT` deprecation for
+  intra-component path `@use` with bare-name stdlib `@use` retained verbatim.
+- **Stage B** — the ADR-0020 §decision-8 grammar amendment (`@pub` + `@export` added to the
+  signature-line `Modifier` set; the `\\ @export` modifier synthesizes the shipped `@export`
+  statement); `@pub` default-private visibility (`E-PRIV`); cross-component dependency aliases
+  (`\\ @use name [as alias];` as a pre-parse directive, consistent with `@use`), with
+  `path:` dependencies statically merged via the same re-prefix-as-module mechanism, restricted
+  to the 2-segment `alias::fn` root-`@export` surface (`E-DEP-UNRESOLVED` / `E-DEP-CYCLE`); and
+  the `sgl fix` codemod (deletes redundant intra-component path `@use`s, keeps bare stdlib ones).
+
+**Deferred past v1.0** exactly as argued above: `--emit=component` (CM binary, memory-export
+hiding, Canonical-ABI glue); well-formed non-scalar `--emit=wit` (the type-mapping table + a
+`namespace`-gated package — `[package].namespace` is now parsed and scaffolded, defaulting to
+`local`); 3-segment `ml::sub::fn` re-exposed dependency sub-modules; binary-level dependency
+merge; the `internal/` tier; and nestable modules. The `\\ @use … as …` line is implemented as
+a pre-parse directive rather than a parser `ImportLine` node (consistent with how `@use` itself
+is "not a grammar construct"), so the LL(1) classifier is untouched.
+
+Tests: `compiler/src/modules/component.test.ts` (assembler unit — prefixing, scope-aware
+shadowing, visibility, every module-edge diagnostic, dependencies),
+`compiler/src/grammar/module-visibility.test.ts` (the modifier grammar), and
+`cli/src/sigil_cli_modules.test.ts` (CLI end-to-end: multi-module build, `E-PRIV`,
+`E-MOD-TOPSTMT`, `E-NO-MAIN`, dependency build, `sgl fix`, standalone-file isolation).
+
 ## Implementation pointer
 
-**Proposed — no commit yet.** Staged delivery: **(Stage A)** new source-dir glob auto-inclusion +
+Staged delivery (both stages landed): **(Stage A)** source-dir glob auto-inclusion +
 flat directory=module discovery + `::` cross-module calls + cycle ban + entry-from-root-module +
-`@export`-**statement**-as-WIT-world — reuses the shipped `useResolver` concat pipeline and the
-existing `@export` *statement* form, but adds genuinely new source-dir discovery/glob; **(Stage B)**
-the ADR-0020 amendments (the `@pub` modifier token + the `\\ @use … as …` `ImportLine`/`as` token),
-then `@pub` default-private visibility + dependency aliases + `sgl fix`.
+`@export`-**statement**-as-WIT-world — reuses the shipped `useResolver` concat pipeline (for
+stdlib) and the existing `@export` *statement* form, plus the new source-dir discovery/glob in
+`assembleComponent`; **(Stage B)** the ADR-0020 modifier amendment (`@pub`/`@export` on the
+signature line) + `@pub` default-private visibility + dependency aliases + `sgl fix`.
 
 An implementation would touch (from the grounding):
 
