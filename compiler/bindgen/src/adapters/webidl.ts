@@ -23,7 +23,7 @@ import type { BindingSpec, SiType, Param } from '../spec'
  *  0017's type-map highlights (`double`/`float` → `Float` (f32, lossy for
  *  `double` — graphics-fine), `unsigned long` → `Int`, `long long` → `Int64`,
  *  `DOMString` → `String`, `undefined` → `Void`). */
-function idlTypeToSi(idlType: string): SiType {
+export function idlTypeToSi(idlType: string): SiType {
     switch (idlType) {
         case 'double': case 'unrestricted double':
         case 'float':  case 'unrestricted float':           return 'Float'

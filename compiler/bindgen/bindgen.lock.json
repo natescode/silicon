@@ -5,7 +5,11 @@
   "toolchain": {
     "runtime": "bun",
     "webidl2": "^24.5.0",
-    "note": "Performance.now() is parsed from real Web IDL via webidl2 (devDependency). Math.* and Date.now() are ECMAScript built-ins (no @webref/idl definition) and come from the hand-authored ECMAScript table. The @webref/idl bulk-IDL bundle (+ per-spec version pinning) is the next adapter source."
+    "@webref/idl": "^3.80.0",
+    "typescript": "^5.0.0",
+    "@types/node": "^25.0.0",
+    "bun-types": "^1.3.14",
+    "note": "All source adapters are spec-driven: Web from @webref/idl via webidl2 (adapters/webref.ts + webidl.ts); Node from @types/node and Bun from bun-types via the TypeScript compiler API (adapters/dts.ts). Math.*/Date.now() are ECMAScript built-ins with no machine-readable spec and stay hand-authored. The sha256 below pins the SHIPPED web Math/clock surface; per-source corpus pinning (@webref snapshot hash) arrives with the multi-module generation."
   },
   "surfaces": [
     {

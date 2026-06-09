@@ -49,10 +49,11 @@ jobs:
         working-directory: compiler
         run: bun run bindgen/cli.ts
 
-      # Golden + key-parity + lock-hash + round-trip.
-      - name: bindgen golden test
+      # Golden + key-parity + lock-hash + round-trip, the Web IDL adapter, and
+      # the spec-driven Web/Node/Bun source adapters (against the real corpora).
+      - name: bindgen tests
         working-directory: compiler
-        run: bun test bindgen/bindgen.test.ts
+        run: bun test bindgen/
 
       # The regenerated web.si must still re-bundle into assets.generated.ts.
       - name: gen-web-assets re-bundles

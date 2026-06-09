@@ -68,6 +68,9 @@ const DATE: readonly BindingSpec[] = [
     { name: 'date_now', params: [], result: 'Float', impl: { kind: 'call', expr: 'Date.now()' }, source: 'ecmascript:Date.now' },
 ]
 
+/** Count of hand-authored ECMAScript bindings (no machine-readable spec). */
+export const MATH_DATE_COUNT = MATH.length + DATE.length
+
 // ── Web IDL source: Performance (genuinely generated) ────────────────────────
 // `Performance.now()` IS Web IDL (W3C High Resolution Time).  This is the real
 // upstream spec text, parsed by the webidl2 adapter into a BindingSpec — the

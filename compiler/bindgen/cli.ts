@@ -60,7 +60,30 @@ export function targets(): Target[] {
     ]
 }
 
+/** `--report`: run every source adapter against its real spec and print the
+ *  per-source coverage (auto-generated Tier-0 bindings + what was skipped). */
+function report(): void {
+    const { webrefToSpecs } = require('./src/adapters/webref') as typeof import('./src/adapters/webref')
+    const { dtsToSpecs } = require('./src/adapters/dts') as typeof import('./src/adapters/dts')
+    const { MATH_DATE_COUNT } = require('./src/spec') as any
+
+    const web = webrefToSpecs()
+    const node = dtsToSpecs({ module: 'node:path', types: ['node'], accessor: "require('node:path')", prefix: 'path' })
+    const bun = dtsToSpecs({ global: 'Bun', types: ['bun-types'], accessor: 'Bun', prefix: 'bun' })
+
+    console.log('FFI binding sources — auto-generated from spec (ADR 0017):\n')
+    const row = (src: string, spec: string, gen: number, skip: number) =>
+        console.log(`  ${src.padEnd(12)} ${spec.padEnd(22)} ${String(gen).padStart(4)} bindings   ${skip} skipped (non-Tier-0)`)
+    row('Web IDL', '@webref/idl corpus', web.specs.length, web.skipped.length)
+    row('Node', '@types/node (.d.ts)', node.specs.length, node.skipped.length)
+    row('Bun', 'bun-types (.d.ts)', bun.specs.length, bun.skipped.length)
+    console.log(`  ${'ECMAScript'.padEnd(12)} ${'(hand-authored)'.padEnd(22)} ${String(MATH_DATE_COUNT ?? 16).padStart(4)} bindings   — Math/Date have no machine-readable spec`)
+    console.log('\n  Web IDL gives int-vs-float exactly; Node/Bun use the TS `number` heuristic (default Float).')
+    console.log('  The signature + tier come from the spec; the host accessor (e.g. `performance`, `Bun`) is the per-source convention.')
+}
+
 function main(): void {
+    if (process.argv.includes('--report')) { report(); return }
     const write = process.argv.includes('--write')
     let drift = 0
     for (const t of targets()) {
