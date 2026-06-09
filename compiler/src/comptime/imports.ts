@@ -114,9 +114,19 @@ export interface ComptimeEnv {
 }
 
 export function createComptimeEnv(registry: ElaboratorRegistry): ComptimeEnv {
+    // Share ONE handle table across every handler env of a registry.  Strata
+    // 2.0 §7 monomorphization stores a captured-template HANDLE in the shared
+    // `state('stratum')` bucket during the on::decl firing and reads it back in
+    // a *different* handler (the on::call_site firing).  Per-env tables would
+    // make that id meaningless across the boundary; a registry-shared table
+    // keeps handle ids portable.  Ids are globally unique, and each firing only
+    // releases its own input-node id, so sharing is collision-free.  (irHandles
+    // and the string pool stay per-env — they don't cross handler boundaries.)
+    const sharedHandles: HandleTable<any> =
+        (registry as any).__sharedHandles ?? ((registry as any).__sharedHandles = new HandleTable<any>())
     return {
         registry,
-        handles: new HandleTable<any>(),
+        handles: sharedHandles,
         strings: new StringPool(),
         irHandles: new HandleTable<IRHandleValue>(),
         ctx: undefined,
@@ -125,6 +135,34 @@ export function createComptimeEnv(registry: ElaboratorRegistry): ComptimeEnv {
         pendingDefinitions: [],
         pendingGlobals: [],
         testLog: [],
+    }
+}
+
+/**
+ * Drain a handler env's per-firing module-mutation accumulators into the
+ * registry so lowerProgram re-lowers them (Strata 2.0 §7 monomorphization
+ * substrate: `module::push_definition` captures+patches a template and pushes
+ * a concrete `@fn`, which must reach `registry.pendingDefinitions` — the list
+ * lowerProgram drains after the main definition pass).  Called by every
+ * compiled-handler firing wrapper after `compiled.invoke` returns.
+ *
+ * Without this the pushed monomorphs are stranded in `env.pendingDefinitions`
+ * (which lowerProgram never reads) and produce no output.
+ */
+export function drainModuleMutations(env: ComptimeEnv, registry: ElaboratorRegistry): void {
+    if (env.pendingDefinitions.length > 0) {
+        for (const d of env.pendingDefinitions) registry.pendingDefinitions.push(d)
+        env.pendingDefinitions.length = 0
+    }
+    if (env.pendingGlobals.length > 0) {
+        for (const g of env.pendingGlobals) {
+            // Materialise an IRGlobal; lowerProgram's append routes 'Global' kinds
+            // straight into the module (no re-elaboration needed).
+            registry.pendingDefinitions.push({
+                kind: 'Global', name: g.name, wasmType: g.type, mutable: 1, init: g.init,
+            })
+        }
+        env.pendingGlobals.length = 0
     }
 }
 
@@ -682,6 +720,14 @@ export function createComptimeImports(env: ComptimeEnv): WebAssembly.Imports {
         return strings.intern(s.replace(/::/g, '_'))
     }
 
+    /** Concatenate two pooled strings → a new pooled string id.  The comptime
+     *  engine has no string `+` operator (operator strata route `+` to numeric
+     *  i32.add), so monomorphization name-building (`callee + suffix`) uses this
+     *  explicit primitive instead. */
+    const str_concat = (aStr: number, bStr: number): number => {
+        return strings.intern((strings.get(aStr) ?? '') + (strings.get(bStr) ?? ''))
+    }
+
     /** Per-env fresh-id counter — local to a firing. */
     let freshIdCounter = 0
     const compiler_freshId = (prefixStr: number): number => {
@@ -1059,6 +1105,32 @@ export function createComptimeImports(env: ComptimeEnv): WebAssembly.Imports {
         return strings.intern(parts.join('_'))
     }
 
+    /** `Compiler::callee::name node` — the callee identifier of a FunctionCall
+     *  node, as a string-pool id.  Delegates to the CompilerAPI so the rule
+     *  matches the legacy interpreter exactly.  0 if api/node unavailable. */
+    const callee_name = (callH: number): number => {
+        if (!env.api) return 0
+        const node = handles.get(callH)
+        if (!node) return 0
+        const name = env.api.callee.name(node)
+        return name ? strings.intern(name) : 0
+    }
+
+    /** `Compiler::type::bind_template_args tmplDef, callNode` — infer the
+     *  concrete type each of the template's type variables takes at this call
+     *  site, returning a Map<varName, SiliconType> handle.  `tmplDefH` is the
+     *  bare Definition (a template wrapper's `::ast`); `callH` the call node.
+     *  Delegates to the CompilerAPI (uses its inferArgType / BUILTIN_TYPE_NAMES
+     *  so the host and legacy engines agree). */
+    const type_bind_template_args = (tmplDefH: number, callH: number): number => {
+        if (!env.api) return 0
+        const tmplDef = handles.get(tmplDefH)
+        const call = handles.get(callH)
+        if (!tmplDef || !call) return 0
+        const bindings = (env.api.type as any).bind_template_args(tmplDef, call)
+        return bindings ? handles.intern(bindings) : 0
+    }
+
     // ── AST manipulation (D-B-6) ───────────────────────────────────────────
     // Templates are deep-cloned AST subtrees with a `kind` discriminator
     // ('pre' = captured before elaboration; 'post' = after).  All `with_*`
@@ -1392,6 +1464,19 @@ export function createComptimeImports(env: ComptimeEnv): WebAssembly.Imports {
         }
     }
 
+    /** Build the full IRImport for an @extern (src/strata/defkinds.si).  ADR
+     *  0018 P0/P1: derives the import module from a `mod::field` name and
+     *  stamps JSString/JSValue externref slots.  Like the arena expanders,
+     *  does NOT catch — the externref web/bun gate throws IRLowerError, and
+     *  that message must reach the user as a compile error. */
+    const compiler_expandExtern = (nodeH: number): number => {
+        if (!env.api) return 0
+        const node = handles.get(nodeH)
+        if (!node) return 0
+        const ir = env.api.expandExtern(node)
+        return ir ? env.irHandles.fresh(ir) : 0
+    }
+
     /** Match-chain expansion — delegate to api.expandMatchChain.
      *  `rawArgsArrH` is a handles id of the AST args array; `inferredTypeH`
      *  is a handle of the inferredType.  Returns an IR-handle of the
@@ -1509,7 +1594,7 @@ export function createComptimeImports(env: ComptimeEnv): WebAssembly.Imports {
             ir_makeFunction, ir_makeImport, compiler_arr_push_str,
             diag_error, diag_warn,
             compiler_str_intern,
-            compiler_watId, compiler_freshId, compiler_arg, compiler_choose, compiler_require_argc,
+            compiler_watId, compiler_freshId, compiler_arg, compiler_choose, compiler_require_argc, str_concat,
             compiler_ctx_locals_set, compiler_ctx_locals_get,
             compiler_ctx_globals_set, compiler_ctx_globals_get,
             compiler_ctx_varNames_add, compiler_ctx_varNames_has,
@@ -1525,6 +1610,7 @@ export function createComptimeImports(env: ComptimeEnv): WebAssembly.Imports {
             type_int, type_int64, type_float, type_bool, type_string, type_void,
             type_variable, type_array,
             type_equals, type_format, type_substitute, type_mangle_suffix,
+            type_bind_template_args, callee_name,
             ast_capture_template, ast_clone, ast_with_keyword, ast_with_name,
             ast_rewrite_call, ast_patch_types,
             compiler_lowerExpr, compiler_lowerExprIfDefined,
@@ -1533,7 +1619,7 @@ export function createComptimeImports(env: ComptimeEnv): WebAssembly.Imports {
             compiler_funcResult_body, compiler_funcResult_locals,
             compiler_resolveFunctionReturnType, compiler_resolveType,
             compiler_lowerGlobalInit, compiler_globalInit_init, compiler_globalInit_wasmType,
-            compiler_lowerExternParams, compiler_lowerExternResult,
+            compiler_lowerExternParams, compiler_lowerExternResult, compiler_expandExtern,
             compiler_expandMatchChain, compiler_expandSumType, compiler_expandTypeRecord, compiler_expandStruct,
             compiler_expandWithArena, compiler_expandMoveToParentArena, compiler_expandCallIndirect,
             test_observe,
@@ -1570,6 +1656,7 @@ function makeNamedHandler(registry: ElaboratorRegistry, handlerName: string) {
         if (Array.isArray(result)) {
             result = result.map((v) => typeof v === 'number' ? env.irHandles.get(v) : v).filter(Boolean)
         }
+        drainModuleMutations(env, registry)
         env.handles.release(nodeId)
         env.ctx = prevCtx
         env.api = prevApi

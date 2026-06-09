@@ -74,6 +74,12 @@ interface LowerCtx {
     moduleRegistry?: ModuleRegistry
     /** Auto-generated imports from module calls — keyed by WAT name to deduplicate. */
     pendingImports: Map<string, IRImport>
+    /** ADR 0018 P1 — namespaced `@extern mod::field` host imports keyed by their
+     *  qualified call name (`mod::field`).  Lets a `mod::field(…)` call route to
+     *  the declared host import instead of demanding a registered Silicon module.
+     *  Populated in the lowerProgram pre-scan (so namespaced externs forward-ref
+     *  like bare ones); consulted by `lowerModuleCall`. */
+    externCalls: Map<string, IRImport>
     /** Stack of active loop IDs — for @break / @continue. */
     loopStack: number[]
     /** Monotonically increasing loop counter for unique labels. */
@@ -186,6 +192,7 @@ const lowerFns: LowerFns = {
     lowerGlobalInit,
     lowerExternParams,
     lowerExternResult,
+    lowerExternImport,
     unwrapNode: unwrap,
     exprWasmType,
     watId,
@@ -277,6 +284,7 @@ export function lowerProgram(
         registry,
         moduleRegistry,
         pendingImports: new Map(),
+        externCalls: new Map(),
         loopStack: [],
         loopCount: { n: 0 },
         deferStack: [],
@@ -315,6 +323,15 @@ export function lowerProgram(
             const name = watId(node.name?.name ?? '')
             ctx.globals.set(name, 'i32') // refined below
             ctx.varNames.add(name)
+        }
+        // ADR 0018 P1: pre-register namespaced `@extern mod::field` host imports
+        // so a `mod::field(…)` call (lowerModuleCall) can route to them whether
+        // declared before or after the call site.  Building the import here is
+        // idempotent — ExternDef_lower rebuilds the identical node when it emits
+        // the actual import; the externref web/bun gate (which throws) just
+        // surfaces from whichever runs first.
+        if (node.keyword === '@extern' && (node.name?.name ?? '').includes('::')) {
+            ctx.externCalls.set(node.name.name, lowerExternImport(node, ctx))
         }
         // Def expander pre-scan (handles type_sum and any user-registered kinds).
         ctx.registry.defExpanders.get(hook)?.preScan?.(node, ctx.$compiler!)
@@ -463,7 +480,7 @@ export function lowerProgram(
     // JS String Builtins (web/bun): encode JSString-typed user params/results/
     // locals as `externref` so `local.set`/calls from the `(ref extern)`-returning
     // builtins validate.  No-op when the program uses no JSString.
-    injectJSStringRefSlots(program, functions, functionSigs)
+    injectExternRefSlots(program, functions, functionSigs)
 
     // CharCodeArray (web/bun): stamp CharCodeArray-typed params/results/locals as
     // a concrete `(ref null $Array_i16)` so they hold the GC array ref.
@@ -536,7 +553,14 @@ function injectRefSlots(
  *  builtins return non-null `(ref extern)`; declaring the holding slots as the
  *  wider nullable `externref` lets `local.set` / calls validate. */
 const EXTERN_SLOT: IRRefSlot = { localTypeIdx: 0, nullable: true, extern: true }
-function injectJSStringRefSlots(
+/** True for the externref-shaped object-handle types (ADR 0018 P0): the
+ *  `wasm:js-string` `JSString` and the generic host-object `JSValue`.  Both lower
+ *  to a nullable `externref` ref slot; only their *operations* differ (JSString
+ *  has the `wasm:js-string` builtins, JSValue is an opaque host handle). */
+function isExternRefKind(t: string | undefined): boolean {
+    return t === 'JSString' || t === 'JSValue'
+}
+function injectExternRefSlots(
     program: any,
     functions: IRFunction[],
     functionSigs: Map<string, FunctionSig>,
@@ -548,16 +572,16 @@ function injectJSStringRefSlots(
     for (const fn of functions) {
         const sig = functionSigs?.get(fn.name)
         if (!sig) continue
-        if (!fn.refResult && sig.result?.kind === 'JSString') fn.refResult = EXTERN_SLOT
+        if (!fn.refResult && isExternRefKind(sig.result?.kind)) fn.refResult = EXTERN_SLOT
         sig.params.forEach((p, i) => {
-            if (p?.kind === 'JSString') {
+            if (isExternRefKind(p?.kind)) {
                 if (!fn.refParams) fn.refParams = new Map()
                 if (!fn.refParams.has(i)) fn.refParams.set(i, EXTERN_SLOT)
             }
         })
     }
 
-    // `@local`/`@var` declarations annotated `\\ name JSString`.
+    // `@local`/`@var` declarations annotated `\\ name JSString|JSValue`.
     const items: any[] = (program?.elements ?? program?.items ?? []) as any[]
     for (const item of items) {
         const def = unwrap(item)
@@ -565,15 +589,15 @@ function injectJSStringRefSlots(
         if (def.keyword !== '@fn' && def.keyword !== '@global') continue
         const fn = fnByName.get(watId(def.name?.name ?? '')) ?? fnByName.get(def.name?.name ?? '')
         if (!fn) continue
-        walkLocalsForJSString(def.binding?.expression ?? def.binding, fn)
+        walkLocalsForExternRef(def.binding?.expression ?? def.binding, fn)
     }
 }
 
-function walkLocalsForJSString(node: any, fn: IRFunction): void {
+function walkLocalsForExternRef(node: any, fn: IRFunction): void {
     if (!node || typeof node !== 'object') return
     if (node.type === 'Definition' && node.keyword === '@local') {
         const localName: string | undefined = node.name?.name
-        if (localName && node.name?.typeAnnotation?.typename === 'JSString') {
+        if (localName && isExternRefKind(node.name?.typeAnnotation?.typename)) {
             const watLocalName = watId(localName)
             for (const l of fn.locals) {
                 if (l.name === watLocalName || l.name === localName) { l.refType = EXTERN_SLOT; break }
@@ -583,14 +607,14 @@ function walkLocalsForJSString(node: any, fn: IRFunction): void {
     for (const key of Object.keys(node)) {
         if (key === 'type' || key === 'sourceLocation') continue
         const val = (node as any)[key]
-        if (Array.isArray(val)) for (const v of val) walkLocalsForJSString(v, fn)
-        else if (val && typeof val === 'object') walkLocalsForJSString(val, fn)
+        if (Array.isArray(val)) for (const v of val) walkLocalsForExternRef(v, fn)
+        else if (val && typeof val === 'object') walkLocalsForExternRef(val, fn)
     }
 }
 
 /** CharCodeArray — stamp CharCodeArray-typed params/results/locals with a concrete
  *  `(ref null $Array_i16)` slot so they hold the GC array ref (mirror of
- *  injectJSStringRefSlots, with a concrete typeidx instead of extern). */
+ *  injectExternRefSlots, with a concrete typeidx instead of extern). */
 function injectCharCodeArrayRefSlots(
     program: any,
     functions: IRFunction[],
@@ -996,6 +1020,51 @@ export function lowerExternResult(node: any): WasmValType | undefined {
         return siliconTypeNameToWasm(node.name.typeAnnotation.typename)
     }
     return undefined
+}
+
+/**
+ * Build the full IRImport for an `@extern` declaration (ADR 0018 P0).
+ * Generalizes the former hardcoded `(env, name)` form two ways:
+ *   - a namespaced name `mod::field` imports from module `mod` (with
+ *     IMPORT_ENV_OVERRIDE applied) instead of the hardcoded `env`; and
+ *   - `JSString` / `JSValue` params/results become `externref` ref slots
+ *     (the object-handle boundary) rather than collapsing to i32.
+ * Externref imports require a JS host, so they are gated to web/bun.
+ */
+export function lowerExternImport(node: any, ctx: LowerCtx): IRImport {
+    const rawName: string = node.name?.name ?? ''
+    const sep = rawName.indexOf('::')
+    const moduleName = sep === -1 ? 'env' : rawName.slice(0, sep)
+    const field = sep === -1 ? rawName : rawName.slice(sep + 2)
+    const watName = watId(rawName)
+    const env = IMPORT_ENV_OVERRIDE[moduleName] ?? moduleName
+
+    const params: WasmValType[] = []
+    let refParams: Map<number, IRRefSlot> | undefined
+    let usesExternref = false
+    for (const p of node.params || []) {
+        if (p.isLiteral || !p.typeAnnotation) continue
+        const tn: string = p.typeAnnotation.typename
+        const idx = params.length
+        params.push(siliconTypeNameToWasm(tn))
+        if (isExternRefKind(tn)) { (refParams ??= new Map()).set(idx, EXTERN_SLOT); usesExternref = true }
+    }
+
+    const resName: string | undefined = node.name?.typeAnnotation?.typename
+    const result = resName && resName !== 'Void' ? siliconTypeNameToWasm(resName) : undefined
+    const refResult: IRRefSlot | undefined = resName && isExternRefKind(resName)
+        ? { localTypeIdx: 0, nullable: false, extern: true }
+        : undefined
+    if (refResult) usesExternref = true
+
+    if (usesExternref && ctx.platform !== 'web' && ctx.platform !== 'bun') {
+        throw new IRLowerError(
+            `'@extern ${rawName}' uses an externref object handle (JSString / JSValue) — ` +
+            `compile with --platform=web or --platform=bun (sgl.toml: [build] platform = "bun").`,
+        )
+    }
+
+    return { kind: 'Import', env, field, name: watName, params, result, refParams, refResult }
 }
 
 // ---------------------------------------------------------------------------
@@ -1423,6 +1492,17 @@ function lowerModuleCall(name: string, sepIdx: number, n: any, ctx: LowerCtx): I
     const moduleEntry = ctx.moduleRegistry?.get(moduleName)
 
     if (!moduleEntry) {
+        // ADR 0018 P1 — a declared `@extern mod::field` is a direct host import
+        // (import module = `mod`), not a Silicon module.  Route the call to it.
+        // The import itself is emitted by ExternDef_lower; here we just emit the
+        // call.  The call's wasmType is the base valtype; externref results are
+        // tracked via the import's refResult + injectExternRefSlots, same as the
+        // bare-extern path.
+        const externImp = ctx.externCalls.get(name)
+        if (externImp) {
+            const args = (n.args || []).map((a: any) => lowerExpr(a, ctx))
+            return { kind: 'Call', wasmType: externImp.result ?? 'void', callee: externImp.name, callKind: 'user', args }
+        }
         throw new IRLowerError(
             `Unknown module '${moduleName}' — not found in built-in modules or ./modules/`
         )
@@ -1434,13 +1514,13 @@ function lowerModuleCall(name: string, sepIdx: number, n: any, ctx: LowerCtx): I
         )
     }
 
-    // JS String Builtins need a JS host: gate JSString + any externref-typed
-    // module on `--platform=web|bun` (wasmtime / native can't provide them).
+    // externref needs a JS host: gate JSString / JSValue object handles on
+    // `--platform=web|bun` (wasmtime / native can't provide externref).
     const usesExternref = moduleName === 'JSString'
-        || fnSig.siliconResult === 'JSString' || fnSig.siliconParams.includes('JSString')
+        || isExternRefKind(fnSig.siliconResult) || fnSig.siliconParams.some(isExternRefKind)
     if (usesExternref && ctx.platform !== 'web' && ctx.platform !== 'bun') {
         throw new IRLowerError(
-            `'${moduleName}::${funcName}' uses JSString (JS String Builtins) — ` +
+            `'${moduleName}::${funcName}' uses an externref object handle (JSString / JSValue) — ` +
             `compile with --platform=web or --platform=bun (sgl.toml: [build] platform = "bun").`
         )
     }
@@ -1479,13 +1559,13 @@ function lowerModuleCall(name: string, sepIdx: number, n: any, ctx: LowerCtx): I
         // ref (for fromCharCodeArray / intoCharCodeArray).
         let refParams: Map<number, IRRefSlot> | undefined
         fnSig.siliconParams.forEach((t, i) => {
-            if (t === 'JSString') {
+            if (isExternRefKind(t)) {
                 (refParams ??= new Map()).set(i, { localTypeIdx: 0, nullable: true, extern: true })
             } else if (t === 'CharCodeArray') {
                 (refParams ??= new Map()).set(i, { localTypeIdx: charCodeArrayTypeIdx(ctx), nullable: true })
             }
         })
-        const refResult: IRRefSlot | undefined = fnSig.siliconResult === 'JSString'
+        const refResult: IRRefSlot | undefined = isExternRefKind(fnSig.siliconResult)
             ? { localTypeIdx: 0, nullable: false, extern: true }
             : fnSig.siliconResult === 'CharCodeArray'
                 ? { localTypeIdx: charCodeArrayTypeIdx(ctx), nullable: true }

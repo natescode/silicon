@@ -98,6 +98,9 @@
 \\ @extern type_format (Int) -> Int;
 \\ @extern type_substitute (Int, Int) -> Int;
 \\ @extern type_mangle_suffix (Int) -> Int;
+\\ @extern type_bind_template_args (Int, Int) -> Int;
+\\ @extern callee_name (Int) -> Int;
+\\ @extern str_concat (Int, Int) -> Int;
 
 # ── Diagnostics (T-5 accumulator model) ────────────────────────────────
 \\ @extern diag_error (Int, Int, Int, Int) -> Void;
@@ -152,6 +155,7 @@
 \\ @extern compiler_globalInit_wasmType (Int) -> Int;
 \\ @extern compiler_lowerExternParams (Int) -> Int;
 \\ @extern compiler_lowerExternResult (Int) -> Int;
+\\ @extern compiler_expandExtern (Int) -> Int;
 \\ @extern compiler_expandSumType (Int) -> Int;
 \\ @extern compiler_expandTypeRecord (Int) -> Int;
 \\ @extern compiler_expandStruct (Int) -> Int;

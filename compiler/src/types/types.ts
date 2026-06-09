@@ -56,6 +56,12 @@ export type SiliconType =
     // / in locals it is i32-shaped (the binary emitter encodes the externref
     // valtype via a ref slot — see IRRefSlot.extern).
     | { kind: 'JSString' }
+    // ADR 0018 P0 — a generic opaque handle to *any* host (JS) object, represented
+    // as `externref` (like JSString, but with no `wasm:js-string` operations — it
+    // is an opaque value passed to / returned from `@extern` host functions).  This
+    // is the object-handle that lets a `Response` / `Uint8Array` / DOM node cross
+    // the boundary.  web/bun only; i32-shaped on the stack, externref via a ref slot.
+    | { kind: 'JSValue' }
     // A WASM-GC `(array (mut i16))` of UTF-16 code units, used to feed / receive
     // the `wasm:js-string` `fromCharCodeArray` / `intoCharCodeArray` builtins.
     // Opaque GC reference (i32-shaped on the stack; the ref-ness rides on a
@@ -134,6 +140,7 @@ export const TypeInt64: SiliconType = { kind: 'Int64' }
 export const TypeFloat: SiliconType = { kind: 'Float' }
 export const TypeString: SiliconType = { kind: 'String' }
 export const TypeJSString: SiliconType = { kind: 'JSString' }
+export const TypeJSValue: SiliconType = { kind: 'JSValue' }
 export const TypeCharCodeArray: SiliconType = { kind: 'CharCodeArray' }
 export const TypeBool: SiliconType = { kind: 'Bool' }
 export const TypeUInt8:  SiliconType = { kind: 'UInt8'  }
@@ -195,6 +202,7 @@ export function wasmTypeOf(t: SiliconType): WasmType {
         case 'String':   // pointer
         case 'JSString': // externref — i32-shaped on the stack; the ref-ness is
                          // encoded by the caller via IRRefSlot.extern (like Vec under wasm-gc)
+        case 'JSValue':  // externref object handle — same i32-shaped/ref-slot encoding
         case 'CharCodeArray': // (ref $Array_i16) — i32-shaped; ref via concrete IRRefSlot
         case 'Array':    // pointer
         case 'Vec':      // Phase 9d-8: pointer (mvp) or ref (wasm-gc — ref-ness encoded by caller)
@@ -275,6 +283,7 @@ export function formatType(t: SiliconType): string {
         case 'Float': return 'Float'
         case 'String': return 'String'
         case 'JSString': return 'JSString'
+        case 'JSValue': return 'JSValue'
         case 'CharCodeArray': return 'CharCodeArray'
         case 'Bool': return 'Bool'
         case 'UInt8':  return 'u8'
@@ -321,6 +330,7 @@ export function parseTypeName(name: string, aliases?: Map<string, SiliconType>):
         case 'Float': return TypeFloat
         case 'String': return TypeString
         case 'JSString': return TypeJSString
+        case 'JSValue': return TypeJSValue
         case 'CharCodeArray': return TypeCharCodeArray
         case 'Bool': return TypeBool
         // Phase 5b — unsigned integer types.

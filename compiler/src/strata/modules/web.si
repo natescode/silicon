@@ -6,6 +6,7 @@
 \\ @extern console_warn (Int) -> Void;
 \\ @extern console_info (Int) -> Void;
 
+# === bindgen:web math+clock (generated — edit compiler/bindgen/src/spec.ts, run `bun bindgen/cli.ts --write`) ===
 \\ @extern math_random () -> Float;
 \\ @extern math_sin (Float) -> Float;
 \\ @extern math_cos (Float) -> Float;
@@ -24,6 +25,7 @@
 
 \\ @extern performance_now () -> Float;
 \\ @extern date_now () -> Float;
+# === /bindgen:web math+clock ===
 
 \\ @extern canvas_set_fill (Int, Int, Int) -> Void;
 \\ @extern canvas_set_stroke (Int, Int, Int) -> Void;

@@ -111,6 +111,11 @@ export interface LowerFns {
     ) => { init: IRExpr; wasmType: WasmValType }
     lowerExternParams: (node: any) => WasmValType[]
     lowerExternResult: (node: any) => WasmValType | undefined
+    /** ADR 0018 P0/P1 — build the full IRImport for an `@extern` (import-module
+     *  override from a `mod::field` name + JSString/JSValue externref slots).
+     *  LowerCtx-bound (needs `ctx.platform` for the externref web/bun gate), so
+     *  surfaced here for the src/strata/defkinds.si `ExternDef_lower` handler. */
+    lowerExternImport: (node: any, ctx: any) => IRImport
     unwrapNode:  (node: any) => any
     exprWasmType:(expr: IRExpr) => WasmType
     watId:       (name: string) => string
@@ -364,6 +369,10 @@ export interface CompilerAPI {
     lowerGlobalInit(node: any, defaultType: WasmValType): { init: IRExpr; wasmType: WasmValType }
     lowerExternParams(node: any): WasmValType[]
     lowerExternResult(node: any): WasmValType | undefined
+    /** ADR 0018 P0/P1 — full IRImport builder for `@extern` (see LowerFns).
+     *  THROWS IRLowerError when an externref handle is used off web/bun; the
+     *  throw must propagate so the CaaS surface reports it as a compile error. */
+    expandExtern(node: any): IRImport
     unwrapNode(node: any): any
 
     watId(name: string): string
@@ -911,6 +920,9 @@ export function createCompilerAPI(ctx: CtxShape, fns: LowerFns): CompilerAPI {
         lowerGlobalInit:          (node, defaultType)   => fns.lowerGlobalInit(node, defaultType, ctx),
         lowerExternParams:        (node)                => fns.lowerExternParams(node),
         lowerExternResult:        (node)                => fns.lowerExternResult(node),
+        // ADR 0018 P0/P1 — delegate to the LowerCtx-bound IRImport builder in
+        // lower.ts.  Throws (externref web/bun gate) propagate intentionally.
+        expandExtern:             (node)                => fns.lowerExternImport(node, ctx),
         unwrapNode:   (node)          => fns.unwrapNode(node),
 
         watId:           (name)        => fns.watId(name),

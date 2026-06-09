@@ -272,12 +272,25 @@ function translateNode(node: any, ctx: TranslatorCtx): any {
         if (path.length > 1 && path[0] === ctx.paramName) {
             return translateNodeFieldAccess(path, ctx)
         }
+        // `<local>::field` access — e.g. `concrete::ast` where `concrete` is a
+        // @mut/@local handle holding a wrapper ({ast,kind}) or AST node.  Route
+        // to compiler_ast_node_field (object navigation, returns a node handle),
+        // NOT compiler_ast_str_field (which reads the param's string fields).
+        if (path.length > 1 && ctx.locals.has(path[0])) {
+            return compilerCall('compiler_ast_node_field', [
+                { type: 'Namespace', path: [path[0]] },
+                wrapStringLiteralAsInternCall(strLit(path.slice(1).join('.'))),
+            ])
+        }
         return node
     }
 
-    // @local declaration — track the name in ctx.locals so subsequent
-    // scope-variable method calls can be recognised.
-    if (node.type === 'Definition' && node.keyword === '@local') {
+    // @local / @mut / @var declaration — track the name in ctx.locals so
+    // subsequent scope-variable method calls and `<local>::field` accesses are
+    // recognised.  Monomorphization strata bind their working values with @mut
+    // (`@mut tmpl := …`), so @mut must be tracked exactly like @local.
+    if (node.type === 'Definition' &&
+        (node.keyword === '@local' || node.keyword === '@mut' || node.keyword === '@var')) {
         const name = node.name?.name
         if (typeof name === 'string') ctx.locals.add(name)
         // Translate the binding's expression.

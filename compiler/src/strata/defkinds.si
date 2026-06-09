@@ -58,12 +58,12 @@
     Compiler::on::lower('@extern', ExternDef_lower);
 };
 \\ ExternDef_lower (Int)
-@fn ExternDef_lower node := {
-    name := compiler::compiler_watId(compiler::compiler_ast_str_field(node, compiler::compiler_str_intern('name.name', 0)));
-    params := compiler::compiler_lowerExternParams(node);
-    result := compiler::compiler_lowerExternResult(node);
-    compiler::ir_makeImport(compiler::compiler_str_intern('env', 0), name, name, params, result)
-};
+# ADR 0018 P0/P1: the full IRImport is built host-side (compiler_expandExtern)
+# so it can derive the import module from a `mod::field` name and stamp
+# JSString/JSValue externref slots — neither of which the str-id-only
+# ir_makeImport surface can express.  The host expander throws (externref
+# web/bun gate) on misuse, and that error propagates to the user.
+@fn ExternDef_lower node := compiler::compiler_expandExtern(node);
 
 # D-D-11a: leaf def-kinds (@type_alias, @type_distinct, @local) migrated to
 # the new @stratum form.  These either emit no IR (type aliases) or build

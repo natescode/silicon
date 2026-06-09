@@ -1,0 +1,24 @@
+{
+  "$comment": "ADR 0017 — bindgen lockfile. Pins the provenance + content hash of the generated FFI surface so CI (bindgen.yml / bindgen.test.ts) fails on any drift between the spec and the three emitted sites. For this first slice the spec is hand-authored (compiler/bindgen/src/spec.ts), so the lock pins the spec source + the toolchain rather than upstream package versions; the real @webref/idl + webidl2 pins arrive with the WebIDL adapter.",
+  "generator": "compiler/bindgen",
+  "specVersion": 1,
+  "toolchain": {
+    "runtime": "bun",
+    "note": "webidl2 / @webref/idl are NOT yet a dependency — the Math/clock slice is a hand-authored Tier-0 table (ADR 0017 first milestone)."
+  },
+  "surfaces": [
+    {
+      "module": "web",
+      "group": "math+clock",
+      "spec": "compiler/bindgen/src/spec.ts",
+      "tier": 0,
+      "bindings": 17,
+      "sha256": "d2625ff364eef00467519344b5002e736be4a2dd06b0a70a99e7fac1570ab5f4",
+      "sites": [
+        "compiler/src/strata/modules/web.si",
+        "cli/src/host/js-host.ts",
+        "playground/playground/web-env.js"
+      ]
+    }
+  ]
+}
