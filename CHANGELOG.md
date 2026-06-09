@@ -27,6 +27,28 @@ This project aims for [Semantic Versioning](https://semver.org/).
 - Standalone files compiled outside a project keep the classic single-file
   `@use` behaviour unchanged.
 
+### Added — v1.0 roadmap Phase 2 (closures, [ADR 0019](docs/adr/0019-first-class-closures-and-capture.md))
+
+Delivered on the `phase-2-closures` branch and merged into the v1 roadmap.
+
+- **C1 — non-escaping closures with by-value capture.** `@closure(body_fn, …caps)`
+  and `@call_closure(clo, …args)` — first-class closures that capture surrounding
+  values, the gap ADR 0016 named ("a callback cannot close over a surrounding
+  accumulator"). Implemented as one AST→AST elaborator pass (`closureDesugar.ts`,
+  modelled on `loopDesugar.ts`) with **zero new IR / codegen / grammar**: a closure
+  is an i32 `Vec[i32]` env `[fnref, …caps]`; each site synthesizes an env-unpack
+  wrapper `@fn(env, …args)` so all closures share one uniform `call_indirect`
+  signature; invocation reuses the C0 multi-signature funcref ABI. Runs on every
+  mode. Unblocks closures passed to higher-order functions (the combinator case).
+- **C2 — escape/host-reachability gate.** A closure crossing an `@extern` boundary
+  is a host-callable *escaping* closure whose captured env may outlive the call;
+  under C1's non-escaping representation that is unsound, so it is rejected with
+  *"host-callable escaping closure requires `--target=wasm-gc`"* (the conservative
+  classifier, ADR 0019 §9). A plain `@fnref` still crosses; Silicon-side
+  higher-order functions are unaffected. The wasm-gc Tier-B representation (the
+  `(struct $Clo)` record + `__invoke` trampoline) that *enables* the crossing
+  remains future work. ADR 0019 flipped Proposed → Accepted.
+
 ### Added — v1.0 roadmap Phase 0/1 (FFI object handles · monomorphization substrate · bindgen)
 
 Delivered on the `phase-1-ffi-async` branch and merged into the v1 roadmap.

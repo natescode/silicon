@@ -51,13 +51,15 @@ S = [
          desc="Stop forcing <code>__fn_i_i</code>: derive <code>sigKey</code> from the <code>@fn</code>'s real param/result wasm types; multi-signature funcref table; relax the arity-2 guard. <b>Built directly on the <code>funcref.si</code> surface dissolved earlier.</b>",
          files="<code>compiler/src/strata/funcref.si</code>; <code>compiler/src/compiler-api/index.ts</code> (<code>expandCallIndirect</code>); <code>compiler/src/comptime/imports.ts</code> (the funcref/call_indirect path now lives in strata, not the old <code>lower.ts:1584/1620</code>)",
          unblocks="C1; funcref-at-boundary. Pure refactor — kept byte-equal codegen for non-funcref / i32→i32 programs."),
-    dict(id="C1", track="ffi", ver="v1.0", size="L", risk="Med", crit=True,
+    dict(id="C1", track="ffi", ver="v1.0", size="L", risk="Med", crit=True, status="done",
+         note="DONE (2026-06-09). <code>@closure(body_fn, …caps)</code> / <code>@call_closure(clo, …args)</code> as one AST→AST elaborator pass (<code>closureDesugar.ts</code>, loopDesugar model) — <b>zero new IR / codegen / grammar</b>. A closure is an i32 pointer to a <code>Vec[i32]</code> env <code>[fnref, …caps]</code>; each site synthesizes an env-unpack wrapper <code>@fn(env, …args)</code> so every closure shares one uniform <code>(env,…args)→ret</code> <code>call_indirect</code> signature; <code>@call_closure</code> loads the wrapper index from slot 0 and dispatches env-first over the C0 multi-sig table. Runs on EVERY mode. 5 closure.test.ts cases run real WASM (single/double capture, empty-env, coexisting closures, and a closure passed to a combinator — the ADR 0016 gap). Scope shipped = correct call_indirect baseline for i32 captures; the per-concrete-env-type monomorphized DIRECT-call zero-cost form (§2.1) + Float captures are refinements on top.",
          title="Non-escaping closures (all modes, zero-cost)  (closures C1)",
          adr="ADR 0019 · C1",
          desc="<code>&@closure</code>/<code>&@call_closure</code>; lambda-lift in the elaborator; anonymous-struct env in frame/arena; <b>per-concrete-env-type consumer specialization (uses M0)</b> → a direct call; empty-env degenerates to today's <code>@fnref</code>. By-value/<code>&</code>-immutable capture only — <b>does NOT require the borrow checker</b>.",
          files="NEW closure strata alongside <code>control.si</code>; elaborator lambda-lift modeled on <code>elaborator/loopDesugar.ts</code>; <b>reuses M0</b>",
          unblocks="ADR 0016 combinators <code>map</code>/<code>filter</code>/<code>fold</code> (with M1) on every mode. <b>Needs M0 + C0</b>"),
-    dict(id="C2", track="ffi", ver="v1.0", size="L", risk="High", crit=True, gate=True,
+    dict(id="C2", track="ffi", ver="v1.0", size="L", risk="High", crit=True, gate=True, status="partial",
+         note="ESCAPE GATE done (2026-06-09); Tier-B codegen REMAINS. Shipped: the conservative escape/host-reachability classifier + the mode-gate (<code>classifyEscapes</code> in <code>closureDesugar.ts</code>) — a <code>@closure</code> (literal or a closure-bound local) crossing an <code>@extern</code> boundary is rejected with <i>“host-callable escaping closure requires --target=wasm-gc”</i> (the §9 soundness gate; a plain <code>@fnref</code> still crosses, Silicon-side HOFs are unaffected). 4 tests green; no false positives across the @extern-heavy suites. REMAINING (the multi-week core, §9): the wasm-gc Tier-B representation — <code>(struct $Clo)</code> via <code>WasmGcTypeRegistry</code>, the exported <code>__invoke_&lt;sig&gt;(externref,…)</code> trampoline (needs new <code>ref.cast</code>/<code>extern.convert</code> IR nodes + emitter cases — absent today), <code>Fn[..]</code> as an <code>externref</code> <code>@extern</code> slot, the <code>@export_callback</code>/<code>@on</code>/<code>@off</code> strata, and the host-side registration shims. ADR 0019 flipped Proposed → Accepted.",
          title="Escaping host-callable closures — wasm-gc only  (closures C2 · THE GATE)",
          adr="ADR 0019 · C2 / 0018 · P3",
          desc="<code>(type $Clo (struct (i32 fnIndex)(ref $Env)))</code>; an <code>__invoke_&lt;sig&gt;(externref,…)</code> trampoline; <code>&@on</code>/<code>&@off</code> over the engine-traced externref; <code>@extern</code> externref/funcref slot; the conservative <b>escape/host-reachability classifier</b> (routes any closure reaching <code>@extern</code> to Tier B, rejects on <code>wasm-mvp</code>/<code>--native</code> with a mode-gate E-code). Engine-GC'd — no leak, cycles collected, <code>__closure_release</code> is a no-op. Verified Bun/JSC runs wasm-gc today; v1.0 invocation reuses the existing <code>call_indirect</code> (no JSPI dep).",
@@ -157,8 +159,8 @@ def chip(sid):
     gate = " gate" if s.get("gate") else ""
     crit = " crit" if s.get("crit") else ""
     status = s.get("status", "todo")
-    stcls = f" chip-{status}" if status in ("done", "blocked") else ""
-    mark = {"done": "✓ ", "blocked": "⚠ "}.get(status, "")
+    stcls = f" chip-{status}" if status in ("done", "blocked", "partial") else ""
+    mark = {"done": "✓ ", "blocked": "⚠ ", "partial": "◐ "}.get(status, "")
     return f'<a href="#{s["id"]}" class="chip {cls}{gate}{crit}{stcls}" title="{html.escape(strip(s["title"]))}"><b>{mark}{s["id"]}</b> {html.escape(strip_short(s["title"]))}</a>'
 
 def strip(t):
@@ -183,7 +185,8 @@ def row(s):
     crit = ' <span class="crittag">critical path</span>' if s.get("crit") else ""
     status = s.get("status", "todo")
     stbadge = {"done": ' <span class="st st-done">✓ DONE</span>',
-               "blocked": ' <span class="st st-blocked">⚠ BLOCKED</span>'}.get(status, "")
+               "blocked": ' <span class="st st-blocked">⚠ BLOCKED</span>',
+               "partial": ' <span class="st st-partial">◐ PARTIAL</span>'}.get(status, "")
     note = f'<div class="tnote tnote-{status}">{s["note"]}</div>' if s.get("note") else ""
     return f"""<tr id="{s['id']}" class="t-{TRACKS[s['track']][1]} v-{vcls} status-{status}">
   <td class="cid"><span class="idbadge {TRACKS[s['track']][1]}">{s['id']}</span></td>
@@ -320,9 +323,12 @@ HTML = f"""<!DOCTYPE html>
   .st {{ font-size:10px; font-weight:800; padding:1px 7px; border-radius:6px; letter-spacing:.04em; }}
   .st-done {{ color:#0d1117; background:var(--mono); }}
   .st-blocked {{ color:#0d1117; background:var(--gate); }}
+  .st-partial {{ color:#0d1117; background:#d6a700; }}
   .chip-done {{ border-color:var(--mono); }} .chip-blocked {{ border-color:var(--gate); }}
+  .chip-partial {{ border-color:#d6a700; }}
   tr.status-done td.cid {{ box-shadow:inset 3px 0 0 var(--mono) !important; }}
   tr.status-blocked td.cid {{ box-shadow:inset 3px 0 0 var(--gate) !important; }}
+  tr.status-partial td.cid {{ box-shadow:inset 3px 0 0 #d6a700 !important; }}
   .tnote {{ font-size:12.5px; margin:8px 0; padding:9px 12px; border-radius:8px; line-height:1.5; }}
   .tnote code {{ background:#11161f; }}
   .tnote-done {{ background:rgba(63,185,80,.08); border:1px solid #1f4427; color:#bfe6c8; }}
@@ -362,9 +368,10 @@ HTML = f"""<!DOCTYPE html>
   key files, size, risk, and what it unblocks.</p>
   <div class="meta">Generated <b>{GEN_DATE}</b> · derived from ADRs 0001/0003/0008/0009/0011/0012/0013/0015/0016/0017/0018/0019 ·
   cross-checked against <code>docs/v1.0-critical-path.md</code></div>
-  <div class="meta">Progress: <b style="color:var(--mono)">C0 ✓ done</b> (multi-signature funcref ABI) ·
-  <b style="color:var(--gate)">M0 ⚠ blocked</b> (engine gap — see note) · F0a scoped as a standalone effort.
-  Phase 0 is partially complete; M0 and F0a are each multi-session features.</div>
+  <div class="meta">Progress (2026-06-09): <b style="color:var(--mono)">Phase 0 ✓</b> — C0, M0 (monomorphization substrate), F0a (bindgen) all done.
+  <b style="color:var(--mono)">Phase 1 ✓</b> — F1a object handles done. <b style="color:var(--mono)">Phase 2:</b> C1 closures ✓ done;
+  <b style="color:#d6a700">C2 ◐ partial</b> — escape gate done, the wasm-gc Tier-B codegen (the gate) remains.
+  Next on the critical path: <b style="color:var(--gate)">C2 Tier-B</b> → F3 (poll-reactor), with F1b (Asyncify @await) on the async spine.</div>
   <div class="tiles">
     <div class="tile"><div class="num">{n_total}</div><div class="lbl">subtasks</div></div>
     <div class="tile gate"><div class="num">{n_crit}</div><div class="lbl">on the critical path</div></div>
