@@ -129,6 +129,34 @@ export function createComptimeEnv(registry: ElaboratorRegistry): ComptimeEnv {
 }
 
 /**
+ * Drain a handler env's per-firing module-mutation accumulators into the
+ * registry so lowerProgram re-lowers them (Strata 2.0 §7 monomorphization
+ * substrate: `module::push_definition` captures+patches a template and pushes
+ * a concrete `@fn`, which must reach `registry.pendingDefinitions` — the list
+ * lowerProgram drains after the main definition pass).  Called by every
+ * compiled-handler firing wrapper after `compiled.invoke` returns.
+ *
+ * Without this the pushed monomorphs are stranded in `env.pendingDefinitions`
+ * (which lowerProgram never reads) and produce no output.
+ */
+export function drainModuleMutations(env: ComptimeEnv, registry: ElaboratorRegistry): void {
+    if (env.pendingDefinitions.length > 0) {
+        for (const d of env.pendingDefinitions) registry.pendingDefinitions.push(d)
+        env.pendingDefinitions.length = 0
+    }
+    if (env.pendingGlobals.length > 0) {
+        for (const g of env.pendingGlobals) {
+            // Materialise an IRGlobal; lowerProgram's append routes 'Global' kinds
+            // straight into the module (no re-elaboration needed).
+            registry.pendingDefinitions.push({
+                kind: 'Global', name: g.name, wasmType: g.type, mutable: 1, init: g.init,
+            })
+        }
+        env.pendingGlobals.length = 0
+    }
+}
+
+/**
  * Build the WebAssembly import object for a strata handler module.
  *
  *     const env = createComptimeEnv(registry)
@@ -1583,6 +1611,7 @@ function makeNamedHandler(registry: ElaboratorRegistry, handlerName: string) {
         if (Array.isArray(result)) {
             result = result.map((v) => typeof v === 'number' ? env.irHandles.get(v) : v).filter(Boolean)
         }
+        drainModuleMutations(env, registry)
         env.handles.release(nodeId)
         env.ctx = prevCtx
         env.api = prevApi

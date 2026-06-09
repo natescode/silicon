@@ -41,6 +41,7 @@ import { translateLegacyBlock } from './legacyBlockTranslator'
 // D-E-1: comptime engine for pre-compiling strata handlers @fns at
 // strata-load time.  See `compileStrataHandlers` call in buildStrataRegistry.
 import { compileStrataHandlers, compileHandlerToWasm } from '../comptime/engine'
+import { drainModuleMutations } from '../comptime/imports'
 import parse from '../parser'
 import addToAstSemantics from '../ast/toAst'
 import siliconGrammar from '../grammar/SiliconGrammar'
@@ -436,6 +437,7 @@ function buildPhaseHandler(
         if (Array.isArray(result)) {
           result = result.map((v) => typeof v === 'number' ? env.irHandles.get(v) : v).filter(Boolean)
         }
+        drainModuleMutations(env, registry)
         env.handles.release(nodeId)
         // Note: do NOT clear env.irHandles — recursive firings share the
         // env and would lose each other's handles mid-flight.  The
@@ -514,6 +516,7 @@ function makeAutoExtractedHandler(
       if (Array.isArray(result)) {
         result = result.map((v) => typeof v === 'number' ? env.irHandles.get(v) : v).filter(Boolean)
       }
+      drainModuleMutations(env, registry)
       env.handles.release(nodeId)
       env.ctx = prevCtx
       env.api = prevApi
