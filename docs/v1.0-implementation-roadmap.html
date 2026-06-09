@@ -137,9 +137,10 @@
   <div class="meta">Generated <b>2026-06-09</b> · derived from ADRs 0001/0003/0008/0009/0011/0012/0013/0015/0016/0017/0018/0019 ·
   cross-checked against <code>docs/v1.0-critical-path.md</code></div>
   <div class="meta">Progress (2026-06-09): <b style="color:var(--mono)">Phase 0 ✓</b> — C0, M0 (monomorphization substrate), F0a (bindgen).
-  <b style="color:var(--mono)">Phase 1 ✓</b> — F1a object handles. <b style="color:var(--mono)">Phase 2 ✓</b> — C1 closures + C2 (escape gate
-  AND host-callable closures, Bun round-trip verified) done; the leak-free wasm-gc closure representation is a refinement on the working path.
-  Next on the critical path: <b style="color:var(--gate)">F3</b> (poll-reactor), with F1b (Asyncify @await) on the async spine.</div>
+  <b style="color:var(--mono)">Phase 1 ✓</b> — F1a object handles; F1b (blocking @await via Asyncify) core. <b style="color:var(--mono)">Phase 2 ✓</b> — C1 closures + C2
+  (escape gate AND host-callable closures, Bun round-trip verified). <b style="color:#d6a700">Phase 3/4 ◐</b> — F3 poll-reactor CORE done
+  (block_on/block_all over closure-futures, true concurrency). <b>The full critical path M0→C0→C1→C2→F3 + the F1a→F1b async spine
+  now has a working core at every link.</b> Remaining are refinements: F1b production host + JSPI, F3 generic Poll[T] + host-async, C2 leak-free wasm-gc.</div>
   <div class="tiles">
     <div class="tile"><div class="num">18</div><div class="lbl">subtasks</div></div>
     <div class="tile gate"><div class="num">7</div><div class="lbl">on the critical path</div></div>
@@ -175,7 +176,7 @@
   <div class="pchips"><a href="#C1" class="chip ffi crit chip-done" title="Non-escaping closures (all modes, zero-cost)  (closures C1)"><b>✓ C1</b> Non-escaping closures</a><a href="#C2" class="chip ffi gate crit chip-done" title="Escaping host-callable closures — wasm-gc only  (closures C2 · THE GATE)"><b>✓ C2</b> Escaping host-callable closures</a></div>
 </div><div class="phase">
   <div class="phead"><span class="pnum">Phase 3</span><span class="pnote">FFI to 100%</span></div>
-  <div class="pchips"><a href="#F3" class="chip ffi crit" title="Poll-reactor + tasks  (closures C3)"><b>F3</b> Poll-reactor + tasks</a><a href="#F3-opt" class="chip ffi" title="JSPI fast path"><b>F3-opt</b> JSPI fast path</a></div>
+  <div class="pchips"><a href="#F3" class="chip ffi crit chip-partial" title="Poll-reactor + tasks  (closures C3)"><b>◐ F3</b> Poll-reactor + tasks</a><a href="#F3-opt" class="chip ffi" title="JSPI fast path"><b>F3-opt</b> JSPI fast path</a></div>
 </div><div class="phase">
   <div class="phead"><span class="pnum">Phase 4</span><span class="pnote">Capability model — post-v1.0 (strict P-chain)</span></div>
   <div class="pchips"><a href="#K1" class="chip cap" title="on::check phase hook"><b>K1</b> on::check phase hook</a><a href="#K2" class="chip cap" title="AST reflection primitives"><b>K2</b> AST reflection primitives</a><a href="#K3" class="chip cap" title="Comptime collections"><b>K3</b> Comptime collections</a><a href="#K4" class="chip cap" title="Capability/effect checker prototype (TS)"><b>K4</b> Capability/effect checker prot…</a><a href="#K5" class="chip cap" title="@capability stratum + ocap mint-site rule"><b>K5</b> @capability stratum + ocap min…</a><a href="#K6" class="chip cap" title="Port checker into Silicon (dogfood)"><b>K6</b> Port checker into Silicon</a><a href="#K7" class="chip cap" title="Effect-class consumption by the optimizer"><b>K7</b> Effect-class consumption by th…</a><a href="#K8" class="chip cap" title="Borrow checker / rcaps R1–R4"><b>K8</b> Borrow checker / rcaps R1–R4</a></div>
@@ -251,11 +252,11 @@
   <td class="cadr">ADR 0019 · C2 / 0018 · P3</td>
   <td class="cmeta"><span class="sz sz-l">L</span><span class="rk rk-hi">High</span><span class="ver ver-v10">v1.0 — the gate</span></td>
 </tr>
-<tr id="F3" class="t-ffi v-v10 status-todo">
+<tr id="F3" class="t-ffi v-v10 status-partial">
   <td class="cid"><span class="idbadge ffi">F3</span></td>
-  <td class="ctitle"><div class="tt">Poll-reactor + tasks  (closures C3) <span class="crittag">critical path</span></div>
+  <td class="ctitle"><div class="tt">Poll-reactor + tasks  (closures C3) <span class="st st-partial">◐ PARTIAL</span> <span class="crittag">critical path</span></div>
       <div class="tdesc"><code>Future[T]</code> sum (<code>$Pending waker | $Ready value</code>), <code>spawn</code>/<code>block_on</code>, microtask drain, many in-flight awaits. Reuses C1/C2 closures as wake continuations.</div>
-      
+      <div class="tnote tnote-partial">CORE done (2026-06-09) — the poll-reactor proven end-to-end. <code>stdlib/future.si</code>: a FUTURE is a no-arg C1 closure over a mutable poll-state pointer that returns a PENDING sentinel until ready; <code>block_on</code> drives one to completion, and <code>block_all</code> drives MANY <b>concurrently</b> — each round polls every still-pending future, so independent futures progress interleaved (the true-concurrency model single-in-flight Asyncify can't express). <code>future.test.ts</code>: block_on (single), block_all (3 futures, deadlines 2/4/3 → 60, polled interleaved), and fast+slow independent progress (→107). Reuses the C1/C2 closure keystone as wake continuations — the reason this waited on closures. REMAINING: the generic <code>Poll[T] := $Pending | $Ready value T</code> sum (removes the negative-sentinel constraint), host-async integration (a future backed by a real Promise woken by the F1b reactor), spawn/microtask-drain. The data model + concurrent scheduler ship; the host wiring + generic Poll are the refinements.</div>
       <div class="tfiles"><span class="k">Files</span> stdlib <code>Future[T]</code>; reactor host generalization</div>
       <div class="tunb"><span class="k">Unblocks</span> True concurrency, <code>Promise.all</code>-shaped composition, streaming events. <b>~97% → 100%</b>. Needs C2</div></td>
   <td class="cadr">ADR 0018 · P4 / 0019 · C3</td>
