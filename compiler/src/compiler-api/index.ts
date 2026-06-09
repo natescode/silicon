@@ -185,11 +185,9 @@ export interface CompilerCtx {
      *  mutates.  Drained into IRModule.funcrefTable at end of lowerProgram. */
     funcref: {
         /** Slot index for a wat-id'd function name (find-or-append).  Also
-         *  ensures the default i32→i32 (`__fn_i_i`) signature is registered. */
+         *  ensures the default i32→i32 (`__fn_i_i`) signature is registered, so a
+         *  lone `@fnref` still emits a valid (unused) type. */
         index(watName: string): number
-        /** Ensure the default `__fn_i_i` signature is registered (used by
-         *  @call_indirect sites that consume a slot they didn't mint). */
-        ensureDefaultSig(): void
     }
 }
 
@@ -383,6 +381,12 @@ export interface CompilerAPI {
      *  throw propagate so the CaaS surface reports it. */
     expandWithArena(rawArgs: any[]): IRExpr
     expandMoveToParentArena(rawArgs: any[]): IRExpr
+    /** Phase 5 / ADR 0019 C0 — `@call_indirect(cb, …args)`.  Lowers the callback
+     *  + a variadic arg list, derives the call signature from the args' wasm
+     *  types (result from `inferredType`, default i32), registers that sig in the
+     *  funcref table, and builds the CallIndirect node.  Generalizes the former
+     *  fixed `__fn_i_i` / arity-2 form. */
+    expandCallIndirect(rawArgs: any[], inferredType: any): IRExpr
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -396,6 +400,22 @@ export function createCompilerAPI(ctx: CtxShape, fns: LowerFns): CompilerAPI {
         // is the low-level escape hatch mirroring how `i32`/`f32` work.
         if (name === 'Int64' || name === 'i64') return 'i64'
         return 'i32'
+    }
+
+    // ── funcref signatures (ADR 0019 C0 — multi-signature funcref table) ──────
+    // Canonical key for a funcref / call_indirect signature, derived from the
+    // wasm types: i32→'i', i64→'l', f32→'f', void→'v'.  The single i32→i32 case
+    // is `__fn_i_i`, byte-identical to the former hardcode.
+    const wcode = (t: string): string => t === 'i64' ? 'l' : t === 'f32' ? 'f' : t === 'void' ? 'v' : 'i'
+    function funcrefSigKey(params: WasmValType[], result: WasmType): string {
+        return `__fn_${params.map(wcode).join('')}_${wcode(result)}`
+    }
+    /** Find-or-append a signature in the funcref table; returns its key. */
+    function ensureFuncrefSig(params: WasmValType[], result: WasmType): string {
+        const key = funcrefSigKey(params, result)
+        const t = ctx.funcrefTable
+        if (t && !t.signatures.some(s => s.key === key)) t.signatures.push({ key, params, result })
+        return key
     }
 
     const compilerCtx: CompilerCtx = {
@@ -455,12 +475,6 @@ export function createCompilerAPI(ctx: CtxShape, fns: LowerFns): CompilerAPI {
                     t.signatures.push({ key: '__fn_i_i', params: ['i32'], result: 'i32' })
                 }
                 return idx
-            },
-            ensureDefaultSig: () => {
-                const t = ctx.funcrefTable
-                if (t && t.signatures.length === 0) {
-                    t.signatures.push({ key: '__fn_i_i', params: ['i32'], result: 'i32' })
-                }
             },
         },
     }
@@ -915,6 +929,19 @@ export function createCompilerAPI(ctx: CtxShape, fns: LowerFns): CompilerAPI {
         // Throws propagate intentionally (the CaaS surface turns them into errors).
         expandWithArena:         (rawArgs) => fns.lowerWithArena(rawArgs, ctx),
         expandMoveToParentArena: (rawArgs) => fns.lowerMoveToParentArena(rawArgs, ctx),
+        expandCallIndirect: (rawArgs, inferredType) => {
+            if (!Array.isArray(rawArgs) || rawArgs.length < 1) {
+                throw new CompilerAPIError('@call_indirect expects at least 1 argument (the callback table index)')
+            }
+            const cb = fns.lowerExpr(rawArgs[0], ctx)
+            const argExprs = rawArgs.slice(1).map((a) => fns.lowerExpr(a, ctx))
+            const params = argExprs.map(e => fns.exprWasmType(e) as WasmValType)
+            const result: WasmType = (inferredType && inferredType.kind && inferredType.kind !== 'Unknown')
+                ? (wasmTypeOf(inferredType) as WasmType)
+                : 'i32'
+            const sigKey = ensureFuncrefSig(params, result)
+            return { kind: 'CallIndirect', wasmType: result, sigKey, args: argExprs, tableIndex: cb }
+        },
         expandMatchChain: (rawArgs, inferredType) => {
             // Normalise arm-expression form (`pat => body`, with `|`-alternation)
             // into the flat `[disc, pat, body, …]` form the rest of this

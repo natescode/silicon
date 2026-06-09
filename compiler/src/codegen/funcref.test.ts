@@ -130,23 +130,36 @@ describe('Phase 5 Workstream B: @fnref + @call_indirect', () => {
         expect(threw).toBe(true)
     })
 
-    test('@call_indirect with wrong arity errors at lower time', async () => {
+    test('@call_indirect with no callback errors at lower time', async () => {
+        // C0 relaxed the arity to variadic (cb + 0..N args), but the callback
+        // table index is still required — a bare @call_indirect() is an error.
         let threw = false
         try {
             await compileAndRun(`
-                \\\\ add_one (Int) -> Int
-                @fn add_one x := x + 1;
                 \\\\ bad Int
-                @fn bad := {
-                    @mut cb := @fnref(add_one);
-                    @call_indirect(cb)
-                };
+                @fn bad := @call_indirect();
                 @export bad;`)
         } catch (e) {
             threw = true
-            expect((e as Error).message).toContain('@call_indirect expects exactly 2 arguments')
+            expect((e as Error).message).toContain('@call_indirect expects at least 1 argument')
         }
         expect(threw).toBe(true)
+    })
+
+    test('multi-signature: @call_indirect dispatches a two-param function (ADR 0019 C0)', async () => {
+        // @fnref a (Int,Int)->Int function and call it indirectly with two args.
+        // C0 derives the signature `__fn_ii_i` from the operand wasm types
+        // instead of the former hardcoded `__fn_i_i`/arity-2.
+        const ex = await compileAndRun(`
+            \\\\ add (Int, Int) -> Int
+            @fn add a, b := a + b;
+            \\\\ call2 Int
+            @fn call2 := {
+                @mut cb := @fnref(add);
+                @call_indirect(cb, 20, 22)
+            };
+            @export call2;`)
+        expect(ex.call2()).toBe(42)
     })
 
     test('non-funcref programs preserve their existing direct-binary path', async () => {

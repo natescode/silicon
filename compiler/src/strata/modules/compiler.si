@@ -126,7 +126,6 @@
 \\ @extern compiler_ctx_varNames_has (Int) -> Int;
 \\ @extern compiler_ctx_pendingLocals_push (Int) -> Void;
 \\ @extern compiler_ctx_funcref_index (Int) -> Int;
-\\ @extern compiler_ctx_funcref_ensure_default_sig () -> Void;
 \\ @extern compiler_ctx_loopStack_push (Int) -> Void;
 \\ @extern compiler_ctx_loopStack_pop () -> Int;
 \\ @extern compiler_ctx_loopStack_peek () -> Int;
@@ -158,6 +157,7 @@
 \\ @extern compiler_expandStruct (Int) -> Int;
 \\ @extern compiler_expandWithArena (Int) -> Int;
 \\ @extern compiler_expandMoveToParentArena (Int) -> Int;
+\\ @extern compiler_expandCallIndirect (Int, Int) -> Int;
 
 # ── Test-only ───────────────────────────────────────────────────────────
 \\ @extern test_observe (Int) -> Void;

@@ -781,13 +781,6 @@ export function createComptimeImports(env: ComptimeEnv): WebAssembly.Imports {
         return env.ctx.funcref.index(strings.get(watNameStr))
     }
 
-    /** @call_indirect: ensure the default `__fn_i_i` funcref signature is
-     *  registered (the slot may have been minted by an @fnref elsewhere). */
-    const compiler_ctx_funcref_ensure_default_sig = (): void => {
-        if (!env.ctx) return
-        env.ctx.funcref.ensureDefaultSig()
-    }
-
     const compiler_ctx_loopStack_push = (id: number): void => {
         if (!env.ctx) return
         env.ctx.loopStack.push(id | 0)
@@ -1433,6 +1426,16 @@ export function createComptimeImports(env: ComptimeEnv): WebAssembly.Imports {
         return ir ? env.irHandles.fresh(ir) : 0
     }
 
+    // @call_indirect (src/strata/funcref.si).  Like the arena expanders, does
+    // NOT catch — invalid arity throws a fatal error that must reach the user.
+    const compiler_expandCallIndirect = (rawArgsArrH: number, inferredTypeH: number): number => {
+        if (!env.api) return 0
+        const rawArgs = handles.get(rawArgsArrH)
+        const inferredType = inferredTypeH === 0 ? undefined : handles.get(inferredTypeH)
+        const ir = env.api.expandCallIndirect(Array.isArray(rawArgs) ? rawArgs : [], inferredType)
+        return ir ? env.irHandles.fresh(ir) : 0
+    }
+
     const ast_patch_types = (templateH: number, bindingsH: number): number => {
         const tmpl = handles.get(templateH) as { ast: any; kind: 'pre' | 'post' } | undefined
         const bindings = handles.get(bindingsH) as Map<string, SiliconType> | undefined
@@ -1512,7 +1515,7 @@ export function createComptimeImports(env: ComptimeEnv): WebAssembly.Imports {
             compiler_ctx_varNames_add, compiler_ctx_varNames_has,
             compiler_isVarName,
             compiler_ctx_pendingLocals_push,
-            compiler_ctx_funcref_index, compiler_ctx_funcref_ensure_default_sig,
+            compiler_ctx_funcref_index,
             compiler_ctx_loopStack_push, compiler_ctx_loopStack_pop, compiler_ctx_loopStack_peek,
             compiler_ctx_nextLoopId,
             module_push_definition, module_push_global,
@@ -1532,7 +1535,7 @@ export function createComptimeImports(env: ComptimeEnv): WebAssembly.Imports {
             compiler_lowerGlobalInit, compiler_globalInit_init, compiler_globalInit_wasmType,
             compiler_lowerExternParams, compiler_lowerExternResult,
             compiler_expandMatchChain, compiler_expandSumType, compiler_expandTypeRecord, compiler_expandStruct,
-            compiler_expandWithArena, compiler_expandMoveToParentArena,
+            compiler_expandWithArena, compiler_expandMoveToParentArena, compiler_expandCallIndirect,
             test_observe,
         },
     }
