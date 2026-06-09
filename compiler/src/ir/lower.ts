@@ -1070,6 +1070,23 @@ function lowerExpr(node: any, ctx: LowerCtx): IRExpr {
  * baseKey is the watId of the first path segment (the root local/global),
  * currentStructName is its struct type, and remaining is path[1..].
  * Returns null if any segment doesn't resolve as a struct field.
+ *
+ * AUDIT NOTE — field access stays a compiler primitive (deliberately not a
+ * stratum), despite docs/strata-feature-audit.html tagging it "should-migrate".
+ * On inspection it belongs with literal/BinOp lowering in the irreducible
+ * expression substrate, NOT with the keyword strata:
+ *   1. There is no keyword and no distinct AST node to dispatch on — `p.x` is a
+ *      `Namespace` whose multi-segment `path` is heuristically recognised here
+ *      (and `p.x = v` is a `BinaryOp('=')` in lowerBinaryOp).  Unlike @try /
+ *      @fnref / @with_arena there is no hardcoded `name === '@...'` branch to
+ *      dissolve — this is already part of the normal node-kind switch.
+ *   2. The logic is intrinsically host-side: struct-layout registry, field
+ *      offsets/wasm types, the struct-local map, recursive chaining.  A `.si`
+ *      handler would delegate 100% to new primitives for all of it — a hollow
+ *      migration that adds surface without moving real logic to Silicon.
+ * A genuine data-driven version needs a member-access dispatch hook + open-tagged
+ * IR (bootstrap-plan R1) — i.e. the self-host-port infrastructure, not a
+ * standalone change.  See the IRExpr note in src/ir/nodes.ts.
  */
 function lowerStructFieldChain(
     baseKey: string,
