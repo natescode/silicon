@@ -1,4 +1,16 @@
 // SPDX-License-Identifier: MIT
+//
+// `StrataType` is a COARSE classification tag, not a dispatch key.  Built-in
+// lowering is selected by the registered token + its `on::lower` handler, never
+// by StrataType.  The live loader (strataLoader.ts) only ever assigns two of the
+// six variants — `Keyword` (every keyword) and `Operator` (every operator); the
+// finer variants below (`Control`, `Definition`, `Constraint`, `Metadata`) are
+// reserved and currently UNUSED, because `strataTypeFromIntrinsic` (which would
+// assign them) is not called on the migrated-strata path (handlers carry no
+// intrinsic).  These six map onto the spec's nine conceptual StrataTypes as:
+// Operator→Operator, Control→Control, Type→Definition (broader: all def-kinds),
+// Constraint→Constraint, Metadata→Metadata; spec Codegen/Runtime/Capability/DSL
+// have no enum variant (reserved).  See docs/strata.md for the full table.
 export enum StrataType {
     Keyword,
     Operator,
@@ -71,6 +83,12 @@ export interface SourceLocation {
 /**
  * Derive the correct StrataType from an intrinsic name and the syntactic
  * kind of the strata definition (operator vs keyword).
+ *
+ * NOTE: currently UNUSED by the live loader — built-in strata register via
+ * `on::lower` handlers and carry no intrinsic, so the loader tags them
+ * `Keyword`/`Operator` directly (see strataLoader.ts).  Retained as the
+ * intended classifier for any future intrinsic-bearing strata and exercised
+ * by unit tests; the finer tags it returns are informational, not dispatched on.
  *
  * Naming conventions used:
  *   WASM::control_* / IR::control_*  → StrataType.Control    (if, loop, match, break, return, …)

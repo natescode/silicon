@@ -111,6 +111,19 @@ interface ModuleInfo {
     exports: Set<string>
     /** Module names this module references via `other::`. */
     refs: Set<string>
+    /** Per-file line ranges within `chunk` (1-based, inclusive), in
+     *  concatenation order — maps a chunk line back to its source file so
+     *  diagnostics can name the actual file rather than the module dir. */
+    fileRanges: { path: string; startLine: number; endLine: number }[]
+}
+
+/** Find the source file whose chunk line-range contains `line` (1-based). */
+function fileAtChunkLine(
+    ranges: ModuleInfo['fileRanges'], line: number | undefined,
+): string | undefined {
+    if (line == null) return undefined
+    for (const r of ranges) if (line >= r.startLine && line <= r.endLine) return r.path
+    return undefined
 }
 
 // ---------------------------------------------------------------------------
@@ -214,19 +227,32 @@ function assembleCore(
     const autoIncludedPaths = new Set<string>([...rootFiles, ...subDirs.flatMap(s => s.files)].map(p => resolve(p)))
     const externalUses: string[] = []
     const referencedDeps = new Set<string>()
-    const buildChunk = (files: string[]): string => {
-        const parts: string[] = []
+    const buildChunk = (files: string[]): { chunk: string; fileRanges: ModuleInfo['fileRanges'] } => {
+        const pushed: { path: string; text: string }[] = []
         for (const f of files) {
             const raw = readFile(f)
             if (raw === undefined) continue
             const aliased = processImports(raw, f, referencedDeps, diagnostics)
-            parts.push(stripAndCollectUses(aliased, f, autoIncludedPaths, externalUses, diagnostics))
+            pushed.push({ path: f, text: stripAndCollectUses(aliased, f, autoIncludedPaths, externalUses, diagnostics) })
         }
-        return parts.join('\n\n')
+        // Parts are joined with '\n\n', so each separator advances the line
+        // cursor by 2 (one blank line between files).  Track 1-based ranges.
+        const fileRanges: ModuleInfo['fileRanges'] = []
+        let line = 1
+        for (const p of pushed) {
+            const n = p.text.split('\n').length
+            fileRanges.push({ path: p.path, startLine: line, endLine: line + n - 1 })
+            line += n + 1
+        }
+        return { chunk: pushed.map(p => p.text).join('\n\n'), fileRanges }
     }
 
-    const root = blankModule('', rootDir, buildChunk(rootFiles))
-    const subs = subDirs.map(s => blankModule(s.name, s.dir, buildChunk(s.files)))
+    const rootChunk = buildChunk(rootFiles)
+    const root = blankModule('', rootDir, rootChunk.chunk, rootChunk.fileRanges)
+    const subs = subDirs.map(s => {
+        const c = buildChunk(s.files)
+        return blankModule(s.name, s.dir, c.chunk, c.fileRanges)
+    })
 
     // 3. Resolve referenced dependency components FIRST so their export surfaces
     //    are known before the consumer's cross-module rewrite runs.
@@ -455,8 +481,11 @@ function prefixDependency(depName: string, source: string, diagnostics: Componen
 
 const RENAMEABLE_KW = new Set(['@fn', '@global', '@local', '@let', '@var', '@type', '@type_sum', '@enum', '@struct'])
 
-function blankModule(name: string, dir: string, chunk: string): ModuleInfo {
-    return { name, dir, chunk, ast: null, defs: new Set(), pub: new Set(), exports: new Set(), refs: new Set() }
+function blankModule(
+    name: string, dir: string, chunk: string,
+    fileRanges: ModuleInfo['fileRanges'] = [],
+): ModuleInfo {
+    return { name, dir, chunk, ast: null, defs: new Set(), pub: new Set(), exports: new Set(), refs: new Set(), fileRanges }
 }
 
 function unwrap(node: any): any {
@@ -479,7 +508,7 @@ function parseModule(m: ModuleInfo, diagnostics: ComponentDiagnostic[], isRoot: 
         return
     }
     m.ast = prog
-    const seenDef = new Map<string, true>()
+    const seenDef = new Map<string, { file: string }>()
     for (const el of prog.elements ?? []) {
         const n = unwrap(el)
         if (!n) continue
@@ -502,13 +531,24 @@ function parseModule(m: ModuleInfo, diagnostics: ComponentDiagnostic[], isRoot: 
         if (n.keyword === '@extern') continue   // host import — not a renameable member
         const name: string | undefined = n.name?.name
         if (!name) continue
-        if (seenDef.has(name)) {
+        // Map the def's chunk line back to its source file so the diagnostic
+        // points at the actual file(s), not just the module directory.  (Line
+        // numbers within the file are intentionally omitted: the chunk is
+        // `@use`-stripped, so chunk lines don't match the user's original
+        // line numbers — the file attribution, however, is exact.)
+        const defFile = fileAtChunkLine(m.fileRanges, n.sourceLocation?.startLine) ?? m.dir
+        const prior = seenDef.get(name)
+        if (prior) {
+            const where = prior.file === defFile
+                ? `file '${defFile}'`
+                : `files '${prior.file}' and '${defFile}'`
             diagnostics.push({
-                code: 'E-DUP-DEF', severity: 'error', file: m.dir,
-                message: `duplicate definition '${name}' in module '${m.name || '<root>'}' — two files (or one file) define the same top-level name.`,
+                code: 'E-DUP-DEF', severity: 'error', file: defFile,
+                message: `duplicate definition '${name}' in module '${m.name || '<root>'}' — defined in ${where}.`,
             })
+        } else {
+            seenDef.set(name, { file: defFile })
         }
-        seenDef.set(name, true)
         m.defs.add(name)
         if (n.pub === true) m.pub.add(name)
         if (n.export === true) m.exports.add(name)

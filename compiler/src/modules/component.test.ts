@@ -134,7 +134,13 @@ describe('ADR-0024 assembler — module-edge diagnostics', () => {
             '/p/src/m/b.si': `\\\\ @pub f (Int) -> Int\n@fn f y := { y };`,
         })
         const r = assembleComponent('/p/src/main.si', opts)
-        expect(r.diagnostics.some(d => d.code === 'E-DUP-DEF')).toBe(true)
+        const dup = r.diagnostics.find(d => d.code === 'E-DUP-DEF')
+        expect(dup).toBeTruthy()
+        // Names the actual source files, not just the module directory.
+        expect(dup!.file).toBe('/p/src/m/b.si')
+        expect(dup!.message).toContain('/p/src/m/a.si')
+        expect(dup!.message).toContain('/p/src/m/b.si')
+        expect(dup!.file).not.toBe('/p/src/m')   // was previously the module dir
     })
 
     test('E-MOD-TOPSTMT on a top-level statement in a sub-module', () => {
