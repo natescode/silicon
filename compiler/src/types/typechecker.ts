@@ -1614,6 +1614,9 @@ function checkFunctionCall(call: any, ctx: Ctx): SiliconType {
             // marker — D-D-* migrations to the new @stratum form drop the
             // intrinsic field, but the typechecker still needs the special
             // typing rules (branch unification for @if/@match, void for @loop).
+            // ADR 0018 — `@await(expr)` yields its argument's type (the awaited
+            // result; the suspension is transparent under the Asyncify mechanism).
+            if (name === '@await') return argTypes[0] ?? TypeUnknown
             if (intr === 'WASM::control_if'    || intr === 'IR::control_if'    || name === '@if')    return typeOfIfCall(argTypes, call.sourceLocation, ctx)
             if (intr === 'WASM::control_loop'  || intr === 'IR::control_loop'  || name === '@loop')  return TypeUnknown  // loops are void
             if (intr === 'WASM::control_match' || intr === 'IR::control_match' || name === '@match') return typeOfMatchCall(argTypes, call.sourceLocation, ctx)
