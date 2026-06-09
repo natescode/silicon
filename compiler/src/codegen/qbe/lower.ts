@@ -530,20 +530,38 @@ function lowerBinaryOp(node: any, fn: QbeFnCtx): string {
         return ''
     }
 
+    // Short-circuit OR: `a || b` ≡ `if a then 1 else b`.  Mirrors the WASM
+    // strata lowering (logic.si: IRIf(left, 1, right)); must NOT be treated as
+    // a plain binop — the right operand is only evaluated when left is falsy.
+    if (op === '||') {
+        return lowerShortCircuit(fn, node.left, () => '1', () => lowerExpr(node.right, fn))
+    }
+
     const left  = lowerExpr(node.left, fn)
     const right = lowerExpr(node.right, fn)
 
     // Determine the operand type kind for instruction selection.
     // Strata 2.0 operators use on::lower handlers — the registry doesn't store
-    // WAT intrinsic strings.  We resolve directly via lookupOpToQbe.
+    // WAT intrinsic strings.  We resolve directly via lookupOpToQbe, mirroring
+    // exactly what the WASM strata emit per (operator, operand type):
+    //   - `| ^ <<` are signedness-agnostic and always 32-bit (bitwise.si emits
+    //     i32.* unconditionally — even for Int64), so force the 'Int' table.
+    //   - `>>` follows the operand: unsigned → logical shr (i32/i64.shr_u);
+    //     signed Int *and* Int64 → arithmetic 32-bit sar (bitwise.si i32.shr_s;
+    //     there is no `>>:Int64` overload), so map Int64 `>>` to 'Int'.
+    //   - everything else routes by the operand's own type, including the
+    //     unsigned div/rem/comparison overloads (UInt8/16/32 → 'UInt32' bucket).
     const leftType: SiliconType | undefined = node.left?.inferredType as any
-    const isBitwise = ['|', '^', '<<', '>>'].includes(op)
+    const k = leftType?.kind
+    const isUnsigned32 = k === 'UInt8' || k === 'UInt16' || k === 'UInt32'
     const typeKind =
-        isBitwise                             ? 'Int'
-        : leftType?.kind === 'Int64'          ? 'Int64'
-        : leftType?.kind === 'UInt64'         ? 'UInt64'
-        : leftType?.kind === 'Float'          ? 'Float'
-        :                                       'Int'
+        (op === '|' || op === '^' || op === '<<') ? 'Int'
+        : op === '>>'        ? (k === 'UInt64' ? 'UInt64' : isUnsigned32 ? 'UInt32' : 'Int')
+        : k === 'Int64'      ? 'Int64'
+        : k === 'UInt64'     ? 'UInt64'
+        : k === 'Float'      ? 'Float'
+        : isUnsigned32       ? 'UInt32'
+        :                      'Int'
 
     const entry = lookupOpToQbe(op, typeKind)
     if (entry) {
@@ -620,6 +638,21 @@ function lowerBuiltinCall(callee: string, args: any[], fn: QbeFnCtx): string {
         // -- Boolean literals arriving as builtins (stratum path) ------------
         case '@true':  return '1'
         case '@false': return '0'
+
+        // -- Short-circuit logic keywords (logic.si) -------------------------
+        // Mirror the WASM strata lowering, which is IRIf-based:
+        //   @and(a, b) ≡ if a then b else 0   @or(a, b) ≡ if a then 1 else b
+        //   @not(x)    ≡ x == 0
+        case '@and':
+            return lowerShortCircuit(fn, args[0], () => lowerExpr(args[1], fn), () => '0')
+        case '@or':
+            return lowerShortCircuit(fn, args[0], () => '1', () => lowerExpr(args[1], fn))
+        case '@not': {
+            const x = args[0] ? lowerExpr(args[0], fn) : '0'
+            const tmp = freshTemp(fn)
+            emit(fn, `${tmp} =w ceqw ${x}, 0`)
+            return tmp
+        }
 
         // -- Phase 9c — explicit arenas not yet supported on QBE ─────────────
         // The WASM backend's bump allocator lives in the prelude IR; QBE
@@ -901,6 +934,38 @@ function lowerIf(args: any[], fn: QbeFnCtx): string {
     }
 
     return ''
+}
+
+/**
+ * Emit a short-circuit conditional value `if cond then <thenVal> else <elseVal>`,
+ * mirroring lowerIf's jnz + phi shape.  Used by the logic operators ||, @and, @or
+ * whose strata lowering (logic.si) is IRIf-based: the non-taken branch's value
+ * thunk is never evaluated, so a side-effecting operand is correctly skipped.
+ * Result is an i32 ('w') — the type of all v1.0 logic operands.
+ */
+function lowerShortCircuit(
+    fn: QbeFnCtx, condNode: any, thenVal: () => string, elseVal: () => string,
+): string {
+    const c = lowerExpr(condNode, fn)
+    const thenLabel  = freshLabel(fn, 'sc_then')
+    const elseLabel  = freshLabel(fn, 'sc_else')
+    const mergeLabel = freshLabel(fn, 'sc_end')
+    emit(fn, `jnz ${c}, ${thenLabel}, ${elseLabel}`)
+
+    startBlock(fn, thenLabel)
+    const tv = thenVal()
+    const thenExit = fn.currentBlock
+    if (!isTerminated(fn)) emit(fn, `jmp ${mergeLabel}`)
+
+    startBlock(fn, elseLabel)
+    const ev = elseVal()
+    const elseExit = fn.currentBlock
+    if (!isTerminated(fn)) emit(fn, `jmp ${mergeLabel}`)
+
+    startBlock(fn, mergeLabel)
+    const tmp = freshTemp(fn)
+    emit(fn, `${tmp} =w phi ${thenExit} ${tv}, ${elseExit} ${ev}`)
+    return tmp
 }
 
 // ---------------------------------------------------------------------------

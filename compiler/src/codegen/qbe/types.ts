@@ -161,11 +161,40 @@ const FLOAT_OPS: Record<string, QbeOpEntry> = {
     '<=': { instr: 'cles', qt: 'w' }, '>=': { instr: 'cges', qt: 'w' },
 }
 
+// Unsigned 32-bit (UInt8/16/32 — all share the 32-bit 'w' width).  Identical to
+// INT_OPS except the operations whose semantics differ by signedness: division,
+// remainder, the logical right shift, and the four ordering comparisons — matching
+// the WASM unsigned overloads in operators.si (i32.div_u / rem_u / shr_u / lt_u /
+// gt_u / le_u / ge_u).  `+ - * == != | ^ <<` are signedness-agnostic (inherited).
+const UINT_OPS: Record<string, QbeOpEntry> = {
+    ...INT_OPS,
+    '/':  { instr: 'udiv',  qt: 'w' }, '%':  { instr: 'urem',  qt: 'w' },
+    '>>': { instr: 'shr',   qt: 'w' },   // logical (zero-fill), matches i32.shr_u
+    '<':  { instr: 'cultw', qt: 'w' }, '>':  { instr: 'cugtw', qt: 'w' },
+    '<=': { instr: 'culew', qt: 'w' }, '>=': { instr: 'cugew', qt: 'w' },
+}
+
+// Unsigned 64-bit (UInt64).  Like INT64_OPS but unsigned div/rem/shr/comparisons,
+// matching the WASM i64.*_u overloads.  (Bitwise | ^ << on UInt64 stay 32-bit to
+// match WASM's i32.* — the lowerer routes those through INT_OPS, not here.)
+const UINT64_OPS: Record<string, QbeOpEntry> = {
+    ...INT64_OPS,
+    '/':  { instr: 'udiv',  qt: 'l' }, '%':  { instr: 'urem',  qt: 'l' },
+    '>>': { instr: 'shr',   qt: 'l' },   // logical 64-bit, matches i64.shr_u
+    '<':  { instr: 'cultl', qt: 'w' }, '>':  { instr: 'cugtl', qt: 'w' },
+    '<=': { instr: 'culel', qt: 'w' }, '>=': { instr: 'cugel', qt: 'w' },
+}
+
 export function lookupOpToQbe(op: string, typeKind: string): QbeOpEntry | undefined {
     switch (typeKind) {
-        case 'Float':                         return FLOAT_OPS[op]
-        case 'Int64': case 'UInt64':          return INT64_OPS[op]
-        default:                              return INT_OPS[op]
+        case 'Float':   return FLOAT_OPS[op]
+        case 'Int64':   return INT64_OPS[op]
+        case 'UInt64':  return UINT64_OPS[op]
+        // UInt8/16/32 share the 32-bit unsigned table.  (The bitwise | ^ << path
+        // forces typeKind 'Int' upstream so those stay 32-bit like WASM's i32.*.)
+        case 'UInt32': case 'UInt16': case 'UInt8':
+                        return UINT_OPS[op]
+        default:        return INT_OPS[op]
     }
 }
 

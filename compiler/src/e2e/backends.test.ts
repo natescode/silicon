@@ -21,10 +21,11 @@
 import { describe, test, expect } from 'bun:test'
 import * as path from 'node:path'
 import * as fsp  from 'node:fs/promises'
+import { readFileSync } from 'node:fs'
 
 import { compileToWatString, compileToTyped } from '../../tests/properties/_compile'
 import { lowerToQbe }                          from '../codegen/qbe/lower'
-import { siliconTypeToQbe, abstractOpToQbe }   from '../codegen/qbe/types'
+import { siliconTypeToQbe, abstractOpToQbe, lookupOpToQbe } from '../codegen/qbe/types'
 import { wasmIntrinsics }                       from '../intrinsics/intrinsics'
 import type { AbstractOp }                      from '../ir/nodes'
 
@@ -616,6 +617,92 @@ describe('Phase 9c arena: QBE rejection (allocator surface deferred)', () => {
             throw new Error('expected toQbeIr to throw')
         } catch (e) {
             expect(String(e)).toContain('9c-6')
+        }
+    })
+})
+
+// ---------------------------------------------------------------------------
+// Layer 1 — surface-derived anti-drift gate (no toolchain needed).
+//
+// The QBE backend resolves operator → instruction via `lookupOpToQbe`, a table
+// maintained INDEPENDENTLY of the WASM strata (operators.si etc.).  These tests
+// pin that table to the strata surface so the two can't silently diverge:
+//   (a) every unsigned WASM overload routes to an UNSIGNED QBE mnemonic — the
+//       signedness drift that can't be reached through the exit-code oracle
+//       (operands need the high bit set); and
+//   (b) every operator declared in the strata source is either handled by
+//       lookupOpToQbe or explicitly allow-listed with a reason.
+// ---------------------------------------------------------------------------
+
+describe('QBE unsigned-operator routing (signedness drift gate)', () => {
+    // For each WASM unsigned overload (operators.si i32/i64.*_u), the QBE
+    // operator path must emit the UNSIGNED mnemonic, not the signed one.
+    const UNSIGNED: { op: string; tk: string; instr: string }[] = [
+        // UInt32 bucket (UInt8/16/32 share the 32-bit 'w' width)
+        { op: '/',  tk: 'UInt32', instr: 'udiv'  }, { op: '%',  tk: 'UInt32', instr: 'urem'  },
+        { op: '<',  tk: 'UInt32', instr: 'cultw' }, { op: '>',  tk: 'UInt32', instr: 'cugtw' },
+        { op: '<=', tk: 'UInt32', instr: 'culew' }, { op: '>=', tk: 'UInt32', instr: 'cugew' },
+        { op: '>>', tk: 'UInt32', instr: 'shr'   },   // logical, not arithmetic 'sar'
+        // UInt64
+        { op: '/',  tk: 'UInt64', instr: 'udiv'  }, { op: '%',  tk: 'UInt64', instr: 'urem'  },
+        { op: '<',  tk: 'UInt64', instr: 'cultl' }, { op: '>',  tk: 'UInt64', instr: 'cugtl' },
+        { op: '<=', tk: 'UInt64', instr: 'culel' }, { op: '>=', tk: 'UInt64', instr: 'cugel' },
+        { op: '>>', tk: 'UInt64', instr: 'shr'   },
+    ]
+    for (const { op, tk, instr } of UNSIGNED) {
+        test(`${op} on ${tk} → ${instr}`, () => {
+            expect(lookupOpToQbe(op, tk)?.instr).toBe(instr)
+        })
+    }
+
+    test('signed Int operators stay signed (no over-correction)', () => {
+        expect(lookupOpToQbe('/',  'Int')?.instr).toBe('div')    // signed
+        expect(lookupOpToQbe('%',  'Int')?.instr).toBe('rem')    // signed
+        expect(lookupOpToQbe('>>', 'Int')?.instr).toBe('sar')    // arithmetic
+        expect(lookupOpToQbe('<',  'Int')?.instr).toBe('csltw')  // signed
+    })
+})
+
+describe('QBE operator coverage (anti-drift gate, surface-derived)', () => {
+    // register::operator / register::typed_operator surfaces that are
+    // intentionally NOT in lookupOpToQbe's tables, each with the reason.
+    const QBE_OPERATOR_GAPS: Record<string, string> = {
+        '||': 'short-circuit OR; lowered directly in lowerBinaryOp, not via the table',
+        '++': 'string concat; unsupported on the native backend (no heap / str_concat)',
+    }
+
+    // Enumerate the operator surface from the strata source — NOT a hardcoded
+    // list — so a newly-added operator that QBE forgets fails this test.
+    const strataDir = path.join(import.meta.dir, '../strata')
+    const src = ['operators.si', 'bitwise.si', 'strings.si', 'logic.si']
+        .map(f => readFileSync(path.join(strataDir, f), 'utf-8')).join('\n')
+    const opPairs = new Map<string, string>()   // `op:typeKind` → op
+    for (const m of src.matchAll(/register::operator\('([^']+)'\)/g)) opPairs.set(`${m[1]}:Int`, m[1])
+    for (const m of src.matchAll(/register::typed_operator\('([^']+)',\s*'([^']+)'\)/g)) opPairs.set(`${m[1]}:${m[2]}`, m[1])
+
+    test('enumeration found the operator surface', () => {
+        // Sanity: at least the core arithmetic + a typed overload were parsed.
+        expect(opPairs.has('+:Int')).toBe(true)
+        expect(opPairs.has('+:Float')).toBe(true)
+        expect(opPairs.size).toBeGreaterThan(20)
+    })
+
+    test('every strata operator is handled by QBE or explicitly allow-listed', () => {
+        const missing: string[] = []
+        for (const [key, op] of opPairs) {
+            const tk = key.slice(op.length + 1)
+            if (lookupOpToQbe(op, tk)) continue       // handled by the table
+            if (QBE_OPERATOR_GAPS[op]) continue       // documented gap
+            missing.push(key)
+        }
+        expect(missing, `strata operators with no QBE lowering and no allow-list entry: ${missing.join(', ')}`).toEqual([])
+    })
+
+    test('allow-list has no stale entries (each is genuinely absent from the table)', () => {
+        for (const op of Object.keys(QBE_OPERATOR_GAPS)) {
+            expect(lookupOpToQbe(op, 'Int'),
+                `'${op}' is allow-listed but now resolves via lookupOpToQbe — remove it from QBE_OPERATOR_GAPS`,
+            ).toBeUndefined()
         }
     })
 })
