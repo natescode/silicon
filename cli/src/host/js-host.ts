@@ -84,6 +84,31 @@ function buildImports(state: HostState, write: (s: string) => void) {
             date_now: () => Date.now(),
             // === /bindgen:web math+clock ===
         },
+        // Generated built-in modules (compiler/bindgen) — Node + Bun surfaces,
+        // string-marshalled via readLenString/allocLenString.  Callable from
+        // Silicon as `path::basename(…)` / `bun::nanoseconds()`.
+        path: {
+            // === bindgen:module path ===
+            basename: (path: number, suffix: number) => allocLenString(require('node:path').basename(readLenString(path), readLenString(suffix))),
+            dirname: (path: number) => allocLenString(require('node:path').dirname(readLenString(path))),
+            extname: (path: number) => allocLenString(require('node:path').extname(readLenString(path))),
+            is_absolute: (path: number) => require('node:path').isAbsolute(readLenString(path)),
+            matches_glob: (path: number, pattern: number) => require('node:path').matchesGlob(readLenString(path), readLenString(pattern)),
+            normalize: (path: number) => allocLenString(require('node:path').normalize(readLenString(path))),
+            relative: (from: number, to: number) => allocLenString(require('node:path').relative(readLenString(from), readLenString(to))),
+            to_namespaced_path: (path: number) => allocLenString(require('node:path').toNamespacedPath(readLenString(path))),
+            // === /bindgen:module path ===
+        },
+        bun: {
+            // === bindgen:module bun ===
+            gc: (force: number) => Bun.gc(force),
+            nanoseconds: () => Bun.nanoseconds(),
+            resolve_sync: (moduleId: number, parent: number) => allocLenString(Bun.resolveSync(readLenString(moduleId), readLenString(parent))),
+            shrink: () => Bun.shrink(),
+            sleep_sync: (ms: number) => Bun.sleepSync(ms),
+            strip_ansi: (input: number) => allocLenString(Bun.stripANSI(readLenString(input))),
+            // === /bindgen:module bun ===
+        },
     }
     return { imports, flush }
 }

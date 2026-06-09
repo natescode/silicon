@@ -117,7 +117,7 @@ export function dtsToSpecs(src: DtsSource): DtsResult {
 
         const argList = params.map(p => p.name).join(', ')
         specs.push({
-            name: `${src.prefix}_${snake(name)}`,
+            name: src.prefix ? `${src.prefix}_${snake(name)}` : snake(name),
             params,
             result: ret!,
             impl: { kind: 'call', expr: `${src.accessor}.${name}(${argList})` },

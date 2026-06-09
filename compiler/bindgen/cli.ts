@@ -17,6 +17,7 @@
 import { readFileSync, writeFileSync } from 'fs'
 import { WEB_MATH_CLOCK, WEB_MODULE } from './src/spec'
 import { generate } from './src/generate'
+import { GENERATED_MODULES, generateModule } from './src/modules'
 
 const START = 'bindgen:web math+clock'
 const END = '/bindgen:web math+clock'
@@ -25,26 +26,32 @@ interface Target {
     readonly label: string
     readonly path: string
     readonly fragment: string
+    /** 'splice' replaces the marker region in an existing file; 'file' owns the
+     *  whole file.  Splice targets carry their own marker tag. */
+    readonly kind?: 'splice' | 'file'
+    readonly tag?: string
 }
 
 /** Replace the lines strictly between the START and END marker lines with
  *  `fragment`.  Returns the rewritten file text, or throws if markers are
  *  missing / malformed. */
-function splice(text: string, fragment: string, path: string): string {
+function splice(text: string, fragment: string, path: string, tag = START): string {
+    const end = `/${tag}`
     const lines = text.split('\n')
-    const startIdx = lines.findIndex(l => l.includes(START) && !l.includes(END))
-    const endIdx = lines.findIndex(l => l.includes(END))
+    const startIdx = lines.findIndex(l => l.includes(tag) && !l.includes(end))
+    const endIdx = lines.findIndex(l => l.includes(end))
     if (startIdx === -1 || endIdx === -1 || endIdx <= startIdx) {
-        throw new Error(`${path}: bindgen markers not found (expected '${START}' … '${END}')`)
+        throw new Error(`${path}: bindgen markers not found (expected '${tag}' … '${end}')`)
     }
     return [...lines.slice(0, startIdx + 1), fragment, ...lines.slice(endIdx)].join('\n')
 }
 
 /** Extract the current bytes between the markers (for --check). */
-function extract(text: string, path: string): string {
+function extract(text: string, path: string, tag = START): string {
+    const end = `/${tag}`
     const lines = text.split('\n')
-    const startIdx = lines.findIndex(l => l.includes(START) && !l.includes(END))
-    const endIdx = lines.findIndex(l => l.includes(END))
+    const startIdx = lines.findIndex(l => l.includes(tag) && !l.includes(end))
+    const endIdx = lines.findIndex(l => l.includes(end))
     if (startIdx === -1 || endIdx === -1 || endIdx <= startIdx) {
         throw new Error(`${path}: bindgen markers not found`)
     }
@@ -53,11 +60,18 @@ function extract(text: string, path: string): string {
 
 export function targets(): Target[] {
     const g = generate(WEB_MODULE, WEB_MATH_CLOCK)
-    return [
-        { label: '.si @extern', path: 'src/strata/modules/web.si',            fragment: g.si },
-        { label: 'Bun shim',    path: '../cli/src/host/js-host.ts',           fragment: g.bunShim },
-        { label: 'browser shim', path: '../playground/playground/web-env.js', fragment: g.webShim },
+    const ts: Target[] = [
+        { label: 'web .si',     path: 'src/strata/modules/web.si',            fragment: g.si,      kind: 'splice', tag: START },
+        { label: 'web Bun shim', path: '../cli/src/host/js-host.ts',          fragment: g.bunShim, kind: 'splice', tag: START },
+        { label: 'web browser shim', path: '../playground/playground/web-env.js', fragment: g.webShim, kind: 'splice', tag: START },
     ]
+    // Generated Node/Bun modules: a whole `.si` file + a host-shim splice.
+    for (const cfg of GENERATED_MODULES) {
+        const { si, hostShim } = generateModule(cfg)
+        ts.push({ label: `${cfg.module}.si`, path: `src/strata/modules/${cfg.module}.si`, fragment: si, kind: 'file' })
+        ts.push({ label: `${cfg.module} host shim`, path: '../cli/src/host/js-host.ts', fragment: hostShim, kind: 'splice', tag: `bindgen:module ${cfg.module}` })
+    }
+    return ts
 }
 
 /** `--report`: run every source adapter against its real spec and print the
@@ -87,13 +101,23 @@ function main(): void {
     const write = process.argv.includes('--write')
     let drift = 0
     for (const t of targets()) {
+        if (t.kind === 'file') {
+            // The whole file is generated.
+            const current = readFileSync(t.path, 'utf8')
+            if (write) {
+                if (current !== t.fragment) { writeFileSync(t.path, t.fragment); console.log(`wrote  ${t.label}  (${t.path})`) }
+                else console.log(`ok     ${t.label}  (unchanged)`)
+            } else if (current === t.fragment) console.log(`ok     ${t.label}`)
+            else { drift++; console.log(`DRIFT  ${t.label}  (${t.path}) — run \`bun bindgen/cli.ts --write\``) }
+            continue
+        }
         const text = readFileSync(t.path, 'utf8')
         if (write) {
-            const next = splice(text, t.fragment, t.path)
+            const next = splice(text, t.fragment, t.path, t.tag)
             if (next !== text) { writeFileSync(t.path, next); console.log(`wrote  ${t.label}  (${t.path})`) }
             else console.log(`ok     ${t.label}  (unchanged)`)
         } else {
-            const current = extract(text, t.path)
+            const current = extract(text, t.path, t.tag)
             if (current === t.fragment) console.log(`ok     ${t.label}`)
             else { drift++; console.log(`DRIFT  ${t.label}  (${t.path}) — run \`bun bindgen/cli.ts --write\``) }
         }
