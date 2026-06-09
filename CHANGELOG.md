@@ -27,6 +27,40 @@ This project aims for [Semantic Versioning](https://semver.org/).
 - Standalone files compiled outside a project keep the classic single-file
   `@use` behaviour unchanged.
 
+### Added — v1.0 roadmap Phase 0/1 (FFI object handles · monomorphization substrate · bindgen)
+
+Delivered on the `phase-1-ffi-async` branch and merged into the v1 roadmap.
+See [`docs/v1.0-implementation-roadmap.html`](docs/v1.0-implementation-roadmap.html).
+
+- **C0 — multi-signature funcref ABI** ([ADR 0019](docs/adr/0019-closures.md)).
+  `@call_indirect(cb, …args)` is variadic; the call signature is derived from the
+  args' wasm types and registered in a multi-signature table. i32→i32 stays
+  byte-identical.
+- **F1a — `JSValue` generic externref object handle + `@extern` object-handle
+  imports** ([ADR 0018](docs/adr/0018-async-promise-ffi.md) P0/P1). `JSString`/
+  `JSValue` params, results, and locals lower to `externref`; a namespaced
+  `@extern mod::field` imports from host module `mod` (not the hardcoded `env`)
+  and is callable + forward-referenced. Externref imports are gated to
+  `--platform=web|bun`. Lifts the FFI surface from scalar-only toward sync
+  object-returning APIs.
+- **M0 — comptime monomorphization substrate** ([ADR 0003](docs/adr/0003-comptime-via-compilation.md)).
+  A Silicon-authored `@generic` stratum captures a template at `on::decl`, hands
+  it across handler firings via a registry-shared handle table + per-stratum
+  state, infers the call's type args, and emits a real `$id$Int` / `$id$Float`
+  monomorph with substituted param/result types and a rewritten call — running
+  under WebAssembly. New compiled-engine primitives `callee_name`,
+  `type_bind_template_args`, `str_concat`; the block translator now tracks `@mut`
+  and `<local>::field` access. (Same-type-call memoization, which needs comptime
+  conditionals, remains future work.)
+- **F0a — FFI binding generator** ([ADR 0017](docs/adr/0017-ffi-binding-generator.md), Accepted).
+  `compiler/bindgen/` is now the single source of truth for the Web `Math`/clock
+  `@extern` surface across `web.si` + the Bun and browser host shims. A CLI
+  (`bun bindgen/cli.ts --check/--write`) splices each fragment between markers;
+  a golden test enforces byte-for-byte fidelity, cross-site `(module, field,
+  arity)` key parity, a lockfile content hash, and a round-trip compile of
+  `web::math_sqrt`; `.github/workflows/bindgen.yml` gates drift. Generating
+  collapsed the pre-existing ordering/whitespace drift across the three sites.
+
 ## 0.1.5
 
 Lands the **ADR-0020 grammar redesign** — a breaking change to Silicon's surface
