@@ -156,6 +156,8 @@
 \\ @extern compiler_expandSumType (Int) -> Int;
 \\ @extern compiler_expandTypeRecord (Int) -> Int;
 \\ @extern compiler_expandStruct (Int) -> Int;
+\\ @extern compiler_expandWithArena (Int) -> Int;
+\\ @extern compiler_expandMoveToParentArena (Int) -> Int;
 
 # ── Test-only ───────────────────────────────────────────────────────────
 \\ @extern test_observe (Int) -> Void;

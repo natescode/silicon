@@ -114,6 +114,12 @@ export interface LowerFns {
     unwrapNode:  (node: any) => any
     exprWasmType:(expr: IRExpr) => WasmType
     watId:       (name: string) => string
+    /** Phase 9c (ADR 0008) — @with_arena / @move_to_parent_arena lowering.
+     *  Kept in lower.ts (deeply LowerCtx-bound: target, freshIdCounter,
+     *  pendingLocals, sum-layout sizing) and surfaced here so the
+     *  src/strata/arena.si handlers can delegate to it. */
+    lowerWithArena:         (rawArgs: any[], ctx: any) => IRExpr
+    lowerMoveToParentArena: (rawArgs: any[], ctx: any) => IRExpr
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -371,6 +377,12 @@ export interface CompilerAPI {
     assertDefined(value: any, msg: string): void
     error(msg: string, node?: any): never
     expandMatchChain(rawArgs: any[], inferredType: any): IRExpr
+    /** Phase 9c — delegate @with_arena / @move_to_parent_arena lowering to
+     *  lower.ts (used by src/strata/arena.si).  These THROW IRLowerError on
+     *  invalid use (nested heap, non-tail promote, …); callers must let the
+     *  throw propagate so the CaaS surface reports it. */
+    expandWithArena(rawArgs: any[]): IRExpr
+    expandMoveToParentArena(rawArgs: any[]): IRExpr
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -899,6 +911,10 @@ export function createCompilerAPI(ctx: CtxShape, fns: LowerFns): CompilerAPI {
         error: (msg, node) => {
             throw new CompilerAPIError(`${msg}${formatLoc(node)}`)
         },
+        // Phase 9c — delegate to the LowerCtx-bound arena lowering in lower.ts.
+        // Throws propagate intentionally (the CaaS surface turns them into errors).
+        expandWithArena:         (rawArgs) => fns.lowerWithArena(rawArgs, ctx),
+        expandMoveToParentArena: (rawArgs) => fns.lowerMoveToParentArena(rawArgs, ctx),
         expandMatchChain: (rawArgs, inferredType) => {
             // Normalise arm-expression form (`pat => body`, with `|`-alternation)
             // into the flat `[disc, pat, body, …]` form the rest of this

@@ -1415,6 +1415,24 @@ export function createComptimeImports(env: ComptimeEnv): WebAssembly.Imports {
         }
     }
 
+    // @with_arena / @move_to_parent_arena (src/strata/arena.si).  Unlike the
+    // match expander, these do NOT catch: lowerWithArena throws IRLowerError on
+    // invalid use (heap-return without promote, non-tail promote, nested-heap
+    // sizing), and those messages must reach the CaaS surface as compile errors.
+    const compiler_expandWithArena = (rawArgsArrH: number): number => {
+        if (!env.api) return 0
+        const rawArgs = handles.get(rawArgsArrH)
+        const ir = env.api.expandWithArena(Array.isArray(rawArgs) ? rawArgs : [])
+        return ir ? env.irHandles.fresh(ir) : 0
+    }
+
+    const compiler_expandMoveToParentArena = (rawArgsArrH: number): number => {
+        if (!env.api) return 0
+        const rawArgs = handles.get(rawArgsArrH)
+        const ir = env.api.expandMoveToParentArena(Array.isArray(rawArgs) ? rawArgs : [])
+        return ir ? env.irHandles.fresh(ir) : 0
+    }
+
     const ast_patch_types = (templateH: number, bindingsH: number): number => {
         const tmpl = handles.get(templateH) as { ast: any; kind: 'pre' | 'post' } | undefined
         const bindings = handles.get(bindingsH) as Map<string, SiliconType> | undefined
@@ -1514,6 +1532,7 @@ export function createComptimeImports(env: ComptimeEnv): WebAssembly.Imports {
             compiler_lowerGlobalInit, compiler_globalInit_init, compiler_globalInit_wasmType,
             compiler_lowerExternParams, compiler_lowerExternResult,
             compiler_expandMatchChain, compiler_expandSumType, compiler_expandTypeRecord, compiler_expandStruct,
+            compiler_expandWithArena, compiler_expandMoveToParentArena,
             test_observe,
         },
     }

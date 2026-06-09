@@ -1,0 +1,38 @@
+# SPDX-License-Identifier: MIT
+# Phase 9c (ADR 0008) — explicit-arena memory management, migrated to
+# data-driven strata.
+#
+# `@with_arena({ body })` saves the bump heap pointer at entry and resets it
+# at exit, so every byte allocated inside the block is freed at once.
+# `@move_to_parent_arena(value)` (tail position only) memcpys a flat heap
+# value past the saved boundary so the block result survives the reset.
+#
+# Like @match / @struct / @type, these dissolve the *surface* (no more
+# hardcoded `name === '@with_arena'` in lowerBuiltinCall) while the heavy
+# lowering stays as a host expander — here lower.ts's lowerWithArena /
+# lowerMoveToParentArena, reached via compiler_expandWithArena /
+# compiler_expandMoveToParentArena.  That lowering is deeply LowerCtx-bound
+# (compile target, fresh locals, heap-pointer save/restore, and per-type
+# byte-size computation over the sum-layout registry), so it is NOT
+# expressible in portable Silicon today.
+#
+# The expanders THROW on invalid use (heap-typed body without a promote,
+# a non-tail @move_to_parent_arena, or a nested-heap value whose size can't
+# be computed); the import deliberately lets those throws propagate so the
+# diagnostics reach the user.
+
+@stratum WithArena := {
+    Compiler::register::expression_keyword('@with_arena');
+    Compiler::on::lower('@with_arena', WithArena_lower);
+};
+
+\\ WithArena_lower (Int)
+@fn WithArena_lower node := compiler::compiler_expandWithArena(compiler::compiler_ast_node_field(node, compiler::compiler_str_intern('args', 0)));
+
+@stratum MoveToParentArena := {
+    Compiler::register::expression_keyword('@move_to_parent_arena');
+    Compiler::on::lower('@move_to_parent_arena', MoveToParentArena_lower);
+};
+
+\\ MoveToParentArena_lower (Int)
+@fn MoveToParentArena_lower node := compiler::compiler_expandMoveToParentArena(compiler::compiler_ast_node_field(node, compiler::compiler_str_intern('args', 0)));

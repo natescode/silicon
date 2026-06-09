@@ -189,6 +189,8 @@ const lowerFns: LowerFns = {
     unwrapNode: unwrap,
     exprWasmType,
     watId,
+    lowerWithArena,
+    lowerMoveToParentArena,
 }
 
 // ---------------------------------------------------------------------------
@@ -1496,16 +1498,10 @@ function lowerBuiltinCall(name: string, rawArgs: any[], ctx: LowerCtx, inferredT
     // reachable via the CompilerAPI `funcref` surface).
     // Phase 5a-3 — `@try` is now a data-driven stratum (src/strata/try.si);
     // it falls through to the on::lower handler-firing path below.
-    // Phase 9c (ADR 0008) — explicit-arena scope + tail-position escape.
-    // Hardcoded for the same reasons as @try: fresh-local allocation,
-    // multi-statement Block synthesis, and AST tail-walking that the
-    // strata-body interpreter doesn't have a clean API for today.
-    if (name === '@with_arena') {
-        return lowerWithArena(rawArgs, ctx)
-    }
-    if (name === '@move_to_parent_arena') {
-        return lowerMoveToParentArena(rawArgs, ctx)
-    }
+    // Phase 9c (ADR 0008) — `@with_arena` / `@move_to_parent_arena` are now
+    // data-driven strata (src/strata/arena.si) whose handlers delegate to the
+    // host arena expander (lowerWithArena / lowerMoveToParentArena, surfaced
+    // via the CompilerAPI); they fall through to the handler-firing path below.
     // Typed dispatch: try the first arg's type kind, fall back to the untyped entry.
     const firstArgKind: string = (inferredTypeOf(rawArgs[0], ctx) ?? (rawArgs[0] as any)?.inferredType)?.kind ?? 'Int'
     const kwEntry = lookupTypedKeyword(ctx.registry, name, firstArgKind) ?? lookupKeyword(ctx.registry, name)
