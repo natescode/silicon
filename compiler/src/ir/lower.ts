@@ -463,7 +463,7 @@ export function lowerProgram(
     // JS String Builtins (web/bun): encode JSString-typed user params/results/
     // locals as `externref` so `local.set`/calls from the `(ref extern)`-returning
     // builtins validate.  No-op when the program uses no JSString.
-    injectJSStringRefSlots(program, functions, functionSigs)
+    injectExternRefSlots(program, functions, functionSigs)
 
     // CharCodeArray (web/bun): stamp CharCodeArray-typed params/results/locals as
     // a concrete `(ref null $Array_i16)` so they hold the GC array ref.
@@ -536,7 +536,14 @@ function injectRefSlots(
  *  builtins return non-null `(ref extern)`; declaring the holding slots as the
  *  wider nullable `externref` lets `local.set` / calls validate. */
 const EXTERN_SLOT: IRRefSlot = { localTypeIdx: 0, nullable: true, extern: true }
-function injectJSStringRefSlots(
+/** True for the externref-shaped object-handle types (ADR 0018 P0): the
+ *  `wasm:js-string` `JSString` and the generic host-object `JSValue`.  Both lower
+ *  to a nullable `externref` ref slot; only their *operations* differ (JSString
+ *  has the `wasm:js-string` builtins, JSValue is an opaque host handle). */
+function isExternRefKind(t: string | undefined): boolean {
+    return t === 'JSString' || t === 'JSValue'
+}
+function injectExternRefSlots(
     program: any,
     functions: IRFunction[],
     functionSigs: Map<string, FunctionSig>,
@@ -548,16 +555,16 @@ function injectJSStringRefSlots(
     for (const fn of functions) {
         const sig = functionSigs?.get(fn.name)
         if (!sig) continue
-        if (!fn.refResult && sig.result?.kind === 'JSString') fn.refResult = EXTERN_SLOT
+        if (!fn.refResult && isExternRefKind(sig.result?.kind)) fn.refResult = EXTERN_SLOT
         sig.params.forEach((p, i) => {
-            if (p?.kind === 'JSString') {
+            if (isExternRefKind(p?.kind)) {
                 if (!fn.refParams) fn.refParams = new Map()
                 if (!fn.refParams.has(i)) fn.refParams.set(i, EXTERN_SLOT)
             }
         })
     }
 
-    // `@local`/`@var` declarations annotated `\\ name JSString`.
+    // `@local`/`@var` declarations annotated `\\ name JSString|JSValue`.
     const items: any[] = (program?.elements ?? program?.items ?? []) as any[]
     for (const item of items) {
         const def = unwrap(item)
@@ -565,15 +572,15 @@ function injectJSStringRefSlots(
         if (def.keyword !== '@fn' && def.keyword !== '@global') continue
         const fn = fnByName.get(watId(def.name?.name ?? '')) ?? fnByName.get(def.name?.name ?? '')
         if (!fn) continue
-        walkLocalsForJSString(def.binding?.expression ?? def.binding, fn)
+        walkLocalsForExternRef(def.binding?.expression ?? def.binding, fn)
     }
 }
 
-function walkLocalsForJSString(node: any, fn: IRFunction): void {
+function walkLocalsForExternRef(node: any, fn: IRFunction): void {
     if (!node || typeof node !== 'object') return
     if (node.type === 'Definition' && node.keyword === '@local') {
         const localName: string | undefined = node.name?.name
-        if (localName && node.name?.typeAnnotation?.typename === 'JSString') {
+        if (localName && isExternRefKind(node.name?.typeAnnotation?.typename)) {
             const watLocalName = watId(localName)
             for (const l of fn.locals) {
                 if (l.name === watLocalName || l.name === localName) { l.refType = EXTERN_SLOT; break }
@@ -583,14 +590,14 @@ function walkLocalsForJSString(node: any, fn: IRFunction): void {
     for (const key of Object.keys(node)) {
         if (key === 'type' || key === 'sourceLocation') continue
         const val = (node as any)[key]
-        if (Array.isArray(val)) for (const v of val) walkLocalsForJSString(v, fn)
-        else if (val && typeof val === 'object') walkLocalsForJSString(val, fn)
+        if (Array.isArray(val)) for (const v of val) walkLocalsForExternRef(v, fn)
+        else if (val && typeof val === 'object') walkLocalsForExternRef(val, fn)
     }
 }
 
 /** CharCodeArray — stamp CharCodeArray-typed params/results/locals with a concrete
  *  `(ref null $Array_i16)` slot so they hold the GC array ref (mirror of
- *  injectJSStringRefSlots, with a concrete typeidx instead of extern). */
+ *  injectExternRefSlots, with a concrete typeidx instead of extern). */
 function injectCharCodeArrayRefSlots(
     program: any,
     functions: IRFunction[],
@@ -1434,13 +1441,13 @@ function lowerModuleCall(name: string, sepIdx: number, n: any, ctx: LowerCtx): I
         )
     }
 
-    // JS String Builtins need a JS host: gate JSString + any externref-typed
-    // module on `--platform=web|bun` (wasmtime / native can't provide them).
+    // externref needs a JS host: gate JSString / JSValue object handles on
+    // `--platform=web|bun` (wasmtime / native can't provide externref).
     const usesExternref = moduleName === 'JSString'
-        || fnSig.siliconResult === 'JSString' || fnSig.siliconParams.includes('JSString')
+        || isExternRefKind(fnSig.siliconResult) || fnSig.siliconParams.some(isExternRefKind)
     if (usesExternref && ctx.platform !== 'web' && ctx.platform !== 'bun') {
         throw new IRLowerError(
-            `'${moduleName}::${funcName}' uses JSString (JS String Builtins) — ` +
+            `'${moduleName}::${funcName}' uses an externref object handle (JSString / JSValue) — ` +
             `compile with --platform=web or --platform=bun (sgl.toml: [build] platform = "bun").`
         )
     }
@@ -1479,13 +1486,13 @@ function lowerModuleCall(name: string, sepIdx: number, n: any, ctx: LowerCtx): I
         // ref (for fromCharCodeArray / intoCharCodeArray).
         let refParams: Map<number, IRRefSlot> | undefined
         fnSig.siliconParams.forEach((t, i) => {
-            if (t === 'JSString') {
+            if (isExternRefKind(t)) {
                 (refParams ??= new Map()).set(i, { localTypeIdx: 0, nullable: true, extern: true })
             } else if (t === 'CharCodeArray') {
                 (refParams ??= new Map()).set(i, { localTypeIdx: charCodeArrayTypeIdx(ctx), nullable: true })
             }
         })
-        const refResult: IRRefSlot | undefined = fnSig.siliconResult === 'JSString'
+        const refResult: IRRefSlot | undefined = isExternRefKind(fnSig.siliconResult)
             ? { localTypeIdx: 0, nullable: false, extern: true }
             : fnSig.siliconResult === 'CharCodeArray'
                 ? { localTypeIdx: charCodeArrayTypeIdx(ctx), nullable: true }
