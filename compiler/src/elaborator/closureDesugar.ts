@@ -75,6 +75,85 @@ function refName(node: any): string | null {
     return null
 }
 
+const isClosureCall = (n: any): boolean => n && n.type === 'FunctionCall' && n.name === '@closure'
+
+/** The callee name of a FunctionCall, whether a builtin keyword (string name) or
+ *  a user/namespaced call (Namespace path joined by `::`). */
+function calleeName(call: any): string | null {
+    const nm = call?.name
+    if (typeof nm === 'string') return nm
+    if (nm?.type === 'Namespace' && Array.isArray(nm.path)) return nm.path.join('::')
+    return null
+}
+
+/**
+ * ADR 0019 C2 — the conservative escape/host-reachability classifier + mode-gate.
+ *
+ * A closure handed across an `@extern` boundary is a HOST-CALLABLE ESCAPING
+ * closure: the host may retain it and call it back after the env's frame is
+ * gone.  Under C1's non-escaping representation the env is a linear-memory
+ * `Vec` that does NOT outlive the call, so letting a closure cross `@extern`
+ * (where it would type-check as a bare i32 pointer) is UNSOUND.  The ADR routes
+ * this case to the wasm-gc Tier-B `(struct $Clo)` representation (§2.2); that
+ * codegen is not yet implemented, so the only sound action today is to REJECT.
+ *
+ * The classifier is the conservative syntactic over-approximation the ADR
+ * mandates (§9): a closure-valued expression — a `@closure(…)` literal, or a
+ * local bound to one — appearing in an `@extern`/namespaced-host call argument
+ * position is flagged.  (Fuller flow — a closure stored in a struct or returned
+ * past its frame — is a documented gap that loosens as ADR 0011 R4 lands.)
+ */
+function classifyEscapes(program: any, ctx: Ctx): void {
+    // Collect @extern declaration names (bare and namespaced `mod::field`).
+    const externs = new Set<string>()
+    for (const el of (program.elements ?? []) as any[]) {
+        const d = el && el.type === 'Definition' ? el : (el?.value?.type === 'Definition' ? el.value : null)
+        if (d && d.keyword === '@extern' && d.name?.name) externs.add(d.name.name)
+    }
+    if (externs.size === 0) return
+
+    // Conservatively collect every local name ever bound to a @closure(…).
+    const closureVars = new Set<string>()
+    const scanBinds = (node: any): void => {
+        if (!node || typeof node !== 'object') return
+        if (Array.isArray(node)) { node.forEach(scanBinds); return }
+        if (node.type === 'Definition' && (node.keyword === '@local' || node.keyword === '@mut' || node.keyword === '@var')
+            && node.name?.name && isClosureCall(node.binding?.expression)) {
+            closureVars.add(node.name.name)
+        }
+        if (node.type === 'Assignment' && isClosureCall(node.value)) {
+            const t = refName(node.target); if (t) closureVars.add(t)
+        }
+        for (const k of Object.keys(node)) scanBinds(node[k])
+    }
+    scanBinds(program)
+
+    const isClosureArg = (a: any): boolean => isClosureCall(a) || (refName(a) !== null && closureVars.has(refName(a)!))
+    const scanCalls = (node: any): void => {
+        if (!node || typeof node !== 'object') return
+        if (Array.isArray(node)) { node.forEach(scanCalls); return }
+        if (node.type === 'FunctionCall') {
+            const callee = calleeName(node)
+            // `mod::field` host-module calls share the @extern boundary; match
+            // either the bare extern name or a namespaced call whose tail is one.
+            const tail = callee?.includes('::') ? callee.split('::').pop()! : callee
+            if (callee && (externs.has(callee) || (tail && externs.has(tail)))) {
+                for (const a of (node.args ?? [])) {
+                    if (isClosureArg(a)) {
+                        err(ctx, '@closure',
+                            `a closure passed to the @extern boundary '${callee}' is a host-callable escaping ` +
+                            `closure (ADR 0019 C2): its captured environment may outlive the call. This requires the ` +
+                            `--target=wasm-gc Tier-B representation (the (struct $Clo) record + __invoke trampoline), ` +
+                            `which is not yet implemented; pass a plain @fnref (no captures) across @extern instead.`)
+                    }
+                }
+            }
+        }
+        for (const k of Object.keys(node)) scanCalls(node[k])
+    }
+    scanCalls(program)
+}
+
 /** Pre-scan: collect every top-level `@fn`'s param types + result type. */
 function collectFns(program: any): Map<string, FnSig> {
     const fns = new Map<string, FnSig>()
@@ -179,6 +258,10 @@ function walk(node: any, ctx: Ctx): any {
  */
 export function desugarClosures(program: any): { program: any; errors: ElaborationError[] } {
     const ctx: Ctx = { n: 0, errors: [], fns: collectFns(program), wrappers: [] }
+    // C2 escape gate: flag host-callable escaping closures (a closure crossing
+    // @extern) BEFORE the rewrite erases the @closure literals.  Sound rejection
+    // until the wasm-gc Tier-B representation lands.
+    classifyEscapes(program, ctx)
     const rewritten = walk(program, ctx)
     if (ctx.wrappers.length === 0) return { program: rewritten, errors: ctx.errors }
     return {

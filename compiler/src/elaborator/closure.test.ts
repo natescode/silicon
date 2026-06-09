@@ -126,3 +126,51 @@ describe('ADR 0019 C1 — closures with by-value capture', () => {
         expect(ex.run(2)).toBe(12)    // (1+2+3) * 2
     })
 })
+
+describe('ADR 0019 C2 — escape/host-reachability gate', () => {
+    // The classifier runs in closureDesugar before the rewrite; its errors
+    // surface as elaboration diagnostics.  No vec.si needed here.
+    function elabErrors(src: string): string[] {
+        const ast = addToAstSemantics(siliconGrammar)(parse(src)).toAst() as Program
+        const registry = buildStrataRegistry(ast)
+        const { errors } = elaborate(ast, registry)
+        return (errors ?? []).map((e: any) => e.message)
+    }
+
+    test('a @closure literal crossing an @extern boundary is rejected (host-callable escape)', () => {
+        const errs = elabErrors(`\\\\ @extern register_cb (Int) -> Void;
+\\\\ h (Int, Int) -> Int
+@fn h c, x := { c + x };
+\\\\ run (Int) -> Void
+@fn run n := { register_cb(@closure(h, n)) };`)
+        expect(errs.some(m => m.includes('host-callable escaping closure') && m.includes('--target=wasm-gc'))).toBe(true)
+    })
+
+    test('a closure-bound local crossing @extern is also rejected (conservative over-approximation)', () => {
+        const errs = elabErrors(`\\\\ @extern register_cb (Int) -> Void;
+\\\\ h (Int, Int) -> Int
+@fn h c, x := { c + x };
+\\\\ run (Int) -> Void
+@fn run n := { cb := @closure(h, n); register_cb(cb) };`)
+        expect(errs.some(m => m.includes('host-callable escaping closure'))).toBe(true)
+    })
+
+    test('a closure passed to a Silicon-side higher-order function is allowed (no host escape)', () => {
+        const errs = elabErrors(`\\\\ apply (Int, Int) -> Int
+@fn apply clo, x := { @call_closure(clo, x) };
+\\\\ h (Int, Int) -> Int
+@fn h c, x := { c + x };
+\\\\ run (Int) -> Int
+@fn run n := { apply(@closure(h, n), 5) };`)
+        expect(errs.filter(m => m.includes('host-callable escaping closure'))).toEqual([])
+    })
+
+    test('a plain @fnref (no captures) may cross @extern unchanged', () => {
+        const errs = elabErrors(`\\\\ @extern register_cb (Int) -> Void;
+\\\\ h (Int) -> Int
+@fn h x := { x };
+\\\\ run () -> Void
+@fn run := { register_cb(@fnref(h)) };`)
+        expect(errs.filter(m => m.includes('host-callable escaping closure'))).toEqual([])
+    })
+})
