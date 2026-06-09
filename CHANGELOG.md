@@ -27,6 +27,26 @@ This project aims for [Semantic Versioning](https://semver.org/).
 - Standalone files compiled outside a project keep the classic single-file
   `@use` behaviour unchanged.
 
+### Added — v1.0 roadmap Phase 3 core: blocking `@await` (Asyncify, [ADR 0018](docs/adr/0018-async-promise-ffi.md))
+
+Delivered on the `phase-3-async-await` branch.
+
+- **`@await(expr)`** — a suspension-point surface stratum (`control.si`); transparent
+  (lowers to its argument) and typed to its argument's type. The route-A Asyncify
+  transform makes the suspension automatic at the host-async import call.
+- **Asyncify transform** (`codegen/asyncify.ts`, `applyAsyncify`) — runs Binaryen's
+  `asyncify` pass over the emitted binary, instrumenting the unwind/rewind state
+  machine so a synchronous-looking guest can suspend on any engine (V8/JSC/Bun/
+  native) with no host async feature — the permanent floor while JSPI is absent on
+  JSC/Bun.
+- **Async host reactor** (`codegen/async-reactor.ts`, `createAsyncReactor`) — wraps
+  host-async imports and drives the unwind → await → rewind loop (single-in-flight;
+  the asyncify stack lives in a reserved memory page). Verified end-to-end under
+  Bun (`asyncify.test.ts`): a Silicon `@fn` `@await`s host-async imports and resumes
+  correctly, including a two-suspension chain. ADR 0018 Accepted.
+  Remaining: the `@async`/`@suspending` coloring, precise-coloring route B, the
+  production `sgl run` reactor, and the JSPI fast path.
+
 ### Added — v1.0 roadmap Phase 2 (closures, [ADR 0019](docs/adr/0019-first-class-closures-and-capture.md))
 
 Delivered on the `phase-2-closures` branch and merged into the v1 roadmap.

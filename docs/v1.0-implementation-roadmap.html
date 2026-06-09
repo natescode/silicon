@@ -169,7 +169,7 @@
   <div class="pchips"><a href="#F0a" class="chip ffi chip-done" title="Bindgen"><b>✓ F0a</b> Bindgen</a><a href="#M0" class="chip mono crit chip-done" title="Comptime monomorphization substrate"><b>✓ M0</b> Comptime monomorphization subs…</a><a href="#C0" class="chip ffi crit chip-done" title="Generalize the funcref ABI  (closures C0)"><b>✓ C0</b> Generalize the funcref ABI</a></div>
 </div><div class="phase">
   <div class="phead"><span class="pnum">Phase 1</span><span class="pnote">FFI to ~80% (async) + container mono — parallel</span></div>
-  <div class="pchips"><a href="#F1a" class="chip ffi crit chip-done" title="Object handles / JSValue externref"><b>✓ F1a</b> Object handles / JSValue exter…</a><a href="#F1b" class="chip ffi crit" title="Blocking @await (Asyncify) + reactor host + async effect"><b>F1b</b> Blocking @await</a><a href="#M1" class="chip mono" title="Container monomorphization — Vec[T] / HashMap[K,V]"><b>M1</b> Container monomorphization</a></div>
+  <div class="pchips"><a href="#F1a" class="chip ffi crit chip-done" title="Object handles / JSValue externref"><b>✓ F1a</b> Object handles / JSValue exter…</a><a href="#F1b" class="chip ffi crit chip-partial" title="Blocking @await (Asyncify) + reactor host + async effect"><b>◐ F1b</b> Blocking @await</a><a href="#M1" class="chip mono" title="Container monomorphization — Vec[T] / HashMap[K,V]"><b>M1</b> Container monomorphization</a></div>
 </div><div class="phase">
   <div class="phead"><span class="pnum">Phase 2</span><span class="pnote">The keystone — closures (the FFI↔mono join)</span></div>
   <div class="pchips"><a href="#C1" class="chip ffi crit chip-done" title="Non-escaping closures (all modes, zero-cost)  (closures C1)"><b>✓ C1</b> Non-escaping closures</a><a href="#C2" class="chip ffi gate crit chip-done" title="Escaping host-callable closures — wasm-gc only  (closures C2 · THE GATE)"><b>✓ C2</b> Escaping host-callable closures</a></div>
@@ -211,11 +211,11 @@
   <td class="cadr">ADR 0018 · P0/P1</td>
   <td class="cmeta"><span class="sz sz-m">M</span><span class="rk rk-md">Med</span><span class="ver ver-v10">v1.0 — the gate</span></td>
 </tr>
-<tr id="F1b" class="t-ffi v-v10 status-todo">
+<tr id="F1b" class="t-ffi v-v10 status-partial">
   <td class="cid"><span class="idbadge ffi">F1b</span></td>
-  <td class="ctitle"><div class="tt">Blocking @await (Asyncify) + reactor host + async effect <span class="crittag">critical path</span></div>
+  <td class="ctitle"><div class="tt">Blocking @await (Asyncify) + reactor host + async effect <span class="st st-partial">◐ PARTIAL</span> <span class="crittag">critical path</span></div>
       <div class="tdesc"><code>@async</code>/<code>@await</code>/<code>@suspending</code> strata (no grammar change); the Asyncify unwind/rewind transform; the one-shot host → a reactor; an <code>async</code> effect tag. <b>Portable incl. Bun</b> — JSPI is absent in JSC, so Asyncify is the permanent floor.</div>
-      
+      <div class="tnote tnote-partial">CORE done (2026-06-09) — blocking <code>@await</code> via Asyncify proven end-to-end under Bun. Shipped: the <code>@await(expr)</code> surface stratum (<code>control.si</code>, transparent + typed to its argument); the Binaryen Asyncify transform (<code>codegen/asyncify.ts</code> <code>applyAsyncify</code>, route-A whole-program); and the host reactor (<code>codegen/async-reactor.ts</code> <code>createAsyncReactor</code> — the unwind→await→rewind driver, single-in-flight, asyncify-stack in a reserved page). <code>asyncify.test.ts</code>: a Silicon <code>@fn</code> <code>@await</code>s host-async imports and resumes correctly — single suspend AND a two-suspend chain (the multi-suspend rewind-state bug found + fixed). REMAINING: the <code>@async</code>/<code>@suspending</code> markers + async effect/coloring rule (P5); precise-coloring route B (recover the size tax); the production <code>sgl run</code> reactor in <code>js-host.ts</code> (auto-apply Asyncify + wire <code>fetch</code>/timers); the JSPI fast path (Phase 2). ADR 0018 Accepted.</div>
       <div class="tfiles"><span class="k">Files</span> NEW strata in <code>strata/control.si</code>; Asyncify pass (Binaryen v117 is already a dep, then an IR pass sibling to <code>loopDesugar</code>); <code>js-host.ts</code> <code>runUnderBun</code> ~100 → reactor; <code>web-env.js</code> <code>startGameLoop</code> → reactor; ADR 0012 lattice <code>+async</code></div>
       <div class="tunb"><span class="k">Unblocks</span> <b>All</b> Promise APIs on Bun today (<code>fetch</code>/<code>.json()</code>/timers/<code>crypto.subtle</code>). <b>~35% → ~80%</b></div></td>
   <td class="cadr">ADR 0018 · P1/P2-host/P3/P5</td>
