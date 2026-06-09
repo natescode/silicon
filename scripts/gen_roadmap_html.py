@@ -66,7 +66,8 @@ S = [
          desc="<code>(type $Clo (struct (i32 fnIndex)(ref $Env)))</code>; an <code>__invoke_&lt;sig&gt;(externref,…)</code> trampoline; <code>&@on</code>/<code>&@off</code> over the engine-traced externref; <code>@extern</code> externref/funcref slot; the conservative <b>escape/host-reachability classifier</b> (routes any closure reaching <code>@extern</code> to Tier B, rejects on <code>wasm-mvp</code>/<code>--native</code> with a mode-gate E-code). Engine-GC'd — no leak, cycles collected, <code>__closure_release</code> is a no-op. Verified Bun/JSC runs wasm-gc today; v1.0 invocation reuses the existing <code>call_indirect</code> (no JSPI dep).",
          files="<code>lower.ts</code> (wasm-gc struct env + externref trampoline export); NEW escape classifier; <code>@export_callback</code> keyword stratum",
          unblocks="Callbacks/events (<code>addEventListener</code>, <code>setTimeout(cb)</code>, <code>onmessage</code>, <code>EventTarget</code>, <code>.on('data')</code>). <b>~80% → ~97% — THE GATE CLOSES.</b> Needs C1"),
-    dict(id="F3", track="ffi", ver="v1.0", size="L", risk="Med", crit=True,
+    dict(id="F3", track="ffi", ver="v1.0", size="L", risk="Med", crit=True, status="partial",
+         note="CORE done (2026-06-09) — the poll-reactor proven end-to-end. <code>stdlib/future.si</code>: a FUTURE is a no-arg C1 closure over a mutable poll-state pointer that returns a PENDING sentinel until ready; <code>block_on</code> drives one to completion, and <code>block_all</code> drives MANY <b>concurrently</b> — each round polls every still-pending future, so independent futures progress interleaved (the true-concurrency model single-in-flight Asyncify can't express). <code>future.test.ts</code>: block_on (single), block_all (3 futures, deadlines 2/4/3 → 60, polled interleaved), and fast+slow independent progress (→107). Reuses the C1/C2 closure keystone as wake continuations — the reason this waited on closures. REMAINING: the generic <code>Poll[T] := $Pending | $Ready value T</code> sum (removes the negative-sentinel constraint), host-async integration (a future backed by a real Promise woken by the F1b reactor), spawn/microtask-drain. The data model + concurrent scheduler ship; the host wiring + generic Poll are the refinements.",
          title="Poll-reactor + tasks  (closures C3)",
          adr="ADR 0018 · P4 / 0019 · C3",
          desc="<code>Future[T]</code> sum (<code>$Pending waker | $Ready value</code>), <code>spawn</code>/<code>block_on</code>, microtask drain, many in-flight awaits. Reuses C1/C2 closures as wake continuations.",
@@ -370,9 +371,10 @@ HTML = f"""<!DOCTYPE html>
   <div class="meta">Generated <b>{GEN_DATE}</b> · derived from ADRs 0001/0003/0008/0009/0011/0012/0013/0015/0016/0017/0018/0019 ·
   cross-checked against <code>docs/v1.0-critical-path.md</code></div>
   <div class="meta">Progress (2026-06-09): <b style="color:var(--mono)">Phase 0 ✓</b> — C0, M0 (monomorphization substrate), F0a (bindgen).
-  <b style="color:var(--mono)">Phase 1 ✓</b> — F1a object handles. <b style="color:var(--mono)">Phase 2 ✓</b> — C1 closures + C2 (escape gate
-  AND host-callable closures, Bun round-trip verified) done; the leak-free wasm-gc closure representation is a refinement on the working path.
-  Next on the critical path: <b style="color:var(--gate)">F3</b> (poll-reactor), with F1b (Asyncify @await) on the async spine.</div>
+  <b style="color:var(--mono)">Phase 1 ✓</b> — F1a object handles; F1b (blocking @await via Asyncify) core. <b style="color:var(--mono)">Phase 2 ✓</b> — C1 closures + C2
+  (escape gate AND host-callable closures, Bun round-trip verified). <b style="color:#d6a700">Phase 3/4 ◐</b> — F3 poll-reactor CORE done
+  (block_on/block_all over closure-futures, true concurrency). <b>The full critical path M0→C0→C1→C2→F3 + the F1a→F1b async spine
+  now has a working core at every link.</b> Remaining are refinements: F1b production host + JSPI, F3 generic Poll[T] + host-async, C2 leak-free wasm-gc.</div>
   <div class="tiles">
     <div class="tile"><div class="num">{n_total}</div><div class="lbl">subtasks</div></div>
     <div class="tile gate"><div class="num">{n_crit}</div><div class="lbl">on the critical path</div></div>

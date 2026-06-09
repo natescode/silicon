@@ -1,0 +1,60 @@
+# SPDX-License-Identifier: MIT
+# ADR 0018 Phase 4 / ADR 0019 C3 — the poll-reactor (the path to true concurrency).
+#
+# A FUTURE is a no-arg closure (ADR 0019 C1) that, when polled via @call_closure,
+# advances its own captured state and returns either a PENDING sentinel
+# (future_pending(), a negative value) or a ready result (>= 0).  Because a future
+# IS a closure, its wake continuation closes over the awaiting state — exactly the
+# capture the reactor needs and the reason this waited on closures (C1/C2).
+#
+# The reactor drives MANY futures concurrently: each round it polls every
+# still-pending future, so independent futures make progress interleaved — the
+# true-concurrency model that single-in-flight Asyncify (@await, ADR 0018 Phase 1)
+# cannot express.  This is the ~97% -> 100% step: Promise.all-shaped composition.
+#
+# Requires the Vec surface (vec_new / vec_len / vec_get_i32 / vec_set_i32).
+#
+# v1 scope: Int-valued futures with a negative-sentinel Poll (ready values must be
+# >= 0).  The generic `Poll[T] := $Pending | $Ready value T` sum (which removes the
+# sentinel constraint) and host-async integration (a future backed by a real
+# Promise, woken by the F1b reactor) are the refinements on this proven core.
+
+# The PENDING sentinel and its test.  A poll function returns future_pending()
+# while not ready, or a value >= 0 when ready.
+\\ future_pending () -> Int
+@fn future_pending := { 0 - 1 };
+
+\\ future_is_pending (Int) -> Int
+@fn future_is_pending p := { p < 0 };
+
+# block_on(future) — drive a single future to completion, returning its value.
+\\ block_on (Int) -> Int
+@fn block_on future := {
+    @mut r := future_pending();
+    @loop(future_is_pending(r), { r = @call_closure(future); });
+    r
+};
+
+# block_all(futures) — drive a Vec of future closures concurrently to completion,
+# returning the sum of their ready values.  Each round polls every still-pending
+# future (a resolved slot is zeroed so it is skipped thereafter), so the futures
+# progress interleaved rather than one-at-a-time.
+\\ block_all (Int) -> Int
+@fn block_all futures := {
+    n := vec_len(futures);
+    @mut sum := 0;
+    @mut all_done := 0;
+    @loop(all_done == 0, {
+        all_done = 1;
+        @mut j := 0;
+        @loop(j < n, {
+            f := vec_get_i32(futures, j);
+            @if(f != 0, {
+                p := @call_closure(f);
+                @if(future_is_pending(p), { all_done = 0; }, { sum = sum + p; vec_set_i32(futures, j, 0); });
+            });
+            j = j + 1;
+        });
+    });
+    sum
+};

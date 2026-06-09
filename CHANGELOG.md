@@ -27,6 +27,25 @@ This project aims for [Semantic Versioning](https://semver.org/).
 - Standalone files compiled outside a project keep the classic single-file
   `@use` behaviour unchanged.
 
+### Added — v1.0 roadmap Phase 4 core: the poll-reactor ([ADR 0018](docs/adr/0018-async-promise-ffi.md) P4 / ADR 0019 C3)
+
+Delivered on the `phase-4-poll-reactor` branch. The final critical-path mechanism
+toward true concurrency — and the payoff of the closures keystone.
+
+- **`stdlib/future.si`** — a *future* is a no-arg closure (C1) over a mutable
+  poll-state pointer that returns `future_pending()` until ready, then a value.
+  `block_on` drives one future to completion; **`block_all` drives MANY futures
+  concurrently** — each round polls every still-pending future, so independent
+  futures progress *interleaved* (the true-concurrency model single-in-flight
+  Asyncify cannot express). Futures are closures, so a wake continuation closes
+  over the awaiting state — the reason this waited on C1/C2.
+- `future.test.ts` runs real WASM: `block_on` (single), `block_all` over three
+  futures with deadlines 2/4/3 (→ 60, polled interleaved), and fast+slow
+  independent progress (→ 107).
+- Remaining: the generic `Poll[T] := $Pending | $Ready value T` sum (removes the
+  negative-sentinel constraint) and host-async integration (a future backed by a
+  real Promise, woken by the F1b reactor).
+
 ### Added — v1.0 roadmap Phase 3 core: blocking `@await` (Asyncify, [ADR 0018](docs/adr/0018-async-promise-ffi.md))
 
 Delivered on the `phase-3-async-await` branch.
