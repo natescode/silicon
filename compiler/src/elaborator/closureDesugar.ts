@@ -58,6 +58,9 @@ const fnDef = (name: string, params: any[], resultType: string, bodyExpr: any): 
     params,
     binding: { type: 'Binding', expression: bodyExpr },
 })
+const exportDef = (name: string): any => ({
+    type: 'Definition', keyword: '@export', name: { type: 'TypedIdentifier', name }, params: [],
+})
 
 interface FnSig { paramTypes: string[]; resultType: string }
 interface Ctx {
@@ -65,6 +68,9 @@ interface Ctx {
     errors: ElaborationError[]
     fns: Map<string, FnSig>      // top-level @fn name → signature
     wrappers: any[]              // synthesized wrapper @fn Definitions to append
+    /** C2: arities for which a host-callable __closure_invoke_<k> trampoline
+     *  export must be synthesized (set when @export_callback is used). */
+    invokeArities: Set<number>
 }
 
 const err = (ctx: Ctx, kw: string, message: string): void => { ctx.errors.push({ keyword: kw, message }) }
@@ -141,10 +147,11 @@ function classifyEscapes(program: any, ctx: Ctx): void {
                 for (const a of (node.args ?? [])) {
                     if (isClosureArg(a)) {
                         err(ctx, '@closure',
-                            `a closure passed to the @extern boundary '${callee}' is a host-callable escaping ` +
-                            `closure (ADR 0019 C2): its captured environment may outlive the call. This requires the ` +
-                            `--target=wasm-gc Tier-B representation (the (struct $Clo) record + __invoke trampoline), ` +
-                            `which is not yet implemented; pass a plain @fnref (no captures) across @extern instead.`)
+                            `a bare closure passed to the @extern boundary '${callee}' is a host-callable escaping ` +
+                            `closure (ADR 0019 C2): the host may retain it and call it back after this frame returns. ` +
+                            `Wrap it in @export_callback(…) to make it an intentional host-callable export (the closure ` +
+                            `env is retained for the host and an exported __closure_invoke_<k> trampoline is synthesized), ` +
+                            `or pass a plain @fnref (no captures) if no capture is needed.`)
                     }
                 }
             }
@@ -225,6 +232,46 @@ function transformCallClosure(call: any, ctx: Ctx): any {
     )
 }
 
+/**
+ * ADR 0019 C2 — `@export_callback(closure)` marks a closure as an intentional
+ * HOST-CALLABLE export and evaluates to its handle.  Crossing `@extern` wrapped
+ * in `@export_callback` is the sanctioned, gate-exempt escape (vs. the bare
+ * `@closure`-crosses-`@extern` footgun the classifier rejects): the closure env
+ * lives in the bump heap (it persists past the frame), so the host may store the
+ * handle and call it back later through a synthesized exported trampoline
+ * `__closure_invoke_<k>(clo, …args) := @call_indirect(vec_get_i32(clo,0), clo, …args)`.
+ * The arity is inferred from a literal `@closure` argument, else trampolines for
+ * arities 1 and 2 are emitted.
+ *
+ * NOTE on representation: this is the linear-memory host-callable baseline — the
+ * handle crosses as a plain i32 and the persisted env is a documented heap
+ * retention (no engine GC).  The ADR's leak-free wasm-gc `(struct $Clo)` +
+ * `externref` form (§2.2) is the refinement layered on top of this working path.
+ */
+function transformExportCallback(call: any, ctx: Ctx): any {
+    const args: any[] = Array.isArray(call.args) ? call.args : []
+    if (args.length < 1) { err(ctx, '@export_callback', '@export_callback expects the closure: @export_callback(closure)'); return call }
+    const inner = args[0]
+    // Infer the call arity from a literal @closure(body_fn, …caps); else 1 and 2.
+    if (isClosureCall(inner)) {
+        const bn = refName(inner.args?.[0])
+        const sig = bn ? ctx.fns.get(bn) : undefined
+        if (sig) ctx.invokeArities.add(Math.max(0, sig.paramTypes.length - (inner.args.length - 1)))
+        else { ctx.invokeArities.add(1); ctx.invokeArities.add(2) }
+    } else { ctx.invokeArities.add(1); ctx.invokeArities.add(2) }
+    return inner   // the handle itself; the trampoline is appended at the top level
+}
+
+/** Synthesize an exported host-callable trampoline for closure call-arity `k`:
+ *  `__closure_invoke_<k>(clo, a0…) -> Int := @call_indirect(vec_get_i32(clo,0), clo, a0…)`. */
+function trampolineFor(k: number): any[] {
+    const name = `__closure_invoke_${k}`
+    const argNames = Array.from({ length: k }, (_, i) => `__a${i}`)
+    const params = [param('clo', 'Int'), ...argNames.map(nm => param(nm, 'Int'))]
+    const body = block([], kwCall('@call_indirect', [userCall('vec_get_i32', [ns('clo'), intLit(0)]), ns('clo'), ...argNames.map(ns)]))
+    return [fnDef(name, params, 'Int', body), exportDef(name)]
+}
+
 /** Structural-sharing walk (matches loopDesugar): rebuild only the spine down
  *  to each transformed closure site; PRE-order so a rewritten site is re-walked
  *  (nested closures in captures/args desugar in that second pass). */
@@ -235,6 +282,10 @@ function walk(node: any, ctx: Ctx): any {
         const out = new Array(node.length)
         for (let i = 0; i < node.length; i++) { const y = walk(node[i], ctx); out[i] = y; if (y !== node[i]) changed = true }
         return changed ? out : node
+    }
+    if (node.type === 'FunctionCall' && node.name === '@export_callback') {
+        const t = transformExportCallback(node, ctx)
+        if (t !== node) return walk(t, ctx)
     }
     if (node.type === 'FunctionCall' && node.name === '@closure') {
         const t = transformClosure(node, ctx)
@@ -257,15 +308,19 @@ function walk(node: any, ctx: Ctx): any {
  * plus any diagnostics.
  */
 export function desugarClosures(program: any): { program: any; errors: ElaborationError[] } {
-    const ctx: Ctx = { n: 0, errors: [], fns: collectFns(program), wrappers: [] }
-    // C2 escape gate: flag host-callable escaping closures (a closure crossing
-    // @extern) BEFORE the rewrite erases the @closure literals.  Sound rejection
-    // until the wasm-gc Tier-B representation lands.
+    const ctx: Ctx = { n: 0, errors: [], fns: collectFns(program), wrappers: [], invokeArities: new Set() }
+    // C2 escape gate: flag host-callable escaping closures (a bare closure
+    // crossing @extern) BEFORE the rewrite erases the @closure literals.  A
+    // closure wrapped in @export_callback is the sanctioned, gate-exempt form.
     classifyEscapes(program, ctx)
     const rewritten = walk(program, ctx)
-    if (ctx.wrappers.length === 0) return { program: rewritten, errors: ctx.errors }
+    // C2: append the exported host-callable trampolines (one per call-arity used
+    // with @export_callback) so the JS/Bun host can invoke a stored closure.
+    const trampolines = [...ctx.invokeArities].sort().flatMap(trampolineFor)
+    const appended = [...ctx.wrappers, ...trampolines]
+    if (appended.length === 0) return { program: rewritten, errors: ctx.errors }
     return {
-        program: { ...rewritten, elements: [...rewritten.elements, ...ctx.wrappers] },
+        program: { ...rewritten, elements: [...rewritten.elements, ...appended] },
         errors: ctx.errors,
     }
 }

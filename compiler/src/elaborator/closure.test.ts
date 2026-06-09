@@ -143,7 +143,7 @@ describe('ADR 0019 C2 — escape/host-reachability gate', () => {
 @fn h c, x := { c + x };
 \\\\ run (Int) -> Void
 @fn run n := { register_cb(@closure(h, n)) };`)
-        expect(errs.some(m => m.includes('host-callable escaping closure') && m.includes('--target=wasm-gc'))).toBe(true)
+        expect(errs.some(m => m.includes('host-callable escaping closure') && m.includes('@export_callback'))).toBe(true)
     })
 
     test('a closure-bound local crossing @extern is also rejected (conservative over-approximation)', () => {
@@ -153,6 +153,15 @@ describe('ADR 0019 C2 — escape/host-reachability gate', () => {
 \\\\ run (Int) -> Void
 @fn run n := { cb := @closure(h, n); register_cb(cb) };`)
         expect(errs.some(m => m.includes('host-callable escaping closure'))).toBe(true)
+    })
+
+    test('wrapping the crossing in @export_callback is allowed (the sanctioned host-callable export)', () => {
+        const errs = elabErrors(`\\\\ @extern register_cb (Int) -> Void;
+\\\\ h (Int, Int) -> Int
+@fn h c, x := { c + x };
+\\\\ run (Int) -> Void
+@fn run n := { register_cb(@export_callback(@closure(h, n))) };`)
+        expect(errs.filter(m => m.includes('host-callable escaping closure'))).toEqual([])
     })
 
     test('a closure passed to a Silicon-side higher-order function is allowed (no host escape)', () => {
@@ -172,5 +181,49 @@ describe('ADR 0019 C2 — escape/host-reachability gate', () => {
 \\\\ run () -> Void
 @fn run := { register_cb(@fnref(h)) };`)
         expect(errs.filter(m => m.includes('host-callable escaping closure'))).toEqual([])
+    })
+})
+
+describe('ADR 0019 C2 — host-callable closures (@export_callback), end-to-end', () => {
+    // Compile + instantiate with a JS host that captures the closure handle and
+    // can call it back via the synthesized __closure_invoke_<k> trampoline.
+    async function compileWithHost(programSrc: string): Promise<{ exports: any; saved: () => number }> {
+        const source = `${vecSrc}\n${programSrc}`
+        const ast = addToAstSemantics(siliconGrammar)(parse(source)).toAst() as Program
+        const registry = buildStrataRegistry(ast)
+        const { program: elaborated, errors } = elaborate(ast, registry)
+        expect(errors ?? []).toEqual([])
+        const { program: typed, functions } = typecheck(elaborated, registry)
+        const bin = compileToWasm(typed, registry, functions)
+        let savedHandle = 0
+        const mod = await WebAssembly.instantiate(bin, {
+            env: { print: () => {}, read: () => 0, store_cb: (h: number) => { savedHandle = h } },
+        })
+        return { exports: mod.instance.exports as any, saved: () => savedHandle }
+    }
+
+    const HOST_CALLBACK = `\\\\ @extern store_cb (Int) -> Void;
+\\\\ scale (Int, Int) -> Int
+@fn scale factor, x := { factor * x };
+\\\\ register (Int) -> Void
+@fn register factor := { store_cb(@export_callback(@closure(scale, factor))) };
+@export register;`
+
+    test('a captured closure crosses to the host, is stored, and is called back later', async () => {
+        const { exports, saved } = await compileWithHost(HOST_CALLBACK)
+        // The trampoline export the host invokes is synthesized automatically.
+        expect(typeof exports.__closure_invoke_1).toBe('function')
+        exports.register(7)                                  // hand a closure capturing 7 to the host
+        expect(saved()).toBeGreaterThan(0)                   // host now holds the closure handle
+        expect(exports.__closure_invoke_1(saved(), 5)).toBe(35)   // host calls it back: scale(7, 5)
+        expect(exports.__closure_invoke_1(saved(), 1)).toBe(7)    // …repeatedly (the env persists)
+    })
+
+    test('re-registering captures fresh state for the next host callback', async () => {
+        const { exports, saved } = await compileWithHost(HOST_CALLBACK)
+        exports.register(10)
+        expect(exports.__closure_invoke_1(saved(), 3)).toBe(30)   // scale(10, 3)
+        exports.register(4)
+        expect(exports.__closure_invoke_1(saved(), 3)).toBe(12)   // scale(4, 3)
     })
 })
