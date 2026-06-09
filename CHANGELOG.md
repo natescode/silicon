@@ -42,12 +42,18 @@ Delivered on the `phase-2-closures` branch and merged into the v1 roadmap.
   mode. Unblocks closures passed to higher-order functions (the combinator case).
 - **C2 — escape/host-reachability gate.** A closure crossing an `@extern` boundary
   is a host-callable *escaping* closure whose captured env may outlive the call;
-  under C1's non-escaping representation that is unsound, so it is rejected with
-  *"host-callable escaping closure requires `--target=wasm-gc`"* (the conservative
-  classifier, ADR 0019 §9). A plain `@fnref` still crosses; Silicon-side
-  higher-order functions are unaffected. The wasm-gc Tier-B representation (the
-  `(struct $Clo)` record + `__invoke` trampoline) that *enables* the crossing
-  remains future work. ADR 0019 flipped Proposed → Accepted.
+  a *bare* `@closure` crossing `@extern` is rejected (the conservative classifier,
+  ADR 0019 §9), pointing the user at `@export_callback`. A plain `@fnref` still
+  crosses; Silicon-side higher-order functions are unaffected.
+- **C2 — host-callable closures.** `@export_callback(closure)` is the sanctioned,
+  gate-exempt host escape: it hands a closure's handle across `@extern` to a JS/Bun
+  host, which stores it and calls it back at an unbounded later time — with the
+  captured environment intact — through a synthesized exported
+  `__closure_invoke_<k>` trampoline. The full register→store→call-back round-trip
+  is verified under Bun. Representation: the linear-memory baseline (the handle is
+  an i32; the env is retained in the bump heap); the leak-free wasm-gc
+  `(struct $Clo)` + `externref` form (engine GC) is the refinement that remains.
+  ADR 0019 flipped Proposed → Accepted.
 
 ### Added — v1.0 roadmap Phase 0/1 (FFI object handles · monomorphization substrate · bindgen)
 

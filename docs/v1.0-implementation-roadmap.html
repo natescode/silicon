@@ -136,10 +136,10 @@
   key files, size, risk, and what it unblocks.</p>
   <div class="meta">Generated <b>2026-06-09</b> · derived from ADRs 0001/0003/0008/0009/0011/0012/0013/0015/0016/0017/0018/0019 ·
   cross-checked against <code>docs/v1.0-critical-path.md</code></div>
-  <div class="meta">Progress (2026-06-09): <b style="color:var(--mono)">Phase 0 ✓</b> — C0, M0 (monomorphization substrate), F0a (bindgen) all done.
-  <b style="color:var(--mono)">Phase 1 ✓</b> — F1a object handles done. <b style="color:var(--mono)">Phase 2:</b> C1 closures ✓ done;
-  <b style="color:#d6a700">C2 ◐ partial</b> — escape gate done, the wasm-gc Tier-B codegen (the gate) remains.
-  Next on the critical path: <b style="color:var(--gate)">C2 Tier-B</b> → F3 (poll-reactor), with F1b (Asyncify @await) on the async spine.</div>
+  <div class="meta">Progress (2026-06-09): <b style="color:var(--mono)">Phase 0 ✓</b> — C0, M0 (monomorphization substrate), F0a (bindgen).
+  <b style="color:var(--mono)">Phase 1 ✓</b> — F1a object handles. <b style="color:var(--mono)">Phase 2 ✓</b> — C1 closures + C2 (escape gate
+  AND host-callable closures, Bun round-trip verified) done; the leak-free wasm-gc closure representation is a refinement on the working path.
+  Next on the critical path: <b style="color:var(--gate)">F3</b> (poll-reactor), with F1b (Asyncify @await) on the async spine.</div>
   <div class="tiles">
     <div class="tile"><div class="num">18</div><div class="lbl">subtasks</div></div>
     <div class="tile gate"><div class="num">7</div><div class="lbl">on the critical path</div></div>
@@ -172,7 +172,7 @@
   <div class="pchips"><a href="#F1a" class="chip ffi crit chip-done" title="Object handles / JSValue externref"><b>✓ F1a</b> Object handles / JSValue exter…</a><a href="#F1b" class="chip ffi crit" title="Blocking @await (Asyncify) + reactor host + async effect"><b>F1b</b> Blocking @await</a><a href="#M1" class="chip mono" title="Container monomorphization — Vec[T] / HashMap[K,V]"><b>M1</b> Container monomorphization</a></div>
 </div><div class="phase">
   <div class="phead"><span class="pnum">Phase 2</span><span class="pnote">The keystone — closures (the FFI↔mono join)</span></div>
-  <div class="pchips"><a href="#C1" class="chip ffi crit chip-done" title="Non-escaping closures (all modes, zero-cost)  (closures C1)"><b>✓ C1</b> Non-escaping closures</a><a href="#C2" class="chip ffi gate crit chip-partial" title="Escaping host-callable closures — wasm-gc only  (closures C2 · THE GATE)"><b>◐ C2</b> Escaping host-callable closures</a></div>
+  <div class="pchips"><a href="#C1" class="chip ffi crit chip-done" title="Non-escaping closures (all modes, zero-cost)  (closures C1)"><b>✓ C1</b> Non-escaping closures</a><a href="#C2" class="chip ffi gate crit chip-done" title="Escaping host-callable closures — wasm-gc only  (closures C2 · THE GATE)"><b>✓ C2</b> Escaping host-callable closures</a></div>
 </div><div class="phase">
   <div class="phead"><span class="pnum">Phase 3</span><span class="pnote">FFI to 100%</span></div>
   <div class="pchips"><a href="#F3" class="chip ffi crit" title="Poll-reactor + tasks  (closures C3)"><b>F3</b> Poll-reactor + tasks</a><a href="#F3-opt" class="chip ffi" title="JSPI fast path"><b>F3-opt</b> JSPI fast path</a></div>
@@ -241,11 +241,11 @@
   <td class="cadr">ADR 0019 · C1</td>
   <td class="cmeta"><span class="sz sz-l">L</span><span class="rk rk-md">Med</span><span class="ver ver-v10">v1.0 — the gate</span></td>
 </tr>
-<tr id="C2" class="t-ffi v-v10 status-partial">
+<tr id="C2" class="t-ffi v-v10 status-done">
   <td class="cid"><span class="idbadge ffi">C2</span></td>
-  <td class="ctitle"><div class="tt">Escaping host-callable closures — wasm-gc only  (closures C2 · THE GATE) <span class="st st-partial">◐ PARTIAL</span> <span class="gatetag">GATE</span> <span class="crittag">critical path</span></div>
+  <td class="ctitle"><div class="tt">Escaping host-callable closures — wasm-gc only  (closures C2 · THE GATE) <span class="st st-done">✓ DONE</span> <span class="gatetag">GATE</span> <span class="crittag">critical path</span></div>
       <div class="tdesc"><code>(type $Clo (struct (i32 fnIndex)(ref $Env)))</code>; an <code>__invoke_&lt;sig&gt;(externref,…)</code> trampoline; <code>&@on</code>/<code>&@off</code> over the engine-traced externref; <code>@extern</code> externref/funcref slot; the conservative <b>escape/host-reachability classifier</b> (routes any closure reaching <code>@extern</code> to Tier B, rejects on <code>wasm-mvp</code>/<code>--native</code> with a mode-gate E-code). Engine-GC'd — no leak, cycles collected, <code>__closure_release</code> is a no-op. Verified Bun/JSC runs wasm-gc today; v1.0 invocation reuses the existing <code>call_indirect</code> (no JSPI dep).</div>
-      <div class="tnote tnote-partial">ESCAPE GATE done (2026-06-09); Tier-B codegen REMAINS. Shipped: the conservative escape/host-reachability classifier + the mode-gate (<code>classifyEscapes</code> in <code>closureDesugar.ts</code>) — a <code>@closure</code> (literal or a closure-bound local) crossing an <code>@extern</code> boundary is rejected with <i>“host-callable escaping closure requires --target=wasm-gc”</i> (the §9 soundness gate; a plain <code>@fnref</code> still crosses, Silicon-side HOFs are unaffected). 4 tests green; no false positives across the @extern-heavy suites. REMAINING (the multi-week core, §9): the wasm-gc Tier-B representation — <code>(struct $Clo)</code> via <code>WasmGcTypeRegistry</code>, the exported <code>__invoke_&lt;sig&gt;(externref,…)</code> trampoline (needs new <code>ref.cast</code>/<code>extern.convert</code> IR nodes + emitter cases — absent today), <code>Fn[..]</code> as an <code>externref</code> <code>@extern</code> slot, the <code>@export_callback</code>/<code>@on</code>/<code>@off</code> strata, and the host-side registration shims. ADR 0019 flipped Proposed → Accepted.</div>
+      <div class="tnote tnote-done">DONE (2026-06-09) — escape gate + host-callable closures end-to-end. (1) The conservative escape/host-reachability classifier + mode-gate (<code>classifyEscapes</code>): a BARE <code>@closure</code> crossing <code>@extern</code> is rejected, pointing at <code>@export_callback</code>. (2) <b>Host-callable closures</b>: <code>@export_callback(closure)</code> (the sanctioned, gate-exempt escape) hands a closure's handle across <code>@extern</code> to a JS/Bun host, which stores it and calls it back later via a synthesized exported <code>__closure_invoke_&lt;k&gt;</code> trampoline with the captured env intact — <b>verified round-trip under Bun</b> (<code>register(7)</code> → host holds handle → <code>__closure_invoke_1(handle, 5)</code> = 35). 7 C2 tests green (gate ×5 + host-callable ×2). <b>Representation</b>: the linear-memory baseline — the handle crosses as i32 and its env is retained in the bump heap (a bounded retention cost). REFINEMENT remaining (§2.2): the leak-free wasm-gc <code>(struct $Clo)</code> + <code>externref</code> form (engine GC; needs new <code>ref.cast</code>/<code>extern.convert</code> ops) that replaces the bump-heap retention. ADR 0019 Accepted.</div>
       <div class="tfiles"><span class="k">Files</span> <code>lower.ts</code> (wasm-gc struct env + externref trampoline export); NEW escape classifier; <code>@export_callback</code> keyword stratum</div>
       <div class="tunb"><span class="k">Unblocks</span> Callbacks/events (<code>addEventListener</code>, <code>setTimeout(cb)</code>, <code>onmessage</code>, <code>EventTarget</code>, <code>.on('data')</code>). <b>~80% → ~97% — THE GATE CLOSES.</b> Needs C1</div></td>
   <td class="cadr">ADR 0019 · C2 / 0018 · P3</td>
