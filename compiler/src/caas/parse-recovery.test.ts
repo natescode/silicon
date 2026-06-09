@@ -16,7 +16,7 @@ const names = (r: ReturnType<typeof parse>): string[] =>
 
 describe('parser error recovery', () => {
     test('a trailing incomplete line keeps the earlier definitions', () => {
-        const r = parse('@fn a := {\n    1\n};\nb := 2;\nt := ad()', { file: 'm.si' })
+        const r = parse('@fn a := {\n    1\n};\nb := 2;\nt := ad(', { file: 'm.si' })
         expect(names(r)).toEqual(['a', 'b'])
         expect(elemTypes(r)).toContain('ParseError')
         expect(r.diagnostics.length).toBeGreaterThanOrEqual(1)
@@ -57,7 +57,7 @@ describe('parser error recovery', () => {
         // ones still type-check and appear in the model.
         const { Workspace } = await import('./workspace')
         const ws = new Workspace()
-        const doc = ws.openDocument('m.si', '@fn a := {\n    1\n};\nt := ad()')
+        const doc = ws.openDocument('m.si', '@fn a := {\n    1\n};\nt := ad(')
         expect(doc.diagnostics.some(d => d.code === 'E0000')).toBe(true)
         expect([...doc.model.allSymbols].map(s => s.name)).toContain('a')
     })

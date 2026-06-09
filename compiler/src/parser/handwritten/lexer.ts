@@ -49,6 +49,8 @@ export interface Token {
     base?: 'decimal' | 'binary' | 'hexadecimal' | 'octal'
     /** For '.'/'::' separators, which one. */
     sep?: '.' | '::'
+    /** True when skipped trivia before this token contained at least one newline. */
+    leadingNewline?: boolean
 }
 
 // ── character classification (ASCII lookup tables, indexed by char code) ──────
@@ -83,6 +85,7 @@ function isIdentStart(c: string): boolean { const k = c.charCodeAt(0); return k 
 
 export class Lexer {
     private i = 0
+    private skippedNewline = false
     constructor(private readonly src: string) {}
 
     /** Tokenize the whole source into an array ending with an `eof` token. */
@@ -99,21 +102,33 @@ export class Lexer {
     private skipTrivia(): void {
         const s = this.src
         const len = s.length
+        let sawNewline = false
         while (this.i < len) {
             const code = s.charCodeAt(this.i)
-            if (isSpaceCode(code)) { this.i++; continue }
+            if (isSpaceCode(code)) {
+                if (isLineEnd(code)) {
+                    sawNewline = true
+                    if (code === CR && s.charCodeAt(this.i + 1) === NL) this.i++
+                }
+                this.i++
+                continue
+            }
             if (code === HASH) {
                 // Line comment (covers `##` too) — consume to end of line.
                 this.i++
                 while (this.i < len && !isLineEnd(s.charCodeAt(this.i))) this.i++
                 continue
             }
+            this.skippedNewline = sawNewline
             return
         }
+        this.skippedNewline = sawNewline
     }
 
     private tok(kind: TokKind, start: number, extra?: Partial<Token>): Token {
-        return { kind, text: this.src.slice(start, this.i), start, end: this.i, ...extra }
+        const leadingNewline = this.skippedNewline
+        this.skippedNewline = false
+        return { kind, text: this.src.slice(start, this.i), start, end: this.i, leadingNewline, ...extra }
     }
 
     /** Throw a structured parse error (same shape as the parser's) so callers —
@@ -128,7 +143,11 @@ export class Lexer {
         const s = this.src
         const len = s.length
         const start = this.i
-        if (start >= len) return { kind: 'eof', text: '', start, end: start }
+        if (start >= len) {
+            const leadingNewline = this.skippedNewline
+            this.skippedNewline = false
+            return { kind: 'eof', text: '', start, end: start, leadingNewline }
+        }
         const c = s[this.i]
 
         // Two-backslash attached-signature sigil.

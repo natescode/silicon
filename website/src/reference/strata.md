@@ -14,19 +14,40 @@ Strata are Silicon's open extension system. Built-in operators, control-flow key
 
 ## StrataTypes
 
-The Silicon spec defines nine StrataTypes. Today's Stage 0 status:
+The Silicon spec defines **nine** conceptual StrataTypes. The compiler does **not**
+dispatch on them — built-in lowering is selected by the registered token (operator
+symbol or keyword) and its `on::lower` handler, not by StrataType. The `StrataType`
+enum (`src/elaborator/strataenum.ts`) is a coarse classification tag with **six**
+variants, and in the current loader only two are ever assigned: `strataLoader.ts`
+tags every keyword `StrataType.Keyword` and every operator `StrataType.Operator`.
+The mapping from the nine spec types to the enum, with status:
 
-| StrataType  | What It Extends                                                       | Stage 0 Status |
-| ----------- | --------------------------------------------------------------------- | -------------- |
-| Operator    | Binary infix operators (`+`, `==`, …)                                 | Implemented (`operators.si`) |
-| Control     | Control-flow keywords (`@if`, `@loop`, `@break`, `@match`, `@return`) | Implemented (`if.si`, `loop.si`, `control.si`, `match.si`) |
-| Type        | Named types the type system understands                               | Hard-coded primitives (`Int`, `Float`, `Bool`, `String`); user-defined types via `@enum` / `@type_alias` / `@type_distinct` |
-| Constraint  | Typeclass / protocol-style constraints                                | None — registry slot reserved |
-| Codegen     | Replaces or supplements lowering for an AST/IR node kind              | Partial — control-flow and definition-kind lowering now live in `.si` strata; new node kinds still need TS |
-| Runtime     | Custom allocators, schedulers, panic handlers                         | None |
-| Capability  | Effect / permission gates                                             | None — `required_caps` is post-bootstrap |
-| Metadata    | Annotation kinds (`@export`, `@platform`, future `@inline`)           | `@export` and `@platform` (`metadata.si`) |
-| DSL         | Delegates a syntactic region to a sub-parser                          | None — bootstrap-plan reserves `parse_dsl_region` hook |
+| Spec StrataType | Code enum variant | What It Extends | Status |
+| --- | --- | --- | --- |
+| Operator    | `Operator`        | Binary infix operators (`+`, `==`, …)                                 | Implemented (`operators.si`); assigned at load |
+| Control     | `Control` ¹       | Control-flow keywords (`@if`, `@loop`, `@break`, `@match`, `@return`) | Implemented as data (`if.si`, `loop.si`, `control.si`, `match.si`); tagged `Keyword` at load |
+| Type        | `Definition` ²    | Named types the type system understands                               | Hard-coded primitives (`Int`, `Float`, `Bool`, `String`); user types via `@type` / `@enum` / `@type_alias` / `@type_distinct` |
+| Constraint  | `Constraint`      | Typeclass / protocol-style constraints                                | None — enum slot reserved, no dispatch |
+| Codegen     | — (reserved)      | Replaces or supplements lowering for an AST/IR node kind              | Partial — control/def-kind lowering live in `.si`; new IR node kinds still need TS. The full version needs open-tagged IR (bootstrap-plan R1, done with the self-host port) |
+| Runtime     | — (reserved)      | Custom allocators, schedulers, panic handlers                         | None |
+| Capability  | — (reserved)      | Effect / permission gates                                             | None — `required_caps` is post-bootstrap |
+| Metadata    | `Metadata` ¹      | Annotation kinds (`@export`, `@platform`, future `@inline`)           | Implemented as data (`metadata.si`); tagged `Keyword` at load |
+| DSL         | — (reserved)      | Delegates a syntactic region to a sub-parser                          | None — bootstrap-plan reserves `parse_dsl_region` hook |
+
+¹ The finer variants `Control`, `Definition`, `Constraint`, and `Metadata` exist in
+the enum but are **not assigned by the live loader** — every keyword is tagged
+`StrataType.Keyword`, every operator `StrataType.Operator`. The
+`strataTypeFromIntrinsic` classifier that *would* assign the finer tags (from
+`WASM::control_*` / `IR::def_*` / `IR::meta_*` intrinsic names) is currently
+**unused**, because migrated strata carry an `on::lower` handler instead of an
+intrinsic. The classification is informational, not load-bearing.
+
+² The code's `Definition` variant covers **all** definition keywords (`@fn`,
+`@global`, `@extern`, `@struct`, `@type` / `@enum` / `@type_alias` / `@type_distinct`) —
+broader than the spec's `Type` (just named types). The enum's sixth variant,
+`Keyword`, is the catch-all every expression keyword is actually tagged with. The
+four spec types with no enum variant (`Codegen`, `Runtime`, `Capability`, `DSL`) are
+reserved; see `docs/strata-feature-audit.html` for which are unbuilt and why.
 
 Authoritative API reference: `docs/compiler-api.md`. Bootstrap roadmap (which StrataTypes Stage 1 will need, in what order): `docs/archive/bootstrap-plan.html`.
 

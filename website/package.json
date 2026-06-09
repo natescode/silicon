@@ -10,6 +10,7 @@
     "build": "bun run build:playground && vitepress build src",
     "preview": "vitepress preview src",
     "sync": "bun run scripts/sync-docs.ts",
+    "go": "bun run sync && bun run build && bun run dev",
     "test": "bun test scripts"
   },
   "devDependencies": {

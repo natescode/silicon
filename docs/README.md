@@ -23,6 +23,7 @@ If you're new, start with [`getting-started.md`](getting-started.md).
 | File | What's in it |
 |------|--------------|
 | [grammar.ebnf](grammar.ebnf) | ISO/IEC 14977 EBNF grammar (authoritative) |
+| [automatic-semicolon-insertion.html](automatic-semicolon-insertion.html) | Conservative automatic semicolon insertion rules and examples |
 | [hm-lite.md](hm-lite.md) | Type inference reference (HM restricted to declared polymorphism) |
 | [optional-signatures-inference.md](optional-signatures-inference.md) | Optional function signatures — monomorphic, call-site inference; per-compilation-unit scope; library-API guidance |
 | [diagnostics.md](diagnostics.md) | Error-code catalogue, caret rendering, hint format |

@@ -105,6 +105,7 @@ export default defineConfig({
                     items: [
                         { text: 'Overview', link: '/reference/' },
                         { text: 'Grammar (EBNF)', link: '/reference/grammar' },
+                        { text: 'Automatic semicolon insertion', link: '/reference/automatic-semicolon-insertion' },
                         { text: 'Types', link: '/reference/types' },
                         { text: 'Type inference (HM-lite)', link: '/reference/hm-lite' },
                         { text: 'Diagnostics', link: '/reference/diagnostics' },

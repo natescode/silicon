@@ -4,6 +4,9 @@
 
 # A root-module helper, auto-included from util.si below — called bare.
 
+@use 'io';
+@use 'num';
+
 \\ @export run () -> Int
 @fn run := {
     # math:: and text:: are sibling modules; only their @pub members are visible.
@@ -16,6 +19,9 @@
     math::add(banner(a, b), c)     # banner() is a bare root-module call
 };
 
-@fn main := { run() };
+@fn main := { 
+    result := int_to_str(run());
+    println(result); 
+};
 
 main();

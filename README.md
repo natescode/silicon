@@ -1,5 +1,11 @@
 # Silicon
 
+[![Latest release](https://img.shields.io/github/v/release/natescode/silicon?sort=semver&display_name=tag)](https://github.com/natescode/silicon/releases)
+[![Release](https://github.com/natescode/silicon/actions/workflows/release.yml/badge.svg)](https://github.com/natescode/silicon/actions/workflows/release.yml)
+[![Native backend](https://github.com/natescode/silicon/actions/workflows/native.yml/badge.svg)](https://github.com/natescode/silicon/actions/workflows/native.yml)
+[![Docs](https://github.com/natescode/silicon/actions/workflows/docs.yml/badge.svg)](https://github.com/natescode/silicon/actions/workflows/docs.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+
 > **A systems language built for WebAssembly.** Zig-level control, ML-level
 > ergonomics (sum types, pattern matching, inference), and a gradual memory model
 > that's no-GC when you need speed and garbage-collected (wasm-gc) when you don't —

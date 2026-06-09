@@ -8,7 +8,7 @@
  * alone.  These tests lock that behaviour.
  */
 import { test, expect, describe } from 'bun:test'
-import { rewriteLinks } from './sync-docs'
+import { renderSyncBody, rewriteLinks } from './sync-docs'
 
 // All links below originate from a doc at docs/<x>.md (so docs-relative).
 const from = 'docs/overview.md'
@@ -20,6 +20,8 @@ describe('sync-docs link rewriting', () => {
         expect(rw('see [Platforms](targets.md)')).toBe('see [Platforms](/guide/platforms)')
         // docs/hm-lite.md → reference/hm-lite.md, anchor preserved
         expect(rw('[inf](hm-lite.md#instantiation)')).toBe('[inf](/reference/hm-lite#instantiation)')
+        expect(rw('[asi](automatic-semicolon-insertion.html)'))
+            .toBe('[asi](/reference/automatic-semicolon-insertion)')
     })
 
     test('link to a repo file the site does NOT host → absolute GitHub URL', () => {
@@ -50,5 +52,14 @@ describe('sync-docs link rewriting', () => {
     test('fenced code blocks are left untouched', () => {
         const fenced = ['```md', '[x](targets.md)', '```'].join('\n')
         expect(rw(fenced)).toBe(fenced)
+    })
+
+    test('raw sync mode copies HTML without markdown rewriting', () => {
+        const html = '<a href="targets.md">repo-relative stays raw</a>'
+        expect(renderSyncBody({
+            from: 'docs/automatic-semicolon-insertion.html',
+            to: 'public/reference/automatic-semicolon-insertion.html',
+            mode: 'raw',
+        }, html)).toBe(html)
     })
 })

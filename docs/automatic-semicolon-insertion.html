@@ -1,0 +1,390 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Automatic Semicolon Insertion for Silicon</title>
+  <style>
+    :root {
+      color-scheme: light dark;
+      --bg: #fbfaf7;
+      --panel: #ffffff;
+      --text: #202124;
+      --muted: #5c6470;
+      --line: #d9dee7;
+      --accent: #245c8f;
+      --accent-soft: #e8f2fb;
+      --code-bg: #111827;
+      --code-text: #f7fafc;
+      --warn-bg: #fff5db;
+      --warn-line: #e5bb55;
+    }
+
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #121417;
+        --panel: #1b1f24;
+        --text: #eceff3;
+        --muted: #b1bac4;
+        --line: #343b45;
+        --accent: #8ab7e6;
+        --accent-soft: #172433;
+        --code-bg: #080b10;
+        --code-text: #f7fafc;
+        --warn-bg: #2b2414;
+        --warn-line: #8f6b1f;
+      }
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      line-height: 1.55;
+    }
+
+    main {
+      width: min(980px, calc(100% - 32px));
+      margin: 0 auto;
+      padding: 48px 0 72px;
+    }
+
+    header {
+      padding-bottom: 28px;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .eyebrow {
+      margin: 0 0 10px;
+      color: var(--accent);
+      font-size: 0.82rem;
+      font-weight: 700;
+      letter-spacing: 0;
+      text-transform: uppercase;
+    }
+
+    h1, h2, h3 {
+      margin: 0;
+      line-height: 1.15;
+      letter-spacing: 0;
+    }
+
+    h1 {
+      max-width: 760px;
+      font-size: clamp(2rem, 5vw, 4rem);
+    }
+
+    h2 {
+      margin-top: 42px;
+      padding-top: 18px;
+      border-top: 1px solid var(--line);
+      font-size: 1.55rem;
+    }
+
+    h3 {
+      margin-top: 26px;
+      font-size: 1.05rem;
+    }
+
+    p {
+      max-width: 760px;
+      margin: 14px 0 0;
+    }
+
+    a { color: var(--accent); }
+
+    .lede {
+      max-width: 760px;
+      margin-top: 18px;
+      color: var(--muted);
+      font-size: 1.08rem;
+    }
+
+    .notice {
+      margin-top: 22px;
+      max-width: 760px;
+      border-left: 4px solid var(--warn-line);
+      background: var(--warn-bg);
+      padding: 14px 16px;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 16px;
+      margin-top: 18px;
+    }
+
+    .card {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel);
+      padding: 16px;
+    }
+
+    ul, ol {
+      max-width: 780px;
+      margin: 14px 0 0;
+      padding-left: 1.4rem;
+    }
+
+    li + li { margin-top: 8px; }
+
+    code {
+      font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+      font-size: 0.92em;
+    }
+
+    :not(pre) > code {
+      padding: 0.1em 0.28em;
+      border-radius: 4px;
+      background: var(--accent-soft);
+    }
+
+    pre {
+      overflow-x: auto;
+      margin: 14px 0 0;
+      border-radius: 8px;
+      background: var(--code-bg);
+      color: var(--code-text);
+      padding: 16px;
+    }
+
+    pre code {
+      display: block;
+      min-width: max-content;
+      font-size: 0.9rem;
+      line-height: 1.55;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 16px;
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      overflow: hidden;
+    }
+
+    th, td {
+      padding: 12px 14px;
+      border-bottom: 1px solid var(--line);
+      text-align: left;
+      vertical-align: top;
+    }
+
+    tr:last-child td { border-bottom: 0; }
+    th { color: var(--muted); font-size: 0.9rem; }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <p class="eyebrow">Accepted · ADR 0026</p>
+      <h1>Automatic Semicolon Insertion for Silicon</h1>
+      <p class="lede">
+        Silicon should let a newline terminate a complete statement without
+        turning newline into expression syntax. ASI is accepted only where the
+        parser already expects a statement terminator.
+      </p>
+      <div class="notice">
+        This page documents the accepted ADR 0026 behavior implemented by the
+        handwritten lexer/parser.
+      </div>
+    </header>
+
+    <section>
+      <h2>Motivation</h2>
+      <p>
+        ADR 0020 moved Silicon toward a bare, line-readable surface:
+        definitions are ordinary names, calls are parenthesized, and explicit
+        sigils are reserved for language forms. Requiring semicolons after every
+        complete item keeps the grammar simple, but it makes ordinary examples
+        look heavier than the language intends.
+      </p>
+      <p>
+        The goal is not JavaScript-style recovery. The goal is a narrow rule:
+        at statement boundaries, a newline may do the same job as a semicolon.
+      </p>
+    </section>
+
+    <section>
+      <h2>Final Insertion Rules</h2>
+      <ol>
+        <li>Explicit <code>;</code> stays valid everywhere it is valid today.</li>
+        <li>At the top level, a newline or EOF may terminate a complete item.</li>
+        <li>Inside a block, a newline may terminate a complete item only when the next token starts another item.</li>
+        <li>Do not insert before <code>}</code> by default; a trailing block expression remains the block value.</li>
+        <li>Do not insert after incomplete tokens: <code>:=</code>, <code>=</code>, binary operators, commas, <code>::</code>, open delimiters, <code>\\</code>, or signature modifiers.</li>
+        <li>Do not insert before continuation tokens: binary operators, commas, <code>.</code>, <code>::</code>, <code>)</code>, or <code>]</code>.</li>
+        <li>A call's <code>(</code> must stay on the same logical line as the callee.</li>
+        <li>Normal <code>\\</code> signature lines attach to the next definition. Bodyless <code>\\ @extern ...</code> signatures may terminate at line end.</li>
+      </ol>
+    </section>
+
+    <section>
+      <h2>Examples</h2>
+      <h3>Top-level items</h3>
+      <pre><code class="language-silicon">\\ add (Int, Int) -> Int
+@fn add a, b := a + b
+
+answer := add(20, 22)
+print_int(answer)</code></pre>
+
+      <h3>Block values</h3>
+      <pre><code class="language-silicon">\\ score (Int) -> Int
+@fn score n := {
+    doubled := n * 2
+    capped := @if(doubled &gt; 100, { 100 }, { doubled })
+    capped
+}</code></pre>
+      <p>
+        No semicolon is inserted before <code>}</code>, so <code>capped</code>
+        remains the block's value.
+      </p>
+
+      <h3>Multiline calls</h3>
+      <pre><code class="language-silicon">total := add(
+    subtotal,
+    tax
+)
+
+message := format_invoice(
+    customer,
+    total
+)</code></pre>
+
+      <h3>Binary continuations</h3>
+      <pre><code class="language-silicon">total := subtotal
+    + tax
+    + shipping
+
+ready := subtotal
+    + tax
+    + shipping</code></pre>
+
+      <h3>Signature lines</h3>
+      <pre><code class="language-silicon">\\ distance (Point, Point) -> Int
+@fn distance a, b := abs(a.x - b.x) + abs(a.y - b.y)
+
+\\ @extern puts (String) -> Int
+puts("hello")</code></pre>
+    </section>
+
+    <section>
+      <h2>Non-examples</h2>
+      <div class="grid">
+        <div class="card">
+          <h3>Call opener moved to the next line</h3>
+          <pre><code class="language-silicon">print
+("hello")</code></pre>
+          <p>The callee and call <code>(</code> are not on the same logical line.</p>
+        </div>
+        <div class="card">
+          <h3>Assignment split after <code>:=</code></h3>
+          <pre><code class="language-silicon">value :=
+    compute()</code></pre>
+          <p>No terminator is inserted after <code>:=</code>; the expression is incomplete.</p>
+        </div>
+        <div class="card">
+          <h3>Comma as a continuation</h3>
+          <pre><code class="language-silicon">pair := make_pair(first,
+    second)</code></pre>
+          <p>No terminator is inserted after a comma.</p>
+        </div>
+        <div class="card">
+          <h3>Namespace continuation</h3>
+          <pre><code class="language-silicon">value := math::
+    abs(n)</code></pre>
+          <p>No terminator is inserted after a namespace separator.</p>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h2>Parser Implementation Shape</h2>
+      <p>
+        ASI should live at parser statement boundaries. A helper like
+        <code>consumeTerminator()</code> can accept either an explicit semicolon
+        or a virtual terminator when newline metadata says the current item is
+        complete and the following token is a valid follow token.
+      </p>
+      <pre><code>parseElement():
+    if next_is_signature_line():
+        parseSignatureLine()
+        consumeSignatureTerminatorIfExtern()
+        return
+
+    parseItem()
+    consumeTerminator(topLevelFollow)
+
+parseBlockTail():
+    parseItem()
+    if next_token_is("}"):
+        keep_item_as_trailing_block_value()
+    else:
+        consumeTerminator(blockItemFollow)</code></pre>
+      <p>
+        The lexer can expose newline tokens or attach newline metadata to tokens.
+        It should not globally rewrite newlines into semicolons before the parser
+        knows whether it is at an <code>Element</code> or <code>BlockTail</code>
+        follow position.
+      </p>
+    </section>
+
+    <section>
+      <h2>Test Matrix</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>Case</th>
+            <th>Expected result</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Two top-level definitions separated by newline</td>
+            <td>Parses as two items</td>
+          </tr>
+          <tr>
+            <td>EOF after a complete top-level item</td>
+            <td>Parses without a trailing semicolon</td>
+          </tr>
+          <tr>
+            <td>Block with final expression before <code>}</code></td>
+            <td>No virtual semicolon before <code>}</code>; expression is block value</td>
+          </tr>
+          <tr>
+            <td>Block with multiple newline-separated bindings</td>
+            <td>Virtual semicolons between item starts</td>
+          </tr>
+          <tr>
+            <td>Newline after binary operator, comma, <code>:=</code>, <code>=</code>, <code>::</code>, or open delimiter</td>
+            <td>No virtual semicolon</td>
+          </tr>
+          <tr>
+            <td>Newline before binary operator, comma, <code>.</code>, <code>::</code>, <code>)</code>, or <code>]</code></td>
+            <td>No virtual semicolon</td>
+          </tr>
+          <tr>
+            <td>Callee newline before call <code>(</code></td>
+            <td>Parse error</td>
+          </tr>
+          <tr>
+            <td>Normal <code>\\</code> signature followed by definition</td>
+            <td>Signature attaches to definition</td>
+          </tr>
+          <tr>
+            <td>Bodyless <code>\\ @extern ...</code> at line end</td>
+            <td>Signature line terminates without a following body</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+  </main>
+</body>
+</html>

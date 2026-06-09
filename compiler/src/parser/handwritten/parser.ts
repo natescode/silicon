@@ -88,6 +88,9 @@ class Parser {
         if (t.kind !== kind) this.fail(`expected ${kind} but found ${t.kind} '${t.text}'`, t)
         return this.next()
     }
+    private hasLeadingNewline(t = this.peek()): boolean {
+        return t.kind === 'eof' || t.leadingNewline === true
+    }
     private fail(msg: string, t = this.peek()): never {
         // Windowed parses are speculative — any failure routes to a full reparse
         // (which reproduces the real diagnostic), so the line/col here is unused.
@@ -227,7 +230,7 @@ class Parser {
         // Definition with an attached signature: `\\ sig` then `@kw …;`
         if (t.kind === 'attachedSig') {
             const def = this.parseDefinitionWithSig()
-            this.expect('semi')
+            this.consumeTopLevelTerminator()
             // ADR-0020 decision-8 / ADR-0024: the `\\ @export` MODIFIER form is
             // sugar for the def plus the shipped `@export name;` STATEMENT, which
             // drives the existing export lowering. Synthesize that statement so a
@@ -245,12 +248,41 @@ class Parser {
         // `@loop(...)`), not a definition — let it fall through to parseItem.
         if (this.isDefKw(t) && this.peek(1).kind !== 'lparen') {
             const def = this.parseDefOrBlockDef()
-            this.expect('semi')
+            this.consumeTopLevelTerminator()
             return def
         }
         const item = this.parseItem()
-        this.expect('semi')
+        this.consumeTopLevelTerminator()
         return item
+    }
+
+    private consumeTopLevelTerminator(): void {
+        if (this.at('semi')) { this.next(); return }
+        if (this.atEof()) return
+        if (this.hasLeadingNewline() && !this.isContinuationToken(this.peek())) return
+        this.fail(`expected statement terminator but found ${this.peek().kind} '${this.peek().text}'`)
+    }
+
+    private consumeBlockTerminator(): boolean {
+        if (this.at('semi')) { this.next(); return true }
+        if (this.at('rbrace')) return false
+        if (this.hasLeadingNewline() && this.startsItem(this.peek()) && !this.isContinuationToken(this.peek())) return true
+        return false
+    }
+
+    private isContinuationToken(t: Token): boolean {
+        return t.kind === 'op'
+            || t.kind === 'comma'
+            || t.kind === 'nsSep'
+            || t.kind === 'lparen'
+            || t.kind === 'rparen'
+            || t.kind === 'rbrack'
+    }
+
+    private startsItem(t: Token): boolean {
+        if (t.kind === 'attachedSig' || t.kind === 'ident' || t.kind === 'dollar' || t.kind === 'lbrace' || t.kind === 'lparen') return true
+        if (t.kind === 'kw') return true
+        return this.startsLiteral(t)
     }
 
     /** A defKw is an `@ident` keyword that is not the reserved `@true`/`@false`. */
@@ -524,7 +556,7 @@ class Parser {
 
     // ADR-0020 paren call: a namespace immediately followed by `(args)`.
     private applyCallSuffix(callee: Namespace): ASTNode {
-        if (!this.at('lparen')) return callee
+        if (!this.at('lparen') || this.hasLeadingNewline()) return callee
         this.next()
         const args = this.exprListUntil('rparen')
         this.expect('rparen')
@@ -649,7 +681,7 @@ class Parser {
         let trailing: any
         while (!this.at('rbrace')) {
             const node = this.parseItem()
-            if (this.at('semi')) { this.next(); items.push(node) }
+            if (this.consumeBlockTerminator()) { items.push(node) }
             else { trailing = node; break }
         }
         this.expect('rbrace')

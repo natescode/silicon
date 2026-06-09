@@ -56,10 +56,16 @@ title: "Grammar (EBNF)"
 Program     = { Element } ;
 
 Element     = SignatureLine          (* a `\\` type signature for the next def *)
-            | Item ";"
+            | Item Terminator
             ;
             (* `#`/`##` comments are stripped as trivia by the lexer and are not
                Elements — see §Whitespace and comments. *)
+
+Terminator  = ";"
+            | (* virtual semicolon: newline or EOF accepted only when the
+                 parser is already at an Element terminator position; see
+                 §Automatic semicolon insertion. *)
+            ;
 
 Item        = Definition
             | Assignment
@@ -150,13 +156,19 @@ Param       = identifier [ TypeExpr ] ;
     \\ add (Int, Int) -> Int
     add a, b := { a + b };
 
-  NOT YET IMPLEMENTED: ADR-0020 decision 8 designs signature-line modifiers
-  (`\\ @extern name … ;` body-less external; `\\ @export …` / `\\ @platform(…) …`
-  linkage/target) — these are NOT parsed yet.  Until they land, externals use the
-  transitional brace form `@extern { \\ … }` and `@export name;` statements (see
-  §Legacy).
+  SIGNATURE-LINE MODIFIERS (ADR-0020 decision 8, amended by ADR-0024): the `\\`
+  line may carry leading modifiers.  IMPLEMENTED: `@extern` (body-less external),
+  `@export` (host/WIT-world export — the signature-line form of the `@export name;`
+  statement), and `@pub` (ADR-0024 module visibility: callable across the module
+  boundary as `mod::name`).  They appear in any order and are a pure prefix-token
+  loop (LL(1)).  `@platform(…)` is still designed-only.
+
+  DEPENDENCY IMPORT (ADR-0024): `\\ @use name [as alias];` binds a dependency
+  component for the file (then call `alias::fn` / `name::fn`).  Implemented as a
+  pre-parse directive (like `@use 'path';`), not a SignatureLine production.
 *)
-SignatureLine = "\\" Namespace [ GenericParams ] TypeExpr ;
+SignatureLine = "\\" { Modifier } Namespace [ GenericParams ] TypeExpr ;
+Modifier      = "@extern" | "@export" | "@pub" | "@platform" "(" identifier ")" ;
 
 (* ── Assignments (reassignment) ─────────────────────────────────────────── *)
 
@@ -318,7 +330,10 @@ octdigit    = "0".."7" ;
 
 (*
   Whitespace and comments are ignored everywhere between tokens.
-  They are not listed in production rules above for clarity.
+  They are not listed in production rules above for clarity, except that the
+  hand-written lexer preserves whether skipped trivia before a token contained a
+  line-end.  The parser uses that metadata for ADR-0026 automatic semicolon
+  insertion.
 *)
 
 whitespace    = " " | "\t" | "\x0B" | "\x0C" | " " | "﻿"
@@ -328,6 +343,24 @@ whitespace    = " " | "\t" | "\x0B" | "\x0C" | " " | "﻿"
 line-end      = "\n" | "\r" | "" | "" ;
 
 line-comment  = "#" { (* any char except line-end *) } line-end ;
+
+(*
+  Automatic semicolon insertion (ADR-0026, accepted):
+
+    - Explicit ";" remains valid forever.
+    - At the top level, newline or EOF may terminate a complete Element.
+    - Inside blocks, newline may terminate a complete item only when the next
+      token starts another item.
+    - Newline before "}" does not insert a terminator by default; the preceding
+      item remains the block's trailing value.
+    - Newline is not a terminator before continuation tokens such as binary
+      operators, comma, "."/"::", "(", ")" or "]".
+    - A call's "(" must stay on the same logical line as the callee.
+    - Normal "\\" signature lines attach to the following definition; bodyless
+      "\\ @extern ..." signatures may terminate at line end.
+
+  This is parser-position ASI, not lexer-global semicolon rewriting.
+*)
 
 (*
   Notes:
