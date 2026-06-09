@@ -14,9 +14,8 @@ import type { PreludeSpec } from './prelude-ir'
 import type {
     IRModule, IRFunction, IRGlobal, IRImport, IRExport, IRDataSegment,
     IRExpr, IRStmt, IRLocal, WasmValType, WasmType, AbstractOp,
-    WasmGcType, WasmGcField, WasmGcStorageType, IRRefSlot,
+    WasmGcType, WasmGcField, WasmGcStorageType, IRRefSlot, IRArrayLiteral,
 } from '../ir/nodes'
-import { ARRAY_LITERAL_CALLEE } from '../ir/nodes'
 import { wasmIntrinsics } from '../intrinsics/intrinsics'
 
 /** Map an AbstractOp to its WAT instruction string for OPCODES lookup. */
@@ -265,11 +264,11 @@ function emitExpr(e: IRExpr, buf: WasmBuffer, ctx: EmitCtx, isUser: boolean,
             for (const b of ops) buf.u8(b)
             return
         }
+        case 'ArrayLiteral': {
+            emitArrayLiteral(e, buf, ctx, isUser, localIdxOf)
+            return
+        }
         case 'Call': {
-            if (e.callee === ARRAY_LITERAL_CALLEE) {
-                emitArrayLiteral(e.args, buf, ctx, isUser, localIdxOf)
-                return
-            }
             if (e.callKind === 'instr') {
                 // Zero-arg instructions (memory.size etc.) emit before their args
                 if (e.args.length === 0) {
@@ -475,26 +474,24 @@ function emitStmt(s: IRStmt, buf: WasmBuffer, ctx: EmitCtx, isUser: boolean,
 }
 
 function emitArrayLiteral(
-    args: IRExpr[], buf: WasmBuffer, ctx: EmitCtx, isUser: boolean,
+    e: IRArrayLiteral, buf: WasmBuffer, ctx: EmitCtx, isUser: boolean,
     localIdxOf: (name: string) => number,
 ): void {
-    const count = (args[0] as { value: number }).value
-    const elemBytes = (args[1] as { value: number }).value
-    const elements = args.slice(2)
+    const i32Const = (value: number): IRExpr => ({ kind: 'Const', wasmType: 'i32', value })
 
     buf.u8(0x02); buf.u8(0x7F) // block (result i32)
     ctx.depthStack.push(2)
 
     // local.set $addr = call $alloc_array count elemBytes
-    emitExpr(args[0], buf, ctx, isUser, localIdxOf)
-    emitExpr(args[1], buf, ctx, isUser, localIdxOf)
+    emitExpr(i32Const(e.count), buf, ctx, isUser, localIdxOf)
+    emitExpr(i32Const(e.elemBytes), buf, ctx, isUser, localIdxOf)
     buf.u8(0x10); buf.u32(ctx.funcIdxOf('alloc_array'))
     buf.u8(0x21); buf.u32(localIdxOf('addr'))
 
-    for (let i = 0; i < elements.length; i++) {
+    for (let i = 0; i < e.elements.length; i++) {
         buf.u8(0x20); buf.u32(localIdxOf('addr')) // local.get $addr
-        emitExpr(elements[i], buf, ctx, isUser, localIdxOf)
-        buf.u8(0x36); buf.u8(2); buf.u32(4 + i * 4) // i32.store align=2 offset
+        emitExpr(e.elements[i], buf, ctx, isUser, localIdxOf)
+        buf.u8(0x36); buf.u8(2); buf.u32(4 + i * e.elemBytes) // i32.store align=2 offset
     }
 
     buf.u8(0x20); buf.u32(localIdxOf('addr')) // local.get $addr (result)

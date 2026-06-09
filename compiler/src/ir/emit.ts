@@ -22,9 +22,8 @@
 
 import type {
     IRModule, IRFunction, IRGlobal, IRImport, IRDataSegment, IRExport,
-    IRExpr, IRStmt, IRBlock, IRConst, WasmType, WasmValType, AbstractOp,
+    IRExpr, IRStmt, IRBlock, IRConst, IRArrayLiteral, WasmType, WasmValType, AbstractOp,
 } from './nodes'
-import { ARRAY_LITERAL_CALLEE } from './nodes'
 import { wasmIntrinsics } from '../intrinsics/intrinsics'
 
 /** Map an AbstractOp to its WAT instruction string via the intrinsics registry. */
@@ -221,12 +220,12 @@ export function emitExpr(e: IRExpr): string {
             return `(array.len ${emitExpr(e.target)})`
         case 'ArrayCopy':
             return `(array.copy ${e.dstTypeName} ${e.srcTypeName} ${emitExpr(e.dstRef)} ${emitExpr(e.dstIdx)} ${emitExpr(e.srcRef)} ${emitExpr(e.srcIdx)} ${emitExpr(e.count)})`
+        case 'ArrayLiteral':
+            return emitArrayLiteral(e)
     }
 }
 
 function emitCall(e: IRExpr & { kind: 'Call' }): string {
-    if (e.callee === ARRAY_LITERAL_CALLEE) return emitArrayLiteral(e.args)
-
     const argWat = e.args.map(emitExpr).join('\n')
     const argStr = e.args.map(emitExpr).join(' ')
     if (e.callKind === 'instr') {
@@ -271,18 +270,13 @@ function emitLoop(e: IRExpr & { kind: 'Loop' }): string {
     ].join('\n')
 }
 
-function emitArrayLiteral(args: IRExpr[]): string {
-    // args[0] = count (IRConst), args[1] = elemBytes (IRConst), args[2..] = elements
-    const countWat = emitExpr(args[0])
-    const elemBytesWat = emitExpr(args[1])
-    const count = (args[0] as IRConst).value
-    const elemExprs = args.slice(2)
-    const stores = elemExprs.map((el, i) =>
-        `(i32.store offset=${4 + i * 4} (local.get $addr) ${emitExpr(el)})`
+function emitArrayLiteral(e: IRArrayLiteral): string {
+    const stores = e.elements.map((el, i) =>
+        `(i32.store offset=${4 + i * e.elemBytes} (local.get $addr) ${emitExpr(el)})`
     )
     return [
         `(block (result i32)`,
-        `  (local.set $addr (call $alloc_array ${countWat} ${elemBytesWat}))`,
+        `  (local.set $addr (call $alloc_array (i32.const ${e.count}) (i32.const ${e.elemBytes})))`,
         ...stores.map(s => `  ${s}`),
         `  (local.get $addr)`,
         `)`,
@@ -317,6 +311,7 @@ function isVoidIR(e: IRExpr): boolean {
         case 'StructNew': case 'StructGet': case 'StructSet':
         case 'ArrayNew': case 'ArrayNewDefault': case 'ArrayGet':
         case 'ArraySet': case 'ArrayLen': case 'ArrayCopy':
+        case 'ArrayLiteral':
             return (e as any).wasmType === 'void'
     }
 }

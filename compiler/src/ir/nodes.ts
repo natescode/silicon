@@ -271,6 +271,19 @@ export interface IRArrayCopy {
     count: IRExpr
 }
 
+/** A linear-memory array literal `$[a, b, …]`.  Lowers to
+ *  `alloc_array(count, elemBytes)` into the implicit `$addr` local, then a
+ *  store per element at `4 + i*elemBytes`, evaluating to the base pointer.
+ *  (Replaces the former ARRAY_LITERAL_CALLEE sentinel-Call hack — the
+ *  emitter recognised a magic callee string instead of a typed node.) */
+export interface IRArrayLiteral {
+    kind: 'ArrayLiteral'
+    wasmType: 'i32'
+    count: number
+    elemBytes: number
+    elements: IRExpr[]
+}
+
 // NOTE (bootstrap-plan R1 — "open-tagged IR"): this is intentionally a CLOSED
 // discriminated union for now.  It buys exhaustiveness checking on every
 // `switch (node.kind)` across both backends (src/ir/emit.ts, src/ir/lower.ts,
@@ -288,6 +301,8 @@ export type IRExpr =
     // Phase 9d-3 — WasmGC instructions.
     | IRStructNew | IRStructGet | IRStructSet
     | IRArrayNew | IRArrayNewDefault | IRArrayGet | IRArraySet | IRArrayLen | IRArrayCopy
+    // Linear-memory array literal `$[…]`.
+    | IRArrayLiteral
 
 // ---------------------------------------------------------------------------
 // Statement IR nodes (produce no stack value)
@@ -529,5 +544,3 @@ export class WasmGcTypeRegistry {
     size(): number { return this.types.length }
 }
 
-/** Sentinel callee name for array-literal IR nodes, shared between lower.ts and emit.ts. */
-export const ARRAY_LITERAL_CALLEE = '__array_literal'

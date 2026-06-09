@@ -27,7 +27,7 @@ import type {
     IRLocalGet, IRGlobalGet, IRCall, IRRefSlot,
     IRBlock, IRIf, IRLoop, IRBreak, IRContinue, IRNop, IRUnreachable, IRExprStmt,
 } from './nodes'
-import { ARRAY_LITERAL_CALLEE, WasmGcTypeRegistry } from './nodes'
+import { WasmGcTypeRegistry } from './nodes'
 import { type CompilerAPI, type LowerFns, createCompilerAPI } from '../compiler-api'
 
 /** Built-in modules whose WASM import-module string differs from the Silicon
@@ -2038,24 +2038,16 @@ function lowerAssignmentAsExpr(node: any, ctx: LowerCtx): IRExpr {
 }
 
 function lowerArrayLiteral(n: any, ctx: LowerCtx): IRExpr {
-    const count = (n.elements || []).length
-    const elemExprs = (n.elements || []).map((e: any) => lowerExpr(e, ctx))
-    // Inline the alloc_array pattern as an IRCall chain.
-    // This mirrors the Ohm codegen's ArrayLiteral handler.
-    // For the IR, we represent it as a raw WAT block via a special Call node.
-    // Full array IR lowering is deferred — emit as a placeholder.
-    const allocArgs: IRExpr[] = [
-        { kind: 'Const', wasmType: 'i32', value: count },
-        { kind: 'Const', wasmType: 'i32', value: 4 },
-    ]
-    // We'll build the array block in emit.ts for now.
-    // Store elem exprs as extra args so emitter can use them.
+    // $[a, b, …] → IRArrayLiteral.  The emitters (src/ir/emit.ts and
+    // src/codegen/wasm-emitter.ts) lower it to alloc_array + per-element stores
+    // into the implicit `$addr` local.  Element type is i32 for v1.0 (4 bytes).
+    const elements = (n.elements || []).map((e: any) => lowerExpr(e, ctx))
     return {
-        kind: 'Call',
+        kind: 'ArrayLiteral',
         wasmType: 'i32',
-        callee: ARRAY_LITERAL_CALLEE,
-        callKind: 'user',
-        args: [...allocArgs, ...elemExprs],
+        count: elements.length,
+        elemBytes: 4,
+        elements,
     }
 }
 
@@ -2091,6 +2083,7 @@ export function exprWasmType(e: IRExpr): WasmType {
         case 'ArraySet':         return 'void'
         case 'ArrayLen':         return e.wasmType
         case 'ArrayCopy':        return 'void'
+        case 'ArrayLiteral':     return e.wasmType
     }
 }
 

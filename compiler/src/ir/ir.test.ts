@@ -17,8 +17,7 @@ import { TypeInt, TypeFloat, TypeBool } from '../types/types'
 import { intrinsicSignature } from '../types/intrinsicSig'
 import { lowerProgram, IRLowerError } from './lower'
 import { emitExpr, emitModule } from './emit'
-import { ARRAY_LITERAL_CALLEE } from './nodes'
-import type { IRExpr, IRBinOp, IRConst, IRCall, IRIf } from './nodes'
+import type { IRExpr, IRBinOp, IRConst, IRCall, IRIf, IRArrayLiteral } from './nodes'
 
 // ---------------------------------------------------------------------------
 // Test helpers
@@ -484,8 +483,19 @@ describe('intrinsicSignature', () => {
         expect(intrinsicSignature('not_a_wasm_name')).toBeUndefined()
     })
 
-    test('ARRAY_LITERAL_CALLEE is a defined string constant', () => {
-        expect(typeof ARRAY_LITERAL_CALLEE).toBe('string')
-        expect(ARRAY_LITERAL_CALLEE.length).toBeGreaterThan(0)
+    test('IRArrayLiteral emits an alloc_array block (replaces the old sentinel Call)', () => {
+        const lit: IRArrayLiteral = {
+            kind: 'ArrayLiteral', wasmType: 'i32', count: 2, elemBytes: 4,
+            elements: [
+                { kind: 'Const', wasmType: 'i32', value: 7 },
+                { kind: 'Const', wasmType: 'i32', value: 9 },
+            ],
+        }
+        const wat = emitExpr(lit)
+        expect(wat).toContain('call $alloc_array')
+        expect(wat).toContain('(i32.const 2)')        // count
+        expect(wat).toContain('i32.store offset=4')   // element 0
+        expect(wat).toContain('i32.store offset=8')   // element 1
+        expect(wat).toContain('local.get $addr')      // result pointer
     })
 })
