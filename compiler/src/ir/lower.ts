@@ -74,6 +74,12 @@ interface LowerCtx {
     moduleRegistry?: ModuleRegistry
     /** Auto-generated imports from module calls — keyed by WAT name to deduplicate. */
     pendingImports: Map<string, IRImport>
+    /** ADR 0018 P1 — namespaced `@extern mod::field` host imports keyed by their
+     *  qualified call name (`mod::field`).  Lets a `mod::field(…)` call route to
+     *  the declared host import instead of demanding a registered Silicon module.
+     *  Populated in the lowerProgram pre-scan (so namespaced externs forward-ref
+     *  like bare ones); consulted by `lowerModuleCall`. */
+    externCalls: Map<string, IRImport>
     /** Stack of active loop IDs — for @break / @continue. */
     loopStack: number[]
     /** Monotonically increasing loop counter for unique labels. */
@@ -186,6 +192,7 @@ const lowerFns: LowerFns = {
     lowerGlobalInit,
     lowerExternParams,
     lowerExternResult,
+    lowerExternImport,
     unwrapNode: unwrap,
     exprWasmType,
     watId,
@@ -277,6 +284,7 @@ export function lowerProgram(
         registry,
         moduleRegistry,
         pendingImports: new Map(),
+        externCalls: new Map(),
         loopStack: [],
         loopCount: { n: 0 },
         deferStack: [],
@@ -315,6 +323,15 @@ export function lowerProgram(
             const name = watId(node.name?.name ?? '')
             ctx.globals.set(name, 'i32') // refined below
             ctx.varNames.add(name)
+        }
+        // ADR 0018 P1: pre-register namespaced `@extern mod::field` host imports
+        // so a `mod::field(…)` call (lowerModuleCall) can route to them whether
+        // declared before or after the call site.  Building the import here is
+        // idempotent — ExternDef_lower rebuilds the identical node when it emits
+        // the actual import; the externref web/bun gate (which throws) just
+        // surfaces from whichever runs first.
+        if (node.keyword === '@extern' && (node.name?.name ?? '').includes('::')) {
+            ctx.externCalls.set(node.name.name, lowerExternImport(node, ctx))
         }
         // Def expander pre-scan (handles type_sum and any user-registered kinds).
         ctx.registry.defExpanders.get(hook)?.preScan?.(node, ctx.$compiler!)
@@ -1005,6 +1022,51 @@ export function lowerExternResult(node: any): WasmValType | undefined {
     return undefined
 }
 
+/**
+ * Build the full IRImport for an `@extern` declaration (ADR 0018 P0).
+ * Generalizes the former hardcoded `(env, name)` form two ways:
+ *   - a namespaced name `mod::field` imports from module `mod` (with
+ *     IMPORT_ENV_OVERRIDE applied) instead of the hardcoded `env`; and
+ *   - `JSString` / `JSValue` params/results become `externref` ref slots
+ *     (the object-handle boundary) rather than collapsing to i32.
+ * Externref imports require a JS host, so they are gated to web/bun.
+ */
+export function lowerExternImport(node: any, ctx: LowerCtx): IRImport {
+    const rawName: string = node.name?.name ?? ''
+    const sep = rawName.indexOf('::')
+    const moduleName = sep === -1 ? 'env' : rawName.slice(0, sep)
+    const field = sep === -1 ? rawName : rawName.slice(sep + 2)
+    const watName = watId(rawName)
+    const env = IMPORT_ENV_OVERRIDE[moduleName] ?? moduleName
+
+    const params: WasmValType[] = []
+    let refParams: Map<number, IRRefSlot> | undefined
+    let usesExternref = false
+    for (const p of node.params || []) {
+        if (p.isLiteral || !p.typeAnnotation) continue
+        const tn: string = p.typeAnnotation.typename
+        const idx = params.length
+        params.push(siliconTypeNameToWasm(tn))
+        if (isExternRefKind(tn)) { (refParams ??= new Map()).set(idx, EXTERN_SLOT); usesExternref = true }
+    }
+
+    const resName: string | undefined = node.name?.typeAnnotation?.typename
+    const result = resName && resName !== 'Void' ? siliconTypeNameToWasm(resName) : undefined
+    const refResult: IRRefSlot | undefined = resName && isExternRefKind(resName)
+        ? { localTypeIdx: 0, nullable: false, extern: true }
+        : undefined
+    if (refResult) usesExternref = true
+
+    if (usesExternref && ctx.platform !== 'web' && ctx.platform !== 'bun') {
+        throw new IRLowerError(
+            `'@extern ${rawName}' uses an externref object handle (JSString / JSValue) — ` +
+            `compile with --platform=web or --platform=bun (sgl.toml: [build] platform = "bun").`,
+        )
+    }
+
+    return { kind: 'Import', env, field, name: watName, params, result, refParams, refResult }
+}
+
 // ---------------------------------------------------------------------------
 // Expression lowering
 // ---------------------------------------------------------------------------
@@ -1430,6 +1492,17 @@ function lowerModuleCall(name: string, sepIdx: number, n: any, ctx: LowerCtx): I
     const moduleEntry = ctx.moduleRegistry?.get(moduleName)
 
     if (!moduleEntry) {
+        // ADR 0018 P1 — a declared `@extern mod::field` is a direct host import
+        // (import module = `mod`), not a Silicon module.  Route the call to it.
+        // The import itself is emitted by ExternDef_lower; here we just emit the
+        // call.  The call's wasmType is the base valtype; externref results are
+        // tracked via the import's refResult + injectExternRefSlots, same as the
+        // bare-extern path.
+        const externImp = ctx.externCalls.get(name)
+        if (externImp) {
+            const args = (n.args || []).map((a: any) => lowerExpr(a, ctx))
+            return { kind: 'Call', wasmType: externImp.result ?? 'void', callee: externImp.name, callKind: 'user', args }
+        }
         throw new IRLowerError(
             `Unknown module '${moduleName}' — not found in built-in modules or ./modules/`
         )

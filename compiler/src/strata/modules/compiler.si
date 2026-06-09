@@ -152,6 +152,7 @@
 \\ @extern compiler_globalInit_wasmType (Int) -> Int;
 \\ @extern compiler_lowerExternParams (Int) -> Int;
 \\ @extern compiler_lowerExternResult (Int) -> Int;
+\\ @extern compiler_expandExtern (Int) -> Int;
 \\ @extern compiler_expandSumType (Int) -> Int;
 \\ @extern compiler_expandTypeRecord (Int) -> Int;
 \\ @extern compiler_expandStruct (Int) -> Int;

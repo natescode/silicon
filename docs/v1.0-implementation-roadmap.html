@@ -165,7 +165,7 @@
   <div class="pchips"><a href="#F0a" class="chip ffi" title="Bindgen"><b>F0a</b> Bindgen</a><a href="#M0" class="chip mono crit chip-blocked" title="Comptime monomorphization substrate"><b>⚠ M0</b> Comptime monomorphization subs…</a><a href="#C0" class="chip ffi crit chip-done" title="Generalize the funcref ABI  (closures C0)"><b>✓ C0</b> Generalize the funcref ABI</a></div>
 </div><div class="phase">
   <div class="phead"><span class="pnum">Phase 1</span><span class="pnote">FFI to ~80% (async) + container mono — parallel</span></div>
-  <div class="pchips"><a href="#F1a" class="chip ffi crit" title="Object handles / JSValue externref"><b>F1a</b> Object handles / JSValue exter…</a><a href="#F1b" class="chip ffi crit" title="Blocking @await (Asyncify) + reactor host + async effect"><b>F1b</b> Blocking @await</a><a href="#M1" class="chip mono" title="Container monomorphization — Vec[T] / HashMap[K,V]"><b>M1</b> Container monomorphization</a></div>
+  <div class="pchips"><a href="#F1a" class="chip ffi crit chip-done" title="Object handles / JSValue externref"><b>✓ F1a</b> Object handles / JSValue exter…</a><a href="#F1b" class="chip ffi crit" title="Blocking @await (Asyncify) + reactor host + async effect"><b>F1b</b> Blocking @await</a><a href="#M1" class="chip mono" title="Container monomorphization — Vec[T] / HashMap[K,V]"><b>M1</b> Container monomorphization</a></div>
 </div><div class="phase">
   <div class="phead"><span class="pnum">Phase 2</span><span class="pnote">The keystone — closures (the FFI↔mono join)</span></div>
   <div class="pchips"><a href="#C1" class="chip ffi crit" title="Non-escaping closures (all modes, zero-cost)  (closures C1)"><b>C1</b> Non-escaping closures</a><a href="#C2" class="chip ffi gate crit" title="Escaping host-callable closures — wasm-gc only  (closures C2 · THE GATE)"><b>C2</b> Escaping host-callable closures</a></div>
@@ -197,12 +197,12 @@
   <td class="cadr">ADR 0017</td>
   <td class="cmeta"><span class="sz sz-l">L</span><span class="rk rk-md">Med</span><span class="ver ver-v10">v1.0 — the gate</span></td>
 </tr>
-<tr id="F1a" class="t-ffi v-v10 status-todo">
+<tr id="F1a" class="t-ffi v-v10 status-done">
   <td class="cid"><span class="idbadge ffi">F1a</span></td>
-  <td class="ctitle"><div class="tt">Object handles / JSValue externref <span class="crittag">critical path</span></div>
+  <td class="ctitle"><div class="tt">Object handles / JSValue externref <span class="st st-done">✓ DONE</span> <span class="crittag">critical path</span></div>
       <div class="tdesc">Generalize the <code>JSString</code>-only externref path to a generic <code>JSValue</code> object handle, so a <code>Response</code>/<code>Uint8Array</code>/DOM node has a type to land in.</div>
-      
-      <div class="tfiles"><span class="k">Files</span> <code>compiler/src/ir/lower.ts</code> (<code>siliconTypeNameToWasm</code> ~2263, <code>usesExternref</code> ~1426, slot stamping ~1468, new <code>injectExternRefSlots</code> modeled on <code>injectJSStringRefSlots</code> ~457/528, <code>lowerExternParams/Result</code> ~978); <code>strata/defkinds.si</code> <code>ExternDef_lower</code> (import-module override, not hardcoded <code>'env'</code>)</div>
+      <div class="tnote tnote-done">Done (2026-06-09). <code>JSValue</code> is a generic <code>externref</code> object handle reusing the <code>JSString</code> ref-slot machinery (no <code>wasm:js-string</code> ops). <code>@extern</code> now builds its full IRImport host-side (<code>compiler_expandExtern</code>): a namespaced <code>mod::field</code> name imports from host module <code>mod</code> (callable, forward-ref'd via a lowerProgram pre-scan), and <code>JSString</code>/<code>JSValue</code> params/results become <code>externref</code> slots gated to <code>--platform=web|bun</code>. Bare scalar externs stay byte-identical to <code>(import "env" …)</code>. ~1,500 tests green incl. 9 jsvalue cases; modules instantiate under Bun.</div>
+      <div class="tfiles"><span class="k">Files</span> <code>compiler/src/ir/lower.ts</code> (<code>siliconTypeNameToWasm</code>, <code>isExternRefKind</code>, <code>injectExternRefSlots</code>, new <code>lowerExternImport</code> + <code>externCalls</code> routing in <code>lowerModuleCall</code>); <code>compiler-api/index.ts</code> + <code>comptime/imports.ts</code> (<code>expandExtern</code>/<code>compiler_expandExtern</code>); <code>strata/defkinds.si</code> <code>ExternDef_lower</code> delegates host-side (import-module override, not hardcoded <code>'env'</code>); <code>types/types.ts</code> + <code>unify.ts</code> (<code>JSValue</code> kind)</div>
       <div class="tunb"><span class="k">Unblocks</span> Sync object-returning APIs; lifts bindgen scalar→object tier. <b>~10% → ~35%</b></div></td>
   <td class="cadr">ADR 0018 · P0/P1</td>
   <td class="cmeta"><span class="sz sz-m">M</span><span class="rk rk-md">Med</span><span class="ver ver-v10">v1.0 — the gate</span></td>

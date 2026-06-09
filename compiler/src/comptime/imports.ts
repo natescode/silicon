@@ -1392,6 +1392,19 @@ export function createComptimeImports(env: ComptimeEnv): WebAssembly.Imports {
         }
     }
 
+    /** Build the full IRImport for an @extern (src/strata/defkinds.si).  ADR
+     *  0018 P0/P1: derives the import module from a `mod::field` name and
+     *  stamps JSString/JSValue externref slots.  Like the arena expanders,
+     *  does NOT catch — the externref web/bun gate throws IRLowerError, and
+     *  that message must reach the user as a compile error. */
+    const compiler_expandExtern = (nodeH: number): number => {
+        if (!env.api) return 0
+        const node = handles.get(nodeH)
+        if (!node) return 0
+        const ir = env.api.expandExtern(node)
+        return ir ? env.irHandles.fresh(ir) : 0
+    }
+
     /** Match-chain expansion — delegate to api.expandMatchChain.
      *  `rawArgsArrH` is a handles id of the AST args array; `inferredTypeH`
      *  is a handle of the inferredType.  Returns an IR-handle of the
@@ -1533,7 +1546,7 @@ export function createComptimeImports(env: ComptimeEnv): WebAssembly.Imports {
             compiler_funcResult_body, compiler_funcResult_locals,
             compiler_resolveFunctionReturnType, compiler_resolveType,
             compiler_lowerGlobalInit, compiler_globalInit_init, compiler_globalInit_wasmType,
-            compiler_lowerExternParams, compiler_lowerExternResult,
+            compiler_lowerExternParams, compiler_lowerExternResult, compiler_expandExtern,
             compiler_expandMatchChain, compiler_expandSumType, compiler_expandTypeRecord, compiler_expandStruct,
             compiler_expandWithArena, compiler_expandMoveToParentArena, compiler_expandCallIndirect,
             test_observe,
