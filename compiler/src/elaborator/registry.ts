@@ -520,11 +520,18 @@ export function fireHandlers(
     const handlers = (registry.handlers[phase] as Map<string, PhaseHandler[]>).get(token) ?? []
     const results: any[] = []
     for (const h of handlers) {
-        if (stratumRef) stratumRef.name = (h as any).__stratumName ?? '__global__'
+        const sName = (h as any).__stratumName ?? '__global__'
+        if (stratumRef) stratumRef.name = sName
+        // The compiled-engine `state('stratum')` primitive reads
+        // registry.__currentStratum (it has no access to the lowerer's
+        // threaded stratumRef), so set it here too — otherwise per-stratum
+        // state always lands in the '__global__' bucket.
+        ;(registry as any).__currentStratum = { name: sName }
         const r = h(node, api)
         if (r != null) results.push(r)
     }
     if (stratumRef) stratumRef.name = '__global__'
+    ;(registry as any).__currentStratum = { name: '__global__' }
     return results
 }
 
@@ -536,11 +543,14 @@ export function fireModuleFinalizeHandlers(
 ): any[] {
     const results: any[] = []
     for (const h of registry.handlers.moduleFinalize) {
-        if (stratumRef) stratumRef.name = (h as any).__stratumName ?? '__global__'
+        const sName = (h as any).__stratumName ?? '__global__'
+        if (stratumRef) stratumRef.name = sName
+        ;(registry as any).__currentStratum = { name: sName }
         const r = h(null, api)
         if (r != null) results.push(r)
     }
     if (stratumRef) stratumRef.name = '__global__'
+    ;(registry as any).__currentStratum = { name: '__global__' }
     return results
 }
 
