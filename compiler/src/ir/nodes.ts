@@ -271,6 +271,17 @@ export interface IRArrayCopy {
     count: IRExpr
 }
 
+// NOTE (bootstrap-plan R1 — "open-tagged IR"): this is intentionally a CLOSED
+// discriminated union for now.  It buys exhaustiveness checking on every
+// `switch (node.kind)` across both backends (src/ir/emit.ts, src/ir/lower.ts,
+// src/codegen/wasm-emitter.ts, src/codegen/qbe/types.ts) — a safety property the
+// current TS compiler relies on.  R1 requires this become an OPEN/registry-tagged
+// representation so strata ("strata as mods") and codegen StrataType can register
+// new node kinds without editing this union.  That migration MUST be done as part
+// of the Silicon-in-Silicon self-host port — NOT standalone: open-tagging now would
+// delete TS exhaustiveness with no consumer to justify it, and every kind-switch
+// would have to move to registry dispatch in lockstep across both backends.
+// See docs/strata.md (Codegen StrataType) and docs/strata-feature-audit.html.
 export type IRExpr =
     | IRConst | IRLocalGet | IRGlobalGet | IRBinOp | IRCall | IRCallIndirect
     | IRBlock | IRIf | IRLoop | IRBreak | IRContinue | IRReturn | IRNop | IRUnreachable

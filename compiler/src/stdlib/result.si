@@ -9,8 +9,8 @@
 #   @local err := &Err 'oops';   ;; inferred Result[?T, String]
 #   @local x   := &result_unwrap_or ok, 0;
 #
-# `?` unwrap shorthand and `@try` (story 5a-3) are still deferred — they
-# need an `on::callSite` stratum.
+# `@try` (story 5a-3) is implemented as a data-driven stratum — see
+# `src/strata/try.si`.  The `?` postfix-operator spelling is still deferred.
 
 @type Result[T, E] := $Ok value T | $Err error E;
 

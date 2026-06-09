@@ -1,0 +1,75 @@
+# SPDX-License-Identifier: MIT
+# @try — Result early-return shorthand, migrated to a data-driven stratum.
+#
+# `@try(r)` desugars to a small inline expression: if the Result's tag word
+# is Ok (0), take the payload value (the word at offset +4); otherwise
+# `@return` the original Result pointer unchanged so the Err propagates to
+# the caller.  Lowering shape (i32 throughout — Results are heap pointers):
+#
+#   {
+#     __try_tmp_N := <r>;
+#     @if (i32.load __try_tmp_N) == 0
+#        then { i32.load (__try_tmp_N + 4) }     # Ok payload
+#        else { @return __try_tmp_N }            # Err propagates
+#   }
+#
+# This handler is the proof-of-concept for the Codegen StrataType: it builds
+# a multi-statement Block with a trailing If and allocates a fresh local —
+# exactly the capabilities that kept @try hardcoded in `lower.ts:lowerTry`
+# until the CompilerAPI exposed `compiler_freshId`, `ir_makeLocal`,
+# `compiler_ctx_pendingLocals_push`, and `ir_makeBlock`.
+#
+# Fresh-local uniqueness: `compiler_freshId` increments a per-handler counter
+# that persists across firings (handlers are pre-compiled once and reused),
+# so every `@try` site gets a distinct `__try_tmp_N` name.
+@stratum Try := {
+    Compiler::register::expression_keyword('@try');
+    Compiler::on::lower('@try', Try_lower);
+};
+
+\\ Try_lower (Int)
+@fn Try_lower node := {
+    # @try takes exactly one argument (the Result).  Fatal arity guard —
+    # silently dropping extra args would be worse than a clear error.
+    compiler::compiler_require_argc(node, 1, compiler::compiler_str_intern('@try expects exactly 1 argument (a Result expression)', 0));
+    wi := compiler::compiler_str_intern('i32', 0);
+    instr := compiler::compiler_str_intern('instr', 0);
+    load := compiler::compiler_str_intern('i32.load', 0);
+
+    # Lower the Result argument BEFORE allocating the temp (matches lowerTry
+    # ordering so any locals the argument itself allocates are numbered first).
+    resultExpr := compiler::compiler_lowerExpr(compiler::compiler_arg(node, 0));
+
+    # Fresh i32 local to hold the Result pointer; register it so the function
+    # prologue declares it and assignment/lookup resolve.
+    tmp := compiler::compiler_freshId(compiler::compiler_str_intern('__try_tmp', 0));
+    compiler::compiler_ctx_pendingLocals_push(compiler::ir_makeLocal(tmp, wi));
+    compiler::compiler_ctx_locals_set(tmp, wi);
+
+    # tag := i32.load(tmp)
+    tagArgs := compiler::compiler_arr_new();
+    compiler::compiler_arr_push(tagArgs, compiler::ir_makeLocalGet(tmp, wi));
+    tag := compiler::ir_makeCall(load, tagArgs, wi, instr);
+
+    # isOk := tag == 0
+    isOk := compiler::ir_makeBinOp(compiler::compiler_str_intern('i32.eq', 0), tag, compiler::ir_makeConst(0, wi), wi);
+
+    # okValue := i32.load(tmp + 4)
+    addr := compiler::ir_makeBinOp(compiler::compiler_str_intern('i32.add', 0), compiler::ir_makeLocalGet(tmp, wi), compiler::ir_makeConst(4, wi), wi);
+    okArgs := compiler::compiler_arr_new();
+    compiler::compiler_arr_push(okArgs, addr);
+    okValue := compiler::ir_makeCall(load, okArgs, wi, instr);
+
+    # errReturn := @return tmp  (propagate the original Err pointer)
+    errReturn := compiler::ir_makeReturn(compiler::ir_makeLocalGet(tmp, wi));
+
+    # if isOk { okValue } else { errReturn }
+    thenBlk := compiler::ir_makeBlock(compiler::compiler_arr_new(), okValue, wi);
+    elseBlk := compiler::ir_makeBlock(compiler::compiler_arr_new(), errReturn, wi);
+    ifExpr := compiler::ir_makeIf(isOk, thenBlk, elseBlk, wi);
+
+    # { tmp := <r>; <ifExpr> }
+    stmts := compiler::compiler_arr_new();
+    compiler::compiler_arr_push(stmts, compiler::ir_makeLocalSet(tmp, resultExpr));
+    compiler::ir_makeBlock(stmts, ifExpr, wi)
+};

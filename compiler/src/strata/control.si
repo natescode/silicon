@@ -51,15 +51,11 @@
     Compiler::register::expression_keyword('@call_indirect');
 };
 
-# Phase 5a-3 — Result early-return shorthand.
-# `&@try r` desugars to a small inline expression: if the Result's tag
-# byte is Ok (0), take the payload value; otherwise `@return` the
-# original Result pointer unchanged (Err propagates).  Hardcoded in
-# `lower.ts:lowerTry` because it needs to allocate a fresh local and
-# construct a multi-statement Block with a trailing If.
-@stratum Try := {
-    Compiler::register::expression_keyword('@try');
-};
+# Phase 5a-3 — Result early-return shorthand `@try`.
+# Migrated to a data-driven stratum with its own on::lower handler — see
+# `src/strata/try.si`.  (It used to register here with a hardcoded
+# `lower.ts:lowerTry`; the CompilerAPI now exposes fresh-local allocation
+# and multi-statement Block synthesis, so the lowering lives in Silicon.)
 
 # Phase 9c (ADR 0008) — explicit-arena memory management.
 # `&@with_arena { body }` saves the bump heap pointer at entry, runs

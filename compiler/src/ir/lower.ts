@@ -1323,17 +1323,6 @@ function lowerBinaryOp(n: any, ctx: LowerCtx): IRExpr {
         throw new IRLowerError(`No stratum registered for operator '${op}'`)
     }
 
-    // Control-flow operators: || maps to IR::control_or (short-circuit evaluation).
-    if (intrinsic === 'IR::control_or' || intrinsic === 'WASM::control_or') {
-        return {
-            kind: 'If',
-            wasmType: 'i32',
-            cond: left,
-            then: { kind: 'Const', wasmType: 'i32', value: 1 },
-            else_: right,
-        }
-    }
-
     const abstractOp = resolveIntrinsicAbstractOp(intrinsic) as AbstractOp | undefined
     if (!abstractOp) throw new IRLowerError(`No WasmIntrinsic for '${intrinsic}'`)
 
@@ -1511,11 +1500,8 @@ function lowerBuiltinCall(name: string, rawArgs: any[], ctx: LowerCtx, inferredT
     if (name === '@call_indirect') {
         return lowerCallIndirect(rawArgs, ctx)
     }
-    // Phase 5a-3 — `@try`.  Hardcoded here because it needs a fresh local
-    // and module-level access to the lowering ctx.
-    if (name === '@try') {
-        return lowerTry(rawArgs, ctx)
-    }
+    // Phase 5a-3 — `@try` is now a data-driven stratum (src/strata/try.si);
+    // it falls through to the on::lower handler-firing path below.
     // Phase 9c (ADR 0008) — explicit-arena scope + tail-position escape.
     // Hardcoded for the same reasons as @try: fresh-local allocation,
     // multi-statement Block synthesis, and AST tail-walking that the
@@ -1638,78 +1624,6 @@ function lowerCallIndirect(rawArgs: any[], ctx: LowerCtx): IRExpr {
         sigKey: '__fn_i_i',
         args: [arg],
         tableIndex: cb,
-    }
-}
-
-/**
- * `@try r` — Result[T, E] early-return shorthand (Phase 5a-3).
- *
- * Lowers to the equivalent of:
- *
- *     {
- *         @local __try_tmp:Int := r;
- *         @if (WASM::i32_load __try_tmp) == 0,
- *             { WASM::i32_load (__try_tmp + 4) },     # Ok → take value
- *             { @return __try_tmp }                   # Err → propagate
- *     }
- *
- * The Result `@type Result[T, E] := $Ok value:T | $Err error:E;` lays
- * out as `[tag:i32, field0:i32]` (pad-to-max — both variants have one
- * field, so layout is 8 bytes).  Tag 0 = Ok, 1 = Err.  Since both
- * variants share the same single payload slot, Err can propagate by
- * returning the original pointer unchanged — no need to allocate a
- * fresh Err wrapper.
- *
- * The caller's return type must be a Result with the same E.  HM-lite
- * doesn't validate this for the keyword surface (no signature is
- * registered in the typechecker for `@try`); the WASM type system
- * gives an i32 → i32 contract at the IR level either way.  A future
- * tightening can register `@try : Result[T, E] → T` and let HM-lite
- * enforce the propagation rule.
- */
-function lowerTry(rawArgs: any[], ctx: LowerCtx): IRExpr {
-    if (rawArgs.length !== 1) {
-        throw new IRLowerError(`@try expects exactly 1 argument (a Result expression), got ${rawArgs.length}`)
-    }
-    const resultExpr = lowerExpr(rawArgs[0], ctx)
-    const tmpName = `__try_tmp_${ctx.freshIdCounter.n++}`
-    ctx.pendingLocals.push({ name: tmpName, wasmType: 'i32' })
-    ctx.locals.set(tmpName, 'i32')
-
-    const tmpGet = (): IRExpr => ({ kind: 'LocalGet', wasmType: 'i32', name: tmpName })
-    const i32Load = (addr: IRExpr): IRExpr => ({
-        kind: 'Call', wasmType: 'i32', callee: 'i32.load', callKind: 'instr', args: [addr],
-    } as any)
-    const i32Const = (value: number): IRExpr => ({ kind: 'Const', wasmType: 'i32', value })
-    const i32Add = (left: IRExpr, right: IRExpr): IRExpr => ({
-        kind: 'BinOp', wasmType: 'i32', op: 'i32_add', left, right,
-    })
-
-    const tag = i32Load(tmpGet())
-    const isOk: IRExpr = {
-        kind: 'BinOp', wasmType: 'i32', op: 'i32_eq',
-        left: tag, right: i32Const(0),
-    }
-    const okValue = i32Load(i32Add(tmpGet(), i32Const(4)))
-    const errReturn: IRExpr = {
-        kind: 'Return',
-        wasmType: 'void' as WasmType,
-        value: tmpGet(),
-    } as any
-
-    const ifExpr: IRExpr = {
-        kind: 'If',
-        wasmType: 'i32',
-        cond: isOk,
-        then: { kind: 'Block', wasmType: 'i32', stmts: [], trailing: okValue },
-        else_: { kind: 'Block', wasmType: 'i32', stmts: [], trailing: errReturn },
-    }
-
-    return {
-        kind: 'Block',
-        wasmType: 'i32',
-        stmts: [{ kind: 'LocalSet', name: tmpName, value: resultExpr }],
-        trailing: ifExpr,
     }
 }
 

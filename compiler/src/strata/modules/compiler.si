@@ -112,6 +112,8 @@
 \\ @extern compiler_freshId (Int) -> Int;
 \\ @extern compiler_arg (Int, Int) -> Int;
 \\ @extern compiler_choose (Int, Int, Int) -> Int;
+# Fatal precondition guard — throws unless node has exactly `expected` args.
+\\ @extern compiler_require_argc (Int, Int, Int) -> Void;
 \\ @extern compiler_isVarName (Int) -> Int;
 
 # ── Ctx accessors (require env.ctx — set per firing by the wrapper) ────

@@ -394,11 +394,13 @@ Internally this is the existing single-concatenated-program compile (auto-inclus
 modules feeds one IR/codegen pass, one shared linear memory), so "linking modules" is **free**
 and zero-runtime-cost. `--native` (QBE) is unchanged. New emit modes:
 
-- **`--emit=wit`** — available at v1.0 **for the mapped type subset, gated on
-  `[package].namespace` landing**. It emits the world/interface *shape* (world from
-  `@export`s; sub-module interfaces only where re-exposed through root) with a defined
-  type-mapping for the **scalar/agreed subset** as forward-compat metadata alongside the
-  core `.wasm`, even though nothing consumes it at runtime yet. It is **not** a fully
+- **`--emit=wit`** — **design only; the flag is not implemented at v1.0.** The CLI
+  exposes no `--emit` mode beyond `--emit-qbe` (`cli/src/sigil_cli.ts`); today only
+  `[package].namespace` is parsed and scaffolded into `sgl.toml` (defaulting to `local`).
+  No world/interface is emitted yet. *When built (post-v1.0)* it will emit the
+  world/interface *shape* (world from `@export`s; sub-module interfaces only where
+  re-exposed through root) with a defined type-mapping for the **scalar/agreed subset** as
+  forward-compat metadata alongside the core `.wasm`. It will **not** be a fully
   well-formed package for arbitrary signatures: rich Silicon types (UTF-8 `Str`/`Slice[u8]`
   → `string`/`list`, `@type` records → `record`, `Option[T]` → `option`, sum types →
   `variant`) require a documented Silicon→WIT type-mapping table and the corresponding
@@ -756,9 +758,10 @@ What landed, by stage:
   the `sgl fix` codemod (deletes redundant intra-component path `@use`s, keeps bare stdlib ones).
 
 **Deferred past v1.0** exactly as argued above: `--emit=component` (CM binary, memory-export
-hiding, Canonical-ABI glue); well-formed non-scalar `--emit=wit` (the type-mapping table + a
-`namespace`-gated package — `[package].namespace` is now parsed and scaffolded, defaulting to
-`local`); 3-segment `ml::sub::fn` re-exposed dependency sub-modules; binary-level dependency
+hiding, Canonical-ABI glue); **`--emit=wit` in full** — no `--emit=wit` flag exists yet (the
+CLI ships only `--emit-qbe`); only `[package].namespace` is parsed and scaffolded (defaulting
+to `local`), so the type-mapping table *and* the world/interface emitter are both the
+post-v1.0 follow-up; 3-segment `ml::sub::fn` re-exposed dependency sub-modules; binary-level dependency
 merge; the `internal/` tier; and nestable modules. The `\\ @use … as …` line is implemented as
 a pre-parse directive rather than a parser `ImportLine` node (consistent with how `@use` itself
 is "not a grammar construct"), so the LL(1) classifier is untouched.

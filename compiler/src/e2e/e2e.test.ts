@@ -1738,9 +1738,10 @@ div a, b := {
 // Round 37: || strata consistency, keyword typed dispatch, @export metadata strata
 // ---------------------------------------------------------------------------
 
-test("Round 37: || produces short-circuit WAT driven by WASM::control_or intrinsic", () => {
-    // || must be lowered via the strata registry (WASM::control_or → IRIf),
-    // not via a hardcoded symbol check. Verify the emitted structure.
+test("Round 37: || produces short-circuit WAT driven by the Or_lower strata handler", () => {
+    // || must be lowered via the strata registry (the logic.si Or_lower
+    // on::lower handler builds the IRIf), not via a hardcoded symbol check.
+    // Verify the emitted structure.
     const result = compileSource(`\\\\ f (Int, Int)
 f a, b := {
     a || b

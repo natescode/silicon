@@ -681,6 +681,21 @@ export function createComptimeImports(env: ComptimeEnv): WebAssembly.Imports {
     const compiler_choose = (cond: number, aH: number, bH: number): number =>
         cond !== 0 ? aH : bH
 
+    /** Hard precondition check for an on::lower handler: throw a fatal
+     *  compile-time error unless the firing node has exactly `expected`
+     *  args.  The diagnostic imports (`diag_error`/`diag_warn`) are
+     *  non-throwing by design (T-5 accumulator model), so this is a
+     *  handler's only path to the kind of fatal arity error the legacy
+     *  hardcoded lowerings raised via `IRLowerError`.  `msgStr` is the
+     *  human-readable prefix; the actual count is appended as ", got N". */
+    const compiler_require_argc = (nodeH: number, expected: number, msgStr: number): void => {
+        const node = handles.get(nodeH)
+        const n = Array.isArray(node?.args) ? node.args.length : 0
+        if (n !== (expected | 0)) {
+            throw new Error(`${strings.get(msgStr)}, got ${n}`)
+        }
+    }
+
     // ── Ctx accessors (D-B-11) ─────────────────────────────────────────────
     // All of these are no-ops when `env.ctx` is undefined (handler is
     // running outside a firing — e.g. during unit tests with no full
@@ -1432,7 +1447,7 @@ export function createComptimeImports(env: ComptimeEnv): WebAssembly.Imports {
             ir_makeFunction, ir_makeImport, compiler_arr_push_str,
             diag_error, diag_warn,
             compiler_str_intern,
-            compiler_watId, compiler_freshId, compiler_arg, compiler_choose,
+            compiler_watId, compiler_freshId, compiler_arg, compiler_choose, compiler_require_argc,
             compiler_ctx_locals_set, compiler_ctx_locals_get,
             compiler_ctx_globals_set, compiler_ctx_globals_get,
             compiler_ctx_varNames_add, compiler_ctx_varNames_has,

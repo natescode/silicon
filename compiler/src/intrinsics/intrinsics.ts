@@ -156,12 +156,6 @@ export const wasmIntrinsics: Record<string, WasmIntrinsic> = {
     memory_fill: { name: 'WASM::memory_fill', wasmInstr: 'memory.fill', description: 'Bulk fill n bytes (dst, byte, n)' },
 
     // -------------------------------------------------------------------------
-    // Logical Short-Circuit (emitted as IRIf by lowerBinaryOp / lowerBuiltinCall)
-    // -------------------------------------------------------------------------
-    control_or:  { name: 'WASM::control_or',  wasmInstr: 'if', description: 'Short-circuit OR — IRIf cond (then 1) (else right)' },
-    control_and: { name: 'WASM::control_and', wasmInstr: 'if', description: 'Short-circuit AND — IRIf cond (then right) (else 0)' },
-
-    // -------------------------------------------------------------------------
     // Structural Control Flow (emitted as IR nodes by lowerBuiltinCall)
     // -------------------------------------------------------------------------
     control_if:       { name: 'WASM::control_if',       wasmInstr: 'if',     description: 'WAT if/then/else — used by @if stratum' },

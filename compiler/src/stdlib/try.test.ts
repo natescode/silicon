@@ -135,6 +135,34 @@ describe('Phase 5a-3: @try unwrap shorthand', () => {
         expect(ex.test_chained_err()).toBe(999) // Err propagated through both fns
     })
 
+    test('two @try in the same function get distinct temps (fresh-local uniqueness)', async () => {
+        // Regression: the data-driven try.si handler names its temp via
+        // compiler_freshId, whose counter persists across firings.  Two @try
+        // in ONE function must get distinct __try_tmp_N names, else the WAT
+        // has a duplicate local and fails validation / miscompiles.
+        const ex = await compileAndRun(`
+            \\\\ add_two (Result[Int, Int], Result[Int, Int]) -> Result[Int, Int]
+            @fn add_two a, b := {
+                @mut x := @try(a);
+                @mut y := @try(b);
+                Ok(x + y)
+            };
+            \\\\ test_two_ok Int
+            @fn test_two_ok := {
+                @mut r := add_two(Ok(20), Ok(22));
+                result_unwrap_or(r, 0)
+            };
+            \\\\ test_two_err Int
+            @fn test_two_err := {
+                @mut r := add_two(Ok(1), Err(7));
+                result_unwrap_or(r, 999)
+            };
+            @export test_two_ok;
+            @export test_two_err;`)
+        expect(ex.test_two_ok()).toBe(42)    // 20 + 22, both Ok
+        expect(ex.test_two_err()).toBe(999)  // second @try propagates Err
+    })
+
     test('@try with comma-list arity errors at lower time', async () => {
         let threw = false
         try {

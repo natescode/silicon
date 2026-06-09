@@ -1,8 +1,9 @@
 # SPDX-License-Identifier: MIT
 # D-D-3: logic strata migrated to the new @stratum form.
-# - `||` keeps its hardcoded short-circuit lowering in lowerBinaryOp (the
-#   stratum just needs to register the operator token so the parser
-#   recognises it; lowerBinaryOp checks intrinsic to pick that path).
+# - `||` short-circuits via its own on::lower handler (Or_lower below):
+#   the operator stub carries no intrinsic, so lowerBinaryOp fires the
+#   handler, which builds the IRIf `cond ? 1 : right`.  (The old hardcoded
+#   control_or branch in lowerBinaryOp is gone.)
 # - `@not` builds (i32.eqz x).
 # - `@and` and `@or` keyword forms short-circuit via ir_makeIf.
 
