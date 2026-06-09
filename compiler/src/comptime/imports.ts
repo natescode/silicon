@@ -402,6 +402,33 @@ export function createComptimeImports(env: ComptimeEnv): WebAssembly.Imports {
         })
     }
 
+    /**
+     * CallIndirect IR.  `tableIndexH` is the IRExpr handle of the slot
+     * index; `argsArrH` is a handle of an array of IRExpr-handle ids;
+     * `sigKeyStr` is the signature key (0 → '__fn_i_i'); `wasmTypeStr` is
+     * the result type (0 → 'i32').  Mirrors lowerCallIndirect — see
+     * src/strata/funcref.si.
+     */
+    const ir_makeCallIndirect = (
+        tableIndexH: number, argsArrH: number, sigKeyStr: number, wasmTypeStr: number,
+    ): number => {
+        const tableIndex = env.irHandles.get(tableIndexH) as IRExpr | undefined
+        if (!tableIndex) return 0
+        const rawArgs = env.irHandles.get(argsArrH)
+        const args = Array.isArray(rawArgs)
+            ? (rawArgs as number[]).map(id => env.irHandles.get(id) as IRExpr).filter(Boolean)
+            : []
+        const wt = wasmTypeStr === 0 ? 'i32' : strings.get(wasmTypeStr)
+        const sigKey = sigKeyStr === 0 ? '__fn_i_i' : strings.get(sigKeyStr)
+        return env.irHandles.fresh({
+            kind: 'CallIndirect',
+            wasmType: wt as IRExpr['wasmType'],
+            sigKey,
+            args,
+            tableIndex,
+        } as IRExpr)
+    }
+
     // ── IR builders (D-B-4 — control flow) ──────────────────────────────────
     // The whole point of strata is to emit control IR.  These four imports
     // close out the basic surface needed by `if.si`, `loop.si`, `control.si`.
@@ -745,6 +772,20 @@ export function createComptimeImports(env: ComptimeEnv): WebAssembly.Imports {
         if (!env.ctx) return
         const local = env.irHandles.get(localH) as IRLocal | undefined
         if (local) env.ctx.pendingLocals.push(local)
+    }
+
+    /** @fnref: slot index for a wat-id'd function name (find-or-append),
+     *  also registering the default i32→i32 funcref signature. */
+    const compiler_ctx_funcref_index = (watNameStr: number): number => {
+        if (!env.ctx) return 0
+        return env.ctx.funcref.index(strings.get(watNameStr))
+    }
+
+    /** @call_indirect: ensure the default `__fn_i_i` funcref signature is
+     *  registered (the slot may have been minted by an @fnref elsewhere). */
+    const compiler_ctx_funcref_ensure_default_sig = (): void => {
+        if (!env.ctx) return
+        env.ctx.funcref.ensureDefaultSig()
     }
 
     const compiler_ctx_loopStack_push = (id: number): void => {
@@ -1441,7 +1482,7 @@ export function createComptimeImports(env: ComptimeEnv): WebAssembly.Imports {
             compiler_arr_new, compiler_arr_push,
             ir_makeConst, ir_makeLocalGet, ir_makeLocalSet,
             ir_makeGlobalGet, ir_makeGlobalSet,
-            ir_makeBinOp, ir_makeBlock, ir_null, ir_makeCall,
+            ir_makeBinOp, ir_makeBlock, ir_null, ir_makeCall, ir_makeCallIndirect,
             ir_makeIf, ir_makeLoop, ir_makeBreak, ir_makeContinue, ir_makeReturn,
             ir_makeExport, ir_makeLocal, ir_makeParam, ir_makeGlobal,
             ir_makeFunction, ir_makeImport, compiler_arr_push_str,
@@ -1453,6 +1494,7 @@ export function createComptimeImports(env: ComptimeEnv): WebAssembly.Imports {
             compiler_ctx_varNames_add, compiler_ctx_varNames_has,
             compiler_isVarName,
             compiler_ctx_pendingLocals_push,
+            compiler_ctx_funcref_index, compiler_ctx_funcref_ensure_default_sig,
             compiler_ctx_loopStack_push, compiler_ctx_loopStack_pop, compiler_ctx_loopStack_peek,
             compiler_ctx_nextLoopId,
             module_push_definition, module_push_global,

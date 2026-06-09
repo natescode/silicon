@@ -1,0 +1,49 @@
+# SPDX-License-Identifier: MIT
+# Phase 5 Workstream B — first-class function references, migrated to
+# data-driven strata.
+#
+# `@fnref name`      — produce the i32 table index for top-level @fn `name`,
+#                      adding it to the module funcref table on first reference
+#                      (stable across references, so `@fnref f == @fnref f`).
+# `@call_indirect cb, arg` — invoke the function at table index `cb` with one
+#                      i32 argument, returning i32.  The 1.0 surface fixes the
+#                      signature to i32 → i32 (`__fn_i_i`).
+#
+# These used to be hardcoded in `lower.ts` (lowerFnRef / lowerCallIndirect)
+# because they mutate module-level funcref-table state — a LowerCtx field the
+# handler ctx didn't expose.  That state is now reachable via the CompilerAPI
+# `funcref` surface (compiler_ctx_funcref_index / _ensure_default_sig), and the
+# CallIndirect node via ir_makeCallIndirect, so the lowering lives in Silicon.
+
+@stratum FnRef := {
+    Compiler::register::expression_keyword('@fnref');
+    Compiler::on::lower('@fnref', FnRef_lower);
+};
+
+\\ FnRef_lower (Int)
+@fn FnRef_lower node := {
+    compiler::compiler_require_argc(node, 1, compiler::compiler_str_intern('@fnref expects exactly 1 argument (a function name)', 0));
+    # The argument is a bare identifier — a Namespace node with a single
+    # path segment.  Read it, wat-id it, and find-or-append its table slot.
+    arg := compiler::compiler_arg(node, 0);
+    name := compiler::compiler_ast_str_field(arg, compiler::compiler_str_intern('path.0', 0));
+    target := compiler::compiler_watId(name);
+    idx := compiler::compiler_ctx_funcref_index(target);
+    compiler::ir_makeConst(idx, compiler::compiler_str_intern('i32', 0))
+};
+
+@stratum CallIndirect := {
+    Compiler::register::expression_keyword('@call_indirect');
+    Compiler::on::lower('@call_indirect', CallIndirect_lower);
+};
+
+\\ CallIndirect_lower (Int)
+@fn CallIndirect_lower node := {
+    compiler::compiler_require_argc(node, 2, compiler::compiler_str_intern('@call_indirect expects exactly 2 arguments (cb, arg)', 0));
+    compiler::compiler_ctx_funcref_ensure_default_sig();
+    cb := compiler::compiler_lowerExpr(compiler::compiler_arg(node, 0));
+    a := compiler::compiler_lowerExpr(compiler::compiler_arg(node, 1));
+    args := compiler::compiler_arr_new();
+    compiler::compiler_arr_push(args, a);
+    compiler::ir_makeCallIndirect(cb, args, compiler::compiler_str_intern('__fn_i_i', 0), compiler::compiler_str_intern('i32', 0))
+};

@@ -79,6 +79,9 @@ interface CtxShape {
      *  by hand) don't have to construct them. */
     target?: import('../ir/lower').LowerTarget
     wasmGcTypes?: import('../ir/nodes').WasmGcTypeRegistry
+    /** Phase 5 Workstream B — funcref table for @fnref / @call_indirect.
+     *  Optional so test-only hand-built ctxs don't have to construct it. */
+    funcrefTable?: import('../ir/nodes').FuncrefTable
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -170,6 +173,17 @@ export interface CompilerCtx {
         internNominal(t: import('../ir/nodes').WasmGcType): number
         /** Look up a previously-registered nominal type by name. */
         lookupByName(name: string): number | undefined
+    }
+    /** Phase 5 Workstream B — module-level funcref table (first-class
+     *  function references), the state @fnref / @call_indirect lowering
+     *  mutates.  Drained into IRModule.funcrefTable at end of lowerProgram. */
+    funcref: {
+        /** Slot index for a wat-id'd function name (find-or-append).  Also
+         *  ensures the default i32→i32 (`__fn_i_i`) signature is registered. */
+        index(watName: string): number
+        /** Ensure the default `__fn_i_i` signature is registered (used by
+         *  @call_indirect sites that consume a slot they didn't mint). */
+        ensureDefaultSig(): void
     }
 }
 
@@ -416,6 +430,26 @@ export function createCompilerAPI(ctx: CtxShape, fns: LowerFns): CompilerAPI {
             intern:        (t)    => ctx.wasmGcTypes?.intern(t) ?? 0,
             internNominal: (t)    => ctx.wasmGcTypes?.internNominal(t) ?? 0,
             lookupByName:  (name) => ctx.wasmGcTypes?.lookupByName(name),
+        },
+        // Phase 5 Workstream B — funcref table (mirrors lowerFnRef /
+        // lowerCallIndirect, which now live in src/strata/funcref.si).
+        funcref: {
+            index: (watName) => {
+                const t = ctx.funcrefTable
+                if (!t) return 0
+                let idx = t.entries.indexOf(watName)
+                if (idx < 0) { idx = t.entries.length; t.entries.push(watName) }
+                if (t.signatures.length === 0) {
+                    t.signatures.push({ key: '__fn_i_i', params: ['i32'], result: 'i32' })
+                }
+                return idx
+            },
+            ensureDefaultSig: () => {
+                const t = ctx.funcrefTable
+                if (t && t.signatures.length === 0) {
+                    t.signatures.push({ key: '__fn_i_i', params: ['i32'], result: 'i32' })
+                }
+            },
         },
     }
 

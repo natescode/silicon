@@ -50,6 +50,7 @@
 \\ @extern ir_makeBlock (Int, Int, Int) -> Int;
 \\ @extern ir_null () -> Int;
 \\ @extern ir_makeCall (Int, Int, Int, Int) -> Int;
+\\ @extern ir_makeCallIndirect (Int, Int, Int, Int) -> Int;
 
 # ── IR builders — control flow ─────────────────────────────────────────
 \\ @extern ir_makeIf (Int, Int, Int, Int) -> Int;
@@ -124,6 +125,8 @@
 \\ @extern compiler_ctx_varNames_add (Int) -> Void;
 \\ @extern compiler_ctx_varNames_has (Int) -> Int;
 \\ @extern compiler_ctx_pendingLocals_push (Int) -> Void;
+\\ @extern compiler_ctx_funcref_index (Int) -> Int;
+\\ @extern compiler_ctx_funcref_ensure_default_sig () -> Void;
 \\ @extern compiler_ctx_loopStack_push (Int) -> Void;
 \\ @extern compiler_ctx_loopStack_pop () -> Int;
 \\ @extern compiler_ctx_loopStack_peek () -> Int;

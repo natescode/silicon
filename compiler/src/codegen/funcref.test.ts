@@ -114,6 +114,41 @@ describe('Phase 5 Workstream B: @fnref + @call_indirect', () => {
         expect(ex.dispatch_double()).toBe(20)
     })
 
+    test('@fnref with wrong arity errors at lower time', async () => {
+        let threw = false
+        try {
+            await compileAndRun(`
+                \\\\ add_one (Int) -> Int
+                @fn add_one x := x + 1;
+                \\\\ bad Int
+                @fn bad := @fnref(add_one, add_one);
+                @export bad;`)
+        } catch (e) {
+            threw = true
+            expect((e as Error).message).toContain('@fnref expects exactly 1 argument')
+        }
+        expect(threw).toBe(true)
+    })
+
+    test('@call_indirect with wrong arity errors at lower time', async () => {
+        let threw = false
+        try {
+            await compileAndRun(`
+                \\\\ add_one (Int) -> Int
+                @fn add_one x := x + 1;
+                \\\\ bad Int
+                @fn bad := {
+                    @mut cb := @fnref(add_one);
+                    @call_indirect(cb)
+                };
+                @export bad;`)
+        } catch (e) {
+            threw = true
+            expect((e as Error).message).toContain('@call_indirect expects exactly 2 arguments')
+        }
+        expect(threw).toBe(true)
+    })
+
     test('non-funcref programs preserve their existing direct-binary path', async () => {
         // A program without @fnref / @call_indirect must produce identical
         // bytes via the direct binary emitter as before (the byte-equal
