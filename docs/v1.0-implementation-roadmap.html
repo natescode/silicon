@@ -88,6 +88,16 @@
   .tt { font-weight:650; font-size:15px; margin-bottom:6px; }
   .gatetag { font-size:10px; font-weight:800; color:#0d1117; background:var(--gate); padding:1px 7px; border-radius:6px; letter-spacing:.04em; }
   .crittag { font-size:10px; font-weight:700; color:var(--crit); border:1px solid #4a2f3e; padding:1px 7px; border-radius:6px; }
+  .st { font-size:10px; font-weight:800; padding:1px 7px; border-radius:6px; letter-spacing:.04em; }
+  .st-done { color:#0d1117; background:var(--mono); }
+  .st-blocked { color:#0d1117; background:var(--gate); }
+  .chip-done { border-color:var(--mono); } .chip-blocked { border-color:var(--gate); }
+  tr.status-done td.cid { box-shadow:inset 3px 0 0 var(--mono) !important; }
+  tr.status-blocked td.cid { box-shadow:inset 3px 0 0 var(--gate) !important; }
+  .tnote { font-size:12.5px; margin:8px 0; padding:9px 12px; border-radius:8px; line-height:1.5; }
+  .tnote code { background:#11161f; }
+  .tnote-done { background:rgba(63,185,80,.08); border:1px solid #1f4427; color:#bfe6c8; }
+  .tnote-blocked { background:rgba(247,185,85,.08); border:1px solid #4a3a1e; color:#f0d9a8; }
   .tdesc { color:#d2dae4; font-size:14px; margin-bottom:8px; }
   .tfiles, .tunb { font-size:12.5px; color:var(--muted); margin-top:5px; }
   .tfiles .k, .tunb .k { display:inline-block; font-size:10px; text-transform:uppercase; letter-spacing:.06em;
@@ -123,6 +133,9 @@
   key files, size, risk, and what it unblocks.</p>
   <div class="meta">Generated <b>2026-06-09</b> · derived from ADRs 0001/0003/0008/0009/0011/0012/0013/0015/0016/0017/0018/0019 ·
   cross-checked against <code>docs/v1.0-critical-path.md</code></div>
+  <div class="meta">Progress: <b style="color:var(--mono)">C0 ✓ done</b> (multi-signature funcref ABI) ·
+  <b style="color:var(--gate)">M0 ⚠ blocked</b> (engine gap — see note) · F0a scoped as a standalone effort.
+  Phase 0 is partially complete; M0 and F0a are each multi-session features.</div>
   <div class="tiles">
     <div class="tile"><div class="num">18</div><div class="lbl">subtasks</div></div>
     <div class="tile gate"><div class="num">7</div><div class="lbl">on the critical path</div></div>
@@ -149,7 +162,7 @@
     (<code>M0 → C0 → C1 → C2</code>, →97%) converge at the poll-reactor.</p>
     <div class="ladder"><div class="phase">
   <div class="phead"><span class="pnum">Phase 0</span><span class="pnote">Foundations — no inter-dependencies, run in parallel</span></div>
-  <div class="pchips"><a href="#F0a" class="chip ffi" title="Bindgen"><b>F0a</b> Bindgen</a><a href="#M0" class="chip mono crit" title="Comptime monomorphization substrate"><b>M0</b> Comptime monomorphization subs…</a><a href="#C0" class="chip ffi crit" title="Generalize the funcref ABI  (closures C0)"><b>C0</b> Generalize the funcref ABI</a></div>
+  <div class="pchips"><a href="#F0a" class="chip ffi" title="Bindgen"><b>F0a</b> Bindgen</a><a href="#M0" class="chip mono crit chip-blocked" title="Comptime monomorphization substrate"><b>⚠ M0</b> Comptime monomorphization subs…</a><a href="#C0" class="chip ffi crit chip-done" title="Generalize the funcref ABI  (closures C0)"><b>✓ C0</b> Generalize the funcref ABI</a></div>
 </div><div class="phase">
   <div class="phead"><span class="pnum">Phase 1</span><span class="pnote">FFI to ~80% (async) + container mono — parallel</span></div>
   <div class="pchips"><a href="#F1a" class="chip ffi crit" title="Object handles / JSValue externref"><b>F1a</b> Object handles / JSValue exter…</a><a href="#F1b" class="chip ffi crit" title="Blocking @await (Asyncify) + reactor host + async effect"><b>F1b</b> Blocking @await</a><a href="#M1" class="chip mono" title="Container monomorphization — Vec[T] / HashMap[K,V]"><b>M1</b> Container monomorphization</a></div>
@@ -174,73 +187,81 @@
 <table class="rt">
 <thead><tr><th>#</th><th>Subtask</th><th>ADR · phase</th><th>Size · risk · version</th></tr></thead>
 <tbody>
-<tr id="F0a" class="t-ffi v-v10">
+<tr id="F0a" class="t-ffi v-v10 status-todo">
   <td class="cid"><span class="idbadge ffi">F0a</span></td>
   <td class="ctitle"><div class="tt">Bindgen</div>
       <div class="tdesc">Machine-generate the <code>@extern</code> <code>.si</code> + both host shims from upstream specs (WebIDL for the web — the only source that preserves int-vs-float; <code>.d.ts</code> for Node/Bun), with a <code>bindgen.lock</code> + a CI <code>check-shims</code> test that fails on drift. First slice: regenerate <code>web.si</code> Math/clock byte-for-byte.</div>
+      <div class="tnote tnote-todo">Scoping (2026-06-09): the anti-drift value requires external deps (<code>@webref/idl</code>, <code>webidl2</code>) + network to parse upstream IDL. A self-contained first slice — Binding IR + Tier-0 typemap + <code>.si</code> emitter reproducing the <code>web.si</code> Math/clock decls from an in-repo spec — is buildable without deps; the live web/node/bun adapters are the follow-up. A standalone, multi-session effort.</div>
       <div class="tfiles"><span class="k">Files</span> NEW <code>compiler/bindgen/</code>; marker regions in <code>cli/src/host/js-host.ts</code> + <code>playground/playground/web-env.js</code>; <code>compiler/scripts/gen-web-assets.ts</code>; NEW <code>.github/workflows/bindgen.yml</code></div>
       <div class="tunb"><span class="k">Unblocks</span> Anti-drift, on-demand regen. <b>Stays ~10%</b> (doesn't lift the ceiling). Independently buildable.</div></td>
   <td class="cadr">ADR 0017</td>
   <td class="cmeta"><span class="sz sz-l">L</span><span class="rk rk-md">Med</span><span class="ver ver-v10">v1.0 — the gate</span></td>
 </tr>
-<tr id="F1a" class="t-ffi v-v10">
+<tr id="F1a" class="t-ffi v-v10 status-todo">
   <td class="cid"><span class="idbadge ffi">F1a</span></td>
   <td class="ctitle"><div class="tt">Object handles / JSValue externref <span class="crittag">critical path</span></div>
       <div class="tdesc">Generalize the <code>JSString</code>-only externref path to a generic <code>JSValue</code> object handle, so a <code>Response</code>/<code>Uint8Array</code>/DOM node has a type to land in.</div>
+      
       <div class="tfiles"><span class="k">Files</span> <code>compiler/src/ir/lower.ts</code> (<code>siliconTypeNameToWasm</code> ~2263, <code>usesExternref</code> ~1426, slot stamping ~1468, new <code>injectExternRefSlots</code> modeled on <code>injectJSStringRefSlots</code> ~457/528, <code>lowerExternParams/Result</code> ~978); <code>strata/defkinds.si</code> <code>ExternDef_lower</code> (import-module override, not hardcoded <code>'env'</code>)</div>
       <div class="tunb"><span class="k">Unblocks</span> Sync object-returning APIs; lifts bindgen scalar→object tier. <b>~10% → ~35%</b></div></td>
   <td class="cadr">ADR 0018 · P0/P1</td>
   <td class="cmeta"><span class="sz sz-m">M</span><span class="rk rk-md">Med</span><span class="ver ver-v10">v1.0 — the gate</span></td>
 </tr>
-<tr id="F1b" class="t-ffi v-v10">
+<tr id="F1b" class="t-ffi v-v10 status-todo">
   <td class="cid"><span class="idbadge ffi">F1b</span></td>
   <td class="ctitle"><div class="tt">Blocking @await (Asyncify) + reactor host + async effect <span class="crittag">critical path</span></div>
       <div class="tdesc"><code>@async</code>/<code>@await</code>/<code>@suspending</code> strata (no grammar change); the Asyncify unwind/rewind transform; the one-shot host → a reactor; an <code>async</code> effect tag. <b>Portable incl. Bun</b> — JSPI is absent in JSC, so Asyncify is the permanent floor.</div>
+      
       <div class="tfiles"><span class="k">Files</span> NEW strata in <code>strata/control.si</code>; Asyncify pass (Binaryen v117 is already a dep, then an IR pass sibling to <code>loopDesugar</code>); <code>js-host.ts</code> <code>runUnderBun</code> ~100 → reactor; <code>web-env.js</code> <code>startGameLoop</code> → reactor; ADR 0012 lattice <code>+async</code></div>
       <div class="tunb"><span class="k">Unblocks</span> <b>All</b> Promise APIs on Bun today (<code>fetch</code>/<code>.json()</code>/timers/<code>crypto.subtle</code>). <b>~35% → ~80%</b></div></td>
   <td class="cadr">ADR 0018 · P1/P2-host/P3/P5</td>
   <td class="cmeta"><span class="sz sz-l">L</span><span class="rk rk-hi">High</span><span class="ver ver-v10">v1.0 — the gate</span></td>
 </tr>
-<tr id="C0" class="t-ffi v-v10">
+<tr id="C0" class="t-ffi v-v10 status-done">
   <td class="cid"><span class="idbadge ffi">C0</span></td>
-  <td class="ctitle"><div class="tt">Generalize the funcref ABI  (closures C0) <span class="crittag">critical path</span></div>
-      <div class="tdesc">Stop forcing <code>__fn_i_i</code>: derive <code>sigKey</code> from the <code>@fn</code>'s real param/result wasm types; multi-signature funcref table; relax the arity-2 guard. <b>Builds directly on the <code>funcref.si</code> surface just dissolved.</b></div>
-      <div class="tfiles"><span class="k">Files</span> <code>compiler/src/ir/lower.ts</code> <code>lowerFnRef</code> ~1584, <code>lowerCallIndirect</code> ~1620, <code>__fn_i_i</code> hardcode ~1608/1625; <code>compiler/src/strata/funcref.si</code></div>
-      <div class="tunb"><span class="k">Unblocks</span> C1; funcref-at-boundary. Pure refactor — must keep byte-equal codegen for non-funcref programs (<code>funcrefTable</code> stays <code>undefined</code>).</div></td>
+  <td class="ctitle"><div class="tt">Generalize the funcref ABI  (closures C0) <span class="st st-done">✓ DONE</span> <span class="crittag">critical path</span></div>
+      <div class="tdesc">Stop forcing <code>__fn_i_i</code>: derive <code>sigKey</code> from the <code>@fn</code>'s real param/result wasm types; multi-signature funcref table; relax the arity-2 guard. <b>Built directly on the <code>funcref.si</code> surface dissolved earlier.</b></div>
+      <div class="tnote tnote-done">Done (2026-06-09, commit 73c6337). <code>@call_indirect(cb, …args)</code> is variadic; a host expander derives the sigKey from the args' wasm types and registers it in the multi-signature table. i32→i32 stays byte-identical; new multi-sig test dispatches a (Int,Int)→Int fn → 42. ~1,545 tests green.</div>
+      <div class="tfiles"><span class="k">Files</span> <code>compiler/src/strata/funcref.si</code>; <code>compiler/src/compiler-api/index.ts</code> (<code>expandCallIndirect</code>); <code>compiler/src/comptime/imports.ts</code> (the funcref/call_indirect path now lives in strata, not the old <code>lower.ts:1584/1620</code>)</div>
+      <div class="tunb"><span class="k">Unblocks</span> C1; funcref-at-boundary. Pure refactor — kept byte-equal codegen for non-funcref / i32→i32 programs.</div></td>
   <td class="cadr">ADR 0019 · C0</td>
   <td class="cmeta"><span class="sz sz-m">M</span><span class="rk rk-lo">Low-Med</span><span class="ver ver-v10">v1.0 — the gate</span></td>
 </tr>
-<tr id="C1" class="t-ffi v-v10">
+<tr id="C1" class="t-ffi v-v10 status-todo">
   <td class="cid"><span class="idbadge ffi">C1</span></td>
   <td class="ctitle"><div class="tt">Non-escaping closures (all modes, zero-cost)  (closures C1) <span class="crittag">critical path</span></div>
       <div class="tdesc"><code>&@closure</code>/<code>&@call_closure</code>; lambda-lift in the elaborator; anonymous-struct env in frame/arena; <b>per-concrete-env-type consumer specialization (uses M0)</b> → a direct call; empty-env degenerates to today's <code>@fnref</code>. By-value/<code>&</code>-immutable capture only — <b>does NOT require the borrow checker</b>.</div>
+      
       <div class="tfiles"><span class="k">Files</span> NEW closure strata alongside <code>control.si</code>; elaborator lambda-lift modeled on <code>elaborator/loopDesugar.ts</code>; <b>reuses M0</b></div>
       <div class="tunb"><span class="k">Unblocks</span> ADR 0016 combinators <code>map</code>/<code>filter</code>/<code>fold</code> (with M1) on every mode. <b>Needs M0 + C0</b></div></td>
   <td class="cadr">ADR 0019 · C1</td>
   <td class="cmeta"><span class="sz sz-l">L</span><span class="rk rk-md">Med</span><span class="ver ver-v10">v1.0 — the gate</span></td>
 </tr>
-<tr id="C2" class="t-ffi v-v10">
+<tr id="C2" class="t-ffi v-v10 status-todo">
   <td class="cid"><span class="idbadge ffi">C2</span></td>
   <td class="ctitle"><div class="tt">Escaping host-callable closures — wasm-gc only  (closures C2 · THE GATE) <span class="gatetag">GATE</span> <span class="crittag">critical path</span></div>
       <div class="tdesc"><code>(type $Clo (struct (i32 fnIndex)(ref $Env)))</code>; an <code>__invoke_&lt;sig&gt;(externref,…)</code> trampoline; <code>&@on</code>/<code>&@off</code> over the engine-traced externref; <code>@extern</code> externref/funcref slot; the conservative <b>escape/host-reachability classifier</b> (routes any closure reaching <code>@extern</code> to Tier B, rejects on <code>wasm-mvp</code>/<code>--native</code> with a mode-gate E-code). Engine-GC'd — no leak, cycles collected, <code>__closure_release</code> is a no-op. Verified Bun/JSC runs wasm-gc today; v1.0 invocation reuses the existing <code>call_indirect</code> (no JSPI dep).</div>
+      
       <div class="tfiles"><span class="k">Files</span> <code>lower.ts</code> (wasm-gc struct env + externref trampoline export); NEW escape classifier; <code>@export_callback</code> keyword stratum</div>
       <div class="tunb"><span class="k">Unblocks</span> Callbacks/events (<code>addEventListener</code>, <code>setTimeout(cb)</code>, <code>onmessage</code>, <code>EventTarget</code>, <code>.on('data')</code>). <b>~80% → ~97% — THE GATE CLOSES.</b> Needs C1</div></td>
   <td class="cadr">ADR 0019 · C2 / 0018 · P3</td>
   <td class="cmeta"><span class="sz sz-l">L</span><span class="rk rk-hi">High</span><span class="ver ver-v10">v1.0 — the gate</span></td>
 </tr>
-<tr id="F3" class="t-ffi v-v10">
+<tr id="F3" class="t-ffi v-v10 status-todo">
   <td class="cid"><span class="idbadge ffi">F3</span></td>
   <td class="ctitle"><div class="tt">Poll-reactor + tasks  (closures C3) <span class="crittag">critical path</span></div>
       <div class="tdesc"><code>Future[T]</code> sum (<code>$Pending waker | $Ready value</code>), <code>spawn</code>/<code>block_on</code>, microtask drain, many in-flight awaits. Reuses C1/C2 closures as wake continuations.</div>
+      
       <div class="tfiles"><span class="k">Files</span> stdlib <code>Future[T]</code>; reactor host generalization</div>
       <div class="tunb"><span class="k">Unblocks</span> True concurrency, <code>Promise.all</code>-shaped composition, streaming events. <b>~97% → 100%</b>. Needs C2</div></td>
   <td class="cadr">ADR 0018 · P4 / 0019 · C3</td>
   <td class="cmeta"><span class="sz sz-l">L</span><span class="rk rk-md">Med</span><span class="ver ver-v10">v1.0 — the gate</span></td>
 </tr>
-<tr id="F3-opt" class="t-ffi v-v10opt">
+<tr id="F3-opt" class="t-ffi v-v10opt status-todo">
   <td class="cid"><span class="idbadge ffi">F3-opt</span></td>
   <td class="ctitle"><div class="tt">JSPI fast path</div>
       <div class="tdesc">Loader feature-detects <code>WebAssembly.promising</code>; emit a plain <code>call</code> + promising export on V8/Node/Deno (and JSC once it ships). Same <code>@await</code> surface — flip a flag.</div>
+      
       <div class="tfiles"><span class="k">Files</span> loader glue only</div>
       <div class="tunb"><span class="k">Unblocks</span> No new coverage — erases the Asyncify size/perf tax on V8/Node. A detect-and-upgrade, never a hard dep. Slots in any time after F1a.</div></td>
   <td class="cadr">ADR 0018 · P2</td>
@@ -255,19 +276,21 @@
 <table class="rt">
 <thead><tr><th>#</th><th>Subtask</th><th>ADR · phase</th><th>Size · risk · version</th></tr></thead>
 <tbody>
-<tr id="M0" class="t-mono v-v10">
+<tr id="M0" class="t-mono v-v10 status-blocked">
   <td class="cid"><span class="idbadge mono">M0</span></td>
-  <td class="ctitle"><div class="tt">Comptime monomorphization substrate <span class="crittag">critical path</span></div>
-      <div class="tdesc">Audit/wire the comptime API coverage (<code>ast::capture_template</code>/<code>patch_types</code>/<code>with_name</code>/<code>rewrite_call</code>, <code>type::bind_template_args</code>/<code>mangle_suffix</code>); unskip the <code>@generic</code> stratum (9 skipped tests — the stratum is already written); make the <code>on::call_site</code> wildcard fire + state-memoized monomorph-per-(template, type-args). <b>Pulled into v1.0 because closures C1 need it.</b></div>
-      <div class="tfiles"><span class="k">Files</span> <code>strata/modules/compiler.si</code>; <code>comptime/imports.ts</code> + body interpreter; <code>wit/comptime.wit</code>; tests <code>elaborator/generic-monomorph.test.ts:103-187</code>, <code>generic-e2e.test.ts:62-174</code></div>
-      <div class="tunb"><span class="k">Unblocks</span> <b>Shared mechanism: closures C1 (env specialization) AND M1 (containers).</b> Design done — mostly wiring + debugging</div></td>
+  <td class="ctitle"><div class="tt">Comptime monomorphization substrate <span class="st st-blocked">⚠ BLOCKED</span> <span class="crittag">critical path</span></div>
+      <div class="tdesc">Audit/wire the comptime API coverage (<code>ast::capture_template</code>/<code>patch_types</code>/<code>with_name</code>/<code>rewrite_call</code>, <code>type::bind_template_args</code>/<code>mangle_suffix</code>); unskip the <code>@generic</code> stratum (9 skipped tests); make the <code>on::call_site</code> wildcard fire + state-memoized monomorph-per-(template, type-args). <b>Pulled into v1.0 because closures C1 need it.</b></div>
+      <div class="tnote tnote-blocked">Engine gap (found 2026-06-09): the existing <code>@generic</code> stratum is written in the <b>legacy rich-body inline-handler style</b> (<code>on::decl('@generic', { … })</code> / <code>on::call_site({ … })</code> blocks, <code>Compiler::ast::*</code>, <code>Compiler::state</code>, <code>s::set</code>, <code>@nil()</code>) which the current <b>compiled-handler</b> engine does not register — after loading the stratum, <code>registry.handlers.decl.has('@generic')</code> is <code>false</code>, so template-capture never fires. The 9 tests are skipped for this reason. The comptime APIs exist in <code>imports.ts</code>, but the inline-block <code>on::decl</code>/<code>on::call_site</code> registration + running the rich surface in the compiled engine does not. <b>Bigger than 'wire the APIs'</b> — needs either reviving inline-block handler support OR a full rewrite of the stratum in the named-handler/<code>compiler_*</code> style. A standalone, multi-session effort. (Size revised L, risk Med→High.)</div>
+      <div class="tfiles"><span class="k">Files</span> <code>strata/modules/compiler.si</code>; <code>comptime/imports.ts</code> + the strata loader's on::decl/on::call_site registration (<code>elaborator/strataLoader.ts</code>); tests <code>elaborator/generic-monomorph.test.ts:103-187</code>, <code>generic-e2e.test.ts:62-174</code></div>
+      <div class="tunb"><span class="k">Unblocks</span> <b>Shared mechanism: closures C1 (env specialization) AND M1 (containers).</b></div></td>
   <td class="cadr">ADR 0003 · C-1 / 0001 · G-1 core</td>
-  <td class="cmeta"><span class="sz sz-l">M-L</span><span class="rk rk-md">Med</span><span class="ver ver-v10">v1.0 — the gate</span></td>
+  <td class="cmeta"><span class="sz sz-l">L</span><span class="rk rk-md">Med-High</span><span class="ver ver-v10">v1.0 — the gate</span></td>
 </tr>
-<tr id="M1" class="t-mono v-v11">
+<tr id="M1" class="t-mono v-v11 status-todo">
   <td class="cid"><span class="idbadge mono">M1</span></td>
   <td class="ctitle"><div class="tt">Container monomorphization — Vec[T] / HashMap[K,V]</div>
       <div class="tdesc">Structural constraint protocol (comptime <code>sizeof[T]</code>/hashable check at <i>instantiation</i>, Zig-style — not at definition); emit monomorphic Vec/HashMap variants per element/(K,V) type; a HashMap iteration surface (<code>IterStep</code>).</div>
+      
       <div class="tfiles"><span class="k">Files</span> <code>stdlib/vec.si</code> (i32-only; <code>vec_map_i32_i32</code> is the template), <code>stdlib/hashmap.si</code> (i32→i32, no iteration), <code>slice.si</code>; <code>codegen/gc-vec.ts</code> (Vec[Int] only; Float/Int64 stubbed)</div>
       <div class="tunb"><span class="k">Unblocks</span> <code>Vec[Float]</code>/<code>Vec[Int64]</code>; HashMap iteration; ADR 0016 <code>IterStep</code> dispatch; combinators (with C1). The “dominant speed lever.” <b>Needs M0</b></div></td>
   <td class="cadr">ADR 0001 · G-1 / 0016</td>
@@ -282,73 +305,81 @@
 <table class="rt">
 <thead><tr><th>#</th><th>Subtask</th><th>ADR · phase</th><th>Size · risk · version</th></tr></thead>
 <tbody>
-<tr id="K1" class="t-cap v-post">
+<tr id="K1" class="t-cap v-post status-todo">
   <td class="cid"><span class="idbadge cap">K1</span></td>
   <td class="ctitle"><div class="tt">on::check phase hook</div>
       <div class="tdesc">Add <code>'check'</code> to <code>StratumPhase</code>; fire per-module after typecheck, before lowering; pass the typed AST + imported sigs + <code>typeMap</code>.</div>
+      
       <div class="tfiles"><span class="k">Files</span> <code>elaborator/registry.ts</code> (<code>StratumPhase</code> ~63; <code>handlers</code> maps ~114-129 add <code>check:</code>); <code>strataLoader.ts</code> dispatch</div>
       <div class="tunb"><span class="k">Unblocks</span> <b>All</b> capability/effect work (K2–K8) + ADR 0015 ocaps. The substrate gate.</div></td>
   <td class="cadr">ADR 0013 · P1</td>
   <td class="cmeta"><span class="sz sz-m">M</span><span class="rk rk-lo">Low</span><span class="ver ver-post">post-v1.0</span></td>
 </tr>
-<tr id="K2" class="t-cap v-post">
+<tr id="K2" class="t-cap v-post status-todo">
   <td class="cid"><span class="idbadge cap">K2</span></td>
   <td class="ctitle"><div class="tt">AST reflection primitives</div>
       <div class="tdesc"><code>ast_inferred_type</code>, <code>ast_callee</code>, <code>is_construction</code>, <code>symbol_module</code>.</div>
+      
       <div class="tfiles"><span class="k">Files</span> <code>comptime/imports.ts</code> + <code>strata/modules/compiler.si</code> + <code>wit/comptime.wit</code></div>
       <div class="tunb"><span class="k">Unblocks</span> K4, K5</div></td>
   <td class="cadr">ADR 0013 · P2</td>
   <td class="cmeta"><span class="sz sz-m">M</span><span class="rk rk-lo">Low</span><span class="ver ver-post">post-v1.0</span></td>
 </tr>
-<tr id="K3" class="t-cap v-post">
+<tr id="K3" class="t-cap v-post status-todo">
   <td class="cid"><span class="idbadge cap">K3</span></td>
   <td class="ctitle"><div class="tt">Comptime collections</div>
       <div class="tdesc">Map/Set/Worklist for the checker's fixpoint (host-side interim, then stdlib).</div>
+      
       <div class="tfiles"><span class="k">Files</span> <code>comptime/imports.ts</code> (interim JS)</div>
       <div class="tunb"><span class="k">Unblocks</span> K4</div></td>
   <td class="cadr">ADR 0013 · P3</td>
   <td class="cmeta"><span class="sz sz-s">S-M</span><span class="rk rk-lo">Low</span><span class="ver ver-post">post-v1.0</span></td>
 </tr>
-<tr id="K4" class="t-cap v-post">
+<tr id="K4" class="t-cap v-post status-todo">
   <td class="cid"><span class="idbadge cap">K4</span></td>
   <td class="ctitle"><div class="tt">Capability/effect checker prototype (TS)</div>
       <div class="tdesc">Bottom-up union of callees' required caps + <code>@extern</code> tags ⇒ a fixpoint over the call graph; reject when a required capability isn't reachable; emit <code>capabilityMap</code>.</div>
+      
       <div class="tfiles"><span class="k">Files</span> <code>comptime/</code> (new)</div>
       <div class="tunb"><span class="k">Unblocks</span> K6, K7. De-risks the analysis rules before the Silicon port.</div></td>
   <td class="cadr">ADR 0013 · P4a</td>
   <td class="cmeta"><span class="sz sz-l">L</span><span class="rk rk-md">Med</span><span class="ver ver-post">post-v1.0</span></td>
 </tr>
-<tr id="K5" class="t-cap v-post">
+<tr id="K5" class="t-cap v-post status-todo">
   <td class="cid"><span class="idbadge cap">K5</span></td>
   <td class="ctitle"><div class="tt">@capability stratum + ocap mint-site rule</div>
       <div class="tdesc"><code>@capability Console;</code> declares a nominal capability; an <code>on::check</code> rule rejects construction outside the issuer module (unforgeability leg 1).</div>
+      
       <div class="tfiles"><span class="k">Files</span> NEW <code>strata/modules/capabilities.si</code></div>
       <div class="tunb"><span class="k">Unblocks</span> Ocaps, no-ambient-authority. Needs K1 + K2</div></td>
   <td class="cadr">ADR 0015 / 0013 · P5</td>
   <td class="cmeta"><span class="sz sz-m">M</span><span class="rk rk-md">Med</span><span class="ver ver-post">post-v1.0</span></td>
 </tr>
-<tr id="K6" class="t-cap v-post">
+<tr id="K6" class="t-cap v-post status-todo">
   <td class="cid"><span class="idbadge cap">K6</span></td>
   <td class="ctitle"><div class="tt">Port checker into Silicon (dogfood)</div>
       <div class="tdesc">Rewrite K4 as a Silicon <code>@fn</code> handler over K2 reflection + K3 collections + K5 registry.</div>
+      
       <div class="tfiles"><span class="k">Files</span> <code>strata/modules/capabilities.si</code></div>
       <div class="tunb"><span class="k">Unblocks</span> Self-hosting alignment</div></td>
   <td class="cadr">ADR 0013 · P4b</td>
   <td class="cmeta"><span class="sz sz-l">M-L</span><span class="rk rk-md">Med</span><span class="ver ver-post">post-v1.0</span></td>
 </tr>
-<tr id="K7" class="t-cap v-post">
+<tr id="K7" class="t-cap v-post status-todo">
   <td class="cid"><span class="idbadge cap">K7</span></td>
   <td class="ctitle"><div class="tt">Effect-class consumption by the optimizer</div>
       <div class="tdesc">Add <code>effectClass: pure|mut|effectful</code> to the per-module symbol record; the optimizer reads it for CSE/LICM/in-placing (<code>pure ≙ no mutation rcap ∧ no effect ocap</code>).</div>
+      
       <div class="tfiles"><span class="k">Files</span> <code>caas</code> MetadataReference; optimizer stage</div>
       <div class="tunb"><span class="k">Unblocks</span> The perf payoff of the effect lattice</div></td>
   <td class="cadr">ADR 0012</td>
   <td class="cmeta"><span class="sz sz-l">M-L</span><span class="rk rk-md">Med</span><span class="ver ver-post">post-v1.0</span></td>
 </tr>
-<tr id="K8" class="t-cap v-v1y">
+<tr id="K8" class="t-cap v-v1y status-todo">
   <td class="cid"><span class="idbadge cap">K8</span></td>
   <td class="ctitle"><div class="tt">Borrow checker / rcaps R1–R4</div>
       <div class="tdesc"><code>&</code>/<code>&mut</code>/<code>&uniq</code>/<code>&val</code>; R1 scope, R2 aliasing, R3 cross-actor upgrade, R4 escape promotion; the Span/View/Slice rename (ADR-0011 addendum). <b>“Extremely low priority.”</b></div>
+      
       <div class="tfiles"><span class="k">Files</span> typechecker; <code>stdlib/slice.si</code> rename</div>
       <div class="tunb"><span class="k">Unblocks</span> Mutable capture in escaping closures; data-race-free concurrency; free-without-arena-exit; the Span/View/Slice surface</div></td>
   <td class="cadr">ADR 0011</td>

@@ -24,7 +24,8 @@ VERS = {  # version bucket → (label, css-class)
 # Each subtask: id, track, title, desc(html-ok via inline), adr, files, size, risk, unblocks, ver, crit
 S = [
     # ---- FFI gate ----
-    dict(id="F0a", track="ffi", ver="v1.0", size="L", risk="Med", crit=False,
+    dict(id="F0a", track="ffi", ver="v1.0", size="L", risk="Med", crit=False, status="todo",
+         note="Scoping (2026-06-09): the anti-drift value requires external deps (<code>@webref/idl</code>, <code>webidl2</code>) + network to parse upstream IDL. A self-contained first slice — Binding IR + Tier-0 typemap + <code>.si</code> emitter reproducing the <code>web.si</code> Math/clock decls from an in-repo spec — is buildable without deps; the live web/node/bun adapters are the follow-up. A standalone, multi-session effort.",
          title="Bindgen",
          adr="ADR 0017",
          desc="Machine-generate the <code>@extern</code> <code>.si</code> + both host shims from upstream specs (WebIDL for the web — the only source that preserves int-vs-float; <code>.d.ts</code> for Node/Bun), with a <code>bindgen.lock</code> + a CI <code>check-shims</code> test that fails on drift. First slice: regenerate <code>web.si</code> Math/clock byte-for-byte.",
@@ -42,12 +43,13 @@ S = [
          desc="<code>@async</code>/<code>@await</code>/<code>@suspending</code> strata (no grammar change); the Asyncify unwind/rewind transform; the one-shot host → a reactor; an <code>async</code> effect tag. <b>Portable incl. Bun</b> — JSPI is absent in JSC, so Asyncify is the permanent floor.",
          files="NEW strata in <code>strata/control.si</code>; Asyncify pass (Binaryen v117 is already a dep, then an IR pass sibling to <code>loopDesugar</code>); <code>js-host.ts</code> <code>runUnderBun</code> ~100 → reactor; <code>web-env.js</code> <code>startGameLoop</code> → reactor; ADR 0012 lattice <code>+async</code>",
          unblocks="<b>All</b> Promise APIs on Bun today (<code>fetch</code>/<code>.json()</code>/timers/<code>crypto.subtle</code>). <b>~35% → ~80%</b>"),
-    dict(id="C0", track="ffi", ver="v1.0", size="M", risk="Low-Med", crit=True,
+    dict(id="C0", track="ffi", ver="v1.0", size="M", risk="Low-Med", crit=True, status="done",
+         note="Done (2026-06-09, commit 73c6337). <code>@call_indirect(cb, …args)</code> is variadic; a host expander derives the sigKey from the args' wasm types and registers it in the multi-signature table. i32→i32 stays byte-identical; new multi-sig test dispatches a (Int,Int)→Int fn → 42. ~1,545 tests green.",
          title="Generalize the funcref ABI  (closures C0)",
          adr="ADR 0019 · C0",
-         desc="Stop forcing <code>__fn_i_i</code>: derive <code>sigKey</code> from the <code>@fn</code>'s real param/result wasm types; multi-signature funcref table; relax the arity-2 guard. <b>Builds directly on the <code>funcref.si</code> surface just dissolved.</b>",
-         files="<code>compiler/src/ir/lower.ts</code> <code>lowerFnRef</code> ~1584, <code>lowerCallIndirect</code> ~1620, <code>__fn_i_i</code> hardcode ~1608/1625; <code>compiler/src/strata/funcref.si</code>",
-         unblocks="C1; funcref-at-boundary. Pure refactor — must keep byte-equal codegen for non-funcref programs (<code>funcrefTable</code> stays <code>undefined</code>)."),
+         desc="Stop forcing <code>__fn_i_i</code>: derive <code>sigKey</code> from the <code>@fn</code>'s real param/result wasm types; multi-signature funcref table; relax the arity-2 guard. <b>Built directly on the <code>funcref.si</code> surface dissolved earlier.</b>",
+         files="<code>compiler/src/strata/funcref.si</code>; <code>compiler/src/compiler-api/index.ts</code> (<code>expandCallIndirect</code>); <code>compiler/src/comptime/imports.ts</code> (the funcref/call_indirect path now lives in strata, not the old <code>lower.ts:1584/1620</code>)",
+         unblocks="C1; funcref-at-boundary. Pure refactor — kept byte-equal codegen for non-funcref / i32→i32 programs."),
     dict(id="C1", track="ffi", ver="v1.0", size="L", risk="Med", crit=True,
          title="Non-escaping closures (all modes, zero-cost)  (closures C1)",
          adr="ADR 0019 · C1",
@@ -73,12 +75,13 @@ S = [
          files="loader glue only",
          unblocks="No new coverage — erases the Asyncify size/perf tax on V8/Node. A detect-and-upgrade, never a hard dep. Slots in any time after F1a."),
     # ---- Monomorphization ----
-    dict(id="M0", track="mono", ver="v1.0", size="M-L", risk="Med", crit=True,
+    dict(id="M0", track="mono", ver="v1.0", size="L", risk="Med-High", crit=True, status="blocked",
+         note="Engine gap (found 2026-06-09): the existing <code>@generic</code> stratum is written in the <b>legacy rich-body inline-handler style</b> (<code>on::decl('@generic', { … })</code> / <code>on::call_site({ … })</code> blocks, <code>Compiler::ast::*</code>, <code>Compiler::state</code>, <code>s::set</code>, <code>@nil()</code>) which the current <b>compiled-handler</b> engine does not register — after loading the stratum, <code>registry.handlers.decl.has('@generic')</code> is <code>false</code>, so template-capture never fires. The 9 tests are skipped for this reason. The comptime APIs exist in <code>imports.ts</code>, but the inline-block <code>on::decl</code>/<code>on::call_site</code> registration + running the rich surface in the compiled engine does not. <b>Bigger than 'wire the APIs'</b> — needs either reviving inline-block handler support OR a full rewrite of the stratum in the named-handler/<code>compiler_*</code> style. A standalone, multi-session effort. (Size revised L, risk Med→High.)",
          title="Comptime monomorphization substrate",
          adr="ADR 0003 · C-1 / 0001 · G-1 core",
-         desc="Audit/wire the comptime API coverage (<code>ast::capture_template</code>/<code>patch_types</code>/<code>with_name</code>/<code>rewrite_call</code>, <code>type::bind_template_args</code>/<code>mangle_suffix</code>); unskip the <code>@generic</code> stratum (9 skipped tests — the stratum is already written); make the <code>on::call_site</code> wildcard fire + state-memoized monomorph-per-(template, type-args). <b>Pulled into v1.0 because closures C1 need it.</b>",
-         files="<code>strata/modules/compiler.si</code>; <code>comptime/imports.ts</code> + body interpreter; <code>wit/comptime.wit</code>; tests <code>elaborator/generic-monomorph.test.ts:103-187</code>, <code>generic-e2e.test.ts:62-174</code>",
-         unblocks="<b>Shared mechanism: closures C1 (env specialization) AND M1 (containers).</b> Design done — mostly wiring + debugging"),
+         desc="Audit/wire the comptime API coverage (<code>ast::capture_template</code>/<code>patch_types</code>/<code>with_name</code>/<code>rewrite_call</code>, <code>type::bind_template_args</code>/<code>mangle_suffix</code>); unskip the <code>@generic</code> stratum (9 skipped tests); make the <code>on::call_site</code> wildcard fire + state-memoized monomorph-per-(template, type-args). <b>Pulled into v1.0 because closures C1 need it.</b>",
+         files="<code>strata/modules/compiler.si</code>; <code>comptime/imports.ts</code> + the strata loader's on::decl/on::call_site registration (<code>elaborator/strataLoader.ts</code>); tests <code>elaborator/generic-monomorph.test.ts:103-187</code>, <code>generic-e2e.test.ts:62-174</code>",
+         unblocks="<b>Shared mechanism: closures C1 (env specialization) AND M1 (containers).</b>"),
     dict(id="M1", track="mono", ver="v1.1", size="L", risk="Med", crit=False,
          title="Container monomorphization — Vec[T] / HashMap[K,V]",
          adr="ADR 0001 · G-1 / 0016",
@@ -152,7 +155,10 @@ def chip(sid):
     cls = TRACKS[s["track"]][1]
     gate = " gate" if s.get("gate") else ""
     crit = " crit" if s.get("crit") else ""
-    return f'<a href="#{s["id"]}" class="chip {cls}{gate}{crit}" title="{html.escape(strip(s["title"]))}"><b>{s["id"]}</b> {html.escape(strip_short(s["title"]))}</a>'
+    status = s.get("status", "todo")
+    stcls = f" chip-{status}" if status in ("done", "blocked") else ""
+    mark = {"done": "✓ ", "blocked": "⚠ "}.get(status, "")
+    return f'<a href="#{s["id"]}" class="chip {cls}{gate}{crit}{stcls}" title="{html.escape(strip(s["title"]))}"><b>{mark}{s["id"]}</b> {html.escape(strip_short(s["title"]))}</a>'
 
 def strip(t):
     import re
@@ -174,10 +180,15 @@ def row(s):
     vlabel, vcls = VERS[s["ver"]]
     gate = ' <span class="gatetag">GATE</span>' if s.get("gate") else ""
     crit = ' <span class="crittag">critical path</span>' if s.get("crit") else ""
-    return f"""<tr id="{s['id']}" class="t-{TRACKS[s['track']][1]} v-{vcls}">
+    status = s.get("status", "todo")
+    stbadge = {"done": ' <span class="st st-done">✓ DONE</span>',
+               "blocked": ' <span class="st st-blocked">⚠ BLOCKED</span>'}.get(status, "")
+    note = f'<div class="tnote tnote-{status}">{s["note"]}</div>' if s.get("note") else ""
+    return f"""<tr id="{s['id']}" class="t-{TRACKS[s['track']][1]} v-{vcls} status-{status}">
   <td class="cid"><span class="idbadge {TRACKS[s['track']][1]}">{s['id']}</span></td>
-  <td class="ctitle"><div class="tt">{s['title']}{gate}{crit}</div>
+  <td class="ctitle"><div class="tt">{s['title']}{stbadge}{gate}{crit}</div>
       <div class="tdesc">{s['desc']}</div>
+      {note}
       <div class="tfiles"><span class="k">Files</span> {s['files']}</div>
       <div class="tunb"><span class="k">Unblocks</span> {s['unblocks']}</div></td>
   <td class="cadr">{html.escape(s['adr'])}</td>
@@ -305,6 +316,16 @@ HTML = f"""<!DOCTYPE html>
   .tt {{ font-weight:650; font-size:15px; margin-bottom:6px; }}
   .gatetag {{ font-size:10px; font-weight:800; color:#0d1117; background:var(--gate); padding:1px 7px; border-radius:6px; letter-spacing:.04em; }}
   .crittag {{ font-size:10px; font-weight:700; color:var(--crit); border:1px solid #4a2f3e; padding:1px 7px; border-radius:6px; }}
+  .st {{ font-size:10px; font-weight:800; padding:1px 7px; border-radius:6px; letter-spacing:.04em; }}
+  .st-done {{ color:#0d1117; background:var(--mono); }}
+  .st-blocked {{ color:#0d1117; background:var(--gate); }}
+  .chip-done {{ border-color:var(--mono); }} .chip-blocked {{ border-color:var(--gate); }}
+  tr.status-done td.cid {{ box-shadow:inset 3px 0 0 var(--mono) !important; }}
+  tr.status-blocked td.cid {{ box-shadow:inset 3px 0 0 var(--gate) !important; }}
+  .tnote {{ font-size:12.5px; margin:8px 0; padding:9px 12px; border-radius:8px; line-height:1.5; }}
+  .tnote code {{ background:#11161f; }}
+  .tnote-done {{ background:rgba(63,185,80,.08); border:1px solid #1f4427; color:#bfe6c8; }}
+  .tnote-blocked {{ background:rgba(247,185,85,.08); border:1px solid #4a3a1e; color:#f0d9a8; }}
   .tdesc {{ color:#d2dae4; font-size:14px; margin-bottom:8px; }}
   .tfiles, .tunb {{ font-size:12.5px; color:var(--muted); margin-top:5px; }}
   .tfiles .k, .tunb .k {{ display:inline-block; font-size:10px; text-transform:uppercase; letter-spacing:.06em;
@@ -340,6 +361,9 @@ HTML = f"""<!DOCTYPE html>
   key files, size, risk, and what it unblocks.</p>
   <div class="meta">Generated <b>{GEN_DATE}</b> · derived from ADRs 0001/0003/0008/0009/0011/0012/0013/0015/0016/0017/0018/0019 ·
   cross-checked against <code>docs/v1.0-critical-path.md</code></div>
+  <div class="meta">Progress: <b style="color:var(--mono)">C0 ✓ done</b> (multi-signature funcref ABI) ·
+  <b style="color:var(--gate)">M0 ⚠ blocked</b> (engine gap — see note) · F0a scoped as a standalone effort.
+  Phase 0 is partially complete; M0 and F0a are each multi-session features.</div>
   <div class="tiles">
     <div class="tile"><div class="num">{n_total}</div><div class="lbl">subtasks</div></div>
     <div class="tile gate"><div class="num">{n_crit}</div><div class="lbl">on the critical path</div></div>
