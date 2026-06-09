@@ -1,0 +1,415 @@
+#!/usr/bin/env python3
+"""Generate docs/v1.0-implementation-roadmap.html — the ordered build plan for the
+FFI gate, monomorphization, and the capability model. Self-contained dark-theme page
+mirroring docs/strata-feature-audit.html."""
+import html
+
+OUT = "/home/natescode/repos/silicon/docs/v1.0-implementation-roadmap.html"
+GEN_DATE = "2026-06-09"
+
+# track → (label, css-class, color var)
+TRACKS = {
+    "ffi":  ("FFI gate",          "ffi"),
+    "mono": ("Monomorphization",  "mono"),
+    "cap":  ("Capability model",  "cap"),
+}
+VERS = {  # version bucket → (label, css-class)
+    "v1.0":      ("v1.0 — the gate", "v10"),
+    "v1.0-opt":  ("v1.0 (optional)", "v10opt"),
+    "v1.1":      ("v1.1",            "v11"),
+    "v1.y":      ("v1.y",            "v1y"),
+    "post":      ("post-v1.0",       "post"),
+}
+
+# Each subtask: id, track, title, desc(html-ok via inline), adr, files, size, risk, unblocks, ver, crit
+S = [
+    # ---- FFI gate ----
+    dict(id="F0a", track="ffi", ver="v1.0", size="L", risk="Med", crit=False,
+         title="Bindgen",
+         adr="ADR 0017",
+         desc="Machine-generate the <code>@extern</code> <code>.si</code> + both host shims from upstream specs (WebIDL for the web — the only source that preserves int-vs-float; <code>.d.ts</code> for Node/Bun), with a <code>bindgen.lock</code> + a CI <code>check-shims</code> test that fails on drift. First slice: regenerate <code>web.si</code> Math/clock byte-for-byte.",
+         files="NEW <code>compiler/bindgen/</code>; marker regions in <code>cli/src/host/js-host.ts</code> + <code>playground/playground/web-env.js</code>; <code>compiler/scripts/gen-web-assets.ts</code>; NEW <code>.github/workflows/bindgen.yml</code>",
+         unblocks="Anti-drift, on-demand regen. <b>Stays ~10%</b> (doesn't lift the ceiling). Independently buildable."),
+    dict(id="F1a", track="ffi", ver="v1.0", size="M", risk="Med", crit=True,
+         title="Object handles / JSValue externref",
+         adr="ADR 0018 · P0/P1",
+         desc="Generalize the <code>JSString</code>-only externref path to a generic <code>JSValue</code> object handle, so a <code>Response</code>/<code>Uint8Array</code>/DOM node has a type to land in.",
+         files="<code>compiler/src/ir/lower.ts</code> (<code>siliconTypeNameToWasm</code> ~2263, <code>usesExternref</code> ~1426, slot stamping ~1468, new <code>injectExternRefSlots</code> modeled on <code>injectJSStringRefSlots</code> ~457/528, <code>lowerExternParams/Result</code> ~978); <code>strata/defkinds.si</code> <code>ExternDef_lower</code> (import-module override, not hardcoded <code>'env'</code>)",
+         unblocks="Sync object-returning APIs; lifts bindgen scalar→object tier. <b>~10% → ~35%</b>"),
+    dict(id="F1b", track="ffi", ver="v1.0", size="L", risk="High", crit=True,
+         title="Blocking @await (Asyncify) + reactor host + async effect",
+         adr="ADR 0018 · P1/P2-host/P3/P5",
+         desc="<code>@async</code>/<code>@await</code>/<code>@suspending</code> strata (no grammar change); the Asyncify unwind/rewind transform; the one-shot host → a reactor; an <code>async</code> effect tag. <b>Portable incl. Bun</b> — JSPI is absent in JSC, so Asyncify is the permanent floor.",
+         files="NEW strata in <code>strata/control.si</code>; Asyncify pass (Binaryen v117 is already a dep, then an IR pass sibling to <code>loopDesugar</code>); <code>js-host.ts</code> <code>runUnderBun</code> ~100 → reactor; <code>web-env.js</code> <code>startGameLoop</code> → reactor; ADR 0012 lattice <code>+async</code>",
+         unblocks="<b>All</b> Promise APIs on Bun today (<code>fetch</code>/<code>.json()</code>/timers/<code>crypto.subtle</code>). <b>~35% → ~80%</b>"),
+    dict(id="C0", track="ffi", ver="v1.0", size="M", risk="Low-Med", crit=True,
+         title="Generalize the funcref ABI  (closures C0)",
+         adr="ADR 0019 · C0",
+         desc="Stop forcing <code>__fn_i_i</code>: derive <code>sigKey</code> from the <code>@fn</code>'s real param/result wasm types; multi-signature funcref table; relax the arity-2 guard. <b>Builds directly on the <code>funcref.si</code> surface just dissolved.</b>",
+         files="<code>compiler/src/ir/lower.ts</code> <code>lowerFnRef</code> ~1584, <code>lowerCallIndirect</code> ~1620, <code>__fn_i_i</code> hardcode ~1608/1625; <code>compiler/src/strata/funcref.si</code>",
+         unblocks="C1; funcref-at-boundary. Pure refactor — must keep byte-equal codegen for non-funcref programs (<code>funcrefTable</code> stays <code>undefined</code>)."),
+    dict(id="C1", track="ffi", ver="v1.0", size="L", risk="Med", crit=True,
+         title="Non-escaping closures (all modes, zero-cost)  (closures C1)",
+         adr="ADR 0019 · C1",
+         desc="<code>&@closure</code>/<code>&@call_closure</code>; lambda-lift in the elaborator; anonymous-struct env in frame/arena; <b>per-concrete-env-type consumer specialization (uses M0)</b> → a direct call; empty-env degenerates to today's <code>@fnref</code>. By-value/<code>&</code>-immutable capture only — <b>does NOT require the borrow checker</b>.",
+         files="NEW closure strata alongside <code>control.si</code>; elaborator lambda-lift modeled on <code>elaborator/loopDesugar.ts</code>; <b>reuses M0</b>",
+         unblocks="ADR 0016 combinators <code>map</code>/<code>filter</code>/<code>fold</code> (with M1) on every mode. <b>Needs M0 + C0</b>"),
+    dict(id="C2", track="ffi", ver="v1.0", size="L", risk="High", crit=True, gate=True,
+         title="Escaping host-callable closures — wasm-gc only  (closures C2 · THE GATE)",
+         adr="ADR 0019 · C2 / 0018 · P3",
+         desc="<code>(type $Clo (struct (i32 fnIndex)(ref $Env)))</code>; an <code>__invoke_&lt;sig&gt;(externref,…)</code> trampoline; <code>&@on</code>/<code>&@off</code> over the engine-traced externref; <code>@extern</code> externref/funcref slot; the conservative <b>escape/host-reachability classifier</b> (routes any closure reaching <code>@extern</code> to Tier B, rejects on <code>wasm-mvp</code>/<code>--native</code> with a mode-gate E-code). Engine-GC'd — no leak, cycles collected, <code>__closure_release</code> is a no-op. Verified Bun/JSC runs wasm-gc today; v1.0 invocation reuses the existing <code>call_indirect</code> (no JSPI dep).",
+         files="<code>lower.ts</code> (wasm-gc struct env + externref trampoline export); NEW escape classifier; <code>@export_callback</code> keyword stratum",
+         unblocks="Callbacks/events (<code>addEventListener</code>, <code>setTimeout(cb)</code>, <code>onmessage</code>, <code>EventTarget</code>, <code>.on('data')</code>). <b>~80% → ~97% — THE GATE CLOSES.</b> Needs C1"),
+    dict(id="F3", track="ffi", ver="v1.0", size="L", risk="Med", crit=True,
+         title="Poll-reactor + tasks  (closures C3)",
+         adr="ADR 0018 · P4 / 0019 · C3",
+         desc="<code>Future[T]</code> sum (<code>$Pending waker | $Ready value</code>), <code>spawn</code>/<code>block_on</code>, microtask drain, many in-flight awaits. Reuses C1/C2 closures as wake continuations.",
+         files="stdlib <code>Future[T]</code>; reactor host generalization",
+         unblocks="True concurrency, <code>Promise.all</code>-shaped composition, streaming events. <b>~97% → 100%</b>. Needs C2"),
+    dict(id="F3-opt", track="ffi", ver="v1.0-opt", size="M", risk="Low", crit=False,
+         title="JSPI fast path",
+         adr="ADR 0018 · P2",
+         desc="Loader feature-detects <code>WebAssembly.promising</code>; emit a plain <code>call</code> + promising export on V8/Node/Deno (and JSC once it ships). Same <code>@await</code> surface — flip a flag.",
+         files="loader glue only",
+         unblocks="No new coverage — erases the Asyncify size/perf tax on V8/Node. A detect-and-upgrade, never a hard dep. Slots in any time after F1a."),
+    # ---- Monomorphization ----
+    dict(id="M0", track="mono", ver="v1.0", size="M-L", risk="Med", crit=True,
+         title="Comptime monomorphization substrate",
+         adr="ADR 0003 · C-1 / 0001 · G-1 core",
+         desc="Audit/wire the comptime API coverage (<code>ast::capture_template</code>/<code>patch_types</code>/<code>with_name</code>/<code>rewrite_call</code>, <code>type::bind_template_args</code>/<code>mangle_suffix</code>); unskip the <code>@generic</code> stratum (9 skipped tests — the stratum is already written); make the <code>on::call_site</code> wildcard fire + state-memoized monomorph-per-(template, type-args). <b>Pulled into v1.0 because closures C1 need it.</b>",
+         files="<code>strata/modules/compiler.si</code>; <code>comptime/imports.ts</code> + body interpreter; <code>wit/comptime.wit</code>; tests <code>elaborator/generic-monomorph.test.ts:103-187</code>, <code>generic-e2e.test.ts:62-174</code>",
+         unblocks="<b>Shared mechanism: closures C1 (env specialization) AND M1 (containers).</b> Design done — mostly wiring + debugging"),
+    dict(id="M1", track="mono", ver="v1.1", size="L", risk="Med", crit=False,
+         title="Container monomorphization — Vec[T] / HashMap[K,V]",
+         adr="ADR 0001 · G-1 / 0016",
+         desc="Structural constraint protocol (comptime <code>sizeof[T]</code>/hashable check at <i>instantiation</i>, Zig-style — not at definition); emit monomorphic Vec/HashMap variants per element/(K,V) type; a HashMap iteration surface (<code>IterStep</code>).",
+         files="<code>stdlib/vec.si</code> (i32-only; <code>vec_map_i32_i32</code> is the template), <code>stdlib/hashmap.si</code> (i32→i32, no iteration), <code>slice.si</code>; <code>codegen/gc-vec.ts</code> (Vec[Int] only; Float/Int64 stubbed)",
+         unblocks="<code>Vec[Float]</code>/<code>Vec[Int64]</code>; HashMap iteration; ADR 0016 <code>IterStep</code> dispatch; combinators (with C1). The “dominant speed lever.” <b>Needs M0</b>"),
+    # ---- Capability model ----
+    dict(id="K1", track="cap", ver="post", size="M", risk="Low", crit=False,
+         title="on::check phase hook",
+         adr="ADR 0013 · P1",
+         desc="Add <code>'check'</code> to <code>StratumPhase</code>; fire per-module after typecheck, before lowering; pass the typed AST + imported sigs + <code>typeMap</code>.",
+         files="<code>elaborator/registry.ts</code> (<code>StratumPhase</code> ~63; <code>handlers</code> maps ~114-129 add <code>check:</code>); <code>strataLoader.ts</code> dispatch",
+         unblocks="<b>All</b> capability/effect work (K2–K8) + ADR 0015 ocaps. The substrate gate."),
+    dict(id="K2", track="cap", ver="post", size="M", risk="Low", crit=False,
+         title="AST reflection primitives",
+         adr="ADR 0013 · P2",
+         desc="<code>ast_inferred_type</code>, <code>ast_callee</code>, <code>is_construction</code>, <code>symbol_module</code>.",
+         files="<code>comptime/imports.ts</code> + <code>strata/modules/compiler.si</code> + <code>wit/comptime.wit</code>",
+         unblocks="K4, K5"),
+    dict(id="K3", track="cap", ver="post", size="S-M", risk="Low", crit=False,
+         title="Comptime collections",
+         adr="ADR 0013 · P3",
+         desc="Map/Set/Worklist for the checker's fixpoint (host-side interim, then stdlib).",
+         files="<code>comptime/imports.ts</code> (interim JS)",
+         unblocks="K4"),
+    dict(id="K4", track="cap", ver="post", size="L", risk="Med", crit=False,
+         title="Capability/effect checker prototype (TS)",
+         adr="ADR 0013 · P4a",
+         desc="Bottom-up union of callees' required caps + <code>@extern</code> tags ⇒ a fixpoint over the call graph; reject when a required capability isn't reachable; emit <code>capabilityMap</code>.",
+         files="<code>comptime/</code> (new)",
+         unblocks="K6, K7. De-risks the analysis rules before the Silicon port."),
+    dict(id="K5", track="cap", ver="post", size="M", risk="Med", crit=False,
+         title="@capability stratum + ocap mint-site rule",
+         adr="ADR 0015 / 0013 · P5",
+         desc="<code>@capability Console;</code> declares a nominal capability; an <code>on::check</code> rule rejects construction outside the issuer module (unforgeability leg 1).",
+         files="NEW <code>strata/modules/capabilities.si</code>",
+         unblocks="Ocaps, no-ambient-authority. Needs K1 + K2"),
+    dict(id="K6", track="cap", ver="post", size="M-L", risk="Med", crit=False,
+         title="Port checker into Silicon (dogfood)",
+         adr="ADR 0013 · P4b",
+         desc="Rewrite K4 as a Silicon <code>@fn</code> handler over K2 reflection + K3 collections + K5 registry.",
+         files="<code>strata/modules/capabilities.si</code>",
+         unblocks="Self-hosting alignment"),
+    dict(id="K7", track="cap", ver="post", size="M-L", risk="Med", crit=False,
+         title="Effect-class consumption by the optimizer",
+         adr="ADR 0012",
+         desc="Add <code>effectClass: pure|mut|effectful</code> to the per-module symbol record; the optimizer reads it for CSE/LICM/in-placing (<code>pure ≙ no mutation rcap ∧ no effect ocap</code>).",
+         files="<code>caas</code> MetadataReference; optimizer stage",
+         unblocks="The perf payoff of the effect lattice"),
+    dict(id="K8", track="cap", ver="v1.y", size="XL", risk="High", crit=False,
+         title="Borrow checker / rcaps R1–R4",
+         adr="ADR 0011",
+         desc="<code>&</code>/<code>&mut</code>/<code>&uniq</code>/<code>&val</code>; R1 scope, R2 aliasing, R3 cross-actor upgrade, R4 escape promotion; the Span/View/Slice rename (ADR-0011 addendum). <b>“Extremely low priority.”</b>",
+         files="typechecker; <code>stdlib/slice.si</code> rename",
+         unblocks="Mutable capture in escaping closures; data-race-free concurrency; free-without-arena-exit; the Span/View/Slice surface"),
+]
+
+# The phase ladder (timeline). Each phase: title, note, list of (id, track) chips.
+PHASES = [
+    ("Phase 0", "Foundations — no inter-dependencies, run in parallel", ["F0a", "M0", "C0"]),
+    ("Phase 1", "FFI to ~80% (async) + container mono — parallel", ["F1a", "F1b", "M1"]),
+    ("Phase 2", "The keystone — closures (the FFI↔mono join)", ["C1", "C2"]),
+    ("Phase 3", "FFI to 100%", ["F3", "F3-opt"]),
+    ("Phase 4", "Capability model — post-v1.0 (strict P-chain)", ["K1", "K2", "K3", "K4", "K5", "K6", "K7", "K8"]),
+]
+
+BYID = {s["id"]: s for s in S}
+
+def chip(sid):
+    s = BYID[sid]
+    cls = TRACKS[s["track"]][1]
+    gate = " gate" if s.get("gate") else ""
+    crit = " crit" if s.get("crit") else ""
+    return f'<a href="#{s["id"]}" class="chip {cls}{gate}{crit}" title="{html.escape(strip(s["title"]))}"><b>{s["id"]}</b> {html.escape(strip_short(s["title"]))}</a>'
+
+def strip(t):
+    import re
+    return re.sub("<[^>]+>", "", t)
+
+def strip_short(t):
+    base = strip(t).split("(")[0].split("—")[0].strip()
+    return (base[:30] + "…") if len(base) > 31 else base
+
+def size_badge(sz):
+    cls = {"S": "s", "S-M": "s", "M": "m", "M-L": "l", "L": "l", "XL": "xl"}.get(sz, "m")
+    return f'<span class="sz sz-{cls}">{sz}</span>'
+
+def risk_badge(r):
+    cls = "lo" if r.startswith("Low") else "hi" if r.startswith("High") else "md"
+    return f'<span class="rk rk-{cls}">{r}</span>'
+
+def row(s):
+    vlabel, vcls = VERS[s["ver"]]
+    gate = ' <span class="gatetag">GATE</span>' if s.get("gate") else ""
+    crit = ' <span class="crittag">critical path</span>' if s.get("crit") else ""
+    return f"""<tr id="{s['id']}" class="t-{TRACKS[s['track']][1]} v-{vcls}">
+  <td class="cid"><span class="idbadge {TRACKS[s['track']][1]}">{s['id']}</span></td>
+  <td class="ctitle"><div class="tt">{s['title']}{gate}{crit}</div>
+      <div class="tdesc">{s['desc']}</div>
+      <div class="tfiles"><span class="k">Files</span> {s['files']}</div>
+      <div class="tunb"><span class="k">Unblocks</span> {s['unblocks']}</div></td>
+  <td class="cadr">{html.escape(s['adr'])}</td>
+  <td class="cmeta">{size_badge(s['size'])}{risk_badge(s['risk'])}<span class="ver ver-{vcls}">{vlabel}</span></td>
+</tr>"""
+
+def item_table(track_key, heading, blurb, ids):
+    rows = "\n".join(row(BYID[i]) for i in ids)
+    return f"""<section class="prose">
+<h2 class="sec" id="item-{track_key}"><span class="dot {TRACKS[track_key][1]}"></span>{heading}</h2>
+<p class="blurb">{blurb}</p>
+<table class="rt">
+<thead><tr><th>#</th><th>Subtask</th><th>ADR · phase</th><th>Size · risk · version</th></tr></thead>
+<tbody>
+{rows}
+</tbody></table>
+</section>"""
+
+# ---- counts ----
+n_total = len(S)
+n_crit = sum(1 for s in S if s.get("crit"))
+n_v10 = sum(1 for s in S if s["ver"].startswith("v1.0"))
+
+# ---- timeline ladder ----
+ladder = ""
+for title, note, ids in PHASES:
+    chips = "".join(chip(i) for i in ids)
+    ladder += f"""<div class="phase">
+  <div class="phead"><span class="pnum">{title}</span><span class="pnote">{note}</span></div>
+  <div class="pchips">{chips}</div>
+</div>"""
+
+legend = "".join(
+    f'<span class="lg"><span class="dot {cls}"></span>{label}</span>'
+    for label, cls in [(TRACKS["ffi"][0], "ffi"), (TRACKS["mono"][0], "mono"), (TRACKS["cap"][0], "cap")]
+) + '<span class="lg"><span class="dot crità"></span>critical path</span>'
+
+HTML = f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Silicon — v1.0 Implementation Roadmap</title>
+<style>
+  :root {{
+    --bg:#0d1117; --panel:#161b22; --panel2:#1c2230; --border:#2a3140;
+    --fg:#e6edf3; --muted:#8b97a7; --faint:#6b7585;
+    --ffi:#58a6ff; --mono:#3fb950; --cap:#a371f7;
+    --gate:#f7b955; --crit:#f778ba; --accent:#a371f7;
+    --v10:#3fb950; --v10opt:#58a6ff; --v11:#d29922; --v1y:#8b949e; --post:#8b949e;
+  }}
+  * {{ box-sizing:border-box; }}
+  html {{ scroll-behavior:smooth; }}
+  body {{ margin:0; background:var(--bg); color:var(--fg);
+    font:15px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif; }}
+  code {{ background:#1f2733; color:#9ad1ff; padding:1px 5px; border-radius:5px;
+    font:0.85em/1.4 "SF Mono",ui-monospace,"JetBrains Mono",Menlo,Consolas,monospace; word-break:break-word; }}
+  a {{ color:var(--ffi); text-decoration:none; }}
+  .wrap {{ max-width:1180px; margin:0 auto; padding:0 22px 80px; }}
+
+  header.hero {{ padding:54px 0 26px; border-bottom:1px solid var(--border);
+    background:radial-gradient(1100px 360px at 12% -10%, rgba(163,113,247,.16), transparent 60%),
+               radial-gradient(900px 320px at 95% -20%, rgba(88,166,255,.12), transparent 55%); }}
+  .eyebrow {{ color:var(--accent); font-weight:700; letter-spacing:.14em; text-transform:uppercase; font-size:12px; }}
+  h1 {{ margin:.3em 0 .15em; font-size:34px; line-height:1.12; letter-spacing:-.02em; }}
+  .thesis {{ color:var(--muted); font-size:17px; max-width:880px; }}
+  .thesis b {{ color:var(--fg); }}
+  .meta {{ margin-top:14px; color:var(--faint); font-size:13px; }} .meta b {{ color:var(--muted); }}
+  .tiles {{ display:grid; grid-template-columns:repeat(4,1fr); gap:12px; margin:24px 0 6px; }}
+  .tile {{ background:var(--panel); border:1px solid var(--border); border-radius:12px; padding:15px 14px; text-align:center; }}
+  .tile .num {{ font-size:28px; font-weight:800; letter-spacing:-.02em; }}
+  .tile .lbl {{ color:var(--muted); font-size:12px; margin-top:3px; line-height:1.3; }}
+  .tile.gate .num {{ color:var(--crit); }} .tile.v10 .num {{ color:var(--v10); }}
+  .legend {{ display:flex; flex-wrap:wrap; gap:16px; color:var(--muted); font-size:13px; margin-top:14px; }}
+  .lg {{ display:inline-flex; align-items:center; gap:7px; }}
+  .dot {{ width:11px; height:11px; border-radius:50%; display:inline-block; }}
+  .dot.ffi {{ background:var(--ffi); }} .dot.mono {{ background:var(--mono); }} .dot.cap {{ background:var(--cap); }}
+  .dot.crità {{ background:var(--crit); }}
+
+  nav.toc {{ position:sticky; top:0; z-index:20; background:rgba(13,17,23,.93); backdrop-filter:blur(8px);
+    border-bottom:1px solid var(--border); padding:11px 0; }}
+  nav.toc .wrap {{ padding-bottom:0; padding-top:0; display:flex; gap:6px; flex-wrap:wrap; }}
+  nav.toc a {{ color:var(--muted); font-size:13px; padding:5px 11px; border-radius:7px; }}
+  nav.toc a:hover {{ background:var(--panel2); color:var(--fg); }}
+
+  section {{ margin:30px 0; }}
+  h2.sec {{ font-size:23px; margin:36px 0 10px; padding-top:10px; letter-spacing:-.01em;
+    border-top:1px solid var(--border); display:flex; align-items:center; gap:10px; }}
+  h2.sec:first-child {{ border-top:none; }}
+  .blurb {{ color:var(--muted); margin:0 0 14px; max-width:880px; }}
+
+  /* timeline ladder */
+  .ladder {{ display:flex; flex-direction:column; gap:12px; margin:18px 0 6px; }}
+  .phase {{ background:var(--panel); border:1px solid var(--border); border-left:3px solid var(--accent);
+    border-radius:12px; padding:14px 16px; }}
+  .phead {{ display:flex; align-items:baseline; gap:12px; flex-wrap:wrap; margin-bottom:10px; }}
+  .pnum {{ font-weight:800; font-size:15px; letter-spacing:.02em; }}
+  .pnote {{ color:var(--muted); font-size:13px; }}
+  .pchips {{ display:flex; flex-wrap:wrap; gap:8px; }}
+  .chip {{ display:inline-flex; align-items:center; gap:6px; font-size:12.5px; padding:5px 11px; border-radius:20px;
+    border:1px solid var(--border); background:#11161f; color:var(--fg); }}
+  .chip b {{ font-family:ui-monospace,monospace; font-size:11.5px; }}
+  .chip.ffi {{ border-color:#234; box-shadow:inset 3px 0 0 var(--ffi); }}
+  .chip.mono {{ box-shadow:inset 3px 0 0 var(--mono); }}
+  .chip.cap {{ box-shadow:inset 3px 0 0 var(--cap); }}
+  .chip.crit {{ outline:1px solid rgba(247,120,186,.5); }}
+  .chip.gate {{ background:linear-gradient(90deg, rgba(247,185,85,.18), #11161f); border-color:var(--gate); }}
+  .critline {{ margin:14px 0 0; padding:12px 16px; border:1px solid #4a2f3e; border-radius:10px;
+    background:linear-gradient(180deg, rgba(247,120,186,.08), rgba(247,120,186,.02)); color:#f2c3da; font-size:14px; }}
+  .critline code {{ background:#2a1722; color:#ffd0e6; }}
+
+  /* roadmap tables */
+  table.rt {{ width:100%; border-collapse:collapse; margin:8px 0 6px; }}
+  table.rt th {{ text-align:left; font-size:11px; text-transform:uppercase; letter-spacing:.07em; color:var(--faint);
+    border-bottom:1px solid var(--border); padding:8px 10px; background:var(--panel2); }}
+  table.rt td {{ border-bottom:1px solid var(--border); padding:13px 10px; vertical-align:top; }}
+  tr[id] {{ border-left:3px solid transparent; }}
+  tr.t-ffi td.cid {{ box-shadow:inset 3px 0 0 var(--ffi); }}
+  tr.t-mono td.cid {{ box-shadow:inset 3px 0 0 var(--mono); }}
+  tr.t-cap td.cid {{ box-shadow:inset 3px 0 0 var(--cap); }}
+  .idbadge {{ font-family:ui-monospace,monospace; font-size:12px; font-weight:700; padding:3px 8px; border-radius:7px;
+    background:#11161f; border:1px solid var(--border); white-space:nowrap; }}
+  .idbadge.ffi {{ color:var(--ffi); }} .idbadge.mono {{ color:var(--mono); }} .idbadge.cap {{ color:var(--cap); }}
+  td.cid {{ width:62px; }}
+  .tt {{ font-weight:650; font-size:15px; margin-bottom:6px; }}
+  .gatetag {{ font-size:10px; font-weight:800; color:#0d1117; background:var(--gate); padding:1px 7px; border-radius:6px; letter-spacing:.04em; }}
+  .crittag {{ font-size:10px; font-weight:700; color:var(--crit); border:1px solid #4a2f3e; padding:1px 7px; border-radius:6px; }}
+  .tdesc {{ color:#d2dae4; font-size:14px; margin-bottom:8px; }}
+  .tfiles, .tunb {{ font-size:12.5px; color:var(--muted); margin-top:5px; }}
+  .tfiles .k, .tunb .k {{ display:inline-block; font-size:10px; text-transform:uppercase; letter-spacing:.06em;
+    color:var(--faint); margin-right:6px; }}
+  .tunb b {{ color:var(--fg); }}
+  td.cadr {{ width:140px; color:var(--muted); font-size:13px; white-space:nowrap; }}
+  td.cmeta {{ width:150px; }}
+  .sz {{ display:inline-block; font-size:11px; font-weight:700; padding:2px 7px; border-radius:6px; margin:0 6px 6px 0; }}
+  .sz-s {{ background:#16331f; color:#5cd17e; }} .sz-m {{ background:#16283f; color:#7db8ff; }}
+  .sz-l {{ background:#3a2a14; color:#e0a64e; }} .sz-xl {{ background:#3a1620; color:#f77b9e; }}
+  .rk {{ display:inline-block; font-size:11px; padding:2px 7px; border-radius:6px; margin:0 6px 6px 0; border:1px solid var(--border); }}
+  .rk-lo {{ color:#5cd17e; }} .rk-md {{ color:#e0a64e; }} .rk-hi {{ color:#f77b9e; }}
+  .ver {{ display:inline-block; font-size:11px; font-weight:700; padding:2px 8px; border-radius:6px; }}
+  .ver-v10 {{ background:#16331f; color:#5cd17e; }} .ver-v10opt {{ background:#16283f; color:#7db8ff; }}
+  .ver-v11 {{ background:#3a2e14; color:#e0c04e; }} .ver-v1y {{ background:#262b36; color:#aab2c4; }}
+  .ver-post {{ background:#262b36; color:#aab2c4; }}
+
+  .callout {{ background:linear-gradient(180deg, rgba(163,113,247,.08), rgba(163,113,247,.02));
+    border:1px solid #34304a; border-left:3px solid var(--accent); border-radius:10px; padding:14px 18px; margin:16px 0; }}
+  .callout h4 {{ margin:0 0 8px; font-size:14px; color:#cdb8ff; }}
+  .callout ul {{ margin:6px 0 0; padding-left:20px; }} .callout li {{ margin:6px 0; color:#d2dae4; }}
+  footer {{ border-top:1px solid var(--border); margin-top:50px; padding:24px 0; color:var(--faint); font-size:13px; }}
+  @media (max-width:880px) {{ .tiles {{ grid-template-columns:repeat(2,1fr); }} td.cadr,td.cmeta {{ width:auto; }} h1 {{ font-size:27px; }} }}
+</style>
+</head>
+<body>
+<header class="hero"><div class="wrap" style="padding-bottom:0">
+  <div class="eyebrow">Silicon · v1.0 build plan</div>
+  <h1>Implementation Roadmap — FFI gate · Monomorphization · Capability model</h1>
+  <p class="thesis">The ordered, dependency-driven plan for Silicon's three remaining workstreams. The hard
+  v1.0 product gate is <b>100% web/bun FFI coverage</b>; the critical path runs
+  <b>monomorphization substrate → closures → poll-reactor</b>. Each item is broken into subtasks with its ADR,
+  key files, size, risk, and what it unblocks.</p>
+  <div class="meta">Generated <b>{GEN_DATE}</b> · derived from ADRs 0001/0003/0008/0009/0011/0012/0013/0015/0016/0017/0018/0019 ·
+  cross-checked against <code>docs/v1.0-critical-path.md</code></div>
+  <div class="tiles">
+    <div class="tile"><div class="num">{n_total}</div><div class="lbl">subtasks</div></div>
+    <div class="tile gate"><div class="num">{n_crit}</div><div class="lbl">on the critical path</div></div>
+    <div class="tile v10"><div class="num">{n_v10}</div><div class="lbl">v1.0 gate items</div></div>
+    <div class="tile"><div class="num">3</div><div class="lbl">workstreams · 12 ADRs</div></div>
+  </div>
+  <div class="legend">{legend}</div>
+</div></header>
+
+<nav class="toc"><div class="wrap">
+  <a href="#timeline">Critical-path timeline</a>
+  <a href="#item-ffi">FFI gate</a>
+  <a href="#item-mono">Monomorphization</a>
+  <a href="#item-cap">Capability model</a>
+  <a href="#tensions">Sequencing notes</a>
+</div></nav>
+
+<div class="wrap">
+
+  <section id="timeline">
+    <h2 class="sec" style="border-top:none">Critical-path timeline</h2>
+    <p class="blurb">Dependency-driven order. Within a phase, items run in parallel; across phases, later items
+    depend on earlier. The async spine (<code>F1a → F1b</code>, →80%) and the closure spine
+    (<code>M0 → C0 → C1 → C2</code>, →97%) converge at the poll-reactor.</p>
+    <div class="ladder">{ladder}</div>
+    <div class="critline"><b>Longest chain to the gate:</b>
+      <code>M0</code> → <code>C0</code> → <code>C1</code> → <code>C2</code> (gate, ~97%) → <code>F3</code> (100%).
+      <code>F0a</code> (bindgen) and the capability model (<code>K1…K8</code>) are off the critical path.</div>
+  </section>
+
+  {item_table("ffi", "Item A — FFI gate", "The hard v1.0 product gate: lift web/bun coverage from ~10% to 100%. Bindgen, object handles, and Asyncify <code>@await</code> reach ~80% <i>without</i> monomorphization; the closures keystone (C0→C1→C2) needs it, and C2 closes the gate. ADR 0017 → 0018 → 0019.", ["F0a","F1a","F1b","C0","C1","C2","F3","F3-opt"])}
+
+  {item_table("mono", "Item B — Monomorphization", "<code>@fn[T]</code> and <code>@type[T]</code> (Option/Result) already ship. What remains: the comptime-specialization <b>substrate</b> (pulled into v1.0 because closures C1 consume it) and the <b>container</b> application (Vec[T]/HashMap[K,V], v1.1). ADR 0001 (substrate via ADR 0003 C-1).", ["M0","M1"])}
+
+  {item_table("cap", "Item C — Capability model", "All zero-code today (the P0 comptime substrate shipped). The <code>on::check</code> + reflection substrate gates everything. <b>Deliberately decoupled from the v1.0 FFI gate</b> — v1.0 closures use by-value/immutable capture, which needs no borrow checker. ADR 0011/0012/0013/0015.", ["K1","K2","K3","K4","K5","K6","K7","K8"])}
+
+  <section id="tensions">
+    <h2 class="sec">Sequencing notes — the three couplings that set the order</h2>
+    <div class="callout">
+      <h4>1 · Monomorphization ↔ closures (the join)</h4>
+      <ul><li><b>M0 is a v1.0 item, not v1.1.</b> Closures C1 specialize the captured-env type per concrete shape using
+      <i>exactly</i> the ADR-0001 comptime monomorphization machinery. So the substrate (M0) must land before C1 — even though
+      the container payoff (M1: Vec[T]/HashMap) is v1.1. The ADR-0016 combinators (<code>vec_map[T,U](v, cb)</code>) are the
+      join of M1 + C1: they need container mono <i>and</i> closures.</li></ul>
+    </div>
+    <div class="callout">
+      <h4>2 · FFI ↔ closures (the keystone)</h4>
+      <ul><li>Bindgen + object handles + Asyncify <code>@await</code> reach ~80% with no closures. But callbacks/events
+      (~80→97%) and the poll-reactor (~97→100%) <i>are</i> closures — which is why ADR 0018 pulls them forward as a v1.0
+      keystone. <b>C2 (escaping, wasm-gc-only) is the highest-risk single item and the point the gate closes.</b>
+      It needs wasm-gc (present in Bun/JSC), not JSPI (absent) — independent of the async mechanism.</li></ul>
+    </div>
+    <div class="callout">
+      <h4>3 · Capability model ↔ v1.0 (the decoupling)</h4>
+      <ul><li>The capability model is <b>off the v1.0 critical path</b>. ADR 0019 v1.0 closures restrict to by-value/
+      immutable capture precisely so they need <i>no</i> borrow checker. Within the capability track the order is strict
+      (<code>K1 on::check</code> → <code>K2 reflection</code> → checker/ocaps → optimizer), and the borrow checker
+      (<code>K8</code>, ADR 0011) is explicitly <b>“extremely low priority” (v1.y)</b> — its payoff is unlocking
+      <i>mutable</i> capture in escaping closures and data-race-free concurrency.</li></ul>
+    </div>
+  </section>
+</div>
+
+<footer><div class="wrap" style="padding-bottom:0">
+  Silicon implementation roadmap · {n_total} subtasks across 3 workstreams · generated {GEN_DATE}.
+  Re-run <code>scripts/gen_roadmap_html.py</code> after an ADR is accepted or a phase lands.
+  Source of truth: <code>docs/adr/</code> + <code>docs/v1.0-critical-path.md</code>.
+</div></footer>
+</body>
+</html>"""
+
+open(OUT, "w").write(HTML)
+print(f"wrote {OUT} ({len(HTML)} bytes, {n_total} subtasks, {n_crit} on critical path)")

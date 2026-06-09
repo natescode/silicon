@@ -59,6 +59,7 @@ If you're new, start with [`getting-started.md`](getting-started.md).
 
 | File | What's in it |
 |------|--------------|
+| [v1.0-implementation-roadmap.html](v1.0-implementation-roadmap.html) | Ordered build plan for the FFI gate, monomorphization, and the capability model — critical-path timeline + per-item subtasks |
 | [v1-user-stories.html](v1-user-stories.html) | v1.0 story tracker — all closed as of 2026-05-28 |
 | [v1.1-user-stories.html](v1.1-user-stories.html) | v1.1 work — LSP, package registry, interpreter, etc. |
 | [language-server-plan.html](language-server-plan.html) | LSP — original v1-alpha design record (shipped + superseded; see caas-roslyn-parity.md E3) |
