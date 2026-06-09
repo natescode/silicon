@@ -162,7 +162,7 @@
     (<code>M0 → C0 → C1 → C2</code>, →97%) converge at the poll-reactor.</p>
     <div class="ladder"><div class="phase">
   <div class="phead"><span class="pnum">Phase 0</span><span class="pnote">Foundations — no inter-dependencies, run in parallel</span></div>
-  <div class="pchips"><a href="#F0a" class="chip ffi" title="Bindgen"><b>F0a</b> Bindgen</a><a href="#M0" class="chip mono crit chip-done" title="Comptime monomorphization substrate"><b>✓ M0</b> Comptime monomorphization subs…</a><a href="#C0" class="chip ffi crit chip-done" title="Generalize the funcref ABI  (closures C0)"><b>✓ C0</b> Generalize the funcref ABI</a></div>
+  <div class="pchips"><a href="#F0a" class="chip ffi chip-done" title="Bindgen"><b>✓ F0a</b> Bindgen</a><a href="#M0" class="chip mono crit chip-done" title="Comptime monomorphization substrate"><b>✓ M0</b> Comptime monomorphization subs…</a><a href="#C0" class="chip ffi crit chip-done" title="Generalize the funcref ABI  (closures C0)"><b>✓ C0</b> Generalize the funcref ABI</a></div>
 </div><div class="phase">
   <div class="phead"><span class="pnum">Phase 1</span><span class="pnote">FFI to ~80% (async) + container mono — parallel</span></div>
   <div class="pchips"><a href="#F1a" class="chip ffi crit chip-done" title="Object handles / JSValue externref"><b>✓ F1a</b> Object handles / JSValue exter…</a><a href="#F1b" class="chip ffi crit" title="Blocking @await (Asyncify) + reactor host + async effect"><b>F1b</b> Blocking @await</a><a href="#M1" class="chip mono" title="Container monomorphization — Vec[T] / HashMap[K,V]"><b>M1</b> Container monomorphization</a></div>
@@ -187,11 +187,11 @@
 <table class="rt">
 <thead><tr><th>#</th><th>Subtask</th><th>ADR · phase</th><th>Size · risk · version</th></tr></thead>
 <tbody>
-<tr id="F0a" class="t-ffi v-v10 status-todo">
+<tr id="F0a" class="t-ffi v-v10 status-done">
   <td class="cid"><span class="idbadge ffi">F0a</span></td>
-  <td class="ctitle"><div class="tt">Bindgen</div>
+  <td class="ctitle"><div class="tt">Bindgen <span class="st st-done">✓ DONE</span></div>
       <div class="tdesc">Machine-generate the <code>@extern</code> <code>.si</code> + both host shims from upstream specs (WebIDL for the web — the only source that preserves int-vs-float; <code>.d.ts</code> for Node/Bun), with a <code>bindgen.lock</code> + a CI <code>check-shims</code> test that fails on drift. First slice: regenerate <code>web.si</code> Math/clock byte-for-byte.</div>
-      <div class="tnote tnote-todo">Scoping (2026-06-09): the anti-drift value requires external deps (<code>@webref/idl</code>, <code>webidl2</code>) + network to parse upstream IDL. A self-contained first slice — Binding IR + Tier-0 typemap + <code>.si</code> emitter reproducing the <code>web.si</code> Math/clock decls from an in-repo spec — is buildable without deps; the live web/node/bun adapters are the follow-up. A standalone, multi-session effort.</div>
+      <div class="tnote tnote-done">First milestone DONE (2026-06-09, ADR 0017 flipped to Accepted). Self-contained: an in-repo hand-authored Tier-0 spec (<code>compiler/bindgen/src/spec.ts</code>) → Binding IR + <code>siToWasm</code> typemap → three emitters (<code>.si</code> @extern block + Bun shim + browser shim). A CLI (<code>bun bindgen/cli.ts --check/--write</code>) splices each fragment between markers in <code>web.si</code> / <code>js-host.ts</code> / <code>web-env.js</code>; generating <b>collapsed the existing drift</b> (js-host ordered <code>math_random</code> last; web.si carried a stray CRLF) into one canonical order/format. <code>bindgen.lock.json</code> pins a content hash; <code>bindgen.test.ts</code> (8 green) enforces byte-for-byte fidelity, cross-site (module,field,arity) key parity, the lock hash, and a round-trip compile of <code>web::math_sqrt</code> (defeats the loader.ts silent-skip). <code>.github/workflows/bindgen.yml</code> gates drift on push/PR + regenerates-via-PR on dispatch. Follow-up (additive on this pipeline): the live <code>@webref/idl</code>+<code>webidl2</code> adapter, the Node/Bun <code>.d.ts</code> adapters, Tier-1 strings, the opt-in object-handle tier.</div>
       <div class="tfiles"><span class="k">Files</span> NEW <code>compiler/bindgen/</code>; marker regions in <code>cli/src/host/js-host.ts</code> + <code>playground/playground/web-env.js</code>; <code>compiler/scripts/gen-web-assets.ts</code>; NEW <code>.github/workflows/bindgen.yml</code></div>
       <div class="tunb"><span class="k">Unblocks</span> Anti-drift, on-demand regen. <b>Stays ~10%</b> (doesn't lift the ceiling). Independently buildable.</div></td>
   <td class="cadr">ADR 0017</td>

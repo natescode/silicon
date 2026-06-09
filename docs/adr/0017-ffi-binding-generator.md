@@ -1,6 +1,6 @@
 # ADR 0017 — FFI binding generator: machine-generate Web / Node / Bun `@extern` bindings from upstream specs
 
-- **Status:** Proposed (design + plan; no code lands until Accepted)
+- **Status:** Accepted — first milestone implemented (2026-06-09). The Web `Math`/clock surface is now generated from `compiler/bindgen/` and spliced into all three sites between markers; `bun bindgen/cli.ts --check` + `bindgen.test.ts` enforce lockstep. The WebIDL adapter (`@webref/idl` + `webidl2`), Tier-1 strings, and the Node/Bun adapters remain future, additive work on this proven pipeline.
 - **Date:** 2026-06-05
 - **Deciders:** NatesCode
 - **Related:** ADR 0016 (`@loop`/iterables — established the FFI ceiling reasoning and the closures/coroutine deferral) · ADR 0011 (rcaps) · ADR 0012 (effect lattice) · **ADR 0018 (async/Promise FFI — the work that lifts this generator's coverage ceiling from ~10% toward 100%)** · the JS/Browser/Bun API-coverage audit (this repo currently binds ~54 host functions across `web::`/`JSString::`/`console::`) · [[silicon-js-string-builtins]] memory · prior art: `wasm-bindgen` (Rust), Emscripten Embind, `TypeScript-DOM-lib-generator`, Deno/Node type packages.
@@ -105,4 +105,11 @@ Steps: `setup-bun` + `bun install --frozen-lockfile` → run the generator with 
 
 ## Implementation pointer
 
-Proposed — no code until Accepted. Touchpoints: `compiler/bindgen/` (new), `compiler/src/strata/modules/` + `compiler/src/platforms/web/` (generated `.si` destinations), `cli/src/host/js-host.ts` + `playground/playground/web-env.js` (marker regions for the spliced shim fragments), `compiler/scripts/gen-web-assets.ts` (bundling), `.github/workflows/bindgen.yml` (new). Reference the landing commit here on acceptance.
+First milestone landed. As built:
+- `compiler/bindgen/src/spec.ts` — the hand-authored Tier-0 `BindingSpec[]` (Web Math/clock). A future `@webref/idl` adapter produces this same shape.
+- `compiler/bindgen/src/generate.ts` — `BindingSpec[] → Binding IR → { si, bunShim, webShim }`, with tier classification + the `siToWasm` boundary map.
+- `compiler/bindgen/cli.ts` — `--check` (CI) / `--write` (regen); splices each fragment between `// === bindgen:web math+clock === … // === /bindgen:web math+clock ===` markers in the three sites.
+- `compiler/bindgen/bindgen.lock.json` — pinned content hash + provenance (the silent-skip + drift tripwire).
+- `compiler/bindgen/bindgen.test.ts` — byte-for-byte golden, cross-site (module, field, arity) key parity, lock-hash, and a round-trip compile of `web::math_sqrt` (defeats the `loader.ts` silent-skip).
+- Marker regions inserted into `compiler/src/strata/modules/web.si`, `cli/src/host/js-host.ts`, `playground/playground/web-env.js`. Generating collapsed the prior drift (js-host ordered `math_random` last; web.si had a stray CRLF) into one canonical order/format.
+- `.github/workflows/bindgen.yml` — `workflow_dispatch` (regen-PR) + push/PR `check-shims`.

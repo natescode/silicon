@@ -1,0 +1,103 @@
+name: bindgen — FFI binding lockstep (ADR 0017)
+
+# Opt into Node 24 for JS actions ahead of the 2026-06-16 forced cutoff.
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
+# check-shims: the generated FFI surface (compiler/bindgen) must stay in lockstep
+# with the three sites it owns (web.si + both host shims).  Runs on any change to
+# the generator, the spec, or a generated site.  workflow_dispatch regenerates and
+# opens a PR.  Tag-independent — never touches release.yml.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'compiler/bindgen/**'
+      - 'compiler/src/strata/modules/web.si'
+      - 'cli/src/host/js-host.ts'
+      - 'playground/playground/web-env.js'
+      - '.github/workflows/bindgen.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'compiler/bindgen/**'
+      - 'compiler/src/strata/modules/web.si'
+      - 'cli/src/host/js-host.ts'
+      - 'playground/playground/web-env.js'
+      - '.github/workflows/bindgen.yml'
+  workflow_dispatch:
+
+jobs:
+  check-shims:
+    name: check-shims
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      # Fails if any of the three sites has drifted from the spec.
+      - name: bindgen --check
+        working-directory: compiler
+        run: bun run bindgen/cli.ts
+
+      # Golden + key-parity + lock-hash + round-trip.
+      - name: bindgen golden test
+        working-directory: compiler
+        run: bun test bindgen/bindgen.test.ts
+
+      # The regenerated web.si must still re-bundle into assets.generated.ts.
+      - name: gen-web-assets re-bundles
+        working-directory: compiler
+        run: bun run scripts/gen-web-assets.ts
+
+  regenerate:
+    name: regenerate (workflow_dispatch)
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Regenerate FFI surface
+        working-directory: compiler
+        run: |
+          bun run bindgen/cli.ts --write
+          bun run scripts/gen-web-assets.ts
+
+      - name: Open PR on drift
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if [ -z "$(git status --porcelain)" ]; then
+            echo "No drift — generated surface already up to date."
+            exit 0
+          fi
+          BRANCH="bindgen/regen-$(git rev-parse --short HEAD)"
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git checkout -b "$BRANCH"
+          git commit -am "chore(bindgen): regenerate Web FFI surface from spec"
+          git push origin "$BRANCH"
+          gh pr create --title "bindgen: regenerate Web FFI surface" \
+            --body "Automated regeneration from compiler/bindgen (ADR 0017). Review the (module, field, arity) diff before merging." \
+            --base main --head "$BRANCH"

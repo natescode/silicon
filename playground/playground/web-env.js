@@ -74,6 +74,7 @@
             console_warn:    function (v)       { console.warn(v);  onPrint('[warn] '  + String(v), 'warn') },
             console_info:    function (v)       { console.info(v);  onPrint('[info] '  + String(v), 'info') },
 
+            // === bindgen:web math+clock (generated — edit compiler/bindgen/src/spec.ts, run `bun bindgen/cli.ts --write`) ===
             math_random:     function ()        { return Math.random() },
             math_sin:        function (x)       { return Math.sin(x) },
             math_cos:        function (x)       { return Math.cos(x) },
@@ -92,6 +93,7 @@
 
             performance_now: function ()        { return performance.now() },
             date_now:        function ()        { return Date.now() },
+            // === /bindgen:web math+clock ===
         }
 
         // ── Canvas feature ────────────────────────────────────────────────────

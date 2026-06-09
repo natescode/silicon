@@ -63,14 +63,26 @@ function buildImports(state: HostState, write: (s: string) => void) {
             console_error: (v: number) => { flush(); process.stderr.write(String(v) + '\n') },
             console_warn: (v: number) => { flush(); write('[warn] ' + v + '\n') },
             console_info: (v: number) => { flush(); write('[info] ' + v + '\n') },
-            math_sin: Math.sin, math_cos: Math.cos, math_tan: Math.tan,
-            math_sqrt: Math.sqrt, math_log: Math.log, math_exp: Math.exp,
-            math_pow: Math.pow, math_atan2: Math.atan2,
-            math_floor: Math.floor, math_ceil: Math.ceil, math_round: Math.round,
-            math_abs: Math.abs, math_min: Math.min, math_max: Math.max,
+            // === bindgen:web math+clock (generated — edit compiler/bindgen/src/spec.ts, run `bun bindgen/cli.ts --write`) ===
             math_random: Math.random,
+            math_sin: Math.sin,
+            math_cos: Math.cos,
+            math_tan: Math.tan,
+            math_sqrt: Math.sqrt,
+            math_log: Math.log,
+            math_exp: Math.exp,
+            math_pow: Math.pow,
+            math_atan2: Math.atan2,
+            math_floor: Math.floor,
+            math_ceil: Math.ceil,
+            math_round: Math.round,
+            math_abs: Math.abs,
+            math_min: Math.min,
+            math_max: Math.max,
+
             performance_now: () => performance.now(),
             date_now: () => Date.now(),
+            // === /bindgen:web math+clock ===
         },
     }
     return { imports, flush }
