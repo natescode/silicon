@@ -1,10 +1,11 @@
 {
-  "$comment": "ADR 0017 — bindgen lockfile. Pins the provenance + content hash of the generated FFI surface so CI (bindgen.yml / bindgen.test.ts) fails on any drift between the spec and the three emitted sites. For this first slice the spec is hand-authored (compiler/bindgen/src/spec.ts), so the lock pins the spec source + the toolchain rather than upstream package versions; the real @webref/idl + webidl2 pins arrive with the WebIDL adapter.",
+  "$comment": "ADR 0017 — bindgen lockfile. Pins the provenance + content hash of the generated FFI surface so CI (bindgen.yml / bindgen.test.ts) fails on any drift between the spec and the three emitted sites. Performance.now() is now generated from real Web IDL via the webidl2 adapter; Math.*/Date.now() are ECMAScript built-ins from the hand-authored table.",
   "generator": "compiler/bindgen",
   "specVersion": 1,
   "toolchain": {
     "runtime": "bun",
-    "note": "webidl2 / @webref/idl are NOT yet a dependency — the Math/clock slice is a hand-authored Tier-0 table (ADR 0017 first milestone)."
+    "webidl2": "^24.5.0",
+    "note": "Performance.now() is parsed from real Web IDL via webidl2 (devDependency). Math.* and Date.now() are ECMAScript built-ins (no @webref/idl definition) and come from the hand-authored ECMAScript table. The @webref/idl bulk-IDL bundle (+ per-spec version pinning) is the next adapter source."
   },
   "surfaces": [
     {

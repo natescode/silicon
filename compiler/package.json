@@ -35,7 +35,8 @@
     "@types/node": "^20.14.2",
     "fast-check": "^4.8.0",
     "vscode-oniguruma": "^2.0.1",
-    "vscode-textmate": "^9.3.2"
+    "vscode-textmate": "^9.3.2",
+    "webidl2": "^24.5.0"
   },
   "peerDependencies": {
     "typescript": "^5.0.0"
