@@ -28,9 +28,7 @@
 # The branch values are typed locals so HM-lite pins the mixed
 # `Result[Int, String]` (the Ok and Err arms otherwise infer different free type
 # parameters); the error branch is lazy, so `js::error_message` only runs (and
-# clears the slot) on failure.  `js_check` takes an `Int` (not a `JSValue`) on
-# purpose — an externref-param function whose `@if` tail builds a sum type hits a
-# codegen gap, so pinning happens at the call site instead.
+# clears the slot) on failure.
 \\ js_check (Int) -> Result[Int, String]
 @fn js_check ok := {
     @if(js::had_error(), {
@@ -40,6 +38,26 @@
     }, {
         \\ k Result[Int, String]
         @mut k := Ok(ok);
+        k
+    })
+};
+
+# Lift a fallible call's result handle into a Result, pinning the success handle
+# so it threads through the Result by id (retrieve with `js::pinned(id)`).
+#
+#   resp := js::call(client, get, args);     ;; null + boundary error on throw
+#   @match(js_try(resp),
+#       $Ok id, { use(js::pinned(id)) },
+#       $Err m, { recover(m) });
+\\ js_try (JSValue) -> Result[Int, String]
+@fn js_try h := {
+    @if(js::had_error(), {
+        \\ e Result[Int, String]
+        @mut e := Err(js::error_message());
+        e
+    }, {
+        \\ k Result[Int, String]
+        @mut k := Ok(js::pin(h));
         k
     })
 };

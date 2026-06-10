@@ -130,19 +130,22 @@ describe('next FFI #2 — host-error → Result (sync boundary)', () => {
         expect(ex.pin_rt(sentinel)).toBe(sentinel)   // same object handle back
     })
 
-    test('js_check(js::pin(r)) carries the handle by id: Ok(pin id ≥ 1) / Err on throw', async () => {
+    test('js_try(handle) carries the handle by id: Ok(pin id ≥ 1) / Err on throw', async () => {
+        // js_try takes the JSValue handle directly (an externref-param helper
+        // that builds + matches a Result — works now the flat @match form landed).
         const { ex } = await instantiate(compileBin(`@use 'ffi';
 \\\\ try_id (JSValue, JSString, JSValue) -> Int
 @fn try_id recv, method, args := {
     \\\\ r JSValue
     @mut r := js::call(recv, method, args);
     \\\\ res Result[Int, String]
-    @mut res := js_check(js::pin(r));
+    @mut res := js_try(r);
     @match(res, $Ok id, { id }, $Err _m, { 0 - 1 })
 };
 @export try_id;`))
         const obj = { good: () => ({}), bad: () => { throw new Error('x') } }
-        expect(ex.try_id(obj, 'good', [])).toBeGreaterThanOrEqual(1)   // Ok(pin id)
+        const goodId = ex.try_id(obj, 'good', [])
+        expect(goodId).toBeGreaterThanOrEqual(1)   // Ok(pin id)
         expect(ex.try_id(obj, 'bad', [])).toBe(-1)                     // Err
     })
 
