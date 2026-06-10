@@ -33,6 +33,13 @@ export interface DtsSource {
     readonly prefix: string
     /** How to map TS `number` (the int-vs-float heuristic). Default 'Float'. */
     readonly numberType?: SiType
+    /** Tier-2 object handling (ADR 0018).  'skip' (default) drops any binding
+     *  with a non-Tier-0 object param/result.  'jsvalue' instead maps such object
+     *  types to the externref handle `JSValue` — so object-returning / object-
+     *  taking APIs become callable (the handle is opaque, engine-GC'd, web/bun).
+     *  Callables (need real closures) and thenables (belong to the async path)
+     *  are still NOT mapped; if such a param is optional it is simply dropped. */
+    readonly objects?: 'skip' | 'jsvalue'
 }
 
 export interface DtsResult {
@@ -40,8 +47,20 @@ export interface DtsResult {
     readonly skipped: { readonly member: string; readonly reason: string }[]
 }
 
-/** Resolve a TS type to a Tier-0 Silicon type, or null if it isn't Tier-0. */
-function tsTypeToSi(t: ts.Type, numberType: SiType): SiType | null {
+/** True for a TS type that needs a real closure (a function) — never a JSValue. */
+const isCallable = (t: ts.Type): boolean => t.getCallSignatures().length > 0
+/** True for a Promise-like type — it belongs to the async path (F1b/F3), not a
+ *  synchronous object handle, so it is not mapped to JSValue. */
+const isThenable = (t: ts.Type): boolean => {
+    const then = t.getProperty('then')
+    return then != null && (then.flags & ts.SymbolFlags.Method) !== 0
+}
+
+/** Resolve a TS type to a Tier-0 Silicon type, or — when `objects` is 'jsvalue'
+ *  — the externref handle `JSValue` for a plain object type.  Returns null for a
+ *  type that can't cross at all (callables, thenables, or a non-Tier-0 object in
+ *  'skip' mode). */
+function tsTypeToSi(t: ts.Type, numberType: SiType, objects: 'skip' | 'jsvalue'): SiType | null {
     const f = t.flags
     if (f & ts.TypeFlags.StringLike)  return 'String'
     if (f & ts.TypeFlags.NumberLike)  return numberType
@@ -49,11 +68,15 @@ function tsTypeToSi(t: ts.Type, numberType: SiType): SiType | null {
     if (f & (ts.TypeFlags.Void | ts.TypeFlags.Undefined)) return 'Void'
     if (t.isUnion()) {
         // A union of one Tier-0 kind (e.g. NodeJS.Platform = string-literal union).
-        const parts = t.types.map(p => tsTypeToSi(p, numberType))
+        const parts = t.types.map(p => tsTypeToSi(p, numberType, 'skip'))
         if (parts.every(p => p === 'String')) return 'String'
         if (parts.every(p => p === numberType)) return numberType
         if (parts.every(p => p === 'Bool')) return 'Bool'
     }
+    // Tier-2: a plain object/array crosses as an opaque externref handle.  A
+    // function (needs a closure) or a Promise (async) is deliberately NOT a handle.
+    if (objects === 'jsvalue' && (f & ts.TypeFlags.Object) && !isCallable(t) && !isThenable(t)) return 'JSValue'
+    if (objects === 'jsvalue' && (f & ts.TypeFlags.Any)) return 'JSValue'
     return null
 }
 
@@ -91,9 +114,21 @@ function loadNamespace(src: DtsSource): { type: ts.Type; checker: ts.TypeChecker
 /** Generate BindingSpecs from a Node/Bun `.d.ts` namespace via the TS checker. */
 export function dtsToSpecs(src: DtsSource): DtsResult {
     const numberType = src.numberType ?? 'Float'
+    const objects = src.objects ?? 'skip'
     const { type, checker, sf } = loadNamespace(src)
     const specs: BindingSpec[] = []
     const skipped: { member: string; reason: string }[] = []
+
+    /** A param is droppable (the host call simply omits it, falling back to the
+     *  API default) when it is OPTIONAL (`?`) — used to skip an unrepresentable
+     *  trailing arg (e.g. a JSON `reviver` callback) instead of rejecting the
+     *  whole binding.  A rest param (`...args`) is NOT droppable: omitting it
+     *  would silently change the call's meaning (e.g. `path.join(...paths)` →
+     *  a no-arg `join()`), so such a binding stays skipped. */
+    const droppable = (p: ts.Symbol): boolean => {
+        const d = p.valueDeclaration
+        return !!d && ts.isParameter(d) && d.questionToken != null && d.dotDotDotToken == null
+    }
 
     for (const prop of checker.getPropertiesOfType(type)) {
         const name = prop.getName()
@@ -101,15 +136,26 @@ export function dtsToSpecs(src: DtsSource): DtsResult {
         const sigs = propType.getCallSignatures()
         if (sigs.length === 0) continue   // not a function (a property/namespace) — silently skip
         const sig = sigs[0]               // first overload (@extern has no overloading)
-        const member = `${src.prefix}.${name}`
+        const member = `${src.prefix || src.global || src.module}.${name}`
 
-        const ret = tsTypeToSi(checker.getReturnTypeOfSignature(sig), numberType)
+        const ret = tsTypeToSi(checker.getReturnTypeOfSignature(sig), numberType, objects)
         const params: Param[] = []
         let bad: string | null = ret === null ? 'non-Tier-0 result' : null
         if (!bad) {
             for (const p of sig.getParameters()) {
-                const pt = tsTypeToSi(checker.getTypeOfSymbolAtLocation(p, sf), numberType)
-                if (pt === null) { bad = `non-Tier-0 param '${p.getName()}'`; break }
+                const d = p.valueDeclaration
+                // A rest param (`...args`) is variadic — it can't be a single
+                // fixed param (and its array type must NOT be smuggled across as
+                // one JSValue: `path.join([..])` ≠ `path.join(a, b)`).  Skip the
+                // whole binding rather than generate a wrong-arity call.
+                if (d && ts.isParameter(d) && d.dotDotDotToken != null) {
+                    bad = `variadic rest param '${p.getName()}'`; break
+                }
+                const pt = tsTypeToSi(checker.getTypeOfSymbolAtLocation(p, sf), numberType, objects)
+                if (pt === null) {
+                    if (droppable(p)) continue   // omit an unrepresentable optional param
+                    bad = `non-Tier-0 param '${p.getName()}'`; break
+                }
                 params.push({ name: p.getName(), type: pt })
             }
         }
@@ -121,7 +167,7 @@ export function dtsToSpecs(src: DtsSource): DtsResult {
             params,
             result: ret!,
             impl: { kind: 'call', expr: `${src.accessor}.${name}(${argList})` },
-            source: `${src.types[0]}:${member}`,
+            source: `${src.types[0] ?? 'ecmascript'}:${member}`,
         })
     }
     // Deterministic order (the checker's property order is stable but sort to be safe).

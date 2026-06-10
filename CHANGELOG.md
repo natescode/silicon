@@ -27,6 +27,36 @@ This project aims for [Semantic Versioning](https://semver.org/).
 - Standalone files compiled outside a project keep the classic single-file
   `@use` behaviour unchanged.
 
+### Added — v1.0 roadmap: spec-driven FFI modules + Tier-2 object handles ([ADR 0017](docs/adr/0017-ffi-binding-generator.md) / [ADR 0018](docs/adr/0018-async-promise-ffi.md))
+
+Broadens the FFI surface from the single Web `Math`/clock fragment to whole
+spec-generated built-in modules, across all three boundary tiers.
+
+- **Every adapter is spec-driven.** Web from the real `@webref/idl` corpus (via
+  `webidl2`), Node + Bun from their real `.d.ts` (`@types/node`, `bun-types`) via
+  the TypeScript compiler API. A `BindingSpec` is generated per callable export
+  whose resolved signature is bindable; everything else is logged, never silently
+  dropped. `bun bindgen/cli.ts --report` prints per-source coverage.
+- **Generated built-in modules.** A namespace becomes its own
+  `compiler/src/strata/modules/<mod>.si` (auto-bundled, callable as `mod::fn`) plus
+  a marshalling host shim spliced into `js-host.ts`: **`path`** + **`os`** (Node,
+  Tier-0 linear `String`), **`bun`** (Tier-1), **`json`** (Tier-2). One IR, three
+  emitters, byte-for-byte enforced by `--check` in CI.
+- **Tier-1 — `JSString`.** A module marked `strings: 'jsstring'` emits `String` as
+  `JSString` (an engine-native externref); the host passes JS strings DIRECTLY with
+  zero linear-memory marshalling (`bun::strip_ansi`, web/bun only).
+- **Tier-2 — `JSValue` object handles.** A new `objects: 'jsvalue'` adapter mode
+  maps a plain object/array type to the opaque externref handle `JSValue` (callables
+  and Promises are deliberately *not* handles). `json::parse` returns a `JSValue`;
+  `json::stringify` takes one back — a host object round-trips through guest code as
+  an engine-GC'd externref with no marshalling and no manual release. The compiler
+  already lowers `JSValue` to a nullable `externref` (F1a), web/bun-gated.
+- **Optional-arg widening.** An unrepresentable *optional* (`?`) param (e.g. a JSON
+  `reviver` callback) is dropped so the common-case call still binds, instead of
+  rejecting the whole binding; a *variadic rest* (`...args`) param still skips the
+  binding (no silent wrong-arity call). This alone added `bun::open_in_editor`,
+  `random_uuidv7`, `string_width`, `which`, `wrap_ansi`, `slice_ansi`.
+
 ### Added — v1.0 roadmap Phase 4 core: the poll-reactor ([ADR 0018](docs/adr/0018-async-promise-ffi.md) P4 / ADR 0019 C3)
 
 Delivered on the `phase-4-poll-reactor` branch. The final critical-path mechanism

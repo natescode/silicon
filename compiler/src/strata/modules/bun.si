@@ -3,7 +3,13 @@
 # Regenerate: `bun bindgen/cli.ts --write`.  Call as `bun::<fn>`.  (Tier-1: JSString = externref, web/bun only)
 \\ @extern gc (Bool);
 \\ @extern nanoseconds () -> Float;
+\\ @extern open_in_editor (JSString);
+\\ @extern random_uuidv7 (JSString) -> JSString;
 \\ @extern resolve_sync (JSString, JSString) -> JSString;
 \\ @extern shrink ();
 \\ @extern sleep_sync (Float);
+\\ @extern slice_ansi (JSString, Float, Float, Bool) -> JSString;
+\\ @extern string_width (JSString) -> Float;
 \\ @extern strip_ansi (JSString) -> JSString;
+\\ @extern which (JSString) -> JSString;
+\\ @extern wrap_ansi (JSString, Float) -> JSString;

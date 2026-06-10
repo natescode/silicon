@@ -14,7 +14,7 @@
  * hand; thereafter this tool owns the bytes between them.
  */
 
-import { readFileSync, writeFileSync } from 'fs'
+import { existsSync, readFileSync, writeFileSync } from 'fs'
 import { WEB_MATH_CLOCK, WEB_MODULE } from './src/spec'
 import { generate } from './src/generate'
 import { GENERATED_MODULES, generateModule } from './src/modules'
@@ -102,8 +102,8 @@ function main(): void {
     let drift = 0
     for (const t of targets()) {
         if (t.kind === 'file') {
-            // The whole file is generated.
-            const current = readFileSync(t.path, 'utf8')
+            // The whole file is generated.  A not-yet-created file counts as drift.
+            const current = existsSync(t.path) ? readFileSync(t.path, 'utf8') : null
             if (write) {
                 if (current !== t.fragment) { writeFileSync(t.path, t.fragment); console.log(`wrote  ${t.label}  (${t.path})`) }
                 else console.log(`ok     ${t.label}  (unchanged)`)

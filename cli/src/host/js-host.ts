@@ -99,14 +99,48 @@ function buildImports(state: HostState, write: (s: string) => void) {
             to_namespaced_path: (path: number) => allocLenString(require('node:path').toNamespacedPath(readLenString(path))),
             // === /bindgen:module path ===
         },
+        os: {
+            // === bindgen:module os ===
+            arch: () => allocLenString(require('node:os').arch()),
+            available_parallelism: () => require('node:os').availableParallelism(),
+            endianness: () => allocLenString(require('node:os').endianness()),
+            freemem: () => require('node:os').freemem(),
+            get_priority: (pid: number) => require('node:os').getPriority(pid),
+            homedir: () => allocLenString(require('node:os').homedir()),
+            hostname: () => allocLenString(require('node:os').hostname()),
+            machine: () => allocLenString(require('node:os').machine()),
+            platform: () => allocLenString(require('node:os').platform()),
+            release: () => allocLenString(require('node:os').release()),
+            set_priority: (priority: number) => require('node:os').setPriority(priority),
+            tmpdir: () => allocLenString(require('node:os').tmpdir()),
+            totalmem: () => require('node:os').totalmem(),
+            type: () => allocLenString(require('node:os').type()),
+            uptime: () => require('node:os').uptime(),
+            version: () => allocLenString(require('node:os').version()),
+            // === /bindgen:module os ===
+        },
+        // JSON (Tier-2): `parse`/`stringify` pass a host object across as an
+        // externref `JSValue` — no marshalling, engine-GC'd.
+        json: {
+            // === bindgen:module json ===
+            parse: (text: any) => JSON.parse(text),
+            stringify: (value: any) => JSON.stringify(value),
+            // === /bindgen:module json ===
+        },
         bun: {
             // === bindgen:module bun ===
             gc: (force: number) => Bun.gc(force),
             nanoseconds: () => Bun.nanoseconds(),
+            open_in_editor: (path: any) => Bun.openInEditor(path),
+            random_uuidv7: (encoding: any) => Bun.randomUUIDv7(encoding),
             resolve_sync: (moduleId: any, parent: any) => Bun.resolveSync(moduleId, parent),
             shrink: () => Bun.shrink(),
             sleep_sync: (ms: number) => Bun.sleepSync(ms),
+            slice_ansi: (input: any, start: number, end: number, ambiguousIsNarrow: number) => Bun.sliceAnsi(input, start, end, ambiguousIsNarrow),
+            string_width: (input: any) => Bun.stringWidth(input),
             strip_ansi: (input: any) => Bun.stripANSI(input),
+            which: (command: any) => Bun.which(command),
+            wrap_ansi: (input: any, columns: number) => Bun.wrapAnsi(input, columns),
             // === /bindgen:module bun ===
         },
     }

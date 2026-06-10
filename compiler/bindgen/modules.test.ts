@@ -45,6 +45,10 @@ function makeHost() {
             basename: (p: number, s: number) => allocLenString(require('node:path').basename(readLenString(p), readLenString(s))),
         },
         bun: { nanoseconds: () => (globalThis as any).Bun.nanoseconds() },
+        os: {
+            platform: () => allocLenString(require('node:os').platform()),
+            available_parallelism: () => require('node:os').availableParallelism(),
+        },
     }
     return { imports, bind: (inst: WebAssembly.Instance) => { state.memory = (inst.exports as any).memory; state.alloc = (inst.exports as any).alloc }, readLenString }
 }
@@ -83,6 +87,40 @@ describe('bindgen — generated Node/Bun modules run end-to-end', () => {
         const inst = new WebAssembly.Instance(await WebAssembly.compile(bin), host.imports)
         host.bind(inst)
         expect((inst.exports as any).now()).toBeGreaterThan(0)
+    })
+
+    test('os::platform (String result) + os::available_parallelism (Float) — generated from @types/node', async () => {
+        const bin = compileBin(`\\\\ plat () -> String
+@fn plat := { os::platform() };
+\\\\ cpus () -> Float
+@fn cpus := { os::available_parallelism() };
+@export plat;
+@export cpus;`)
+        const host = makeHost()
+        const inst = new WebAssembly.Instance(await WebAssembly.compile(bin), host.imports)
+        host.bind(inst)
+        expect(host.readLenString((inst.exports as any).plat())).toBe(require('node:os').platform())
+        expect((inst.exports as any).cpus()).toBeGreaterThan(0)   // at least 1 core
+    })
+
+    test('json::parse → json::stringify (Tier-2 JSValue) — a host object round-trips through guest code as an externref', async () => {
+        // `json.si` is generated Tier-2 (objects: 'jsvalue'): `parse` returns a
+        // JSValue (externref handle to the parsed JS object) and `stringify` takes
+        // one back.  The guest never inspects the object — it holds the opaque
+        // handle and threads it from one extern to the next.  No linear marshalling
+        // for the object; the engine GCs it.  (Strings here are Tier-1 JSString.)
+        const bin = compileBin(`\\\\ roundtrip (JSString) -> JSString
+@fn roundtrip s := { json::stringify(json::parse(s)) };
+@export roundtrip;`)
+        const inst = new WebAssembly.Instance(await WebAssembly.compile(bin), {
+            env: { print: () => {}, read: () => 0 },
+            json: {
+                parse: (text: any) => JSON.parse(text),         // String → object handle (externref)
+                stringify: (value: any) => JSON.stringify(value), // object handle → String
+            },
+        })
+        // The parsed object never touches linear memory — it crosses as an externref.
+        expect((inst.exports as any).roundtrip('{"a":1,"b":[2,3]}')).toBe('{"a":1,"b":[2,3]}')
     })
 
     test('bun::strip_ansi (Tier-1 JSString) — crosses as externref, ZERO linear marshalling', async () => {

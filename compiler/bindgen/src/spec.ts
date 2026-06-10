@@ -24,6 +24,11 @@
 import { webidlToSpecs } from './adapters/webidl'
 
 export type SiType = 'Int' | 'Int64' | 'Bool' | 'Float' | 'String' | 'Void'
+    // Tier-1/Tier-2 externref object handles (ADR 0018, web/bun only):
+    //   JSString — an engine-native string handle (the `wasm:js-string` builtins).
+    //   JSValue  — an opaque host-object handle (any JS object/array crosses as
+    //              an externref; engine-GC'd, no manual release).
+    | 'JSString' | 'JSValue'
 
 export interface Param {
     readonly name: string

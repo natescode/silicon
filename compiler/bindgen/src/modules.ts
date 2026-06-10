@@ -36,6 +36,24 @@ export const GENERATED_MODULES: readonly ModuleConfig[] = [
         strings: 'linear',
     },
     {
+        // Node os: Tier-0 — scalar system info (linear String / Float), portable.
+        module: 'os',
+        provenance: '@types/node (node:os)',
+        specs: () => dtsToSpecs({ module: 'node:os', types: ['node'], accessor: "require('node:os')", prefix: '' }).specs,
+        strings: 'linear',
+    },
+    {
+        // JSON: Tier-2 — object handles.  `parse` returns a `JSValue` (an opaque
+        // externref to the parsed JS object); `stringify` takes one back.  Both
+        // cross as engine-GC'd externrefs with ZERO linear marshalling — the
+        // first shipped surface to round-trip a host object through guest code.
+        // Generated from the real lib.es5 `JSON` interface (objects: 'jsvalue').
+        module: 'json',
+        provenance: 'ECMAScript (lib.es5 JSON)',
+        specs: () => dtsToSpecs({ global: 'JSON', types: [], accessor: 'JSON', prefix: '', objects: 'jsvalue' }).specs,
+        strings: 'jsstring',
+    },
+    {
         // Bun: Tier-1 — JSString (externref).  Bun is a JS host, so its string
         // bindings cross as native JS strings with zero linear-memory marshalling.
         module: 'bun',
