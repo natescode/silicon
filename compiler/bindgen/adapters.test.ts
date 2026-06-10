@@ -14,6 +14,7 @@
 import { test, expect, describe } from 'bun:test'
 import { webrefToSpecs } from './src/adapters/webref'
 import { dtsToSpecs } from './src/adapters/dts'
+import { webifaceToSpecs } from './src/adapters/webiface'
 
 describe('bindgen adapters — generated from real spec sources', () => {
     test('Web: @webref/idl corpus → Tier-0 bindings with WebIDL signatures', () => {
@@ -94,5 +95,80 @@ describe('bindgen adapters — generated from real spec sources', () => {
         const asInt = dtsToSpecs({ global: 'Bun', types: ['bun-types'], accessor: 'Bun', prefix: 'bun', numberType: 'Int' })
         expect(asFloat.specs.find(s => s.name === 'bun_nanoseconds')?.result).toBe('Float')
         expect(asInt.specs.find(s => s.name === 'bun_nanoseconds')?.result).toBe('Int')
+    })
+})
+
+describe('bindgen webiface adapter — constructed Web interfaces from @webref/idl', () => {
+    const byName = (specs: { name: string }[]) => new Map(specs.map(s => [s.name, s as any]))
+
+    test('URL: constructor → create, getter/setter pairs, static, stringifier → to_string', () => {
+        const { specs } = webifaceToSpecs('URL')
+        const m = byName(specs)
+        // constructor binds as `create` (`new` is a reserved Silicon token); the
+        // optional `base` is DROPPED (a secondary optional after the required url),
+        // so the 1-arg form is exposed.
+        expect(m.get('create')).toMatchObject({
+            params: [{ type: 'String' }], result: 'JSValue', impl: { kind: 'construct', iface: 'URL' },
+        })
+        // a static with only a required arg keeps it; its trailing optional base is dropped.
+        expect(m.get('can_parse')).toMatchObject({ params: [{ type: 'String' }], result: 'Bool' })
+        // writable attribute → getter + setter; the receiver is a JSValue handle.
+        expect(m.get('href')).toMatchObject({ params: [{ name: 'self', type: 'JSValue' }], result: 'String', impl: { kind: 'getter', attr: 'href' } })
+        expect(m.get('set_href')).toMatchObject({ params: [{ type: 'JSValue' }, { type: 'String' }], result: 'Void', impl: { kind: 'setter', attr: 'href' } })
+        // readonly attribute → getter only.
+        expect(m.get('origin')?.impl).toEqual({ kind: 'getter', attr: 'origin' })
+        expect(m.get('set_origin')).toBeUndefined()
+        // a static method takes NO receiver and reaches through the interface global.
+        expect(m.get('can_parse')).toMatchObject({ result: 'Bool', impl: { kind: 'static', iface: 'URL', method: 'canParse' } })
+        // an interface-typed attribute crosses as a JSValue handle (the cross-handle case).
+        expect(m.get('search_params')).toMatchObject({ result: 'JSValue', impl: { kind: 'getter', attr: 'searchParams' } })
+        // the stringifier (URL's is the href attribute) also yields to_string → obj.toString().
+        expect(m.get('to_string')).toMatchObject({ params: [{ type: 'JSValue' }], result: 'String', impl: { kind: 'method', method: 'toString' } })
+    })
+
+    test('TextEncoder/TextDecoder: object members cross as JSValue handles (Uint8Array / BufferSource)', () => {
+        const enc = byName(webifaceToSpecs('TextEncoder').specs)
+        // encode returns a Uint8Array (ambient buffer type) → JSValue handle; input kept.
+        expect(enc.get('encode')).toMatchObject({ params: [{ type: 'JSValue' }, { type: 'String' }], result: 'JSValue', impl: { kind: 'method', method: 'encode' } })
+        const dec = byName(webifaceToSpecs('TextDecoder').specs)
+        // decode takes a BufferSource handle (JSValue) and returns a String.
+        expect(dec.get('decode')).toMatchObject({ params: [{ type: 'JSValue' }, { type: 'JSValue' }], result: 'String', impl: { kind: 'method', method: 'decode' } })
+    })
+
+    test('non-handle members are skipped, not silently mis-bound (dictionaries / sequences)', () => {
+        // TextEncoder.encodeInto returns a dictionary (TextEncoderEncodeIntoResult) → skipped.
+        expect(webifaceToSpecs('TextEncoder').skipped.some(s => s.member === 'encodeInto')).toBe(true)
+        // Headers.getSetCookie returns a sequence → skipped (a collection, not a single handle).
+        const h = webifaceToSpecs('Headers')
+        expect(h.skipped.some(s => s.member === 'getSetCookie')).toBe(true)
+        // Headers ctor's union init has no string arm and is optional → dropped → create() no-arg.
+        expect(byName(h.specs).get('create')).toMatchObject({ params: [], result: 'JSValue' })
+    })
+
+    test('URLSearchParams: a union ctor arg with a string member is bindable as String', () => {
+        // init is (sequence<…> or record<…> or USVString) — the USVString arm means
+        // the guest can supply a query string, so it binds as a String param.
+        const m = byName(webifaceToSpecs('URLSearchParams').specs)
+        expect(m.get('create')).toMatchObject({ params: [{ type: 'String' }], result: 'JSValue' })
+        // its anonymous operation-stringifier also yields to_string.
+        expect(m.get('to_string')?.impl).toEqual({ kind: 'method', method: 'toString' })
+    })
+
+    test('optional-arg policy: secondary optionals dropped (no silent-wrong answers); payload optionals kept', () => {
+        // has/delete drop the optional `value` → the 1-arg WHATWG membership/clear
+        // forms (forcing `value=""` would silently mis-answer; Silicon has no
+        // optional params and "" ≠ omitted).
+        const usp = byName(webifaceToSpecs('URLSearchParams').specs)
+        expect(usp.get('has')).toMatchObject({ params: [{ type: 'JSValue' }, { type: 'String' }], result: 'Bool' })
+        expect(usp.get('delete')).toMatchObject({ params: [{ type: 'JSValue' }, { type: 'String' }] })
+        // But a payload optional with no required arg before it is KEPT (else the op
+        // is useless): TextEncoder.encode(input?) and new URLSearchParams(init?).
+        const enc = byName(webifaceToSpecs('TextEncoder').specs)
+        expect(enc.get('encode')).toMatchObject({ params: [{ type: 'JSValue' }, { type: 'String' }] })
+        expect(usp.get('create')?.params).toHaveLength(1)
+        // URL.canParse/create drop the trailing optional base → 1-arg.
+        const url = byName(webifaceToSpecs('URL').specs)
+        expect(url.get('create')?.params).toHaveLength(1)
+        expect(url.get('can_parse')?.params).toHaveLength(1)
     })
 })

@@ -55,6 +55,19 @@ function loadCorpus(dir: string): { file: string; text: string }[] {
         .map(f => ({ file: f, text: readFileSync(join(dir, f), 'utf8') }))
 }
 
+/** The whole @webref/idl corpus as `{file,text}[]`, loaded once and memoized so
+ *  the per-interface adapter (webiface.ts) and modules.ts don't re-read ~325
+ *  files each.  Shared loader for every Web-IDL-driven generator. */
+let _corpus: { file: string; text: string }[] | undefined
+export function loadWebrefCorpus(): { file: string; text: string }[] {
+    return (_corpus ??= loadCorpus(webrefIdlDir()))
+}
+
+/** camelCase / single-word → snake_case (the shared binding-name convention). */
+export function snake(name: string): string {
+    return name.replace(/([a-z0-9])([A-Z])/g, '$1_$2').toLowerCase()
+}
+
 type Op = { name: string; result: string; args: { name: string; type: string }[] }
 
 /**

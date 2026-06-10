@@ -10,6 +10,7 @@
  */
 
 import { dtsToSpecs } from './adapters/dts'
+import { webifaceToSpecs } from './adapters/webiface'
 import { buildIR, emitModuleSi, emitHostModule, type BindingIR, type StringTier } from './generate'
 import type { BindingSpec } from './spec'
 
@@ -59,6 +60,42 @@ export const GENERATED_MODULES: readonly ModuleConfig[] = [
         module: 'bun',
         provenance: 'bun-types (global Bun)',
         specs: () => dtsToSpecs({ global: 'Bun', types: ['bun-types'], accessor: 'Bun', prefix: '' }).specs,
+        strings: 'jsstring',
+    },
+
+    // ── Constructed Web interfaces (Tier-2, generated from @webref/idl) ──────────
+    // Each is `new`'d (callable as `<mod>::create(…)`) and operated on through
+    // instance methods / getters / setters whose first arg is the JSValue handle.
+    // Strings cross as JSString; object members (URL.searchParams,
+    // TextEncoder.encode → Uint8Array) cross as JSValue handles.  web/bun only.
+    {
+        module: 'url',
+        provenance: '@webref/idl (URL interface)',
+        specs: () => webifaceToSpecs('URL').specs,
+        strings: 'jsstring',
+    },
+    {
+        module: 'url_search_params',
+        provenance: '@webref/idl (URLSearchParams interface)',
+        specs: () => webifaceToSpecs('URLSearchParams').specs,
+        strings: 'jsstring',
+    },
+    {
+        module: 'headers',
+        provenance: '@webref/idl (Headers interface)',
+        specs: () => webifaceToSpecs('Headers').specs,
+        strings: 'jsstring',
+    },
+    {
+        module: 'text_encoder',
+        provenance: '@webref/idl (TextEncoder interface)',
+        specs: () => webifaceToSpecs('TextEncoder').specs,
+        strings: 'jsstring',
+    },
+    {
+        module: 'text_decoder',
+        provenance: '@webref/idl (TextDecoder interface)',
+        specs: () => webifaceToSpecs('TextDecoder').specs,
         strings: 'jsstring',
     },
 ]

@@ -85,7 +85,10 @@ describe('@extern object-handle FFI surface (ADR 0018 P1)', () => {
         expect(r.diagnostics?.length ?? 0).toBe(0)
         const imp = importLines(r.wat).find(l => l.includes('get_thing')) ?? ''
         expect(imp).toContain('(import "env" "get_thing"')
-        expect(imp).toContain('(result (ref extern))')
+        // An object-handle import returns a NULLABLE externref — the host may
+        // legitimately return null (a missing element, an invalid parse); a
+        // non-null `(ref extern)` result would trap on that.
+        expect(imp).toContain('(result externref)')
     })
 
     test('a bare @extern with a JSValue param imports an externref param', () => {
@@ -109,7 +112,8 @@ describe('@extern object-handle FFI surface (ADR 0018 P1)', () => {
         // module = "dom" (the namespace), field = "get_element"; wat id is mangled.
         expect(imp).toContain('(import "dom" "get_element"')
         expect(imp).toContain('$dom_get_element')
-        expect(imp).toContain('(param externref) (result (ref extern))')
+        // param + nullable result (getElement may return null → nullable externref).
+        expect(imp).toContain('(param externref) (result externref)')
     })
 
     test('a namespaced @extern forward-references (declared after the call)', () => {

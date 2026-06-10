@@ -158,22 +158,59 @@ export function emitModuleSi(ir: BindingIR, provenance: string, strings: StringT
  *  JS method are recovered from each binding's `impl.expr`. */
 export function emitHostModule(ir: BindingIR, indent = '            ', strings: StringTier = 'linear'): string {
     const js = strings === 'jsstring'
+    // Marshal one param at the host boundary: a linear String is an i32 ptr →
+    // `readLenString`; a jsstring String / JSString / JSValue is the JS value
+    // itself (pass-through); scalars pass through.
+    const inArg = (p: { name: string; type: SiType }): string =>
+        (!js && p.type === 'String') ? `readLenString(${p.name})` : p.name
+    // Wrap a String result back into linear memory (jsstring/JSValue/scalar pass through).
+    const outWrap = (call: string, result: SiType): string =>
+        (!js && result === 'String') ? `allocLenString(${call})` : call
+    // Param TS type at the boundary: externref handles + jsstring Strings are
+    // `any`; linear String ptrs and all scalars are `number`.
+    const ptype = (t: SiType): string =>
+        (t === 'JSValue' || t === 'JSString' || (js && t === 'String')) ? 'any' : 'number'
+
     return ir.decls.map(d => {
-        const expr = d.impl.kind === 'mathRef' ? `Math.${d.impl.method}()` : d.impl.expr
-        const head = expr.slice(0, expr.lastIndexOf('('))   // "<accessor>.<method>"
-        const dot = head.lastIndexOf('.')
-        const accessor = head.slice(0, dot)
-        const method = head.slice(dot + 1)
-        const args = d.params.map(p => (!js && p.type === 'String' ? `readLenString(${p.name})` : p.name))
-        let call = `${accessor}.${method}(${args.join(', ')})`
-        if (!js && d.result === 'String') call = `allocLenString(${call})`
-        // Linear String params are i32 ptrs (`number`).  Everything that crosses
-        // as an externref — a JSString (in 'jsstring' mode) or a JSValue object
-        // handle (any tier) — is the JS value itself, typed `any` at the boundary.
-        const ptype = (t: string): string =>
-            (t === 'JSValue' || t === 'JSString' || (js && t === 'String')) ? 'any' : 'number'
-        const params = d.params.map(p => `${p.name}: ${ptype(p.type)}`).join(', ')
-        return `${indent}${d.name}: (${params}) => ${call},`
+        const sig = d.params.map(p => `${p.name}: ${ptype(p.type)}`).join(', ')
+        let call: string
+        switch (d.impl.kind) {
+            case 'mathRef': {
+                call = outWrap(`Math.${d.impl.method}(${d.params.map(inArg).join(', ')})`, d.result)
+                break
+            }
+            case 'call': {
+                // accessor.method recovered from impl.expr; params re-marshalled in
+                // declaration order (so the jsstring/linear rule is reapplied).
+                const head = d.impl.expr.slice(0, d.impl.expr.lastIndexOf('('))
+                const dot = head.lastIndexOf('.')
+                call = outWrap(`${head.slice(0, dot)}.${head.slice(dot + 1)}(${d.params.map(inArg).join(', ')})`, d.result)
+                break
+            }
+            case 'construct':
+                // new Iface(args…) → a fresh JSValue handle (result is JSValue, never wrapped).
+                call = `new ${d.impl.iface}(${d.params.map(inArg).join(', ')})`
+                break
+            case 'static':
+                call = outWrap(`${d.impl.iface}.${d.impl.method}(${d.params.map(inArg).join(', ')})`, d.result)
+                break
+            case 'method': {
+                // params[0] is the receiver handle — NOT marshalled (it's a JSValue).
+                const [recv, ...rest] = d.params
+                call = outWrap(`${recv.name}.${d.impl.method}(${rest.map(inArg).join(', ')})`, d.result)
+                break
+            }
+            case 'getter':
+                call = outWrap(`${d.params[0].name}.${d.impl.attr}`, d.result)
+                break
+            case 'setter': {
+                // (receiver: JSValue, value: T) -> Void.  value is params[1].
+                const [recv, value] = d.params
+                call = `${recv.name}.${d.impl.attr} = ${inArg(value)}`
+                break
+            }
+        }
+        return `${indent}${d.name}: (${sig}) => ${call},`
     }).join('\n')
 }
 

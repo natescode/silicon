@@ -38,6 +38,16 @@ export interface Param {
 export type Impl =
     | { readonly kind: 'mathRef'; readonly method: string }   // Math.<method>
     | { readonly kind: 'call'; readonly expr: string }         // returns <expr>
+    // ADR 0018 — constructed Web interface shapes (Tier-2).  The host
+    // accessor/receiver is STRUCTURAL (not embedded in a string), so the emitter
+    // never re-parses an expr.  `iface` is the JS global the ctor/static is
+    // reached through (e.g. `URL`); a method/getter/setter takes its receiver as
+    // params[0] (a JSValue handle, never marshalled).
+    | { readonly kind: 'construct'; readonly iface: string }                        // new Iface(args…)
+    | { readonly kind: 'method'; readonly method: string }                          // params[0].method(rest…)
+    | { readonly kind: 'getter'; readonly attr: string }                            // params[0].attr
+    | { readonly kind: 'setter'; readonly attr: string }                            // params[0].attr = value
+    | { readonly kind: 'static'; readonly iface: string; readonly method: string }  // Iface.method(args…)
 
 export interface BindingSpec {
     readonly name: string

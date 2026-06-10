@@ -1052,8 +1052,12 @@ export function lowerExternImport(node: any, ctx: LowerCtx): IRImport {
 
     const resName: string | undefined = node.name?.typeAnnotation?.typename
     const result = resName && resName !== 'Void' ? siliconTypeNameToWasm(resName) : undefined
+    // An object-handle import (not a `wasm:js-string` builtin) may return null —
+    // its result must be a NULLABLE externref or the host traps on null (e.g. a
+    // DOM `getElement` miss, `Headers.get` of an absent header).  Mirrors the
+    // module-call import path in lowerModuleCall.
     const refResult: IRRefSlot | undefined = resName && isExternRefKind(resName)
-        ? { localTypeIdx: 0, nullable: false, extern: true }
+        ? { localTypeIdx: 0, nullable: moduleName !== 'JSString', extern: true }
         : undefined
     if (refResult) usesExternref = true
 
@@ -1565,8 +1569,14 @@ function lowerModuleCall(name: string, sepIdx: number, n: any, ctx: LowerCtx): I
                 (refParams ??= new Map()).set(i, { localTypeIdx: charCodeArrayTypeIdx(ctx), nullable: true })
             }
         })
+        // A `wasm:js-string` builtin result is the spec's non-null `(ref extern)`
+        // (the host validates the exact signature).  But a general object-handle
+        // import (`json`/`bun`/`url`/… — our own host shim) can legitimately
+        // return `null` (e.g. `Headers.get` of a missing header, `URL.parse` of an
+        // invalid URL); its result must be a NULLABLE `externref` or the host
+        // traps ("returned null for a nonnullable result").
         const refResult: IRRefSlot | undefined = isExternRefKind(fnSig.siliconResult)
-            ? { localTypeIdx: 0, nullable: false, extern: true }
+            ? { localTypeIdx: 0, nullable: moduleName !== 'JSString', extern: true }
             : fnSig.siliconResult === 'CharCodeArray'
                 ? { localTypeIdx: charCodeArrayTypeIdx(ctx), nullable: true }
                 : undefined

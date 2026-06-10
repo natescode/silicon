@@ -143,6 +143,81 @@ function buildImports(state: HostState, write: (s: string) => void) {
             wrap_ansi: (input: any, columns: number) => Bun.wrapAnsi(input, columns),
             // === /bindgen:module bun ===
         },
+        // Constructed Web interfaces (Tier-2): `create` constructs the object and
+        // returns a JSValue handle; methods/getters/setters take it as `self`.
+        // The global (URL/Headers/TextEncoder/…) must be in host scope (it is in Bun).
+        url: {
+            // === bindgen:module url ===
+            create_object_url: (obj: any) => URL.createObjectURL(obj),
+            revoke_object_url: (url: any) => URL.revokeObjectURL(url),
+            create: (url: any) => new URL(url),
+            parse: (url: any) => URL.parse(url),
+            can_parse: (url: any) => URL.canParse(url),
+            to_string: (self: any) => self.toString(),
+            href: (self: any) => self.href,
+            set_href: (self: any, value: any) => self.href = value,
+            origin: (self: any) => self.origin,
+            protocol: (self: any) => self.protocol,
+            set_protocol: (self: any, value: any) => self.protocol = value,
+            username: (self: any) => self.username,
+            set_username: (self: any, value: any) => self.username = value,
+            password: (self: any) => self.password,
+            set_password: (self: any, value: any) => self.password = value,
+            host: (self: any) => self.host,
+            set_host: (self: any, value: any) => self.host = value,
+            hostname: (self: any) => self.hostname,
+            set_hostname: (self: any, value: any) => self.hostname = value,
+            port: (self: any) => self.port,
+            set_port: (self: any, value: any) => self.port = value,
+            pathname: (self: any) => self.pathname,
+            set_pathname: (self: any, value: any) => self.pathname = value,
+            search: (self: any) => self.search,
+            set_search: (self: any, value: any) => self.search = value,
+            search_params: (self: any) => self.searchParams,
+            hash: (self: any) => self.hash,
+            set_hash: (self: any, value: any) => self.hash = value,
+            to_json: (self: any) => self.toJSON(),
+            // === /bindgen:module url ===
+        },
+        url_search_params: {
+            // === bindgen:module url_search_params ===
+            create: (init: any) => new URLSearchParams(init),
+            size: (self: any) => self.size,
+            append: (self: any, name: any, value: any) => self.append(name, value),
+            delete: (self: any, name: any) => self.delete(name),
+            get: (self: any, name: any) => self.get(name),
+            has: (self: any, name: any) => self.has(name),
+            set: (self: any, name: any, value: any) => self.set(name, value),
+            sort: (self: any) => self.sort(),
+            to_string: (self: any) => self.toString(),
+            // === /bindgen:module url_search_params ===
+        },
+        headers: {
+            // === bindgen:module headers ===
+            create: () => new Headers(),
+            append: (self: any, name: any, value: any) => self.append(name, value),
+            delete: (self: any, name: any) => self.delete(name),
+            get: (self: any, name: any) => self.get(name),
+            has: (self: any, name: any) => self.has(name),
+            set: (self: any, name: any, value: any) => self.set(name, value),
+            // === /bindgen:module headers ===
+        },
+        text_encoder: {
+            // === bindgen:module text_encoder ===
+            create: () => new TextEncoder(),
+            encode: (self: any, input: any) => self.encode(input),
+            encoding: (self: any) => self.encoding,
+            // === /bindgen:module text_encoder ===
+        },
+        text_decoder: {
+            // === bindgen:module text_decoder ===
+            create: (label: any) => new TextDecoder(label),
+            decode: (self: any, input: any) => self.decode(input),
+            encoding: (self: any) => self.encoding,
+            fatal: (self: any) => self.fatal,
+            ignore_bom: (self: any) => self.ignoreBOM,
+            // === /bindgen:module text_decoder ===
+        },
     }
     return { imports, flush }
 }

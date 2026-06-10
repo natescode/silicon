@@ -27,6 +27,48 @@ This project aims for [Semantic Versioning](https://semver.org/).
 - Standalone files compiled outside a project keep the classic single-file
   `@use` behaviour unchanged.
 
+### Added — v1.0 roadmap: constructed Web interface modules ([ADR 0017](docs/adr/0017-ffi-binding-generator.md) / [ADR 0018](docs/adr/0018-async-promise-ffi.md))
+
+Five real Web interfaces are now generated as Tier-2 built-in modules from the
+`@webref/idl` corpus — the FFI surface's first *constructed objects* (not just
+free functions): **`url`**, **`url_search_params`**, **`headers`**,
+**`text_encoder`**, **`text_decoder`**.
+
+- **A new `webiface` adapter** turns one Web IDL interface into a module. Because
+  Silicon has no methods or `.`-syntax (ADR-0023), each instance member becomes a
+  free function whose FIRST argument is the receiver — a `JSValue` externref
+  handle: `new URL(s)` → `url::create(s)`, `url.pathname` → `url::pathname(h)`,
+  `headers.append(k,v)` → `headers::append(h, k, v)`. It binds all six shapes:
+  **constructor** (`new Iface(args)` → JSValue), **instance method**
+  (`recv.m(rest)`), **getter** (`recv.attr`), **setter** (`recv.attr = v`),
+  **static** (`Iface.m(args)`), and IDL **stringifier** (`recv.toString()` →
+  `to_string`).
+- **Cross-handle threading** — a handle produced by one interface flows into
+  another, entirely as externref with no marshalling: `url::search_params(url)`
+  returns a `URLSearchParams` handle consumed by `url_search_params::get`;
+  `text_encoder::encode` returns a `Uint8Array` handle consumed by
+  `text_decoder::decode` (a verified multibyte UTF-8 round-trip).
+- **Type rule**: scalars via `idlTypeToSi`; interfaces and ambient JS object/
+  buffer types (Uint8Array, BufferSource, …) → `JSValue`; **dictionaries are NOT
+  handles** (an optional dict arg is dropped, a required one skips the member);
+  a union with a string arm binds as `String`.
+- **Optional-arg policy** (Silicon has no optional params, and a `""` string ≠
+  "omitted"): keep required args; keep the FIRST optional only when it is the
+  payload (no required arg precedes it — `encode(input)`, `new URLSearchParams(init)`);
+  DROP a secondary optional (`URL.canParse`'s base, `URLSearchParams.has`/`delete`'s
+  value) so the correct 1-arg WHATWG form is exposed rather than a forced arg that
+  silently mis-answers.
+- **Nullable externref results.** An object-handle import that can return `null`
+  (`Headers.get` of a missing header, `URL.parse` of an invalid URL) now lowers to
+  a NULLABLE `externref` result (`lower.ts`, both the module-call and bare-`@extern`
+  paths) — previously every externref result was non-null `(ref extern)` and
+  trapped on `null`. `wasm:js-string` builtin results stay non-null per spec.
+- Two adversarial-review-confirmed bug classes (forced-optional wrong answers,
+  null-return traps) fixed before merge. `externref-shapes.test.ts` proves all
+  seven binding shapes compile AND run under Bun; `web-interfaces.test.ts` runs
+  the five modules end-to-end including a missing-key `null` result and the
+  `encode → Uint8Array handle → decode` round-trip.
+
 ### Added — v1.0 roadmap: spec-driven FFI modules + Tier-2 object handles ([ADR 0017](docs/adr/0017-ffi-binding-generator.md) / [ADR 0018](docs/adr/0018-async-promise-ffi.md))
 
 Broadens the FFI surface from the single Web `Math`/clock fragment to whole
