@@ -84,4 +84,20 @@ describe('bindgen — generated Node/Bun modules run end-to-end', () => {
         host.bind(inst)
         expect((inst.exports as any).now()).toBeGreaterThan(0)
     })
+
+    test('bun::strip_ansi (Tier-1 JSString) — crosses as externref, ZERO linear marshalling', async () => {
+        // bun.si is generated Tier-1: strings are JSString (externref).  The
+        // binding lowers to an externref import + result, and the host shim
+        // passes JS strings directly — no readLenString/allocLenString.
+        const bin = compileBin(`\\\\ run (JSString) -> JSString
+@fn run s := { bun::strip_ansi(s) };
+@export run;`)
+        // The param/result are externref, not an i32 pointer.
+        const inst = new WebAssembly.Instance(await WebAssembly.compile(bin), {
+            env: { print: () => {}, read: () => 0 },
+            bun: { strip_ansi: (s: string) => (globalThis as any).Bun.stripANSI(s) },
+        })
+        // A real JS string (ANSI-coded) crosses in and out as an externref.
+        expect((inst.exports as any).run('\x1b[31mhello\x1b[0m world')).toBe('hello world')
+    })
 })

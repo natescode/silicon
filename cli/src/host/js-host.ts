@@ -103,10 +103,10 @@ function buildImports(state: HostState, write: (s: string) => void) {
             // === bindgen:module bun ===
             gc: (force: number) => Bun.gc(force),
             nanoseconds: () => Bun.nanoseconds(),
-            resolve_sync: (moduleId: number, parent: number) => allocLenString(Bun.resolveSync(readLenString(moduleId), readLenString(parent))),
+            resolve_sync: (moduleId: any, parent: any) => Bun.resolveSync(moduleId, parent),
             shrink: () => Bun.shrink(),
             sleep_sync: (ms: number) => Bun.sleepSync(ms),
-            strip_ansi: (input: number) => allocLenString(Bun.stripANSI(readLenString(input))),
+            strip_ansi: (input: any) => Bun.stripANSI(input),
             // === /bindgen:module bun ===
         },
     }
