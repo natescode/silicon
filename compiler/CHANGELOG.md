@@ -69,6 +69,60 @@ The first stable Silicon release.
 - `HashMap[i32, i32]` — open-addressing hash table.
 - `Rc<T>` — single-threaded reference-counted smart pointer.
 - `io.si` — WASI-backed `print` / `println`.
+- `future.si` — the poll-reactor. A future is a poll-closure returning either a
+  negative-sentinel `Int` (`block_on` / `block_all`) or the generic
+  `Poll[T] := $Pending | $Ready value T` (`block_on_poll` / `block_all_poll` —
+  the tag, not the sign, marks readiness, so a future may be `Ready` with any
+  value). `tasks_new` / `spawn` / `poll_once` / `run_tasks` give a dynamic task
+  surface; `block_all` polls every still-pending future each round so independent
+  futures progress interleaved (true concurrency).
+- `future_async.si` — a guest `Future` backed by a real host `Promise`, woken by
+  the reactor: `block_on_async` drives one and `block_all_async` drives many
+  concurrently, yielding to the event loop (`promise::tick`) between poll rounds.
+- `ffi.si` — host-error / Promise-rejection → `Result`: `js_check` / `js_try`
+  lift a caught host throw (a boundary error slot) into `Result[Int, String]`.
+
+### Async & closures
+
+- `@async` / `@await` / `@suspending` — signature-line markers (no grammar
+  change). Coloring rule **E0016**: `@await` only inside an `@async` body.
+- The async reactor (`runWithReactor`) drives a `@suspending`-using program from
+  one vanilla binary, choosing the backend at load time: the **JSPI fast path**
+  (`WebAssembly.Suspending` / `promising`; Bun 1.3.14+, V8/Node/Deno) else the
+  **Asyncify** route-B unwind→await→rewind loop (precise coloring).
+- Closures (ADR 0019): `@closure` / `@call_closure` (non-escaping, all targets,
+  `Vec[i32]` env) and `@export_callback` (escaping, host-callable via a
+  synthesized `__closure_invoke_<k>` trampoline). Under `--target=wasm-gc` the
+  env is a `(ref $Vec_i32)` the engine garbage-collects — leak-free.
+- Host concurrency: the `promise` module — `promise::all` / `race` /
+  `all_settled` / `any` / `value` (all `@suspending`). Kick off N host operations
+  un-awaited, join with one `@await`.
+
+### FFI / host interop (web/bun)
+
+- **Bindgen** (ADR 0017): WebIDL (`@webref/idl`) and Node/Bun `.d.ts` (the TS
+  compiler API) → generated `@extern` modules + host shims, CI-gated byte-for-byte
+  (`bindgen --check`, `bindgen.lock.json`). Three boundary tiers: Tier-0 (linear
+  `String`), Tier-1 (`JSString` externref, zero-copy), Tier-2 (`JSValue` opaque
+  object handle, engine-GC'd). Best-bindable overload selection; `Promise<T>`
+  members → `@suspending`; callback params → closure handles.
+- **The `js` module** — the generic object/array build-and-read substrate for
+  `JSValue` handles: `object` / `array` / `set` / `push` / `get` / `len` / `keys`
+  / `typeof` build options bags and inspect returned handles; `from_*` / `as_*`
+  box/unbox Silicon scalars; `call` / `apply` / `construct` are fallible invokers
+  feeding the boundary error channel (`had_error` / `error_message`); `pin` /
+  `pinned` thread a handle through a `Result`; `bytes_in` / `bytes_out` /
+  `byte_length` / `u8` bulk-copy binary between linear memory and typed arrays.
+- **The `stream` module** — the JS iteration protocol: `iter` / `next` / `value`
+  / `done` over any sync iterable, `aiter` / `anext` (`@suspending`) over async
+  iterables / ReadableStream.
+- **Generated modules**: `path` / `os` / `json` / `bun` / `url` /
+  `url_search_params` / `headers` / `text_encoder` / `text_decoder`; the fetch
+  ecosystem `response` / `request` / `blob` / `form_data` / `abort_controller` /
+  `abort_signal` (Response body readers are awaitable `@suspending`); Node
+  `crypto` and `fs` (the mixed-union fix unlocked `read_file_sync` etc.); and bare
+  globals `global::fetch` (first-class, `@suspending`) / `atob` / `btoa`. All
+  externref-handle surfaces are web/bun only.
 
 ### Compiler-as-a-Service (CaaS)
 
@@ -188,6 +242,19 @@ a v1.x story:
 - **No interactive browser playground.** v1.1 stretch goal.
 - **No multi-version docs site.** At 1.0 there's one version; the URL
   structure supports it landing later.
+- **No container monomorphization.** `Vec`/`HashMap` are i32-element only;
+  `Vec[Float]` / `Vec[Int64]` and HashMap iteration are v1.1 (M1).
+- **No capability / borrow-checker model.** The ocap + effect-class +
+  rcap (`&` / `&mut`) machinery (ADR 0011/0012/0013/0015) is post-v1.0; v1.0
+  closures use by-value/immutable capture, which needs no borrow checker.
+- **A sum type can't carry a host handle natively.** A `JSValue`/`JSString`
+  (externref) can't be a `Result`/`Option` payload (generic sums share one
+  linear/struct layout); thread a handle through a `Result` by `js::pin` id
+  (an `Int`) instead. Native support follows generic-sum monomorphization.
+- **Externref-valued `@suspending` results need JSPI.** Binaryen Asyncify can't
+  carry reference types (binaryen#3739), so an awaited externref requires the
+  JSPI backend — present on Bun 1.3.14+/V8/Node 24+; the Asyncify fallback
+  covers scalar awaits.
 
 ## Migration
 
