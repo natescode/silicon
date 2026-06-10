@@ -453,10 +453,13 @@ obj := json::parse(text);                        # JSValue handle; round-trips b
 json::stringify(obj);
 ```
 
-Tiers: **Tier-0** (`os`, `path`) marshals linear `String` and runs on any host;
-**Tier-1** (`bun` strings) and **Tier-2** (`json`, the `url`/`headers`/
-`text_encoder`/`text_decoder` constructed interfaces) cross as zero-copy
-`JSString`/`JSValue` handles (web/bun only).
+Tiers: **Tier-0** marshals linear `String` and runs on any host — the `os`/`path`
+string/scalar functions (`platform`/`basename`/…) are Tier-0 portable; **Tier-1**
+(`bun` strings) and **Tier-2** (`json`, the `url`/`headers`/`text_encoder`/
+`text_decoder` constructed interfaces, *and* the `os`/`path` object readers such as
+`path::parse` / `os::cpus`) cross as zero-copy `JSString`/`JSValue` handles (web/bun
+only). `os`/`path` are thus **mixed tier** — a program calling only their string
+functions stays portable; calling an object reader needs a JS host (gated by `E0010`).
 
 **Async (`@async` / `@await` / `@suspending`).** A Promise-returning host import
 is marked `@suspending`; a function that awaits one is `@async`; `@await` is the

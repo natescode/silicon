@@ -1,35 +1,39 @@
-# FFI coverage gaps — closed (no fundamental gaps remain)
+# FFI coverage gaps — closed (100% bound except one tagged-template)
 
-> **Status:** **DONE — no fundamental bindgen gaps remain.** Categories 2–4 +
-> webiface `events:'closure'` implemented; the 4 "fundamental" skips resolved
-> (intersection/conditional → `JSValue`, variadic → spread, name-sanitize,
-> static-collision → `_static`); `Bun.$` reclassified as a tagged-template (a JS
-> syntactic form, not a bindgen limitation). Aggregate bind rate **90.1% → 97.6%**
-> (338→371 bindings, 37→9 skips). **The 9 remaining skips are 8 deliberate `path`/`os`
-> portability tradeoffs (proven to flip to 0 → trivial 100%) + 1 tagged-template
-> (`Bun.$`); zero are fundamental classifier/architecture limits.**
+> **Status:** **DONE — every host-API member binds except the `Bun.$` tagged
+> template.** Categories 2–4 + webiface `events:'closure'` implemented; the 4
+> "fundamental" skips resolved (intersection/conditional → `JSValue`, variadic →
+> spread, name-sanitize, static-collision → `_static`); `path`/`os` flipped to
+> `objects:'jsvalue'` (mixed tier) to bind their object/variadic surface. Aggregate
+> bind rate **90.1% → 99.74%** (338→379 bindings, 37→1 skip). **The one remaining
+> skip is `Bun.$` — a tagged template (a JS syntactic form), not a bindgen
+> classifier/architecture limit.**
 > **Scope:** the host-API surface the bindgen adapters could not bind.
 > **Companion docs:** [`js-string-builtins.md`](js-string-builtins.md) (tier model),
 > the FFI sections of [`overview.md`](overview.md), and the bindgen source under
 > `compiler/bindgen/`.
 
-> **Trivial-100% proof:** running the `path` / `os` adapters with `objects:'jsvalue'`
-> yields **0 skips each** (path 4→0, os 4→0). The only thing between 97.6% and 100%
-> is the deliberate choice to keep `path`/`os` Tier-0 portable (every host, not just
-> web/bun) — a one-flag flip, not a bindgen limit. Breadth (shipping more of the
-> 1,475-interface Web-IDL corpus / more Node modules) is likewise one `modules.ts`
+> **`path`/`os` are now MIXED tier.** Their string/scalar functions
+> (`basename`/`dirname`/`platform`/…) stay **Tier-0, portable to any host**
+> (byte-identical to before — the per-call `E0010` gate only fires on a `JSValue`
+> extern); their object/variadic functions (`path::parse`/`format`/`join`/`resolve`,
+> `os::cpus`/`loadavg`/`user_info`/`network_interfaces`) bind as **Tier-2 `JSValue`
+> handles (web/bun only)**. Verified: a program calling only `path::basename`
+> compiles to pure-`i32` imports and runs on `--platform=native` (wasmtime); one
+> calling `path::parse` gets an `externref` import and is rejected on native with
+> `E0010` ("compile with --platform=web or --platform=bun"). Breadth (shipping more
+> of the 1,475-interface Web-IDL corpus / more Node modules) is one `modules.ts`
 > entry per module.
 
 After flipping `events:'closure'` on `fs` / `crypto` / `global` (callbacks cross
 as closure handles), aggregate bind rate sat at **90.1%** (338 bindings, 37
-skips). This doc accounted for the remaining ~7% — what each skipped binding is,
-*why* the adapter dropped it, and whether recovering it was worth doing — and the
-worthwhile recoveries are now **shipped**. Bind rate is **96.8%** (368 bindings,
-12 skips): the categories-2–4 classifier work lifted it to 96.5%, then porting
-`events:'closure'` to the **Web-IDL** adapter recovered `AbortSignal.onabort` and
-shipped a new `event_target` module (see the dedicated section below). The 12
-that remain are 8 deliberate portability tradeoffs (keeping `path`/`os` portable
-Tier-0) and 4 genuinely fundamental skips.
+skips). This doc accounted for the remaining ~10% — what each skipped binding is,
+*why* the adapter dropped it, and how to recover it — and every recovery is now
+**shipped**. The arc: the categories-2–4 classifier work → 96.5%; porting
+`events:'closure'` to the **Web-IDL** adapter (recovering `AbortSignal.onabort`,
+shipping `event_target`) → 96.8%; resolving the 4 "fundamental" skips → 97.6%;
+flipping `path`/`os` to `objects:'jsvalue'` (mixed tier) → **99.74%** (379
+bindings, **1 skip**). The one skip is the `Bun.$` tagged template.
 
 The headline finding held: **four of the five gap categories converged on a
 single seam** — `tsTypeToSi` in `compiler/bindgen/src/adapters/dts.ts` (and its
@@ -47,7 +51,7 @@ runtime — the host shim and `Impl` shapes were untouched. The fifth category
 
 | # | Category | Verdict | Status | Recovered | Seam |
 |---|----------|---------|--------|-----------|------|
-| 1 | Variadic rest params | glue | **not done** (no usable win) | 0 — `Bun.$`'s name is the bare `$` (invalid Silicon id); `path.join/resolve` would force `path` web/bun-only | — |
+| 1 | Variadic rest params | glue | **done** (spread Impl) | `path.join`/`resolve` (via the spread Impl, now `path` is `jsvalue`); `Bun.$` is the one variadic that *also* needs the tagged-template convention → skipped | `dts.ts` trySig + `spread` Impl |
 | 2 | Unrepresentable results | adapter-tweak | **done** | union-with-Promise (`Bun.readableStreamTo*`, `peek`), `bigint` results (`Bun.hash`), `fs.openAsBlob` | `dts.ts` `tsTypeToSi` |
 | 3 | Object/buffer params not classified | adapter-tweak | **done** | generic constraints (`crypto.randomFill*`/`generateKeyPair*`/`getRandomValues`, `fs.writev`/`readv`), `bigint` unions (`crypto.checkPrime*`), `unknown` (`Bun.deepMatch`), `structuredClone` | `dts.ts` `tsTypeToSi` |
 | 4 | webiface seq/`any`/dict | adapter-tweak | **done** | `FormData`/`URLSearchParams.getAll`, `Headers.getSetCookie`, `TextEncoder.encodeInto`, `AbortSignal.any`/`reason` | `webiface.ts` `classify`/`classifyName` |
@@ -56,8 +60,10 @@ runtime — the host shim and `Impl` shapes were untouched. The fifth category
 **Net result:** the categories-2–4 adapter tweaks recovered **24 directly-skipped
 bindings** (37 skips → 13) with **no host-shim or runtime change** — all the work
 was in two type classifiers plus one config flag (`fs` `async:'suspending'`).
-`path`/`os` were deliberately **kept portable** (Tier-0, every host), so their 8
-object/variadic skips stay — recovering them would make those modules web/bun-only.
+`path`/`os` were **subsequently flipped** to `objects:'jsvalue'` (mixed tier): their
+8 object/variadic members now bind as Tier-2 `JSValue`, while their string/scalar
+functions stay Tier-0 portable (see the header note). The history below describes
+the original investigation — when those 8 were still skipped portability tradeoffs.
 
 The recovered bindings are **handle bindings**, not typed ones: the guest
 receives an opaque, engine-GC'd `JSValue` (a Tier-2 externref) and drives it
@@ -413,15 +419,23 @@ verified by re-running `bun bindgen/cli.ts --check` and diffing each module's
   diff confirmed the recovered set and caught no over-binding (the recursive
   classify still nulls callback/thenable constraints).
 
-Left out, deliberately:
+Subsequently completed (later commits, beyond the categories-2–4 work):
 
-- **Category 1** (variadic) — **not implemented**: no usable win (`Bun.$` →
-  invalid name `$`; `path` kept portable). The `spread` `Impl` shape was not added.
-- **Category 5** (overload alternatives) — **out of scope**: a consequence of
-  `@extern` monomorphism, correctness-neutral, and `_altN` naming is noise.
-- **`path` / `os` object + variadic results** — **not recovered, on purpose**:
-  these modules stay Tier-0 portable (every host); binding their object results
-  would require `objects:'jsvalue'`, making them web/bun-only.
+- **Category 1** (variadic) — **implemented**: a `spread` `Impl` ships (the host
+  spreads a trailing `JSValue` array handle), plus a name sanitizer. `path.join`/
+  `resolve` bind via it now that `path` is `jsvalue`. `Bun.$` is the one variadic
+  that *also* needs the tagged-template convention → skipped (see below).
+- **The 4 "fundamental" skips** — **resolved**: `Intersection`/`Conditional` →
+  `JSValue` (Bun.serve/plugin), static-collision → `_static` (Response.json), and
+  `Bun.$` detected as a tagged-template and skipped.
+- **`path` / `os` object + variadic members** — **recovered**: flipped to
+  `objects:'jsvalue'` (mixed tier). String/scalar functions stay Tier-0 portable;
+  object functions are Tier-2 web/bun-only.
+
+Still out of scope:
+
+- **Category 5** (overload alternatives) — a consequence of `@extern` monomorphism,
+  correctness-neutral, and `_altN` naming is noise.
 
 ## webiface `events:'closure'` — the EventHandler / listener path (IMPLEMENTED)
 
@@ -501,20 +515,18 @@ non-fundamental classification, with no change to the host shim's contract:
 - `getAwaitedType` is now the fallback for a `Promise` **subclass** result, so a
   subclass's resolved value isn't silently dropped to `Void`.
 
-## What stays unbound — the 9 remaining skips (none fundamental)
+## What stays unbound — the 1 remaining skip (not fundamental)
 
-**Portability tradeoff (8)** — bind *today* with `objects:'jsvalue'` (proven: path
-4→0, os 4→0 skips); deliberately left Tier-0 portable (every host, not just web/bun):
-
-- `path.parse`, `path.format`, `path.join`, `path.resolve`
-- `os.cpus`, `os.loadavg`, `os.userInfo`, `os.networkInterfaces`
-
-**Tagged-template (1)** — a recognised JS syntactic form, not a classifier gap:
+Everything in the configured modules binds **except one member**:
 
 - **`Bun.$`** — a tagged template (first param `TemplateStringsArray`); it needs the
   `` $`…` `` calling convention (a strings array carrying `.raw`), which a normal
-  `@extern` can't express. Detected and skipped with a precise reason.
+  `@extern` can't express. Detected and skipped with a precise reason. A JS
+  syntactic form, not a classifier/architecture gap.
 
-> `AbortSignal.onabort` (the former 5th fundamental skip) is **recovered** by the
-> webiface `events:'closure'` path above (as `set_onabort`). `Bun.hash`
-> (`number | bigint`) also binds now (the `bigint` arm → a `JSValue` handle).
+> The former portability tradeoffs are gone: `path`/`os` were flipped to
+> `objects:'jsvalue'` (mixed tier), so `path::parse`/`format`/`join`/`resolve` and
+> `os::cpus`/`loadavg`/`user_info`/`network_interfaces` now bind (Tier-2, web/bun),
+> while their string/scalar functions stay Tier-0 portable. `AbortSignal.onabort`
+> binds via `events:'closure'` (`set_onabort`); `Bun.hash` (`number | bigint`) binds
+> (the `bigint` arm → a `JSValue` handle).

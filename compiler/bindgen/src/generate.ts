@@ -151,8 +151,14 @@ export function emitModuleSi(ir: BindingIR, provenance: string, strings: StringT
         return `\\\\ ${mod} ${d.name} (${params})${ret};`
     })
     const hasJsValue = ir.decls.some(d => d.result === 'JSValue' || d.params.some(p => p.type === 'JSValue'))
+    // A 'linear' module with SOME JSValue functions is MIXED tier: its String/scalar
+    // functions stay Tier-0 (portable to any host — the per-call E0010 gate only
+    // fires on a JSValue extern), only the JSValue functions are Tier-2 externref
+    // (web/bun only).  A 'jsstring' module is uniformly externref.
     const tierNote = hasJsValue
-        ? '  (Tier-2: JSValue = object handle, externref, web/bun only)'
+        ? (strings === 'linear'
+            ? '  (Mixed tier: String/scalar functions are Tier-0 / portable to any host; JSValue functions are externref, web/bun only)'
+            : '  (Tier-2: JSValue = object handle, externref, web/bun only)')
         : strings === 'jsstring' ? '  (Tier-1: JSString = externref, web/bun only)' : ''
     return [
         '# SPDX-License-Identifier: MIT',

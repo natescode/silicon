@@ -140,9 +140,12 @@ The first stable Silicon release.
   collides with an instance member ships under a `_static` suffix (`Response.json`
   + `json_static`). `Bun.$` is detected as a tagged-template (a JS syntactic form,
   not a normal callable) and skipped. **No fundamental bindgen gaps remain.**
-  Aggregate bind rate **90.1 % → 97.6 %** (371 bindings, 9 skips); the 9 are 8
-  deliberate `path` / `os` portability tradeoffs (proven to flip to 0 under
-  `objects:'jsvalue'` → trivial 100 %) and the one tagged-template. See
+  Finally `path` / `os` flipped to `objects:'jsvalue'` (**mixed tier**): their
+  string/scalar functions stay Tier-0 portable (any host, byte-identical), and
+  their object/variadic members (`path::parse`/`format`/`join`/`resolve`,
+  `os::cpus`/`loadavg`/`user_info`/`network_interfaces`) bind as Tier-2 `JSValue`
+  (web/bun only — gated per call by `E0010`). Aggregate bind rate **90.1 % →
+  99.74 %** (379 bindings, **1 skip** — only the `Bun.$` tagged-template). See
   [`docs/ffi-coverage-gaps.md`](../docs/ffi-coverage-gaps.md).
 
 ### Compiler-as-a-Service (CaaS)

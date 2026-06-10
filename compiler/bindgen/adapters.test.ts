@@ -109,10 +109,11 @@ describe('bindgen adapters — generated from real spec sources', () => {
     })
 
     test('a rest param (`...args`) stays skipped in portable mode, binds via spread in jsvalue mode', () => {
-        // SKIP mode (a portable Tier-0 module like the shipped `path`): a variadic
-        // can't degrade to a meaningless `join()`, and its array must NOT be
-        // smuggled as one linear arg (`join([a,b])` ≠ `join(a,b)`) — so it stays
-        // skipped, keeping the module portable to any host.
+        // SKIP mode (objects:'skip' — the portable Tier-0 path): a variadic can't
+        // degrade to a meaningless `join()`, and its array must NOT be smuggled as
+        // one linear arg (`join([a,b])` ≠ `join(a,b)`) — so it stays skipped, keeping
+        // the module portable.  (The SHIPPED `path` now uses objects:'jsvalue', where
+        // the jsvalue branch below binds `join` via spread.)
         const portable = dtsToSpecs({
             module: 'node:path', types: ['node'], accessor: "require('node:path')", prefix: 'path',
         })

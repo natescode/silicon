@@ -30,17 +30,25 @@ export interface ModuleConfig {
  *  @types/node, Bun from bun-types, both via the TS compiler API). */
 export const GENERATED_MODULES: readonly ModuleConfig[] = [
     {
-        // Node path: Tier-0 — linear String, portable to any host.
+        // Node path: MIXED tier.  `strings:'linear'` keeps the scalar/string
+        // functions (basename/dirname/normalize/…) Tier-0 and portable to ANY host;
+        // `objects:'jsvalue'` additionally binds the object/variadic surface
+        // (parse → object, format → object param, join/resolve → spread) as Tier-2
+        // JSValue handles (web/bun only).  A program that touches only the string
+        // functions stays portable; one that calls `path::parse` needs a JS host.
         module: 'path',
         provenance: '@types/node (node:path)',
-        specs: () => dtsToSpecs({ module: 'node:path', types: ['node'], accessor: "require('node:path')", prefix: '' }).specs,
+        specs: () => dtsToSpecs({ module: 'node:path', types: ['node'], accessor: "require('node:path')", prefix: '', objects: 'jsvalue' }).specs,
         strings: 'linear',
     },
     {
-        // Node os: Tier-0 — scalar system info (linear String / Float), portable.
+        // Node os: MIXED tier (same rationale as `path`).  `strings:'linear'` keeps
+        // the scalar system info (arch/platform/hostname/freemem/…) Tier-0 portable;
+        // `objects:'jsvalue'` binds the structured readers (cpus/loadavg/userInfo/
+        // networkInterfaces → object/array handles) as Tier-2 JSValue (web/bun only).
         module: 'os',
         provenance: '@types/node (node:os)',
-        specs: () => dtsToSpecs({ module: 'node:os', types: ['node'], accessor: "require('node:os')", prefix: '' }).specs,
+        specs: () => dtsToSpecs({ module: 'node:os', types: ['node'], accessor: "require('node:os')", prefix: '', objects: 'jsvalue' }).specs,
         strings: 'linear',
     },
     {
