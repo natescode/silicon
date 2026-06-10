@@ -194,6 +194,16 @@ function buildImports(state: HostState, write: (s: string) => void) {
             pinned: (i: number) => (pins[i] ?? null),
             unpin: (i: number) => { if (i > 0 && i < pins.length) pins[i] = null },
         },
+        // `stream` (Tier-2, #3): the JS iteration protocol — a guest `@loop`
+        // pulls values from any host iterable.  See strata/modules/stream.si.
+        stream: {
+            iter: (it: any) => it[Symbol.iterator](),
+            next: (it: any) => it.next(),
+            value: (step: any) => (step == null ? null : (step.value ?? null)),
+            done: (step: any) => (step != null && step.done ? 1 : 0),
+            aiter: (it: any) => it[Symbol.asyncIterator](),
+            anext: (it: any) => it.next(),   // Promise<{value,done}> — @suspending awaits it
+        },
         bun: {
             // === bindgen:module bun ===
             alloc_unsafe: (size: number) => Bun.allocUnsafe(size),

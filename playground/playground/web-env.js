@@ -30,6 +30,9 @@
 
         var wasmMemory = null
         var wasmAlloc  = null
+        // `js` boundary error slot + pin table (next FFI work #2).
+        var jsLastError = null
+        var jsPins = [null]
 
         // Silicon strings are UTF-8 with a 4-byte little-endian byte-length
         // header (see compiler std.wat / docs).  Read and write them as UTF-8.
@@ -177,6 +180,26 @@
                 as_bool:  function (v) { return v ? 1 : 0 },
                 as_str:   function (v) { return String(v) },
                 global:   function (name) { return (typeof globalThis !== 'undefined' ? globalThis : window)[name] },
+                // Fallible invokers + boundary error channel + pinning (#2).
+                call:      function (rc, m, a) { jsLastError = null; try { return rc[m].apply(rc, a || []) } catch (e) { jsLastError = e; return null } },
+                apply:     function (fn, a)    { jsLastError = null; try { return fn.apply(null, a || []) } catch (e) { jsLastError = e; return null } },
+                construct: function (c, a)     { jsLastError = null; try { return new (Function.prototype.bind.apply(c, [null].concat(a || []))) } catch (e) { jsLastError = e; return null } },
+                had_error:     function () { return jsLastError != null ? 1 : 0 },
+                take_error:    function () { var e = jsLastError; jsLastError = null; return e == null ? null : e },
+                error_message: function () { var e = jsLastError; jsLastError = null; return allocLenString(e == null ? '' : String((e && e.message) != null ? e.message : e)) },
+                clear_error:   function () { jsLastError = null },
+                pin:    function (v) { jsPins.push(v); return jsPins.length - 1 },
+                pinned: function (i) { return jsPins[i] == null ? null : jsPins[i] },
+                unpin:  function (i) { if (i > 0 && i < jsPins.length) jsPins[i] = null },
+            },
+            // `stream` — JS iteration protocol (#3).  See strata/modules/stream.si.
+            stream: {
+                iter:  function (it)   { return it[Symbol.iterator]() },
+                next:  function (it)   { return it.next() },
+                value: function (step) { return step == null ? null : (step.value == null ? null : step.value) },
+                done:  function (step) { return (step != null && step.done) ? 1 : 0 },
+                aiter: function (it)   { return it[Symbol.asyncIterator]() },
+                anext: function (it)   { return it.next() },
             },
         }
 

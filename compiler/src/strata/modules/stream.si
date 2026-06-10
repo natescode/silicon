@@ -1,0 +1,33 @@
+# SPDX-License-Identifier: MIT
+# HAND-AUTHORED runtime FFI substrate — NOT bindgen-generated.
+#
+# `stream` is async iteration / streaming over host iterables (the "next FFI
+# work" #3): the JS iteration protocol exposed to guest code so a Silicon `@loop`
+# can pull values one at a time from any host iterator — arrays, Maps, Sets,
+# generators (sync) and ReadableStreams / async generators / `.values()` async
+# iterables (async, via the reactor).
+#
+# A `.next()` call yields a step object `{ value, done }`; rather than make the
+# guest read those keys (which would need JSString literals), the host exposes
+# dedicated `value`/`done` accessors.  All handles cross as `externref`; box the
+# pulled value with the `js` module's `as_*`.  web/bun only.
+#
+# Sync loop:
+#   it := stream::iter(coll);
+#   more := 1;
+#   @loop(more, {
+#       step := stream::next(it);
+#       @if(stream::done(step), { more = 0; }, { use(stream::value(step)); });
+#   });
+#
+# Async loop (inside an `@async @fn`):  step := @await(stream::anext(it)); …
+
+# ── Sync iteration (Symbol.iterator) ─────────────────────────────────────────
+\\ @extern iter (JSValue) -> JSValue;          # iterable[Symbol.iterator]()
+\\ @extern next (JSValue) -> JSValue;          # iterator.next() -> { value, done }
+\\ @extern value (JSValue) -> JSValue;         # step.value
+\\ @extern done (JSValue) -> Bool;             # step.done
+
+# ── Async iteration (Symbol.asyncIterator) — web/bun, JSPI ───────────────────
+\\ @extern aiter (JSValue) -> JSValue;                 # asyncIterable[Symbol.asyncIterator]()
+\\ @suspending @extern anext (JSValue) -> JSValue;     # await iterator.next() -> { value, done }
