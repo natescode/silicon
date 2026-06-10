@@ -5,6 +5,16 @@ This project aims for [Semantic Versioning](https://semver.org/).
 
 ## Unreleased
 
+This cycle lands the **v1.0 FFI-coverage gate** — the dependency chain `binding generator → object handles → async/await → closures → callbacks` that lets a Silicon program reach the modern web/Bun platform — plus the **module/component system** (ADR-0024). Headline capabilities now supported:
+
+- **First-class closures** (ADR 0019): `@closure`/`@call_closure` (non-escaping, all modes) and `@export_callback` (escaping host-callable). Under `--target=wasm-gc` the closure env is **engine-GC'd (leak-free)**.
+- **Async/await** (ADR 0018): `@async`/`@await`/`@suspending` markers + a production reactor that picks **JSPI** (Bun 1.3 / V8) or **Asyncify** at load time, wired into `sgl run`.
+- **Object handles** (ADR 0018): `JSValue`/`JSString` externref types — any host object crosses `@extern` as an opaque, engine-GC'd handle.
+- **A spec-driven FFI binding generator** (ADR 0017) shipping built-in modules across every tier: `os`/`path` (Tier-0), `bun`/`json` (Tier-1 `JSString` + Tier-2 `JSValue`), and constructed Web interfaces `url`/`url_search_params`/`headers`/`text_encoder`/`text_decoder` — with `async:'suspending'` (Promise→`@suspending`) and `events:'closure'` (callback→closure) generation modes.
+- **Comptime monomorphization substrate** (M0, ADR 0003) and a **poll-reactor** for true concurrency (`block_on`/`block_all`).
+
+See the per-ADR entries below for detail, and `docs/v1.0-implementation-roadmap.html` for subtask status.
+
 ### Added — v1.0 roadmap: closures under wasm-gc + async/event bindgen ([ADR 0018](docs/adr/0018-async-promise-ffi.md) / [ADR 0019](docs/adr/0019-first-class-closures-and-capture.md))
 
 **C2 — closures run under `--target=wasm-gc`, engine-GC'd.** Both the non-escaping (C1) and escaping/host-callable (C2) forms now compile + run under wasm-gc with the env as a `(ref $Vec_i32)` (gc-vec.ts) instead of an i32 linear pointer — so the closure env is ENGINE-GC'd, no bump-heap retention (the linear path's documented leak).
