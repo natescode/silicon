@@ -4,6 +4,7 @@
 \\ @extern aborted (JSValue) -> Bool;
 \\ @extern reason (JSValue) -> JSValue;
 \\ @extern throw_if_aborted (JSValue);
+\\ @extern set_onabort (JSValue, Vec[Int]);
 \\ @extern abort (JSValue) -> JSValue;
 \\ @extern timeout (Int64) -> JSValue;
 \\ @extern any (JSValue) -> JSValue;

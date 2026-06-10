@@ -1,8 +1,9 @@
 # FFI coverage gaps — the last ~7% (mostly closed)
 
-> **Status:** categories 2–4 **IMPLEMENTED**; categories 1 + 5 documented as the
-> permanent tail. Aggregate bind rate **90.1% → 96.5%** across the shipped
-> platform modules (338→362 bindings, 37→13 skips).
+> **Status:** categories 2–4 **IMPLEMENTED**; webiface `events:'closure'`
+> **IMPLEMENTED** (the last fundamental skip with a real fix); categories 1 + 5
+> documented as the permanent tail. Aggregate bind rate **90.1% → 96.8%** across
+> the shipped platform modules (338→368 bindings, 37→12 skips).
 > **Scope:** the host-API surface the bindgen adapters could not bind.
 > **Companion docs:** [`js-string-builtins.md`](js-string-builtins.md) (tier model),
 > the FFI sections of [`overview.md`](overview.md), and the bindgen source under
@@ -12,9 +13,12 @@ After flipping `events:'closure'` on `fs` / `crypto` / `global` (callbacks cross
 as closure handles), aggregate bind rate sat at **90.1%** (338 bindings, 37
 skips). This doc accounted for the remaining ~7% — what each skipped binding is,
 *why* the adapter dropped it, and whether recovering it was worth doing — and the
-worthwhile recoveries are now **shipped**. Bind rate is **96.5%** (362 bindings,
-13 skips); the 13 that remain are 8 deliberate portability tradeoffs (keeping
-`path`/`os` portable Tier-0) and 5 genuinely fundamental skips.
+worthwhile recoveries are now **shipped**. Bind rate is **96.8%** (368 bindings,
+12 skips): the categories-2–4 classifier work lifted it to 96.5%, then porting
+`events:'closure'` to the **Web-IDL** adapter recovered `AbortSignal.onabort` and
+shipped a new `event_target` module (see the dedicated section below). The 12
+that remain are 8 deliberate portability tradeoffs (keeping `path`/`os` portable
+Tier-0) and 4 genuinely fundamental skips.
 
 The headline finding held: **four of the five gap categories converged on a
 single seam** — `tsTypeToSi` in `compiler/bindgen/src/adapters/dts.ts` (and its
@@ -336,8 +340,9 @@ JSValue`), but its snake-name `json` **collides** with the established `Body`-mi
 instance body-reader `json()` (the suspending `response::json(resp)` everyone
 uses). Static operations are now processed **last**, so the instance reader keeps
 the name and the static collides-and-drops — a category-5 overload-tail skip, not
-a regression. `AbortSignal.onabort` (`EventHandler` callback) **stays skipped**:
-webiface has no `events:'closure'` trampoline path, so that one is fundamental.
+a regression. `AbortSignal.onabort` (`EventHandler` callback) was skipped here at
+the time (webiface had no callback path) — it is now **recovered** by the
+`events:'closure'` work described in its own section below.
 
 **Compounding win.** The dict-param branch unblocks any future module that takes
 an options bag (hundreds of dictionaries exist in the corpus), so the recovery
@@ -407,7 +412,58 @@ Left out, deliberately:
   these modules stay Tier-0 portable (every host); binding their object results
   would require `objects:'jsvalue'`, making them web/bun-only.
 
-## What stays unbound — the 13 remaining skips
+## webiface `events:'closure'` — the EventHandler / listener path (IMPLEMENTED)
+
+Category 5's lone fixable item — porting the dts adapter's `events:'closure'`
+callback path to the **Web-IDL** adapter — is now done. The dts adapter already
+mapped a callable param to the `Callback` closure handle; webiface had no callback
+case at all, so `EventHandler` attributes and listener arguments were silently
+skipped. The whole downstream machinery (`Callback` SiType → `Vec[Int]` → the
+`__closure_invoke_<k>` trampoline → `closureToFn` at the host) already existed, so
+this was a **classifier-only** change (zero emitter/host edits).
+
+**What it does** (`webifaceToSpecs(iface, corpus, 'closure')`):
+
+- Collects a `callbacks` Set from every `callback` / `callback interface` def in
+  the corpus. A callback name → the `Callback` SiType — **only in `'closure'`
+  mode** (the default `'skip'` keeps the prior behaviour; verified the callback
+  Set is disjoint from `ifaces`/`dicts`/`enums`/`typedefs`, so skip-mode output is
+  byte-identical across all 11 prior modules).
+- **Asymmetry guard** — a callback crosses *only* guest→host. So `Callback` is
+  allowed only in param / setter-value position; it sinks to `null` in a result
+  (`classifyResult`), in a getter, and as any union arm. A host function can't be
+  handed back to the guest as a Silicon closure.
+- An `EventHandler` attribute (`onabort`) → a **setter-only** binding
+  `set_onabort(self, Callback) -> Void` (no getter — reading a handler back is
+  meaningless). `EventHandler` resolves through the existing typedef recursion
+  (`EventHandler → EventHandlerNonNull`, a `callback` def).
+- A listener **argument** (`EventListener`, a *callback interface*) → a `Callback`
+  param.
+
+**Shipped** — `abort_signal` opts into `'closure'` (recovers `set_onabort`), and a
+new **`event_target`** module: `add_event_listener` / `remove_event_listener`
+(Callback listener) + `dispatch_event` + `create`. A guest registers a listener
+with `event_target::add_event_listener(target, "abort", @export_callback(@closure(…)))`;
+`target` is any `EventTarget` handle (an `AbortSignal` handle works too, so you get
+`addEventListener` on signals without an inheritance walk).
+
+**Two limitations (honest scope):**
+
+1. **A fired listener must not consume its `Event` argument.** The closure
+   trampoline (`__closure_invoke_<k>`) types every callback arg as `i32`, but when
+   the host dispatches an event it calls the listener with the `Event` *externref*
+   — a boundary mismatch that traps. **Registration and no-arg / arg-ignoring
+   firing are safe; reading the event is not** until the trampoline ABI accepts an
+   externref param (a future story). The tests exercise registration only.
+2. **`event_target::when`** (the WICG Observable proposal) is bound from
+   `observable.idl` but is **unimplemented on Bun's `EventTarget`** → it traps at
+   call time. It's a faithful reflection of the IDL; treat it as a not-yet-on-this-host
+   member, like any host API a given runtime hasn't shipped.
+
+`removeEventListener` is bound but of limited use: each `@export_callback` produces
+a fresh host function, so you can't pass back the *same* reference you registered.
+
+## What stays unbound — the 12 remaining skips
 
 **Portability tradeoff (8)** — recoverable only by making the module web/bun-only;
 deliberately left portable:
@@ -415,7 +471,7 @@ deliberately left portable:
 - `path.parse`, `path.format`, `path.join`, `path.resolve`
 - `os.cpus`, `os.loadavg`, `os.userInfo`, `os.networkInterfaces`
 
-**Genuinely fundamental (5)** — permanent skips:
+**Genuinely fundamental (4)** — permanent skips:
 
 - **`Bun.plugin`** — `ReturnType<T["setup"]>`, a conditional type.
 - **`Bun.serve`** — its `options` is an intersection type carrying an embedded
@@ -424,9 +480,10 @@ deliberately left portable:
   data-shape sigil — not a valid identifier).
 - **`Response.json`** *static factory* — collides with the instance body-reader
   `json()`; `@extern` monomorphism keeps the instance form (the useful one).
-- **`AbortSignal.onabort`** — an `EventHandler` callback; webiface has no
-  closure-trampoline path (no `events:'closure'` analogue).
 
+> `AbortSignal.onabort` was the 5th fundamental skip; it is now **recovered** by
+> the webiface `events:'closure'` path above (as `set_onabort`).
+>
 > Note: `Bun.hash` (`number | bigint`) is no longer skipped — the union's `bigint`
 > arm now crosses as a `JSValue` handle, so it binds (the numeric value is opaque
 > to the guest, but the binding exists). A native `bigint → Int64` ABI remains

@@ -119,19 +119,26 @@ The first stable Silicon release.
 - **Generated modules**: `path` / `os` / `json` / `bun` / `url` /
   `url_search_params` / `headers` / `text_encoder` / `text_decoder`; the fetch
   ecosystem `response` / `request` / `blob` / `form_data` / `abort_controller` /
-  `abort_signal` (Response body readers are awaitable `@suspending`); Node
+  `abort_signal` (Response body readers are awaitable `@suspending`); the event
+  surface `event_target` (`add_event_listener` with a closure listener); Node
   `crypto` and `fs` (the mixed-union fix unlocked `read_file_sync` etc.); and bare
   globals `global::fetch` (first-class, `@suspending`) / `atob` / `btoa`. All
   externref-handle surfaces are web/bun only.
 - **Classifier coverage** — the `.d.ts` and Web-IDL type classifiers now resolve
   generic params to their constraints, map `bigint` / `unknown` / IDL `any` and
   dictionaries (options bags) and `sequence<>` / `FrozenArray<>` to `JSValue`
-  handles, and bind a `T | Promise<T>` union through its synchronous arm. Lifts
-  aggregate bind rate across the shipped platform modules from **90.1 % to 96.5 %**
-  (362 bindings, 13 skips) with no host-shim or runtime change. The 13 remaining
-  skips are 8 deliberate portability tradeoffs (`path` / `os` kept Tier-0 portable)
-  and 5 fundamental cases (conditional types, an intersection options bag, the `$`
-  binding name, a static/instance name collision, an `EventHandler` callback). See
+  handles, and bind a `T | Promise<T>` union through its synchronous arm. Then the
+  Web-IDL adapter gained the `events:'closure'` callback path (ADR 0019 C2): an
+  `EventHandler` attribute → a setter taking a `Callback` closure handle, and a
+  listener argument → a `Callback` param — recovering `abort_signal::set_onabort`
+  and shipping the `event_target` module. (A `Callback` crosses only guest→host,
+  so it is rejected in result/getter/union position; a fired listener can't yet
+  consume its `Event` arg — see the doc.) Lifts aggregate bind rate across the
+  shipped platform modules from **90.1 % to 96.8 %** (368 bindings, 12 skips) with
+  no host-shim or runtime change. The 12 remaining skips are 8 deliberate
+  portability tradeoffs (`path` / `os` kept Tier-0 portable) and 4 fundamental
+  cases (conditional types, an intersection options bag, the `$` binding name, a
+  static/instance name collision). See
   [`docs/ffi-coverage-gaps.md`](../docs/ffi-coverage-gaps.md).
 
 ### Compiler-as-a-Service (CaaS)

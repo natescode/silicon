@@ -479,10 +479,20 @@ function buildImports(state: HostState, write: (s: string) => void) {
             aborted: (self: any) => self.aborted,
             reason: (self: any) => self.reason,
             throw_if_aborted: (self: any) => self.throwIfAborted(),
+            set_onabort: (self: any, value: any) => self.onabort = closureToFn(value),
             abort: (reason: any) => AbortSignal.abort(reason),
             timeout: (milliseconds: number) => AbortSignal.timeout(milliseconds),
             any: (signals: any) => AbortSignal.any(signals),
             // === /bindgen:module abort_signal ===
+        },
+        event_target: {
+            // === bindgen:module event_target ===
+            create: () => new EventTarget(),
+            add_event_listener: (self: any, type: any, callback: any) => self.addEventListener(type, closureToFn(callback)),
+            remove_event_listener: (self: any, type: any, callback: any) => self.removeEventListener(type, closureToFn(callback)),
+            dispatch_event: (self: any, event: any) => self.dispatchEvent(event),
+            when: (self: any, type: any) => self.when(type),
+            // === /bindgen:module event_target ===
         },
         crypto: {
             // === bindgen:module crypto ===

@@ -39,21 +39,29 @@ const HANDLE_TYPES = new Set<string>([
     'Float16Array', 'Float32Array', 'Float64Array', 'BigInt64Array', 'BigUint64Array',
 ])
 
+type Events = 'skip' | 'closure'
+
 interface Ctx {
     readonly ifaces: Set<string>
     readonly dicts: Set<string>
     readonly enums: Set<string>
     readonly typedefs: Map<string, any>   // name → idlType node (resolves union typedefs too)
+    readonly callbacks: Set<string>       // callback + callback-interface names (EventListener, EventHandlerNonNull, …)
 }
 
 /** Classify one webidl2 type NODE to a Silicon boundary type, or null if it
  *  can't cross (dictionary / sequence / record / Promise / callback / unknown).
  *  A union maps to String if any arm is a string (the guest can supply one),
- *  else to JSValue if every arm is a handle, else null. */
-function classify(tn: any, ctx: Ctx, depth = 0): SiType | null {
+ *  else to JSValue if every arm is a handle, else null.  Under `events:'closure'`
+ *  a CALLBACK type yields `Callback` — valid only in PARAM position (see the
+ *  result/getter/union sinks in `classifyResult`/`classify`/the attribute loop). */
+function classify(tn: any, ctx: Ctx, events: Events, depth = 0): SiType | null {
     if (!tn || depth > 8) return null
     if (tn.union && Array.isArray(tn.idlType)) {
-        const parts = tn.idlType.map((p: any) => classify(p, ctx, depth + 1))
+        const parts = tn.idlType.map((p: any) => classify(p, ctx, events, depth + 1))
+        // A callback arm sinks the whole union: a closure can't be one of several
+        // interchangeable handle/string arms (`(EventHandler or DOMString)`).
+        if (parts.some((p: SiType | null) => p === 'Callback')) return null
         if (parts.some((p: SiType | null) => p === 'String')) return 'String'
         if (parts.length && parts.every((p: SiType | null) => p === 'JSValue')) return 'JSValue'
         return null
@@ -67,26 +75,33 @@ function classify(tn: any, ctx: Ctx, depth = 0): SiType | null {
     }
     const name = tn.idlType
     if (typeof name !== 'string') return null
-    return classifyName(name, ctx, depth)
+    return classifyName(name, ctx, events, depth)
 }
 
 /** Classify a NAMED IDL type (a string), shared by `classify` and the Promise
  *  awaited-type path. */
-function classifyName(name: string, ctx: Ctx, depth: number): SiType | null {
+function classifyName(name: string, ctx: Ctx, events: Events, depth: number): SiType | null {
     if (typeof name !== 'string') return null
     if (HANDLE_TYPES.has(name)) return 'JSValue'
     // The IDL `any`/`object` type is as opaque as a host object — cross it as a
     // JSValue handle (the guest reads it with js::as_int/as_str/get, builds it
     // with js::object/js::set).  Mirrors dts.ts mapping `any` → JSValue.
     if (name === 'any' || name === 'object') return 'JSValue'
+    // A callback (`callback`/`callback interface` def, or an EventHandler typedef
+    // chain that lands on one) crosses as a `Callback` closure handle in 'closure'
+    // mode — the guest passes `@export_callback(@closure(…))`.  In 'skip' mode it
+    // stays unbindable (null), preserving the default.  ONLY valid in param/setter
+    // position; the result/getter/union sites reject `Callback`.
+    if (ctx.callbacks.has(name)) return events === 'closure' ? 'Callback' : null
     try { return idlTypeToSi(name) } catch { /* not a scalar */ }
     if (ctx.ifaces.has(name)) return 'JSValue'
     if (ctx.enums.has(name)) return 'String'     // an IDL enum is a set of string values
     // A dictionary (options bag) crosses as a JSValue handle — the guest builds it
     // with js::object()/js::set(...); the host receives a plain object.
     if (ctx.dicts.has(name)) return 'JSValue'
+    // A typedef may alias a callback (EventHandler → EventHandlerNonNull) — recurse.
     const td = ctx.typedefs.get(name)
-    if (td) return classify(td, ctx, depth + 1)
+    if (td) return classify(td, ctx, events, depth + 1)
     return null
 }
 
@@ -94,15 +109,17 @@ function classifyName(name: string, ctx: Ctx, depth: number): SiType | null {
  *  binding whose result is the awaited `T` (ADR 0018 / next FFI #5): so
  *  `Response.json()` / `text()` / `arrayBuffer()` become awaitable.  The resolved
  *  value of `Promise<any>` (or any non-Tier-0 awaited type) crosses as a JSValue
- *  handle; `Promise<undefined>` is a suspending `Void`. */
-function classifyResult(tn: any, ctx: Ctx): { type: SiType | null; suspending: boolean } {
+ *  handle; `Promise<undefined>` is a suspending `Void`.  A callback RESULT is not
+ *  bindable (the guest can't be handed a host function) → null. */
+function classifyResult(tn: any, ctx: Ctx, events: Events): { type: SiType | null; suspending: boolean } {
+    const notCallback = (t: SiType | null): SiType | null => (t === 'Callback' ? null : t)
     if (tn && tn.generic === 'Promise') {
         const awaited = Array.isArray(tn.idlType) ? tn.idlType[0] : undefined
         const aname = awaited?.idlType
         if (!awaited || aname === 'undefined' || aname === 'void') return { type: 'Void', suspending: true }
-        return { type: classify(awaited, ctx) ?? 'JSValue', suspending: true }
+        return { type: notCallback(classify(awaited, ctx, events) ?? 'JSValue'), suspending: true }
     }
-    return { type: classify(tn, ctx), suspending: false }
+    return { type: notCallback(classify(tn, ctx, events)), suspending: false }
 }
 
 /** Build a param list from an IDL argument list.
@@ -122,10 +139,10 @@ function classifyResult(tn: any, ctx: Ctx): { type: SiType | null; suspending: b
  *    - an UNREPRESENTABLE required arg makes the whole member unbindable (null);
  *      an unrepresentable optional is simply dropped.
  *  Returns null to signal "skip this member". */
-function buildParams(args: any[], ctx: Ctx): Param[] | null {
+function buildParams(args: any[], ctx: Ctx, events: Events): Param[] | null {
     const out: Param[] = []
     for (const a of args ?? []) {
-        const t = classify(a.idlType, ctx)
+        const t = classify(a.idlType, ctx, events)
         if (a.optional) {
             // Keep this optional only if it is the sole/first data arg (a payload);
             // either way, stop — trailing positional args cannot be reached.
@@ -152,14 +169,22 @@ export interface WebIfaceResult {
  * snake_cased; the constructor binds as `create` (`new` is a reserved Silicon
  * token).  Strings are emitted as `String` (the emitter rewrites to `JSString`
  * in jsstring mode); object handles as `JSValue`.
+ *
+ * `events:'closure'` (ADR 0019 C2) binds a CALLBACK type as a `Callback` closure
+ * handle: an `EventHandler` attribute (`onabort`) → a setter `set_onabort(self,
+ * Callback)`, and a callback ARGUMENT (`addEventListener(type, listener)`) → a
+ * `Callback` param.  The default 'skip' leaves both unbindable (the prior
+ * behaviour — `bindgen --check` / the lockfile stay byte-stable for callers that
+ * don't opt in).
  */
-export function webifaceToSpecs(interfaceName: string, corpus = loadWebrefCorpus()): WebIfaceResult {
+export function webifaceToSpecs(interfaceName: string, corpus = loadWebrefCorpus(), events: Events = 'skip'): WebIfaceResult {
     // Global maps across the whole corpus (an interface's members may reference
-    // any spec's typedef / dictionary / enum).
+    // any spec's typedef / dictionary / enum / callback).
     const ifaces = new Set<string>()
     const dicts = new Set<string>()
     const enums = new Set<string>()
     const typedefs = new Map<string, any>()
+    const callbacks = new Set<string>()  // `callback` + `callback interface` def names
     // Members of THIS interface, merged across partials + included mixins.
     const ownMembers: any[] = []
     const includes: string[] = []        // mixin names this interface includes
@@ -182,10 +207,16 @@ export function webifaceToSpecs(interfaceName: string, corpus = loadWebrefCorpus
                 case 'enum': enums.add(def.name); break
                 case 'typedef': if (def.idlType) typedefs.set(def.name, def.idlType); break
                 case 'includes': if (def.target === interfaceName) includes.push(def.includes); break
+                // A `callback` (EventHandlerNonNull, FrameRequestCallback, …) or a
+                // `callback interface` (EventListener, NodeFilter) is a function the
+                // guest can supply as a closure.  An `EventHandler` typedef resolves
+                // here through the typedefs map.
+                case 'callback': callbacks.add(def.name); break
+                case 'callback interface': callbacks.add(def.name); break
             }
         }
     }
-    const ctx: Ctx = { ifaces, dicts, enums, typedefs }
+    const ctx: Ctx = { ifaces, dicts, enums, typedefs, callbacks }
     // Process STATIC operations last: a static factory whose snake-name collides
     // with an instance member (e.g. Response's static `json(data)` vs the Body-mixin
     // instance `json()` body-reader) must yield the binding name to the instance
@@ -221,15 +252,25 @@ export function webifaceToSpecs(interfaceName: string, corpus = loadWebrefCorpus
         }
 
         if (m.type === 'constructor') {
-            const params = buildParams(m.arguments, ctx)
+            const params = buildParams(m.arguments, ctx, events)
             if (params === null) { skipped.push({ member: 'constructor', reason: 'a required ctor arg is not bindable' }); continue }
             emit('create', params, 'JSValue', { kind: 'construct', iface: interfaceName }, 'constructor')
             continue
         }
 
         if (m.type === 'attribute' && m.name) {
-            const t = classify(m.idlType, ctx)
+            const t = classify(m.idlType, ctx, events)
             if (t === null || t === 'Void') { skipped.push({ member: m.name, reason: 'attribute type not bindable' }); continue }
+            // An EventHandler attribute (`signal.onabort = fn`, t === 'Callback'):
+            // a host handler can't be read back as a guest closure, so emit the
+            // SETTER ONLY — `set_onabort(self, value: Callback) -> Void`.  The
+            // (always-writable) EventHandler has no useful getter.
+            if (t === 'Callback') {
+                if (m.readonly) { skipped.push({ member: m.name, reason: 'read-only callback handler — not bindable' }); continue }
+                emit(`set_${snake(m.name)}`, [{ name: 'self', type: 'JSValue' }, { name: 'value', type: 'Callback' }],
+                     'Void', { kind: 'setter', attr: m.name }, m.name)
+                continue
+            }
             emit(snake(m.name), [{ name: 'self', type: 'JSValue' }], t, { kind: 'getter', attr: m.name }, m.name)
             if (!m.readonly) {
                 emit(`set_${snake(m.name)}`, [{ name: 'self', type: 'JSValue' }, { name: 'value', type: t }],
@@ -239,9 +280,9 @@ export function webifaceToSpecs(interfaceName: string, corpus = loadWebrefCorpus
         }
 
         if (m.type === 'operation' && m.name && (m.special === '' || m.special === undefined || m.special === 'static')) {
-            const { type: result, suspending } = classifyResult(m.idlType, ctx)
+            const { type: result, suspending } = classifyResult(m.idlType, ctx, events)
             if (result === null) { skipped.push({ member: m.name, reason: `return type not bindable` }); continue }
-            const args = buildParams(m.arguments, ctx)
+            const args = buildParams(m.arguments, ctx, events)
             if (args === null) { skipped.push({ member: m.name, reason: 'a required arg is not bindable' }); continue }
             if (m.special === 'static') {
                 emit(snake(m.name), args, result, { kind: 'static', iface: interfaceName, method: m.name }, m.name, suspending)

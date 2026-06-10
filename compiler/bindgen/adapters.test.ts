@@ -211,4 +211,46 @@ describe('bindgen webiface adapter — constructed Web interfaces from @webref/i
         expect(url.get('create')?.params).toHaveLength(1)
         expect(url.get('can_parse')?.params).toHaveLength(1)
     })
+
+    test("events:'closure': an EventHandler attribute binds as a setter-only Callback (default skip preserved)", () => {
+        // DEFAULT ('skip') leaves onabort unbindable — the prior behaviour the
+        // lockfile/other callers depend on.
+        const skip = webifaceToSpecs('AbortSignal')
+        expect(skip.skipped.some(s => s.member === 'onabort')).toBe(true)
+        expect(byName(skip.specs).has('set_onabort')).toBe(false)
+
+        // 'closure' binds `signal.onabort = handler` as a Callback SETTER — and
+        // emits NO getter (a host handler can't be handed back to the guest).
+        const clo = webifaceToSpecs('AbortSignal', undefined, 'closure')
+        const m = byName(clo.specs)
+        expect(clo.skipped.some(s => s.member === 'onabort')).toBe(false)
+        expect(m.get('set_onabort')).toMatchObject({
+            params: [{ type: 'JSValue' }, { type: 'Callback' }], result: 'Void',
+            impl: { kind: 'setter', attr: 'onabort' },
+        })
+        expect(m.has('onabort')).toBe(false)   // no getter
+    })
+
+    test("events:'closure': EventTarget binds add/removeEventListener with a Callback listener", () => {
+        // 'skip' leaves the EventListener (a callback interface) arg unbindable, so
+        // the whole member skips — only dispatchEvent (Event handle) survives.
+        const skip = byName(webifaceToSpecs('EventTarget').specs)
+        expect(skip.has('add_event_listener')).toBe(false)
+        expect(skip.get('dispatch_event')).toBeDefined()
+
+        // 'closure' binds the listener arg as a Callback; the optional `options`
+        // union is dropped → the 2-arg (type, callback) form.  EventListener is a
+        // `callback interface`, so this also proves callback-interface detection.
+        const m = byName(webifaceToSpecs('EventTarget', undefined, 'closure').specs)
+        expect(m.get('add_event_listener')).toMatchObject({
+            params: [{ type: 'JSValue' }, { type: 'String' }, { type: 'Callback' }], result: 'Void',
+            impl: { kind: 'method', method: 'addEventListener' },
+        })
+        expect(m.get('remove_event_listener')).toMatchObject({
+            params: [{ type: 'JSValue' }, { type: 'String' }, { type: 'Callback' }],
+        })
+        // dispatchEvent still binds its Event arg as a plain JSValue handle — a
+        // regular interface must NOT be mistaken for a callback.
+        expect(m.get('dispatch_event')).toMatchObject({ params: [{ type: 'JSValue' }, { type: 'JSValue' }], result: 'Bool' })
+    })
 })

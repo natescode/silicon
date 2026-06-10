@@ -34,4 +34,29 @@ run();`, ENTRY, { target: 'host' } as any)
         const code = await runUnderBun(r.binary)
         expect(code).toBe(0)
     })
+
+    test("a closure handed to a webiface events:'closure' setter (abort_signal::set_onabort) is wrapped (exit 0)", async () => {
+        // The webiface adapter's events:'closure' path: `signal.onabort = handler`
+        // binds as `set_onabort(self, Callback)`, emitted as `self.onabort =
+        // closureToFn(value)`.  Get a real AbortSignal handle from timeout(), then
+        // register a Silicon closure as its abort handler — proving the closure
+        // crosses into a webiface (not just dts) module shim and closureToFn wires.
+        const { source } = resolveUses(`@use 'vec';
+\\\\ on_abort (Int) -> Int
+@fn on_abort x := { x };
+\\\\ run () -> Void
+@fn run := {
+\\\\ c JSValue
+c := abort_controller::create();
+\\\\ s JSValue
+s := abort_controller::signal(c);
+abort_signal::set_onabort(s, @export_callback(@closure(on_abort, 0)));
+};
+run();`, ENTRY, { target: 'host' } as any)
+        const r: any = compile(source, { file: ENTRY, moduleRegistry: mods, target: 'host', platform: 'bun', emitBinary: true } as any)
+        expect(r.diagnostics ?? []).toEqual([])
+
+        const code = await runUnderBun(r.binary)
+        expect(code).toBe(0)
+    })
 })

@@ -136,9 +136,33 @@ export const GENERATED_MODULES: readonly ModuleConfig[] = [
         strings: 'jsstring',
     },
     {
+        // events:'closure' binds the EventHandler attribute `onabort` as a setter
+        // taking a Callback closure handle (`signal.onabort = handler`).
         module: 'abort_signal',
         provenance: '@webref/idl (AbortSignal interface)',
-        specs: () => webifaceToSpecs('AbortSignal').specs,
+        specs: () => webifaceToSpecs('AbortSignal', undefined, 'closure').specs,
+        strings: 'jsstring',
+    },
+    {
+        // EventTarget (ADR 0019 C2) — the canonical event API.  events:'closure'
+        // binds add_event_listener / remove_event_listener with a Callback closure
+        // listener; dispatch_event takes an Event handle.  A guest registers a
+        // listener with `event_target::add_event_listener(target, "abort",
+        // @export_callback(@closure(...)))` — `target` is any EventTarget handle
+        // (an AbortSignal handle works too).  web/bun only.
+        //
+        // TWO LIMITATIONS (see docs/ffi-coverage-gaps.md):
+        //   1. A FIRED listener must not consume its Event arg: the closure
+        //      trampoline (`__closure_invoke_<k>`) types every callback arg as i32,
+        //      but a dispatched listener is called with an Event externref → a
+        //      boundary mismatch that traps.  Registration + no-arg/arg-ignoring
+        //      firing is safe; reading the event needs an externref-arg trampoline
+        //      (a future story).
+        //   2. `when()` (the WICG Observable proposal) is bound from observable.idl
+        //      but is unimplemented on Bun's EventTarget → traps at call time.
+        module: 'event_target',
+        provenance: '@webref/idl (EventTarget interface)',
+        specs: () => webifaceToSpecs('EventTarget', undefined, 'closure').specs,
         strings: 'jsstring',
     },
 
