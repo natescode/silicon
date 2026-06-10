@@ -2,110 +2,74 @@
 /**
  * Match-arm normalization.
  *
- * `&@match` is a builtin function call.  The legacy "flat" form passes
- * patterns and bodies as alternating args:
+ * `@match` is an ordinary builtin function call (Silicon's "built-ins are
+ * functions" stance): the discriminant followed by alternating pattern / body
+ * arguments, each body a `{ … }` block —
  *
- *     &@match disc, pat0, body0, pat1, body1, …
+ *     @match(disc,
+ *         $Some v, { v },
+ *         $None,   { dflt })
  *
- * The "arm-expression" form folds each (pattern, body) pair into a single
- * arg shaped as a `BinaryOp` with operator `=>`:
+ * Because a body is a brace-delimited block it is a single argument, so an arm
+ * body can be any expression (`{ v * 2 }`, `{ 0 - 1 }`) with no dependence on
+ * operator precedence — Silicon's operators are flat (left-to-right, equal), and
+ * `@match` deliberately needs no exception to that.  There is NO infix arm
+ * operator: the old `pattern => body` form is gone (an infix `=>` collided with
+ * flat precedence the moment a body was itself a binary expression).
  *
- *     &@match disc,
- *         pat0 => body0,
- *         pat1 => body1
+ * Per-arm pattern alternation reuses the `|` already used in `@type`:
  *
- * Per-arm pattern alternation uses the same `|` already used in `@type`:
+ *     @match(c,
+ *         $Red | $Green, { 'warm' },
+ *         $Blue,         { 'cool' })
  *
- *     &@match c,
- *         $Red | $Green => 'warm',
- *         $Blue => 'cool'
+ * A trailing single argument (odd count after the discriminant) is a catch-all
+ * default, preserved verbatim.
  *
- * Both forms require *zero grammar changes* — `=>` and `|` are already valid
- * `BinaryOp` operators.  This module flattens the arm-expression form back
- * into the flat shape so the existing match typechecker / lowerer can
- * consume either form uniformly.
- *
- * Pattern alternation expands by *duplicating the body* across the alternatives
- * — `$Red | $Green => 'warm'` becomes flat `[$Red, 'warm', $Green, 'warm']`.
- * Bodies are AST references, not deep-cloned: this is fine because match
- * arms run at most once each (they're branches of an if-then-else chain).
+ * This module flattens alternation into the shape the match typechecker /
+ * lowerer consume — `[disc, pat, body, pat, body, …, (default)]` — by
+ * duplicating the body across a `|`-arm's alternatives.  Bodies are AST
+ * references, not deep-cloned: fine, since arms run at most once each.
  */
-
-/** Detect arm-expression form by checking if any arg after the discriminant
- *  is shaped as `pattern => body`.  Pure inspection — no mutation. */
-export function isArmExpressionForm(rawArgs: any[]): boolean {
-    if (rawArgs.length < 2) return false
-    return rawArgs.slice(1).some(a => extractArm(a) != null)
-}
 
 /**
- * Normalize a `&@match` call's args.  If the call uses arm-expression form,
- * flatten into `[disc, pat, body, pat, body, …]`.  Otherwise pass through.
+ * Normalize a `@match` call's args.  Walks the (pattern, body) pairs after the
+ * discriminant, expanding any `|`-alternation pattern into one arm per
+ * alternative sharing the body.  A non-`|` pattern passes through 1:1, so a
+ * plain `[disc, pat, body, …]` is unchanged.  A trailing odd arg is a default.
  *
- *   `disc, $Some v => v, $None => dflt`
+ *   `disc, $Red | $Green, { 'warm' }, $Blue, { 'cool' }`
  *      ↓
- *   `disc, $Some v, v, $None, dflt`
- *
- * Pattern alternation inside an arm expands:
- *
- *   `disc, $Red | $Green => 'warm', $Blue => 'cool'`
- *      ↓
- *   `disc, $Red, 'warm', $Green, 'warm', $Blue, 'cool'`
- *
- * An arg that is *not* arm-expression-shaped is passed through verbatim —
- * this preserves the trailing-default behavior (`disc, pat, body, dflt`)
- * and lets the new and legacy forms coexist within one call (intentional
- * for backwards compatibility; the legacy form is not deprecated).
+ *   `disc, $Red, { 'warm' }, $Green, { 'warm' }, $Blue, { 'cool' }`
  */
 export function normalizeMatchArgs(rawArgs: any[]): any[] {
-    if (!isArmExpressionForm(rawArgs)) return rawArgs
-
+    if (rawArgs.length < 2) return rawArgs
     const out: any[] = [rawArgs[0]]
-    for (let i = 1; i < rawArgs.length; i++) {
-        const a = rawArgs[i]
-        const arm = extractArm(a)
-        if (arm) {
-            const patterns = collectAltPatterns(arm.pattern)
-            for (const pat of patterns) {
-                out.push(pat)
-                out.push(arm.body)
-            }
-        } else {
-            // Arg without `=>` in arm-expression mode is a trailing default
-            // (the existing semantics) or, if it's not the last arg, a legacy
-            // flat-form arg that the rest of the pipeline handles.
-            out.push(a)
+    let i = 1
+    while (i < rawArgs.length) {
+        const pat = rawArgs[i]
+        assertNotArrowArm(pat)
+        // A trailing pattern with no following body is the catch-all default.
+        if (i + 1 >= rawArgs.length) { out.push(pat); break }
+        const body = rawArgs[i + 1]
+        for (const p of collectAltPatterns(pat)) {
+            out.push(p)
+            out.push(body)
         }
+        i += 2
     }
     return out
 }
 
-/**
- * Recover one `pattern => body` arm, returning its pattern and body nodes — or
- * `null` if the arg is not an arm.
- *
- * Silicon has **flat (left-associative, equal) operator precedence**, so a body
- * that is itself a binary expression steals the arm's root: `$Err e => 0 - 1`
- * parses as `(($Err e => 0) - 1)`, a `-` node whose left spine bottoms out at
- * the `=>`.  We descend the left spine collecting the stolen `(operator, right)`
- * pairs, and if we reach a `=>`, rebuild the real body by re-applying them to
- * the `=>`'s right child (innermost first), reproducing the flat left-assoc
- * chain.  A plain `pattern => body` (no binary body) is the zero-steal case.
- */
-function extractArm(a: any): { pattern: any; body: any } | null {
-    if (a == null || a.type !== 'BinaryOp') return null
-    const stolen: { operator: string; right: any }[] = []
-    let node = a
-    while (node != null && node.type === 'BinaryOp' && node.operator !== '=>') {
-        stolen.push({ operator: node.operator, right: node.right })
-        node = node.left
+/** The `pattern => body` arm form was removed — a leftover `=>` parses (under
+ *  flat precedence) into the pattern slot.  Fail loudly with the migration so it
+ *  can never silently mis-lower. */
+function assertNotArrowArm(node: any): void {
+    if (node != null && node.type === 'BinaryOp' && node.operator === '=>') {
+        throw new Error(
+            "@match no longer uses the `pattern => body` arm form — write the body as a block argument instead: `@match(x, $Some v, { v }, $None, { dflt })`",
+        )
     }
-    if (node == null || node.type !== 'BinaryOp' || node.operator !== '=>') return null
-    let body = node.right
-    for (let i = stolen.length - 1; i >= 0; i--) {
-        body = { type: 'BinaryOp', operator: stolen[i].operator, left: body, right: stolen[i].right, sourceLocation: a.sourceLocation }
-    }
-    return { pattern: node.left, body }
 }
 
 /** Collect `|`-chained patterns into a flat list.  `$A | $B | $C` → [$A, $B, $C]. */

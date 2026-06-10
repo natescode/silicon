@@ -118,7 +118,7 @@ describe('Gap 3: end-to-end compile (typecheck → lower → emit)', () => {
             @type Option[T] := $Some value T | $None;
             \\\\ unwrap_or[T] (Option[T], T)
             @fn unwrap_or[T] opt, dflt := {
-                @match(opt, $Some v => v, $None => dflt)
+                @match(opt, $Some v, { v }, $None, { dflt })
             };
             \\\\ pick Int
             @fn pick := unwrap_or(Some(42), 0);
@@ -151,7 +151,7 @@ describe('Gap 4: nested generic types', () => {
         ok(`@type Option[T] := $Some value T | $None;
             \\\\ unwrap_or[T] (Option[T], T)
             @fn unwrap_or[T] opt, dflt := {
-                @match(opt, $Some v => v, $None => dflt)
+                @match(opt, $Some v, { v }, $None, { dflt })
             };
             \\\\ nested Option[Int]
             @fn nested := {
@@ -163,7 +163,7 @@ describe('Gap 4: nested generic types', () => {
         ok(`@type Option[T] := $Some value T | $None;
             \\\\ unwrap_or[T] (Option[T], T)
             @fn unwrap_or[T] opt, dflt := {
-                @match(opt, $Some v => v, $None => dflt)
+                @match(opt, $Some v, { v }, $None, { dflt })
             };
             \\\\ nested Option[Int]
             @fn nested := {
@@ -187,7 +187,7 @@ describe('Gap 5: generic used inside non-generic context', () => {
             \\\\ maybe_int Int
             @fn maybe_int := {
                 @mut x := Some(7);
-                @match(x, $Some v => v, $None => 0)
+                @match(x, $Some v, { v }, $None, { 0 })
             };`)
     })
 })
@@ -197,7 +197,7 @@ describe('Gap 6: generic fn body contains generic call to another fn', () => {
         ok(`@type Option[T] := $Some value T | $None;
             \\\\ unwrap_or[T] (Option[T], T)
             @fn unwrap_or[T] opt, dflt := {
-                @match(opt, $Some v => v, $None => dflt)
+                @match(opt, $Some v, { v }, $None, { dflt })
             };
             # second generic fn that itself calls unwrap_or with its own T
             \\\\ unwrap_double[T] (Option[T], T)
@@ -213,16 +213,16 @@ describe('stdlib helpers: option_is_some / option_is_none / result_is_err', () =
     const OPTION = `@type Option[T] := $Some value T | $None;
         \\\\ option_is_some[T] (Option[T])
         @fn option_is_some[T] opt := {
-            @match(opt, $Some _v => @true, $None => @false)
+            @match(opt, $Some _v, { @true }, $None, { @false })
         };
         \\\\ option_is_none[T] (Option[T])
         @fn option_is_none[T] opt := {
-            @match(opt, $Some _v => @false, $None => @true)
+            @match(opt, $Some _v, { @false }, $None, { @true })
         };`
     const RESULT = `@type Result[T, E] := $Ok value T | $Err error E;
         \\\\ result_is_err[T, E] (Result[T, E])
         @fn result_is_err[T, E] r := {
-            @match(r, $Ok _v => @false, $Err _e => @true)
+            @match(r, $Ok _v, { @false }, $Err _e, { @true })
         };`
 
     test('option_is_some/some Int → true', () => {

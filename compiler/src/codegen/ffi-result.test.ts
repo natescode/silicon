@@ -95,7 +95,7 @@ describe('next FFI #2 — host-error → Result (sync boundary)', () => {
     js::call(recv, method, args);
     \\\\ r Result[Int, String]
     @mut r := js_check(0);
-    @match(r, $Ok _ok => 0, $Err _m => 1)
+    @match(r, $Ok _ok, { 0 }, $Err _m, { 1 })
 };
 @export probe;`))
         const obj = { good: () => 42, bad: () => { throw new Error('boom') } }
@@ -138,7 +138,7 @@ describe('next FFI #2 — host-error → Result (sync boundary)', () => {
     @mut r := js::call(recv, method, args);
     \\\\ res Result[Int, String]
     @mut res := js_check(js::pin(r));
-    @match(res, $Ok id => id, $Err _m => 0 - 1)
+    @match(res, $Ok id, { id }, $Err _m, { 0 - 1 })
 };
 @export try_id;`))
         const obj = { good: () => ({}), bad: () => { throw new Error('x') } }
@@ -158,7 +158,7 @@ describe('next FFI #2 — host-error → Result (sync boundary)', () => {
     js::apply(parse_fn, args);
     \\\\ r Result[Int, String]
     @mut r := js_check(0);
-    @match(r, $Ok _ok => 1, $Err _m => 0)
+    @match(r, $Ok _ok, { 1 }, $Err _m, { 0 })
 };
 @export parse_ok;`))
         const parse = JSON.parse

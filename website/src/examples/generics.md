@@ -46,8 +46,8 @@ Defining your own:
 \\ unwrap_or[T] (Option[T], T) -> T
 @fn unwrap_or opt, dflt := {
     @match(opt,
-        $Some v => v,
-        $None   => dflt)
+        $Some v, { v },
+        $None,   { dflt })
 };
 ```
 

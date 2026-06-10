@@ -17,17 +17,17 @@
 # Extract the value or fall back to `dflt`.  T is inferred from `opt`.
 \\ option_unwrap_or[T] (Option[T], T)
 @fn option_unwrap_or[T] opt, dflt := {
-    @match(opt, $Some v => v, $None => dflt)
+    @match(opt, $Some v, { v }, $None, { dflt })
 };
 
 # True if the option carries a value.
 \\ option_is_some[T] (Option[T])
 @fn option_is_some[T] opt := {
-    @match(opt, $Some _v => @true, $None => @false)
+    @match(opt, $Some _v, { @true }, $None, { @false })
 };
 
 # True if the option is empty.
 \\ option_is_none[T] (Option[T])
 @fn option_is_none[T] opt := {
-    @match(opt, $Some _v => @false, $None => @true)
+    @match(opt, $Some _v, { @false }, $None, { @true })
 };

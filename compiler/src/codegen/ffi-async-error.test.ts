@@ -32,7 +32,7 @@ const SRC = `@use 'ffi';
     @mut n := @await(load(x));
     \\\\ res Result[Int, String]
     @mut res := js_check(0);
-    @match(res, $Ok _ok => 1, $Err _m => 0)
+    @match(res, $Ok _ok, { 1 }, $Err _m, { 0 })
 };
 @export run;`
 

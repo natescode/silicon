@@ -53,8 +53,8 @@ that still feels like HM, scoped to grow into full Roc-style later.
 \\ unwrap_or_match[T] (Option[T], T) -> T
 @fn unwrap_or_match opt, dflt := {
     @match(opt,
-        $Some v => v,        # `v` binds as T, not hardcoded Int
-        $None => dflt)
+        $Some v, { v },      # `v` binds as T, not hardcoded Int
+        $None,   { dflt })
 };
 ```
 

@@ -97,8 +97,8 @@ describe('Phase 5a-2: Result stdlib', () => {
         const { errors } = await compile(`${resultSrc}
             @fn pick := {
                 @match(Ok(42),
-                    $Ok v => v,
-                    $Err _e => 0)
+                    $Ok v, { v },
+                    $Err _e, { 0 })
             };
         `)
         expect(errors.length).toBe(0)
@@ -112,8 +112,8 @@ describe('Phase 5a-2: Result stdlib', () => {
             @fn pick := {
                 @mut r := Ok(42);
                 @match(r,
-                    $Ok v   => v,
-                    $Err _e => 0)
+                    $Ok v, { v },
+                    $Err _e, { 0 })
             };
         `)
         expect(errors.length).toBe(0)
@@ -143,7 +143,7 @@ describe('Phase 5a: stdlib types coexist in one program', () => {
             @fn use_both := {
                 @mut maybe := Some(7);
                 @mut r := Ok(42);
-                @mut picked := @match(r, $Ok v => v, $Err _e => 0);
+                @mut picked := @match(r, $Ok v, { v }, $Err _e, { 0 });
                 option_unwrap_or(maybe, 0) + picked
             };
         `)

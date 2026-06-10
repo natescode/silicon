@@ -241,8 +241,8 @@ A **sum type** has variants, each marked with `$` and an optional payload:
 \\ size (Shape) -> Int
 @fn size sh := {
     @match(sh,
-        $Circle r => r,
-        $Square s => s)
+        $Circle r, { r },
+        $Square s, { s })
 };
 
 size(Circle(10));               # constructors are Circle / Square
@@ -256,13 +256,15 @@ An **enum** is a set of payload-free variants:
 \\ code (Color) -> Int
 @fn code c := {
     @match(c,
-        $Red   => 1,
-        $Green => 2,
-        $Blue  => 3)
+        $Red,   { 1 },
+        $Green, { 2 },
+        $Blue,  { 3 })
 };
 ```
 
-Pattern alternation shares a body across variants: `$Red | $Green => 1`.
+`@match` is an ordinary call: each arm is a pattern argument followed by a
+`{ … }` block body. Pattern alternation shares a body across variants:
+`$Red | $Green, { 1 }`.
 
 ---
 

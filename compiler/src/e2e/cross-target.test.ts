@@ -170,7 +170,7 @@ describe('Phase 9d-9: sum-type parity', () => {
             \\\\ run Int
             @fn run := {
                 @mut c := Color::Green;
-                @match(c, Color::Red => 1, Color::Green => 2, Color::Blue => 3)
+                @match(c, Color::Red, { 1 }, Color::Green, { 2 }, Color::Blue, { 3 })
             };
             @export run;`, 'run', 2)
     })
@@ -179,7 +179,7 @@ describe('Phase 9d-9: sum-type parity', () => {
         await assertParity(`
             @type Opt := $Some v Int | $None;
             \\\\ unwrap (Opt)
-            @fn unwrap o := @match(o, $Some v => v, $None => 0);
+            @fn unwrap o := @match(o, $Some v, { v }, $None, { 0 });
             \\\\ run Int
             @fn run := unwrap(Some(42));
             @export run;`, 'run', 42)
@@ -191,7 +191,7 @@ describe('Phase 9d-9: sum-type parity', () => {
         await assertParity(`
             @type Opt := $Some v Int | $None;
             \\\\ unwrap (Opt)
-            @fn unwrap o := @match(o, $Some v => v, $None => (0 - 7));
+            @fn unwrap o := @match(o, $Some v, { v }, $None, { (0 - 7) });
             \\\\ make_none Opt
             @fn make_none := None();
             \\\\ run Int
@@ -213,7 +213,7 @@ describe('Phase 9d-9: Option / Result stdlib parity', () => {
         await assertParity(`
             @type Opt := $Some v Int | $None;
             \\\\ unwrap_or (Opt, Int)
-            @fn unwrap_or o, dflt := @match(o, $Some v => v, $None => dflt);
+            @fn unwrap_or o, dflt := @match(o, $Some v, { v }, $None, { dflt });
             \\\\ run Int
             @fn run := {
                 @mut a := unwrap_or(Some(10), 99);
@@ -230,9 +230,9 @@ describe('Phase 9d-9: Option / Result stdlib parity', () => {
         await assertParity(`
             @type Res := $Ok value Int | $Err code Int;
             \\\\ ok_value (Res)
-            @fn ok_value r := @match(r, $Ok value => value, $Err code => 0);
+            @fn ok_value r := @match(r, $Ok value, { value }, $Err code, { 0 });
             \\\\ err_code (Res)
-            @fn err_code r := @match(r, $Ok value => 0, $Err code => code);
+            @fn err_code r := @match(r, $Ok value, { 0 }, $Err code, { code });
             \\\\ run Int
             @fn run := ok_value(Ok(7)) + err_code(Err(3));
             @export run;`, 'run', 10)
@@ -264,7 +264,7 @@ describe('Phase 9d-9: programs validate under both targets', () => {
             \\\\ identity (Opt)
             @fn identity o := o;
             \\\\ run Int
-            @fn run := @match(identity(Some(5)), $Some v => v, $None => 0);
+            @fn run := @match(identity(Some(5)), $Some v, { v }, $None, { 0 });
             @export run;`)
     })
 
@@ -284,7 +284,7 @@ describe('Phase 9d-9: programs validate under both targets', () => {
             \\\\ make_b (Int)
             @fn make_b v := B(v);
             \\\\ classify (Tag)
-            @fn classify t := @match(t, $A x => x, $B y => (0 - y));
+            @fn classify t := @match(t, $A x, { x }, $B y, { (0 - y) });
             \\\\ run Int
             @fn run := classify(make_a(7)) + classify(make_b(3));
             @export run;`)

@@ -40,8 +40,13 @@ The first stable Silicon release.
 - HM-lite type inference — Hindley-Milner restricted to declared
   polymorphism on `@fn[T]` and `@type[T]`, no let-generalisation.
   Call sites infer `T` automatically.
-- `@match` — flat form and arm-expression form (`pat => body`) are
-  interchangeable; per-arm pattern alternation (`$Red | $Green => 1`).
+- `@match` — a flat function-call form: the discriminant, then alternating
+  `pattern, { body }` arguments (each body a block); per-arm pattern
+  alternation `$Red | $Green, { 1 }`; an optional trailing `{ body }` default.
+  The infix `pattern => body` arm form was removed — an infix `=>` collided
+  with Silicon's flat (left-to-right) operator precedence once a body was
+  itself a binary expression; a `{ }` block body removes the ambiguity with no
+  precedence rule or AST rewrite.
 - `@defer` — LIFO cleanup at every function exit (return, fall-through,
   break, continue). Replaced the compiler's own arena-cleanup paths.
 - `@try` — Result unwrap shorthand (prefix-keyword, since Silicon bans

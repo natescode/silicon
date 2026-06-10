@@ -111,28 +111,34 @@ on `@fn[T]` and `@type[T]`, no let-generalisation. Roc-style trajectory.
 
 Implementation: `src/types/unify.ts`, `src/types/typechecker.ts`, ~250 lines + 38 unit tests + 33 integration tests. See `docs/hm-lite.md` for the reference.
 
-## `@match` Forms
+## `@match` Form
 
-Both forms are supported and interchangeable:
+`@match` is an ordinary builtin call: the discriminant, then alternating
+pattern / body arguments, each **body a `{ … }` block**. There is no infix arm
+operator — `@match` is a "function with parameters," consistent with Silicon's
+flat (left-to-right, equal) operator precedence, so an arm body can be any
+expression (`{ v * 2 }`, `{ 0 - 1 }`) with zero precedence interaction.
 
 ```silicon
-# Flat form
+# Pattern, then a { } block body — per arm.
 @match(opt, $Some v, { v }, $None, { dflt })
 
-# Arm-expression form (`=>` and `|` are BinaryOp operators)
-@match(opt,
-    $Some v => v,
-    $None => dflt)
+@match(sh,
+    $Circle r, { r },
+    $Square s, { s })
 
-# Per-arm pattern alternation
+# Per-arm pattern alternation (the `|` stays in the pattern argument):
 @match(c,
-    $Red | $Green => 1,
-    $Blue => 0)
+    $Red | $Green, { 1 },
+    $Blue,         { 0 })
+
+# An optional trailing { body } with no pattern is a catch-all default.
 ```
 
-`normalizeMatchArgs` in `src/ast/matchArms.ts` flattens the arm-expression
-form into the flat form so the existing match-lowerer / typechecker handle
-both uniformly. Pattern alternation duplicates the body across alternatives.
+`normalizeMatchArgs` in `src/ast/matchArms.ts` expands `|` alternation into the
+`[disc, pat, body, …]` shape the match lowerer / typechecker consume, and
+throws on a leftover `pattern => body` arm (that infix `=>` form was REMOVED —
+it collided with flat precedence once a body was itself a binary expression).
 
 ## Test Structure
 

@@ -10,8 +10,8 @@
 #   @use 'ffi';
 #   resp := js::apply(parse_fn, args);          ;; null + boundary error on throw
 #   @match(js_check(0),
-#       $Ok _   => use(resp),                    ;; value stays in the local `resp`
-#       $Err m  => recover(m));                   ;; m : String (the host message)
+#       $Ok _,  { use(resp) },                   ;; value stays in the local `resp`
+#       $Err m, { recover(m) });                  ;; m : String (the host message)
 #
 # The error is a LINEAR `String` (the host message) so it fits a Result record;
 # externref values can't live in linear memory, so the success value either

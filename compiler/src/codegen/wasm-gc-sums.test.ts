@@ -180,7 +180,7 @@ describe('Phase 9d-7: @match under wasm-gc uses struct.get', () => {
         const r = compile(`
             @type Opt := $Some v Int | $None;
             \\\\ unwrap (Opt)
-            @fn unwrap o := @match(o, $Some v => v, $None => 0);`, 'wasm-gc')
+            @fn unwrap o := @match(o, $Some v, { v }, $None, { 0 });`, 'wasm-gc')
         expect(r.errors).toEqual([])
         const unwrap = extractUserFn(r.wat!, 'unwrap')
         // Tag dispatch via struct.get $Opt 0.
@@ -193,7 +193,7 @@ describe('Phase 9d-7: @match under wasm-gc uses struct.get', () => {
         const r = compile(`
             @type Opt := $Some v Int | $None;
             \\\\ unwrap (Opt)
-            @fn unwrap o := @match(o, $Some v => v, $None => 0);`, 'wasm-gc')
+            @fn unwrap o := @match(o, $Some v, { v }, $None, { 0 });`, 'wasm-gc')
         const unwrap = extractUserFn(r.wat!, 'unwrap')
         // v is field 0 of $Some → struct.get at index 1 (tag is 0).
         expect(unwrap).toContain('(struct.get $Opt 1')
@@ -203,7 +203,7 @@ describe('Phase 9d-7: @match under wasm-gc uses struct.get', () => {
         const r = compile(`
             @type Opt := $Some v Int | $None;
             \\\\ unwrap (Opt)
-            @fn unwrap o := @match(o, $Some v => v, $None => 0);`, 'host')
+            @fn unwrap o := @match(o, $Some v, { v }, $None, { 0 });`, 'host')
         expect(r.errors).toEqual([])
         const unwrap = extractUserFn(r.wat!, 'unwrap')
         expect(unwrap).toContain('i32.load')
@@ -219,7 +219,7 @@ describe('Phase 9d-7: same source compiles cleanly under BOTH targets', () => {
         const src = `
             @type Opt := $Some v Int | $None;
             \\\\ unwrap (Opt)
-            @fn unwrap o := @match(o, $Some v => v, $None => 0);
+            @fn unwrap o := @match(o, $Some v, { v }, $None, { 0 });
             \\\\ test_some Int
             @fn test_some := unwrap(Some(42));
             \\\\ test_none Int
@@ -268,7 +268,7 @@ describe('Phase 9d-7: emitted modules validate under WebAssembly.compile', () =>
         const r = compile(`
             @type Opt := $Some v Int | $None;
             \\\\ unwrap (Opt)
-            @fn unwrap o := @match(o, $Some v => v, $None => 0);
+            @fn unwrap o := @match(o, $Some v, { v }, $None, { 0 });
             \\\\ test Int
             @fn test := unwrap(Some(42));`, 'wasm-gc')
         expect(r.errors).toEqual([])
@@ -280,7 +280,7 @@ describe('Phase 9d-7: emitted modules validate under WebAssembly.compile', () =>
         const r = compile(`
             @type Opt := $Some v Int | $None;
             \\\\ unwrap (Opt)
-            @fn unwrap o := @match(o, $Some v => v, $None => 0);
+            @fn unwrap o := @match(o, $Some v, { v }, $None, { 0 });
             \\\\ test Int
             @fn test := unwrap(Some(42));`, 'host')
         expect(r.errors).toEqual([])
