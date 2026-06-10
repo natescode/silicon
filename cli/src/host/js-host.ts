@@ -193,6 +193,26 @@ function buildImports(state: HostState, write: (s: string) => void) {
             pin: (v: any) => { pins.push(v); return pins.length - 1 },
             pinned: (i: number) => (pins[i] ?? null),
             unpin: (i: number) => { if (i > 0 && i < pins.length) pins[i] = null },
+            // Bulk binary marshalling (#2): copy bytes between guest linear memory
+            // and a host typed array.  Coerce anything byte-ish to a Uint8Array view.
+            byte_length: (h: any) => (h == null ? 0 : ((h.byteLength ?? h.length ?? 0) | 0)),
+            u8: (h: any) => (h instanceof Uint8Array ? h
+                : h instanceof ArrayBuffer ? new Uint8Array(h)
+                : new Uint8Array(h.buffer, h.byteOffset, h.byteLength)),
+            bytes_in: (ptr: number, len: number) => {
+                if (!state.memory) return new Uint8Array(0)
+                // Copy (not view): a later memory.grow would detach a view.
+                return new Uint8Array(state.memory.buffer.slice(ptr, ptr + len))
+            },
+            bytes_out: (h: any, ptr: number, len: number) => {
+                if (!state.memory || h == null) return 0
+                const src = h instanceof Uint8Array ? h
+                    : h instanceof ArrayBuffer ? new Uint8Array(h)
+                    : new Uint8Array(h.buffer, h.byteOffset, h.byteLength)
+                const n = Math.min(len, src.length)
+                new Uint8Array(state.memory.buffer, ptr, n).set(src.subarray(0, n))
+                return n
+            },
         },
         // `stream` (Tier-2, #3): the JS iteration protocol — a guest `@loop`
         // pulls values from any host iterable.  See strata/modules/stream.si.

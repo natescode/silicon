@@ -191,6 +191,17 @@
                 pin:    function (v) { jsPins.push(v); return jsPins.length - 1 },
                 pinned: function (i) { return jsPins[i] == null ? null : jsPins[i] },
                 unpin:  function (i) { if (i > 0 && i < jsPins.length) jsPins[i] = null },
+                // Bulk binary marshalling (#2).
+                byte_length: function (h) { return h == null ? 0 : ((h.byteLength == null ? (h.length == null ? 0 : h.length) : h.byteLength) | 0) },
+                u8: function (h) { return h instanceof Uint8Array ? h : (h instanceof ArrayBuffer ? new Uint8Array(h) : new Uint8Array(h.buffer, h.byteOffset, h.byteLength)) },
+                bytes_in: function (ptr, len) { return wasmMemory ? new Uint8Array(wasmMemory.buffer.slice(ptr, ptr + len)) : new Uint8Array(0) },
+                bytes_out: function (h, ptr, len) {
+                    if (!wasmMemory || h == null) return 0
+                    var src = h instanceof Uint8Array ? h : (h instanceof ArrayBuffer ? new Uint8Array(h) : new Uint8Array(h.buffer, h.byteOffset, h.byteLength))
+                    var n = Math.min(len, src.length)
+                    new Uint8Array(wasmMemory.buffer, ptr, n).set(src.subarray(0, n))
+                    return n
+                },
             },
             // `stream` — JS iteration protocol (#3).  See strata/modules/stream.si.
             stream: {

@@ -71,3 +71,14 @@
 \\ @extern pin (JSValue) -> Int;
 \\ @extern pinned (Int) -> JSValue;
 \\ @extern unpin (Int) -> Void;
+
+# ── Bulk binary marshalling: guest linear memory ⇄ host typed array ───────────
+# A host API that returns binary (crypto::random_bytes, response::array_buffer,
+# file reads) hands back a Uint8Array/ArrayBuffer handle.  `bytes_out` bulk-copies
+# its bytes INTO guest linear memory; `bytes_in` copies guest bytes OUT into a
+# fresh Uint8Array.  `byte_length` is the size; `u8` coerces an ArrayBuffer or any
+# typed array into a Uint8Array view so its bytes are readable.
+\\ @extern bytes_in (Int, Int) -> JSValue;          # linear [ptr, ptr+len) -> Uint8Array
+\\ @extern bytes_out (JSValue, Int, Int) -> Int;    # typed array -> linear at ptr (≤ len); returns bytes copied
+\\ @extern byte_length (JSValue) -> Int;            # byteLength (ArrayBuffer) / length (typed array)
+\\ @extern u8 (JSValue) -> JSValue;                 # coerce ArrayBuffer / typed array -> Uint8Array
