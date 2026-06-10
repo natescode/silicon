@@ -27,3 +27,14 @@
 # Await a SINGLE promise handle (e.g. the un-awaited Promise that js::apply
 # returns from a Promise-returning host call) → its resolved value.
 \\ @suspending @extern value (JSValue) -> JSValue;         # await handle
+
+# ── The poll-reactor bridge (F3): a guest Future backed by a real Promise ────
+# `track` starts watching a Promise WITHOUT blocking and returns a token; a
+# poll-future then checks `settled(token)` (non-blocking) and reads `result(token)`
+# once ready.  `tick` is the wake: it yields to the host event loop one macrotask
+# so tracked Promises can settle between poll rounds — this is how the guest-side
+# poll-reactor (future.si) drives real async I/O (see stdlib `future_async.si`).
+\\ @extern track (JSValue) -> Int;                          # watch p; returns a token
+\\ @extern settled (Int) -> Bool;                           # has the tracked promise settled?
+\\ @extern result (Int) -> JSValue;                         # its settled value (or null)
+\\ @suspending @extern tick () -> Int;                      # yield one event-loop turn (the wake)

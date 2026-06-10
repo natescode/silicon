@@ -59,9 +59,14 @@ const vecIntParam = (name: string): any => ({
     type: 'Parameter', name, isLiteral: false,
     typeAnnotation: { type: 'TypeAnnotation', typename: 'Vec', typeArgs: [{ type: 'TypeArg', name: 'Int' }] },
 })
-const fnDef = (name: string, params: any[], resultType: string, bodyExpr: any): any => ({
+const fnDef = (name: string, params: any[], resultType: string | any, bodyExpr: any): any => ({
     type: 'Definition', keyword: '@fn',
-    name: { type: 'TypedIdentifier', name, typeAnnotation: { type: 'TypeAnnotation', typename: resultType } },
+    // `resultType` may be a bare typename (string) or a full TypeAnnotation node
+    // (carries typeArgs, e.g. `Poll[Int]`).
+    name: { type: 'TypedIdentifier', name,
+        typeAnnotation: typeof resultType === 'string'
+            ? { type: 'TypeAnnotation', typename: resultType }
+            : resultType },
     params,
     binding: { type: 'Binding', expression: bodyExpr },
 })
@@ -69,7 +74,7 @@ const exportDef = (name: string): any => ({
     type: 'Definition', keyword: '@export', name: { type: 'TypedIdentifier', name }, params: [],
 })
 
-interface FnSig { paramTypes: string[]; resultType: string }
+interface FnSig { paramTypes: string[]; resultType: string; resultTypeAnnotation?: any }
 interface Ctx {
     n: number
     errors: ElaborationError[]
@@ -180,7 +185,14 @@ function collectFns(program: any): Map<string, FnSig> {
             const paramTypes = (d.params ?? [])
                 .filter((p: any) => !p.isLiteral)
                 .map((p: any) => p.typeAnnotation?.typename ?? 'Int')
-            fns.set(d.name.name, { paramTypes, resultType: d.name?.typeAnnotation?.typename ?? 'Int' })
+            // Keep the FULL result annotation (incl. typeArgs) — a wrapper for a
+            // body returning a parametric type (`-> Poll[Int]`) must declare that
+            // exact type, not the bare sum name, or the wrapper's body mismatches.
+            fns.set(d.name.name, {
+                paramTypes,
+                resultType: d.name?.typeAnnotation?.typename ?? 'Int',
+                resultTypeAnnotation: d.name?.typeAnnotation,
+            })
         }
     }
     return fns
@@ -218,7 +230,7 @@ function transformClosure(call: any, ctx: Ctx): any {
         ...caps.map((_, k) => userCall('vec_get_i32', [ns('env'), intLit(k + 1)])),
         ...argNames.map(ns),
     ]
-    ctx.wrappers.push(fnDef(wrapName, wrapperParams, sig.resultType, block([], userCall(bodyName, bodyCallArgs))))
+    ctx.wrappers.push(fnDef(wrapName, wrapperParams, sig.resultTypeAnnotation ?? sig.resultType, block([], userCall(bodyName, bodyCallArgs))))
 
     // Site: { env := vec_new(ncaps+1); vec_push_i32(env, @fnref(wrap)); vec_push_i32(env, cap0); …; env }
     // Under wasm-gc the env holds a `(ref $Vec_i32)`, so annotate the local `Vec[Int]`

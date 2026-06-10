@@ -233,6 +233,16 @@ function buildImports(state: HostState, write: (s: string) => void) {
             all_settled: (ps: any) => Promise.allSettled(ps),
             any: (ps: any) => Promise.any(ps),
             value: (p: any) => Promise.resolve(p),   // await a single handle
+            // F3 poll-reactor bridge: watch a Promise non-blockingly (token in the
+            // shared pin table), and `tick` yields one event-loop turn so it settles.
+            track: (p: any) => {
+                const box = { done: 0, val: null as any }
+                Promise.resolve(p).then(v => { box.done = 1; box.val = v }, e => { box.done = 2; box.val = e })
+                pins.push(box); return pins.length - 1
+            },
+            settled: (tok: number) => (pins[tok] && pins[tok].done) ? 1 : 0,
+            result: (tok: number) => (pins[tok] ? pins[tok].val : null),
+            tick: () => new Promise<number>(r => setTimeout(() => r(0), 0)),
         },
         bun: {
             // === bindgen:module bun ===

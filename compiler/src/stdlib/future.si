@@ -14,17 +14,22 @@
 #
 # Requires the Vec surface (vec_new / vec_len / vec_get_i32 / vec_set_i32).
 #
-# v1 scope: Int-valued futures with a negative-sentinel Poll (ready values must be
-# >= 0).  The generic `Poll[T] := $Pending | $Ready value T` sum (which removes the
-# sentinel constraint) and host-async integration (a future backed by a real
-# Promise, woken by the F1b reactor) are the refinements on this proven core.
+# Two poll representations are provided:
+#   * the low-level NEGATIVE-SENTINEL form (future_pending / block_on / block_all)
+#     — a future returns an Int that is < 0 while pending, >= 0 when ready;
+#   * the generic `Poll[T] := $Pending | $Ready value T` SUM form (block_on_poll /
+#     block_all_poll) — removes the "ready value must be >= 0" constraint (the tag,
+#     not the sign, marks readiness), so a future may be Ready with ANY value.
+# Host-async integration (a future backed by a real Promise, woken by the F1b
+# reactor) lives in the `promise` module — see `block_on_async` below.
 
-# The PENDING sentinel and its test.  A poll function returns future_pending()
-# while not ready, or a value >= 0 when ready.
+# ── The negative-sentinel form (the low-level primitive) ─────────────────────
+# A poll function returns future_pending() while not ready, or a value >= 0 when
+# ready.
 \\ future_pending () -> Int
 @fn future_pending := { 0 - 1 };
 
-\\ future_is_pending (Int) -> Int
+\\ future_is_pending (Int) -> Bool
 @fn future_is_pending p := { p < 0 };
 
 # block_on(future) — drive a single future to completion, returning its value.
@@ -57,4 +62,86 @@
         });
     });
     sum
+};
+
+# ── The generic Poll[T] form (removes the negative-sentinel constraint) ──────
+# A poll function returns Pending() while not ready, or Ready(value) when done —
+# so the value may be ANY Int (incl. negative), since the variant tag (not the
+# sign) distinguishes pending from ready.
+@type Poll[T] := $Pending | $Ready value T;
+
+# block_on_poll(future) — drive a single Poll-returning future to completion.
+\\ block_on_poll (Int) -> Int
+@fn block_on_poll future := {
+    @mut done := 0;
+    @mut result := 0;
+    @loop(done == 0, {
+        \\ p Poll[Int]
+        @mut p := @call_closure(future);
+        @match(p, $Ready v, { result = v; done = 1; 0 }, $Pending, { 0 });
+    });
+    result
+};
+
+# block_all_poll(futures) — drive a Vec of Poll-returning future closures
+# concurrently to completion, summing their ready values.  Each round polls every
+# still-pending future (a resolved slot is zeroed and skipped thereafter).
+\\ block_all_poll (Int) -> Int
+@fn block_all_poll futures := {
+    n := vec_len(futures);
+    @mut sum := 0;
+    @mut all_done := 0;
+    @loop(all_done == 0, {
+        all_done = 1;
+        @mut j := 0;
+        @loop(j < n, {
+            f := vec_get_i32(futures, j);
+            @if(f != 0, {
+                \\ p Poll[Int]
+                @mut p := @call_closure(f);
+                @match(p, $Ready v, { sum = sum + v; vec_set_i32(futures, j, 0); 0 }, $Pending, { all_done = 0; 0 });
+            });
+            j = j + 1;
+        });
+    });
+    sum
+};
+
+# ── A dynamic task set — spawn / poll_once / run_tasks (the task surface) ─────
+# A task set is a Vec of Poll-returning future closures.  `spawn` adds one;
+# `poll_once` advances every still-pending task one step (the microtask-drain
+# step); `run_tasks` loops poll_once to completion (fire-and-forget — values are
+# discarded), returning the number of drain rounds.
+\\ tasks_new () -> Int
+@fn tasks_new := { vec_new(4) };
+
+\\ spawn (Int, Int) -> Void
+@fn spawn tasks, future := { vec_push_i32(tasks, future); };
+
+\\ poll_once (Int) -> Int
+@fn poll_once tasks := {
+    n := vec_len(tasks);
+    @mut pending := 0;
+    @mut j := 0;
+    @loop(j < n, {
+        f := vec_get_i32(tasks, j);
+        @if(f != 0, {
+            \\ p Poll[Int]
+            @mut p := @call_closure(f);
+            @match(p, $Ready _v, { vec_set_i32(tasks, j, 0); 0 }, $Pending, { pending = pending + 1; 0 });
+        });
+        j = j + 1;
+    });
+    pending
+};
+
+\\ run_tasks (Int) -> Int
+@fn run_tasks tasks := {
+    @mut rounds := 0;
+    @mut pending := 1;
+    @loop(pending > 0, {
+        pending = poll_once(tasks);
+        rounds = rounds + 1;
+    });
+    rounds
 };
