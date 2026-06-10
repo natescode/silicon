@@ -148,7 +148,7 @@ export const GENERATED_MODULES: readonly ModuleConfig[] = [
     {
         module: 'crypto',
         provenance: '@types/node (node:crypto)',
-        specs: () => dtsToSpecs({ module: 'node:crypto', types: ['node'], accessor: "require('node:crypto')", prefix: '', objects: 'jsvalue', numberType: 'Int' }).specs,
+        specs: () => dtsToSpecs({ module: 'node:crypto', types: ['node'], accessor: "require('node:crypto')", prefix: '', objects: 'jsvalue', numberType: 'Int', events: 'closure' }).specs,
         strings: 'jsstring',
     },
 
@@ -160,7 +160,7 @@ export const GENERATED_MODULES: readonly ModuleConfig[] = [
     {
         module: 'fs',
         provenance: '@types/node (node:fs)',
-        specs: () => dtsToSpecs({ module: 'node:fs', types: ['node'], accessor: "require('node:fs')", prefix: '', objects: 'jsvalue', numberType: 'Int' }).specs,
+        specs: () => dtsToSpecs({ module: 'node:fs', types: ['node'], accessor: "require('node:fs')", prefix: '', objects: 'jsvalue', numberType: 'Int', events: 'closure' }).specs,
         strings: 'jsstring',
     },
 

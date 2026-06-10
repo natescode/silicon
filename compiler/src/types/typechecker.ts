@@ -1305,6 +1305,10 @@ function checkDefinition(d: any, ctx: Ctx): SiliconType {
     // and a body, but the body type came out Unknown, the body doesn't produce
     // a value on (at least) the primary path.  Only flag when the annotation is
     // explicit — without an annotation we have no expectation to enforce.
+    // EXEMPT a body whose tail is a `@call_indirect`/`@call_closure`: an indirect
+    // call's result type is dynamic (Unknown), but it DOES produce a value — this
+    // is the synthesized `__closure_invoke_<k>` trampoline (`:= @call_indirect …`),
+    // which would otherwise trip a spurious E0008.
     const hasParams = (d.params ?? []).some((p: any) => !p.isLiteral)
     if (
         d.name?.name &&
@@ -1312,7 +1316,8 @@ function checkDefinition(d: any, ctx: Ctx): SiliconType {
         annotated &&
         annotated.kind !== 'Unknown' &&
         bodyType.kind === 'Unknown' &&
-        hasParams
+        hasParams &&
+        !tailIsDynamicCall(d.binding?.expression)
     ) {
         ctx.errors.push(missingReturn(d.name.name, annotated, d.sourceLocation))
     }
@@ -1511,6 +1516,22 @@ function checkMatchArgs(args: any[], ctx: Ctx): SiliconType[] {
 
     if (hasDefault) out.push(checkNode(args[args.length - 1], ctx))
     return out
+}
+
+/** True when a function body's TAIL (value) expression is a `@call_indirect` /
+ *  `@call_closure` — a dynamic call whose result type is statically Unknown but
+ *  which DOES produce a value at runtime.  Descends block trailings + AST
+ *  wrappers.  Used to exempt the closure-dispatch trampoline from E0008. */
+function tailIsDynamicCall(expr: any): boolean {
+    let e = expr
+    for (let i = 0; i < 24 && e && typeof e === 'object'; i++) {
+        if (e.type === 'Block') { e = e.trailing ?? (e.items?.length ? e.items[e.items.length - 1] : undefined); continue }
+        if (e.value && (e.type === 'Element' || e.type === 'Item' || e.type === 'Statement')) { e = e.value; continue }
+        break
+    }
+    if (!e || e.type !== 'FunctionCall') return false
+    const nm = typeof e.name === 'string' ? e.name : (e.name && Array.isArray(e.name.path) ? e.name.path.join('::') : '')
+    return nm === '@call_indirect' || nm === '@call_closure'
 }
 
 function isMatchCall(call: any): boolean {

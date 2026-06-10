@@ -29,6 +29,12 @@ function buildImports(state: HostState, write: (s: string) => void) {
     const errBox: { last: any } = { last: null }
     const pins: any[] = [null]   // index 0 reserved = "no handle"
 
+    // Closure-callback bridge (ADR 0019 C2): a callback param crosses as a closure
+    // handle; the generated shims wrap it `closureToFn(cb)` into a JS fn that
+    // dispatches through the instance's exported `__closure_invoke_<k>` trampoline.
+    // Bound to the real impl (`makeClosureToFn(instance)`) once the instance exists.
+    let closureToFn: (handle: any) => (...a: number[]) => number = () => () => 0
+
     /** Read a Silicon linear-memory string (4-byte LE length + UTF-8) → JS string. */
     const readLenString = (ptr: number): string => {
         if (!state.memory) return ''
@@ -466,6 +472,7 @@ function buildImports(state: HostState, write: (s: string) => void) {
         },
         crypto: {
             // === bindgen:module crypto ===
+            argon2: (algorithm: any, parameters: any, callback: any) => require('node:crypto').argon2(algorithm, parameters, closureToFn(callback)),
             argon2_sync: (algorithm: any, parameters: any) => require('node:crypto').argon2Sync(algorithm, parameters),
             create_cipheriv: (algorithm: any, key: any, iv: any, options: any) => require('node:crypto').createCipheriv(algorithm, key, iv, options),
             create_decipheriv: (algorithm: any, key: any, iv: any, options: any) => require('node:crypto').createDecipheriv(algorithm, key, iv, options),
@@ -483,8 +490,10 @@ function buildImports(state: HostState, write: (s: string) => void) {
             diffie_hellman: (options: any) => require('node:crypto').diffieHellman(options),
             diffie_hellman_group: (name: any) => require('node:crypto').DiffieHellmanGroup(name),
             encapsulate: (key: any) => require('node:crypto').encapsulate(key),
+            generate_key: (type: any, options: any, callback: any) => require('node:crypto').generateKey(type, options, closureToFn(callback)),
             generate_key_pair_sync: (type: any) => require('node:crypto').generateKeyPairSync(type),
             generate_key_sync: (type: any, options: any) => require('node:crypto').generateKeySync(type, options),
+            generate_prime: (size: number, callback: any) => require('node:crypto').generatePrime(size, closureToFn(callback)),
             generate_prime_sync: (size: number) => require('node:crypto').generatePrimeSync(size),
             get_cipher_info: (nameOrNid: any, options: any) => require('node:crypto').getCipherInfo(nameOrNid, options),
             get_ciphers: () => require('node:crypto').getCiphers(),
@@ -493,7 +502,9 @@ function buildImports(state: HostState, write: (s: string) => void) {
             get_fips: () => require('node:crypto').getFips(),
             get_hashes: () => require('node:crypto').getHashes(),
             hash: (algorithm: any, data: any, options: any) => require('node:crypto').hash(algorithm, data, options),
+            hkdf: (digest: any, irm: any, salt: any, info: any, keylen: number, callback: any) => require('node:crypto').hkdf(digest, irm, salt, info, keylen, closureToFn(callback)),
             hkdf_sync: (digest: any, ikm: any, salt: any, info: any, keylen: number) => require('node:crypto').hkdfSync(digest, ikm, salt, info, keylen),
+            pbkdf2: (password: any, salt: any, iterations: number, keylen: number, digest: any, callback: any) => require('node:crypto').pbkdf2(password, salt, iterations, keylen, digest, closureToFn(callback)),
             pbkdf2_sync: (password: any, salt: any, iterations: number, keylen: number, digest: any) => require('node:crypto').pbkdf2Sync(password, salt, iterations, keylen, digest),
             private_decrypt: (privateKey: any, buffer: any) => require('node:crypto').privateDecrypt(privateKey, buffer),
             private_encrypt: (privateKey: any, buffer: any) => require('node:crypto').privateEncrypt(privateKey, buffer),
@@ -503,6 +514,7 @@ function buildImports(state: HostState, write: (s: string) => void) {
             random_bytes: (size: number) => require('node:crypto').randomBytes(size),
             random_int: (min: number, max: number) => require('node:crypto').randomInt(min, max),
             random_uuid: (options: any) => require('node:crypto').randomUUID(options),
+            scrypt: (password: any, salt: any, keylen: number, callback: any) => require('node:crypto').scrypt(password, salt, keylen, closureToFn(callback)),
             scrypt_sync: (password: any, salt: any, keylen: number, options: any) => require('node:crypto').scryptSync(password, salt, keylen, options),
             secure_heap_used: () => require('node:crypto').secureHeapUsed(),
             set_engine: (engine: any, flags: number) => require('node:crypto').setEngine(engine, flags),
@@ -514,52 +526,93 @@ function buildImports(state: HostState, write: (s: string) => void) {
         },
         fs: {
             // === bindgen:module fs ===
+            access: (path: any, mode: number, callback: any) => require('node:fs').access(path, mode, closureToFn(callback)),
             access_sync: (path: any, mode: number) => require('node:fs').accessSync(path, mode),
+            append_file: (path: any, data: any, options: any, callback: any) => require('node:fs').appendFile(path, data, options, closureToFn(callback)),
             append_file_sync: (path: any, data: any, options: any) => require('node:fs').appendFileSync(path, data, options),
+            chmod: (path: any, mode: any, callback: any) => require('node:fs').chmod(path, mode, closureToFn(callback)),
             chmod_sync: (path: any, mode: any) => require('node:fs').chmodSync(path, mode),
+            chown: (path: any, uid: number, gid: number, callback: any) => require('node:fs').chown(path, uid, gid, closureToFn(callback)),
             chown_sync: (path: any, uid: number, gid: number) => require('node:fs').chownSync(path, uid, gid),
-            close: (fd: number) => require('node:fs').close(fd),
+            close: (fd: number, callback: any) => require('node:fs').close(fd, closureToFn(callback)),
             close_sync: (fd: number) => require('node:fs').closeSync(fd),
+            copy_file: (src: any, dest: any, mode: number, callback: any) => require('node:fs').copyFile(src, dest, mode, closureToFn(callback)),
             copy_file_sync: (src: any, dest: any, mode: number) => require('node:fs').copyFileSync(src, dest, mode),
+            cp: (source: any, destination: any, callback: any) => require('node:fs').cp(source, destination, closureToFn(callback)),
             cp_sync: (source: any, destination: any, opts: any) => require('node:fs').cpSync(source, destination, opts),
             create_read_stream: (path: any, options: any) => require('node:fs').createReadStream(path, options),
             create_write_stream: (path: any, options: any) => require('node:fs').createWriteStream(path, options),
+            exists: (path: any, callback: any) => require('node:fs').exists(path, closureToFn(callback)),
             exists_sync: (path: any) => require('node:fs').existsSync(path),
+            fchmod: (fd: number, mode: any, callback: any) => require('node:fs').fchmod(fd, mode, closureToFn(callback)),
             fchmod_sync: (fd: number, mode: any) => require('node:fs').fchmodSync(fd, mode),
+            fchown: (fd: number, uid: number, gid: number, callback: any) => require('node:fs').fchown(fd, uid, gid, closureToFn(callback)),
             fchown_sync: (fd: number, uid: number, gid: number) => require('node:fs').fchownSync(fd, uid, gid),
+            fdatasync: (fd: number, callback: any) => require('node:fs').fdatasync(fd, closureToFn(callback)),
             fdatasync_sync: (fd: number) => require('node:fs').fdatasyncSync(fd),
+            fstat: (fd: number, callback: any) => require('node:fs').fstat(fd, closureToFn(callback)),
             fstat_sync: (fd: number) => require('node:fs').fstatSync(fd),
+            fsync: (fd: number, callback: any) => require('node:fs').fsync(fd, closureToFn(callback)),
             fsync_sync: (fd: number) => require('node:fs').fsyncSync(fd),
+            ftruncate: (fd: number, len: number, callback: any) => require('node:fs').ftruncate(fd, len, closureToFn(callback)),
             ftruncate_sync: (fd: number, len: number) => require('node:fs').ftruncateSync(fd, len),
+            futimes: (fd: number, atime: any, mtime: any, callback: any) => require('node:fs').futimes(fd, atime, mtime, closureToFn(callback)),
             futimes_sync: (fd: number, atime: any, mtime: any) => require('node:fs').futimesSync(fd, atime, mtime),
+            glob: (pattern: any, callback: any) => require('node:fs').glob(pattern, closureToFn(callback)),
             glob_sync: (pattern: any) => require('node:fs').globSync(pattern),
+            lchmod: (path: any, mode: any, callback: any) => require('node:fs').lchmod(path, mode, closureToFn(callback)),
             lchmod_sync: (path: any, mode: any) => require('node:fs').lchmodSync(path, mode),
+            lchown: (path: any, uid: number, gid: number, callback: any) => require('node:fs').lchown(path, uid, gid, closureToFn(callback)),
             lchown_sync: (path: any, uid: number, gid: number) => require('node:fs').lchownSync(path, uid, gid),
+            link: (existingPath: any, newPath: any, callback: any) => require('node:fs').link(existingPath, newPath, closureToFn(callback)),
             link_sync: (existingPath: any, newPath: any) => require('node:fs').linkSync(existingPath, newPath),
+            lstat: (path: any, callback: any) => require('node:fs').lstat(path, closureToFn(callback)),
             lstat_sync: (path: any) => require('node:fs').lstatSync(path),
+            lutimes: (path: any, atime: any, mtime: any, callback: any) => require('node:fs').lutimes(path, atime, mtime, closureToFn(callback)),
             lutimes_sync: (path: any, atime: any, mtime: any) => require('node:fs').lutimesSync(path, atime, mtime),
+            mkdir: (path: any, options: any, callback: any) => require('node:fs').mkdir(path, options, closureToFn(callback)),
             mkdir_sync: (path: any, options: any) => require('node:fs').mkdirSync(path, options),
+            mkdtemp: (prefix: any, options: any, callback: any) => require('node:fs').mkdtemp(prefix, options, closureToFn(callback)),
             mkdtemp_disposable_sync: (prefix: any, options: any) => require('node:fs').mkdtempDisposableSync(prefix, options),
             mkdtemp_sync: (prefix: any, options: any) => require('node:fs').mkdtempSync(prefix, options),
+            open: (path: any, flags: any, mode: any, callback: any) => require('node:fs').open(path, flags, mode, closureToFn(callback)),
             open_sync: (path: any, flags: any, mode: any) => require('node:fs').openSync(path, flags, mode),
+            opendir: (path: any, cb: any) => require('node:fs').opendir(path, closureToFn(cb)),
             opendir_sync: (path: any, options: any) => require('node:fs').opendirSync(path, options),
+            read: (fd: number, callback: any) => require('node:fs').read(fd, closureToFn(callback)),
+            read_file: (path: any, options: any, callback: any) => require('node:fs').readFile(path, options, closureToFn(callback)),
             read_file_sync: (path: any, options: any) => require('node:fs').readFileSync(path, options),
             read_sync: (fd: number, buffer: any, opts: any) => require('node:fs').readSync(fd, buffer, opts),
+            readdir: (path: any, options: any, callback: any) => require('node:fs').readdir(path, options, closureToFn(callback)),
             readdir_sync: (path: any, options: any) => require('node:fs').readdirSync(path, options),
+            readlink: (path: any, options: any, callback: any) => require('node:fs').readlink(path, options, closureToFn(callback)),
             readlink_sync: (path: any, options: any) => require('node:fs').readlinkSync(path, options),
             readv_sync: (fd: number, buffers: any, position: number) => require('node:fs').readvSync(fd, buffers, position),
+            realpath: (path: any, options: any, callback: any) => require('node:fs').realpath(path, options, closureToFn(callback)),
             realpath_sync: (path: any, options: any) => require('node:fs').realpathSync(path, options),
+            rename: (oldPath: any, newPath: any, callback: any) => require('node:fs').rename(oldPath, newPath, closureToFn(callback)),
             rename_sync: (oldPath: any, newPath: any) => require('node:fs').renameSync(oldPath, newPath),
+            rm: (path: any, callback: any) => require('node:fs').rm(path, closureToFn(callback)),
             rm_sync: (path: any, options: any) => require('node:fs').rmSync(path, options),
+            rmdir: (path: any, callback: any) => require('node:fs').rmdir(path, closureToFn(callback)),
             rmdir_sync: (path: any) => require('node:fs').rmdirSync(path),
+            stat: (path: any, callback: any) => require('node:fs').stat(path, closureToFn(callback)),
             stat_sync: (path: any) => require('node:fs').statSync(path),
+            statfs: (path: any, callback: any) => require('node:fs').statfs(path, closureToFn(callback)),
             statfs_sync: (path: any) => require('node:fs').statfsSync(path),
+            symlink: (target: any, path: any, type: any, callback: any) => require('node:fs').symlink(target, path, type, closureToFn(callback)),
             symlink_sync: (target: any, path: any, type: any) => require('node:fs').symlinkSync(target, path, type),
+            truncate: (path: any, len: number, callback: any) => require('node:fs').truncate(path, len, closureToFn(callback)),
             truncate_sync: (path: any, len: number) => require('node:fs').truncateSync(path, len),
+            unlink: (path: any, callback: any) => require('node:fs').unlink(path, closureToFn(callback)),
             unlink_sync: (path: any) => require('node:fs').unlinkSync(path),
-            unwatch_file: (filename: any) => require('node:fs').unwatchFile(filename),
+            unwatch_file: (filename: any, listener: any) => require('node:fs').unwatchFile(filename, closureToFn(listener)),
+            utimes: (path: any, atime: any, mtime: any, callback: any) => require('node:fs').utimes(path, atime, mtime, closureToFn(callback)),
             utimes_sync: (path: any, atime: any, mtime: any) => require('node:fs').utimesSync(path, atime, mtime),
-            watch: (filename: any, options: any) => require('node:fs').watch(filename, options),
+            watch: (filename: any, options: any, listener: any) => require('node:fs').watch(filename, options, closureToFn(listener)),
+            watch_file: (filename: any, listener: any) => require('node:fs').watchFile(filename, closureToFn(listener)),
+            write: (fd: number, string: any, position: number, encoding: any, callback: any) => require('node:fs').write(fd, string, position, encoding, closureToFn(callback)),
+            write_file: (file: any, data: any, options: any, callback: any) => require('node:fs').writeFile(file, data, options, closureToFn(callback)),
             write_file_sync: (file: any, data: any, options: any) => require('node:fs').writeFileSync(file, data, options),
             write_sync: (fd: number, string: any, position: number, encoding: any) => require('node:fs').writeSync(fd, string, position, encoding),
             writev_sync: (fd: number, buffers: any, position: number) => require('node:fs').writevSync(fd, buffers, position),
@@ -574,7 +627,7 @@ function buildImports(state: HostState, write: (s: string) => void) {
             // === /bindgen:module global ===
         },
     }
-    return { imports, flush, errBox }
+    return { imports, flush, errBox, setClosureToFn: (fn: (handle: any) => (...a: number[]) => number) => { closureToFn = fn } }
 }
 
 /** Compile + instantiate `binary` under Bun with js-string builtins and run
@@ -596,7 +649,7 @@ export async function runUnderBun(
     } = {},
 ): Promise<number> {
     const state: HostState = {}
-    const { imports, flush, errBox } = buildImports(state, s => process.stdout.write(s))
+    const { imports, flush, errBox, setClosureToFn } = buildImports(state, s => process.stdout.write(s))
 
     // Next FFI work #2 — turn a Promise rejection into a caught boundary error
     // instead of a fatal trap: the awaited value becomes `null` and the rejection
@@ -611,7 +664,7 @@ export async function runUnderBun(
     // Async path: a program with suspending imports yields to a reactor.
     const suspending = opts.suspendingImports ?? []
     if (suspending.length > 0) {
-        const { runWithReactor } = await import('@silicon/compiler')
+        const { runWithReactor, makeClosureToFn } = await import('@silicon/compiler')
         // Suspending imports' host functions come from the base import object OR
         // the injected async surface; collect them as the async-impl set (the
         // reactor wraps them) and drop them from the synchronous base.
@@ -632,6 +685,7 @@ export async function runUnderBun(
                     const ex = inst.exports as any
                     if (ex.memory instanceof WebAssembly.Memory) state.memory = ex.memory
                     if (typeof ex.alloc === 'function') state.alloc = ex.alloc
+                    setClosureToFn(makeClosureToFn(inst))   // wire callback shims
                 },
             })
             flush()
@@ -657,6 +711,8 @@ export async function runUnderBun(
     const ex = instance.exports as Record<string, unknown>
     if (ex.memory instanceof WebAssembly.Memory) state.memory = ex.memory
     if (typeof ex.alloc === 'function') state.alloc = ex.alloc as (n: number) => number
+    const { makeClosureToFn } = await import('@silicon/compiler')
+    setClosureToFn(makeClosureToFn(instance))   // wire callback shims (closureToFn)
 
     try {
         if (typeof ex._start === 'function') (ex._start as () => void)()

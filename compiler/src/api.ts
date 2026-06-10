@@ -115,7 +115,7 @@ export {
 // ADR 0018 — the async host reactor (the `sgl run` production driver: JSPI fast
 // path / Asyncify route-B, chosen at load time from one vanilla binary).
 export {
-    runWithReactor, createAsyncReactor, hasJSPI,
+    runWithReactor, createAsyncReactor, hasJSPI, makeClosureToFn,
     type ReactorRun, type AsyncReactor,
 } from './codegen/async-reactor'
 export { applyAsyncify, type AsyncifyOptions } from './codegen/asyncify'
