@@ -89,6 +89,7 @@ import {
     immutableAssignment,
     globalInFunction,
     missingParamType,
+    awaitOutsideAsync,
     arityMismatch,
     missingReturn,
     mvpOnlyIntrospection,
@@ -150,6 +151,9 @@ interface Ctx {
     // `@global` is a top-level/module-scoped binding, so a `@global` seen with
     // this flag set is an in-function misuse (E0014) — use `@local` there.
     inFunctionBody?: boolean
+    // True while checking the body of an `@async`-colored function (ADR 0018
+    // §2.2).  `@await` is only legal here (E0016 otherwise) — the coloring rule.
+    inAsyncFn?: boolean
     // User-defined type names from @type_alias and @type_distinct declarations.
     // Passed to parseTypeName so annotations like `x: age` resolve correctly.
     typeAliases: Map<string, SiliconType>
@@ -1239,7 +1243,13 @@ function checkDefinition(d: any, ctx: Ctx): SiliconType {
     let bodyType: SiliconType = TypeUnknown
     if (d.binding) {
         const savedInFn = ctx.inFunctionBody
+        const savedInAsync = ctx.inAsyncFn
         ctx.inFunctionBody = true
+        // ADR 0018 — the body of an `@async`-marked function may contain `@await`.
+        // Only a `@fn` defines its own async color; a nested value binding
+        // (`@local`/`@var`/`@mut` inside the body) INHERITS the enclosing color,
+        // so `a := @await(…)` inside an `@async fn` stays colored.
+        ctx.inAsyncFn = d.keyword === '@fn' ? !!d.async : savedInAsync
         bodyType = withScope(ctx, inner => {
             // Inherit the typeVars we just set (withScope clones ctx.typeVars).
             for (const param of d.params || []) {
@@ -1271,6 +1281,7 @@ function checkDefinition(d: any, ctx: Ctx): SiliconType {
             return checkNode(binding.expression ?? binding, inner)
         })
         ctx.inFunctionBody = savedInFn
+        ctx.inAsyncFn = savedInAsync
     }
 
     // Reconcile annotation with body — via unification so polymorphic body
@@ -1616,7 +1627,11 @@ function checkFunctionCall(call: any, ctx: Ctx): SiliconType {
             // typing rules (branch unification for @if/@match, void for @loop).
             // ADR 0018 — `@await(expr)` yields its argument's type (the awaited
             // result; the suspension is transparent under the Asyncify mechanism).
-            if (name === '@await') return argTypes[0] ?? TypeUnknown
+            // Coloring rule (§2.2): `@await` only inside an `@async` body (E0016).
+            if (name === '@await') {
+                if (!ctx.inAsyncFn) ctx.errors.push(awaitOutsideAsync(call.sourceLocation))
+                return argTypes[0] ?? TypeUnknown
+            }
             if (intr === 'WASM::control_if'    || intr === 'IR::control_if'    || name === '@if')    return typeOfIfCall(argTypes, call.sourceLocation, ctx)
             if (intr === 'WASM::control_loop'  || intr === 'IR::control_loop'  || name === '@loop')  return TypeUnknown  // loops are void
             if (intr === 'WASM::control_match' || intr === 'IR::control_match' || name === '@match') return typeOfMatchCall(argTypes, call.sourceLocation, ctx)

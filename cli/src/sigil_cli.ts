@@ -377,7 +377,7 @@ function assertRunnable(entryAbs: string, opts: CompileOptions): void {
 async function compileFile(
     filename: string,
     opts: CompileOptions,
-): Promise<{ wat: string; binary: Uint8Array }> {
+): Promise<{ wat: string; binary: Uint8Array; suspendingImports: readonly string[] }> {
     const entryAbs  = path.resolve(filename)
     const { source, moduleReg } = assembleEntry(entryAbs, opts)
     const extraSources: string[] = await Promise.all(
@@ -391,7 +391,7 @@ async function compileFile(
         compilerVersion: SGL_VERSION,
     })
     if (result.diagnostics.length) emitDiagnostics(result.diagnostics, opts)
-    return { wat: result.wat, binary: result.binary! }
+    return { wat: result.wat, binary: result.binary!, suspendingImports: result.suspendingImports ?? [] }
 }
 
 // ---------------------------------------------------------------------------
@@ -582,8 +582,8 @@ async function cmdRun(positional: string | undefined, opts: CompileOptions): Pro
     // `host` model + the exported `_start` run in-process.
     if (opts.platform === 'bun' || opts.platform === 'web') {
         const { runUnderBun } = await import('./host/js-host')
-        const { binary } = await compileFile(entry, { ...opts, target: 'host' })
-        process.exit(await runUnderBun(binary))
+        const { binary, suspendingImports } = await compileFile(entry, { ...opts, target: 'host' })
+        process.exit(await runUnderBun(binary, { suspendingImports }))
     }
 
     // wasix target so wasmtime can invoke _start directly

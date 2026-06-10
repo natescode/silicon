@@ -245,8 +245,16 @@ function transformCallClosure(call: any, ctx: Ctx): any {
  *
  * NOTE on representation: this is the linear-memory host-callable baseline — the
  * handle crosses as a plain i32 and the persisted env is a documented heap
- * retention (no engine GC).  The ADR's leak-free wasm-gc `(struct $Clo)` +
- * `externref` form (§2.2) is the refinement layered on top of this working path.
+ * retention (no engine GC).  The ADR's leak-free wasm-gc form (§2.2) — box the
+ * env's `(ref $Vec_i32)` as an `externref` so the engine traces it (collected when
+ * the host drops it) and recover it in the trampoline via `ref.cast` — now has its
+ * codegen primitives implemented and proven end-to-end (the `ExternConvertAny` /
+ * `AnyConvertExtern` / `RefCast` IR nodes + emitters; see `gc-closure-box.test.ts`).
+ * Auto-routing THIS path under `--target=wasm-gc` additionally needs the closure
+ * wrapper/`@call_indirect` to carry a ref-typed (`(ref $Vec_i32)`) env param — today
+ * the wrapper hardcodes `param('env', 'Int')`, so closures are linear-only under
+ * wasm-gc (`vec_get_i32` rejects the i32 env: E0002). That ref-typed funcref-ABI
+ * extension (C0) is the remaining integration step.
  */
 function transformExportCallback(call: any, ctx: Ctx): any {
     const args: any[] = Array.isArray(call.args) ? call.args : []

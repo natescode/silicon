@@ -94,7 +94,8 @@ export function emitSi(ir: BindingIR): string {
  *  `performance_now: () => performance.now(),` for clock sources. */
 export function emitBunShim(ir: BindingIR): string {
     return grouped(ir, d => {
-        const rhs = d.impl.kind === 'mathRef' ? `Math.${d.impl.method}` : `() => ${d.impl.expr}`
+        // The web Math/clock surface only ever uses mathRef/call impls.
+        const rhs = d.impl.kind === 'mathRef' ? `Math.${d.impl.method}` : `() => ${(d.impl as { expr: string }).expr}`
         return `${JS_INDENT}${d.name}: ${rhs},`
     })
 }
@@ -106,7 +107,7 @@ export function emitBunShim(ir: BindingIR): string {
 export function emitWebShim(ir: BindingIR): string {
     return grouped(ir, d => {
         const args = d.params.map(p => p.name).join(', ')
-        const call = d.impl.kind === 'mathRef' ? `Math.${d.impl.method}(${args})` : d.impl.expr
+        const call = d.impl.kind === 'mathRef' ? `Math.${d.impl.method}(${args})` : (d.impl as { expr: string }).expr
         const name = `${d.name}:`.padEnd(16)
         const fn = `function (${args})`.padEnd(18)
         return `${JS_INDENT}${name} ${fn} { return ${call} },`

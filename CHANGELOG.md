@@ -5,6 +5,18 @@ This project aims for [Semantic Versioning](https://semver.org/).
 
 ## Unreleased
 
+### Added — v1.0 roadmap: async productization + leak-free closure codegen ([ADR 0018](docs/adr/0018-async-promise-ffi.md) / [ADR 0019](docs/adr/0019-first-class-closures-and-capture.md))
+
+**F1b — the `@async`/`@await`/`@suspending` surface + production reactor (ADR 0018 P2/P3-routeB/P5/Phase-2).** The Asyncify transform and host reactor shipped earlier; this productizes them.
+- **`@async` / `@suspending` markers** — signature-line modifiers (no grammar change): `\\ @async f (…) -> …` colors a function; `\\ @suspending @extern http::get (…)` marks a Promise-returning import. The coloring typecheck rule (**E0016**) rejects `@await` outside an `@async` body; the color is inherited by nested `@local` bindings.
+- **Production reactor** (`runWithReactor`, `compiler/src/codegen/async-reactor.ts`) — chooses the backend at LOAD time from one vanilla binary: the **JSPI fast path** (`WebAssembly.Suspending`/`promising`) where the engine has it — **Bun 1.3.14 now ships JSPI** (`bun#20878` resolved) — else **Asyncify route-B** precise coloring (`applyAsyncify({ suspendingImports })`, instrumenting only functions that can reach a suspending import). Both backends run the SAME source; verified end-to-end on Bun.
+- **`sgl run` wiring** — `runUnderBun` threads `result.suspendingImports` and drives a `@suspending`-using program through the reactor instead of a one-shot `_start`; `compile()` reports `suspendingImports` (`module.field`). The async host APIs (`fetch`/timers) that feed it are the FFI async-binding layer.
+
+**C2 — leak-free wasm-gc closure representation, codegen core (ADR 0019 §2.2).** The escaping closure's env must cross `@extern` as an `externref`-boxed GC ref so the engine traces it (collected when the host drops it — no bump-heap leak). The three primitives ADR 0019 named "absent today" are now implemented + proven:
+- New IR nodes + binary/WAT emitters: **`ExternConvertAny`** (`extern.convert_any`, 0xFB 0x1B — box), **`AnyConvertExtern`** (`any.convert_extern`, 0xFB 0x1A — unbox), **`RefCast`** (`ref.cast (ref $T)`, 0xFB 0x16 — narrow).
+- `gc-closure-box.test.ts` builds a module through Silicon's real emitter that boxes a GC env array as `externref`, hands it to the host, and reads it back via unbox + `ref.cast` + `array.get` — running under Bun, the handle crosses as a real engine reference (not an i32), engine-GC'd.
+- Remaining integration: auto-routing `@export_callback` to this under `--target=wasm-gc` needs the closure wrapper/`@call_indirect` to carry a ref-typed `(ref $Vec_i32)` env param (today hardcoded `Int`, so closures are linear-only under wasm-gc) — a C0 funcref-ABI extension.
+
 ### Added — module / component system ([ADR 0024](docs/adr/0024-module-and-component-system.md))
 
 - **Directory = module.** Inside a project (an `sgl.toml`-rooted component),

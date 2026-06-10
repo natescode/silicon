@@ -27,7 +27,7 @@ import { Lexer, computeLineStarts, lineColumnAt, type Token } from './lexer'
 import { astChildren } from '../../ast/astChildren'
 
 /** Internal shape produced by AttachedSig (mirrors toAst's anonymous object). */
-interface SigInfo { name: string; generics?: GenericParams; type: any; extern?: boolean; pub?: boolean; export?: boolean }
+interface SigInfo { name: string; generics?: GenericParams; type: any; extern?: boolean; pub?: boolean; export?: boolean; async?: boolean; suspending?: boolean }
 
 /**
  * Reproduce toAst's decLiteral value reconstruction, including its quirk: ohm's
@@ -396,12 +396,17 @@ class Parser {
     // statement); `@extern` = body-less external. They may appear in any order.
     private parseAttachedSig(): SigInfo {
         this.expect('attachedSig')
-        let extern = false, pub = false, exportMod = false
+        let extern = false, pub = false, exportMod = false, async = false, suspending = false
         loop: while (this.at('kw')) {
             switch (this.peek().text) {
                 case '@extern': this.next(); extern = true; break
                 case '@pub':    this.next(); pub = true; break
                 case '@export': this.next(); exportMod = true; break
+                // ADR 0018 §2.2 async coloring markers: `@async` colors a @fn as
+                // permitting suspension points; `@suspending` marks an @extern import
+                // as Promise-returning (the host drives unwind/rewind or JSPI).
+                case '@async':      this.next(); async = true; break
+                case '@suspending': this.next(); suspending = true; break
                 default: break loop
             }
         }
@@ -410,7 +415,7 @@ class Parser {
         const name = this.src.slice(nsStart, nsEnd)     // raw text (keeps '::')
         const generics = this.at('lbrack') ? this.parseGenericParams() : undefined
         const type = this.parseTypeExpr()
-        return { name, generics, type, extern, pub, export: exportMod }
+        return { name, generics, type, extern, pub, export: exportMod, async, suspending }
     }
 
     // Build a body-less `@extern` Definition from one signature (params get the
@@ -428,6 +433,7 @@ class Parser {
         const name = ASTFactory.typedIdentifier(sig.name, ret)
         const node = ASTFactory.definition('@extern', name, params, sig.generics, undefined)
         if (sig.pub) (node as any).pub = true
+        if (sig.suspending) (node as any).suspending = true   // ADR 0018: Promise-returning host import
         return node
     }
 
@@ -471,6 +477,10 @@ class Parser {
         // ADR-0024 / ADR-0020 decision-8 signature-line modifiers.
         if (sig?.pub) (node as any).pub = true
         if (sig?.export) (node as any).export = true
+        // ADR 0018 §2.2 — `@async` colors a function; `@suspending` (on a body-less
+        // extern handled above) marks a suspending import.
+        if (sig?.async) (node as any).async = true
+        if (sig?.suspending) (node as any).suspending = true
         node.sourceLocation = this.loc(identTok.start, identTok.end)
         node.relSpan = { start: identTok.start, end: identTok.end }   // absolute now; relativized per element (M3)
         return node

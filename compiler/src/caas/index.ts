@@ -503,6 +503,25 @@ export interface CompileResult {
     readonly binary?: Uint8Array
     readonly model: import('../ast/semanticModel').SemanticModel | undefined
     readonly diagnostics: readonly Diagnostic[]
+    /** ADR 0018 — `module.field` names of `@suspending`-marked extern imports
+     *  (Binaryen `asyncify-imports` format).  The host reactor uses this to drive
+     *  route-B precise coloring (Asyncify) or JSPI `Suspending` wrapping. */
+    readonly suspendingImports?: readonly string[]
+}
+
+/** Collect the `module.field` import names of every `@suspending @extern` (the
+ *  async-coloring boundary metadata, ADR 0018 §3 P2).  A bare extern imports from
+ *  `env`; a namespaced `mod::field` from `mod`. */
+export function collectSuspendingImports(program: any): string[] {
+    const out: string[] = []
+    for (const el of (program?.elements ?? []) as any[]) {
+        const d = el?.type === 'Definition' ? el : (el?.value?.type === 'Definition' ? el.value : null)
+        if (d && d.keyword === '@extern' && (d as any).suspending && d.name?.name) {
+            const raw: string = d.name.name
+            out.push(raw.includes('::') ? raw.replace('::', '.') : `env.${raw}`)
+        }
+    }
+    return out
 }
 
 /**
@@ -543,7 +562,10 @@ export function compile(source: string, options: ParseOptions & ElabOptions & Lo
             checkResult.tree.program, elabResult.registry, checkResult._functions,
             options.moduleRegistry, options,
         )
-        return { wat: lowerResult.wat, binary, model: checkResult.model, diagnostics: [] }
+        return {
+            wat: lowerResult.wat, binary, model: checkResult.model, diagnostics: [],
+            suspendingImports: collectSuspendingImports(checkResult.tree.program),
+        }
     } catch (err) {
         const diag: Diagnostic = {
             phase: 'lower', code: 'E0010',

@@ -25,8 +25,8 @@ function compileBin(src: string): Uint8Array {
 
 describe('ADR 0018 — blocking @await (Asyncify baseline)', () => {
     test('a single @await on a host-async import suspends, awaits, and resumes', async () => {
-        const bin = applyAsyncify(compileBin(`\\\\ @extern async_double (Int) -> Int;
-\\\\ fetch_inc (Int) -> Int
+        const bin = applyAsyncify(compileBin(`\\\\ @suspending @extern async_double (Int) -> Int;
+\\\\ @async fetch_inc (Int) -> Int
 @fn fetch_inc x := { @await(async_double(x)) + 1 };
 @export fetch_inc;`))
 
@@ -44,8 +44,8 @@ describe('ADR 0018 — blocking @await (Asyncify baseline)', () => {
     })
 
     test('two @await suspensions in one function chain through the reactor', async () => {
-        const bin = applyAsyncify(compileBin(`\\\\ @extern step (Int) -> Int;
-\\\\ pipeline (Int) -> Int
+        const bin = applyAsyncify(compileBin(`\\\\ @suspending @extern step (Int) -> Int;
+\\\\ @async pipeline (Int) -> Int
 @fn pipeline x := {
     a := @await(step(x));
     b := @await(step(a));
@@ -67,8 +67,8 @@ describe('ADR 0018 — blocking @await (Asyncify baseline)', () => {
     })
 
     test('the Asyncify pass adds the reactor control exports', () => {
-        const bin = applyAsyncify(compileBin(`\\\\ @extern a (Int) -> Int;
-\\\\ f (Int) -> Int
+        const bin = applyAsyncify(compileBin(`\\\\ @suspending @extern a (Int) -> Int;
+\\\\ @async f (Int) -> Int
 @fn f x := { @await(a(x)) };
 @export f;`))
         // The instrumented module exposes the unwind/rewind state machine.

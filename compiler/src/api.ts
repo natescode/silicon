@@ -112,6 +112,14 @@ export {
     type LowerTarget,
 } from './codegen'
 
+// ADR 0018 — the async host reactor (the `sgl run` production driver: JSPI fast
+// path / Asyncify route-B, chosen at load time from one vanilla binary).
+export {
+    runWithReactor, createAsyncReactor, hasJSPI,
+    type ReactorRun, type AsyncReactor,
+} from './codegen/async-reactor'
+export { applyAsyncify, type AsyncifyOptions } from './codegen/asyncify'
+
 // Module-graph resolution (front-end: `@use` includes + module registry).
 export { resolveUses } from './modules/useResolver'
 export { loadModules } from './modules'

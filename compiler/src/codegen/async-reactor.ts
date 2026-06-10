@@ -17,6 +17,8 @@
  * bind time, so it never collides with the program's bump heap.
  */
 
+import { applyAsyncify } from './asyncify'
+
 export interface AsyncReactor {
     /** Host-async imports wrapped to participate in the unwind/rewind protocol.
      *  Spread these into the import object (e.g. under `env`). */
@@ -90,4 +92,91 @@ export function createAsyncReactor(asyncImports: Record<string, AsyncImport>): A
             return result
         },
     }
+}
+
+// ── The production reactor: JSPI fast path, else Asyncify route-B (ADR 0018) ──
+
+export interface ReactorRun {
+    /** Non-async imports (`{ env: { print, … }, … }`), spread as the base. */
+    readonly baseImports: WebAssembly.Imports
+    /** Promise-returning host impls of the suspending imports, keyed by the
+     *  `module.field` name (e.g. `"env.fetch_json"`). */
+    readonly asyncImpls: Record<string, AsyncImport>
+    /** `module.field` names of the suspending imports (route-B coloring set). */
+    readonly suspendingImports: string[]
+    /** Export to drive (e.g. `"_start"` / `"run"`) and its args. */
+    readonly entry: string
+    readonly args?: number[]
+    /** Called after instantiate (before the entry runs) to capture memory/alloc. */
+    bind?(instance: WebAssembly.Instance): void
+    /** Force a backend (default 'auto' = JSPI when available, else Asyncify).
+     *  'asyncify' is also the right choice to cap the instrumentation cost or to
+     *  match a non-JS target. */
+    readonly backend?: 'auto' | 'jspi' | 'asyncify'
+    /** Engine compile options (e.g. Bun's `{ builtins: ['js-string'] }`). */
+    readonly compileOptions?: WebAssembly.CompileOptions
+}
+
+/** True when the host engine has JS Promise Integration (V8/Node 24+/Deno; NOT
+ *  JSC/Bun as of mid-2026 — `bun#20878`).  Both wrappers must be present. */
+export function hasJSPI(): boolean {
+    const W = WebAssembly as any
+    return typeof W.Suspending === 'function' && typeof W.promising === 'function'
+}
+
+/** Split a `module.field` import name into its two parts (`field` may contain
+ *  no further dots — extern fields are plain identifiers). */
+function splitImport(name: string): [string, string] {
+    const dot = name.indexOf('.')
+    return dot === -1 ? ['env', name] : [name.slice(0, dot), name.slice(dot + 1)]
+}
+
+/** Shallow-merge per-module so adding async imports never drops base fields. */
+function mergeImports(base: WebAssembly.Imports, add: Record<string, Record<string, any>>): WebAssembly.Imports {
+    const out: any = {}
+    for (const [mod, fields] of Object.entries(base)) out[mod] = { ...(fields as any) }
+    for (const [mod, fields] of Object.entries(add)) out[mod] = { ...(out[mod] ?? {}), ...fields }
+    return out
+}
+
+/**
+ * Run a compiled module that has suspending imports, choosing the backend at
+ * LOAD time from one vanilla binary (ADR 0018 §2.1):
+ *   - **JSPI fast path** (when `hasJSPI()`): wrap each suspending import with
+ *     `WebAssembly.Suspending`, instantiate the binary UNCHANGED, and drive the
+ *     entry through `WebAssembly.promising` — the engine suspends the native
+ *     stack, zero transform, zero size tax.
+ *   - **Asyncify fallback** (Bun/JSC and everywhere else): instrument the binary
+ *     with route-B precise coloring (`applyAsyncify({ suspendingImports })`,
+ *     instrumenting only the functions that can reach a suspending import) and
+ *     drive the unwind→await→rewind loop via `createAsyncReactor`.
+ * Same Silicon source, same vanilla binary — only the host glue differs.
+ */
+export async function runWithReactor(binary: Uint8Array, opts: ReactorRun): Promise<number> {
+    const placed: Record<string, Record<string, any>> = {}
+    const place = (name: string, fn: any) => { const [m, f] = splitImport(name); (placed[m] ??= {})[f] = fn }
+    const useJspi = opts.backend === 'jspi' || (opts.backend !== 'asyncify' && hasJSPI())
+
+    const compileWasm = (bin: Uint8Array) => WebAssembly.compile(bin, opts.compileOptions as any)
+
+    if (useJspi) {
+        const W = WebAssembly as any
+        for (const [name, fn] of Object.entries(opts.asyncImpls)) place(name, new W.Suspending(fn))
+        const imports = mergeImports(opts.baseImports, placed)
+        const instance = await WebAssembly.instantiate(await compileWasm(binary), imports)
+        opts.bind?.(instance)
+        const entry = (instance.exports as any)[opts.entry]
+        const promising = W.promising(entry)
+        return Number(await promising(...(opts.args ?? [])))
+    }
+
+    // Asyncify: instrument (route B) then drive the reactor.
+    const instrumented = applyAsyncify(binary, { suspendingImports: opts.suspendingImports })
+    const reactor = createAsyncReactor(opts.asyncImpls)
+    for (const [name, wrapped] of Object.entries(reactor.imports)) place(name, wrapped)
+    const imports = mergeImports(opts.baseImports, placed)
+    const instance = await WebAssembly.instantiate(await compileWasm(instrumented), imports)
+    opts.bind?.(instance)
+    reactor.bind(instance)
+    return reactor.run(() => Number((instance.exports as any)[opts.entry](...(opts.args ?? []))))
 }

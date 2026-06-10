@@ -34,6 +34,7 @@ export type TypeErrorKind =
     | 'MvpOnlyPhysicalByte'   // Phase 9d-5b (E0013) — &alloc, &str_ptr, …
     | 'GlobalInFunction'      // @global used inside a function body (E0014)
     | 'MissingParamType'      // function has parameters but no signature line (E0015)
+    | 'AwaitOutsideAsync'     // @await used outside an @async function body (E0016)
 
 export interface TypeError {
     kind: TypeErrorKind
@@ -166,6 +167,21 @@ export function globalInFunction(name: string, sourceLocation?: SourceLocation):
  * a concrete type (genuinely polymorphic). Fixes: annotate the parameter, add a
  * `\\` signature line, or — for a genuinely polymorphic function — make it `[T]`.
  */
+/**
+ * Factory — `@await` used outside an `@async` function (ADR 0018 §2.2 coloring).
+ * `@await` marks a suspension point, which only an `@async`-colored function may
+ * contain; the color propagates up the call graph (and is exactly the set the
+ * Asyncify route-B transform instruments).  Mark the enclosing `@fn` `@async`.
+ */
+export function awaitOutsideAsync(sourceLocation?: SourceLocation): TypeError {
+    return {
+        kind: 'AwaitOutsideAsync',
+        message: `'@await' may only appear inside an '@async' function`,
+        sourceLocation,
+        hint: `mark the enclosing function '@async' on its \\\\ signature line: \\\\ @async name (…) -> …`,
+    }
+}
+
 export function missingParamType(param: string, fn: string, sourceLocation?: SourceLocation): TypeError {
     return {
         kind: 'MissingParamType',

@@ -223,10 +223,60 @@ function buildImports(state: HostState, write: (s: string) => void) {
 }
 
 /** Compile + instantiate `binary` under Bun with js-string builtins and run
- *  `_start`.  Returns the process exit code (0 on success). */
-export async function runUnderBun(binary: Uint8Array): Promise<number> {
+ *  `_start`.  Returns the process exit code (0 on success).
+ *
+ *  When `suspendingImports` is non-empty (the program has `@suspending @extern`
+ *  imports — ADR 0018), the run is driven through the async reactor instead of a
+ *  one-shot `_start`: the suspending imports' host functions (Promise-returning)
+ *  are wrapped, and the backend is chosen at load time — JSPI when the engine
+ *  has it (Bun ≥ 1.3 / V8), else Asyncify route-B precise coloring. */
+export async function runUnderBun(
+    binary: Uint8Array,
+    opts: {
+        suspendingImports?: readonly string[]
+        /** Promise-returning host impls for suspending imports, keyed by
+         *  `module.field` (where the FFI async-binding layer — `fetch`, timers —
+         *  registers them; also the injection point for tests). */
+        hostAsync?: Record<string, (...a: number[]) => unknown>
+    } = {},
+): Promise<number> {
     const state: HostState = {}
     const { imports, flush } = buildImports(state, s => process.stdout.write(s))
+
+    // Async path: a program with suspending imports yields to a reactor.
+    const suspending = opts.suspendingImports ?? []
+    if (suspending.length > 0) {
+        const { runWithReactor } = await import('@silicon/compiler')
+        // Suspending imports' host functions come from the base import object OR
+        // the injected async surface; collect them as the async-impl set (the
+        // reactor wraps them) and drop them from the synchronous base.
+        const asyncImpls: Record<string, (...a: number[]) => any> = {}
+        for (const [name, fn] of Object.entries(opts.hostAsync ?? {})) asyncImpls[name] = fn
+        for (const name of suspending) {
+            const dot = name.indexOf('.')
+            const mod = dot === -1 ? 'env' : name.slice(0, dot)
+            const field = dot === -1 ? name : name.slice(dot + 1)
+            const host = (imports as any)[mod]?.[field]
+            if (typeof host === 'function') { asyncImpls[name] = host; delete (imports as any)[mod][field] }
+        }
+        try {
+            await runWithReactor(binary, {
+                baseImports: imports, asyncImpls, suspendingImports: [...suspending],
+                entry: '_start', compileOptions: { builtins: ['js-string'] } as any,
+                bind: (inst) => {
+                    const ex = inst.exports as any
+                    if (ex.memory instanceof WebAssembly.Memory) state.memory = ex.memory
+                    if (typeof ex.alloc === 'function') state.alloc = ex.alloc
+                },
+            })
+            flush()
+            return 0
+        } catch (e) {
+            flush()
+            console.error(`sgl run: async trap — ${(e as Error).message}`)
+            return 1
+        }
+    }
 
     let module: WebAssembly.Module
     try {

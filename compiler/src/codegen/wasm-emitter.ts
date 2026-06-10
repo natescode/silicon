@@ -418,6 +418,28 @@ function emitExpr(e: IRExpr, buf: WasmBuffer, ctx: EmitCtx, isUser: boolean,
             buf.u32(ctx.gcTypeIdxBase + e.srcTypeIdx)
             return
         }
+        // ── C2 (ADR 0019 §2.2) — GC reference conversions (closure ⇄ externref) ──
+        case 'ExternConvertAny': {
+            // box an internal GC ref as a host externref (no immediate).
+            emitExpr(e.value, buf, ctx, isUser, localIdxOf)
+            buf.u8(0xFB); buf.u8(0x1B)
+            return
+        }
+        case 'AnyConvertExtern': {
+            // unbox a host externref back to anyref (no immediate).
+            emitExpr(e.value, buf, ctx, isUser, localIdxOf)
+            buf.u8(0xFB); buf.u8(0x1A)
+            return
+        }
+        case 'RefCast': {
+            // narrow anyref → (ref $T); the heaptype immediate is an SLEB-i33
+            // module type index (gcTypeIdxBase + the wasmGcTypes-local index),
+            // matching encodeStorageType's ref form.  0x16 non-null / 0x17 nullable.
+            emitExpr(e.value, buf, ctx, isUser, localIdxOf)
+            buf.u8(0xFB); buf.u8(e.nullable ? 0x17 : 0x16)
+            buf.i32(ctx.gcTypeIdxBase + e.typeIdx)
+            return
+        }
     }
 }
 

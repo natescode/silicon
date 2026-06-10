@@ -220,6 +220,13 @@ export function emitExpr(e: IRExpr): string {
             return `(array.len ${emitExpr(e.target)})`
         case 'ArrayCopy':
             return `(array.copy ${e.dstTypeName} ${e.srcTypeName} ${emitExpr(e.dstRef)} ${emitExpr(e.dstIdx)} ${emitExpr(e.srcRef)} ${emitExpr(e.srcIdx)} ${emitExpr(e.count)})`
+        // C2 (ADR 0019 §2.2) — GC reference conversions (closure ⇄ externref).
+        case 'ExternConvertAny':
+            return `(extern.convert_any ${emitExpr(e.value)})`
+        case 'AnyConvertExtern':
+            return `(any.convert_extern ${emitExpr(e.value)})`
+        case 'RefCast':
+            return `(ref.cast (ref ${e.nullable ? 'null ' : ''}${e.typeName}) ${emitExpr(e.value)})`
         case 'ArrayLiteral':
             return emitArrayLiteral(e)
     }
@@ -312,6 +319,8 @@ function isVoidIR(e: IRExpr): boolean {
         case 'ArrayNew': case 'ArrayNewDefault': case 'ArrayGet':
         case 'ArraySet': case 'ArrayLen': case 'ArrayCopy':
         case 'ArrayLiteral':
+        // C2 GC reference conversions always produce a value (never void).
+        case 'ExternConvertAny': case 'AnyConvertExtern': case 'RefCast':
             return (e as any).wasmType === 'void'
     }
 }
