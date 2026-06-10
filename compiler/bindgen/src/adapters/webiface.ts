@@ -61,6 +61,13 @@ function classify(tn: any, ctx: Ctx, depth = 0): SiType | null {
     if (tn.generic) return null          // sequence<> / record<> / Promise<> / FrozenArray<> — not a single handle
     const name = tn.idlType
     if (typeof name !== 'string') return null
+    return classifyName(name, ctx, depth)
+}
+
+/** Classify a NAMED IDL type (a string), shared by `classify` and the Promise
+ *  awaited-type path. */
+function classifyName(name: string, ctx: Ctx, depth: number): SiType | null {
+    if (typeof name !== 'string') return null
     if (HANDLE_TYPES.has(name)) return 'JSValue'
     try { return idlTypeToSi(name) } catch { /* not a scalar */ }
     if (ctx.ifaces.has(name)) return 'JSValue'
@@ -68,6 +75,21 @@ function classify(tn: any, ctx: Ctx, depth = 0): SiType | null {
     const td = ctx.typedefs.get(name)
     if (td) return classify(td, ctx, depth + 1)
     return null
+}
+
+/** Classify an OPERATION return type, recognising `Promise<T>` → a `@suspending`
+ *  binding whose result is the awaited `T` (ADR 0018 / next FFI #5): so
+ *  `Response.json()` / `text()` / `arrayBuffer()` become awaitable.  The resolved
+ *  value of `Promise<any>` (or any non-Tier-0 awaited type) crosses as a JSValue
+ *  handle; `Promise<undefined>` is a suspending `Void`. */
+function classifyResult(tn: any, ctx: Ctx): { type: SiType | null; suspending: boolean } {
+    if (tn && tn.generic === 'Promise') {
+        const awaited = Array.isArray(tn.idlType) ? tn.idlType[0] : undefined
+        const aname = awaited?.idlType
+        if (!awaited || aname === 'undefined' || aname === 'void') return { type: 'Void', suspending: true }
+        return { type: classify(awaited, ctx) ?? 'JSValue', suspending: true }
+    }
+    return { type: classify(tn, ctx), suspending: false }
 }
 
 /** Build a param list from an IDL argument list.
@@ -159,10 +181,10 @@ export function webifaceToSpecs(interfaceName: string, corpus = loadWebrefCorpus
     const usedName = new Set<string>()      // enforce unique binding names within the interface
 
     /** Emit a spec unless its name collides (the ADR lockstep key must be unique). */
-    const emit = (name: string, params: Param[], result: SiType, impl: BindingSpec['impl'], member: string) => {
+    const emit = (name: string, params: Param[], result: SiType, impl: BindingSpec['impl'], member: string, suspending = false) => {
         if (usedName.has(name)) { skipped.push({ member, reason: `name '${name}' collides — dropped` }); return }
         usedName.add(name)
-        specs.push({ name, params, result, impl, source: `webref:${interfaceName}.${member}` })
+        specs.push({ name, params, result, impl, source: `webref:${interfaceName}.${member}`, suspending: suspending || undefined })
     }
 
     for (const m of members) {
@@ -198,14 +220,14 @@ export function webifaceToSpecs(interfaceName: string, corpus = loadWebrefCorpus
         }
 
         if (m.type === 'operation' && m.name && (m.special === '' || m.special === undefined || m.special === 'static')) {
-            const result = classify(m.idlType, ctx)
+            const { type: result, suspending } = classifyResult(m.idlType, ctx)
             if (result === null) { skipped.push({ member: m.name, reason: `return type not bindable` }); continue }
             const args = buildParams(m.arguments, ctx)
             if (args === null) { skipped.push({ member: m.name, reason: 'a required arg is not bindable' }); continue }
             if (m.special === 'static') {
-                emit(snake(m.name), args, result, { kind: 'static', iface: interfaceName, method: m.name }, m.name)
+                emit(snake(m.name), args, result, { kind: 'static', iface: interfaceName, method: m.name }, m.name, suspending)
             } else {
-                emit(snake(m.name), [{ name: 'self', type: 'JSValue' }, ...args], result, { kind: 'method', method: m.name }, m.name)
+                emit(snake(m.name), [{ name: 'self', type: 'JSValue' }, ...args], result, { kind: 'method', method: m.name }, m.name, suspending)
             }
             continue
         }

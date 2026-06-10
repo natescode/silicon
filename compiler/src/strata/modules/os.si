@@ -11,7 +11,7 @@
 \\ @extern machine () -> String;
 \\ @extern platform () -> String;
 \\ @extern release () -> String;
-\\ @extern set_priority (Float);
+\\ @extern set_priority (Float, Float);
 \\ @extern tmpdir () -> String;
 \\ @extern totalmem () -> Float;
 \\ @extern type () -> String;

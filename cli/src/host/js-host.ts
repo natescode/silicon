@@ -120,7 +120,7 @@ function buildImports(state: HostState, write: (s: string) => void) {
             machine: () => allocLenString(require('node:os').machine()),
             platform: () => allocLenString(require('node:os').platform()),
             release: () => allocLenString(require('node:os').release()),
-            set_priority: (priority: number) => require('node:os').setPriority(priority),
+            set_priority: (pid: number, priority: number) => require('node:os').setPriority(pid, priority),
             tmpdir: () => allocLenString(require('node:os').tmpdir()),
             totalmem: () => require('node:os').totalmem(),
             type: () => allocLenString(require('node:os').type()),
@@ -212,16 +212,18 @@ function buildImports(state: HostState, write: (s: string) => void) {
             race: (ps: any) => Promise.race(ps),
             all_settled: (ps: any) => Promise.allSettled(ps),
             any: (ps: any) => Promise.any(ps),
+            value: (p: any) => Promise.resolve(p),   // await a single handle
         },
         bun: {
             // === bindgen:module bun ===
             alloc_unsafe: (size: number) => Bun.allocUnsafe(size),
             build: (config: any) => Bun.build(config),
-            concat_array_buffers: (buffers: any, maxLength: number) => Bun.concatArrayBuffers(buffers, maxLength),
+            concat_array_buffers: (buffers: any, maxLength: number, asUint8Array: number) => Bun.concatArrayBuffers(buffers, maxLength, asUint8Array),
             connect: (options: any) => Bun.connect(options),
             deep_equals: (a: any, b: any, strict: number) => Bun.deepEquals(a, b, strict),
+            file: (fileDescriptor: number, options: any) => Bun.file(fileDescriptor, options),
             gc: (force: number) => Bun.gc(force),
-            generate_heap_snapshot: (format: any) => Bun.generateHeapSnapshot(format),
+            generate_heap_snapshot: (format: any, encoding: any) => Bun.generateHeapSnapshot(format, encoding),
             inspect: (arg: any, options: any) => Bun.inspect(arg, options),
             listen: (options: any) => Bun.listen(options),
             nanoseconds: () => Bun.nanoseconds(),
@@ -237,11 +239,14 @@ function buildImports(state: HostState, write: (s: string) => void) {
             shrink: () => Bun.shrink(),
             sleep_sync: (ms: number) => Bun.sleepSync(ms),
             slice_ansi: (input: any, start: number, end: number, ambiguousIsNarrow: number) => Bun.sliceAnsi(input, start, end, ambiguousIsNarrow),
+            spawn: (cmds: any, options: any) => Bun.spawn(cmds, options),
+            spawn_sync: (cmds: any, options: any) => Bun.spawnSync(cmds, options),
             string_width: (input: any, options: any) => Bun.stringWidth(input, options),
             strip_ansi: (input: any) => Bun.stripANSI(input),
             udp_socket: (options: any) => Bun.udpSocket(options),
             which: (command: any, options: any) => Bun.which(command, options),
             wrap_ansi: (input: any, columns: number, options: any) => Bun.wrapAnsi(input, columns, options),
+            write: (destination: any, input: any, options: any) => Bun.write(destination, input, options),
             // === /bindgen:module bun ===
         },
         // Constructed Web interfaces (Tier-2): `create` constructs the object and
@@ -318,6 +323,127 @@ function buildImports(state: HostState, write: (s: string) => void) {
             fatal: (self: any) => self.fatal,
             ignore_bom: (self: any) => self.ignoreBOM,
             // === /bindgen:module text_decoder ===
+        },
+        // ── fetch ecosystem + crypto (Tier-2, generated — next FFI #5) ──────────
+        response: {
+            // === bindgen:module response ===
+            create: (body: any) => new Response(body),
+            error: () => Response.error(),
+            redirect: (url: any) => Response.redirect(url),
+            type: (self: any) => self.type,
+            url: (self: any) => self.url,
+            redirected: (self: any) => self.redirected,
+            status: (self: any) => self.status,
+            ok: (self: any) => self.ok,
+            status_text: (self: any) => self.statusText,
+            headers: (self: any) => self.headers,
+            clone: (self: any) => self.clone(),
+            body: (self: any) => self.body,
+            body_used: (self: any) => self.bodyUsed,
+            array_buffer: (self: any) => self.arrayBuffer(),
+            blob: (self: any) => self.blob(),
+            bytes: (self: any) => self.bytes(),
+            form_data: (self: any) => self.formData(),
+            json: (self: any) => self.json(),
+            text: (self: any) => self.text(),
+            // === /bindgen:module response ===
+        },
+        request: {
+            // === bindgen:module request ===
+            create: (input: any) => new Request(input),
+            method: (self: any) => self.method,
+            url: (self: any) => self.url,
+            headers: (self: any) => self.headers,
+            destination: (self: any) => self.destination,
+            referrer: (self: any) => self.referrer,
+            referrer_policy: (self: any) => self.referrerPolicy,
+            mode: (self: any) => self.mode,
+            credentials: (self: any) => self.credentials,
+            cache: (self: any) => self.cache,
+            redirect: (self: any) => self.redirect,
+            integrity: (self: any) => self.integrity,
+            keepalive: (self: any) => self.keepalive,
+            is_reload_navigation: (self: any) => self.isReloadNavigation,
+            is_history_navigation: (self: any) => self.isHistoryNavigation,
+            signal: (self: any) => self.signal,
+            duplex: (self: any) => self.duplex,
+            clone: (self: any) => self.clone(),
+            target_address_space: (self: any) => self.targetAddressSpace,
+            body: (self: any) => self.body,
+            body_used: (self: any) => self.bodyUsed,
+            array_buffer: (self: any) => self.arrayBuffer(),
+            blob: (self: any) => self.blob(),
+            bytes: (self: any) => self.bytes(),
+            form_data: (self: any) => self.formData(),
+            json: (self: any) => self.json(),
+            text: (self: any) => self.text(),
+            // === /bindgen:module request ===
+        },
+        blob: {
+            // === bindgen:module blob ===
+            create: () => new Blob(),
+            size: (self: any) => self.size,
+            type: (self: any) => self.type,
+            slice: (self: any, start: number) => self.slice(start),
+            stream: (self: any) => self.stream(),
+            text: (self: any) => self.text(),
+            array_buffer: (self: any) => self.arrayBuffer(),
+            bytes: (self: any) => self.bytes(),
+            // === /bindgen:module blob ===
+        },
+        form_data: {
+            // === bindgen:module form_data ===
+            create: (form: any) => new FormData(form),
+            append: (self: any, name: any, value: any) => self.append(name, value),
+            delete: (self: any, name: any) => self.delete(name),
+            get: (self: any, name: any) => self.get(name),
+            has: (self: any, name: any) => self.has(name),
+            set: (self: any, name: any, value: any) => self.set(name, value),
+            // === /bindgen:module form_data ===
+        },
+        abort_controller: {
+            // === bindgen:module abort_controller ===
+            create: () => new AbortController(),
+            signal: (self: any) => self.signal,
+            abort: (self: any) => self.abort(),
+            // === /bindgen:module abort_controller ===
+        },
+        abort_signal: {
+            // === bindgen:module abort_signal ===
+            abort: () => AbortSignal.abort(),
+            timeout: (milliseconds: number) => AbortSignal.timeout(milliseconds),
+            aborted: (self: any) => self.aborted,
+            throw_if_aborted: (self: any) => self.throwIfAborted(),
+            // === /bindgen:module abort_signal ===
+        },
+        crypto: {
+            // === bindgen:module crypto ===
+            argon2_sync: (algorithm: any, parameters: any) => require('node:crypto').argon2Sync(algorithm, parameters),
+            create_diffie_hellman: (prime: any, primeEncoding: any, generator: any, generatorEncoding: any) => require('node:crypto').createDiffieHellman(prime, primeEncoding, generator, generatorEncoding),
+            create_diffie_hellman_group: (name: any) => require('node:crypto').createDiffieHellmanGroup(name),
+            create_ecdh: (curveName: any) => require('node:crypto').createECDH(curveName),
+            create_hash: (algorithm: any, options: any) => require('node:crypto').createHash(algorithm, options),
+            create_secret_key: (key: any, encoding: any) => require('node:crypto').createSecretKey(key, encoding),
+            create_sign: (algorithm: any, options: any) => require('node:crypto').createSign(algorithm, options),
+            create_verify: (algorithm: any, options: any) => require('node:crypto').createVerify(algorithm, options),
+            diffie_hellman: (options: any) => require('node:crypto').diffieHellman(options),
+            diffie_hellman_group: (name: any) => require('node:crypto').DiffieHellmanGroup(name),
+            generate_key_pair_sync: (type: any) => require('node:crypto').generateKeyPairSync(type),
+            generate_key_sync: (type: any, options: any) => require('node:crypto').generateKeySync(type, options),
+            generate_prime_sync: (size: number) => require('node:crypto').generatePrimeSync(size),
+            get_ciphers: () => require('node:crypto').getCiphers(),
+            get_curves: () => require('node:crypto').getCurves(),
+            get_diffie_hellman: (groupName: any) => require('node:crypto').getDiffieHellman(groupName),
+            get_fips: () => require('node:crypto').getFips(),
+            get_hashes: () => require('node:crypto').getHashes(),
+            pseudo_random_bytes: (size: number) => require('node:crypto').pseudoRandomBytes(size),
+            random_bytes: (size: number) => require('node:crypto').randomBytes(size),
+            random_int: (min: number, max: number) => require('node:crypto').randomInt(min, max),
+            random_uuid: (options: any) => require('node:crypto').randomUUID(options),
+            secure_heap_used: () => require('node:crypto').secureHeapUsed(),
+            set_engine: (engine: any, flags: number) => require('node:crypto').setEngine(engine, flags),
+            set_fips: (bool: number) => require('node:crypto').setFips(bool),
+            // === /bindgen:module crypto ===
         },
     }
     return { imports, flush, errBox }

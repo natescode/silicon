@@ -142,14 +142,10 @@ export function dtsToSpecs(src: DtsSource): DtsResult {
         return !!d && ts.isParameter(d) && d.questionToken != null && d.dotDotDotToken == null
     }
 
-    for (const prop of checker.getPropertiesOfType(type)) {
-        const name = prop.getName()
-        const propType = checker.getTypeOfSymbolAtLocation(prop, sf)
-        const sigs = propType.getCallSignatures()
-        if (sigs.length === 0) continue   // not a function (a property/namespace) — silently skip
-        const sig = sigs[0]               // first overload (@extern has no overloading)
-        const member = `${src.prefix || src.global || src.module}.${name}`
-
+    /** Try to bind ONE overload to a Tier-0/JSValue signature.  Returns the
+     *  param/result/suspending shape, or a `bad` reason explaining why this
+     *  overload can't cross.  Pure — no `specs`/`skipped` mutation. */
+    const trySig = (sig: ts.Signature): { params: Param[]; ret: SiType; suspending: boolean } | { bad: string } => {
         // ADR 0018 — a `Promise<T>` member becomes a `@suspending` binding whose
         // result is the AWAITED `T` (the reactor returns the resolved value, so the
         // awaited type must be externref/scalar — never linear String).
@@ -163,42 +159,68 @@ export function dtsToSpecs(src: DtsSource): DtsResult {
         } else {
             ret = tsTypeToSi(rawRet, numberType, objects)
         }
+        if (ret === null) return { bad: suspending ? 'awaited type not bindable' : 'non-Tier-0 result' }
         const params: Param[] = []
-        let bad: string | null = ret === null ? (suspending ? 'awaited type not bindable' : 'non-Tier-0 result') : null
-        if (!bad) {
-            for (const p of sig.getParameters()) {
-                const d = p.valueDeclaration
-                // A rest param (`...args`) is variadic — it can't be a single
-                // fixed param (and its array type must NOT be smuggled across as
-                // one JSValue: `path.join([..])` ≠ `path.join(a, b)`).  Skip the
-                // whole binding rather than generate a wrong-arity call.
-                if (d && ts.isParameter(d) && d.dotDotDotToken != null) {
-                    bad = `variadic rest param '${p.getName()}'`; break
-                }
-                const ptype = checker.getTypeOfSymbolAtLocation(p, sf)
-                // ADR 0019 C2 — a callable param is a CALLBACK: bind it as the
-                // closure-handle type `Callback` (the guest passes a closure).
-                if (events === 'closure' && isCallable(ptype) && !isThenable(ptype)) {
-                    params.push({ name: p.getName(), type: 'Callback' }); continue
-                }
-                const pt = tsTypeToSi(ptype, numberType, objects)
-                if (pt === null) {
-                    if (droppable(p)) continue   // omit an unrepresentable optional param
-                    bad = `non-Tier-0 param '${p.getName()}'`; break
-                }
-                params.push({ name: p.getName(), type: pt })
+        for (const p of sig.getParameters()) {
+            const d = p.valueDeclaration
+            // A rest param (`...args`) is variadic — it can't be a single fixed
+            // param (and its array type must NOT be smuggled across as one JSValue:
+            // `path.join([..])` ≠ `path.join(a, b)`).  Reject this overload.
+            if (d && ts.isParameter(d) && d.dotDotDotToken != null) return { bad: `variadic rest param '${p.getName()}'` }
+            const ptype = checker.getTypeOfSymbolAtLocation(p, sf)
+            // ADR 0019 C2 — a callable param is a CALLBACK: bind it as the
+            // closure-handle type `Callback` (the guest passes a closure).
+            if (events === 'closure' && isCallable(ptype) && !isThenable(ptype)) {
+                params.push({ name: p.getName(), type: 'Callback' }); continue
+            }
+            const pt = tsTypeToSi(ptype, numberType, objects)
+            if (pt === null) {
+                if (droppable(p)) continue   // omit an unrepresentable optional param
+                return { bad: `non-Tier-0 param '${p.getName()}'` }
+            }
+            params.push({ name: p.getName(), type: pt })
+        }
+        return { params, ret, suspending }
+    }
+
+    for (const prop of checker.getPropertiesOfType(type)) {
+        const name = prop.getName()
+        const propType = checker.getTypeOfSymbolAtLocation(prop, sf)
+        const sigs = propType.getCallSignatures()
+        if (sigs.length === 0) continue   // not a function (a property/namespace) — silently skip
+        const member = `${src.prefix || src.global || src.module}.${name}`
+
+        // Overload selection (#5): `@extern` has no overloading, so choose the
+        // BEST bindable overload instead of blindly the first.  This recovers
+        // members whose first overload is unrepresentable but a later one binds
+        // (e.g. `Bun.spawn`/`write`/`file`), and — among bindable overloads —
+        // prefers the most usable signature: fewest opaque handle params
+        // (JSValue/Callback), then most concrete scalar/string params, then
+        // earliest declaration.  So `file(path: string)` beats `file(fd, opts)`.
+        const isHandle = (t: SiType) => t === 'JSValue' || t === 'Callback'
+        let chosen: { params: Param[]; ret: SiType; suspending: boolean } | null = null
+        let chosenScore: [number, number] = [Infinity, -1]   // [handleCount, -concreteCount]
+        let lastBad = 'no bindable overload'
+        for (const sig of sigs) {
+            const r = trySig(sig)
+            if ('bad' in r) { lastBad = r.bad; continue }
+            const handles = r.params.filter(p => isHandle(p.type)).length
+            const concrete = r.params.length - handles
+            const score: [number, number] = [handles, -concrete]
+            if (!chosen || score[0] < chosenScore[0] || (score[0] === chosenScore[0] && score[1] < chosenScore[1])) {
+                chosen = r; chosenScore = score
             }
         }
-        if (bad) { skipped.push({ member, reason: bad }); continue }
+        if (!chosen) { skipped.push({ member, reason: lastBad }); continue }
 
-        const argList = params.map(p => p.name).join(', ')
+        const argList = chosen.params.map(p => p.name).join(', ')
         specs.push({
             name: src.prefix ? `${src.prefix}_${snake(name)}` : snake(name),
-            params,
-            result: ret!,
+            params: chosen.params,
+            result: chosen.ret,
             impl: { kind: 'call', expr: `${src.accessor}.${name}(${argList})` },
             source: `${src.types[0] ?? 'ecmascript'}:${member}`,
-            suspending: suspending || undefined,
+            suspending: chosen.suspending || undefined,
         })
     }
     // Deterministic order (the checker's property order is stable but sort to be safe).

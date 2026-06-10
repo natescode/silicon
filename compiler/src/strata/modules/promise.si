@@ -23,3 +23,7 @@
 \\ @suspending @extern race (JSValue) -> JSValue;          # await Promise.race(handles)
 \\ @suspending @extern all_settled (JSValue) -> JSValue;   # await Promise.allSettled(handles)
 \\ @suspending @extern any (JSValue) -> JSValue;           # await Promise.any(handles)
+
+# Await a SINGLE promise handle (e.g. the un-awaited Promise that js::apply
+# returns from a Promise-returning host call) → its resolved value.
+\\ @suspending @extern value (JSValue) -> JSValue;         # await handle

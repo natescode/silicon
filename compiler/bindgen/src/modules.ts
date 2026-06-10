@@ -100,6 +100,57 @@ export const GENERATED_MODULES: readonly ModuleConfig[] = [
         specs: () => webifaceToSpecs('TextDecoder').specs,
         strings: 'jsstring',
     },
+
+    // ── The fetch ecosystem (Tier-2, generated from @webref/idl) — next FFI #5 ──
+    // Response gains its async body readers (json/text/arrayBuffer/blob) as
+    // `@suspending` (the reactor awaits them).  Compose with js::global('fetch')
+    // + promise::all to drive a real request end-to-end.  web/bun only.
+    {
+        module: 'response',
+        provenance: '@webref/idl (Response interface)',
+        specs: () => webifaceToSpecs('Response').specs,
+        strings: 'jsstring',
+    },
+    {
+        module: 'request',
+        provenance: '@webref/idl (Request interface)',
+        specs: () => webifaceToSpecs('Request').specs,
+        strings: 'jsstring',
+    },
+    {
+        module: 'blob',
+        provenance: '@webref/idl (Blob interface)',
+        specs: () => webifaceToSpecs('Blob').specs,
+        strings: 'jsstring',
+    },
+    {
+        module: 'form_data',
+        provenance: '@webref/idl (FormData interface)',
+        specs: () => webifaceToSpecs('FormData').specs,
+        strings: 'jsstring',
+    },
+    {
+        module: 'abort_controller',
+        provenance: '@webref/idl (AbortController interface)',
+        specs: () => webifaceToSpecs('AbortController').specs,
+        strings: 'jsstring',
+    },
+    {
+        module: 'abort_signal',
+        provenance: '@webref/idl (AbortSignal interface)',
+        specs: () => webifaceToSpecs('AbortSignal').specs,
+        strings: 'jsstring',
+    },
+
+    // ── Node crypto (Tier-2, from @types/node) — next FFI #5 ──────────────────
+    // randomUUID / randomBytes / randomInt / createHash / createSign … — useful
+    // sync primitives.  Buffer results cross as JSValue handles → web/bun only.
+    {
+        module: 'crypto',
+        provenance: '@types/node (node:crypto)',
+        specs: () => dtsToSpecs({ module: 'node:crypto', types: ['node'], accessor: "require('node:crypto')", prefix: '', objects: 'jsvalue', numberType: 'Int' }).specs,
+        strings: 'jsstring',
+    },
 ]
 
 export function generateModule(cfg: ModuleConfig): { ir: BindingIR; si: string; hostShim: string } {
