@@ -416,14 +416,21 @@ export function createCompilerAPI(ctx: CtxShape, fns: LowerFns): CompilerAPI {
     // wasm types: i32→'i', i64→'l', f32→'f', void→'v'.  The single i32→i32 case
     // is `__fn_i_i`, byte-identical to the former hardcode.
     const wcode = (t: string): string => t === 'i64' ? 'l' : t === 'f32' ? 'f' : t === 'void' ? 'v' : 'i'
-    function funcrefSigKey(params: WasmValType[], result: WasmType): string {
-        return `__fn_${params.map(wcode).join('')}_${wcode(result)}`
+    /** A position's signature code: a ref-typed slot encodes as `r<typeIdx>` so a
+     *  `(ref $Vec_i32)` env param is a DISTINCT call_indirect signature from a
+     *  plain i32 (ADR 0019 C2).  Plain valtypes keep the C0 single-letter code, so
+     *  all-valtype signatures stay byte-identical to the baseline. */
+    const slotCode = (t: string, ref?: { localTypeIdx: number }): string =>
+        ref ? `r${ref.localTypeIdx}` : wcode(t)
+    function funcrefSigKey(params: WasmValType[], result: WasmType, refParams?: Map<number, any>, refResult?: any): string {
+        const p = params.map((t, i) => slotCode(t, refParams?.get(i))).join('')
+        return `__fn_${p}_${slotCode(result, refResult)}`
     }
     /** Find-or-append a signature in the funcref table; returns its key. */
-    function ensureFuncrefSig(params: WasmValType[], result: WasmType): string {
-        const key = funcrefSigKey(params, result)
+    function ensureFuncrefSig(params: WasmValType[], result: WasmType, refParams?: Map<number, any>, refResult?: any): string {
+        const key = funcrefSigKey(params, result, refParams, refResult)
         const t = ctx.funcrefTable
-        if (t && !t.signatures.some(s => s.key === key)) t.signatures.push({ key, params, result })
+        if (t && !t.signatures.some(s => s.key === key)) t.signatures.push({ key, params, result, refParams, refResult })
         return key
     }
 
@@ -946,12 +953,29 @@ export function createCompilerAPI(ctx: CtxShape, fns: LowerFns): CompilerAPI {
                 throw new CompilerAPIError('@call_indirect expects at least 1 argument (the callback table index)')
             }
             const cb = fns.lowerExpr(rawArgs[0], ctx)
-            const argExprs = rawArgs.slice(1).map((a) => fns.lowerExpr(a, ctx))
+            const argNodes = rawArgs.slice(1)
+            const argExprs = argNodes.map((a) => fns.lowerExpr(a, ctx))
             const params = argExprs.map(e => fns.exprWasmType(e) as WasmValType)
             const result: WasmType = (inferredType && inferredType.kind && inferredType.kind !== 'Unknown')
                 ? (wasmTypeOf(inferredType) as WasmType)
                 : 'i32'
-            const sigKey = ensureFuncrefSig(params, result)
+            // ADR 0019 C2 — under wasm-gc a `Vec[Int]` arg (e.g. the closure env)
+            // is a `(ref $Vec_i32)`, not an i32; record its ref type so the
+            // call_indirect signature matches the ref-typed wrapper.  No-op on
+            // wasm-mvp (refParams stays empty → byte-identical C0 signature).
+            let refParams: Map<number, any> | undefined
+            if (ctx.target === 'wasm-gc') {
+                argNodes.forEach((a, i) => {
+                    // The arg's type comes from the SemanticModel (a Namespace ref to
+                    // a local isn't stamped with `.inferredType` directly).
+                    const t = ctx.semanticModel?.typeOf(a) ?? (a?.inferredType)
+                    if (t?.kind === 'Vec') {
+                        const idx = ctx.wasmGcTypes?.lookupByName('$Vec_i32')
+                        if (idx !== undefined) (refParams ??= new Map()).set(i, { localTypeIdx: idx, nullable: false })
+                    }
+                })
+            }
+            const sigKey = ensureFuncrefSig(params, result, refParams)
             return { kind: 'CallIndirect', wasmType: result, sigKey, args: argExprs, tableIndex: cb }
         },
         expandMatchChain: (rawArgs, inferredType) => {

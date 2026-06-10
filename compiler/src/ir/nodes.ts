@@ -451,8 +451,20 @@ export interface FuncrefTable {
      *  by `sigKey` (e.g. '__fn_i_i').  The order is the type-section
      *  index — `signatures[0]` is type index 0 in the (type) section.
      *  This is module-level state shared by every call_indirect site
-     *  in the module. */
-    signatures: Array<{ key: string; params: WasmValType[]; result: WasmType }>
+     *  in the module.
+     *
+     *  `refParams`/`refResult` (ADR 0019 C2) carry a wasm-gc REF type for a
+     *  position whose `params`/`result` valtype is `i32` at the IR level but is
+     *  actually a `(ref $T)` — e.g. a closure env param `(ref $Vec_i32)`.  The
+     *  call_indirect type then matches the ref-typed wrapper under --target=wasm-gc.
+     *  Undefined ⇒ the all-valtype signature (byte-identical to the C0 baseline). */
+    signatures: Array<{
+        key: string
+        params: WasmValType[]
+        result: WasmType
+        refParams?: Map<number, IRRefSlot>
+        refResult?: IRRefSlot
+    }>
 }
 
 export interface IRModule {

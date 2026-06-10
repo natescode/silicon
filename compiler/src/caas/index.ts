@@ -416,7 +416,7 @@ export function elaborate(
     registry: ElaboratorRegistry,
     _options: ElabOptions = {},
 ): ElabResult {
-    const { program, registry: reg, errors } = elaborateInternal(tree.program, registry)
+    const { program, registry: reg, errors } = elaborateInternal(tree.program, registry, [], _options.target)
     const elaboratedTree = new SyntaxTree(program, tree.source, tree.file)
     const diagnostics: Diagnostic[] = errors.map(e => ({
         phase: 'elaborate' as const,

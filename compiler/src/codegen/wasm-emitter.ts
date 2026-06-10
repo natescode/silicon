@@ -973,7 +973,13 @@ export function emitWasmBinary(
     const funcrefTypeIdxLocal = new Map<string, number>()
     if (userMod.funcrefTable) {
         for (const s of userMod.funcrefTable.signatures) {
-            const fsig: FuncSig = { params: s.params.map(valSlot), result: valSlot(s.result) }
+            // A position with a refParams/refResult entry encodes as a `(ref $T)`
+            // slot (ADR 0019 C2 — the closure env), matching the ref-typed wrapper;
+            // all others keep the C0 valtype slot (byte-identical baseline).
+            const fsig: FuncSig = {
+                params: s.params.map((p, i) => s.refParams?.has(i) ? refSlot(s.refParams.get(i)!) : valSlot(p)),
+                result: s.refResult ? refSlot(s.refResult) : valSlot(s.result),
+            }
             funcrefTypeIdxLocal.set(s.key, internSig(fsig))
         }
     }

@@ -42,15 +42,22 @@ import type { ElaborationError } from './elaborator'
 const ns = (name: string): any => ({ type: 'Namespace', path: [name] })
 const intLit = (v: number): any => ({ type: 'IntLiteral', value: String(v), base: 'decimal' })
 const block = (items: any[], trailing?: any): any => ({ type: 'Block', items, trailing })
-const localDef = (name: string, expr: any): any => ({
+const vecIntAnnotation = (): any => ({ type: 'TypeAnnotation', typename: 'Vec', typeArgs: [{ type: 'TypeArg', name: 'Int' }] })
+const localDef = (name: string, expr: any, typeAnnotation?: any): any => ({
     type: 'Definition', keyword: '@local',
-    name: { type: 'TypedIdentifier', name },
+    name: { type: 'TypedIdentifier', name, ...(typeAnnotation ? { typeAnnotation } : {}) },
     params: [], binding: { type: 'Binding', expression: expr },
 })
 const userCall = (fn: string, args: any[]): any => ({ type: 'FunctionCall', name: ns(fn), isBuiltin: false, args })
 const kwCall = (kw: string, args: any[]): any => ({ type: 'FunctionCall', name: kw, isBuiltin: true, args })
 const param = (name: string, typename: string): any => ({
     type: 'Parameter', name, typeAnnotation: { type: 'TypeAnnotation', typename }, isLiteral: false,
+})
+/** A `Vec[Int]` parameter — the closure env's type under --target=wasm-gc, where
+ *  `vec_*` take a `(ref $Vec_i32)` (gc-vec.ts) rather than an i32 pointer. */
+const vecIntParam = (name: string): any => ({
+    type: 'Parameter', name, isLiteral: false,
+    typeAnnotation: { type: 'TypeAnnotation', typename: 'Vec', typeArgs: [{ type: 'TypeArg', name: 'Int' }] },
 })
 const fnDef = (name: string, params: any[], resultType: string, bodyExpr: any): any => ({
     type: 'Definition', keyword: '@fn',
@@ -71,6 +78,9 @@ interface Ctx {
     /** C2: arities for which a host-callable __closure_invoke_<k> trampoline
      *  export must be synthesized (set when @export_callback is used). */
     invokeArities: Set<number>
+    /** ADR 0019 C2 — under --target=wasm-gc the env `Vec` is a `(ref $Vec_i32)`,
+     *  so the synthesized wrapper's env param is typed `Vec[Int]` (not `Int`). */
+    wasmGc: boolean
 }
 
 const err = (ctx: Ctx, kw: string, message: string): void => { ctx.errors.push({ keyword: kw, message }) }
@@ -199,9 +209,11 @@ function transformClosure(call: any, ctx: Ctx): any {
     const wrapName = `__clo_${bodyName}_${id}`
     const envN = `__clo${id}_env`
 
-    // Wrapper: __clo_<body>_<n>(env Int, a0 …) := body_fn(vec_get_i32(env,1)…, a0 …)
+    // Wrapper: __clo_<body>_<n>(env, a0 …) := body_fn(vec_get_i32(env,1)…, a0 …)
+    // The env is `Int` (linear ptr) on wasm-mvp, `Vec[Int]` (ref) on wasm-gc.
     const argNames = argTypes.map((_, i) => `__a${i}`)
-    const wrapperParams = [param('env', 'Int'), ...argNames.map((nm, i) => param(nm, argTypes[i]))]
+    const envParam = ctx.wasmGc ? vecIntParam('env') : param('env', 'Int')
+    const wrapperParams = [envParam, ...argNames.map((nm, i) => param(nm, argTypes[i]))]
     const bodyCallArgs = [
         ...caps.map((_, k) => userCall('vec_get_i32', [ns('env'), intLit(k + 1)])),
         ...argNames.map(ns),
@@ -209,8 +221,10 @@ function transformClosure(call: any, ctx: Ctx): any {
     ctx.wrappers.push(fnDef(wrapName, wrapperParams, sig.resultType, block([], userCall(bodyName, bodyCallArgs))))
 
     // Site: { env := vec_new(ncaps+1); vec_push_i32(env, @fnref(wrap)); vec_push_i32(env, cap0); …; env }
+    // Under wasm-gc the env holds a `(ref $Vec_i32)`, so annotate the local `Vec[Int]`
+    // (else its slot defaults to i32 and `local.set` rejects the ref).
     const items: any[] = [
-        localDef(envN, userCall('vec_new', [intLit(ncaps + 1)])),
+        localDef(envN, userCall('vec_new', [intLit(ncaps + 1)]), ctx.wasmGc ? vecIntAnnotation() : undefined),
         userCall('vec_push_i32', [ns(envN), kwCall('@fnref', [ns(wrapName)])]),
     ]
     for (const cap of caps) items.push(userCall('vec_push_i32', [ns(envN), cap]))
@@ -227,7 +241,7 @@ function transformCallClosure(call: any, ctx: Ctx): any {
     const id = ctx.n++
     const cN = `__cloc${id}`
     return block(
-        [localDef(cN, clo)],
+        [localDef(cN, clo, ctx.wasmGc ? vecIntAnnotation() : undefined)],
         kwCall('@call_indirect', [userCall('vec_get_i32', [ns(cN), intLit(0)]), ns(cN), ...callArgs]),
     )
 }
@@ -272,10 +286,14 @@ function transformExportCallback(call: any, ctx: Ctx): any {
 
 /** Synthesize an exported host-callable trampoline for closure call-arity `k`:
  *  `__closure_invoke_<k>(clo, a0…) -> Int := @call_indirect(vec_get_i32(clo,0), clo, a0…)`. */
-function trampolineFor(k: number): any[] {
+function trampolineFor(k: number, ctx: Ctx): any[] {
     const name = `__closure_invoke_${k}`
     const argNames = Array.from({ length: k }, (_, i) => `__a${i}`)
-    const params = [param('clo', 'Int'), ...argNames.map(nm => param(nm, 'Int'))]
+    // Under wasm-gc the closure handle is the `(ref $Vec_i32)` env itself (crossing
+    // `@extern` as an engine-GC'd wasm-gc ref — leak-free, collected when the host
+    // drops it); the trampoline's `clo` param is typed `Vec[Int]` accordingly.
+    const cloParam = ctx.wasmGc ? vecIntParam('clo') : param('clo', 'Int')
+    const params = [cloParam, ...argNames.map(nm => param(nm, 'Int'))]
     const body = block([], kwCall('@call_indirect', [userCall('vec_get_i32', [ns('clo'), intLit(0)]), ns('clo'), ...argNames.map(ns)]))
     return [fnDef(name, params, 'Int', body), exportDef(name)]
 }
@@ -290,6 +308,15 @@ function walk(node: any, ctx: Ctx): any {
         const out = new Array(node.length)
         for (let i = 0; i < node.length; i++) { const y = walk(node[i], ctx); out[i] = y; if (y !== node[i]) changed = true }
         return changed ? out : node
+    }
+    // ADR 0019 C2 — under wasm-gc, a local bound to a closure (`x := @closure(…)`)
+    // holds a `(ref $Vec_i32)`; annotate it `Vec[Int]` so injectLocalRefSlots gives
+    // its slot a ref type (else `local.set` rejects the ref).  The user keeps the
+    // closure opaque — the annotation is injected, not required of them.
+    if (ctx.wasmGc && node.type === 'Definition'
+        && (node.keyword === '@local' || node.keyword === '@mut' || node.keyword === '@var')
+        && isClosureCall(node.binding?.expression) && node.name && !node.name.typeAnnotation) {
+        node.name = { ...node.name, typeAnnotation: vecIntAnnotation() }
     }
     if (node.type === 'FunctionCall' && node.name === '@export_callback') {
         const t = transformExportCallback(node, ctx)
@@ -315,8 +342,8 @@ function walk(node: any, ctx: Ctx): any {
  * appended to the program's top-level elements.  Returns the rewritten program
  * plus any diagnostics.
  */
-export function desugarClosures(program: any): { program: any; errors: ElaborationError[] } {
-    const ctx: Ctx = { n: 0, errors: [], fns: collectFns(program), wrappers: [], invokeArities: new Set() }
+export function desugarClosures(program: any, target?: string): { program: any; errors: ElaborationError[] } {
+    const ctx: Ctx = { n: 0, errors: [], fns: collectFns(program), wrappers: [], invokeArities: new Set(), wasmGc: target === 'wasm-gc' }
     // C2 escape gate: flag host-callable escaping closures (a bare closure
     // crossing @extern) BEFORE the rewrite erases the @closure literals.  A
     // closure wrapped in @export_callback is the sanctioned, gate-exempt form.
@@ -324,7 +351,7 @@ export function desugarClosures(program: any): { program: any; errors: Elaborati
     const rewritten = walk(program, ctx)
     // C2: append the exported host-callable trampolines (one per call-arity used
     // with @export_callback) so the JS/Bun host can invoke a stored closure.
-    const trampolines = [...ctx.invokeArities].sort().flatMap(trampolineFor)
+    const trampolines = [...ctx.invokeArities].sort().flatMap(k => trampolineFor(k, ctx))
     const appended = [...ctx.wrappers, ...trampolines]
     if (appended.length === 0) return { program: rewritten, errors: ctx.errors }
     return {

@@ -159,7 +159,7 @@ const VEC_I32   = '$Vec_i32'
 /** Register $Array_i32 and $Vec_i32 in the registry.  Returns the
  *  type indices for downstream callers (constructors / sum lowering
  *  that might reference them in v1.1). */
-function registerGcVecTypes(reg: WasmGcTypeRegistry): { arrayIdx: number; vecIdx: number } {
+export function registerGcVecTypes(reg: WasmGcTypeRegistry): { arrayIdx: number; vecIdx: number } {
     const arrayIdx = reg.internNominal({
         name: ARRAY_I32,
         spec: {

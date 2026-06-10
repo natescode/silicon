@@ -306,6 +306,14 @@ export function lowerProgram(
     // freeze ctx.$compiler at undefined.
     ctx.$compiler = createCompilerAPI(ctx, lowerFns)
 
+    // Pre-register $Array_i32 + $Vec_i32 BEFORE user lowering so a `Vec[Int]` arg
+    // (the wasm-gc closure env, ADR 0019 C2) can resolve $Vec_i32's typeIdx while
+    // `expandCallIndirect` builds the ref-typed call_indirect signature.  Idempotent
+    // with the buildGcVecExtension re-registration below (internNominal is name-keyed).
+    if (target === 'wasm-gc') {
+        require('../codegen/gc-vec').registerGcVecTypes(ctx.wasmGcTypes)
+    }
+
     const imports: IRImport[] = []
     const globals: IRGlobal[] = []
     const functions: IRFunction[] = []
@@ -1048,6 +1056,13 @@ export function lowerExternImport(node: any, ctx: LowerCtx): IRImport {
         const idx = params.length
         params.push(siliconTypeNameToWasm(tn))
         if (isExternRefKind(tn)) { (refParams ??= new Map()).set(idx, EXTERN_SLOT); usesExternref = true }
+        // ADR 0019 C2 — a `Vec[Int]` param under wasm-gc is the closure handle
+        // `(ref $Vec_i32)` crossing the boundary (engine-GC'd); give it a ref slot
+        // so the import type matches (else the ref arg fails validation).
+        else if (ctx.target === 'wasm-gc' && tn === 'Vec') {
+            const vIdx = ctx.wasmGcTypes?.lookupByName('$Vec_i32')
+            if (vIdx !== undefined) (refParams ??= new Map()).set(idx, { localTypeIdx: vIdx, nullable: false })
+        }
     }
 
     const resName: string | undefined = node.name?.typeAnnotation?.typename
