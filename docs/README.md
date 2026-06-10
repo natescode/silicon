@@ -39,6 +39,7 @@ If you're new, start with [`getting-started.md`](getting-started.md).
 | [extern-out-pointer.md](extern-out-pointer.md) | `@extern` out-pointer ABI |
 | [struct-ffi.md](struct-ffi.md) | Struct-by-value FFI design proposal (not yet implemented) |
 | [ffi-coverage-gaps.md](ffi-coverage-gaps.md) | The remaining ~7% of host-API bind coverage — per-category root cause + adapter work needed (mostly one classifier seam) |
+| [bun-shell-ffi-plan.md](bun-shell-ffi-plan.md) | Plan: properly support `Bun.$` (the last skip) via a general `js::tagged` primitive + a `shell.si` stdlib — security-driven (preserve the substitution boundary) |
 | [signature-lines.md](signature-lines.md) | Separate `\\ name: type` signature lines; bare params, externs-as-signatures (proposal) |
 | [signature-lines-migration.md](signature-lines-migration.md) | Codemod + phased rollout plan for the signature-lines change (proposal) |
 | [use-includes.md](use-includes.md) | `@use 'path.si';` resolution semantics |
