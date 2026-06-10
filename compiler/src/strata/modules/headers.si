@@ -5,5 +5,6 @@
 \\ @extern append (JSValue, JSString, JSString);
 \\ @extern delete (JSValue, JSString);
 \\ @extern get (JSValue, JSString) -> JSString;
+\\ @extern get_set_cookie (JSValue) -> JSValue;
 \\ @extern has (JSValue, JSString) -> Bool;
 \\ @extern set (JSValue, JSString, JSString);

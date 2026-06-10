@@ -1,51 +1,70 @@
-# FFI coverage gaps — the remaining ~7%
+# FFI coverage gaps — the last ~7% (mostly closed)
 
-> **Status:** investigation / work plan (not yet implemented).
-> **Scope:** the host-API surface the bindgen adapters *cannot* currently bind.
+> **Status:** categories 2–4 **IMPLEMENTED**; categories 1 + 5 documented as the
+> permanent tail. Aggregate bind rate **90.1% → 96.5%** across the shipped
+> platform modules (338→362 bindings, 37→13 skips).
+> **Scope:** the host-API surface the bindgen adapters could not bind.
 > **Companion docs:** [`js-string-builtins.md`](js-string-builtins.md) (tier model),
 > the FFI sections of [`overview.md`](overview.md), and the bindgen source under
 > `compiler/bindgen/`.
 
-After flipping `events:'closure'` on `fs` / `crypto` / `global` (callbacks now
-cross as closure handles), aggregate bind rate across the shipped platform
-modules sits at **~93%**. This doc accounts for the remaining **~7%** — what
-each skipped binding is, *why* the adapter drops it, the exact work to recover
-it, and whether that work is worth doing.
+After flipping `events:'closure'` on `fs` / `crypto` / `global` (callbacks cross
+as closure handles), aggregate bind rate sat at **90.1%** (338 bindings, 37
+skips). This doc accounted for the remaining ~7% — what each skipped binding is,
+*why* the adapter dropped it, and whether recovering it was worth doing — and the
+worthwhile recoveries are now **shipped**. Bind rate is **96.5%** (362 bindings,
+13 skips); the 13 that remain are 8 deliberate portability tradeoffs (keeping
+`path`/`os` portable Tier-0) and 5 genuinely fundamental skips.
 
-The headline finding: **four of the five gap categories converge on a single
-seam** — `tsTypeToSi` in `compiler/bindgen/src/adapters/dts.ts` (and its
+The headline finding held: **four of the five gap categories converged on a
+single seam** — `tsTypeToSi` in `compiler/bindgen/src/adapters/dts.ts` (and its
 strictly-narrower Web-IDL twin `classify` in
-`compiler/bindgen/src/adapters/webiface.ts`). The guest side is already done:
+`compiler/bindgen/src/adapters/webiface.ts`). The guest side was already done:
 the `js` module (`compiler/src/strata/modules/js.si` + the host `js:` object)
-can build and read every object/array/dictionary handle these bindings need.
-The gap is almost entirely in the **type classifier**, not in codegen or the
-runtime. The fifth category (overload alternatives) is a genuine language fact
-and is mostly out of scope.
+builds and reads every object/array/dictionary handle these bindings need. The
+fix was almost entirely in the **type classifier**, not in codegen or the
+runtime — the host shim and `Impl` shapes were untouched. The fifth category
+(overload alternatives) is a genuine language fact and was left out of scope.
 
 ---
 
 ## Summary
 
-| # | Category | Verdict | Size | Risk | Recovers | Seam |
-|---|----------|---------|:----:|:----:|----------|------|
-| 1 | Variadic rest params | glue | S | Med | 3 fns (`path.join`/`resolve`, `Bun.$`) | `spec.ts` + `dts.ts` + `generate.ts` |
-| 2 | Unrepresentable results | adapter-tweak | S | Low | ~7 fns + ~6 config-only | `dts.ts` `tsTypeToSi` |
-| 3 | Object/buffer params not classified | adapter-tweak | S | Med | ~6 measured (likely 10–15) | `dts.ts` `tsTypeToSi` |
-| 4 | webiface non-bindable + dictionaries | adapter-tweak | S | Low | 7 of 8 webiface skips | `webiface.ts` `classify`/`classifyName` |
-| 5 | Overload alternatives | **fundamental** | S | Med | **0 new coverage** (capability only) | `dts.ts` overload loop |
+| # | Category | Verdict | Status | Recovered | Seam |
+|---|----------|---------|--------|-----------|------|
+| 1 | Variadic rest params | glue | **not done** (no usable win) | 0 — `Bun.$`'s name is the bare `$` (invalid Silicon id); `path.join/resolve` would force `path` web/bun-only | — |
+| 2 | Unrepresentable results | adapter-tweak | **done** | union-with-Promise (`Bun.readableStreamTo*`, `peek`), `bigint` results (`Bun.hash`), `fs.openAsBlob` | `dts.ts` `tsTypeToSi` |
+| 3 | Object/buffer params not classified | adapter-tweak | **done** | generic constraints (`crypto.randomFill*`/`generateKeyPair*`/`getRandomValues`, `fs.writev`/`readv`), `bigint` unions (`crypto.checkPrime*`), `unknown` (`Bun.deepMatch`), `structuredClone` | `dts.ts` `tsTypeToSi` |
+| 4 | webiface seq/`any`/dict | adapter-tweak | **done** | `FormData`/`URLSearchParams.getAll`, `Headers.getSetCookie`, `TextEncoder.encodeInto`, `AbortSignal.any`/`reason` | `webiface.ts` `classify`/`classifyName` |
+| 5 | Overload alternatives | **fundamental** | **out of scope** | 0 new coverage (capability on already-bound names only) | `dts.ts` overload loop |
 
-**Net:** categories 2–4 are low/medium-risk adapter tweaks that recover roughly
-**20 directly-skipped bindings** plus a long tail of config-only and
-future-module wins, all without touching the host shim or the runtime.
-Category 1 is real but ergonomically clunky and carries a portability
-regression. Category 5 does **not** move the coverage needle and is recommended
-out of scope.
+**Net result:** the categories-2–4 adapter tweaks recovered **24 directly-skipped
+bindings** (37 skips → 13) with **no host-shim or runtime change** — all the work
+was in two type classifiers plus one config flag (`fs` `async:'suspending'`).
+`path`/`os` were deliberately **kept portable** (Tier-0, every host), so their 8
+object/variadic skips stay — recovering them would make those modules web/bun-only.
 
 The recovered bindings are **handle bindings**, not typed ones: the guest
 receives an opaque, engine-GC'd `JSValue` (a Tier-2 externref) and drives it
 with the `js` module — exactly as it already does for `json::parse` output and
 the `fetch` ecosystem. That is the consistent contract for "the host owns this
-shape," and is the reason no host-side marshalling work is needed.
+shape," and is why no host-side marshalling was needed.
+
+### What shipped (the classifier changes)
+
+- **`dts.ts` `tsTypeToSi`** — threaded the TS `checker` through; added a
+  `TypeParameter` branch (resolve the base constraint and classify it; an
+  unconstrained `T` → `JSValue` in `jsvalue` mode), `BigIntLike → JSValue`,
+  `Unknown → JSValue`, and a union reducer that **drops `Promise` arms** so a
+  `T | Promise<T>` union binds through its synchronous arm.
+- **`webiface.ts`** — `classify` maps `sequence`/`FrozenArray`/`ObservableArray`
+  generics to a `JSValue` array handle; `classifyName` maps the IDL `any`/`object`
+  type and any **dictionary** (options bag) to `JSValue`. Static operations are
+  now processed **last**, so a static factory (`Response.json(data)`) yields a
+  name collision to the instance member of the same name (the `Body`-mixin
+  `json()` body-reader) instead of evicting it.
+- **`modules.ts`** — `fs` gained `async:'suspending'` (its one `Promise`-returning
+  member, `openAsBlob`, now awaits to a `JSValue`).
 
 ---
 
@@ -77,7 +96,14 @@ shim.
 
 ---
 
-## Category 1 — Variadic rest params  *(glue · S · Med · recovers 3)*
+## Category 1 — Variadic rest params  *(glue · NOT DONE — no usable win)*
+
+> **Outcome:** not implemented. In the `jsvalue`-mode modules the only variadic
+> member is `Bun.$`, whose snake-cased binding name is the bare `$` — not a valid
+> Silicon identifier (it is the data-shape sigil). `path.join`/`resolve` are in
+> `path`, which is kept portable (`objects:'skip'`), so the gated spread emitter
+> would skip them too. Net recovery is **zero usable bindings**, so the `spread`
+> `Impl` shape was not added. The analysis below records why.
 
 **What it is.** A host function whose last parameter is a JS rest param
 (`...args`) — a true variadic call that one fixed-arity `@extern` cannot
@@ -138,7 +164,7 @@ regression is acceptable. Ergonomics are poor either way — callers hand-build 
 
 ---
 
-## Category 2 — Unrepresentable results  *(adapter-tweak · S · Low · recovers ~7 + ~6 config)*
+## Category 2 — Unrepresentable results  *(adapter-tweak · ✅ IMPLEMENTED)*
 
 **What it is.** A host function whose **return** type `tsTypeToSi` can't map
 (returns `null`), dropping the whole binding with reason `"non-Tier-0 result"` /
@@ -194,7 +220,7 @@ conditional type, genuinely unrepresentable).
 
 ---
 
-## Category 3 — Object/buffer params not classified  *(adapter-tweak · S · Med · recovers ~6, likely 10–15)*
+## Category 3 — Object/buffer params not classified  *(adapter-tweak · ✅ IMPLEMENTED)*
 
 **What it is.** Node/Bun members whose object/buffer-typed **params** are dropped
 by `tsTypeToSi`.
@@ -253,7 +279,7 @@ before/after to get the exact recovered count and catch unintended over-binding.
 
 ---
 
-## Category 4 — webiface non-bindable members + dictionaries  *(adapter-tweak · S · Low · recovers 7 of 8)*
+## Category 4 — webiface non-bindable members + dictionaries  *(adapter-tweak · ✅ IMPLEMENTED)*
 
 **What it is.** The Web-IDL adapter drops members whose type is a
 `sequence<>`/`FrozenArray<>` (a JS array), the IDL `any` type, or a dictionary
@@ -297,19 +323,29 @@ if (tn.generic) {
 `classify` runs on results, so the `@suspending` path is undisturbed; `record<>`
 stays `null`.
 
-**Recovers 7 of 8 webiface skips:** `FormData.getAll`, `URLSearchParams.getAll`,
-`Headers.getSetCookie` (sequence returns) + `Response.json` static,
-`AbortSignal.reason` getter, `AbortSignal.any` static (any/sequence args). The
-8th — `AbortSignal.onabort` (`EventHandler` callback) — **stays skipped**:
+**Recovered (6):** `FormData.getAll`, `URLSearchParams.getAll`,
+`Headers.getSetCookie` (sequence returns), `TextEncoder.encodeInto` (dictionary
+result + buffer destination), `AbortSignal.reason` getter (`any` attribute),
+`AbortSignal.any` static (`sequence<AbortSignal>` arg). `AbortSignal.abort` also
+gained its `reason` arg (the `any` param now binds), matching the WHATWG
+signature.
+
+**Did NOT recover — and that's the correct outcome (2):**
+`Response.json` *static factory* (`Response.json(data)`) now classifies (`any →
+JSValue`), but its snake-name `json` **collides** with the established `Body`-mixin
+instance body-reader `json()` (the suspending `response::json(resp)` everyone
+uses). Static operations are now processed **last**, so the instance reader keeps
+the name and the static collides-and-drops — a category-5 overload-tail skip, not
+a regression. `AbortSignal.onabort` (`EventHandler` callback) **stays skipped**:
 webiface has no `events:'closure'` trampoline path, so that one is fundamental.
 
 **Compounding win.** The dict-param branch unblocks any future module that takes
-an options bag (902 dictionaries exist in the corpus), so the recovery grows as
-more Web interfaces ship.
+an options bag (hundreds of dictionaries exist in the corpus), so the recovery
+grows as more Web interfaces ship.
 
 ---
 
-## Category 5 — Overload alternatives (the fundamental tail)  *(fundamental · S · Med · recovers **0 new coverage**)*
+## Category 5 — Overload alternatives (the fundamental tail)  *(fundamental · OUT OF SCOPE)*
 
 **What it is.** A TS/IDL member with multiple overloads binds as **one**
 `@extern` (monomorphic). The best-bindable overload is chosen, and every *other*
@@ -348,32 +384,50 @@ workaround trades correctness-neutral capability for namespace noise.
 
 ---
 
-## Recommended order
+## What was implemented (and what was left)
 
-1. **Category 4** (webiface) and **Category 2** (results) — low risk, recover
-   the most directly-skipped bindings, pure classifier + config. Do these first.
-2. **Category 3** (object/buffer params) — same seam, slightly broader blast
-   radius; land it with the before/after `skipped[]` diff to verify the count
-   and catch over-binding.
-3. **Category 1** (variadic) — only if the `path` web/bun-only regression is
-   acceptable (or keep it gated to `Bun.$`). Ergonomically clunky; lowest value
-   of the four glue/tweak categories.
-4. **Category 5** — defer / skip. Revisit only the specific lossy-result members
-   if a concrete need arises, via per-module tuning rather than `_altN`.
+Done — categories 2, 3, 4, all in the two type classifiers + one config flag,
+verified by re-running `bun bindgen/cli.ts --check` and diffing each module's
+`skipped[]` before/after (`adapters.test.ts` locks the specific recoveries):
 
-Categories 2–4 are all **adapter-tweak / config**, share one seam, and require
-**no host-shim or runtime changes** — the `js` module and the Tier-2 externref
-contract already carry every recovered handle. After they land, re-run
-`bun bindgen/cli.ts --check` per module and diff `skipped[]` to confirm the new
-aggregate bind rate.
+- **Category 4** (webiface seq/`any`/dict) and **Category 2** (unrepresentable
+  results) — the low-risk bulk; the `js` module + Tier-2 externref contract carry
+  every recovered handle, so the host shim was untouched.
+- **Category 3** (object/buffer params) — same seam; the before/after `skipped[]`
+  diff confirmed the recovered set and caught no over-binding (the recursive
+  classify still nulls callback/thenable constraints).
 
-## What stays unbound after all of the above
+Left out, deliberately:
 
-Genuinely fundamental, documented as permanent skips:
+- **Category 1** (variadic) — **not implemented**: no usable win (`Bun.$` →
+  invalid name `$`; `path` kept portable). The `spread` `Impl` shape was not added.
+- **Category 5** (overload alternatives) — **out of scope**: a consequence of
+  `@extern` monomorphism, correctness-neutral, and `_altN` naming is noise.
+- **`path` / `os` object + variadic results** — **not recovered, on purpose**:
+  these modules stay Tier-0 portable (every host); binding their object results
+  would require `objects:'jsvalue'`, making them web/bun-only.
 
-- **`Bun.hash`** — `number | bigint` result; needs a `bigint → Int64` ABI.
+## What stays unbound — the 13 remaining skips
+
+**Portability tradeoff (8)** — recoverable only by making the module web/bun-only;
+deliberately left portable:
+
+- `path.parse`, `path.format`, `path.join`, `path.resolve`
+- `os.cpus`, `os.loadavg`, `os.userInfo`, `os.networkInterfaces`
+
+**Genuinely fundamental (5)** — permanent skips:
+
 - **`Bun.plugin`** — `ReturnType<T["setup"]>`, a conditional type.
+- **`Bun.serve`** — its `options` is an intersection type carrying an embedded
+  `fetch` handler; needs a closure inside a handle, not a plain `JSValue`.
+- **`Bun.$`** — variadic, and its binding name would be the bare `$` (the Silicon
+  data-shape sigil — not a valid identifier).
+- **`Response.json`** *static factory* — collides with the instance body-reader
+  `json()`; `@extern` monomorphism keeps the instance form (the useful one).
 - **`AbortSignal.onabort`** — an `EventHandler` callback; webiface has no
   closure-trampoline path (no `events:'closure'` analogue).
-- **Overload *alternatives*** (category 5) — a consequence of `@extern`
-  monomorphism, not a bug; the best overload always binds.
+
+> Note: `Bun.hash` (`number | bigint`) is no longer skipped — the union's `bigint`
+> arm now crosses as a `JSValue` handle, so it binds (the numeric value is opaque
+> to the guest, but the binding exists). A native `bigint → Int64` ABI remains
+> future work if a scalar result is wanted.

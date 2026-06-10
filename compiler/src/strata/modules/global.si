@@ -5,3 +5,4 @@
 \\ @extern btoa (JSString) -> JSString;
 \\ @suspending @extern fetch (JSString, JSValue) -> JSValue;
 \\ @extern queue_microtask (Vec[Int]);
+\\ @extern structured_clone (JSValue, JSValue) -> JSValue;

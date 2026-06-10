@@ -3,6 +3,8 @@
 # Regenerate: `bun bindgen/cli.ts --write`.  Call as `crypto::<fn>`.  (Tier-2: JSValue = object handle, externref, web/bun only)
 \\ @extern argon2 (JSString, JSValue, Vec[Int]);
 \\ @extern argon2_sync (JSString, JSValue) -> JSValue;
+\\ @extern check_prime (JSValue, Vec[Int]);
+\\ @extern check_prime_sync (JSValue, JSValue) -> Bool;
 \\ @extern create_cipheriv (JSString, JSString, JSString, JSValue) -> JSValue;
 \\ @extern create_decipheriv (JSString, JSString, JSString, JSValue) -> JSValue;
 \\ @extern create_diffie_hellman (JSString, JSString, JSString, JSString) -> JSValue;
@@ -20,7 +22,8 @@
 \\ @extern diffie_hellman_group (JSString) -> JSValue;
 \\ @extern encapsulate (JSString) -> JSValue;
 \\ @extern generate_key (JSString, JSValue, Vec[Int]);
-\\ @extern generate_key_pair_sync (JSString) -> JSValue;
+\\ @extern generate_key_pair (JSString, JSValue, Vec[Int]);
+\\ @extern generate_key_pair_sync (JSString, JSValue) -> JSValue;
 \\ @extern generate_key_sync (JSString, JSValue) -> JSValue;
 \\ @extern generate_prime (Int, Vec[Int]);
 \\ @extern generate_prime_sync (Int) -> JSValue;
@@ -30,6 +33,7 @@
 \\ @extern get_diffie_hellman (JSString) -> JSValue;
 \\ @extern get_fips () -> Int;
 \\ @extern get_hashes () -> JSValue;
+\\ @extern get_random_values (JSValue) -> JSValue;
 \\ @extern hash (JSString, JSString, JSString) -> JSString;
 \\ @extern hkdf (JSString, JSString, JSString, JSString, Int, Vec[Int]);
 \\ @extern hkdf_sync (JSString, JSString, JSString, JSString, Int) -> JSValue;
@@ -41,6 +45,8 @@
 \\ @extern public_decrypt (JSString, JSString) -> JSValue;
 \\ @extern public_encrypt (JSString, JSString) -> JSValue;
 \\ @extern random_bytes (Int) -> JSValue;
+\\ @extern random_fill (JSValue, Int, Int, Vec[Int]);
+\\ @extern random_fill_sync (JSValue, Int, Int) -> JSValue;
 \\ @extern random_int (Int, Int) -> Int;
 \\ @extern random_uuid (JSValue) -> JSString;
 \\ @extern scrypt (JSString, JSString, Int, Vec[Int]);

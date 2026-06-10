@@ -3,4 +3,5 @@
 # Regenerate: `bun bindgen/cli.ts --write`.  Call as `text_encoder::<fn>`.  (Tier-2: JSValue = object handle, externref, web/bun only)
 \\ @extern create () -> JSValue;
 \\ @extern encode (JSValue, JSString) -> JSValue;
+\\ @extern encode_into (JSValue, JSString, JSValue) -> JSValue;
 \\ @extern encoding (JSValue) -> JSString;

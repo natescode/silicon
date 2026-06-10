@@ -58,7 +58,13 @@ function classify(tn: any, ctx: Ctx, depth = 0): SiType | null {
         if (parts.length && parts.every((p: SiType | null) => p === 'JSValue')) return 'JSValue'
         return null
     }
-    if (tn.generic) return null          // sequence<> / record<> / Promise<> / FrozenArray<> — not a single handle
+    if (tn.generic) {
+        // A JS array (`sequence<>`/`FrozenArray<>`/`ObservableArray<>`) crosses as
+        // one opaque JSValue array handle — the guest walks it with js::len /
+        // js::get_index (mirrors dts.ts mapping an array type to JSValue).
+        if (tn.generic === 'sequence' || tn.generic === 'FrozenArray' || tn.generic === 'ObservableArray') return 'JSValue'
+        return null                      // record<> / Promise<> — handled elsewhere (classifyResult), else not a single handle
+    }
     const name = tn.idlType
     if (typeof name !== 'string') return null
     return classifyName(name, ctx, depth)
@@ -69,9 +75,16 @@ function classify(tn: any, ctx: Ctx, depth = 0): SiType | null {
 function classifyName(name: string, ctx: Ctx, depth: number): SiType | null {
     if (typeof name !== 'string') return null
     if (HANDLE_TYPES.has(name)) return 'JSValue'
+    // The IDL `any`/`object` type is as opaque as a host object — cross it as a
+    // JSValue handle (the guest reads it with js::as_int/as_str/get, builds it
+    // with js::object/js::set).  Mirrors dts.ts mapping `any` → JSValue.
+    if (name === 'any' || name === 'object') return 'JSValue'
     try { return idlTypeToSi(name) } catch { /* not a scalar */ }
     if (ctx.ifaces.has(name)) return 'JSValue'
     if (ctx.enums.has(name)) return 'String'     // an IDL enum is a set of string values
+    // A dictionary (options bag) crosses as a JSValue handle — the guest builds it
+    // with js::object()/js::set(...); the host receives a plain object.
+    if (ctx.dicts.has(name)) return 'JSValue'
     const td = ctx.typedefs.get(name)
     if (td) return classify(td, ctx, depth + 1)
     return null
@@ -173,7 +186,13 @@ export function webifaceToSpecs(interfaceName: string, corpus = loadWebrefCorpus
         }
     }
     const ctx: Ctx = { ifaces, dicts, enums, typedefs }
-    const members = [...ownMembers, ...includes.flatMap(m => mixinMembers.get(m) ?? [])]
+    // Process STATIC operations last: a static factory whose snake-name collides
+    // with an instance member (e.g. Response's static `json(data)` vs the Body-mixin
+    // instance `json()` body-reader) must yield the binding name to the instance
+    // member — the established, commonly-used binding — rather than evict it.  The
+    // static then collides-and-drops (a category-5 overload-tail skip).
+    const allMembers = [...ownMembers, ...includes.flatMap(m => mixinMembers.get(m) ?? [])]
+    const members = [...allMembers.filter(m => m.special !== 'static'), ...allMembers.filter(m => m.special === 'static')]
 
     const specs: BindingSpec[] = []
     const skipped: { member: string; reason: string }[] = []

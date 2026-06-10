@@ -78,6 +78,36 @@ describe('bindgen adapters — generated from real spec sources', () => {
         expect(byName.get('stringify')!.impl).toEqual({ kind: 'call', expr: 'JSON.stringify(value)' })
     })
 
+    test('jsvalue mode: generic constraints, bigint, unknown, and sync-arm-of-Promise unions cross as JSValue', () => {
+        // node:crypto exercises the generic-param + bigint-union recoveries.
+        const crypto = dtsToSpecs({
+            module: 'node:crypto', types: ['node'], accessor: "require('node:crypto')",
+            prefix: '', objects: 'jsvalue', numberType: 'Int', events: 'closure',
+        })
+        const c = new Map(crypto.specs.map(s => [s.name, s]))
+        // randomFillSync<T extends ArrayBufferView>(buffer: T, …): T — an unconstrained-
+        // shaped generic result resolves to a JSValue handle (and the buffer param too).
+        expect(c.get('random_fill_sync')).toMatchObject({ params: [{ type: 'JSValue' }, { type: 'Int' }, { type: 'Int' }], result: 'JSValue' })
+        // getRandomValues<T extends ArrayBufferView>(array: T): T — generic param→constraint→JSValue.
+        expect(c.get('get_random_values')).toMatchObject({ params: [{ type: 'JSValue' }], result: 'JSValue' })
+        // generateKeyPairSync(type, options): the `options` generic resolves to its
+        // object constraint → JSValue (not skipped).
+        expect(c.get('generate_key_pair_sync')?.params.at(-1)).toMatchObject({ type: 'JSValue' })
+        // checkPrimeSync(candidate: LargeNumberLike): the bigint arm of the union no
+        // longer poisons the whole union — it binds as a JSValue handle.
+        expect(c.get('check_prime_sync')).toBeDefined()
+        expect(crypto.skipped.some(s => s.member.endsWith('.checkPrimeSync'))).toBe(false)
+
+        // Bun: `unknown` params and `T | Promise<T>` unions cross via their sync arm.
+        const bun = dtsToSpecs({ global: 'Bun', types: ['bun-types'], accessor: 'Bun', prefix: '', objects: 'jsvalue', async: 'suspending' })
+        const b = new Map(bun.specs.map(s => [s.name, s]))
+        // deepMatch(subset: unknown, a: unknown) — unknown → JSValue (was a non-Tier-0 skip).
+        expect(b.get('deep_match')).toMatchObject({ params: [{ type: 'JSValue' }, { type: 'JSValue' }], result: 'Bool' })
+        // peek<T>(promise): T | Promise<T> — the Promise arm is dropped, the sync arm binds.
+        expect(b.get('peek')).toMatchObject({ result: 'JSValue' })
+        expect(bun.skipped.some(s => s.member === 'Bun.peek')).toBe(false)
+    })
+
     test('a rest param (`...args`) is NOT dropped — its binding stays skipped (no silent no-arg call)', () => {
         // `path.join(...paths)` must not degrade to a meaningless `join()`: a rest
         // param is required-shaped, so the whole binding is skipped even in
@@ -135,14 +165,24 @@ describe('bindgen webiface adapter — constructed Web interfaces from @webref/i
         expect(dec.get('decode')).toMatchObject({ params: [{ type: 'JSValue' }, { type: 'JSValue' }], result: 'String', impl: { kind: 'method', method: 'decode' } })
     })
 
-    test('non-handle members are skipped, not silently mis-bound (dictionaries / sequences)', () => {
-        // TextEncoder.encodeInto returns a dictionary (TextEncoderEncodeIntoResult) → skipped.
-        expect(webifaceToSpecs('TextEncoder').skipped.some(s => s.member === 'encodeInto')).toBe(true)
-        // Headers.getSetCookie returns a sequence → skipped (a collection, not a single handle).
+    test('dictionaries / sequences cross as JSValue handles (the guest drives them via the js module)', () => {
+        // TextEncoder.encodeInto returns a dictionary (TextEncoderEncodeIntoResult) →
+        // a JSValue handle (the guest reads {read, written} with js::get); the
+        // destination buffer is also a JSValue handle.
+        const enc = byName(webifaceToSpecs('TextEncoder').specs)
+        expect(enc.get('encode_into')).toMatchObject({
+            params: [{ type: 'JSValue' }, { type: 'String' }, { type: 'JSValue' }], result: 'JSValue',
+            impl: { kind: 'method', method: 'encodeInto' },
+        })
+        // Headers.getSetCookie returns a sequence<ByteString> → a JSValue array handle
+        // (the guest walks it with js::len / js::get_index).
         const h = webifaceToSpecs('Headers')
-        expect(h.skipped.some(s => s.member === 'getSetCookie')).toBe(true)
+        expect(byName(h.specs).get('get_set_cookie')).toMatchObject({ params: [{ type: 'JSValue' }], result: 'JSValue' })
         // Headers ctor's union init has no string arm and is optional → dropped → create() no-arg.
         expect(byName(h.specs).get('create')).toMatchObject({ params: [], result: 'JSValue' })
+        // A genuine callback attribute (an EventHandler) still skips — webiface has no
+        // closure-trampoline path, so it is the documented fundamental tail.
+        expect(webifaceToSpecs('AbortSignal').skipped.some(s => s.member === 'onabort')).toBe(true)
     })
 
     test('URLSearchParams: a union ctor arg with a string member is bindable as String', () => {

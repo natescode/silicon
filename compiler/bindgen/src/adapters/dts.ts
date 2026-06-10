@@ -73,35 +73,55 @@ const isThenable = (t: ts.Type): boolean => {
 /** Resolve a TS type to a Tier-0 Silicon type, or — when `objects` is 'jsvalue'
  *  — the externref handle `JSValue` for a plain object type.  Returns null for a
  *  type that can't cross at all (callables, thenables, or a non-Tier-0 object in
- *  'skip' mode). */
-function tsTypeToSi(t: ts.Type, numberType: SiType, objects: 'skip' | 'jsvalue'): SiType | null {
+ *  'skip' mode).  `checker` is threaded for generic-constraint resolution. */
+function tsTypeToSi(t: ts.Type, checker: ts.TypeChecker, numberType: SiType, objects: 'skip' | 'jsvalue'): SiType | null {
     const f = t.flags
     if (f & ts.TypeFlags.StringLike)  return 'String'
     if (f & ts.TypeFlags.NumberLike)  return numberType
     if (f & ts.TypeFlags.BooleanLike) return 'Bool'
     if (f & (ts.TypeFlags.Void | ts.TypeFlags.Undefined)) return 'Void'
+    // A generic type parameter: resolve its base constraint and classify THAT —
+    // `<T extends ArrayBufferView>` → ArrayBufferView → JSValue (crypto.randomFill,
+    // fs.writev's buffers, crypto.generateKeyPair's options).  An UNCONSTRAINED
+    // `T` is opaque, so it crosses as a JSValue handle in 'jsvalue' mode
+    // (structuredClone's result, Bun.peek's sync arm); else it can't cross.  The
+    // recursive classify still nulls a constraint that is itself a callback or a
+    // thenable, so this never over-binds those.
+    if (f & ts.TypeFlags.TypeParameter) {
+        const base = checker.getBaseConstraintOfType(t)
+        if (base && base !== t) return tsTypeToSi(base, checker, numberType, objects)
+        return objects === 'jsvalue' ? 'JSValue' : null
+    }
     if (t.isUnion()) {
-        // Classify each arm in the SAME `objects` mode, so an object arm becomes
-        // JSValue under 'jsvalue' (this is what unblocks mixed unions like
+        // Drop Promise arms first: a `T | Promise<T>` union is bindable through its
+        // SYNCHRONOUS arm (the async arm belongs to the @suspending result path, so
+        // it must not sink the whole union — Bun.readableStreamTo*/peek).
+        const arms = t.types.filter(p => !isThenable(p))
+        // Classify each surviving arm in the SAME `objects` mode, so an object arm
+        // becomes JSValue under 'jsvalue' (this unblocks mixed unions like
         // `string | Buffer | URL` — Node's PathOrFileDescriptor).
-        const parts = t.types.map(p => tsTypeToSi(p, numberType, objects))
+        const parts = arms.map(p => tsTypeToSi(p, checker, numberType, objects))
         // A homogeneous Tier-0 union reduces to that type (e.g. NodeJS.Platform
         // = string-literal union → String).
-        if (parts.every(p => p === numberType)) return numberType
-        if (parts.every(p => p === 'Bool')) return 'Bool'
+        if (parts.length > 0 && parts.every(p => p === numberType)) return numberType
+        if (parts.length > 0 && parts.every(p => p === 'Bool')) return 'Bool'
         // Any string arm → String: the guest can always supply a string (covers
         // `string | Buffer | URL` paths and `string`-literal unions).
         if (parts.some(p => p === 'String')) return 'String'
-        // A mixed union of otherwise-bindable arms (objects/scalars) crosses as an
-        // opaque JSValue handle in 'jsvalue' mode; an unbindable arm (callback,
-        // thenable → null) sinks the whole union.
+        // A mixed union of otherwise-bindable arms (objects/scalars/bigint) crosses
+        // as an opaque JSValue handle in 'jsvalue' mode; an unbindable arm
+        // (callback → null) sinks the whole union.
         if (objects === 'jsvalue' && parts.length > 0 && parts.every(p => p !== null)) return 'JSValue'
         return null
     }
     // Tier-2: a plain object/array crosses as an opaque externref handle.  A
     // function (needs a closure) or a Promise (async) is deliberately NOT a handle.
     if (objects === 'jsvalue' && (f & ts.TypeFlags.Object) && !isCallable(t) && !isThenable(t)) return 'JSValue'
-    if (objects === 'jsvalue' && (f & ts.TypeFlags.Any)) return 'JSValue'
+    // `bigint` (no linear-memory bigint ABI) and `unknown`/`any` are as opaque as
+    // a host object — cross them as JSValue handles in 'jsvalue' mode.  bigint also
+    // unblocks `LargeNumberLike` unions (crypto.checkPrime: bigint + buffer arms).
+    if (objects === 'jsvalue' && (f & ts.TypeFlags.BigIntLike)) return 'JSValue'
+    if (objects === 'jsvalue' && (f & (ts.TypeFlags.Any | ts.TypeFlags.Unknown))) return 'JSValue'
     return null
 }
 
@@ -172,9 +192,9 @@ export function dtsToSpecs(src: DtsSource): DtsResult {
         if (asyncMode === 'suspending' && isThenable(rawRet)) {
             suspending = true
             const awaited = (checker.getTypeArguments(rawRet as ts.TypeReference) ?? [])[0]
-            ret = awaited ? tsTypeToSi(awaited, numberType, objects) : 'Void'   // Promise<void> → Void
+            ret = awaited ? tsTypeToSi(awaited, checker, numberType, objects) : 'Void'   // Promise<void> → Void
         } else {
-            ret = tsTypeToSi(rawRet, numberType, objects)
+            ret = tsTypeToSi(rawRet, checker, numberType, objects)
         }
         if (ret === null) return { bad: suspending ? 'awaited type not bindable' : 'non-Tier-0 result' }
         const params: Param[] = []
@@ -190,7 +210,7 @@ export function dtsToSpecs(src: DtsSource): DtsResult {
             if (events === 'closure' && isCallable(ptype) && !isThenable(ptype)) {
                 params.push({ name: p.getName(), type: 'Callback' }); continue
             }
-            const pt = tsTypeToSi(ptype, numberType, objects)
+            const pt = tsTypeToSi(ptype, checker, numberType, objects)
             if (pt === null) {
                 // An unrepresentable optional is dropped — but STOP there: keeping a
                 // later param would shift it into the dropped param's positional

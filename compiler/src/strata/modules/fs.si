@@ -51,17 +51,19 @@
 \\ @extern mkdtemp_disposable_sync (JSString, JSString) -> JSValue;
 \\ @extern mkdtemp_sync (JSString, JSString) -> JSString;
 \\ @extern open (JSString, JSString, JSString, Vec[Int]);
+\\ @suspending @extern open_as_blob (JSString, JSValue) -> JSValue;
 \\ @extern open_sync (JSString, JSString, JSString) -> Int;
 \\ @extern opendir (JSString, Vec[Int]);
 \\ @extern opendir_sync (JSString, JSValue) -> JSValue;
 \\ @extern read (Int, Vec[Int]);
 \\ @extern read_file (JSString, JSString, Vec[Int]);
 \\ @extern read_file_sync (JSString, JSString) -> JSString;
-\\ @extern read_sync (Int, JSValue, JSValue) -> Int;
+\\ @extern read_sync (Int, JSValue, Int, Int, JSValue) -> Int;
 \\ @extern readdir (JSString, JSString, Vec[Int]);
 \\ @extern readdir_sync (JSString, JSString) -> JSValue;
 \\ @extern readlink (JSString, JSString, Vec[Int]);
 \\ @extern readlink_sync (JSString, JSString) -> JSString;
+\\ @extern readv (Int, JSValue, Int, Vec[Int]);
 \\ @extern readv_sync (Int, JSValue, Int) -> Int;
 \\ @extern realpath (JSString, JSString, Vec[Int]);
 \\ @extern realpath_sync (JSString, JSString) -> JSString;
@@ -90,4 +92,5 @@
 \\ @extern write_file (JSString, JSString, JSString, Vec[Int]);
 \\ @extern write_file_sync (JSString, JSString, JSString);
 \\ @extern write_sync (Int, JSString, Int, JSString) -> Int;
+\\ @extern writev (Int, JSValue, Int, Vec[Int]);
 \\ @extern writev_sync (Int, JSValue, Int) -> Int;

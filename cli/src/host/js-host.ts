@@ -259,6 +259,7 @@ function buildImports(state: HostState, write: (s: string) => void) {
             connect: (options: any) => Bun.connect(options),
             cron: (path: any, schedule: any, title: any) => Bun.cron(path, schedule, title),
             deep_equals: (a: any, b: any, strict: number) => Bun.deepEquals(a, b, strict),
+            deep_match: (subset: any, a: any) => Bun.deepMatch(subset, a),
             deflate_sync: (data: any, options: any) => Bun.deflateSync(data, options),
             escape_html: (input: any) => Bun.escapeHTML(input),
             fetch: (input: any, init: any) => Bun.fetch(input, init),
@@ -268,6 +269,7 @@ function buildImports(state: HostState, write: (s: string) => void) {
             generate_heap_snapshot: (format: any, encoding: any) => Bun.generateHeapSnapshot(format, encoding),
             gunzip_sync: (data: any, options: any) => Bun.gunzipSync(data, options),
             gzip_sync: (data: any, options: any) => Bun.gzipSync(data, options),
+            hash: (data: any, seed: any) => Bun.hash(data, seed),
             index_of_line: (buffer: any, offset: number) => Bun.indexOfLine(buffer, offset),
             inflate_sync: (data: any, options: any) => Bun.inflateSync(data, options),
             inspect: (arg: any, options: any) => Bun.inspect(arg, options),
@@ -276,9 +278,14 @@ function buildImports(state: HostState, write: (s: string) => void) {
             nanoseconds: () => Bun.nanoseconds(),
             open_in_editor: (path: any, options: any) => Bun.openInEditor(path, options),
             path_to_file_url: (path: any) => Bun.pathToFileURL(path),
+            peek: (promise: any) => Bun.peek(promise),
+            postgres: (string: any) => Bun.postgres(string),
             random_uuidv5: (name: any, namespace: any, encoding: any) => Bun.randomUUIDv5(name, namespace, encoding),
             random_uuidv7: (encoding: any, timestamp: any) => Bun.randomUUIDv7(encoding, timestamp),
+            readable_stream_to_array: (stream: any) => Bun.readableStreamToArray(stream),
+            readable_stream_to_array_buffer: (stream: any) => Bun.readableStreamToArrayBuffer(stream),
             readable_stream_to_blob: (stream: any) => Bun.readableStreamToBlob(stream),
+            readable_stream_to_bytes: (stream: any) => Bun.readableStreamToBytes(stream),
             readable_stream_to_form_data: (stream: any, multipartBoundaryExcludingDashes: any) => Bun.readableStreamToFormData(stream, multipartBoundaryExcludingDashes),
             readable_stream_to_json: (stream: any) => Bun.readableStreamToJSON(stream),
             readable_stream_to_text: (stream: any) => Bun.readableStreamToText(stream),
@@ -291,6 +298,7 @@ function buildImports(state: HostState, write: (s: string) => void) {
             slice_ansi: (input: any, start: number, end: number, options: any, ambiguousIsNarrow: number) => Bun.sliceAnsi(input, start, end, options, ambiguousIsNarrow),
             spawn: (cmds: any, options: any) => Bun.spawn(cmds, options),
             spawn_sync: (cmds: any, options: any) => Bun.spawnSync(cmds, options),
+            sql: (string: any) => Bun.sql(string),
             string_width: (input: any, options: any) => Bun.stringWidth(input, options),
             strip_ansi: (input: any) => Bun.stripANSI(input),
             udp_socket: (options: any) => Bun.udpSocket(options),
@@ -308,11 +316,7 @@ function buildImports(state: HostState, write: (s: string) => void) {
         // The global (URL/Headers/TextEncoder/…) must be in host scope (it is in Bun).
         url: {
             // === bindgen:module url ===
-            create_object_url: (obj: any) => URL.createObjectURL(obj),
-            revoke_object_url: (url: any) => URL.revokeObjectURL(url),
             create: (url: any) => new URL(url),
-            parse: (url: any) => URL.parse(url),
-            can_parse: (url: any) => URL.canParse(url),
             to_string: (self: any) => self.toString(),
             href: (self: any) => self.href,
             set_href: (self: any, value: any) => self.href = value,
@@ -337,6 +341,10 @@ function buildImports(state: HostState, write: (s: string) => void) {
             hash: (self: any) => self.hash,
             set_hash: (self: any, value: any) => self.hash = value,
             to_json: (self: any) => self.toJSON(),
+            create_object_url: (obj: any) => URL.createObjectURL(obj),
+            revoke_object_url: (url: any) => URL.revokeObjectURL(url),
+            parse: (url: any) => URL.parse(url),
+            can_parse: (url: any) => URL.canParse(url),
             // === /bindgen:module url ===
         },
         url_search_params: {
@@ -346,6 +354,7 @@ function buildImports(state: HostState, write: (s: string) => void) {
             append: (self: any, name: any, value: any) => self.append(name, value),
             delete: (self: any, name: any) => self.delete(name),
             get: (self: any, name: any) => self.get(name),
+            get_all: (self: any, name: any) => self.getAll(name),
             has: (self: any, name: any) => self.has(name),
             set: (self: any, name: any, value: any) => self.set(name, value),
             sort: (self: any) => self.sort(),
@@ -358,6 +367,7 @@ function buildImports(state: HostState, write: (s: string) => void) {
             append: (self: any, name: any, value: any) => self.append(name, value),
             delete: (self: any, name: any) => self.delete(name),
             get: (self: any, name: any) => self.get(name),
+            get_set_cookie: (self: any) => self.getSetCookie(),
             has: (self: any, name: any) => self.has(name),
             set: (self: any, name: any, value: any) => self.set(name, value),
             // === /bindgen:module headers ===
@@ -366,6 +376,7 @@ function buildImports(state: HostState, write: (s: string) => void) {
             // === bindgen:module text_encoder ===
             create: () => new TextEncoder(),
             encode: (self: any, input: any) => self.encode(input),
+            encode_into: (self: any, source: any, destination: any) => self.encodeInto(source, destination),
             encoding: (self: any) => self.encoding,
             // === /bindgen:module text_encoder ===
         },
@@ -382,8 +393,6 @@ function buildImports(state: HostState, write: (s: string) => void) {
         response: {
             // === bindgen:module response ===
             create: (body: any) => new Response(body),
-            error: () => Response.error(),
-            redirect: (url: any) => Response.redirect(url),
             type: (self: any) => self.type,
             url: (self: any) => self.url,
             redirected: (self: any) => self.redirected,
@@ -400,6 +409,8 @@ function buildImports(state: HostState, write: (s: string) => void) {
             form_data: (self: any) => self.formData(),
             json: (self: any) => self.json(),
             text: (self: any) => self.text(),
+            error: () => Response.error(),
+            redirect: (url: any) => Response.redirect(url),
             // === /bindgen:module response ===
         },
         request: {
@@ -435,7 +446,7 @@ function buildImports(state: HostState, write: (s: string) => void) {
         },
         blob: {
             // === bindgen:module blob ===
-            create: () => new Blob(),
+            create: (blobParts: any) => new Blob(blobParts),
             size: (self: any) => self.size,
             type: (self: any) => self.type,
             slice: (self: any, start: number) => self.slice(start),
@@ -451,6 +462,7 @@ function buildImports(state: HostState, write: (s: string) => void) {
             append: (self: any, name: any, value: any) => self.append(name, value),
             delete: (self: any, name: any) => self.delete(name),
             get: (self: any, name: any) => self.get(name),
+            get_all: (self: any, name: any) => self.getAll(name),
             has: (self: any, name: any) => self.has(name),
             set: (self: any, name: any, value: any) => self.set(name, value),
             // === /bindgen:module form_data ===
@@ -459,21 +471,25 @@ function buildImports(state: HostState, write: (s: string) => void) {
             // === bindgen:module abort_controller ===
             create: () => new AbortController(),
             signal: (self: any) => self.signal,
-            abort: (self: any) => self.abort(),
+            abort: (self: any, reason: any) => self.abort(reason),
             // === /bindgen:module abort_controller ===
         },
         abort_signal: {
             // === bindgen:module abort_signal ===
-            abort: () => AbortSignal.abort(),
-            timeout: (milliseconds: number) => AbortSignal.timeout(milliseconds),
             aborted: (self: any) => self.aborted,
+            reason: (self: any) => self.reason,
             throw_if_aborted: (self: any) => self.throwIfAborted(),
+            abort: (reason: any) => AbortSignal.abort(reason),
+            timeout: (milliseconds: number) => AbortSignal.timeout(milliseconds),
+            any: (signals: any) => AbortSignal.any(signals),
             // === /bindgen:module abort_signal ===
         },
         crypto: {
             // === bindgen:module crypto ===
             argon2: (algorithm: any, parameters: any, callback: any) => require('node:crypto').argon2(algorithm, parameters, closureToFn(callback)),
             argon2_sync: (algorithm: any, parameters: any) => require('node:crypto').argon2Sync(algorithm, parameters),
+            check_prime: (value: any, callback: any) => require('node:crypto').checkPrime(value, closureToFn(callback)),
+            check_prime_sync: (candidate: any, options: any) => require('node:crypto').checkPrimeSync(candidate, options),
             create_cipheriv: (algorithm: any, key: any, iv: any, options: any) => require('node:crypto').createCipheriv(algorithm, key, iv, options),
             create_decipheriv: (algorithm: any, key: any, iv: any, options: any) => require('node:crypto').createDecipheriv(algorithm, key, iv, options),
             create_diffie_hellman: (prime: any, primeEncoding: any, generator: any, generatorEncoding: any) => require('node:crypto').createDiffieHellman(prime, primeEncoding, generator, generatorEncoding),
@@ -491,7 +507,8 @@ function buildImports(state: HostState, write: (s: string) => void) {
             diffie_hellman_group: (name: any) => require('node:crypto').DiffieHellmanGroup(name),
             encapsulate: (key: any) => require('node:crypto').encapsulate(key),
             generate_key: (type: any, options: any, callback: any) => require('node:crypto').generateKey(type, options, closureToFn(callback)),
-            generate_key_pair_sync: (type: any) => require('node:crypto').generateKeyPairSync(type),
+            generate_key_pair: (type: any, options: any, callback: any) => require('node:crypto').generateKeyPair(type, options, closureToFn(callback)),
+            generate_key_pair_sync: (type: any, options: any) => require('node:crypto').generateKeyPairSync(type, options),
             generate_key_sync: (type: any, options: any) => require('node:crypto').generateKeySync(type, options),
             generate_prime: (size: number, callback: any) => require('node:crypto').generatePrime(size, closureToFn(callback)),
             generate_prime_sync: (size: number) => require('node:crypto').generatePrimeSync(size),
@@ -501,6 +518,7 @@ function buildImports(state: HostState, write: (s: string) => void) {
             get_diffie_hellman: (groupName: any) => require('node:crypto').getDiffieHellman(groupName),
             get_fips: () => require('node:crypto').getFips(),
             get_hashes: () => require('node:crypto').getHashes(),
+            get_random_values: (typedArray: any) => require('node:crypto').getRandomValues(typedArray),
             hash: (algorithm: any, data: any, options: any) => require('node:crypto').hash(algorithm, data, options),
             hkdf: (digest: any, irm: any, salt: any, info: any, keylen: number, callback: any) => require('node:crypto').hkdf(digest, irm, salt, info, keylen, closureToFn(callback)),
             hkdf_sync: (digest: any, ikm: any, salt: any, info: any, keylen: number) => require('node:crypto').hkdfSync(digest, ikm, salt, info, keylen),
@@ -512,6 +530,8 @@ function buildImports(state: HostState, write: (s: string) => void) {
             public_decrypt: (key: any, buffer: any) => require('node:crypto').publicDecrypt(key, buffer),
             public_encrypt: (key: any, buffer: any) => require('node:crypto').publicEncrypt(key, buffer),
             random_bytes: (size: number) => require('node:crypto').randomBytes(size),
+            random_fill: (buffer: any, offset: number, size: number, callback: any) => require('node:crypto').randomFill(buffer, offset, size, closureToFn(callback)),
+            random_fill_sync: (buffer: any, offset: number, size: number) => require('node:crypto').randomFillSync(buffer, offset, size),
             random_int: (min: number, max: number) => require('node:crypto').randomInt(min, max),
             random_uuid: (options: any) => require('node:crypto').randomUUID(options),
             scrypt: (password: any, salt: any, keylen: number, callback: any) => require('node:crypto').scrypt(password, salt, keylen, closureToFn(callback)),
@@ -576,17 +596,19 @@ function buildImports(state: HostState, write: (s: string) => void) {
             mkdtemp_disposable_sync: (prefix: any, options: any) => require('node:fs').mkdtempDisposableSync(prefix, options),
             mkdtemp_sync: (prefix: any, options: any) => require('node:fs').mkdtempSync(prefix, options),
             open: (path: any, flags: any, mode: any, callback: any) => require('node:fs').open(path, flags, mode, closureToFn(callback)),
+            open_as_blob: (path: any, options: any) => require('node:fs').openAsBlob(path, options),
             open_sync: (path: any, flags: any, mode: any) => require('node:fs').openSync(path, flags, mode),
             opendir: (path: any, cb: any) => require('node:fs').opendir(path, closureToFn(cb)),
             opendir_sync: (path: any, options: any) => require('node:fs').opendirSync(path, options),
             read: (fd: number, callback: any) => require('node:fs').read(fd, closureToFn(callback)),
             read_file: (path: any, options: any, callback: any) => require('node:fs').readFile(path, options, closureToFn(callback)),
             read_file_sync: (path: any, options: any) => require('node:fs').readFileSync(path, options),
-            read_sync: (fd: number, buffer: any, opts: any) => require('node:fs').readSync(fd, buffer, opts),
+            read_sync: (fd: number, buffer: any, offset: number, length: number, position: any) => require('node:fs').readSync(fd, buffer, offset, length, position),
             readdir: (path: any, options: any, callback: any) => require('node:fs').readdir(path, options, closureToFn(callback)),
             readdir_sync: (path: any, options: any) => require('node:fs').readdirSync(path, options),
             readlink: (path: any, options: any, callback: any) => require('node:fs').readlink(path, options, closureToFn(callback)),
             readlink_sync: (path: any, options: any) => require('node:fs').readlinkSync(path, options),
+            readv: (fd: number, buffers: any, position: number, cb: any) => require('node:fs').readv(fd, buffers, position, closureToFn(cb)),
             readv_sync: (fd: number, buffers: any, position: number) => require('node:fs').readvSync(fd, buffers, position),
             realpath: (path: any, options: any, callback: any) => require('node:fs').realpath(path, options, closureToFn(callback)),
             realpath_sync: (path: any, options: any) => require('node:fs').realpathSync(path, options),
@@ -615,6 +637,7 @@ function buildImports(state: HostState, write: (s: string) => void) {
             write_file: (file: any, data: any, options: any, callback: any) => require('node:fs').writeFile(file, data, options, closureToFn(callback)),
             write_file_sync: (file: any, data: any, options: any) => require('node:fs').writeFileSync(file, data, options),
             write_sync: (fd: number, string: any, position: number, encoding: any) => require('node:fs').writeSync(fd, string, position, encoding),
+            writev: (fd: number, buffers: any, position: number, cb: any) => require('node:fs').writev(fd, buffers, position, closureToFn(cb)),
             writev_sync: (fd: number, buffers: any, position: number) => require('node:fs').writevSync(fd, buffers, position),
             // === /bindgen:module fs ===
         },
@@ -624,6 +647,7 @@ function buildImports(state: HostState, write: (s: string) => void) {
             btoa: (data: any) => globalThis.btoa(data),
             fetch: (input: any, init: any) => globalThis.fetch(input, init),
             queue_microtask: (callback: any) => globalThis.queueMicrotask(closureToFn(callback)),
+            structured_clone: (value: any, options: any) => globalThis.structuredClone(value, options),
             // === /bindgen:module global ===
         },
     }

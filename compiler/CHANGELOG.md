@@ -123,6 +123,16 @@ The first stable Silicon release.
   `crypto` and `fs` (the mixed-union fix unlocked `read_file_sync` etc.); and bare
   globals `global::fetch` (first-class, `@suspending`) / `atob` / `btoa`. All
   externref-handle surfaces are web/bun only.
+- **Classifier coverage** — the `.d.ts` and Web-IDL type classifiers now resolve
+  generic params to their constraints, map `bigint` / `unknown` / IDL `any` and
+  dictionaries (options bags) and `sequence<>` / `FrozenArray<>` to `JSValue`
+  handles, and bind a `T | Promise<T>` union through its synchronous arm. Lifts
+  aggregate bind rate across the shipped platform modules from **90.1 % to 96.5 %**
+  (362 bindings, 13 skips) with no host-shim or runtime change. The 13 remaining
+  skips are 8 deliberate portability tradeoffs (`path` / `os` kept Tier-0 portable)
+  and 5 fundamental cases (conditional types, an intersection options bag, the `$`
+  binding name, a static/instance name collision, an `EventHandler` callback). See
+  [`docs/ffi-coverage-gaps.md`](../docs/ffi-coverage-gaps.md).
 
 ### Compiler-as-a-Service (CaaS)
 

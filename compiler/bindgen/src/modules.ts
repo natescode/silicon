@@ -157,10 +157,12 @@ export const GENERATED_MODULES: readonly ModuleConfig[] = [
     // readdirSync/statSync/… Unblocked by the dts mixed-union fix (PathOrFileDescriptor
     // = `string | Buffer | URL | number` now binds as a String path).  String
     // content + JSValue handles (Stats, dirent arrays) → web/bun only.
+    // `async:'suspending'` lets the one Promise-returning member (openAsBlob →
+    // Promise<Blob>) await to a JSValue handle via the F1b reactor.
     {
         module: 'fs',
         provenance: '@types/node (node:fs)',
-        specs: () => dtsToSpecs({ module: 'node:fs', types: ['node'], accessor: "require('node:fs')", prefix: '', objects: 'jsvalue', numberType: 'Int', events: 'closure' }).specs,
+        specs: () => dtsToSpecs({ module: 'node:fs', types: ['node'], accessor: "require('node:fs')", prefix: '', objects: 'jsvalue', numberType: 'Int', async: 'suspending', events: 'closure' }).specs,
         strings: 'jsstring',
     },
 

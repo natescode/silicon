@@ -3,4 +3,4 @@
 # Regenerate: `bun bindgen/cli.ts --write`.  Call as `abort_controller::<fn>`.  (Tier-2: JSValue = object handle, externref, web/bun only)
 \\ @extern create () -> JSValue;
 \\ @extern signal (JSValue) -> JSValue;
-\\ @extern abort (JSValue);
+\\ @extern abort (JSValue, JSValue);

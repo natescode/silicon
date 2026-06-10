@@ -8,6 +8,7 @@
 \\ @suspending @extern connect (JSValue) -> JSValue;
 \\ @suspending @extern cron (JSString, JSString, JSString);
 \\ @extern deep_equals (JSValue, JSValue, Bool) -> Bool;
+\\ @extern deep_match (JSValue, JSValue) -> Bool;
 \\ @extern deflate_sync (JSString, JSValue) -> JSValue;
 \\ @extern escape_html (JSString) -> JSString;
 \\ @suspending @extern fetch (JSString, JSValue) -> JSValue;
@@ -17,6 +18,7 @@
 \\ @extern generate_heap_snapshot (JSString, JSString) -> JSValue;
 \\ @extern gunzip_sync (JSString, JSValue) -> JSValue;
 \\ @extern gzip_sync (JSString, JSValue) -> JSValue;
+\\ @extern hash (JSString, JSValue) -> JSValue;
 \\ @extern index_of_line (JSValue, Float) -> Float;
 \\ @extern inflate_sync (JSString, JSValue) -> JSValue;
 \\ @extern inspect (JSValue, JSValue) -> JSString;
@@ -25,9 +27,14 @@
 \\ @extern nanoseconds () -> Float;
 \\ @extern open_in_editor (JSString, JSValue);
 \\ @extern path_to_file_url (JSString) -> JSValue;
+\\ @extern peek (JSValue) -> JSValue;
+\\ @suspending @extern postgres (JSString) -> JSValue;
 \\ @extern random_uuidv5 (JSString, JSString, JSString) -> JSString;
 \\ @extern random_uuidv7 (JSString, JSValue) -> JSString;
+\\ @extern readable_stream_to_array (JSValue) -> JSValue;
+\\ @extern readable_stream_to_array_buffer (JSValue) -> JSValue;
 \\ @suspending @extern readable_stream_to_blob (JSValue) -> JSValue;
+\\ @extern readable_stream_to_bytes (JSValue) -> JSValue;
 \\ @suspending @extern readable_stream_to_form_data (JSValue, JSString) -> JSValue;
 \\ @suspending @extern readable_stream_to_json (JSValue) -> JSValue;
 \\ @suspending @extern readable_stream_to_text (JSValue) -> JSString;
@@ -40,6 +47,7 @@
 \\ @extern slice_ansi (JSString, Float, Float, JSString, Bool) -> JSString;
 \\ @extern spawn (JSValue, JSValue) -> JSValue;
 \\ @extern spawn_sync (JSValue, JSValue) -> JSValue;
+\\ @suspending @extern sql (JSString) -> JSValue;
 \\ @extern string_width (JSString, JSValue) -> Float;
 \\ @extern strip_ansi (JSString) -> JSString;
 \\ @suspending @extern udp_socket (JSValue) -> JSValue;
