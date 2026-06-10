@@ -5,6 +5,14 @@
 #             local.  Reassign with `name = expr`.
 # @fn defines a function; it shares @global's lowering (a named definition).
 # (@let / @var were the previous spellings and have been removed.)
+#
+# NOTE — front-end uniformity has a cost worth optimizing LATER, not here: a
+# zero-param `@global` (e.g. `PI := 314`) lowers via this same path to a zero-arg
+# function, so each use is a `(call $PI)` rather than a folded constant / wasm
+# global.  Keeping this lowering uniform is intentional (see the language ethos);
+# the fix belongs in a future constant-folding OPTIMIZATION pass — ideally a
+# Strata-driven `on::optimize` IR pass once that phase exists (none of today's
+# phases rewrite lowered IR).  See docs/strata.md "Future: an optimization phase".
 
 @stratum GlobalDef := {
     Compiler::register::keyword('@global');
