@@ -151,6 +151,18 @@ export const GENERATED_MODULES: readonly ModuleConfig[] = [
         specs: () => dtsToSpecs({ module: 'node:crypto', types: ['node'], accessor: "require('node:crypto')", prefix: '', objects: 'jsvalue', numberType: 'Int' }).specs,
         strings: 'jsstring',
     },
+
+    // ── Node fs (Tier-2, from @types/node) — FFI follow-up #3 ─────────────────
+    // The sync filesystem surface — readFileSync/writeFileSync/existsSync/mkdirSync/
+    // readdirSync/statSync/… Unblocked by the dts mixed-union fix (PathOrFileDescriptor
+    // = `string | Buffer | URL | number` now binds as a String path).  String
+    // content + JSValue handles (Stats, dirent arrays) → web/bun only.
+    {
+        module: 'fs',
+        provenance: '@types/node (node:fs)',
+        specs: () => dtsToSpecs({ module: 'node:fs', types: ['node'], accessor: "require('node:fs')", prefix: '', objects: 'jsvalue', numberType: 'Int' }).specs,
+        strings: 'jsstring',
+    },
 ]
 
 export function generateModule(cfg: ModuleConfig): { ir: BindingIR; si: string; hostShim: string } {

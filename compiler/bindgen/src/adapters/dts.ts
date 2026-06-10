@@ -77,11 +77,22 @@ function tsTypeToSi(t: ts.Type, numberType: SiType, objects: 'skip' | 'jsvalue')
     if (f & ts.TypeFlags.BooleanLike) return 'Bool'
     if (f & (ts.TypeFlags.Void | ts.TypeFlags.Undefined)) return 'Void'
     if (t.isUnion()) {
-        // A union of one Tier-0 kind (e.g. NodeJS.Platform = string-literal union).
-        const parts = t.types.map(p => tsTypeToSi(p, numberType, 'skip'))
-        if (parts.every(p => p === 'String')) return 'String'
+        // Classify each arm in the SAME `objects` mode, so an object arm becomes
+        // JSValue under 'jsvalue' (this is what unblocks mixed unions like
+        // `string | Buffer | URL` — Node's PathOrFileDescriptor).
+        const parts = t.types.map(p => tsTypeToSi(p, numberType, objects))
+        // A homogeneous Tier-0 union reduces to that type (e.g. NodeJS.Platform
+        // = string-literal union → String).
         if (parts.every(p => p === numberType)) return numberType
         if (parts.every(p => p === 'Bool')) return 'Bool'
+        // Any string arm → String: the guest can always supply a string (covers
+        // `string | Buffer | URL` paths and `string`-literal unions).
+        if (parts.some(p => p === 'String')) return 'String'
+        // A mixed union of otherwise-bindable arms (objects/scalars) crosses as an
+        // opaque JSValue handle in 'jsvalue' mode; an unbindable arm (callback,
+        // thenable → null) sinks the whole union.
+        if (objects === 'jsvalue' && parts.length > 0 && parts.every(p => p !== null)) return 'JSValue'
+        return null
     }
     // Tier-2: a plain object/array crosses as an opaque externref handle.  A
     // function (needs a closure) or a Promise (async) is deliberately NOT a handle.
@@ -175,7 +186,12 @@ export function dtsToSpecs(src: DtsSource): DtsResult {
             }
             const pt = tsTypeToSi(ptype, numberType, objects)
             if (pt === null) {
-                if (droppable(p)) continue   // omit an unrepresentable optional param
+                // An unrepresentable optional is dropped — but STOP there: keeping a
+                // later param would shift it into the dropped param's positional
+                // slot at the host call (e.g. JSON.stringify(value, replacer?, space?)
+                // — dropping `replacer` then keeping `space` would pass space AS the
+                // replacer).  Same policy as the webiface adapter.
+                if (droppable(p)) break
                 return { bad: `non-Tier-0 param '${p.getName()}'` }
             }
             params.push({ name: p.getName(), type: pt })
