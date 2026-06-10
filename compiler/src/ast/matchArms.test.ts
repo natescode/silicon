@@ -20,6 +20,7 @@ const variant = (name: string, ...fields: string[]) => ({
 })
 const arm = (pat: any, body: any) => ({ type: 'BinaryOp', operator: '=>', left: pat, right: body })
 const alt = (l: any, r: any) => ({ type: 'BinaryOp', operator: '|', left: l, right: r })
+const bin = (operator: string, l: any, r: any) => ({ type: 'BinaryOp', operator, left: l, right: r })
 
 // ---------------------------------------------------------------------------
 // Detection
@@ -104,6 +105,45 @@ describe('normalizeMatchArgs', () => {
             b, id('x'),
             c, id('x'),
             d, id('y'),
+        ])
+    })
+
+    // Flat (left-associative, equal) operator precedence steals an arm's `=>`
+    // root when the body is itself a binary expression: `$Err e => 0 - 1` parses
+    // as `(($Err e => 0) - 1)`.  normalizeMatchArgs must recover the real
+    // (pattern, body) so the body is the whole binary expression, not just `0`.
+    test('binary-expression arm body is recovered from a stolen `=>` root', () => {
+        // disc, $Ok v => v, $Err e => 0 - 1   (the Err body parsed as `(=> 0) - 1`)
+        const okV = variant('Ok', 'v')
+        const errE = variant('Err', 'e')
+        const stolen = bin('-', arm(errE, intLit(0)), intLit(1))   // (($Err e => 0) - 1)
+        const out = normalizeMatchArgs([id('disc'), arm(okV, id('v')), stolen])
+        expect(out).toEqual([
+            id('disc'),
+            okV, id('v'),
+            errE, bin('-', intLit(0), intLit(1)),                  // body = `0 - 1`
+        ])
+        expect(isArmExpressionForm([id('disc'), stolen])).toBe(true)
+    })
+
+    test('multi-operator binary arm body rebuilds the flat left-assoc chain', () => {
+        // $Ok v => v + 1 - 2   parses as `((($Ok v => v) + 1) - 2)`
+        const okV = variant('Ok', 'v')
+        const stolen = bin('-', bin('+', arm(okV, id('v')), intLit(1)), intLit(2))
+        const out = normalizeMatchArgs([id('disc'), stolen])
+        // body = ((v + 1) - 2)
+        expect(out).toEqual([id('disc'), okV, bin('-', bin('+', id('v'), intLit(1)), intLit(2))])
+    })
+
+    test('pattern alternation survives a stolen binary body', () => {
+        // $Red | $Green => 1 - 1
+        const red = variant('Red'), green = variant('Green')
+        const stolen = bin('-', arm(alt(red, green), intLit(1)), intLit(1))
+        const out = normalizeMatchArgs([id('disc'), stolen])
+        expect(out).toEqual([
+            id('disc'),
+            red, bin('-', intLit(1), intLit(1)),
+            green, bin('-', intLit(1), intLit(1)),
         ])
     })
 })

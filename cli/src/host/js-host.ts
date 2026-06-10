@@ -20,6 +20,15 @@ function buildImports(state: HostState, write: (s: string) => void) {
     const buf: number[] = []
     const flush = () => { if (buf.length) { write(Buffer.from(buf).toString('utf-8')); buf.length = 0 } }
 
+    // Next FFI work #2 — the boundary error channel.  A fallible `js` invoker
+    // (call/apply/construct) or an awaited Promise rejection (captured in
+    // runUnderBun) records the thrown host value here instead of trapping; guest
+    // code reads it via `js::had_error()` / `js::error_message()` and lifts it
+    // into a Silicon `Result` (stdlib `ffi.si`).  `pins` threads a JSValue
+    // through a linear-memory Result by id (externref can't live in a record).
+    const errBox: { last: any } = { last: null }
+    const pins: any[] = [null]   // index 0 reserved = "no handle"
+
     /** Read a Silicon linear-memory string (4-byte LE length + UTF-8) → JS string. */
     const readLenString = (ptr: number): string => {
         if (!state.memory) return ''
@@ -126,6 +135,64 @@ function buildImports(state: HostState, write: (s: string) => void) {
             parse: (text: any) => JSON.parse(text),
             stringify: (value: any) => JSON.stringify(value),
             // === /bindgen:module json ===
+        },
+        // `js` (Tier-2): the generic object/array build-and-read substrate for
+        // JSValue handles (hand-authored — see compiler/src/strata/modules/js.si).
+        // Build options bags to pass IN; inspect handles handed back OUT.  Box/
+        // unbox Silicon scalars via from_*/as_*.  All values cross as externref.
+        js: {
+            object: () => ({}),
+            array: () => [],
+            null: () => null,
+            undefined: () => undefined,
+            set: (o: any, k: any, v: any) => { o[k] = v },
+            set_index: (a: any, i: number, v: any) => { a[i] = v },
+            push: (a: any, v: any) => { a.push(v) },
+            get: (o: any, k: any) => (o == null ? null : (o[k] ?? null)),
+            get_index: (a: any, i: number) => (a == null ? null : (a[i] ?? null)),
+            len: (v: any) => (v == null ? 0 : (v.length | 0)),
+            has: (o: any, k: any) => (o != null && (k in Object(o))) ? 1 : 0,
+            keys: (o: any) => (o == null ? [] : Object.keys(o)),
+            typeof: (v: any) => Array.isArray(v) ? 'array' : (v === null ? 'null' : typeof v),
+            is_null: (v: any) => (v == null) ? 1 : 0,
+            from_int: (n: number) => n,
+            from_float: (n: number) => n,
+            from_bool: (b: number) => b !== 0,
+            from_str: (s: any) => s,
+            as_int: (v: any) => (v | 0),
+            as_float: (v: any) => +v,
+            as_bool: (v: any) => v ? 1 : 0,
+            as_str: (v: any) => String(v),
+            global: (name: any) => (globalThis as any)[name],
+            // Fallible invokers (#2): run a host call, catching any throw into the
+            // boundary error slot and returning null instead of trapping.  `args`
+            // is a JSValue array handle (build it with js::array + js::push).
+            call: (recv: any, method: any, args: any) => {
+                errBox.last = null
+                try { return recv[method](...(args ?? [])) } catch (e) { errBox.last = e; return null }
+            },
+            apply: (fn: any, args: any) => {
+                errBox.last = null
+                try { return fn(...(args ?? [])) } catch (e) { errBox.last = e; return null }
+            },
+            construct: (ctor: any, args: any) => {
+                errBox.last = null
+                try { return new ctor(...(args ?? [])) } catch (e) { errBox.last = e; return null }
+            },
+            // Boundary error channel.  `had_error` peeks; `error_message`/`take_error`
+            // read-and-clear so the next op starts clean.
+            had_error: () => (errBox.last != null ? 1 : 0),
+            take_error: () => { const e = errBox.last; errBox.last = null; return e ?? null },
+            error_message: () => {
+                const e = errBox.last; errBox.last = null
+                const msg = e == null ? '' : String((e && e.message) != null ? e.message : e)
+                return allocLenString(msg)
+            },
+            clear_error: () => { errBox.last = null },
+            // Pin a handle to thread it through a linear-memory Result by id.
+            pin: (v: any) => { pins.push(v); return pins.length - 1 },
+            pinned: (i: number) => (pins[i] ?? null),
+            unpin: (i: number) => { if (i > 0 && i < pins.length) pins[i] = null },
         },
         bun: {
             // === bindgen:module bun ===
@@ -234,7 +301,7 @@ function buildImports(state: HostState, write: (s: string) => void) {
             // === /bindgen:module text_decoder ===
         },
     }
-    return { imports, flush }
+    return { imports, flush, errBox }
 }
 
 /** Compile + instantiate `binary` under Bun with js-string builtins and run
@@ -256,7 +323,17 @@ export async function runUnderBun(
     } = {},
 ): Promise<number> {
     const state: HostState = {}
-    const { imports, flush } = buildImports(state, s => process.stdout.write(s))
+    const { imports, flush, errBox } = buildImports(state, s => process.stdout.write(s))
+
+    // Next FFI work #2 — turn a Promise rejection into a caught boundary error
+    // instead of a fatal trap: the awaited value becomes `null` and the rejection
+    // is recorded in `errBox`, so guest code reads `js::had_error()` after the
+    // `@await` and lifts it into a `Result` (stdlib `ffi.si`) exactly like a sync
+    // throw.  Each call resets the slot first (last-op semantics).
+    const captureRejections = (fn: (...a: number[]) => any) => async (...a: number[]) => {
+        errBox.last = null
+        try { return await fn(...a) } catch (e) { errBox.last = e; return null }
+    }
 
     // Async path: a program with suspending imports yields to a reactor.
     const suspending = opts.suspendingImports ?? []
@@ -266,13 +343,13 @@ export async function runUnderBun(
         // the injected async surface; collect them as the async-impl set (the
         // reactor wraps them) and drop them from the synchronous base.
         const asyncImpls: Record<string, (...a: number[]) => any> = {}
-        for (const [name, fn] of Object.entries(opts.hostAsync ?? {})) asyncImpls[name] = fn
+        for (const [name, fn] of Object.entries(opts.hostAsync ?? {})) asyncImpls[name] = captureRejections(fn)
         for (const name of suspending) {
             const dot = name.indexOf('.')
             const mod = dot === -1 ? 'env' : name.slice(0, dot)
             const field = dot === -1 ? name : name.slice(dot + 1)
             const host = (imports as any)[mod]?.[field]
-            if (typeof host === 'function') { asyncImpls[name] = host; delete (imports as any)[mod][field] }
+            if (typeof host === 'function') { asyncImpls[name] = captureRejections(host); delete (imports as any)[mod][field] }
         }
         try {
             await runWithReactor(binary, {

@@ -35,7 +35,7 @@
  *  is shaped as `pattern => body`.  Pure inspection — no mutation. */
 export function isArmExpressionForm(rawArgs: any[]): boolean {
     if (rawArgs.length < 2) return false
-    return rawArgs.slice(1).some(a => isArmExpr(a))
+    return rawArgs.slice(1).some(a => extractArm(a) != null)
 }
 
 /**
@@ -63,11 +63,12 @@ export function normalizeMatchArgs(rawArgs: any[]): any[] {
     const out: any[] = [rawArgs[0]]
     for (let i = 1; i < rawArgs.length; i++) {
         const a = rawArgs[i]
-        if (isArmExpr(a)) {
-            const patterns = collectAltPatterns(a.left)
+        const arm = extractArm(a)
+        if (arm) {
+            const patterns = collectAltPatterns(arm.pattern)
             for (const pat of patterns) {
                 out.push(pat)
-                out.push(a.right)
+                out.push(arm.body)
             }
         } else {
             // Arg without `=>` in arm-expression mode is a trailing default
@@ -79,8 +80,32 @@ export function normalizeMatchArgs(rawArgs: any[]): any[] {
     return out
 }
 
-function isArmExpr(node: any): boolean {
-    return node != null && node.type === 'BinaryOp' && node.operator === '=>'
+/**
+ * Recover one `pattern => body` arm, returning its pattern and body nodes — or
+ * `null` if the arg is not an arm.
+ *
+ * Silicon has **flat (left-associative, equal) operator precedence**, so a body
+ * that is itself a binary expression steals the arm's root: `$Err e => 0 - 1`
+ * parses as `(($Err e => 0) - 1)`, a `-` node whose left spine bottoms out at
+ * the `=>`.  We descend the left spine collecting the stolen `(operator, right)`
+ * pairs, and if we reach a `=>`, rebuild the real body by re-applying them to
+ * the `=>`'s right child (innermost first), reproducing the flat left-assoc
+ * chain.  A plain `pattern => body` (no binary body) is the zero-steal case.
+ */
+function extractArm(a: any): { pattern: any; body: any } | null {
+    if (a == null || a.type !== 'BinaryOp') return null
+    const stolen: { operator: string; right: any }[] = []
+    let node = a
+    while (node != null && node.type === 'BinaryOp' && node.operator !== '=>') {
+        stolen.push({ operator: node.operator, right: node.right })
+        node = node.left
+    }
+    if (node == null || node.type !== 'BinaryOp' || node.operator !== '=>') return null
+    let body = node.right
+    for (let i = stolen.length - 1; i >= 0; i--) {
+        body = { type: 'BinaryOp', operator: stolen[i].operator, left: body, right: stolen[i].right, sourceLocation: a.sourceLocation }
+    }
+    return { pattern: node.left, body }
 }
 
 /** Collect `|`-chained patterns into a flat list.  `$A | $B | $C` → [$A, $B, $C]. */

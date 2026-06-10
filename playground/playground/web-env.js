@@ -151,6 +151,33 @@
                 log:   function (s) { onPrint(String(s == null ? '' : s), 'print') },
                 error: function (s) { onPrint(String(s == null ? '' : s), 'error') },
             },
+            // `js` — generic object/array build-and-read substrate (JSValue
+            // handles).  Mirrors cli/src/host/js-host.ts; see strata/modules/js.si.
+            js: {
+                object:    function ()        { return {} },
+                array:     function ()        { return [] },
+                null:      function ()        { return null },
+                undefined: function ()        { return undefined },
+                set:       function (o, k, v) { o[k] = v },
+                set_index: function (a, i, v) { a[i] = v },
+                push:      function (a, v)    { a.push(v) },
+                get:       function (o, k)    { return o == null ? null : (o[k] == null ? null : o[k]) },
+                get_index: function (a, i)    { return a == null ? null : (a[i] == null ? null : a[i]) },
+                len:       function (v)        { return v == null ? 0 : (v.length | 0) },
+                has:       function (o, k)    { return (o != null && (k in Object(o))) ? 1 : 0 },
+                keys:      function (o)        { return o == null ? [] : Object.keys(o) },
+                typeof:    function (v)        { return Array.isArray(v) ? 'array' : (v === null ? 'null' : typeof v) },
+                is_null:   function (v)        { return (v == null) ? 1 : 0 },
+                from_int:   function (n) { return n },
+                from_float: function (n) { return n },
+                from_bool:  function (b) { return b !== 0 },
+                from_str:   function (s) { return s },
+                as_int:   function (v) { return v | 0 },
+                as_float: function (v) { return +v },
+                as_bool:  function (v) { return v ? 1 : 0 },
+                as_str:   function (v) { return String(v) },
+                global:   function (name) { return (typeof globalThis !== 'undefined' ? globalThis : window)[name] },
+            },
         }
 
         return {
