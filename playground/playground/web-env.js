@@ -201,6 +201,13 @@
                 aiter: function (it)   { return it[Symbol.asyncIterator]() },
                 anext: function (it)   { return it.next() },
             },
+            // `promise` — host Promise combinators for concurrency (#4).
+            promise: {
+                all:         function (ps) { return Promise.all(ps) },
+                race:        function (ps) { return Promise.race(ps) },
+                all_settled: function (ps) { return Promise.allSettled(ps) },
+                any:         function (ps) { return Promise.any(ps) },
+            },
         }
 
         return {

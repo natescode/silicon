@@ -204,6 +204,15 @@ function buildImports(state: HostState, write: (s: string) => void) {
             aiter: (it: any) => it[Symbol.asyncIterator](),
             anext: (it: any) => it.next(),   // Promise<{value,done}> — @suspending awaits it
         },
+        // `promise` (Tier-2, #4): host Promise combinators — the guest kicks off
+        // concurrent work (js::apply returns the pending Promise) then joins it
+        // with one @await.  All @suspending.  See strata/modules/promise.si.
+        promise: {
+            all: (ps: any) => Promise.all(ps),
+            race: (ps: any) => Promise.race(ps),
+            all_settled: (ps: any) => Promise.allSettled(ps),
+            any: (ps: any) => Promise.any(ps),
+        },
         bun: {
             // === bindgen:module bun ===
             alloc_unsafe: (size: number) => Bun.allocUnsafe(size),
