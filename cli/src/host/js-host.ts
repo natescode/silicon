@@ -555,6 +555,14 @@ function buildImports(state: HostState, write: (s: string) => void) {
             writev_sync: (fd: number, buffers: any, position: number) => require('node:fs').writevSync(fd, buffers, position),
             // === /bindgen:module fs ===
         },
+        global: {
+            // === bindgen:module global ===
+            atob: (data: any) => globalThis.atob(data),
+            btoa: (data: any) => globalThis.btoa(data),
+            fetch: (input: any, init: any) => globalThis.fetch(input, init),
+            queue_microtask: (callback: any) => globalThis.queueMicrotask(closureToFn(callback)),
+            // === /bindgen:module global ===
+        },
     }
     return { imports, flush, errBox }
 }

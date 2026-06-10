@@ -24,6 +24,10 @@ export interface DtsSource {
     readonly module?: string
     /** OR a global namespace identifier already in scope via the types, e.g. 'Bun'. */
     readonly global?: string
+    /** OR a list of bare GLOBAL functions to harvest (`fetch`, `structuredClone`,
+     *  …) — synthesized into a namespace `{ fetch: typeof fetch; … }` so the same
+     *  property walk binds them.  The accessor should be `globalThis`. */
+    readonly globals?: string[]
     /** Ambient type packages to load (tsconfig `types`), e.g. ['node'] or ['bun-types']. */
     readonly types: string[]
     /** The JS expression that reaches the namespace at the host, e.g.
@@ -109,7 +113,9 @@ function loadNamespace(src: DtsSource): { type: ts.Type; checker: ts.TypeChecker
     const entry = '/__bindgen_dts_entry.ts'
     const text = src.module
         ? `import * as __M from '${src.module}';\nexport declare const __ns: typeof __M;`
-        : `export declare const __ns: typeof ${src.global};`
+        : src.globals
+            ? `export declare const __ns: { ${src.globals.map(g => `${g}: typeof ${g}`).join('; ')} };`
+            : `export declare const __ns: typeof ${src.global};`
     const opts: ts.CompilerOptions = {
         types: src.types,
         moduleResolution: ts.ModuleResolutionKind.Bundler,

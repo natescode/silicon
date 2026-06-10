@@ -163,6 +163,19 @@ export const GENERATED_MODULES: readonly ModuleConfig[] = [
         specs: () => dtsToSpecs({ module: 'node:fs', types: ['node'], accessor: "require('node:fs')", prefix: '', objects: 'jsvalue', numberType: 'Int' }).specs,
         strings: 'jsstring',
     },
+
+    // ── Bare global functions (Tier-2) — FFI follow-up #4 ─────────────────────
+    // The top-level globals the namespace adapters can't reach: `fetch` (the
+    // headline — `@suspending`, Promise<Response> → JSValue), atob/btoa, and
+    // queueMicrotask (a closure callback).  Harvested by the dts bare-global mode
+    // (`globals: [...]`, accessor `globalThis`).  Makes `global::fetch(url, init)`
+    // first-class instead of js::global('fetch') + js::apply composition.
+    {
+        module: 'global',
+        provenance: 'bun-types (global functions)',
+        specs: () => dtsToSpecs({ globals: ['fetch', 'structuredClone', 'atob', 'btoa', 'queueMicrotask'], types: ['bun-types'], accessor: 'globalThis', prefix: '', objects: 'jsvalue', async: 'suspending', events: 'closure' }).specs,
+        strings: 'jsstring',
+    },
 ]
 
 export function generateModule(cfg: ModuleConfig): { ir: BindingIR; si: string; hostShim: string } {
