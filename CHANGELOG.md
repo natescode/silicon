@@ -5,6 +5,16 @@ This project aims for [Semantic Versioning](https://semver.org/).
 
 ## Unreleased
 
+### Added — v1.0 roadmap: closures under wasm-gc + async/event bindgen ([ADR 0018](docs/adr/0018-async-promise-ffi.md) / [ADR 0019](docs/adr/0019-first-class-closures-and-capture.md))
+
+**C2 — closures run under `--target=wasm-gc`, engine-GC'd.** Both the non-escaping (C1) and escaping/host-callable (C2) forms now compile + run under wasm-gc with the env as a `(ref $Vec_i32)` (gc-vec.ts) instead of an i32 linear pointer — so the closure env is ENGINE-GC'd, no bump-heap retention (the linear path's documented leak).
+- The C0 funcref ABI carries ref-typed params: `funcrefSigKey`/`ensureFuncrefSig` + the `FuncrefTable` signature gain `refParams`/`refResult`, so a `(ref $Vec_i32)` env is a DISTINCT call_indirect signature; the emitter builds the funcref FuncSig with `refSlot` for those positions, matching the ref-typed wrapper. All-valtype signatures stay byte-identical (non-wasm-gc unchanged).
+- The closure desugar (target-threaded through `elaborate()`) types the wrapper env param + closure-holding locals + the `__closure_invoke_<k>` trampoline `clo` param `Vec[Int]` under wasm-gc; `lower.ts` pre-registers `$Vec_i32` before user lowering and gives a `Vec[Int]` `@extern` param a `(ref $Vec_i32)` slot — so an escaping closure crosses `@extern` as an engine-GC'd ref the host calls back via the trampoline. `closure-wasm-gc.test.ts` runs C1 + C2 under Bun's wasm-gc.
+
+**Async/event host APIs via bindgen (ADR 0018 F1b / ADR 0019 C2).** The bindgen now generates the two callback-bearing surfaces the reactor + closures unlock:
+- **Async** — `dtsToSpecs({ async: 'suspending' })` turns a `Promise<T>` method into a `@suspending @extern` binding whose result is the AWAITED `T` (an externref — JSString/JSValue). The `bun` module ships its async methods (`resolve`/`readableStreamTo*`/…). A program `@await`ing one drives through the production reactor — `compile()` reports the suspending MODULE call in `suspendingImports` (registry-resolved), `runWithReactor` suspends on the Promise and resumes with the externref via the JSPI fast path. (Binaryen's Asyncify can't carry externref — binaryen#3739 — so an externref async result needs JSPI, which Bun 1.3 has; the Asyncify fallback covers scalar awaited results.)
+- **Event** — `dtsToSpecs({ events: 'closure' })` maps a callable (listener/callback) param to the closure-handle type `Callback`, emitted as `Vec[Int]`; the host shim wraps the handle with `closureToFn(cb)` into a JS function it registers/calls, dispatching back through the `__closure_invoke_<k>` trampoline (the C2 closure machinery). `makeClosureToFn(instance)` binds the trampolines; `event-modules.test.ts` runs the full round-trip under wasm-gc.
+
 ### Added — v1.0 roadmap: async productization + leak-free closure codegen ([ADR 0018](docs/adr/0018-async-promise-ffi.md) / [ADR 0019](docs/adr/0019-first-class-closures-and-capture.md))
 
 **F1b — the `@async`/`@await`/`@suspending` surface + production reactor (ADR 0018 P2/P3-routeB/P5/Phase-2).** The Asyncify transform and host reactor shipped earlier; this productizes them.

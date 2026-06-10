@@ -509,19 +509,38 @@ export interface CompileResult {
     readonly suspendingImports?: readonly string[]
 }
 
-/** Collect the `module.field` import names of every `@suspending @extern` (the
- *  async-coloring boundary metadata, ADR 0018 §3 P2).  A bare extern imports from
- *  `env`; a namespaced `mod::field` from `mod`. */
-export function collectSuspendingImports(program: any): string[] {
-    const out: string[] = []
+/** Collect the `module.field` import names of every suspending host import a
+ *  program uses (the async-coloring boundary metadata, ADR 0018 §3 P2):
+ *    - a direct `@suspending @extern` declaration (bare → `env.<field>`;
+ *      namespaced `mod::field` → `mod.field`), and
+ *    - a CALL to a `@suspending` binding of a generated module (`bun::fetch(…)`),
+ *      looked up in the module registry — this is how the bindgen-generated async
+ *      surface (Promise-returning APIs) reaches the reactor.
+ *  Deduplicated; order-stable. */
+export function collectSuspendingImports(program: any, moduleRegistry?: import('../modules/registry').ModuleRegistry): string[] {
+    const out = new Set<string>()
+    // (a) direct @suspending @extern declarations.
     for (const el of (program?.elements ?? []) as any[]) {
         const d = el?.type === 'Definition' ? el : (el?.value?.type === 'Definition' ? el.value : null)
         if (d && d.keyword === '@extern' && (d as any).suspending && d.name?.name) {
             const raw: string = d.name.name
-            out.push(raw.includes('::') ? raw.replace('::', '.') : `env.${raw}`)
+            out.add(raw.includes('::') ? raw.replace('::', '.') : `env.${raw}`)
         }
     }
-    return out
+    // (b) calls to a @suspending binding of a generated module.
+    if (moduleRegistry) {
+        const walk = (n: any): void => {
+            if (!n || typeof n !== 'object') return
+            if (Array.isArray(n)) { n.forEach(walk); return }
+            if (n.type === 'FunctionCall' && n.name?.type === 'Namespace' && Array.isArray(n.name.path) && n.name.path.length === 2) {
+                const [mod, field] = n.name.path
+                if (moduleRegistry.get(mod)?.functions.get(field)?.suspending) out.add(`${mod}.${field}`)
+            }
+            for (const k of Object.keys(n)) walk(n[k])
+        }
+        walk(program)
+    }
+    return [...out]
 }
 
 /**
@@ -564,7 +583,7 @@ export function compile(source: string, options: ParseOptions & ElabOptions & Lo
         )
         return {
             wat: lowerResult.wat, binary, model: checkResult.model, diagnostics: [],
-            suspendingImports: collectSuspendingImports(checkResult.tree.program),
+            suspendingImports: collectSuspendingImports(checkResult.tree.program, options.moduleRegistry),
         }
     } catch (err) {
         const diag: Diagnostic = {

@@ -29,6 +29,11 @@ export type SiType = 'Int' | 'Int64' | 'Bool' | 'Float' | 'String' | 'Void'
     //   JSValue  — an opaque host-object handle (any JS object/array crosses as
     //              an externref; engine-GC'd, no manual release).
     | 'JSString' | 'JSValue'
+    // ADR 0019 C2 — a CALLBACK param: a closure crossing `@extern`.  Emitted as the
+    // closure handle `Vec[Int]` (a `(ref $Vec_i32)` under wasm-gc — engine-GC'd);
+    // the guest passes `@export_callback(@closure(…))` and the host calls it back
+    // through the synthesized `__closure_invoke_<k>` trampoline.
+    | 'Callback'
 
 export interface Param {
     readonly name: string
@@ -56,6 +61,12 @@ export interface BindingSpec {
     readonly impl: Impl
     /** Source provenance for the lockfile / PR coverage diff. */
     readonly source: string
+    /** ADR 0018 — a Promise-returning host API: emits `@suspending @extern` and
+     *  `result` is the AWAITED type.  The host shim returns the Promise (the F1b
+     *  reactor drives the suspension); the awaited value crosses as an externref
+     *  (JSString/JSValue) or scalar — never linear String (the reactor returns the
+     *  raw resolved value, so there is no host-side marshalling hook). */
+    readonly suspending?: boolean
 }
 
 // ── ECMAScript source: Math (the `mathRef` helper) ──────────────────────────

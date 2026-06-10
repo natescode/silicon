@@ -55,11 +55,13 @@ export const GENERATED_MODULES: readonly ModuleConfig[] = [
         strings: 'jsstring',
     },
     {
-        // Bun: Tier-1 — JSString (externref).  Bun is a JS host, so its string
-        // bindings cross as native JS strings with zero linear-memory marshalling.
+        // Bun: Tier-1 JSString (externref) + Tier-2 JSValue handles + ADR 0018
+        // async — `Promise<T>`-returning methods become `@suspending @extern`
+        // (awaited `T`), driven by the F1b reactor.  Bun is a JS host, so strings
+        // cross as native JS strings with zero linear-memory marshalling.
         module: 'bun',
         provenance: 'bun-types (global Bun)',
-        specs: () => dtsToSpecs({ global: 'Bun', types: ['bun-types'], accessor: 'Bun', prefix: '' }).specs,
+        specs: () => dtsToSpecs({ global: 'Bun', types: ['bun-types'], accessor: 'Bun', prefix: '', objects: 'jsvalue', async: 'suspending' }).specs,
         strings: 'jsstring',
     },
 

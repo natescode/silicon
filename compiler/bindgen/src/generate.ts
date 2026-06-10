@@ -19,6 +19,9 @@ export interface BindingDecl {
     readonly reason: string
     readonly impl: Impl
     readonly source: string
+    /** ADR 0018 — Promise-returning: emit `@suspending @extern`; `result` is the
+     *  awaited type (the F1b reactor drives the suspension). */
+    readonly suspending?: boolean
 }
 
 export interface BindingIR {
@@ -38,12 +41,15 @@ export function siToWasm(t: SiType): 'i32' | 'i64' | 'f32' | 'void' | 'externref
         case 'Void':  return 'void'
         case 'JSString':
         case 'JSValue': return 'externref'   // engine-native object handles (web/bun)
+        case 'Callback': return 'i32'        // closure handle (Vec[Int]; a ref under wasm-gc)
         default:      return 'i32'   // Int, Bool, String all share i32 at the boundary
     }
 }
 
 function classifyTier(spec: BindingSpec): { tier: Tier; reason: string } {
     const types: SiType[] = [...spec.params.map(p => p.type), spec.result]
+    // Tier-2: a closure-handle callback param (ADR 0019 C2).
+    if (types.includes('Callback')) return { tier: 2, reason: `closure callback 'Callback'` }
     // Tier-2: an opaque host-object handle (JSValue externref).
     if (types.includes('JSValue')) return { tier: 2, reason: `object handle 'JSValue' (externref)` }
     // Tier-1: an engine-native string handle (JSString externref).
@@ -59,7 +65,7 @@ export function buildIR(module: string, specs: readonly BindingSpec[]): BindingI
         module,
         decls: specs.map(s => {
             const { tier, reason } = classifyTier(s)
-            return { name: s.name, params: s.params, result: s.result, tier, reason, impl: s.impl, source: s.source }
+            return { name: s.name, params: s.params, result: s.result, tier, reason, impl: s.impl, source: s.source, suspending: s.suspending }
         }),
     }
 }
@@ -132,11 +138,17 @@ export function emitWebShim(ir: BindingIR): string {
 export type StringTier = 'linear' | 'jsstring'
 
 export function emitModuleSi(ir: BindingIR, provenance: string, strings: StringTier = 'linear'): string {
-    const ty = (t: string): string => (strings === 'jsstring' && t === 'String') ? 'JSString' : t
+    const ty = (t: string): string =>
+        t === 'Callback' ? 'Vec[Int]'                                  // closure handle (ADR 0019 C2)
+        : (strings === 'jsstring' && t === 'String') ? 'JSString'
+        : t
     const lines = ir.decls.map(d => {
         const params = d.params.map(p => ty(p.type)).join(', ')
         const ret = d.result === 'Void' ? '' : ` -> ${ty(d.result)}`
-        return `\\\\ @extern ${d.name} (${params})${ret};`
+        // A Promise-returning API emits `@suspending @extern` (ADR 0018) so the
+        // host reactor drives the unwind/await/rewind (or JSPI suspend).
+        const mod = d.suspending ? '@suspending @extern' : '@extern'
+        return `\\\\ ${mod} ${d.name} (${params})${ret};`
     })
     const hasJsValue = ir.decls.some(d => d.result === 'JSValue' || d.params.some(p => p.type === 'JSValue'))
     const tierNote = hasJsValue
@@ -163,14 +175,16 @@ export function emitHostModule(ir: BindingIR, indent = '            ', strings: 
     // `readLenString`; a jsstring String / JSString / JSValue is the JS value
     // itself (pass-through); scalars pass through.
     const inArg = (p: { name: string; type: SiType }): string =>
-        (!js && p.type === 'String') ? `readLenString(${p.name})` : p.name
+        p.type === 'Callback' ? `closureToFn(${p.name})`              // closure handle → JS fn (ADR 0019 C2)
+        : (!js && p.type === 'String') ? `readLenString(${p.name})`
+        : p.name
     // Wrap a String result back into linear memory (jsstring/JSValue/scalar pass through).
     const outWrap = (call: string, result: SiType): string =>
         (!js && result === 'String') ? `allocLenString(${call})` : call
     // Param TS type at the boundary: externref handles + jsstring Strings are
     // `any`; linear String ptrs and all scalars are `number`.
     const ptype = (t: SiType): string =>
-        (t === 'JSValue' || t === 'JSString' || (js && t === 'String')) ? 'any' : 'number'
+        (t === 'JSValue' || t === 'JSString' || t === 'Callback' || (js && t === 'String')) ? 'any' : 'number'
 
     return ir.decls.map(d => {
         const sig = d.params.map(p => `${p.name}: ${ptype(p.type)}`).join(', ')

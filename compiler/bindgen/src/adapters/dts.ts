@@ -40,6 +40,16 @@ export interface DtsSource {
      *  Callables (need real closures) and thenables (belong to the async path)
      *  are still NOT mapped; if such a param is optional it is simply dropped. */
     readonly objects?: 'skip' | 'jsvalue'
+    /** Async handling (ADR 0018 F1b).  'suspending' turns a `Promise<T>`-returning
+     *  member into a `@suspending @extern` binding whose result is the AWAITED `T`
+     *  (the F1b reactor drives the suspension).  'skip' (default) drops Promise
+     *  members.  Pairs with `objects:'jsvalue'` so `Promise<Response>` → JSValue. */
+    readonly async?: 'skip' | 'suspending'
+    /** Event/callback handling (ADR 0019 C2).  'closure' maps a CALLABLE param
+     *  (a listener/callback) to the `Callback` closure-handle type — the guest
+     *  passes `@export_callback(@closure(…))` and the host invokes it through the
+     *  closure trampoline.  'skip' (default) drops callback-taking members. */
+    readonly events?: 'skip' | 'closure'
 }
 
 export interface DtsResult {
@@ -115,6 +125,8 @@ function loadNamespace(src: DtsSource): { type: ts.Type; checker: ts.TypeChecker
 export function dtsToSpecs(src: DtsSource): DtsResult {
     const numberType = src.numberType ?? 'Float'
     const objects = src.objects ?? 'skip'
+    const asyncMode = src.async ?? 'skip'
+    const events = src.events ?? 'skip'
     const { type, checker, sf } = loadNamespace(src)
     const specs: BindingSpec[] = []
     const skipped: { member: string; reason: string }[] = []
@@ -138,9 +150,21 @@ export function dtsToSpecs(src: DtsSource): DtsResult {
         const sig = sigs[0]               // first overload (@extern has no overloading)
         const member = `${src.prefix || src.global || src.module}.${name}`
 
-        const ret = tsTypeToSi(checker.getReturnTypeOfSignature(sig), numberType, objects)
+        // ADR 0018 — a `Promise<T>` member becomes a `@suspending` binding whose
+        // result is the AWAITED `T` (the reactor returns the resolved value, so the
+        // awaited type must be externref/scalar — never linear String).
+        const rawRet = checker.getReturnTypeOfSignature(sig)
+        let suspending = false
+        let ret: SiType | null
+        if (asyncMode === 'suspending' && isThenable(rawRet)) {
+            suspending = true
+            const awaited = (checker.getTypeArguments(rawRet as ts.TypeReference) ?? [])[0]
+            ret = awaited ? tsTypeToSi(awaited, numberType, objects) : 'Void'   // Promise<void> → Void
+        } else {
+            ret = tsTypeToSi(rawRet, numberType, objects)
+        }
         const params: Param[] = []
-        let bad: string | null = ret === null ? 'non-Tier-0 result' : null
+        let bad: string | null = ret === null ? (suspending ? 'awaited type not bindable' : 'non-Tier-0 result') : null
         if (!bad) {
             for (const p of sig.getParameters()) {
                 const d = p.valueDeclaration
@@ -151,7 +175,13 @@ export function dtsToSpecs(src: DtsSource): DtsResult {
                 if (d && ts.isParameter(d) && d.dotDotDotToken != null) {
                     bad = `variadic rest param '${p.getName()}'`; break
                 }
-                const pt = tsTypeToSi(checker.getTypeOfSymbolAtLocation(p, sf), numberType, objects)
+                const ptype = checker.getTypeOfSymbolAtLocation(p, sf)
+                // ADR 0019 C2 — a callable param is a CALLBACK: bind it as the
+                // closure-handle type `Callback` (the guest passes a closure).
+                if (events === 'closure' && isCallable(ptype) && !isThenable(ptype)) {
+                    params.push({ name: p.getName(), type: 'Callback' }); continue
+                }
+                const pt = tsTypeToSi(ptype, numberType, objects)
                 if (pt === null) {
                     if (droppable(p)) continue   // omit an unrepresentable optional param
                     bad = `non-Tier-0 param '${p.getName()}'`; break
@@ -168,6 +198,7 @@ export function dtsToSpecs(src: DtsSource): DtsResult {
             result: ret!,
             impl: { kind: 'call', expr: `${src.accessor}.${name}(${argList})` },
             source: `${src.types[0] ?? 'ecmascript'}:${member}`,
+            suspending: suspending || undefined,
         })
     }
     // Deterministic order (the checker's property order is stable but sort to be safe).

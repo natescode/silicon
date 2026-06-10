@@ -6,6 +6,9 @@ export interface FnSig {
     result?: WasmValType
     siliconParams: string[]
     siliconResult?: string
+    /** ADR 0018 — a `@suspending @extern` (Promise-returning) module binding; the
+     *  reactor drives the await when a program calls it through `@await`. */
+    suspending?: boolean
 }
 
 export interface ModuleEntry {

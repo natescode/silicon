@@ -117,8 +117,27 @@ export interface ReactorRun {
     readonly compileOptions?: WebAssembly.CompileOptions
 }
 
-/** True when the host engine has JS Promise Integration (V8/Node 24+/Deno; NOT
- *  JSC/Bun as of mid-2026 — `bun#20878`).  Both wrappers must be present. */
+/**
+ * ADR 0019 C2 — bind an instance's closure-callback trampolines into a
+ * `closureToFn(handle)` helper for the host event glue.  A bindgen-generated
+ * event binding (`addEventListener(type, callback)`, `setTimeout(cb, ms)`, …)
+ * receives the closure as a handle; the host wraps it with `closureToFn` into a
+ * plain JS function it can register/store, which dispatches back through the
+ * exported `__closure_invoke_<k>` trampoline (k = arg count) with the captured
+ * env intact.  The handle is engine-GC'd (under wasm-gc), so the callback stays
+ * alive while the host holds it.
+ */
+export function makeClosureToFn(instance: WebAssembly.Instance): (handle: any) => (...args: number[]) => number {
+    const ex = instance.exports as any
+    return (handle: any) => (...args: number[]) => {
+        const tramp = ex[`__closure_invoke_${args.length}`]
+        if (typeof tramp !== 'function') throw new Error(`no closure trampoline for arity ${args.length}`)
+        return tramp(handle, ...args)
+    }
+}
+
+/** True when the host engine has JS Promise Integration (V8/Node 24+/Deno; and
+ *  Bun ≥ 1.3 / JSC since `bun#20878` was resolved).  Both wrappers must be present. */
 export function hasJSPI(): boolean {
     const W = WebAssembly as any
     return typeof W.Suspending === 'function' && typeof W.promising === 'function'
@@ -152,7 +171,7 @@ function mergeImports(base: WebAssembly.Imports, add: Record<string, Record<stri
  *     drive the unwind→await→rewind loop via `createAsyncReactor`.
  * Same Silicon source, same vanilla binary — only the host glue differs.
  */
-export async function runWithReactor(binary: Uint8Array, opts: ReactorRun): Promise<number> {
+export async function runWithReactor(binary: Uint8Array, opts: ReactorRun): Promise<any> {
     const placed: Record<string, Record<string, any>> = {}
     const place = (name: string, fn: any) => { const [m, f] = splitImport(name); (placed[m] ??= {})[f] = fn }
     const useJspi = opts.backend === 'jspi' || (opts.backend !== 'asyncify' && hasJSPI())
@@ -167,10 +186,15 @@ export async function runWithReactor(binary: Uint8Array, opts: ReactorRun): Prom
         opts.bind?.(instance)
         const entry = (instance.exports as any)[opts.entry]
         const promising = W.promising(entry)
-        return Number(await promising(...(opts.args ?? [])))
+        // Pass the result through unchanged — it may be a scalar OR an externref
+        // (a JSString/JSValue awaited from `Promise<string>`/`Promise<Response>`).
+        return promising(...(opts.args ?? []))
     }
 
-    // Asyncify: instrument (route B) then drive the reactor.
+    // Asyncify: instrument (route B) then drive the reactor.  NOTE: Binaryen's
+    // Asyncify does NOT support reference types (externref), so this fallback only
+    // handles SCALAR awaited results; an externref async result requires JSPI
+    // (Bun ≥ 1.3 / V8).  See binaryen#3739.
     const instrumented = applyAsyncify(binary, { suspendingImports: opts.suspendingImports })
     const reactor = createAsyncReactor(opts.asyncImpls)
     for (const [name, wrapped] of Object.entries(reactor.imports)) place(name, wrapped)
@@ -178,5 +202,5 @@ export async function runWithReactor(binary: Uint8Array, opts: ReactorRun): Prom
     const instance = await WebAssembly.instantiate(await compileWasm(instrumented), imports)
     opts.bind?.(instance)
     reactor.bind(instance)
-    return reactor.run(() => Number((instance.exports as any)[opts.entry](...(opts.args ?? []))))
+    return reactor.run(() => (instance.exports as any)[opts.entry](...(opts.args ?? [])))
 }
