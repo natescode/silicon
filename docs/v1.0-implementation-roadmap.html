@@ -136,11 +136,13 @@
   key files, size, risk, and what it unblocks.</p>
   <div class="meta">Generated <b>2026-06-10</b> · derived from ADRs 0001/0003/0008/0009/0011/0012/0013/0015/0016/0017/0018/0019 ·
   cross-checked against <code>docs/v1.0-critical-path.md</code></div>
-  <div class="meta">Progress (2026-06-09): <b style="color:var(--mono)">Phase 0 ✓</b> — C0, M0 (monomorphization substrate), F0a (bindgen).
-  <b style="color:var(--mono)">Phase 1 ✓</b> — F1a object handles; F1b (blocking @await via Asyncify) core. <b style="color:var(--mono)">Phase 2 ✓</b> — C1 closures + C2
-  (escape gate AND host-callable closures, Bun round-trip verified). <b style="color:#d6a700">Phase 3/4 ◐</b> — F3 poll-reactor CORE done
-  (block_on/block_all over closure-futures, true concurrency). <b>The full critical path M0→C0→C1→C2→F3 + the F1a→F1b async spine
-  now has a working core at every link.</b> Remaining are refinements: F1b production host + JSPI, F3 generic Poll[T] + host-async, C2 leak-free wasm-gc.</div>
+  <div class="meta">Progress (2026-06-10): <b style="color:var(--mono)">Phases 0–2 ✓ — the v1.0 FFI gate is CLOSED.</b> C0/M0/F0a;
+  F1a object handles; F1b blocking <code>@await</code> productized (dual-backend, JSPI + Asyncify); C1 closures + C2
+  (escape gate AND host-callable closures, leak-free under <code>--target=wasm-gc</code>, Bun round-trip verified). <b style="color:#d6a700">Phase 3 ◐</b> —
+  F3 poll-reactor CORE + host-delegated concurrency (the <code>promise</code> module) ship; the native generic <code>Poll[T]</code> +
+  guest-side future↔Promise wiring remain. <b>Capability model (K1–K8) not started — by design (post-v1.0).</b>
+  <b>Beyond the gate</b>, the FFI <i>surface</i> was broadened end-to-end (see “Post-gate FFI surface” below): object/array reflection,
+  host-error→<code>Result</code>, streaming, concurrency, the fetch ecosystem, bulk binary, Node <code>fs</code>, first-class <code>fetch</code>.</div>
   <div class="tiles">
     <div class="tile"><div class="num">18</div><div class="lbl">subtasks</div></div>
     <div class="tile gate"><div class="num">7</div><div class="lbl">on the critical path</div></div>
@@ -156,6 +158,7 @@
   <a href="#item-ffi">FFI gate</a>
   <a href="#item-mono">Monomorphization</a>
   <a href="#item-cap">Capability model</a>
+  <a href="#surface">Post-gate FFI surface</a>
   <a href="#tensions">Sequencing notes</a>
 </div></nav>
 
@@ -257,7 +260,7 @@
   <td class="cid"><span class="idbadge ffi">F3</span></td>
   <td class="ctitle"><div class="tt">Poll-reactor + tasks  (closures C3) <span class="st st-partial">◐ PARTIAL</span> <span class="crittag">critical path</span></div>
       <div class="tdesc"><code>Future[T]</code> sum (<code>$Pending waker | $Ready value</code>), <code>spawn</code>/<code>block_on</code>, microtask drain, many in-flight awaits. Reuses C1/C2 closures as wake continuations.</div>
-      <div class="tnote tnote-partial">CORE done (2026-06-09) — the poll-reactor proven end-to-end. <code>stdlib/future.si</code>: a FUTURE is a no-arg C1 closure over a mutable poll-state pointer that returns a PENDING sentinel until ready; <code>block_on</code> drives one to completion, and <code>block_all</code> drives MANY <b>concurrently</b> — each round polls every still-pending future, so independent futures progress interleaved (the true-concurrency model single-in-flight Asyncify can't express). <code>future.test.ts</code>: block_on (single), block_all (3 futures, deadlines 2/4/3 → 60, polled interleaved), and fast+slow independent progress (→107). Reuses the C1/C2 closure keystone as wake continuations — the reason this waited on closures. REMAINING: the generic <code>Poll[T] := $Pending | $Ready value T</code> sum (removes the negative-sentinel constraint), host-async integration (a future backed by a real Promise woken by the F1b reactor), spawn/microtask-drain. The data model + concurrent scheduler ship; the host wiring + generic Poll are the refinements.</div>
+      <div class="tnote tnote-partial">CORE done (2026-06-09) — the poll-reactor proven end-to-end. <code>stdlib/future.si</code>: a FUTURE is a no-arg C1 closure over a mutable poll-state pointer that returns a PENDING sentinel until ready; <code>block_on</code> drives one to completion, and <code>block_all</code> drives MANY <b>concurrently</b> — each round polls every still-pending future, so independent futures progress interleaved (the true-concurrency model single-in-flight Asyncify can't express). <code>future.test.ts</code>: block_on (single), block_all (3 futures, deadlines 2/4/3 → 60, polled interleaved), and fast+slow independent progress (→107). Reuses the C1/C2 closure keystone as wake continuations — the reason this waited on closures. <b>UPDATE (2026-06-10): the practical <code>Promise.all</code>-shaped composition this item promises now ALSO ships via the post-gate <code>promise</code> module</b> — host-delegated combinators <code>promise::all</code>/<code>race</code>/<code>all_settled</code>/<code>any</code>/<code>value</code> (all <code>@suspending</code>): the guest kicks off N host operations un-awaited (a Promise-returning call via <code>js::apply</code> returns the pending handle) then joins them with one <code>@await</code>; genuine concurrency, proven (max-in-flight = 2). REMAINING (the still-partial native path): the generic <code>Poll[T] := $Pending | $Ready value T</code> sum (removes the negative-sentinel constraint), guest-side host-async integration (a <code>Future</code> backed by a real Promise woken by the F1b reactor), spawn/microtask-drain. So the data model + concurrent scheduler + host-delegated concurrency all ship; the native generic Poll + guest-side future↔Promise wiring are the refinements.</div>
       <div class="tfiles"><span class="k">Files</span> stdlib <code>Future[T]</code>; reactor host generalization</div>
       <div class="tunb"><span class="k">Unblocks</span> True concurrency, <code>Promise.all</code>-shaped composition, streaming events. <b>~97% → 100%</b>. Needs C2</div></td>
   <td class="cadr">ADR 0018 · P4 / 0019 · C3</td>
@@ -393,6 +396,56 @@
 </tr>
 </tbody></table>
 </section>
+
+  <section id="surface" class="prose">
+    <h2 class="sec"><span class="dot ffi"></span>Post-gate FFI surface — broadening the actual API reach</h2>
+    <p class="blurb">The roadmap above is the <b>mechanism</b> gate (can every host-interaction <i>shape</i> be expressed). Once
+    C2 closed it, the work shifted to the FFI <b>surface</b> — making the bound APIs genuinely callable and shipping
+    more of them. All of the below landed on <code>v1-roadmap</code> (2026-06-10), each tested; not roadmap items, but
+    the payoff of the gate.</p>
+    <table class="rt">
+    <thead><tr><th>#</th><th>Surface work</th><th>What it delivers</th><th>Status</th></tr></thead>
+    <tbody>
+    <tr class="t-ffi status-done"><td class="cid"><span class="idbadge ffi">N1</span></td>
+      <td class="ctitle"><div class="tt">Generic object/array build-and-read</div>
+      <div class="tdesc">The <code>js</code> module: build options-bag objects/arrays in-guest (<code>js::object</code>/<code>array</code>/<code>set</code>/<code>push</code>/<code>from_*</code>) and inspect handles handed back (<code>get</code>/<code>len</code>/<code>keys</code>/<code>typeof</code>/<code>as_*</code>). Closes the options-bag-in + inspection-out gaps that left most <code>JSValue</code>-returning APIs uncallable.</div></td>
+      <td class="cadr">next FFI #1</td><td class="cmeta"><span class="st st-done">✓ DONE</span></td></tr>
+    <tr class="t-ffi status-done"><td class="cid"><span class="idbadge ffi">N2</span></td>
+      <td class="ctitle"><div class="tt">Host-error / Promise-rejection → <code>Result</code></div>
+      <div class="tdesc">The <code>@try</code>-at-the-boundary bridge: <code>js::call</code>/<code>apply</code>/<code>construct</code> catch a host throw into a boundary slot (no trap); the reactor captures a Promise rejection the same way; stdlib <code>ffi.si</code> (<code>js_check</code>/<code>js_try</code>) lifts it into <code>Result[Int, String]</code>.</div></td>
+      <td class="cadr">next FFI #2</td><td class="cmeta"><span class="st st-done">✓ DONE</span></td></tr>
+    <tr class="t-ffi status-done"><td class="cid"><span class="idbadge ffi">N3</span></td>
+      <td class="ctitle"><div class="tt">Async iteration / streaming</div>
+      <div class="tdesc">The <code>stream</code> module: <code>iter</code>/<code>next</code>/<code>value</code>/<code>done</code> over any host iterable (array/Set/Map/generator/string), and <code>aiter</code>/<code>anext</code> (<code>@suspending</code>) over async generators / ReadableStream via the reactor.</div></td>
+      <td class="cadr">next FFI #3</td><td class="cmeta"><span class="st st-done">✓ DONE</span></td></tr>
+    <tr class="t-ffi status-done"><td class="cid"><span class="idbadge ffi">N4</span></td>
+      <td class="ctitle"><div class="tt">True concurrency over host I/O</div>
+      <div class="tdesc">The <code>promise</code> module: <code>all</code>/<code>race</code>/<code>all_settled</code>/<code>any</code>/<code>value</code> (<code>@suspending</code>). Kick off N host ops un-awaited, join with one <code>@await</code>. <b>Folds back into F3</b> as the host-delegated concurrency path.</div></td>
+      <td class="cadr">next FFI #4</td><td class="cmeta"><span class="st st-done">✓ DONE</span></td></tr>
+    <tr class="t-ffi status-done"><td class="cid"><span class="idbadge ffi">N5</span></td>
+      <td class="ctitle"><div class="tt">Generator harvest — overload selection + fetch ecosystem</div>
+      <div class="tdesc">dts best-bindable overload selection (recovered Bun.spawn/write/file); webiface <code>@suspending</code> (Response.json/text awaitable); shipped <code>response</code>/<code>request</code>/<code>blob</code>/<code>form_data</code>/<code>abort_controller</code>/<code>abort_signal</code> + <code>crypto</code> (+92 bindings).</div></td>
+      <td class="cadr">next FFI #5</td><td class="cmeta"><span class="st st-done">✓ DONE</span></td></tr>
+    <tr class="t-mono status-done"><td class="cid"><span class="idbadge mono">F1</span></td>
+      <td class="ctitle"><div class="tt"><code>Result</code> can carry a host handle</div>
+      <div class="tdesc"><code>js_try(JSValue) -> Result[Int, String]</code> (pins the handle) shipped. The NATIVE form (<code>Result[JSValue, …]</code>, no pin) is <b>deferred to M0-style monomorphization</b> — generic sums share one struct, so per-field ref typing falls out of monomorphizing them.</div></td>
+      <td class="cadr">follow-up #1</td><td class="cmeta"><span class="st st-partial">◐ PARTIAL · → M1</span></td></tr>
+    <tr class="t-ffi status-done"><td class="cid"><span class="idbadge ffi">F2</span></td>
+      <td class="ctitle"><div class="tt">Bulk binary marshalling</div>
+      <div class="tdesc"><code>js::bytes_in</code>/<code>bytes_out</code>/<code>byte_length</code>/<code>u8</code> — bulk-copy between guest linear memory and a host typed array (crypto bytes, <code>response.arrayBuffer</code>, file reads), instead of byte-by-byte.</div></td>
+      <td class="cadr">follow-up #2</td><td class="cmeta"><span class="st st-done">✓ DONE</span></td></tr>
+    <tr class="t-ffi status-done"><td class="cid"><span class="idbadge ffi">F3s</span></td>
+      <td class="ctitle"><div class="tt">dts mixed-union → Node <code>fs</code></div>
+      <div class="tdesc">Fixed the union classifier (mixed <code>string | Buffer | URL</code> → String/JSValue) → unlocked <code>fs</code> (49 bindings) + ~19 crypto primitives; also fixed a latent dropped-optional positional bug.</div></td>
+      <td class="cadr">follow-up #3</td><td class="cmeta"><span class="st st-done">✓ DONE</span></td></tr>
+    <tr class="t-ffi status-done"><td class="cid"><span class="idbadge ffi">F4</span></td>
+      <td class="ctitle"><div class="tt">Bare-global harvest — first-class <code>fetch</code></div>
+      <div class="tdesc">A bare-global dts mode → the <code>global</code> module: <code>global::fetch</code> (<code>@suspending</code>, Promise&lt;Response&gt;), <code>atob</code>/<code>btoa</code>, <code>queue_microtask</code>. <code>fetch</code> is now first-class, not a <code>js::global</code>+<code>apply</code> composition.</div></td>
+      <td class="cadr">follow-up #4</td><td class="cmeta"><span class="st st-done">✓ DONE</span></td></tr>
+    </tbody></table>
+    <p class="blurb">Also this period: <code>@match</code> moved to the flat function-call form (<code>@match(x, $A v, { v }, …)</code>),
+    dropping the infix <code>=&gt;</code> arm operator that collided with flat operator precedence.</p>
+  </section>
 
   <section id="tensions">
     <h2 class="sec">Sequencing notes — the three couplings that set the order</h2>
