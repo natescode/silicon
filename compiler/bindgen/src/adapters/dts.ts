@@ -117,6 +117,12 @@ function tsTypeToSi(t: ts.Type, checker: ts.TypeChecker, numberType: SiType, obj
     // Tier-2: a plain object/array crosses as an opaque externref handle.  A
     // function (needs a closure) or a Promise (async) is deliberately NOT a handle.
     if (objects === 'jsvalue' && (f & ts.TypeFlags.Object) && !isCallable(t) && !isThenable(t)) return 'JSValue'
+    // An INTERSECTION (`A & B` — Bun.serve's `options` bag) or a CONDITIONAL type
+    // (`ReturnType<T["setup"]>` — Bun.plugin's result) has no single concrete shape,
+    // but at the host boundary it is just an opaque object the guest builds/reads
+    // via the `js` module — so cross it as a JSValue handle (unless it is itself
+    // callable/thenable, which stay on the closure/async paths).
+    if (objects === 'jsvalue' && (f & (ts.TypeFlags.Intersection | ts.TypeFlags.Conditional)) && !isCallable(t) && !isThenable(t)) return 'JSValue'
     // `bigint` (no linear-memory bigint ABI) and `unknown`/`any` are as opaque as
     // a host object — cross them as JSValue handles in 'jsvalue' mode.  bigint also
     // unblocks `LargeNumberLike` unions (crypto.checkPrime: bigint + buffer arms).
@@ -126,6 +132,16 @@ function tsTypeToSi(t: ts.Type, checker: ts.TypeChecker, numberType: SiType, obj
 }
 
 const snake = (n: string): string => n.replace(/([a-z0-9])([A-Z])/g, '$1_$2').toLowerCase()
+
+/** A defensive safeguard: guarantee a valid Silicon identifier.  Every shipped
+ *  member name already is one (symbol-named members like `Bun.$` are skipped
+ *  upstream as tagged-templates), so this is a no-op today; it exists so no
+ *  future invalid name can ever leak into a generated `@extern`. */
+const sanitizeName = (n: string): string => {
+    if (/^[A-Za-z_][A-Za-z0-9_]*$/.test(n)) return n   // already a valid identifier (the common case)
+    const cleaned = n.replace(/[^A-Za-z0-9_]/g, '_')
+    return /^[0-9]/.test(cleaned) ? '_' + cleaned : (cleaned || 'fn')
+}
 
 /** Build a one-file TS program that brings the source namespace into scope and
  *  return the namespace's value type + the checker. */
@@ -182,7 +198,16 @@ export function dtsToSpecs(src: DtsSource): DtsResult {
     /** Try to bind ONE overload to a Tier-0/JSValue signature.  Returns the
      *  param/result/suspending shape, or a `bad` reason explaining why this
      *  overload can't cross.  Pure — no `specs`/`skipped` mutation. */
-    const trySig = (sig: ts.Signature): { params: Param[]; ret: SiType; suspending: boolean } | { bad: string } => {
+    const trySig = (sig: ts.Signature): { params: Param[]; ret: SiType; suspending: boolean; spread?: boolean } | { bad: string } => {
+        // A TAGGED-TEMPLATE function (first param `TemplateStringsArray`, e.g.
+        // `Bun.$`) is not a normal callable — `Bun.$(plainArray)` throws at runtime
+        // ("use as a tagged template").  It needs the `` $`…` `` calling convention
+        // (a strings array carrying `.raw`), which a normal `@extern` can't express,
+        // so it is skipped (a recognised JS syntactic form, not a bindgen gap).
+        const p0 = sig.getParameters()[0]
+        if (p0 && checker.getTypeOfSymbolAtLocation(p0, sf).getSymbol()?.getName() === 'TemplateStringsArray') {
+            return { bad: 'tagged-template function (call via `$`…`` syntax, not a normal callable)' }
+        }
         // ADR 0018 — a `Promise<T>` member becomes a `@suspending` binding whose
         // result is the AWAITED `T` (the reactor returns the resolved value, so the
         // awaited type must be externref/scalar — never linear String).
@@ -191,19 +216,31 @@ export function dtsToSpecs(src: DtsSource): DtsResult {
         let ret: SiType | null
         if (asyncMode === 'suspending' && isThenable(rawRet)) {
             suspending = true
+            // The awaited type: type-arg [0] for a plain `Promise<T>`, else
+            // `getAwaitedType` for a Promise SUBCLASS (which carries no direct type
+            // args) so the resolved value isn't silently dropped to Void.
             const awaited = (checker.getTypeArguments(rawRet as ts.TypeReference) ?? [])[0]
+                ?? checker.getAwaitedType?.(rawRet)
             ret = awaited ? tsTypeToSi(awaited, checker, numberType, objects) : 'Void'   // Promise<void> → Void
         } else {
             ret = tsTypeToSi(rawRet, checker, numberType, objects)
         }
         if (ret === null) return { bad: suspending ? 'awaited type not bindable' : 'non-Tier-0 result' }
         const params: Param[] = []
+        let spread = false
         for (const p of sig.getParameters()) {
             const d = p.valueDeclaration
             // A rest param (`...args`) is variadic — it can't be a single fixed
-            // param (and its array type must NOT be smuggled across as one JSValue:
-            // `path.join([..])` ≠ `path.join(a, b)`).  Reject this overload.
-            if (d && ts.isParameter(d) && d.dotDotDotToken != null) return { bad: `variadic rest param '${p.getName()}'` }
+            // param.  In 'jsvalue' mode bind it as ONE trailing JSValue array handle
+            // the host SPREADS (`fn(...args)`); the guest hands a js::array.  In
+            // 'skip' mode (a portable module) it stays unbindable — smuggling the
+            // array as one arg would be wrong (`path.join([a,b])` ≠ `path.join(a,b)`).
+            if (d && ts.isParameter(d) && d.dotDotDotToken != null) {
+                if (objects !== 'jsvalue') return { bad: `variadic rest param '${p.getName()}'` }
+                params.push({ name: p.getName(), type: 'JSValue' })
+                spread = true
+                break   // a rest param is always last
+            }
             const ptype = checker.getTypeOfSymbolAtLocation(p, sf)
             // ADR 0019 C2 — a callable param is a CALLBACK: bind it as the
             // closure-handle type `Callback` (the guest passes a closure).
@@ -222,7 +259,7 @@ export function dtsToSpecs(src: DtsSource): DtsResult {
             }
             params.push({ name: p.getName(), type: pt })
         }
-        return { params, ret, suspending }
+        return { params, ret, suspending, spread }
     }
 
     for (const prop of checker.getPropertiesOfType(type)) {
@@ -240,7 +277,7 @@ export function dtsToSpecs(src: DtsSource): DtsResult {
         // (JSValue/Callback), then most concrete scalar/string params, then
         // earliest declaration.  So `file(path: string)` beats `file(fd, opts)`.
         const isHandle = (t: SiType) => t === 'JSValue' || t === 'Callback'
-        let chosen: { params: Param[]; ret: SiType; suspending: boolean } | null = null
+        let chosen: { params: Param[]; ret: SiType; suspending: boolean; spread?: boolean } | null = null
         let chosenScore: [number, number] = [Infinity, -1]   // [handleCount, -concreteCount]
         let lastBad = 'no bindable overload'
         for (const sig of sigs) {
@@ -256,11 +293,16 @@ export function dtsToSpecs(src: DtsSource): DtsResult {
         if (!chosen) { skipped.push({ member, reason: lastBad }); continue }
 
         const argList = chosen.params.map(p => p.name).join(', ')
+        const base = sanitizeName(snake(name))
         specs.push({
-            name: src.prefix ? `${src.prefix}_${snake(name)}` : snake(name),
+            name: src.prefix ? `${src.prefix}_${base}` : base,
             params: chosen.params,
             result: chosen.ret,
-            impl: { kind: 'call', expr: `${src.accessor}.${name}(${argList})` },
+            // A variadic member spreads its single array-handle param; everything
+            // else is a direct `accessor.member(args)` call.
+            impl: chosen.spread
+                ? { kind: 'spread', accessor: src.accessor, method: name }
+                : { kind: 'call', expr: `${src.accessor}.${name}(${argList})` },
             source: `${src.types[0] ?? 'ecmascript'}:${member}`,
             suspending: chosen.suspending || undefined,
         })

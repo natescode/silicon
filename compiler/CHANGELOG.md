@@ -133,12 +133,16 @@ The first stable Silicon release.
   listener argument → a `Callback` param — recovering `abort_signal::set_onabort`
   and shipping the `event_target` module. (A `Callback` crosses only guest→host,
   so it is rejected in result/getter/union position; a fired listener can't yet
-  consume its `Event` arg — see the doc.) Lifts aggregate bind rate across the
-  shipped platform modules from **90.1 % to 96.8 %** (368 bindings, 12 skips) with
-  no host-shim or runtime change. The 12 remaining skips are 8 deliberate
-  portability tradeoffs (`path` / `os` kept Tier-0 portable) and 4 fundamental
-  cases (conditional types, an intersection options bag, the `$` binding name, a
-  static/instance name collision). See
+  consume its `Event` arg — see the doc.) Finally the last "fundamental" skips
+  were closed: `Intersection`/`Conditional` types → `JSValue` (recovers `Bun.serve`
+  / `Bun.plugin`), a variadic rest param → a spread Impl (`accessor.method(...args)`),
+  a name sanitizer (no invalid `@extern` name can leak), and a static factory that
+  collides with an instance member ships under a `_static` suffix (`Response.json`
+  + `json_static`). `Bun.$` is detected as a tagged-template (a JS syntactic form,
+  not a normal callable) and skipped. **No fundamental bindgen gaps remain.**
+  Aggregate bind rate **90.1 % → 97.6 %** (371 bindings, 9 skips); the 9 are 8
+  deliberate `path` / `os` portability tradeoffs (proven to flip to 0 under
+  `objects:'jsvalue'` → trivial 100 %) and the one tagged-template. See
   [`docs/ffi-coverage-gaps.md`](../docs/ffi-coverage-gaps.md).
 
 ### Compiler-as-a-Service (CaaS)

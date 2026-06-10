@@ -43,6 +43,10 @@ export interface Param {
 export type Impl =
     | { readonly kind: 'mathRef'; readonly method: string }   // Math.<method>
     | { readonly kind: 'call'; readonly expr: string }         // returns <expr>
+    // A VARIADIC host fn (`path.join(...paths)`, `Bun.$`): the single trailing
+    // JSValue param is an array handle the host SPREADS — `accessor.method(...args)`.
+    // accessor/method are structural so the emitter never re-parses an expr.
+    | { readonly kind: 'spread'; readonly accessor: string; readonly method: string } // accessor.method(...args)
     // ADR 0018 — constructed Web interface shapes (Tier-2).  The host
     // accessor/receiver is STRUCTURAL (not embedded in a string), so the emitter
     // never re-parses an expr.  `iface` is the JS global the ctor/static is

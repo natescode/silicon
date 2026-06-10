@@ -108,15 +108,46 @@ describe('bindgen adapters — generated from real spec sources', () => {
         expect(bun.skipped.some(s => s.member === 'Bun.peek')).toBe(false)
     })
 
-    test('a rest param (`...args`) is NOT dropped — its binding stays skipped (no silent no-arg call)', () => {
-        // `path.join(...paths)` must not degrade to a meaningless `join()`: a rest
-        // param is required-shaped, so the whole binding is skipped even in
-        // jsvalue mode (only OPTIONAL `?` params are droppable).
-        const { specs, skipped } = dtsToSpecs({
+    test('a rest param (`...args`) stays skipped in portable mode, binds via spread in jsvalue mode', () => {
+        // SKIP mode (a portable Tier-0 module like the shipped `path`): a variadic
+        // can't degrade to a meaningless `join()`, and its array must NOT be
+        // smuggled as one linear arg (`join([a,b])` ≠ `join(a,b)`) — so it stays
+        // skipped, keeping the module portable to any host.
+        const portable = dtsToSpecs({
+            module: 'node:path', types: ['node'], accessor: "require('node:path')", prefix: 'path',
+        })
+        expect(portable.specs.some(s => s.name === 'path_join')).toBe(false)
+        expect(portable.skipped.some(s => s.member === 'path.join')).toBe(true)
+
+        // JSVALUE mode (Tier-2, web/bun): the variadic binds as ONE trailing JSValue
+        // array handle the host spreads — `require('node:path').join(...paths)`.
+        const handles = dtsToSpecs({
             module: 'node:path', types: ['node'], accessor: "require('node:path')", prefix: 'path', objects: 'jsvalue',
         })
-        expect(specs.some(s => s.name === 'path_join')).toBe(false)
-        expect(skipped.some(s => s.member === 'path.join')).toBe(true)
+        const join = handles.specs.find(s => s.name === 'path_join')
+        expect(join).toMatchObject({ params: [{ type: 'JSValue' }], impl: { kind: 'spread', method: 'join' } })
+        expect(handles.skipped.some(s => s.member === 'path.join')).toBe(false)
+    })
+
+    test('a tagged-template function (Bun.$) is skipped — not a normal callable; no invalid name leaks', () => {
+        // `Bun.$` is a tagged template (first param TemplateStringsArray); calling it
+        // as a normal fn throws.  It is skipped (a JS syntactic form, not a binding),
+        // and no spec is named with the invalid identifier `$`.
+        const bun = dtsToSpecs({ global: 'Bun', types: ['bun-types'], accessor: 'Bun', prefix: '', objects: 'jsvalue', async: 'suspending' })
+        expect(bun.skipped.some(s => s.member === 'Bun.$' && /tagged-template/.test(s.reason))).toBe(true)
+        expect(bun.specs.some(s => s.name === '$' || s.name === 'shell')).toBe(false)
+        // Every emitted name is a valid Silicon identifier (the sanitize safeguard).
+        for (const s of bun.specs) expect(s.name).toMatch(/^[A-Za-z_][A-Za-z0-9_]*$/)
+    })
+
+    test('intersection + conditional types cross as JSValue handles (Bun.serve / Bun.plugin)', () => {
+        // Bun.serve's `options` is an intersection; Bun.plugin's result is a
+        // conditional type (ReturnType<T["setup"]>) — both opaque at the boundary.
+        const bun = dtsToSpecs({ global: 'Bun', types: ['bun-types'], accessor: 'Bun', prefix: '', objects: 'jsvalue', async: 'suspending' })
+        expect(bun.specs.find(s => s.name === 'serve')).toMatchObject({ params: [{ type: 'JSValue' }] })
+        expect(bun.specs.find(s => s.name === 'plugin')).toMatchObject({ result: 'JSValue' })
+        // The ONLY remaining bun skip is the tagged-template `$` (no classifier gap).
+        expect(bun.skipped.map(s => s.member)).toEqual(['Bun.$'])
     })
 
     test('the number heuristic is configurable per namespace (TS `number` is opaque)', () => {
@@ -210,6 +241,16 @@ describe('bindgen webiface adapter — constructed Web interfaces from @webref/i
         const url = byName(webifaceToSpecs('URL').specs)
         expect(url.get('create')?.params).toHaveLength(1)
         expect(url.get('can_parse')?.params).toHaveLength(1)
+    })
+
+    test('a static factory colliding with an instance member is disambiguated, not dropped (Response.json)', () => {
+        // Response has BOTH an instance Body-mixin `json()` body-reader (suspending)
+        // and a static `json(data)` factory.  @extern has no overloading, so the
+        // instance reader keeps `json` and the static ships as `json_static`.
+        const m = byName(webifaceToSpecs('Response').specs)
+        expect(m.get('json')).toMatchObject({ params: [{ type: 'JSValue' }], suspending: true, impl: { kind: 'method', method: 'json' } })
+        expect(m.get('json_static')).toMatchObject({ impl: { kind: 'static', iface: 'Response', method: 'json' } })
+        expect(webifaceToSpecs('Response').skipped.some(s => s.member === 'json')).toBe(false)
     })
 
     test("events:'closure': an EventHandler attribute binds as a setter-only Callback (default skip preserved)", () => {

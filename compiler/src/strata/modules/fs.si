@@ -26,7 +26,7 @@
 \\ @extern fdatasync (Int, Vec[Int]);
 \\ @extern fdatasync_sync (Int);
 \\ @extern fstat (Int, Vec[Int]);
-\\ @extern fstat_sync (Int) -> JSValue;
+\\ @extern fstat_sync (Int, JSValue) -> JSValue;
 \\ @extern fsync (Int, Vec[Int]);
 \\ @extern fsync_sync (Int);
 \\ @extern ftruncate (Int, Int, Vec[Int]);
@@ -76,7 +76,7 @@
 \\ @extern stat (JSString, Vec[Int]);
 \\ @extern stat_sync (JSString) -> JSValue;
 \\ @extern statfs (JSString, Vec[Int]);
-\\ @extern statfs_sync (JSString) -> JSValue;
+\\ @extern statfs_sync (JSString, JSValue) -> JSValue;
 \\ @extern symlink (JSString, JSString, JSString, Vec[Int]);
 \\ @extern symlink_sync (JSString, JSString, JSString);
 \\ @extern truncate (JSString, Int, Vec[Int]);

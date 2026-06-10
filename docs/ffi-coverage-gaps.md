@@ -1,13 +1,24 @@
-# FFI coverage gaps — the last ~7% (mostly closed)
+# FFI coverage gaps — closed (no fundamental gaps remain)
 
-> **Status:** categories 2–4 **IMPLEMENTED**; webiface `events:'closure'`
-> **IMPLEMENTED** (the last fundamental skip with a real fix); categories 1 + 5
-> documented as the permanent tail. Aggregate bind rate **90.1% → 96.8%** across
-> the shipped platform modules (338→368 bindings, 37→12 skips).
+> **Status:** **DONE — no fundamental bindgen gaps remain.** Categories 2–4 +
+> webiface `events:'closure'` implemented; the 4 "fundamental" skips resolved
+> (intersection/conditional → `JSValue`, variadic → spread, name-sanitize,
+> static-collision → `_static`); `Bun.$` reclassified as a tagged-template (a JS
+> syntactic form, not a bindgen limitation). Aggregate bind rate **90.1% → 97.6%**
+> (338→371 bindings, 37→9 skips). **The 9 remaining skips are 8 deliberate `path`/`os`
+> portability tradeoffs (proven to flip to 0 → trivial 100%) + 1 tagged-template
+> (`Bun.$`); zero are fundamental classifier/architecture limits.**
 > **Scope:** the host-API surface the bindgen adapters could not bind.
 > **Companion docs:** [`js-string-builtins.md`](js-string-builtins.md) (tier model),
 > the FFI sections of [`overview.md`](overview.md), and the bindgen source under
 > `compiler/bindgen/`.
+
+> **Trivial-100% proof:** running the `path` / `os` adapters with `objects:'jsvalue'`
+> yields **0 skips each** (path 4→0, os 4→0). The only thing between 97.6% and 100%
+> is the deliberate choice to keep `path`/`os` Tier-0 portable (every host, not just
+> web/bun) — a one-flag flip, not a bindgen limit. Breadth (shipping more of the
+> 1,475-interface Web-IDL corpus / more Node modules) is likewise one `modules.ts`
+> entry per module.
 
 After flipping `events:'closure'` on `fs` / `crypto` / `global` (callbacks cross
 as closure handles), aggregate bind rate sat at **90.1%** (338 bindings, 37
@@ -463,28 +474,47 @@ with `event_target::add_event_listener(target, "abort", @export_callback(@closur
 `removeEventListener` is bound but of limited use: each `@export_callback` produces
 a fresh host function, so you can't pass back the *same* reference you registered.
 
-## What stays unbound — the 12 remaining skips
+## The 4 "fundamental" skips — resolved
 
-**Portability tradeoff (8)** — recoverable only by making the module web/bun-only;
-deliberately left portable:
+The prior fundamental tail is gone. Each was either implemented or shown to be a
+non-fundamental classification, with no change to the host shim's contract:
+
+| Was-fundamental | Resolution | Now |
+|---|---|---|
+| `Bun.serve` — `options` is an **intersection** | `tsTypeToSi` maps `Intersection`/`Conditional` → `JSValue` (opaque handle, guarded `!isCallable && !isThenable`) | **bound** `serve(options: JSValue) -> JSValue` |
+| `Bun.plugin` — result is a **conditional** type | same branch | **bound** `plugin(options: JSValue) -> JSValue` |
+| `Response.json` static — **name collision** | a static factory colliding with an instance member ships under a `_static` suffix | **bound** `json` (instance reader) + `json_static` (factory) |
+| `Bun.$` — variadic + invalid name `$` | variadic → a `spread` Impl + `sanitizeName`; but `Bun.$` is a **tagged template** (`$(plainArray)` throws), so it is detected and skipped | **skipped — a JS syntactic form, not a bindgen gap** |
+
+> The **variadic spread** mechanism (a trailing `JSValue` array handle the host
+> spreads) and the **name sanitizer** ship and are tested (via `path.join` in
+> `jsvalue` mode); they're what makes `path.join`/`resolve` bindable the moment
+> `path` opts into `jsvalue`. `Bun.$` is the one variadic that *also* needs the
+> tagged-template calling convention, which no normal `@extern` expresses.
+
+**Notes / minor caveats (documented, not gaps):**
+- `Bun.serve`/`Bun.plugin` bind their options/result as opaque `JSValue`. Passing a
+  *handler-bearing* options bag needs a closure→`JSValue` boxing primitive in the
+  `js` module (a future enhancement); the binding itself is correct.
+- `Bun.plugin`'s result is a deferred conditional (`void | Promise<void>`); the
+  async-setup form isn't flagged `@suspending` (the result is usually discarded).
+- `getAwaitedType` is now the fallback for a `Promise` **subclass** result, so a
+  subclass's resolved value isn't silently dropped to `Void`.
+
+## What stays unbound — the 9 remaining skips (none fundamental)
+
+**Portability tradeoff (8)** — bind *today* with `objects:'jsvalue'` (proven: path
+4→0, os 4→0 skips); deliberately left Tier-0 portable (every host, not just web/bun):
 
 - `path.parse`, `path.format`, `path.join`, `path.resolve`
 - `os.cpus`, `os.loadavg`, `os.userInfo`, `os.networkInterfaces`
 
-**Genuinely fundamental (4)** — permanent skips:
+**Tagged-template (1)** — a recognised JS syntactic form, not a classifier gap:
 
-- **`Bun.plugin`** — `ReturnType<T["setup"]>`, a conditional type.
-- **`Bun.serve`** — its `options` is an intersection type carrying an embedded
-  `fetch` handler; needs a closure inside a handle, not a plain `JSValue`.
-- **`Bun.$`** — variadic, and its binding name would be the bare `$` (the Silicon
-  data-shape sigil — not a valid identifier).
-- **`Response.json`** *static factory* — collides with the instance body-reader
-  `json()`; `@extern` monomorphism keeps the instance form (the useful one).
+- **`Bun.$`** — a tagged template (first param `TemplateStringsArray`); it needs the
+  `` $`…` `` calling convention (a strings array carrying `.raw`), which a normal
+  `@extern` can't express. Detected and skipped with a precise reason.
 
-> `AbortSignal.onabort` was the 5th fundamental skip; it is now **recovered** by
-> the webiface `events:'closure'` path above (as `set_onabort`).
->
-> Note: `Bun.hash` (`number | bigint`) is no longer skipped — the union's `bigint`
-> arm now crosses as a `JSValue` handle, so it binds (the numeric value is opaque
-> to the guest, but the binding exists). A native `bigint → Int64` ABI remains
-> future work if a scalar result is wanted.
+> `AbortSignal.onabort` (the former 5th fundamental skip) is **recovered** by the
+> webiface `events:'closure'` path above (as `set_onabort`). `Bun.hash`
+> (`number | bigint`) also binds now (the `bigint` arm → a `JSValue` handle).

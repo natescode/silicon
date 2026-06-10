@@ -285,7 +285,13 @@ export function webifaceToSpecs(interfaceName: string, corpus = loadWebrefCorpus
             const args = buildParams(m.arguments, ctx, events)
             if (args === null) { skipped.push({ member: m.name, reason: 'a required arg is not bindable' }); continue }
             if (m.special === 'static') {
-                emit(snake(m.name), args, result, { kind: 'static', iface: interfaceName, method: m.name }, m.name, suspending)
+                // A static factory whose snake-name is already taken by an instance
+                // member (e.g. Response's static `json(data)` vs the Body-mixin
+                // instance `json()` body-reader) is disambiguated with a `_static`
+                // suffix rather than dropped — `@extern` has no overloading, so both
+                // shapes ship under distinct names (`json` + `json_static`).
+                const nm = usedName.has(snake(m.name)) ? `${snake(m.name)}_static` : snake(m.name)
+                emit(nm, args, result, { kind: 'static', iface: interfaceName, method: m.name }, m.name, suspending)
             } else {
                 emit(snake(m.name), [{ name: 'self', type: 'JSValue' }, ...args], result, { kind: 'method', method: m.name }, m.name, suspending)
             }

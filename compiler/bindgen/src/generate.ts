@@ -202,6 +202,15 @@ export function emitHostModule(ir: BindingIR, indent = '            ', strings: 
                 call = outWrap(`${head.slice(0, dot)}.${head.slice(dot + 1)}(${d.params.map(inArg).join(', ')})`, d.result)
                 break
             }
+            case 'spread': {
+                // The TRAILING JSValue param is an array handle the host spreads;
+                // any preceding fixed params are passed normally first
+                // (`accessor.method(fixed…, ...args)` — e.g. `Bun.$(strings, ...args)`).
+                const fixed = d.params.slice(0, -1).map(inArg)
+                const rest = `...${d.params[d.params.length - 1].name}`
+                call = outWrap(`${d.impl.accessor}.${d.impl.method}(${[...fixed, rest].join(', ')})`, d.result)
+                break
+            }
             case 'construct':
                 // new Iface(args…) → a fresh JSValue handle (result is JSValue, never wrapped).
                 call = `new ${d.impl.iface}(${d.params.map(inArg).join(', ')})`

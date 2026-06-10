@@ -20,3 +20,4 @@
 \\ @suspending @extern text (JSValue) -> JSString;
 \\ @extern error () -> JSValue;
 \\ @extern redirect (JSString) -> JSValue;
+\\ @extern json_static (JSValue) -> JSValue;

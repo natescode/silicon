@@ -28,6 +28,7 @@
 \\ @extern open_in_editor (JSString, JSValue);
 \\ @extern path_to_file_url (JSString) -> JSValue;
 \\ @extern peek (JSValue) -> JSValue;
+\\ @extern plugin (JSValue) -> JSValue;
 \\ @suspending @extern postgres (JSString) -> JSValue;
 \\ @extern random_uuidv5 (JSString, JSString, JSString) -> JSString;
 \\ @extern random_uuidv7 (JSString, JSValue) -> JSString;
@@ -40,13 +41,14 @@
 \\ @suspending @extern readable_stream_to_text (JSValue) -> JSString;
 \\ @suspending @extern resolve (JSString, JSString) -> JSString;
 \\ @extern resolve_sync (JSString, JSString) -> JSString;
+\\ @extern serve (JSValue) -> JSValue;
 \\ @extern sha (JSString, JSString) -> JSString;
 \\ @extern shrink ();
 \\ @suspending @extern sleep (JSValue);
 \\ @extern sleep_sync (Float);
 \\ @extern slice_ansi (JSString, Float, Float, JSString, Bool) -> JSString;
-\\ @extern spawn (JSValue, JSValue) -> JSValue;
-\\ @extern spawn_sync (JSValue, JSValue) -> JSValue;
+\\ @extern spawn (JSValue) -> JSValue;
+\\ @extern spawn_sync (JSValue) -> JSValue;
 \\ @suspending @extern sql (JSString) -> JSValue;
 \\ @extern string_width (JSString, JSValue) -> Float;
 \\ @extern strip_ansi (JSString) -> JSString;
