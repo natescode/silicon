@@ -38,6 +38,7 @@ If you're new, start with [`getting-started.md`](getting-started.md).
 | [struct-design.md](struct-design.md) | `@struct` design and layout rules |
 | [extern-out-pointer.md](extern-out-pointer.md) | `@extern` out-pointer ABI |
 | [struct-ffi.md](struct-ffi.md) | Struct-by-value FFI design proposal (not yet implemented) |
+| [ffi-coverage-gaps.md](ffi-coverage-gaps.md) | The remaining ~7% of host-API bind coverage — per-category root cause + adapter work needed (mostly one classifier seam) |
 | [signature-lines.md](signature-lines.md) | Separate `\\ name: type` signature lines; bare params, externs-as-signatures (proposal) |
 | [signature-lines-migration.md](signature-lines-migration.md) | Codemod + phased rollout plan for the signature-lines change (proposal) |
 | [use-includes.md](use-includes.md) | `@use 'path.si';` resolution semantics |
