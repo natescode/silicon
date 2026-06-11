@@ -36,6 +36,7 @@ export type TypeErrorKind =
     | 'MissingParamType'      // function has parameters but no signature line (E0015)
     | 'AwaitOutsideAsync'     // @await used outside an @async function body (E0016)
     | 'CapDeriveNonRoot'      // @cap_derive on a non-root capability (ADR 0027, E0017)
+    | 'IntLiteralOutOfRange'  // integer literal exceeds its target's 64-bit range (E0018)
 
 export interface TypeError {
     kind: TypeErrorKind
@@ -180,6 +181,17 @@ export function awaitOutsideAsync(sourceLocation?: SourceLocation): TypeError {
         message: `'@await' may only appear inside an '@async' function`,
         sourceLocation,
         hint: `mark the enclosing function '@async' on its \\\\ signature line: \\\\ @async name (…) -> …`,
+    }
+}
+
+export function intLiteralOutOfRange(value: string, signed: boolean, sourceLocation?: SourceLocation): TypeError {
+    const ty = signed ? 'Int64' : 'UInt64'
+    const range = signed ? '-9223372036854775808 … 9223372036854775807' : '0 … 18446744073709551615'
+    return {
+        kind: 'IntLiteralOutOfRange',
+        message: `integer literal ${value} is out of range for ${ty} (${range})`,
+        sourceLocation,
+        hint: `${ty} holds 64 bits; for arbitrary precision a BigInt type would be needed (not yet in Silicon)`,
     }
 }
 

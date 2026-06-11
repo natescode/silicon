@@ -84,3 +84,33 @@
 };
 \\ ToU64FromInt64_lower (Int)
 @fn ToU64FromInt64_lower node := compiler::compiler_lowerExpr(compiler::compiler_arg(node, 0));
+
+# ── i64 / u64 value casts (clean names; literal-precise) ────────────────
+# `@i64(x)` / `@u64(x)` are the readable casts to Int64 / UInt64.  A LITERAL
+# argument is intercepted in the lowerer (lower.ts lowerBuiltinCall) and
+# emitted as a precision-exact `i64.const` (the only way to write a 64-bit
+# value outside i32 range; also fixes the old @toInt64 literal truncation).
+# A non-literal Int argument reaches these handlers and is sign- (i64) or
+# zero- (u64) extended, exactly like @toInt64 / @toU64.
+
+@stratum I64 := {
+    Compiler::register::expression_keyword('@i64');
+    Compiler::on::lower('@i64', I64_lower);
+};
+\\ I64_lower (Int)
+@fn I64_lower node := {
+    args := compiler::compiler_arr_new();
+    compiler::compiler_arr_push(args, compiler::compiler_lowerExpr(compiler::compiler_arg(node, 0)));
+    compiler::ir_makeCall(compiler::compiler_str_intern('i64.extend_i32_s', 0), args, compiler::compiler_str_intern('i64', 0), compiler::compiler_str_intern('instr', 0))
+};
+
+@stratum U64 := {
+    Compiler::register::expression_keyword('@u64');
+    Compiler::on::lower('@u64', U64_lower);
+};
+\\ U64_lower (Int)
+@fn U64_lower node := {
+    args := compiler::compiler_arr_new();
+    compiler::compiler_arr_push(args, compiler::compiler_lowerExpr(compiler::compiler_arg(node, 0)));
+    compiler::ir_makeCall(compiler::compiler_str_intern('i64.extend_i32_u', 0), args, compiler::compiler_str_intern('i64', 0), compiler::compiler_str_intern('instr', 0))
+};

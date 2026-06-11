@@ -91,6 +91,7 @@ import {
     missingParamType,
     awaitOutsideAsync,
     capDeriveNonRoot,
+    intLiteralOutOfRange,
     arityMismatch,
     missingReturn,
     mvpOnlyIntrospection,
@@ -130,6 +131,21 @@ import { normalizeMatchArgs } from '../ast/matchArms'
  *  well-known entry).  `@cap_derive` may only attenuate a value of this type;
  *  the entry shim hands a `World` to a `main` that requests one. */
 export const CAP_ROOT_TYPE = 'World'
+
+/** The BigInt-parseable text of an integer-literal argument (strips `_`
+ *  separators; keeps any 0x/0b/0o prefix, which `BigInt()` accepts; unwraps
+ *  Element/Item/expression wrapper nodes).  Undefined when the arg is not an
+ *  integer literal. */
+function literalIntText(arg: any): string | undefined {
+    let cur = arg
+    for (let i = 0; i < 6 && cur && typeof cur === 'object'; i++) {
+        if (cur.type === 'IntLiteral') return String(cur.value ?? '').replace(/_/g, '')
+        const next = typeof cur.value === 'object' ? cur.value : cur.expression
+        if (!next || typeof next !== 'object') return undefined
+        cur = next
+    }
+    return undefined
+}
 
 /**
  * Mutable checking context. Threaded through the recursive walk so error
@@ -1721,6 +1737,24 @@ function checkFunctionCall(call: any, ctx: Ctx): SiliconType {
                 }
                 return ctx.fresh.next('Cap')
             }
+            // i64/u64 value casts on a LITERAL argument — range-check it against
+            // the 64-bit target (the lowerer emits a precise i64.const).  Falls
+            // through to the normal cast signature for the result type + the
+            // non-literal (Int-widening) case.
+            if (name === '@i64' || name === '@u64' || name === '@toInt64' || name === '@toU64') {
+                const litRaw = literalIntText(call.args?.[0])
+                if (litRaw !== undefined) {
+                    const signed = name === '@i64' || name === '@toInt64'
+                    let v: bigint | undefined
+                    try { v = BigInt(litRaw) } catch { v = undefined }
+                    if (v !== undefined) {
+                        const lo = signed ? -(2n ** 63n) : 0n
+                        const hi = signed ? (2n ** 63n - 1n) : (2n ** 64n - 1n)
+                        if (v < lo || v > hi) ctx.errors.push(intLiteralOutOfRange(v.toString(), signed, call.sourceLocation))
+                    }
+                }
+                // fall through — migratedCastSig provides Int64/UInt64 result.
+            }
             if (intr === 'WASM::control_if'    || intr === 'IR::control_if'    || name === '@if')    return typeOfIfCall(argTypes, call.sourceLocation, ctx)
             if (intr === 'WASM::control_loop'  || intr === 'IR::control_loop'  || name === '@loop')  return TypeUnknown  // loops are void
             if (intr === 'WASM::control_match' || intr === 'IR::control_match' || name === '@match') return typeOfMatchCall(argTypes, call.sourceLocation, ctx)
@@ -1743,6 +1777,11 @@ function checkFunctionCall(call: any, ctx: Ctx): SiliconType {
                 name === '@toU32' ? { params: [TypeInt],   result: TypeUInt32 } :
                 name === '@toU64' && firstArgKind === 'Int64' ? { params: [TypeInt64], result: TypeUInt64 } :
                 name === '@toU64' ? { params: [TypeInt],   result: TypeUInt64 } :
+                // The readable i64/u64 value casts (clean names for @toInt64 /
+                // @toU64).  A literal argument is lowered to an exact i64.const;
+                // a non-literal Int widens (sign / zero extend).
+                name === '@i64' ? { params: [TypeInt], result: TypeInt64 } :
+                name === '@u64' ? { params: [TypeInt], result: TypeUInt64 } :
                 undefined
             // Prefer the pre-derived TypeSig stored in the registry; fall back to
             // deriving from the intrinsic name for strata loaded before Round 30.

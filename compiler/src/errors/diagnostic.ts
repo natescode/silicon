@@ -76,6 +76,7 @@ export const TYPE_ERROR_CODES: Record<TypeErrorKind, string> = {
     MissingParamType:      'E0015',  // function has parameters but no signature line
     AwaitOutsideAsync:     'E0016',  // @await used outside an @async function (ADR 0018 coloring)
     CapDeriveNonRoot:      'E0017',  // @cap_derive on a non-root capability (ADR 0027 ocaps)
+    IntLiteralOutOfRange:  'E0018',  // integer literal exceeds Int64/UInt64 64-bit range
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

@@ -1283,7 +1283,8 @@ function lowerExpr(node: any, ctx: LowerCtx): IRExpr {
             return { kind: 'Const', wasmType: 'i32', value: parseIntLiteral(n) }
 
         case 'FloatLiteral':
-            return { kind: 'Const', wasmType: 'f32', value: parseFloat(n.value) }
+            // Strip `_` digit separators before parsing (`123_456.789_012`).
+            return { kind: 'Const', wasmType: 'f32', value: parseFloat(String(n.value).replace(/_/g, '')) }
 
         case 'BooleanLiteral':
             return { kind: 'Const', wasmType: 'i32', value: n.value ? 1 : 0 }
@@ -1817,6 +1818,20 @@ function lowerModuleCall(name: string, sepIdx: number, n: any, ctx: LowerCtx): I
 }
 
 function lowerBuiltinCall(name: string, rawArgs: any[], ctx: LowerCtx, inferredType?: any): IRExpr {
+    // `@i64`/`@u64` (and the legacy `@toInt64`/`@toU64`) on a LITERAL argument
+    // lower to a precision-exact `i64.const` carrying the full 64-bit value —
+    // the only way to write an Int64/UInt64 value outside i32 range, and the
+    // fix for the old `@toInt64` truncation (which routed the literal through
+    // a 32-bit constant).  `asIntN(64, …)` stores the two's-complement bit
+    // pattern so a `u64` value ≥ 2^63 emits correctly (its signed-LEB form).
+    // A non-literal argument falls through to the sign/zero-extend handler.
+    if (name === '@i64' || name === '@toInt64' || name === '@u64' || name === '@toU64') {
+        const lit = intLiteralOf(rawArgs[0])
+        if (lit !== undefined) {
+            return { kind: 'Const', wasmType: 'i64', value: BigInt.asIntN(64, parseIntLiteralBig(lit)) }
+        }
+    }
+
     // Phase 5 Workstream B — `@fnref` / `@call_indirect` are now data-driven
     // strata (src/strata/funcref.si); they fall through to the on::lower
     // handler-firing path below (the funcref-table state they mutate is
@@ -2452,4 +2467,27 @@ function parseIntLiteral(n: any): number {
     if (cleaned.startsWith('0x') || cleaned.startsWith('0X')) return parseInt(cleaned.slice(2), 16)
     if (cleaned.startsWith('0o') || cleaned.startsWith('0O')) return parseInt(cleaned.slice(2), 8)
     return parseInt(cleaned, 10)
+}
+
+/** BigInt-precise parse of an integer literal (decimal / 0x / 0b / 0o, `_`
+ *  separators stripped).  Used for `@i64`/`@u64` literal constants, which must
+ *  survive past the JS safe-integer range. */
+export function parseIntLiteralBig(n: any): bigint {
+    const raw: string = n.value ?? '0'
+    // BigInt() natively reads decimal and the 0x / 0b / 0o prefixes; we only
+    // need to strip the `_` digit separators first.
+    return BigInt(raw.replace(/_/g, ''))
+}
+
+/** If `arg` (possibly wrapped in Element/Item/expression nodes) is an integer
+ *  literal, return that IntLiteral node; else undefined. */
+function intLiteralOf(arg: any): any | undefined {
+    let cur = arg
+    for (let i = 0; i < 6 && cur && typeof cur === 'object'; i++) {
+        if (cur.type === 'IntLiteral') return cur
+        const next = typeof cur.value === 'object' ? cur.value : cur.expression
+        if (!next || typeof next !== 'object') return undefined
+        cur = next
+    }
+    return undefined
 }

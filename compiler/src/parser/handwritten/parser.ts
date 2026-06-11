@@ -30,22 +30,17 @@ import { astChildren } from '../../ast/astChildren'
 interface SigInfo { name: string; generics?: GenericParams; type: any; extern?: boolean; pub?: boolean; export?: boolean; async?: boolean; suspending?: boolean }
 
 /**
- * Reproduce toAst's decLiteral value reconstruction, including its quirk: ohm's
- * iteration `.sourceString` makes both columns of `("_" digit+)*` span the whole
- * group, so the separator-onward tail is duplicated — `value = text +
- * text.slice(firstUnderscore)`. e.g. `1_000` → `"1_000_000"`, `1_000_000` →
- * `"1_000_000_000_000"`. We match it exactly for byte-identical ASTs.
+ * The literal's value text is the verbatim source (digit separators intact).
+ * Consumers (`parseIntLiteral` / `parseFloat`) strip the `_`s when computing the
+ * numeric value, so `1_000` is one thousand and `123_456.789_012` is exact.
+ *
+ * (Historically these reproduced a buggy quirk of the retired OHM grammar's
+ * `.toAst()` — it duplicated the separator-onward tail, so `1_000` became
+ * `"1_000_000"` and digit separators silently evaluated to the wrong number.
+ * The OHM grammar is no longer the parser, so the verbatim text is used.)
  */
-function ohmDecValue(text: string): string {
-    const first = text.indexOf('_')
-    return first < 0 ? text : text + text.slice(first)
-}
-
-/** Float = INT "." FRAC; only the integer part carries `_` separators. */
-function ohmFloatValue(text: string): string {
-    const dot = text.indexOf('.')
-    return ohmDecValue(text.slice(0, dot)) + '.' + text.slice(dot + 1)
-}
+function ohmDecValue(text: string): string { return text }
+function ohmFloatValue(text: string): string { return text }
 
 const ZERO_LOC: SourceLocation = { startLine: 0, startColumn: 0, endLine: 0, endColumn: 0 }
 

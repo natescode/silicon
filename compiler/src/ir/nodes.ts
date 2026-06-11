@@ -58,7 +58,10 @@ export type AbstractOp =
 export interface IRConst {
     kind: 'Const'
     wasmType: WasmValType
-    value: number
+    /** The constant value.  A `bigint` is used for `i64` constants that exceed
+     *  the JS safe-integer range (precise 64-bit literals from `@i64`/`@u64`);
+     *  `i32`/`f32` constants are always plain numbers. */
+    value: number | bigint
 }
 
 /** Read a function parameter or @local variable. */

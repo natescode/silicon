@@ -57,11 +57,26 @@ describe('Phase 5b-4: @toU32 / @toU64 cast keywords', () => {
         expect(ex.make_u32()).toBe(42)
     })
 
-    test('@toU64 from Int emits i64.extend_i32_u (zero-extend)', () => {
-        const wat = compileWat(`\\\\ make u64
-@fn make := @toU64(42);`)
+    test('@toU64 from a non-literal Int emits i64.extend_i32_u (zero-extend)', () => {
+        // A runtime Int value (function parameter) takes the real widening
+        // path.  A *literal* arg is constant-folded to a direct i64.const
+        // (see the dedicated folding test below), so use a param here to
+        // exercise the extend instruction itself.
+        const wat = compileWat(`\\\\ make (Int) -> u64
+@fn make x := @toU64(x);`)
         expect(wat).toContain('i64.extend_i32_u')
         // Function's WAT result type must match.
+        expect(wat).toContain('(func $make (param $x i32) (result i64)')
+    })
+
+    test('@toU64 of an Int literal folds to a direct i64.const (no extend)', () => {
+        // The constant-folding fix: a literal cast never round-trips through
+        // an i32.const + extend (which truncated values > 2^31).  It lowers
+        // straight to a 64-bit constant.
+        const wat = compileWat(`\\\\ make u64
+@fn make := @toU64(42);`)
+        expect(wat).not.toContain('i64.extend_i32_u')
+        expect(wat).toContain('i64.const 42')
         expect(wat).toContain('(func $make (result i64)')
     })
 
@@ -75,11 +90,12 @@ describe('Phase 5b-4: @toU32 / @toU64 cast keywords', () => {
     })
 
     test('@toU64 from Int64 emits NO extension instruction (pure relabel)', () => {
-        // Inner @toInt64 emits its own i64.extend_i32_s; outer @toU64:Int64
-        // is a no-op.  Confirm we don't see a *second* extend instruction
-        // wrapping the inner one.
-        const wat = compileWat(`\\\\ make u64
-@fn make := @toU64(@toInt64(42));`)
+        // Inner @toInt64 emits its own i64.extend_i32_s for a runtime Int;
+        // outer @toU64:Int64 is a no-op.  Confirm we don't see a *second*
+        // extend instruction wrapping the inner one.  Use a param so the
+        // inner @toInt64 isn't constant-folded away.
+        const wat = compileWat(`\\\\ make (Int) -> u64
+@fn make x := @toU64(@toInt64(x));`)
         const extendCount = (wat.match(/i64\.extend_i32_/g) || []).length
         expect(extendCount).toBe(1)
     })

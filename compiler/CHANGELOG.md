@@ -54,7 +54,15 @@ The first stable Silicon release.
 - `u8` / `u16` / `u32` / `u64` unsigned integer types with `*_u` codegen
   variants for unsigned division, shift-right, and comparison.
 - `Int` (target-sized) / `Int32` (alias) / `Int64` (always 64-bit) hierarchy.
-  Explicit `&@toInt64` / `&@toInt` casts — no implicit promotion.
+  Explicit `@i64` / `@u64` casts (`Int → Int64` / `Int → UInt64`; the older
+  `@toInt64` / `@toU64` keyword spellings remain) and `@toInt` (`Int64 → Int`) —
+  no implicit promotion. A literal cast is constant-folded to a direct
+  `i64.const`, so values above the 32-bit range are exact (fixing a bug where
+  `@toInt64(N)` truncated `N` through an intermediate `i32.const`); an
+  out-of-range literal is rejected at typecheck (E0018).
+- Numeric literal forms — hex (`0xFF`), binary (`0b1010`), octal (`0o17`), and
+  `_` digit separators in integers and floats (`5_000_000`, `123_456.789_012`,
+  `0xFF_FF`); separators are stripped when computing the value.
 - First-class function references, indirect call (`call_indirect`),
   function-type as a first-class `SiliconType`.
 - Slices — `Slice[T]` (ptr+len) with bounds-checked indexing; `String`

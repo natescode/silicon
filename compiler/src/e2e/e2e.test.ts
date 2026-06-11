@@ -2067,8 +2067,10 @@ test("Phase D i64: path_open call site composes i64 args via module call", () =>
     // The module-call sugar generates the import automatically with i64 rights.
     expect(result.wat).toContain('(import "wasi_snapshot_preview1" "path_open"')
     expect(result.wat).toContain('(param i64) (param i64)')
-    // Call site passes i64 args produced by @toInt64.
-    expect(result.wat).toContain('i64.extend_i32_s')
+    // The i64 rights args are the literal 0, so @toInt64 constant-folds them to
+    // a precise i64.const (a runtime arg would widen via i64.extend_i32_s — see
+    // the Phase A / Phase C tests that pass a parameter).
+    expect(result.wat).toContain('i64.const 0')
 })
 
 test("Phase D i64: wasi_snapshot_preview1.path_open module registry declares i64 rights", () => {

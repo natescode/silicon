@@ -247,11 +247,13 @@ function emitExpr(e: IRExpr, buf: WasmBuffer, ctx: EmitCtx, isUser: boolean,
     switch (e.kind) {
         case 'Const': {
             if (e.wasmType === 'i32') {
-                buf.u8(0x41); buf.i32(e.value)
+                buf.u8(0x41); buf.i32(Number(e.value))
             } else if (e.wasmType === 'f32') {
-                buf.u8(0x43); buf.f32(e.value)
+                buf.u8(0x43); buf.f32(Number(e.value))
             } else {
-                buf.u8(0x42); buf.i64(BigInt(e.value))
+                // i64 — keep full precision when `value` is already a bigint
+                // (a >2^53 literal from @i64/@u64); BigInt(number) otherwise.
+                buf.u8(0x42); buf.i64(typeof e.value === 'bigint' ? e.value : BigInt(e.value))
             }
             return
         }
