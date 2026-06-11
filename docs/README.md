@@ -33,6 +33,7 @@ If you're new, start with [`getting-started.md`](getting-started.md).
 | [compiler-as-a-service.md](compiler-as-a-service.md) | The library-first compiler API (Roslyn-style) |
 | [caas-roslyn-parity.md](caas-roslyn-parity.md) | CaaS gap tracker — what's left to reach Roslyn-level IDE API coverage |
 | [lsp-completion-plan.md](lsp-completion-plan.md) | Plan: LSP autocomplete for stdlib/modules + third-party libs + snippets (`@fn` stub-out) |
+| [lsp-completeness-plan.md](lsp-completeness-plan.md) | What's left for a *full* LSP server — phased, prioritized tracker (correctness spine, missing methods, lifecycle, editor shipping) with file-level entry points |
 | [js-string-builtins.md](js-string-builtins.md) | The `JSString` type, WASM JS String Builtins, and the web/bun platform (`--platform`) |
 | [api-boundaries.md](api-boundaries.md) | Per-subsystem import rules; public vs internal |
 | [struct-design.md](struct-design.md) | `@struct` design and layout rules |
