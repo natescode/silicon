@@ -148,11 +148,13 @@ describe('LSP rides the incremental compiler Workspace', () => {
         ws.update(u, `@fn greet x := { x };\ng := 1;`)
         expect([...ws.getDoc(u)!.model.allSymbols].map(s => s.name)).toContain('greet')
 
-        // edit: start a new, incomplete line (a parse error)
-        const doc = ws.update(u, `@fn greet x := { x };\ng := 1;\nh := gr`)!
+        // edit: a genuinely incomplete trailing line (`h := gr +` — a dangling
+        // binary operator is a parse error, unlike `h := gr` which parses as a
+        // complete binding with an unbound RHS).
+        const doc = ws.update(u, `@fn greet x := { x };\ng := 1;\nh := gr +`)!
         expect(doc.diagnostics.some(d => d.code === 'E0000')).toBe(true)      // error surfaced
         expect([...doc.model.allSymbols].map(s => s.name)).toContain('greet') // …but model alive
-        expect(ws.compiler.getCompletions(u, 3, 14, 'gr').some(i => i.label === 'greet')).toBe(true)
+        expect(ws.compiler.getCompletions(u, 3, 8, 'gr').some(i => i.label === 'greet')).toBe(true)
     })
 
     test('formatting returns edits or a no-op array', () => {

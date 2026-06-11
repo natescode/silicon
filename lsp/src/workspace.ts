@@ -39,6 +39,15 @@ export class Workspace {
      *  projects open in one editor window never cross-resolve. */
     readonly #componentProjects = new Map<string, Project>()
 
+    /** Release retained state on server shutdown.  Drops the component scan
+     *  caches + project map so the compiler workspace and its open documents
+     *  become unreferenced.  Best-effort and idempotent — the process exits
+     *  immediately after `onExit`, so this is about prompt cleanup. */
+    dispose(): void {
+        this.#scannedComponents.clear()
+        this.#componentProjects.clear()
+    }
+
     /** Open (or update) a document and return its compiled state.
      *  Opens any `@use` dependencies AND, inside an `sgl.toml` project, every
      *  sibling source file (ADR-0024 directory=module) into the same workspace

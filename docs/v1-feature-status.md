@@ -61,7 +61,7 @@ post-gate work.
 | `HashMap[K,V]` for non-i32 keys/values — M1 tail | ⏳ v1.1 | `Vec[Float]`/`Vec[Int64]` + HashMap iteration **shipped** (M1); non-i32 (K,V) mono + `@loop` over typed Vecs remain |
 | Heterogeneous host-handle sums on **linear-mem** target | 🔜 | native on `--target=wasm-gc` (✅); on a linear-mem target externref isn't addressable → `E` fail-fast directing to `js::pin`/wasm-gc |
 | `IterStep[T,R]` user iteration protocol (ADR-0016) | ⏳ v1.1 | range/`Vec` dispatch ships; structural dispatch waits on reflection + combinators |
-| LSP server — hardening | 🟡 | a runnable stdio server with 12 handlers (cross-file goto + completion landed) ships; the v1.1 remainder is hardening (one stale mid-typing test) + polish |
+| LSP server | 🟡 | a runnable stdio server, now **18 capabilities** — added declaration, typeDefinition, documentHighlight, rangeFormatting, workspace/symbol, prepareRename + lifecycle (shutdown/exit, positionEncoding, process-level error isolation). Remaining tail: cross-file **diagnostic** invalidation (needs Workspace open-doc dep resolution + incremental dependency tracking) and binding-identity (S1, `containingSymbol`) for scope-correct rename/references |
 | Incremental compilation — codegen + hardening | 🟡 | incremental reparse + elaborate + typecheck shipped & wired into `Workspace`/LSP (43 tests); incremental **codegen** is the v1.1 remainder |
 | Package registry (registry-backed `sgl add`) | ⏳ v1.1 | `--path` local deps work today; the registry server is pending (story 6b-12) |
 | Silicon-native comptime interpreter | 🔜 | comptime runs on the host today (ADR-0003 pivot) |

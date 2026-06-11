@@ -512,22 +512,35 @@ export function lowerProgram(
     // referenced when the user declares them, so giving Vec types stable
     // low indices is safe).  See src/codegen/gc-vec.ts.
     if (target === 'wasm-gc') {
-        // M1 — emit the Float/Int64 Vec monomorphs the program actually uses
-        // (i32 is always emitted).  Detect `Vec[Float]` / `Vec[Int64]` across
-        // the function signatures and every stamped inferredType.
+        // M1 — emit the Float/Int64 Vec monomorphs the program ACTUALLY uses
+        // (i32 is always emitted).  Detection scans the user program, NOT the
+        // function-signature table: the typechecker pre-registers `vec_*_f32`/
+        // `_i64` sigs unconditionally under wasm-gc, so scanning `functionSigs`
+        // would always force both element types (the on-demand emission would
+        // be defeated).  Two signals catch every real use: a stamped
+        // `inferredType` of `Vec[Float]`/`Vec[Int64]` (covers calls + their
+        // args/results), and a `Vec[Float]`/`Vec[Int64]` TYPE ANNOTATION
+        // (covers a param/local typed but never element-accessed) — the latter
+        // keeps the detector aligned with `refIdxFromAnnotation`'s ref-typing.
         const extraElems: Array<'f32' | 'i64'> = []
-        const isVecOf = (t: any, k: string): boolean =>
-            t && t.kind === 'Vec' && t.element?.kind === k
-        const note = (t: any): void => {
-            if (isVecOf(t, 'Float') && !extraElems.includes('f32')) extraElems.push('f32')
-            if (isVecOf(t, 'Int64') && !extraElems.includes('i64')) extraElems.push('i64')
+        const noteElem = (e: string | undefined): void => {
+            if (e === 'Float' && !extraElems.includes('f32')) extraElems.push('f32')
+            if (e === 'Int64' && !extraElems.includes('i64')) extraElems.push('i64')
         }
-        for (const sig of functionSigs.values()) { sig.params.forEach(note); note(sig.result) }
         const walkVecUse = (n: any): void => {
             if (!n || typeof n !== 'object') return
             if (Array.isArray(n)) { for (const x of n) walkVecUse(x); return }
-            if (n.inferredType) note(n.inferredType)
-            for (const k of Object.keys(n)) { if (k !== 'inferredType') walkVecUse(n[k]) }
+            const t = n.inferredType
+            if (t && t.kind === 'Vec') noteElem(t.element?.kind)
+            // `Vec[Float]` / `Vec[Int64]` type annotation (typeArgs[0].name).
+            if (n.type === 'TypeAnnotation' && n.typename === 'Vec' &&
+                Array.isArray(n.typeArgs) && n.typeArgs.length === 1) {
+                noteElem(n.typeArgs[0]?.name)
+            }
+            for (const k of Object.keys(n)) {
+                if (k === 'inferredType' || k === 'sourceLocation' || k === 'relSpan') continue
+                walkVecUse(n[k])
+            }
         }
         walkVecUse(program.elements)
         const vecFns = require('../codegen/gc-vec').buildGcVecExtension(ctx.wasmGcTypes, extraElems) as IRFunction[]

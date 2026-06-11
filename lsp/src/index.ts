@@ -28,6 +28,7 @@ import { registerSignatureHelp } from './handlers/signature-help.ts'
 import { registerFormatting } from './handlers/formatting.ts'
 import { registerSemanticTokens } from './handlers/semantic-tokens.ts'
 import { registerCodeActions } from './handlers/code-action.ts'
+import { registerWorkspaceSymbols } from './handlers/workspace-symbol.ts'
 import { registerWatchedFiles, registerFileWatchers } from './handlers/watched-files.ts'
 
 // Default to stdio when no transport flag is passed.  VS Code's
@@ -51,30 +52,64 @@ connection.onInitialize((params) => {
     // an unsolicited `client/registerCapability` to a client that doesn't would
     // be a protocol violation.
     canWatchFiles = params.capabilities?.workspace?.didChangeWatchedFiles?.dynamicRegistration === true
+    // Position encoding: the compiler addresses columns in UTF-16 code units
+    // (matching the LSP default + JS string indexing), so declare it
+    // explicitly rather than relying on the implicit default.  If the client
+    // only offers other encodings, fall back to utf-16 (the spec default).
+    const clientEncodings = params.capabilities?.general?.positionEncodings ?? []
+    const positionEncoding = clientEncodings.includes('utf-16') || clientEncodings.length === 0
+        ? 'utf-16' : clientEncodings[0]
     return {
         capabilities: {
+            positionEncoding,
             textDocumentSync: TextDocumentSyncKind.Incremental,
             documentSymbolProvider: true,
             definitionProvider: true,
+            declarationProvider: true,
+            typeDefinitionProvider: true,
             hoverProvider: true,
             completionProvider: { triggerCharacters: ['&', '@', ':'] },
             referencesProvider: true,
-            renameProvider: true,
+            documentHighlightProvider: true,
+            renameProvider: { prepareProvider: true },
             signatureHelpProvider: { triggerCharacters: ['(', ',', ' '] },
             documentFormattingProvider: true,
+            documentRangeFormattingProvider: true,
+            workspaceSymbolProvider: true,
             codeActionProvider: true,
             semanticTokensProvider: {
                 legend: { tokenTypes: SEMANTIC_TOKEN_TYPES, tokenModifiers: [] },
                 full: true,
             },
         },
-        serverInfo: { name: 'silicon-lsp', version: '0.2.0' },
+        serverInfo: { name: 'silicon-lsp', version: '0.3.0' },
     }
 })
 
 connection.onInitialized(() => {
     connection.console.info('silicon-lsp initialised (incremental engine)')
     if (canWatchFiles) registerFileWatchers(connection)
+})
+
+// Lifecycle — graceful shutdown/exit.  `onShutdown` releases per-document
+// state (debounce timers, open compiler docs); `onExit` ends the process with
+// the spec-mandated code (0 if shutdown was requested first, else 1).
+let shutdownRequested = false
+connection.onShutdown(() => {
+    shutdownRequested = true
+    workspace.dispose()
+})
+connection.onExit(() => { process.exit(shutdownRequested ? 0 : 1) })
+
+// Robustness — a stray exception in an async path (a notification handler, a
+// debounce callback) must not take the whole server down; log and continue.
+// Request handlers are already isolated by vscode-languageserver (they reply
+// with an error), but uncaught async errors would otherwise be fatal.
+process.on('uncaughtException', (err) => {
+    connection.console.error(`silicon-lsp uncaught exception: ${(err as Error)?.stack ?? String(err)}`)
+})
+process.on('unhandledRejection', (reason) => {
+    connection.console.error(`silicon-lsp unhandled rejection: ${String(reason)}`)
 })
 
 // Wire up handlers.  Each registration attaches its own document /
@@ -90,6 +125,7 @@ registerSignatureHelp(connection, documents, workspace)
 registerFormatting(connection, documents, workspace)
 registerSemanticTokens(connection, documents, workspace)
 registerCodeActions(connection, documents, workspace)
+registerWorkspaceSymbols(connection, workspace)
 registerWatchedFiles(connection, workspace)
 
 documents.listen(connection)

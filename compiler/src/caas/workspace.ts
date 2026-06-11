@@ -800,6 +800,51 @@ export class Workspace {
         return [{ span: editSpan, newText: normalized }]
     }
 
+    /**
+     * Workspace-wide symbol search (LSP `workspace/symbol`, Ctrl-T).  Returns
+     * every user-written, located symbol whose name contains `query`
+     * (case-insensitive; empty query returns all).  Deduplicated by
+     * (name, file, line); implicit/synthesized symbols are excluded.
+     */
+    workspaceSymbols(query: string): CaaSSymbol[] {
+        const q = query.toLowerCase()
+        const out: CaaSSymbol[] = []
+        const seen = new Set<string>()
+        for (const entries of this.#symbolIndex.values()) {
+            for (const { symbol } of entries) {
+                if (symbol.isImplicitlyDeclared || !symbol.definitionSpan) continue
+                if (q && !symbol.name.toLowerCase().includes(q)) continue
+                const sp = symbol.definitionSpan
+                const key = `${symbol.name} ${sp.file} ${sp.line}`
+                if (seen.has(key)) continue
+                seen.add(key)
+                out.push(symbol)
+            }
+        }
+        return out
+    }
+
+    /**
+     * Go-to-type-definition (LSP `textDocument/typeDefinition`): resolve the
+     * symbol at `(line, col)`, then jump to the definition of its *type* (e.g.
+     * the `@type`/`@enum` declaration of a `Sum`/`Distinct`).  Returns the
+     * type's defining symbol, or `undefined` when the type is built-in /
+     * anonymous / not found.
+     */
+    typeDefinition(uri: string, line: number, col: number): CaaSSymbol | undefined {
+        const sym = this.findDefinition(uri, line, col)
+        const t = sym?.type as { kind?: string; name?: string; element?: any } | undefined
+        if (!t) return undefined
+        // The named, user-declarable type kinds.  Vec[T] unwraps to its element.
+        let typeName: string | undefined
+        if (t.kind === 'Sum' || t.kind === 'Distinct') typeName = t.name
+        else if (t.kind === 'Vec' && t.element && (t.element.kind === 'Sum' || t.element.kind === 'Distinct')) {
+            typeName = t.element.name
+        }
+        if (!typeName) return undefined
+        return this.#resolveIndexed([typeName], uri)?.symbol
+    }
+
     // ── internal ──────────────────────────────────────────────────────────────
 
     #compile(uri: string, source: string, version: number, priorTree?: SyntaxTree): Document {
