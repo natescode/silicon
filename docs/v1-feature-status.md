@@ -37,7 +37,7 @@ post-gate work.
 | **C2** | Escaping host-callable closures — **THE GATE** | ✅ | leak-free under `--target=wasm-gc`; linear-mem retains env in bump heap |
 | **FFI 100% gate** | every host member binds | 🟡 | **99.74%** (379/380) — only `Bun.$` (a tagged-template) unbound; plan committed |
 | **M0** | Comptime monomorphization (full) | ✅ | per-call-site memoization + the production `@generic` stratum shipped; the all-i32 erased copy serves i32-shaped calls, Float/Int64/host-handle calls get a specialized monomorph. User-facing generics: `@fn[T]`/`@type[T]` HM-lite. Native `Result[JSValue,E]` rides this (see FFI F1) |
-| **M1** | Container mono `Vec[T]` / `HashMap[K,V]` | ⏳ | works **i32-only** today; element-type/(K,V) mono + HashMap iteration is v1.1 (the "dominant speed lever") |
+| **M1** | Container mono `Vec[T]` / `HashMap[K,V]` | 🟡 | **`Vec[Float]`/`Vec[Int64]` ship on BOTH targets** (linear-mem `vec_*_f32`/`_i64`; wasm-gc per-element `$Array_f32`/`$Array_i64` from the parameterized `gc-vec.ts`) + a **HashMap iteration** cursor surface. The remaining tail: `HashMap[K,V]` for non-i32 keys/values, and `@loop` sugar over typed Vecs (ADR-0016-deferred) |
 | **K0** | Object-capability model **v0** (minimal, WASI-aligned) | ✅ | ADR 0027: unforgeable `@type_distinct` caps, rooted at `@fn main (World)` via the entry shim, attenuated by `@cap_derive` (E0017 "downgrade-from-root"); `World`+`Clock` proven e2e under wasmtime. Zero new analysis pass — a strict subset of ADR 0015 / K1–K8 |
 | **K1–K8** | Full capability/borrow track (`on::check`, reflection, fixpoint checker, `@capability` seal, rcaps) | 🔜 | post-v1.0; K0 (above) is the seed it builds on without rework |
 
@@ -47,7 +47,7 @@ post-gate work.
 |---|---|
 | **Language / grammar** | Strata 2.0 (features-as-Silicon-source), Odin grammar (ADR-0020: bare defs, always-parens calls, dropped `&` sigil), conservative ASI (ADR-0026), bare `name := v` (immutable) / `@mut name := v` (mutable) bindings, `@type P := { x Int, y Int }` records (`@struct`/`@global`/`@local` **retired** by ADR-0020), `@enum`, flat `@match`, `@defer`, `@try`, first-class fn refs + `call_indirect`, `@loop` over iterables (range + indexed-`Vec`, syntactic dispatch) |
 | **Type system** | HM-lite inference, `@fn[T]`/`@type[T]` generics, sum types + parametric `Option[T]`/`Result[T,E]`, `Int`/`Int32`/`Int64` hierarchy, unsigned `u8`–`u64`, `Slice[T]`, `@type_alias`/`@type_distinct` |
-| **Stdlib** | `Option`/`Result`, `Vec[T]` (i32), `HashMap[i32,i32]`, `Rc<T>`, `io`, `future`/`future_async`, `ffi` (host-error→`Result`), string byte-views + `StrBuilder` (ADR-0022). `Result[JSValue,E]`/`Option[JSValue]` carry a host handle **natively** under `--target=wasm-gc` (no `js::pin`) |
+| **Stdlib** | `Option`/`Result`, `Vec[T]` (`Int`/`Float`/`Int64`, both targets — M1), `HashMap[i32,i32]` + **iteration cursor**, `Rc<T>`, `io`, `future`/`future_async`, `ffi` (host-error→`Result`), string byte-views + `StrBuilder` (ADR-0022). `Result[JSValue,E]`/`Option[JSValue]` carry a host handle **natively** under `--target=wasm-gc` (no `js::pin`) |
 | **FFI / host** | bindgen (3 tiers), `js` module (object/array/handle substrate), `stream` module, generated modules (`path`/`os`/`json`/`bun`/`url`/fetch ecosystem/`event_target`/`crypto`/`fs`/`global`), `promise` concurrency, no fundamental classifier gaps |
 | **Backends** | WAT/WASM (binaryen+wabt), QBE → native (Tier-1: linux/macos x86_64+arm64), `--target=wasm-gc` (engine-GC structs/sums) |
 | **Memory** | arena `with_arena`/parent-escape, clean heap-exhaustion trap + `--max-heap=N`, `heap_used`/`arena_used`, published `allocator.wit` |
@@ -58,7 +58,7 @@ post-gate work.
 
 | Feature | When | Note |
 |---|:--:|---|
-| Container mono (`Vec[Float]`/`Vec[Int64]`, HashMap iteration) — M1 | ⏳ v1.1 | i32-only today |
+| `HashMap[K,V]` for non-i32 keys/values — M1 tail | ⏳ v1.1 | `Vec[Float]`/`Vec[Int64]` + HashMap iteration **shipped** (M1); non-i32 (K,V) mono + `@loop` over typed Vecs remain |
 | Heterogeneous host-handle sums on **linear-mem** target | 🔜 | native on `--target=wasm-gc` (✅); on a linear-mem target externref isn't addressable → `E` fail-fast directing to `js::pin`/wasm-gc |
 | `IterStep[T,R]` user iteration protocol (ADR-0016) | ⏳ v1.1 | range/`Vec` dispatch ships; structural dispatch waits on reflection + combinators |
 | LSP server — hardening | 🟡 | a runnable stdio server with 12 handlers (cross-file goto + completion landed) ships; the v1.1 remainder is hardening (one stale mid-typing test) + polish |

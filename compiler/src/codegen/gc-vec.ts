@@ -1,46 +1,70 @@
 // SPDX-License-Identifier: MIT
 /**
- * Phase 9d-8 — Vec[T] for value-typed T under --target=wasm-gc.
+ * Vec[T] for value-typed T under --target=wasm-gc.
  *
  * Mirrors the surface API of `src/stdlib/vec.si` but uses WasmGC
  * struct.new / array.new instead of linear-memory bump allocation.
  *
- * Layout:
- *   $Array_i32  := (array (mut i32))
- *   $Vec_i32    := (struct (mut i32) (mut (ref $Array_i32)))
- *                       ^len           ^data array
+ * Layout (per element type T):
+ *   $Array_<T>  := (array (mut T))
+ *   $Vec_<T>    := (struct (mut i32) (mut (ref $Array_<T>)))
+ *                       ^len            ^data array
  *
  * Capacity = `array.len data` (engine-provided, no separate field).
  *
- * Scope (per ADR 0009 §3 — v1.1 follow-ups deliberately deferred):
- *   - Only `Vec[Int]` (i32 element type).  f32 / i64 / unsigned
- *     variants are mechanical extensions; v1.1 if needed.
- *   - Only value-typed elements.  `Vec[String]` / `Vec[@struct Foo]`
- *     require ref-typed array elements + variance design (v1.1).
- *   - No fully generic `@fn vec_push[T] v:Vec[T], x:T` — the existing
- *     specialised-name scheme (`vec_push_i32`) matches today's mvp
- *     vec.si; full monomorphisation is v1.1.
+ * M1 (ADR 0001 / ADR 0009 M-8): monomorphic per element type.  `i32` is
+ * always emitted; `f32` (Float) and `i64` (Int64) are emitted on demand
+ * when a program uses `Vec[Float]` / `Vec[Int64]` (detected from the typed
+ * program in lowerProgram).  The element type lives in the GC array type,
+ * so per-element widening is "free" — `array.get`/`array.set` are
+ * type-indexed; only the IR operand wasmType + the type/function names
+ * differ.  The i32 emission is byte-identical to the pre-M1 output.
  *
- * The functions emitted here are injected into the user lowering at
- * the start of `lowerProgram` when `target === 'wasm-gc'`, BEFORE any
- * user-defined types or functions.  That way:
- *   - $Array_i32 and $Vec_i32 get the lowest WasmGC type indices,
- *     so the prelude functions' refResult / refParams reference them
- *     by stable, known positions.
- *   - The internNominal call adds them to LowerCtx.wasmGcTypes — the
- *     same registry user @type sums use — so the merged module emits
- *     one consistent type section.
+ * Injected at the start of lowerProgram (target='wasm-gc') BEFORE user
+ * types/functions so the Vec types get the lowest WasmGC type indices and
+ * the prelude functions reference them by stable positions.
  */
 
 import type {
-    IRExpr, IRStmt, IRFunction, IRParam, IRLocal, WasmValType,
-    WasmGcType, IRRefSlot, IRStructNew, IRStructGet, IRStructSet,
-    IRArrayNew, IRArrayNewDefault, IRArrayGet, IRArraySet, IRArrayLen, IRArrayCopy,
+    IRExpr, IRStmt, IRFunction, IRLocal, WasmValType,
+    IRStructNew, IRStructGet, IRStructSet,
+    IRArrayNewDefault, IRArrayGet, IRArraySet, IRArrayLen, IRArrayCopy,
 } from '../ir/nodes'
 import type { WasmGcTypeRegistry } from '../ir/nodes'
 
 const i32 = 'i32' as const
 const void_ = 'void' as const
+
+// ── per-element-type spec ───────────────────────────────────────────────
+
+interface ElemSpec {
+    /** The element wasm value type. */
+    elem: WasmValType
+    /** WasmGC type names. */
+    arrayName: string
+    vecName: string
+    /** Surface function names (the i32 set keeps the historical unsuffixed
+     *  new/len/capacity to stay byte-identical with the pre-M1 output). */
+    fn: { new: string; len: string; cap: string; get: string; set: string; push: string; pop: string }
+}
+
+const SPECS: Record<'i32' | 'f32' | 'i64', ElemSpec> = {
+    i32: {
+        elem: 'i32', arrayName: '$Array_i32', vecName: '$Vec_i32',
+        fn: { new: 'vec_new', len: 'vec_len', cap: 'vec_capacity',
+              get: 'vec_get_i32', set: 'vec_set_i32', push: 'vec_push_i32', pop: 'vec_pop_i32' },
+    },
+    f32: {
+        elem: 'f32', arrayName: '$Array_f32', vecName: '$Vec_f32',
+        fn: { new: 'vec_new_f32', len: 'vec_len_f32', cap: 'vec_capacity_f32',
+              get: 'vec_get_f32', set: 'vec_set_f32', push: 'vec_push_f32', pop: 'vec_pop_f32' },
+    },
+    i64: {
+        elem: 'i64', arrayName: '$Array_i64', vecName: '$Vec_i64',
+        fn: { new: 'vec_new_i64', len: 'vec_len_i64', cap: 'vec_capacity_i64',
+              get: 'vec_get_i64', set: 'vec_set_i64', push: 'vec_push_i64', pop: 'vec_pop_i64' },
+    },
+}
 
 // ── micro-builders ──────────────────────────────────────────────────────
 
@@ -69,12 +93,15 @@ const iif = (cond: IRExpr, then: IRExpr, else_?: IRExpr): IRExpr => {
 }
 
 // ── GC instruction builders ────────────────────────────────────────────
+// The struct ref is i32-shaped on the operand stack; array element ops
+// carry the element wasmType (`et`) so downstream stack typing is correct
+// (the array.get/set bytecode itself is type-indexed by $Array_<T>).
 
 const structNew = (typeIdx: number, typeName: string, args: IRExpr[]): IRStructNew =>
     ({ kind: 'StructNew', wasmType: 'i32', typeIdx, typeName, args })
 
-const structGet = (typeIdx: number, typeName: string, fieldIdx: number, target: IRExpr): IRStructGet =>
-    ({ kind: 'StructGet', wasmType: 'i32', typeIdx, typeName, fieldIdx, target })
+const structGet = (typeIdx: number, typeName: string, fieldIdx: number, target: IRExpr, wt: WasmValType = 'i32'): IRStructGet =>
+    ({ kind: 'StructGet', wasmType: wt, typeIdx, typeName, fieldIdx, target })
 
 const structSet = (typeIdx: number, typeName: string, fieldIdx: number, target: IRExpr, value: IRExpr): IRStructSet =>
     ({ kind: 'StructSet', wasmType: 'void', typeIdx, typeName, fieldIdx, target, value })
@@ -82,10 +109,8 @@ const structSet = (typeIdx: number, typeName: string, fieldIdx: number, target: 
 const arrayNewDefault = (typeIdx: number, typeName: string, size: IRExpr): IRArrayNewDefault =>
     ({ kind: 'ArrayNewDefault', wasmType: 'i32', typeIdx, typeName, size })
 
-// Non-packed array element: plain `array.get` (no signedness suffix).
-// The signed/unsigned variants are reserved for packed i8 / i16 elements.
-const arrayGet = (typeIdx: number, typeName: string, target: IRExpr, idx: IRExpr): IRArrayGet =>
-    ({ kind: 'ArrayGet', wasmType: 'i32', typeIdx, typeName, target, idx })
+const arrayGet = (typeIdx: number, typeName: string, target: IRExpr, idx: IRExpr, et: WasmValType): IRArrayGet =>
+    ({ kind: 'ArrayGet', wasmType: et, typeIdx, typeName, target, idx })
 
 const arraySet = (typeIdx: number, typeName: string, target: IRExpr, idx: IRExpr, value: IRExpr): IRArraySet =>
     ({ kind: 'ArraySet', wasmType: 'void', typeIdx, typeName, target, idx, value })
@@ -105,21 +130,13 @@ const arrayCopy = (
 
 // ── Function builder ───────────────────────────────────────────────────
 
-interface RefSlotSpec {
-    /** Function param index OR -1 for result. */
-    slot: 'result' | number
-    /** localTypeIdx in the wasmGcTypes registry. */
-    typeIdx: number
-}
-
-/** A local slot — name + wasmType, plus optional ref-typeidx for
- *  locals that hold managed refs (`new_data: ref $Array_i32` etc.). */
+interface RefSlotSpec { slot: 'result' | number; typeIdx: number }
 type LocalSpec = [string, WasmValType] | [string, WasmValType, number /* refTypeIdx */]
 
 function gcFn(
     name: string,
     params: Array<[string, WasmValType]>,
-    returnType: 'i32' | 'void',
+    returnType: WasmValType | 'void',
     locals: LocalSpec[],
     body: IRExpr,
     refSlots: RefSlotSpec[] = [],
@@ -132,209 +149,109 @@ function gcFn(
         locals: locals.map(spec => {
             const [n, t, refIdx] = spec
             const local: IRLocal = { name: n, wasmType: t }
-            if (refIdx !== undefined) {
-                local.refType = { localTypeIdx: refIdx, nullable: false }
-            }
+            if (refIdx !== undefined) local.refType = { localTypeIdx: refIdx, nullable: false }
             return local
         }),
         body,
     }
     for (const r of refSlots) {
-        const slot: IRRefSlot = { localTypeIdx: r.typeIdx, nullable: false }
-        if (r.slot === 'result') {
-            fn.refResult = slot
-        } else {
-            if (!fn.refParams) fn.refParams = new Map()
-            fn.refParams.set(r.slot, slot)
-        }
+        const slot = { localTypeIdx: r.typeIdx, nullable: false }
+        if (r.slot === 'result') fn.refResult = slot
+        else { if (!fn.refParams) fn.refParams = new Map(); fn.refParams.set(r.slot, slot) }
     }
     return fn
 }
 
-// ── Vec[Int] (i32) implementations ──────────────────────────────────────
+// ── Registration + per-element function generation ──────────────────────
 
-const ARRAY_I32 = '$Array_i32'
-const VEC_I32   = '$Vec_i32'
-
-/** Register $Array_i32 and $Vec_i32 in the registry.  Returns the
- *  type indices for downstream callers (constructors / sum lowering
- *  that might reference them in v1.1). */
-export function registerGcVecTypes(reg: WasmGcTypeRegistry): { arrayIdx: number; vecIdx: number } {
+/** Register $Array_<elem> and $Vec_<elem> (array first — WasmGC forward-ref
+ *  rule requires the lower index).  Idempotent (internNominal is name-keyed). */
+function registerTypes(reg: WasmGcTypeRegistry, s: ElemSpec): { arrayIdx: number; vecIdx: number } {
     const arrayIdx = reg.internNominal({
-        name: ARRAY_I32,
-        spec: {
-            kind: 'array',
-            element: { storage: { kind: 'val', type: 'i32' }, mutable: true },
-        },
+        name: s.arrayName,
+        spec: { kind: 'array', element: { storage: { kind: 'val', type: s.elem }, mutable: true } },
     })
-    // $Vec_i32 has a ref to $Array_i32 at field 1; WasmGC's forward-ref
-    // rule means $Array_i32 must be declared FIRST (lower index).  The
-    // intern order above guarantees that.
     const vecIdx = reg.internNominal({
-        name: VEC_I32,
-        spec: {
-            kind: 'struct',
-            fields: [
-                { storage: { kind: 'val', type: 'i32' }, mutable: true },                          // len
-                { storage: { kind: 'ref', typeIdx: arrayIdx, nullable: false }, mutable: true },  // data
-            ],
-        },
+        name: s.vecName,
+        spec: { kind: 'struct', fields: [
+            { storage: { kind: 'val', type: 'i32' }, mutable: true },                          // len
+            { storage: { kind: 'ref', typeIdx: arrayIdx, nullable: false }, mutable: true },    // data
+        ] },
     })
     return { arrayIdx, vecIdx }
 }
 
-/** vec_new(cap: i32) → (ref $Vec_i32)
- *
- *     struct.new $Vec_i32
- *         (i32.const 0)                                    ;; len = 0
- *         (array.new_default $Array_i32 (local.get $cap))  ;; data
- */
-function buildVecNew(arrayIdx: number, vecIdx: number): IRFunction {
-    const body = structNew(vecIdx, VEC_I32, [
-        c(0),
-        arrayNewDefault(arrayIdx, ARRAY_I32, lg('cap')),
-    ])
-    return gcFn('vec_new', [['cap', i32]], i32, [], body,
+/** The i32-only public registration kept for callers that pre-register the
+ *  Vec types before user lowering (lower.ts pre-scan). */
+export function registerGcVecTypes(reg: WasmGcTypeRegistry): { arrayIdx: number; vecIdx: number } {
+    return registerTypes(reg, SPECS.i32)
+}
+
+/** Emit the seven vec_* functions for one element type. */
+function buildVecForElem(reg: WasmGcTypeRegistry, s: ElemSpec): IRFunction[] {
+    const { arrayIdx, vecIdx } = registerTypes(reg, s)
+    const A = s.arrayName, V = s.vecName, et = s.elem
+    const vecRef = { slot: 0 as const, typeIdx: vecIdx }
+
+    // new(cap) → struct.new $Vec (0) (array.new_default $Array cap)
+    const fnNew = gcFn(s.fn.new, [['cap', i32]], i32, [],
+        structNew(vecIdx, V, [c(0), arrayNewDefault(arrayIdx, A, lg('cap'))]),
         [{ slot: 'result', typeIdx: vecIdx }])
-}
 
-/** vec_len(v: ref $Vec_i32) → i32 = struct.get $Vec_i32 0 v */
-function buildVecLen(vecIdx: number): IRFunction {
-    const body = structGet(vecIdx, VEC_I32, 0, lg('v'))
-    return gcFn('vec_len', [['v', i32]], i32, [], body,
-        [{ slot: 0, typeIdx: vecIdx }])
-}
+    // len(v) → struct.get $Vec 0 v
+    const fnLen = gcFn(s.fn.len, [['v', i32]], i32, [], structGet(vecIdx, V, 0, lg('v')), [vecRef])
 
-/** vec_capacity(v) → array.len (struct.get $Vec_i32 1 v) */
-function buildVecCapacity(vecIdx: number): IRFunction {
-    const body = arrayLen(structGet(vecIdx, VEC_I32, 1, lg('v')))
-    return gcFn('vec_capacity', [['v', i32]], i32, [], body,
-        [{ slot: 0, typeIdx: vecIdx }])
-}
+    // capacity(v) → array.len (struct.get $Vec 1 v)
+    const fnCap = gcFn(s.fn.cap, [['v', i32]], i32, [], arrayLen(structGet(vecIdx, V, 1, lg('v'))), [vecRef])
 
-/** vec_get_i32(v, i) → array.get_s $Array_i32 (struct.get $Vec_i32 1 v) i */
-function buildVecGetI32(arrayIdx: number, vecIdx: number): IRFunction {
-    const body = arrayGet(arrayIdx, ARRAY_I32,
-        structGet(vecIdx, VEC_I32, 1, lg('v')),
-        lg('i'))
-    return gcFn('vec_get_i32', [['v', i32], ['i', i32]], i32, [], body,
-        [{ slot: 0, typeIdx: vecIdx }])
-}
+    // get(v, i) → array.get $Array (struct.get $Vec 1 v) i   (result et)
+    const fnGet = gcFn(s.fn.get, [['v', i32], ['i', i32]], et, [],
+        arrayGet(arrayIdx, A, structGet(vecIdx, V, 1, lg('v')), lg('i'), et), [vecRef])
 
-/** vec_set_i32(v, i, x) — array.set $Array_i32 data i x */
-function buildVecSetI32(arrayIdx: number, vecIdx: number): IRFunction {
-    const body = block([stmt(arraySet(arrayIdx, ARRAY_I32,
-        structGet(vecIdx, VEC_I32, 1, lg('v')),
-        lg('i'), lg('x')))])
-    return gcFn('vec_set_i32', [['v', i32], ['i', i32], ['x', i32]], void_, [], body,
-        [{ slot: 0, typeIdx: vecIdx }])
-}
+    // set(v, i, x) → array.set $Array (struct.get $Vec 1 v) i x
+    const fnSet = gcFn(s.fn.set, [['v', i32], ['i', i32], ['x', et]], void_, [],
+        block([stmt(arraySet(arrayIdx, A, structGet(vecIdx, V, 1, lg('v')), lg('i'), lg('x', et)))]), [vecRef])
 
-/** vec_push_i32(v, x)
- *
- *     len  := struct.get $Vec_i32 0 v
- *     data := struct.get $Vec_i32 1 v
- *     cap  := array.len data
- *     @if len >= cap, {
- *         new_cap := cap * 2 ; @if (cap == 0) new_cap := 4
- *         new_data := array.new_default $Array_i32 new_cap
- *         array.copy $Array_i32 new_data 0 data 0 len
- *         struct.set $Vec_i32 1 v new_data
- *     }
- *     array.set $Array_i32 (struct.get $Vec_i32 1 v) len x
- *     struct.set $Vec_i32 0 v (len + 1)
- */
-function buildVecPushI32(arrayIdx: number, vecIdx: number): IRFunction {
-    const len = lg('len')
-    const cap = lg('cap')
-    const newCap = lg('new_cap')
+    // push(v, x): grow on len>=cap, then array.set + len++
     const v = lg('v')
-
     const growBody = block([
-        // new_cap := cap * 2 (or 4 if cap == 0)
-        ls('new_cap', iif(
-            binop('i32_eq', cap, c(0)),
-            c(4),
-            binop('i32_mul', cap, c(2)),
-        )),
-        // new_data := array.new_default $Array_i32 new_cap
-        ls('new_data', arrayNewDefault(arrayIdx, ARRAY_I32, newCap)),
-        // array.copy from old data to new
-        stmt(arrayCopy(arrayIdx, ARRAY_I32,
-            lg('new_data'), c(0),
-            structGet(vecIdx, VEC_I32, 1, v), c(0),
-            len)),
-        // struct.set $Vec_i32 1 v new_data
-        stmt(structSet(vecIdx, VEC_I32, 1, v, lg('new_data'))),
+        ls('new_cap', iif(binop('i32_eq', lg('cap'), c(0)), c(4), binop('i32_mul', lg('cap'), c(2)))),
+        ls('new_data', arrayNewDefault(arrayIdx, A, lg('new_cap'))),
+        stmt(arrayCopy(arrayIdx, A, lg('new_data'), c(0), structGet(vecIdx, V, 1, v), c(0), lg('len'))),
+        stmt(structSet(vecIdx, V, 1, v, lg('new_data'))),
     ])
+    const fnPush = gcFn(s.fn.push, [['v', i32], ['x', et]], void_,
+        [['len', i32], ['cap', i32], ['new_cap', i32], ['new_data', i32, arrayIdx]],
+        block([
+            ls('len', structGet(vecIdx, V, 0, v)),
+            ls('cap', arrayLen(structGet(vecIdx, V, 1, v))),
+            stmt(iif(binop('i32_ge_s', lg('len'), lg('cap')), growBody)),
+            stmt(arraySet(arrayIdx, A, structGet(vecIdx, V, 1, v), lg('len'), lg('x', et))),
+            stmt(structSet(vecIdx, V, 0, v, binop('i32_add', lg('len'), c(1)))),
+        ]), [vecRef])
 
-    const body = block([
-        ls('len',  structGet(vecIdx, VEC_I32, 0, v)),
-        ls('cap',  arrayLen(structGet(vecIdx, VEC_I32, 1, v))),
-        stmt(iif(binop('i32_ge_s', len, cap), growBody)),
-        // array.set $Array_i32 (struct.get … 1 v) len x
-        stmt(arraySet(arrayIdx, ARRAY_I32,
-            structGet(vecIdx, VEC_I32, 1, v),
-            len, lg('x'))),
-        // struct.set $Vec_i32 0 v (len + 1)
-        stmt(structSet(vecIdx, VEC_I32, 0, v, binop('i32_add', len, c(1)))),
-    ])
+    // pop(v) → read [len-1], len--, return it
+    const fnPop = gcFn(s.fn.pop, [['v', i32]], et, [['len', i32], ['val', et]],
+        block([
+            ls('len', structGet(vecIdx, V, 0, v)),
+            ls('val', arrayGet(arrayIdx, A, structGet(vecIdx, V, 1, v), binop('i32_sub', lg('len'), c(1)), et)),
+            stmt(structSet(vecIdx, V, 0, v, binop('i32_sub', lg('len'), c(1)))),
+        ], lg('val', et)), [vecRef])
 
-    return gcFn('vec_push_i32',
-        [['v', i32], ['x', i32]],
-        void_,
-        [
-            ['len', i32],
-            ['cap', i32],
-            ['new_cap', i32],
-            // `new_data` holds a (ref $Array_i32) — declared as such so
-            // array.new_default's result can be stored via local.set.
-            ['new_data', i32, arrayIdx],
-        ],
-        body,
-        [{ slot: 0, typeIdx: vecIdx }])
-}
-
-/** vec_pop_i32(v) → i32
- *
- *     len := struct.get $Vec_i32 0 v
- *     val := array.get_s $Array_i32 (struct.get … 1 v) (len - 1)
- *     struct.set $Vec_i32 0 v (len - 1)
- *     val
- */
-function buildVecPopI32(arrayIdx: number, vecIdx: number): IRFunction {
-    const len = lg('len')
-    const v = lg('v')
-    const body = block([
-        ls('len', structGet(vecIdx, VEC_I32, 0, v)),
-        ls('val', arrayGet(arrayIdx, ARRAY_I32,
-            structGet(vecIdx, VEC_I32, 1, v),
-            binop('i32_sub', len, c(1)))),
-        stmt(structSet(vecIdx, VEC_I32, 0, v, binop('i32_sub', len, c(1)))),
-    ], lg('val'))
-
-    return gcFn('vec_pop_i32', [['v', i32]], i32,
-        [['len', i32], ['val', i32]],
-        body,
-        [{ slot: 0, typeIdx: vecIdx }])
+    return [fnNew, fnLen, fnCap, fnGet, fnSet, fnPush, fnPop]
 }
 
 // ── Public injection point ──────────────────────────────────────────────
 
-/** Phase 9d-8: register $Array_i32 + $Vec_i32 in the WasmGC type
- *  registry and emit the seven vec_* functions.  Caller (lowerProgram
- *  under target='wasm-gc') splices the returned functions into
- *  IRModule.functions BEFORE user-emitted functions, so the call
- *  index space is stable and predictable. */
-export function buildGcVecExtension(reg: WasmGcTypeRegistry): IRFunction[] {
-    const { arrayIdx, vecIdx } = registerGcVecTypes(reg)
-    return [
-        buildVecNew(arrayIdx, vecIdx),
-        buildVecLen(vecIdx),
-        buildVecCapacity(vecIdx),
-        buildVecGetI32(arrayIdx, vecIdx),
-        buildVecSetI32(arrayIdx, vecIdx),
-        buildVecPushI32(arrayIdx, vecIdx),
-        buildVecPopI32(arrayIdx, vecIdx),
-    ]
+/** Register the Vec types + emit the vec_* functions.  `i32` is always
+ *  emitted (byte-identical to the historical output); `extraElems` adds the
+ *  Float/Int64 monomorphs a program actually uses.  Caller (lowerProgram
+ *  under target='wasm-gc') unshifts these before user-emitted functions. */
+export function buildGcVecExtension(
+    reg: WasmGcTypeRegistry,
+    extraElems: Array<'f32' | 'i64'> = [],
+): IRFunction[] {
+    const out = buildVecForElem(reg, SPECS.i32)
+    for (const e of extraElems) out.push(...buildVecForElem(reg, SPECS[e]))
+    return out
 }

@@ -687,6 +687,11 @@ function preRegisterStdFunctions(ctx: Ctx): void {
     // bodies, which the resolver pulls in via @use.
     if (ctx.target === 'wasm-gc') {
         const vecInt = VecOf(TypeInt)
+        // M1 — Float / Int64 Vec monomorphs.  Each element type T gets its
+        // own `Vec[T]` (nominally distinct, backed by `$Vec_<T>` under GC)
+        // and a suffixed surface (`vec_new_f32`, `vec_get_i64`, …).
+        const vecF = VecOf(TypeFloat)
+        const vecL = VecOf(TypeInt64)
         const vecDefs: Array<{ name: string; params: SiliconType[]; result: SiliconType }> = [
             { name: 'vec_new',       params: [TypeInt],                       result: vecInt },
             { name: 'vec_len',       params: [vecInt],                        result: TypeInt },
@@ -695,6 +700,22 @@ function preRegisterStdFunctions(ctx: Ctx): void {
             { name: 'vec_set_i32',   params: [vecInt, TypeInt, TypeInt],      result: TypeUnknown },
             { name: 'vec_push_i32',  params: [vecInt, TypeInt],               result: TypeUnknown },
             { name: 'vec_pop_i32',   params: [vecInt],                        result: TypeInt },
+            // Vec[Float] (f32)
+            { name: 'vec_new_f32',      params: [TypeInt],                    result: vecF },
+            { name: 'vec_len_f32',      params: [vecF],                       result: TypeInt },
+            { name: 'vec_capacity_f32', params: [vecF],                       result: TypeInt },
+            { name: 'vec_get_f32',      params: [vecF, TypeInt],              result: TypeFloat },
+            { name: 'vec_set_f32',      params: [vecF, TypeInt, TypeFloat],   result: TypeUnknown },
+            { name: 'vec_push_f32',     params: [vecF, TypeFloat],            result: TypeUnknown },
+            { name: 'vec_pop_f32',      params: [vecF],                       result: TypeFloat },
+            // Vec[Int64] (i64)
+            { name: 'vec_new_i64',      params: [TypeInt],                    result: vecL },
+            { name: 'vec_len_i64',      params: [vecL],                       result: TypeInt },
+            { name: 'vec_capacity_i64', params: [vecL],                       result: TypeInt },
+            { name: 'vec_get_i64',      params: [vecL, TypeInt],              result: TypeInt64 },
+            { name: 'vec_set_i64',      params: [vecL, TypeInt, TypeInt64],   result: TypeUnknown },
+            { name: 'vec_push_i64',     params: [vecL, TypeInt64],            result: TypeUnknown },
+            { name: 'vec_pop_i64',      params: [vecL],                       result: TypeInt64 },
         ]
         for (const { name, params, result } of vecDefs) {
             ctx.functions.set(name, { params, result })

@@ -1,12 +1,13 @@
 # SPDX-License-Identifier: MIT
 # Phase 5a-4 — stdlib Vec[T] growable array.
 #
-# Phase 5 ships Vec specialised for i32-sized elements (Int, Bool,
-# String, and any pointer-typed value).  Float (f32) and Int64 (i64)
-# variants are mechanical extensions — same shape, swap the load/store
-# instruction.  Generic monomorphisation of Vec[T] across all element
-# types is a 1.x improvement that lands with full strata-driven
-# specialisation; the 1.0 surface uses `vec_*_i32` directly.
+# M1 (ADR 0001 / ADR 0009 M-8) — Vec is monomorphic per element type.
+# `vec_*_i32` covers i32-sized elements (Int, Bool, String, any pointer);
+# `vec_*_f32` covers Float (4-byte, reuses the i32 header + `vec_new`);
+# `vec_*_i64` covers Int64 (8-byte, needs `vec_new_i64`).  The header
+# (len/capacity/data_ptr) is element-agnostic, so `vec_len`/`vec_capacity`
+# are shared.  Under `--target=wasm-gc` the same surface is emitted from
+# typed GC arrays per element type (codegen/gc-vec.ts).
 #
 # Layout (12-byte header at `v`, separate element buffer at `data_ptr`):
 #
@@ -105,6 +106,120 @@
     new_len := len - 1;
     data := vec_data_ptr(v);
     x := WASM::i32_load(data + (new_len * 4));
+    WASM::i32_store(v, new_len);
+    x
+};
+
+# ── Vec[Float] (f32) API ───────────────────────────────────────────────
+# 4-byte elements, so the header layout matches i32.  `vec_new_f32` /
+# `vec_len_f32` / `vec_capacity_f32` are provided (identical to the i32
+# header ops here) so the SAME suffixed code is portable to --target=wasm-gc,
+# where each element type is a distinct GC struct.
+
+\\ vec_new_f32 (Int) -> Int
+@fn vec_new_f32 initial_capacity := vec_new(initial_capacity);
+
+\\ vec_len_f32 (Int) -> Int
+@fn vec_len_f32 v := WASM::i32_load(v);
+
+\\ vec_capacity_f32 (Int) -> Int
+@fn vec_capacity_f32 v := WASM::i32_load(v + 4);
+
+\\ vec_get_f32 (Int, Int) -> Float
+@fn vec_get_f32 v, i := {
+    data := vec_data_ptr(v);
+    WASM::f32_load(data + (i * 4))
+};
+
+\\ vec_set_f32 (Int, Int, Float)
+@fn vec_set_f32 v, i, x := {
+    data := vec_data_ptr(v);
+    WASM::f32_store(data + (i * 4), x)
+};
+
+\\ vec_push_f32 (Int, Float)
+@fn vec_push_f32 v, x := {
+    len := vec_len(v);
+    cap := vec_capacity(v);
+    @if(len == cap, {
+        new_cap := cap * 2;
+        data := vec_data_ptr(v);
+        new_data := realloc(data, cap * 4, new_cap * 4);
+        WASM::i32_store(v + 4, new_cap);
+        WASM::i32_store(v + 8, new_data)
+    });
+    data2 := vec_data_ptr(v);
+    WASM::f32_store(data2 + (len * 4), x);
+    WASM::i32_store(v, len + 1)
+};
+
+\\ vec_pop_f32 (Int) -> Float
+@fn vec_pop_f32 v := {
+    len := vec_len(v);
+    new_len := len - 1;
+    data := vec_data_ptr(v);
+    x := WASM::f32_load(data + (new_len * 4));
+    WASM::i32_store(v, new_len);
+    x
+};
+
+# ── Vec[Int64] (i64) API ───────────────────────────────────────────────
+# 8-byte elements: a dedicated `vec_new_i64` allocates `cap * 8`, and the
+# element stride / load / store / realloc all use 8-byte units.
+
+\\ vec_new_i64 (Int) -> Int
+@fn vec_new_i64 initial_capacity := {
+    v := alloc(12);
+    cap := initial_capacity;
+    data := alloc(cap * 8);
+    WASM::i32_store(v, 0);          # len = 0
+    WASM::i32_store(v + 4, cap);    # capacity
+    WASM::i32_store(v + 8, data);   # data_ptr
+    v
+};
+
+# `vec_len_i64` / `vec_capacity_i64` read the i32 header (element-agnostic);
+# provided for a portable per-element surface across both targets.
+\\ vec_len_i64 (Int) -> Int
+@fn vec_len_i64 v := WASM::i32_load(v);
+
+\\ vec_capacity_i64 (Int) -> Int
+@fn vec_capacity_i64 v := WASM::i32_load(v + 4);
+
+\\ vec_get_i64 (Int, Int) -> Int64
+@fn vec_get_i64 v, i := {
+    data := vec_data_ptr(v);
+    WASM::i64_load(data + (i * 8))
+};
+
+\\ vec_set_i64 (Int, Int, Int64)
+@fn vec_set_i64 v, i, x := {
+    data := vec_data_ptr(v);
+    WASM::i64_store(data + (i * 8), x)
+};
+
+\\ vec_push_i64 (Int, Int64)
+@fn vec_push_i64 v, x := {
+    len := vec_len(v);
+    cap := vec_capacity(v);
+    @if(len == cap, {
+        new_cap := cap * 2;
+        data := vec_data_ptr(v);
+        new_data := realloc(data, cap * 8, new_cap * 8);
+        WASM::i32_store(v + 4, new_cap);
+        WASM::i32_store(v + 8, new_data)
+    });
+    data2 := vec_data_ptr(v);
+    WASM::i64_store(data2 + (len * 8), x);
+    WASM::i32_store(v, len + 1)
+};
+
+\\ vec_pop_i64 (Int) -> Int64
+@fn vec_pop_i64 v := {
+    len := vec_len(v);
+    new_len := len - 1;
+    data := vec_data_ptr(v);
+    x := WASM::i64_load(data + (new_len * 8));
     WASM::i32_store(v, new_len);
     x
 };

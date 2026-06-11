@@ -215,3 +215,62 @@
     });
     removed
 };
+
+# ── Iteration (M1, ADR 0016 map iteration surface) ─────────────────────
+# A cursor is a slot index.  `iter_start` finds the first occupied slot;
+# `iter_next` advances past the current to the next occupied; `iter_done`
+# is true once the cursor reaches capacity (the done sentinel).  Read the
+# current entry with `iter_key` / `iter_value`.  Drive with a while-@loop:
+#
+#   i := hashmap_iter_start(h);
+#   @loop(hashmap_iter_done(h, i) == 0, {
+#       k := hashmap_iter_key(h, i);
+#       v := hashmap_iter_value(h, i);
+#       ...;
+#       i = hashmap_iter_next(h, i);
+#   });
+#
+# Order is slot order (unspecified to the caller), and is only stable
+# between mutations — insert/remove/resize may rehash and reorder.
+
+# Scan forward from slot `from` (inclusive) for the first occupied slot.
+# Returns its index, or `capacity` (the done sentinel) if none remain.
+# Reads a slot's state only while in bounds (no out-of-range probe).
+\\ hashmap_scan_occupied (Int, Int) -> Int
+@fn hashmap_scan_occupied h, from := {
+    cap := hashmap_capacity(h);
+    @mut i := from;
+    @mut done := 0;
+    @loop(done == 0, {
+        @if(i < cap, {
+            @if(hashmap_slot_state(hashmap_slot_addr(h, i)) == 1, {
+                done = 1;        # found an occupied slot
+            }, {
+                i = i + 1;       # empty / tombstone — keep scanning
+            });
+        }, {
+            done = 1;            # reached capacity — iteration complete
+        });
+    });
+    i
+};
+
+# First occupied slot index (or capacity if the map is empty).
+\\ hashmap_iter_start (Int) -> Int
+@fn hashmap_iter_start h := hashmap_scan_occupied(h, 0);
+
+# Next occupied slot index after `i` (or capacity if none remain).
+\\ hashmap_iter_next (Int, Int) -> Int
+@fn hashmap_iter_next h, i := hashmap_scan_occupied(h, i + 1);
+
+# 1 when the cursor has passed the last slot, else 0.
+\\ hashmap_iter_done (Int, Int) -> Int
+@fn hashmap_iter_done h, i := @if(i < hashmap_capacity(h), { 0 }, { 1 });
+
+# Key at the current cursor.  Caller must ensure not done.
+\\ hashmap_iter_key (Int, Int) -> Int
+@fn hashmap_iter_key h, i := hashmap_slot_key(hashmap_slot_addr(h, i));
+
+# Value at the current cursor.  Caller must ensure not done.
+\\ hashmap_iter_value (Int, Int) -> Int
+@fn hashmap_iter_value h, i := hashmap_slot_value(hashmap_slot_addr(h, i));

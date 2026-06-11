@@ -239,3 +239,76 @@ describe('Phase 5a-6: HashMap[i32→i32] runtime', () => {
         expect(ex.test_stable()).toBe(0)
     })
 })
+
+// M1 (ADR 0016) — the map iteration surface: a slot-index cursor driven
+// by a while-@loop (iter_start / iter_done / iter_key / iter_value / iter_next).
+describe('M1: HashMap iteration', () => {
+    test('iterating sums every value and counts every entry', async () => {
+        const ex = await compileAndRun({
+            // 3 inserts, one removed → the iteration must see exactly the 2 survivors.
+            sum_values: `{
+                @mut h := hashmap_new(8);
+                hashmap_set_i32_i32(h, 10, 100);
+                hashmap_set_i32_i32(h, 20, 200);
+                hashmap_set_i32_i32(h, 30, 300);
+                hashmap_remove_i32(h, 20);
+                @mut total := 0;
+                @mut i := hashmap_iter_start(h);
+                @loop(hashmap_iter_done(h, i) == 0, {
+                    total = total + hashmap_iter_value(h, i);
+                    i = hashmap_iter_next(h, i);
+                });
+                total
+            }`,
+            count_entries: `{
+                @mut h := hashmap_new(4);
+                hashmap_set_i32_i32(h, 1, 11);
+                hashmap_set_i32_i32(h, 2, 22);
+                hashmap_set_i32_i32(h, 3, 33);
+                @mut n := 0;
+                @mut i := hashmap_iter_start(h);
+                @loop(hashmap_iter_done(h, i) == 0, {
+                    n = n + 1;
+                    i = hashmap_iter_next(h, i);
+                });
+                n
+            }`,
+        })
+        expect(ex.sum_values()).toBe(400)   // 100 + 300 (20 removed → tombstone skipped)
+        expect(ex.count_entries()).toBe(3)
+    })
+
+    test('iterating an empty map yields nothing (iter_start is immediately done)', async () => {
+        const ex = await compileAndRun({
+            empty_count: `{
+                @mut h := hashmap_new(8);
+                @mut n := 0;
+                @mut i := hashmap_iter_start(h);
+                @loop(hashmap_iter_done(h, i) == 0, {
+                    n = n + 1;
+                    i = hashmap_iter_next(h, i);
+                });
+                n
+            }`,
+        })
+        expect(ex.empty_count()).toBe(0)
+    })
+
+    test('iteration sees keys too (key+value paired per cursor)', async () => {
+        const ex = await compileAndRun({
+            sum_keys_plus_values: `{
+                @mut h := hashmap_new(8);
+                hashmap_set_i32_i32(h, 5, 50);
+                hashmap_set_i32_i32(h, 7, 70);
+                @mut acc := 0;
+                @mut i := hashmap_iter_start(h);
+                @loop(hashmap_iter_done(h, i) == 0, {
+                    acc = acc + hashmap_iter_key(h, i) + hashmap_iter_value(h, i);
+                    i = hashmap_iter_next(h, i);
+                });
+                acc
+            }`,
+        })
+        expect(ex.sum_keys_plus_values()).toBe(132)  // (5+50) + (7+70)
+    })
+})

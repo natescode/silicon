@@ -512,7 +512,25 @@ export function lowerProgram(
     // referenced when the user declares them, so giving Vec types stable
     // low indices is safe).  See src/codegen/gc-vec.ts.
     if (target === 'wasm-gc') {
-        const vecFns = require('../codegen/gc-vec').buildGcVecExtension(ctx.wasmGcTypes) as IRFunction[]
+        // M1 — emit the Float/Int64 Vec monomorphs the program actually uses
+        // (i32 is always emitted).  Detect `Vec[Float]` / `Vec[Int64]` across
+        // the function signatures and every stamped inferredType.
+        const extraElems: Array<'f32' | 'i64'> = []
+        const isVecOf = (t: any, k: string): boolean =>
+            t && t.kind === 'Vec' && t.element?.kind === k
+        const note = (t: any): void => {
+            if (isVecOf(t, 'Float') && !extraElems.includes('f32')) extraElems.push('f32')
+            if (isVecOf(t, 'Int64') && !extraElems.includes('i64')) extraElems.push('i64')
+        }
+        for (const sig of functionSigs.values()) { sig.params.forEach(note); note(sig.result) }
+        const walkVecUse = (n: any): void => {
+            if (!n || typeof n !== 'object') return
+            if (Array.isArray(n)) { for (const x of n) walkVecUse(x); return }
+            if (n.inferredType) note(n.inferredType)
+            for (const k of Object.keys(n)) { if (k !== 'inferredType') walkVecUse(n[k]) }
+        }
+        walkVecUse(program.elements)
+        const vecFns = require('../codegen/gc-vec').buildGcVecExtension(ctx.wasmGcTypes, extraElems) as IRFunction[]
         functions.unshift(...vecFns)
     }
 
@@ -884,9 +902,13 @@ function refIdxFromAnnotation(
 ): number | undefined {
     if (!annot) return undefined
     if (annot.typename === 'Vec'
-        && Array.isArray(annot.typeArgs) && annot.typeArgs.length === 1
-        && annot.typeArgs[0].name === 'Int') {
-        return wasmGcTypes.lookupByName('$Vec_i32')
+        && Array.isArray(annot.typeArgs) && annot.typeArgs.length === 1) {
+        const elem = annot.typeArgs[0].name
+        const vecType = elem === 'Float' ? '$Vec_f32'
+            : elem === 'Int64' ? '$Vec_i64'
+            : elem === 'Int' ? '$Vec_i32'
+            : undefined
+        if (vecType) return wasmGcTypes.lookupByName(vecType)
     }
     // Bare typename — could be a user-defined sum.  The registry
     // already has `$<typename>` from typeRecordExpander; lookup by name.
@@ -922,9 +944,13 @@ function siliconTypeToRefIdx(
         return wasmGcTypes.lookupByName(`$${t.name}`)
     }
     if (t.kind === 'Vec') {
-        if (t.element.kind === 'Int') return wasmGcTypes.lookupByName('$Vec_i32')
-        // f32 / i64 variants are mechanical extensions (v1.1).
-        return undefined
+        // M1 — Vec[Int]/Vec[Float]/Vec[Int64] resolve to their per-element
+        // GC struct ($Vec_i32 / $Vec_f32 / $Vec_i64).
+        const name = t.element.kind === 'Float' ? '$Vec_f32'
+            : t.element.kind === 'Int64' ? '$Vec_i64'
+            : t.element.kind === 'Int' ? '$Vec_i32'
+            : undefined
+        return name ? wasmGcTypes.lookupByName(name) : undefined
     }
     return undefined
 }
@@ -1629,7 +1655,7 @@ function lowerFunctionCall(n: any, ctx: LowerCtx): IRExpr {
         // wasmType so downstream emit doesn't try to (drop ...) their non-result.
         const instr = resolvedInstr ?? name
         const isVoidInstr = instr === 'i32.store' || instr === 'i32.store8'
-            || instr === 'f32.store' || instr === 'drop'
+            || instr === 'i64.store' || instr === 'f32.store' || instr === 'drop'
             || instr === 'memory.copy' || instr === 'memory.fill'
         const wt = isVoidInstr ? 'void' : resolveWasmType(inferT, 'i32')
         return { kind: 'Call', wasmType: wt, callee: instr, callKind: 'instr', args }
