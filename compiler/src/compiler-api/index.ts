@@ -347,6 +347,12 @@ export interface CompilerAPI {
     state(scope: 'stratum' | 'instance'): StateHandle
     /** Inspect a call site's callee (§5 spec — `&Compiler::callee::*`). */
     readonly callee: { name(callNode: any): string }
+
+    /** Look up the `@fn[T]` template Definition named `name` in the program
+     *  being lowered, regardless of declaration order.  Returns null when no
+     *  generic @fn of that name exists.  Backs the generics monomorphization
+     *  stratum's `Compiler::generic_template(callee)` probe. */
+    generic_template(name: string): any | null
     /** Look up a comptime handler registered for an operator/keyword token.
      *  Used by the strata body interpreter to dispatch built-in forms
      *  (`@nil`, `@not`, `+`, `==`, etc.) and any user-defined comptime
@@ -678,9 +684,16 @@ export function createCompilerAPI(ctx: CtxShape, fns: LowerFns): CompilerAPI {
             const bindings = new Map<string, SiliconType>()
             const params: any[] = tmplDef?.params ?? []
             const args:   any[] = callNode?.args   ?? []
+            // A def with a declared generics list (`@fn id[T] …`) binds ONLY
+            // those names — a non-builtin annotation like `Option[T]` is a
+            // concrete (parametric) type, not a type variable.  Defs without
+            // the list (e.g. a user stratum's `@generic id x T := x`) keep
+            // the every-non-builtin-annotation heuristic.
+            const declared: string[] | undefined = tmplDef?.generics?.params
             for (let i = 0; i < params.length; i++) {
                 const paramType: string | undefined = params[i]?.typeAnnotation?.typename
                 if (!paramType || BUILTIN_TYPE_NAMES.has(paramType)) continue
+                if (declared && declared.length > 0 && !declared.includes(paramType)) continue
                 if (bindings.has(paramType)) continue
                 const argType = inferArgType(args[i])
                 if (argType) bindings.set(paramType, argType)
@@ -891,6 +904,27 @@ export function createCompilerAPI(ctx: CtxShape, fns: LowerFns): CompilerAPI {
                 if (typeof callNode?.name === 'string') return callNode.name
                 return ''
             },
+        },
+
+        generic_template: (name: string) => {
+            let map = (ctx as any).__genericTemplateDefs as Map<string, any> | undefined
+            if (!map) {
+                map = new Map()
+                const unwrapEl = (n: any): any => {
+                    if (!n) return null
+                    if (n.type === 'Element' || n.type === 'Item' || n.type === 'Statement') return unwrapEl(n.value)
+                    return n
+                }
+                for (const el of ((ctx as any).program?.elements ?? []) as any[]) {
+                    const def = unwrapEl(el)
+                    if (def?.type === 'Definition' && def.keyword === '@fn' &&
+                        (def.generics?.params?.length ?? 0) > 0 && def.name?.name) {
+                        map.set(def.name.name, def)
+                    }
+                }
+                ;(ctx as any).__genericTemplateDefs = map
+            }
+            return map.get(name) ?? null
         },
 
         lookupComptime: (token) =>

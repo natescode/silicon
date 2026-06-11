@@ -1160,10 +1160,50 @@ export function createComptimeImports(env: ComptimeEnv): WebAssembly.Imports {
             case 'Bool':   return 'Bool'
             case 'String': return 'String'
             case 'Void':   return 'Void'
+            case 'JSValue':  return 'JSValue'
+            case 'JSString': return 'JSString'
             case 'Distinct': return (t as any).name ?? 'Unknown'
             case 'Sum':      return (t as any).name ?? 'Unknown'
             default:       return 'Unknown'
         }
+    }
+
+    /** `Compiler::generic_template(name)` — look up the `@fn[T]` template
+     *  Definition named `name` in the program being lowered (any declaration
+     *  order; the CompilerAPI memoizes the name→def map per lowering run).
+     *  Returns a 'pre' template handle, or 0 when the callee isn't a generic
+     *  @fn — the fast-path exit for the monomorphization stratum's wildcard
+     *  call_site probe. */
+    const generic_template = (nameStr: number): number => {
+        if (!env.api) return 0
+        const name = strings.get(nameStr)
+        if (!name) return 0
+        const def = env.api.generic_template?.(name)
+        if (!def) return 0
+        return handles.intern({ ast: deepCloneAst(def), kind: 'pre' as const })
+    }
+
+    /** `Compiler::type::needs_mono(tmpl, bindings)` — 1 when the bindings
+     *  fully cover the template's declared generics AND at least one binding
+     *  is a non-i32-shaped type (Float → f32, Int64 → i64, JSValue/JSString →
+     *  externref).  Those are exactly the instantiations the type-erased i32
+     *  base copy cannot serve (the call would fail WASM validation); i32-shaped
+     *  instantiations keep the shared erased copy. */
+    const type_needs_mono = (templateH: number, bindingsH: number): number => {
+        const tmpl = handles.get(templateH) as { ast: any } | undefined
+        const bindings = handles.get(bindingsH) as Map<string, SiliconType> | undefined
+        if (!tmpl || !(bindings instanceof Map)) return 0
+        const declared: string[] = tmpl.ast?.generics?.params ?? []
+        const names = declared.length > 0 ? declared : Array.from(bindings.keys())
+        if (names.length === 0) return 0
+        let needs = false
+        for (const g of names) {
+            const b = bindings.get(g) as any
+            if (!b || b.kind === 'Unknown') return 0   // incomplete — leave erased
+            if (b.kind === 'Float' || b.kind === 'Int64' ||
+                b.kind === 'JSValue' || b.kind === 'JSString') needs = true
+        }
+        return needs ? 1 : 0
     }
 
     const ast_capture_template = (nodeH: number, kindStr: number): number => {
@@ -1616,7 +1656,7 @@ export function createComptimeImports(env: ComptimeEnv): WebAssembly.Imports {
             type_int, type_int64, type_float, type_bool, type_string, type_void,
             type_variable, type_array,
             type_equals, type_format, type_substitute, type_mangle_suffix,
-            type_bind_template_args, callee_name,
+            type_bind_template_args, callee_name, generic_template, type_needs_mono,
             ast_capture_template, ast_clone, ast_with_keyword, ast_with_name,
             ast_rewrite_call, ast_patch_types,
             compiler_lowerExpr, compiler_lowerExprIfDefined,

@@ -119,6 +119,10 @@ interface LowerCtx {
     /** Set when the program uses CharCodeArray (the `(array (mut i16))`): drives
      *  the GC-array helper-function injection + ref-slot stamping. */
     usesCharCodeArray: { v: boolean }
+    /** The full program AST being lowered — lets call-site strata (the
+     *  generics monomorphization stratum) look up @fn[T] template defs by
+     *  name regardless of declaration order. */
+    program?: Program
     /** Phase 9d-7: registry of WasmGC struct/array type declarations
      *  populated as the program is lowered.  Drained into
      *  `IRModule.wasmGcTypes` at the end of `lowerProgram`.  Only
@@ -299,6 +303,7 @@ export function lowerProgram(
         platform: options.platform ?? 'native',
         usesCharCodeArray: { v: false },
         wasmGcTypes: new WasmGcTypeRegistry(),
+        program,
     }
     // Pass the live ctx (not a snapshot) so $compiler is current when
     // recursively invoked methods (api.lowerExpr → lowerBinaryOp → on::lower
@@ -1459,8 +1464,13 @@ function lowerFunctionCall(n: any, ctx: LowerCtx): IRExpr {
     // for every call site (used by monomorphization / instrumentation strata
     // that filter by inspecting the callee themselves).  After handlers run,
     // re-read the call name so a rewrite_call has effect downstream.
-    const hasNameKeyed = ctx.registry.handlers.callSite.has(name)
-    const hasWildcard  = ctx.registry.handlers.callSite.has('*')
+    // Skipped while compiling a strata handler @fn: a handler body is
+    // compiler-internal code, and firing call-site handlers inside it would
+    // deadlock the T0 fixpoint (every body's calls would fire the
+    // not-yet-compiled monomorphization handler).
+    const inHandlerCompile = (ctx.registry as any).__compilingHandler === true
+    const hasNameKeyed = !inHandlerCompile && ctx.registry.handlers.callSite.has(name)
+    const hasWildcard  = !inHandlerCompile && ctx.registry.handlers.callSite.has('*')
     if (hasNameKeyed) {
         fireHandlers(ctx.registry, 'callSite', name, n, ctx.$compiler!, ctx.currentStratumRef)
     }

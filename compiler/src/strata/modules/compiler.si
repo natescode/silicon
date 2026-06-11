@@ -102,6 +102,8 @@
 \\ @extern callee_name (Int) -> Int;
 \\ @extern str_concat (Int, Int) -> Int;
 \\ @extern str_of_int (Int) -> Int;
+\\ @extern generic_template (Int) -> Int;
+\\ @extern type_needs_mono (Int, Int) -> Int;
 
 # ── Diagnostics (T-5 accumulator model) ────────────────────────────────
 \\ @extern diag_error (Int, Int, Int, Int) -> Void;
