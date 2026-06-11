@@ -81,8 +81,8 @@ S = [
          files="loader glue only",
          unblocks="No new coverage — erases the Asyncify size/perf tax on V8/Node. A detect-and-upgrade, never a hard dep. Slots in any time after F1a."),
     # ---- Monomorphization ----
-    dict(id="M0", track="mono", ver="v1.0", size="L", risk="Med", crit=True, status="done",
-         note="Substrate DONE (2026-06-09). Reframed the earlier 'blocked' diagnosis: a <code>@generic</code> inline-block <code>on::decl</code>/<code>on::call_site</code> handler DID register + fire all along (the compiled engine auto-extracts inline blocks). The real gaps were substrate defects, now fixed: (1) <code>module::push_definition</code> was stranded in the per-firing <code>env.pendingDefinitions</code> — added <code>drainModuleMutations</code> in every firing wrapper so pushed monomorphs reach <code>registry.pendingDefinitions</code>; (2) the block translator tracked only <code>@local</code>, not <code>@mut</code>, and emitted <code>&lt;local&gt;::field</code> verbatim — now tracks <code>@mut</code> and routes field access through <code>compiler_ast_node_field</code>; (3) handler envs each had their own handle table, so a template handle stored at <code>on::decl</code> was unreadable at <code>on::call_site</code> — now ONE registry-shared handle table; (4) the <code>state('stratum')</code> bucket always resolved to <code>__global__</code> — fixed; (5) added the missing compiled-engine primitives <code>callee_name</code>, <code>type_bind_template_args</code>, <code>str_concat</code>. <b>Proven end-to-end</b> (generic-e2e.test.ts ×6 + generic-monomorph-substrate.test.ts ×4): a Silicon stratum captures a template, hands it across handler firings via shared state, infers the call's type args, and emits a real <code>$id$Int</code>/<code>$id$Float</code> monomorph with substituted param/result types + a rewritten call that RUNS under WASM. <b>Remaining tail</b> (the full generic-monomorph.test.ts ×4, still skipped): same-type call-site memoization needs comptime conditionals (<code>@if</code>/<code>@not</code>/<code>!=</code>/<code>@nil</code>) + string <code>+</code> in compiled handlers, plus a multi-push call-site-triggered lowering re-entrancy edge.",
+    dict(id="M0", track="mono", ver="v1.0", size="L", risk="Med", crit=True, status="partial",
+         note="<b>The user-facing generics — <code>@fn[T]</code> / <code>@type[T]</code> (Option/Result) — ship via HM-lite (33 e2e + 38 unit tests); THIS row is the separate comptime-monomorphization machinery that closures C1 consume.</b> Its SUBSTRATE is done; the <code>@generic</code> production stratum + full per-call-site memoization remain the tail (so this row is <i>partial</i>, not fully closed). Substrate DONE (2026-06-09). Reframed the earlier 'blocked' diagnosis: a <code>@generic</code> inline-block <code>on::decl</code>/<code>on::call_site</code> handler DID register + fire all along (the compiled engine auto-extracts inline blocks). The real gaps were substrate defects, now fixed: (1) <code>module::push_definition</code> was stranded in the per-firing <code>env.pendingDefinitions</code> — added <code>drainModuleMutations</code> in every firing wrapper so pushed monomorphs reach <code>registry.pendingDefinitions</code>; (2) the block translator tracked only <code>@local</code>, not <code>@mut</code>, and emitted <code>&lt;local&gt;::field</code> verbatim — now tracks <code>@mut</code> and routes field access through <code>compiler_ast_node_field</code>; (3) handler envs each had their own handle table, so a template handle stored at <code>on::decl</code> was unreadable at <code>on::call_site</code> — now ONE registry-shared handle table; (4) the <code>state('stratum')</code> bucket always resolved to <code>__global__</code> — fixed; (5) added the missing compiled-engine primitives <code>callee_name</code>, <code>type_bind_template_args</code>, <code>str_concat</code>. <b>Proven end-to-end</b> (generic-e2e.test.ts ×6 + generic-monomorph-substrate.test.ts ×4): a Silicon stratum captures a template, hands it across handler firings via shared state, infers the call's type args, and emits a real <code>$id$Int</code>/<code>$id$Float</code> monomorph with substituted param/result types + a rewritten call that RUNS under WASM. <b>Remaining tail</b> (the full generic-monomorph.test.ts ×4, still skipped): same-type call-site memoization needs comptime conditionals (<code>@if</code>/<code>@not</code>/<code>!=</code>/<code>@nil</code>) + string <code>+</code> in compiled handlers, plus a multi-push call-site-triggered lowering re-entrancy edge.",
          title="Comptime monomorphization substrate",
          adr="ADR 0003 · C-1 / 0001 · G-1 core",
          desc="Audit/wire the comptime API coverage (<code>ast::capture_template</code>/<code>patch_types</code>/<code>with_name</code>/<code>rewrite_call</code>, <code>type::bind_template_args</code>/<code>mangle_suffix</code>); unskip the <code>@generic</code> stratum (9 skipped tests); make the <code>on::call_site</code> wildcard fire + state-memoized monomorph-per-(template, type-args). <b>Pulled into v1.0 because closures C1 need it.</b>",
@@ -337,6 +337,7 @@ HTML = f"""<!DOCTYPE html>
   .tnote code {{ background:#11161f; }}
   .tnote-done {{ background:rgba(63,185,80,.08); border:1px solid #1f4427; color:#bfe6c8; }}
   .tnote-blocked {{ background:rgba(247,185,85,.08); border:1px solid #4a3a1e; color:#f0d9a8; }}
+  .tnote-partial {{ background:rgba(214,167,0,.08); border:1px solid #4a3a1e; color:#f0d9a8; }}
   .tdesc {{ color:#d2dae4; font-size:14px; margin-bottom:8px; }}
   .tfiles, .tunb {{ font-size:12.5px; color:var(--muted); margin-top:5px; }}
   .tfiles .k, .tunb .k {{ display:inline-block; font-size:10px; text-transform:uppercase; letter-spacing:.06em;
@@ -372,13 +373,16 @@ HTML = f"""<!DOCTYPE html>
   key files, size, risk, and what it unblocks.</p>
   <div class="meta">Generated <b>{GEN_DATE}</b> · derived from ADRs 0001/0003/0008/0009/0011/0012/0013/0015/0016/0017/0018/0019 ·
   cross-checked against <code>docs/v1.0-critical-path.md</code></div>
-  <div class="meta">Progress (2026-06-10): <b style="color:var(--mono)">Phases 0–3 ✓ — the v1.0 FFI gate is CLOSED and the poll-reactor is complete.</b>
-  C0/M0/F0a; F1a object handles; F1b blocking <code>@await</code> productized (dual-backend, JSPI + Asyncify); C1 closures + C2
+  <div class="meta">Progress (2026-06-10): <b style="color:var(--mono)">Phases 0–3 ✓ — the v1.0 FFI mechanism gate is CLOSED and the poll-reactor is complete.</b>
+  C0/F0a; F1a object handles; F1b blocking <code>@await</code> productized (dual-backend, JSPI + Asyncify); C1 closures + C2
   (escape gate AND host-callable closures, leak-free under <code>--target=wasm-gc</code>, Bun round-trip verified); <b>F3 poll-reactor
   done</b> — generic <code>Poll[T]</code>, spawn/task-drain, and a guest <code>Future</code>↔host <code>Promise</code> bridge woken by the reactor
-  (<code>future_async.si</code>). <b>Capability model (K1–K8) not started — by design (post-v1.0); M1 container mono is v1.1.</b>
-  <b>Beyond the gate</b>, the FFI <i>surface</i> was broadened end-to-end (see “Post-gate FFI surface” below): object/array reflection,
-  host-error→<code>Result</code>, streaming, concurrency, the fetch ecosystem, bulk binary, Node <code>fs</code>, first-class <code>fetch</code>.</div>
+  (<code>future_async.si</code>). <b>M0 substrate done (the comptime-mono machinery C1 consumes); the <code>@generic</code> production stratum + full
+  per-call-site memoization are the tail, so M0 is marked PARTIAL — user-facing generics ship via <code>@fn[T]</code> HM-lite.</b>
+  <b>Capability model (K1–K8) not started — by design (post-v1.0); M1 container mono is v1.1.</b>
+  <b>Beyond the mechanism gate</b>, the FFI <i>surface</i> was broadened end-to-end (see “Post-gate FFI surface” below) and the bind rate
+  reached <b style="color:var(--mono)">99.74% (379 / 380 members)</b> — the only unbound member is <code>Bun.$</code>, a tagged-template
+  (a JS syntactic form, not a classifier gap). No fundamental bindgen gaps remain.</div>
   <div class="tiles">
     <div class="tile"><div class="num">{n_total}</div><div class="lbl">subtasks</div></div>
     <div class="tile gate"><div class="num">{n_crit}</div><div class="lbl">on the critical path</div></div>
@@ -406,14 +410,15 @@ HTML = f"""<!DOCTYPE html>
     depend on earlier. The async spine (<code>F1a → F1b</code>, →80%) and the closure spine
     (<code>M0 → C0 → C1 → C2</code>, →97%) converge at the poll-reactor.</p>
     <div class="ladder">{ladder}</div>
-    <div class="critline"><b>Longest chain to the gate (all ✓):</b>
-      <code>M0</code> → <code>C0</code> → <code>C1</code> → <code>C2</code> (gate, ~97%) → <code>F3</code> (100%, poll-reactor complete).
-      <code>F0a</code> (bindgen) and the capability model (<code>K1…K8</code>) are off the critical path.</div>
+    <div class="critline"><b>Longest chain to the gate:</b>
+      <code>M0</code>(substrate ✓) → <code>C0</code> ✓ → <code>C1</code> ✓ → <code>C2</code> ✓ (mechanism gate, ~97%) → <code>F3</code> ✓ (poll-reactor complete).
+      Surface bind rate then reached <b>99.74%</b> (only <code>Bun.$</code> unbound). <code>F0a</code> (bindgen) and the capability model
+      (<code>K1…K8</code>) are off the critical path.</div>
   </section>
 
   {item_table("ffi", "Item A — FFI gate", "The hard v1.0 product gate: lift web/bun coverage from ~10% to 100%. Bindgen, object handles, and Asyncify <code>@await</code> reach ~80% <i>without</i> monomorphization; the closures keystone (C0→C1→C2) needs it, and C2 closes the gate. ADR 0017 → 0018 → 0019.", ["F0a","F1a","F1b","C0","C1","C2","F3","F3-opt"])}
 
-  {item_table("mono", "Item B — Monomorphization", "<code>@fn[T]</code> and <code>@type[T]</code> (Option/Result) already ship. What remains: the comptime-specialization <b>substrate</b> (pulled into v1.0 because closures C1 consume it) and the <b>container</b> application (Vec[T]/HashMap[K,V], v1.1). ADR 0001 (substrate via ADR 0003 C-1).", ["M0","M1"])}
+  {item_table("mono", "Item B — Monomorphization", "<code>@fn[T]</code> and <code>@type[T]</code> (Option/Result) already ship via <b>HM-lite</b> — that is the user-facing generics surface, fully landed. What remains is the comptime-specialization <b>substrate</b> (M0 — substrate done, the <code>@generic</code> production stratum + full per-call-site memoization is the tail, so M0 is PARTIAL) and the <b>container</b> application (Vec[T]/HashMap[K,V], v1.1). ADR 0001 (substrate via ADR 0003 C-1).", ["M0","M1"])}
 
   {item_table("cap", "Item C — Capability model", "All zero-code today (the P0 comptime substrate shipped). The <code>on::check</code> + reflection substrate gates everything. <b>Deliberately decoupled from the v1.0 FFI gate</b> — v1.0 closures use by-value/immutable capture, which needs no borrow checker. ADR 0011/0012/0013/0015.", ["K1","K2","K3","K4","K5","K6","K7","K8"])}
 
@@ -462,6 +467,22 @@ HTML = f"""<!DOCTYPE html>
       <td class="ctitle"><div class="tt">Bare-global harvest — first-class <code>fetch</code></div>
       <div class="tdesc">A bare-global dts mode → the <code>global</code> module: <code>global::fetch</code> (<code>@suspending</code>, Promise&lt;Response&gt;), <code>atob</code>/<code>btoa</code>, <code>queue_microtask</code>. <code>fetch</code> is now first-class, not a <code>js::global</code>+<code>apply</code> composition.</div></td>
       <td class="cadr">follow-up #4</td><td class="cmeta"><span class="st st-done">✓ DONE</span></td></tr>
+    <tr class="t-ffi status-done"><td class="cid"><span class="idbadge ffi">F5</span></td>
+      <td class="ctitle"><div class="tt">Classifier coverage — no fundamental bindgen gaps</div>
+      <div class="tdesc">The <code>.d.ts</code> + Web-IDL classifiers learned the rest: generic params → their constraints, <code>bigint</code>/<code>unknown</code>/IDL <code>any</code>/dictionaries/<code>sequence&lt;&gt;</code> → <code>JSValue</code>, <code>T | Promise&lt;T&gt;</code> via its sync arm, <code>Intersection</code>/<code>Conditional</code> → <code>JSValue</code> (Bun.serve/plugin), variadic → a spread Impl, a name sanitizer, and static-collision → <code>_static</code> (Response.json). Lifted bind rate <b>90.1% → 97.6%</b>.</div></td>
+      <td class="cadr">follow-up #5</td><td class="cmeta"><span class="st st-done">✓ DONE</span></td></tr>
+    <tr class="t-ffi status-done"><td class="cid"><span class="idbadge ffi">F6</span></td>
+      <td class="ctitle"><div class="tt">webiface <code>events:'closure'</code> + <code>event_target</code></div>
+      <div class="tdesc">Ported the closure-callback path to the Web-IDL adapter: an <code>EventHandler</code> attribute → a setter taking a <code>Callback</code> handle (<code>abort_signal::set_onabort</code>), a listener arg → a <code>Callback</code> param, plus a new <code>event_target</code> module (<code>add_event_listener</code>). <code>Callback</code> is rejected in result/getter/union position (it crosses only guest→host).</div></td>
+      <td class="cadr">follow-up #6</td><td class="cmeta"><span class="st st-done">✓ DONE</span></td></tr>
+    <tr class="t-ffi status-done"><td class="cid"><span class="idbadge ffi">F7</span></td>
+      <td class="ctitle"><div class="tt"><code>path</code>/<code>os</code> mixed-tier flip → <b>99.74%</b></div>
+      <div class="tdesc">Flipped <code>path</code>/<code>os</code> to <code>objects:'jsvalue'</code> (recovering parse/format/join/resolve, cpus/loadavg/user_info/network_interfaces) while keeping their string/scalar functions <b>Tier-0 portable</b> — a per-call <code>E0010</code> gate enforces it. Bind rate <b>97.6% → 99.74%</b> (379 / 380).</div></td>
+      <td class="cadr">follow-up #7</td><td class="cmeta"><span class="st st-done">✓ DONE</span></td></tr>
+    <tr class="t-ffi status-partial"><td class="cid"><span class="idbadge ffi">F8</span></td>
+      <td class="ctitle"><div class="tt"><code>Bun.$</code> — the one remaining skip</div>
+      <div class="tdesc">A tagged-template function (<code>$`…`</code>); not a normal callable, so the generator correctly skips it. A security-driven technical plan (<code>docs/bun-shell-ffi-plan.md</code>) proposes a general <code>js::tagged</code> primitive + a <code>shell.si</code> stdlib that preserves the substitution-escaping boundary.</div></td>
+      <td class="cadr">plan</td><td class="cmeta"><span class="st st-partial">◐ PLANNED</span></td></tr>
     </tbody></table>
     <p class="blurb">Also this period: <code>@match</code> moved to the flat function-call form (<code>@match(x, $A v, {{ v }}, …)</code>),
     dropping the infix <code>=&gt;</code> arm operator that collided with flat operator precedence.</p>

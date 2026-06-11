@@ -61,6 +61,7 @@ If you're new, start with [`getting-started.md`](getting-started.md).
 
 | File | What's in it |
 |------|--------------|
+| [v1-feature-status.md](v1-feature-status.md) | Verified v1 feature/shipped-status table (critical path + broader surface + deferred), as of the current branch |
 | [v1.0-implementation-roadmap.html](v1.0-implementation-roadmap.html) | Ordered build plan for the FFI gate, monomorphization, and the capability model — critical-path timeline + per-item subtasks |
 | [v1-user-stories.html](v1-user-stories.html) | v1.0 story tracker — all closed as of 2026-05-28 |
 | [v1.1-user-stories.html](v1.1-user-stories.html) | v1.1 work — LSP, package registry, interpreter, etc. |
