@@ -1,8 +1,8 @@
 # Silicon v1 — feature status
 
-> **As of:** branch `v1-roadmap` (M0 full monomorphization + F1 native host-handle
-> sums landed). Verified against the roadmap, all 26 ADRs, the CHANGELOG, and the
-> actual code/tests on this branch (code beats memory where they disagree).
+> **As of:** branch `v1-roadmap` (`89d8259` — M0 full monomorphization + F1 native
+> host-handle sums landed). Verified against the roadmap, all 26 ADRs, the CHANGELOG,
+> and the actual code/tests on this branch (code beats memory where they disagree).
 > **Companion:** [`v1.0-implementation-roadmap.html`](v1.0-implementation-roadmap.html)
 > (critical-path detail), [`ffi-coverage-gaps.md`](ffi-coverage-gaps.md) (FFI),
 > the per-feature ADRs under [`adr/`](adr/).
