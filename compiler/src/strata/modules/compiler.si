@@ -101,6 +101,7 @@
 \\ @extern type_bind_template_args (Int, Int) -> Int;
 \\ @extern callee_name (Int) -> Int;
 \\ @extern str_concat (Int, Int) -> Int;
+\\ @extern str_of_int (Int) -> Int;
 
 # ── Diagnostics (T-5 accumulator model) ────────────────────────────────
 \\ @extern diag_error (Int, Int, Int, Int) -> Void;

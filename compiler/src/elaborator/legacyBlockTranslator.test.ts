@@ -167,3 +167,57 @@ describe('translateLegacyBlock — pass-through', () => {
         expect(JSON.stringify(input)).toBe(before)
     })
 })
+
+describe('translateLegacyBlock — comptime string `+` → str_concat', () => {
+    const binop = (op: string, left: any, right: any) => ({ type: 'BinaryOp', operator: op, left, right })
+
+    test("'lit' + <string import call> routes to compiler::str_concat", () => {
+        const input = binop('+', strLit('tmpl::'), fcall(ns('Compiler', 'callee', 'name'), ns('node')))
+        const output = translateLegacyBlock(input)
+        expect(output.name).toEqual(ns('compiler', 'str_concat'))
+        expect(output.args[0].name).toEqual(ns('compiler', 'compiler_str_intern'))
+        expect(output.args[1].name).toEqual(ns('compiler', 'callee_name'))
+    })
+
+    test('two string-tracked LOCALS concat via str_concat (no literal in the chain)', () => {
+        const input = block(
+            local('a', fcall(ns('Compiler', 'callee', 'name'), ns('node'))),
+            local('b', fcall(ns('Compiler', 'type', 'mangle_suffix'), ns('bs'))),
+            local('c', binop('+', ns('a'), ns('b'))),
+        )
+        const output = translateLegacyBlock(input)
+        const c = output.items[2]
+        expect(c.binding.expression.name).toEqual(ns('compiler', 'str_concat'))
+        expect(c.binding.expression.args[0]).toEqual(ns('a'))
+        expect(c.binding.expression.args[1]).toEqual(ns('b'))
+    })
+
+    test('a local bound from string + is itself string-tracked (chained concat)', () => {
+        const input = block(
+            local('mono', binop('+', strLit('id'), fcall(ns('Compiler', 'type', 'mangle_suffix'), ns('bs')))),
+            local('key', binop('+', ns('mono'), ns('mono'))),
+        )
+        const output = translateLegacyBlock(input)
+        expect(output.items[1].binding.expression.name).toEqual(ns('compiler', 'str_concat'))
+    })
+
+    test("mixed 'count: ' + 2 renders the number via str_of_int", () => {
+        const input = binop('+', strLit('count: '), intLit('2'))
+        const output = translateLegacyBlock(input)
+        expect(output.name).toEqual(ns('compiler', 'str_concat'))
+        expect(output.args[1].name).toEqual(ns('compiler', 'str_of_int'))
+        expect(output.args[1].args[0]).toEqual(intLit('2'))
+    })
+
+    test('numeric + over plain ints still passes through unchanged', () => {
+        const input = binop('+', intLit('1'), ns('n'))
+        const output = translateLegacyBlock(input)
+        expect(output).toEqual(input)
+    })
+
+    test('@nil() lowers to IntLiteral 0', () => {
+        const input = { type: 'FunctionCall', name: '@nil', isBuiltin: true, args: [] }
+        const output = translateLegacyBlock(input)
+        expect(output).toEqual(intLit('0'))
+    })
+})

@@ -54,6 +54,11 @@ interface TranslatorCtx {
     /** Names bound by @local declarations inside this block.  Used to
      *  distinguish scope-variable method calls from Compiler:: calls. */
     locals: Set<string>
+    /** Subset of `locals` whose binding expression is known to produce a
+     *  StringPool id (a string literal, a string-returning compiler import,
+     *  or string `+`).  Lets `a + b` over string locals route to
+     *  compiler::str_concat instead of silently lowering to i32.add. */
+    stringLocals: Set<string>
 }
 
 /** Deep-clone a node so the translator can rewrite without mutating input. */
@@ -227,6 +232,45 @@ function translateNodeFieldAccess(path: string[], ctx: TranslatorCtx): any {
 }
 
 /**
+ * True when a node is known to produce a StringPool id at comptime:
+ * a string literal (pre-wrap), a call to one of the compiler imports whose
+ * result is a string id, or a local tracked as string-typed.  Used to
+ * detect string `+` so it can be routed to `compiler::str_concat` instead
+ * of i32 addition over pool ids.
+ */
+const STRING_RESULT_IMPORTS = new Set([
+    'str_concat', 'str_of_int', 'compiler_str_intern', 'compiler_ast_str_field',
+    'callee_name', 'type_mangle_suffix', 'type_format', 'compiler_resolveType',
+    'compiler_resolveFunctionReturnType', 'compiler_watId', 'compiler_freshId',
+])
+
+function isStringProducing(original: any, translated: any, ctx: TranslatorCtx): boolean {
+    if (original?.type === 'StringLiteral') return true
+    if (original?.type === 'Namespace' && Array.isArray(original.path) &&
+        original.path.length === 1 && ctx.stringLocals.has(original.path[0])) return true
+    const t = translated
+    if (t?.type === 'FunctionCall' && t.name?.type === 'Namespace' &&
+        Array.isArray(t.name.path) && t.name.path[0] === 'compiler') {
+        return STRING_RESULT_IMPORTS.has(t.name.path[1])
+    }
+    return false
+}
+
+/** True when a node is statically a numeric value (not a string id). */
+function isNumeric(original: any): boolean {
+    return original?.type === 'IntLiteral' || original?.type === 'BooleanLiteral'
+}
+
+/** Wrap a translated operand for str_concat: string literals become intern
+ *  calls; statically-numeric operands become str_of_int (decimal render,
+ *  matching the legacy interpreter's mixed `'n: ' + 2` semantics). */
+function asStringId(original: any, translated: any): any {
+    if (translated?.type === 'StringLiteral') return wrapStringLiteralAsInternCall(translated)
+    if (isNumeric(original)) return compilerCall('str_of_int', [translated])
+    return translated
+}
+
+/**
  * Top-level node translator — recursively rewrites the AST.
  */
 function translateNode(node: any, ctx: TranslatorCtx): any {
@@ -238,7 +282,18 @@ function translateNode(node: any, ctx: TranslatorCtx): any {
         const name = node.name
         const args: any[] = node.args ?? []
 
-        // &@token (builtin keyword like @if, @local, @true) — pass through.
+        // `@nil()` — the interpreter-era missing-value sentinel, with no
+        // runtime stratum behind it.  Lower to 0: handle/string ids are ≥ 1
+        // and state_get returns 0 on a miss, so `x != @nil()` reads as
+        // "x is present".  Note this conflates a STORED 0 with absence —
+        // `state::has` is the precise presence check.  (@true/@false need no
+        // arm here: the parser reserves them as BooleanLiteral tokens, so a
+        // call form `@true()` cannot reach the translator.)
+        if (typeof name === 'string' && name === '@nil' && args.length === 0) {
+            return { type: 'IntLiteral', value: '0' }
+        }
+
+        // &@token (builtin keyword like @if, @local, @not) — pass through.
         if (typeof name === 'string') {
             return { ...node, args: args.map(a => translateNode(a, ctx)) }
         }
@@ -296,12 +351,34 @@ function translateNode(node: any, ctx: TranslatorCtx): any {
         // Translate the binding's expression.
         const binding = node.binding
         if (binding?.expression) {
+            const translated = translateNode(binding.expression, ctx)
+            // Track string-typed locals so later `a + b` over them routes
+            // to str_concat (see isStringProducing).
+            if (typeof name === 'string' && isStringProducing(binding.expression, translated, ctx)) {
+                ctx.stringLocals.add(name)
+            }
             return {
                 ...node,
-                binding: { ...binding, expression: translateNode(binding.expression, ctx) },
+                binding: { ...binding, expression: translated },
             }
         }
         return node
+    }
+
+    // Binary `+` over comptime strings → compiler::str_concat.  String
+    // values are StringPool ids (i32) inside a compiled handler, so plain
+    // `+` would lower to i32.add on the ids.  Detect the string case
+    // structurally: a string literal operand, a string-tracked local, or an
+    // operand whose translated form is a string-returning compiler import.
+    // A statically-numeric operand mixed in is rendered via str_of_int
+    // (legacy interpreter semantics for `'count: ' + 2`).
+    if (node.type === 'BinaryOp' && node.operator === '+') {
+        const left = translateNode(node.left, ctx)
+        const right = translateNode(node.right, ctx)
+        if (isStringProducing(node.left, left, ctx) || isStringProducing(node.right, right, ctx)) {
+            return compilerCall('str_concat', [asStringId(node.left, left), asStringId(node.right, right)])
+        }
+        return { ...node, left, right }
     }
 
     // Block — recurse into items + trailing.
@@ -342,6 +419,6 @@ function translateNode(node: any, ctx: TranslatorCtx): any {
  */
 export function translateLegacyBlock(block: any, paramName: string = 'node'): any {
     if (!block) return block
-    const ctx: TranslatorCtx = { paramName, locals: new Set() }
+    const ctx: TranslatorCtx = { paramName, locals: new Set(), stringLocals: new Set() }
     return translateNode(clone(block), ctx)
 }

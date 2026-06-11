@@ -91,7 +91,7 @@ const GENERIC_STRATUM = `@stratum Generics := {
                 @mut renamed := Compiler::ast::with_name(patched, monoName);
                 @mut concrete := Compiler::ast::with_keyword(renamed, '@fn');
                 Compiler::module::push_definition(concrete::ast);
-                s::set(monoKey, @true());
+                s::set(monoKey, 1);
             });
             # Redirect this call site to the monomorph.
             Compiler::ast::rewrite_call(node, monoName);
@@ -100,7 +100,7 @@ const GENERIC_STRATUM = `@stratum Generics := {
 };`
 
 describe('@generic — real per-call monomorphization', () => {
-    test.skip('one call with one type produces one monomorph', () => {
+    test('one call with one type produces one monomorph', () => {
         const wat = compileToWat(
             `@generic id x T := x;
              \\\\ run (Int) -> Int
@@ -120,7 +120,7 @@ describe('@generic — real per-call monomorphization', () => {
         expect(wat).toMatch(/\$run[\s\S]*call \$id\$Int/)
     })
 
-    test.skip('two calls with two different types produce two distinct monomorphs', () => {
+    test('two calls with two different types produce two distinct monomorphs', () => {
         const wat = compileToWat(
             `@generic id x T := x;
              \\\\ run_i () -> Int
@@ -141,7 +141,7 @@ describe('@generic — real per-call monomorphization', () => {
         expect(wat).toMatch(/\$run_f[\s\S]*call \$id\$Float/)
     })
 
-    test.skip('two calls with the same type share one monomorph', () => {
+    test('two calls with the same type share one monomorph', () => {
         const wat = compileToWat(
             `@generic id x T := x;
              \\\\ a () -> Int
@@ -162,7 +162,7 @@ describe('@generic — real per-call monomorphization', () => {
         expect(wat).toMatch(/\$b[\s\S]*call \$id\$Int/)
     })
 
-    test.skip('the generated WASM actually runs and returns correct values for each monomorph', async () => {
+    test('the generated WASM actually runs and returns correct values for each monomorph', async () => {
         const wat = compileToWat(
             `@generic id x T := x;
              \\\\ run_i (Int) -> Int

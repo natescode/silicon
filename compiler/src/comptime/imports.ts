@@ -728,6 +728,12 @@ export function createComptimeImports(env: ComptimeEnv): WebAssembly.Imports {
         return strings.intern((strings.get(aStr) ?? '') + (strings.get(bStr) ?? ''))
     }
 
+    /** Decimal rendering of an i32 → StringPool id.  The translator wraps a
+     *  numeric operand of a string `+` with this so mixed concatenation
+     *  (`'count: ' + n`) reproduces the legacy interpreter's semantics
+     *  instead of misreading the number as a pool id. */
+    const str_of_int = (n: number): number => strings.intern(String(n | 0))
+
     /** Per-env fresh-id counter — local to a firing. */
     let freshIdCounter = 0
     const compiler_freshId = (prefixStr: number): number => {
@@ -1594,7 +1600,7 @@ export function createComptimeImports(env: ComptimeEnv): WebAssembly.Imports {
             ir_makeFunction, ir_makeImport, compiler_arr_push_str,
             diag_error, diag_warn,
             compiler_str_intern,
-            compiler_watId, compiler_freshId, compiler_arg, compiler_choose, compiler_require_argc, str_concat,
+            compiler_watId, compiler_freshId, compiler_arg, compiler_choose, compiler_require_argc, str_concat, str_of_int,
             compiler_ctx_locals_set, compiler_ctx_locals_get,
             compiler_ctx_globals_set, compiler_ctx_globals_get,
             compiler_ctx_varNames_add, compiler_ctx_varNames_has,

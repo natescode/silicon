@@ -125,6 +125,21 @@ export function buildStrataRegistry(
     }
   }
 
+  // Pre-compile the T0 handlers NOW — before T2/T1 strata register.
+  // A user stratum's inline-block handler is compiled eagerly during
+  // registerStratumDefinition, and its body may use migrated forms
+  // (`!=`, `@if`, `@local`, …) that only lower through their compiled
+  // T0 handlers while __compilingHandler is set (no legacy fallback for
+  // migrated operators).  The final compileStrataHandlers pass below
+  // still picks up T1/T2 named handlers; already-compiled T0 entries
+  // are skipped there.
+  ;(registry as any).__t0Phase = true
+  try {
+    compileStrataHandlers({ type: 'Program', elements: [] } as any, registry)
+  } finally {
+    ;(registry as any).__t0Phase = false
+  }
+
   // T2: external strata files supplied by the caller.  Process
   // @stratum unified-form definitions AND top-level @fn handler bodies
   // — same shape as the T0/T1 pre-passes.  Without the @fn capture,
