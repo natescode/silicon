@@ -42,5 +42,8 @@
 \\ @extern environ_sizes_get (Int, Int) -> Int;
 \\ @extern proc_exit (Int) -> Void;
 
-# ---- Clock (optional — compile timings) ----
-\\ @extern clock_time_get (Int, Int, Int) -> Int;
+# ---- Clock ----
+# clock_time_get(clock_id, precision, time_out_ptr) -> errno.  `precision` is
+# i64 per the WASI Preview-1 ABI; the host writes a u64 nanosecond timestamp
+# through `time_out_ptr`.  (clock_id 0 = realtime, 1 = monotonic.)
+\\ @extern clock_time_get (Int, Int64, Int) -> Int;

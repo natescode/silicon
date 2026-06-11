@@ -90,6 +90,7 @@ import {
     globalInFunction,
     missingParamType,
     awaitOutsideAsync,
+    capDeriveNonRoot,
     arityMismatch,
     missingReturn,
     mvpOnlyIntrospection,
@@ -124,6 +125,11 @@ import {
 } from './unify'
 import type { Subst, FreshGen } from './unify'
 import { normalizeMatchArgs } from '../ast/matchArms'
+
+/** ADR 0027 — the well-known root capability type name (like `main` is the
+ *  well-known entry).  `@cap_derive` may only attenuate a value of this type;
+ *  the entry shim hands a `World` to a `main` that requests one. */
+export const CAP_ROOT_TYPE = 'World'
 
 /**
  * Mutable checking context. Threaded through the recursive walk so error
@@ -1679,6 +1685,20 @@ function checkFunctionCall(call: any, ctx: Ctx): SiliconType {
             if (name === '@await') {
                 if (!ctx.inAsyncFn) ctx.errors.push(awaitOutsideAsync(call.sourceLocation))
                 return argTypes[0] ?? TypeUnknown
+            }
+            // ADR 0027 — `@cap_derive(x)` attenuates the root capability into a
+            // narrower domain cap.  Runtime: identity (both are i32).  Type:
+            // a fresh variable that unifies with the caller's declared cap
+            // result.  CONFINEMENT (the mint-site rule): the argument MUST be
+            // the root `World` — so a cap can't be forged from a literal, nor
+            // one domain cap amplified into another.  Only the root downgrades.
+            if (name === '@cap_derive') {
+                const arg = argTypes[0]
+                const isRoot = arg?.kind === 'Distinct' && arg.name === CAP_ROOT_TYPE
+                if (arg !== undefined && arg.kind !== 'Unknown' && !isRoot) {
+                    ctx.errors.push(capDeriveNonRoot(arg, call.sourceLocation))
+                }
+                return ctx.fresh.next('Cap')
             }
             if (intr === 'WASM::control_if'    || intr === 'IR::control_if'    || name === '@if')    return typeOfIfCall(argTypes, call.sourceLocation, ctx)
             if (intr === 'WASM::control_loop'  || intr === 'IR::control_loop'  || name === '@loop')  return TypeUnknown  // loops are void

@@ -34,7 +34,8 @@ capability/borrow-checker model and container monomorphization (M1) are the
 | **FFI 100% gate** | every host member binds | 🟡 | **99.74%** (379/380) — only `Bun.$` (a tagged-template) unbound; plan committed |
 | **M0** | Comptime monomorphization (full) | ✅ | per-call-site memoization + the production `@generic` stratum shipped; the all-i32 erased copy serves i32-shaped calls, Float/Int64/host-handle calls get a specialized monomorph. User-facing generics: `@fn[T]`/`@type[T]` HM-lite. Native `Result[JSValue,E]` rides this (see FFI F1) |
 | **M1** | Container mono `Vec[T]` / `HashMap[K,V]` | ⏳ | works **i32-only** today; element-type/(K,V) mono + HashMap iteration is v1.1 (the "dominant speed lever") |
-| **K1–K8** | Capability model + borrow checker (`on::check`, reflection, `@capability`, rcaps) | 🔜 | **zero code by design** — post-v1.0; v1.0 closures need no borrow checker |
+| **K0** | Object-capability model **v0** (minimal, WASI-aligned) | ✅ | ADR 0027: unforgeable `@type_distinct` caps, rooted at `@fn main (World)` via the entry shim, attenuated by `@cap_derive` (E0017 "downgrade-from-root"); `World`+`Clock` proven e2e under wasmtime. Zero new analysis pass — a strict subset of ADR 0015 / K1–K8 |
+| **K1–K8** | Full capability/borrow track (`on::check`, reflection, fixpoint checker, `@capability` seal, rcaps) | 🔜 | post-v1.0; K0 (above) is the seed it builds on without rework |
 
 ## The broader v1 surface (shipped)
 
@@ -58,7 +59,7 @@ capability/borrow-checker model and container monomorphization (M1) are the
 | LSP server | ⏳ v1.1 | CaaS foundation shipped; cross-file goto + completion **already landed on this branch**; full server is v1.1 |
 | Package registry, incremental compilation, code-action API, playground | ⏳ v1.1 | CaaS-7/8/11 stories |
 | Silicon-native comptime interpreter | 🔜 | comptime runs on the host today (ADR-0003 pivot) |
-| Capability model + borrow checker + ocaps + effect-class optimization (K1–K8) | 🔜 post-v1 | ADR 0011/0012/0013/0015 |
+| Full capability/borrow track — fixpoint checker, borrow checker, effect-class optimization (K1–K8) | 🔜 post-v1 | ADR 0011/0012/0013/0015; the minimal ocap **v0** seed shipped (ADR 0027 — see K0) |
 | `Bun.$` tagged-template binding | 🔜 | the one FFI skip; security-driven plan ([`bun-shell-ffi-plan.md`](bun-shell-ffi-plan.md)) |
 
 ## Note — M0 completed + F1 (native host-handle sums) landed

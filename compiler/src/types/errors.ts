@@ -35,6 +35,7 @@ export type TypeErrorKind =
     | 'GlobalInFunction'      // @global used inside a function body (E0014)
     | 'MissingParamType'      // function has parameters but no signature line (E0015)
     | 'AwaitOutsideAsync'     // @await used outside an @async function body (E0016)
+    | 'CapDeriveNonRoot'      // @cap_derive on a non-root capability (ADR 0027, E0017)
 
 export interface TypeError {
     kind: TypeErrorKind
@@ -179,6 +180,15 @@ export function awaitOutsideAsync(sourceLocation?: SourceLocation): TypeError {
         message: `'@await' may only appear inside an '@async' function`,
         sourceLocation,
         hint: `mark the enclosing function '@async' on its \\\\ signature line: \\\\ @async name (…) -> …`,
+    }
+}
+
+export function capDeriveNonRoot(got: SiliconType, sourceLocation?: SourceLocation): TypeError {
+    return {
+        kind: 'CapDeriveNonRoot',
+        message: `'@cap_derive' may only attenuate the root capability 'World', not '${formatType(got)}'`,
+        sourceLocation,
+        hint: `derive domain capabilities from the root passed to 'main' (\\\\ @fn main (World) -> Int); a cap can't be forged from a literal or amplified from another domain cap`,
     }
 }
 

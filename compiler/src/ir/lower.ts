@@ -18,6 +18,12 @@ import { type SiliconType } from '../types/types'
 import { type ElaboratorRegistry, lookupTypedOperator, lookupKeyword, lookupTypedKeyword, lookupDefKindEntry, fireModuleFinalizeHandlers, fireHandlers } from '../elaborator/registry'
 import { resolveIntrinsicWasmInstr, resolveIntrinsicAbstractOp } from '../intrinsics'
 import type { FunctionSig } from '../types/typechecker'
+import { CAP_ROOT_TYPE } from '../types/typechecker'
+
+/** ADR 0027 — the root capability token the entry shim passes to `main(World)`.
+ *  The first WASI non-stdio fd (preopens start here): a `Clock` witness, or the
+ *  preopened dir-fd for `Fs`.  The host (wasmtime preopens) is the real grant. */
+const CAP_ROOT_TOKEN = 3
 import type { ModuleRegistry } from '../modules/registry'
 import type { SemanticModel } from '../ast/semanticModel'
 import type {
@@ -454,6 +460,24 @@ export function lowerProgram(
         if (!node || node.type === 'Definition') continue
         const stmt = lowerAsStmt(node, startCtx)
         if (stmt) startStmts.push(stmt)
+    }
+    // ADR 0027 — capability rooting.  When the program defines `@fn main` whose
+    // first parameter is the root capability `World`, the entry shim itself
+    // calls `main(<root>)` with an inline root token (no user-nameable mint —
+    // that would be ambient authority).  The token is the first WASI non-stdio
+    // fd (3); for a `Clock` cap it's an ignored witness, for `Fs` (later) it is
+    // the preopened dir-fd.  The real grant is host-side (wasmtime preopens).
+    for (const el of program.elements as any[]) {
+        const def = unwrap(el)
+        if (def?.type !== 'Definition' || def.keyword !== '@fn' || def.name?.name !== 'main') continue
+        const firstParam = (def.params ?? []).find((p: any) => !p.isLiteral)
+        if (firstParam?.typeAnnotation?.typename !== CAP_ROOT_TYPE) continue
+        startStmts.push({
+            kind: 'ExprStmt',
+            expr: { kind: 'Call', wasmType: 'i32', callee: watId('main'), callKind: 'user',
+                    args: [{ kind: 'Const', wasmType: 'i32', value: CAP_ROOT_TOKEN }] },
+        })
+        break
     }
     // WASIX runners (wasmer run) invoke the function exported as `_start`.
     // We always synthesise $__start so the module-init wrapper exists; on the
