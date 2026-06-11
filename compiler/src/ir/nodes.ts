@@ -109,6 +109,10 @@ export interface IRBlock {
     wasmType: WasmType
     stmts: IRStmt[]
     trailing?: IRExpr
+    /** F1 — the block yields a host handle (externref).  `wasmType` carries
+     *  the i32 placeholder, so this flag drives the `(result externref)` block
+     *  type at emit (the abbreviated `0x6F` valtype block type). */
+    externResult?: boolean
 }
 
 /**
@@ -121,6 +125,9 @@ export interface IRIf {
     cond: IRExpr
     then: IRExpr
     else_?: IRExpr
+    /** F1 — both branches yield a host handle (externref); drives the
+     *  `(if (result externref) …)` block type at emit. */
+    externResult?: boolean
 }
 
 /**
@@ -304,6 +311,15 @@ export interface IRRefCast {
     value: IRExpr           // the anyref to narrow
 }
 
+/** `ref.null extern` — a null abstract-extern reference.  Used as the
+ *  default value for a host-handle (externref) struct field that a given
+ *  variant of a native host-handle-carrying sum doesn't populate (the F1
+ *  flat-union layout). */
+export interface IRRefNullExtern {
+    kind: 'RefNullExtern'
+    wasmType: WasmValType    // 'i32' placeholder on the IR stack model; emits externref
+}
+
 /** A linear-memory array literal `$[a, b, …]`.  Lowers to
  *  `alloc_array(count, elemBytes)` into the implicit `$addr` local, then a
  *  store per element at `4 + i*elemBytes`, evaluating to the base pointer.
@@ -336,6 +352,8 @@ export type IRExpr =
     | IRArrayNew | IRArrayNewDefault | IRArrayGet | IRArraySet | IRArrayLen | IRArrayCopy
     // C2 (ADR 0019 §2.2) — GC reference conversions (closure ⇄ externref).
     | IRExternConvertAny | IRAnyConvertExtern | IRRefCast
+    // F1 — null host handle (externref) for an unused flat-union sum slot.
+    | IRRefNullExtern
     // Linear-memory array literal `$[…]`.
     | IRArrayLiteral
 
@@ -500,6 +518,7 @@ export type WasmGcStorageType =
     | { kind: 'val';    type: WasmValType }       // i32 | i64 | f32
     | { kind: 'packed'; type: 'i8' | 'i16' }      // struct/array only
     | { kind: 'ref';    typeIdx: number; nullable: boolean }  // (ref $T) / (ref null $T)
+    | { kind: 'externref'; nullable: boolean }    // abstract extern heaptype — host handle (JSValue/JSString) field
 
 /** A struct or array field declaration: storage type + mutability bit. */
 export interface WasmGcField {

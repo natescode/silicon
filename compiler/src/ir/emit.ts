@@ -227,6 +227,8 @@ export function emitExpr(e: IRExpr): string {
             return `(any.convert_extern ${emitExpr(e.value)})`
         case 'RefCast':
             return `(ref.cast (ref ${e.nullable ? 'null ' : ''}${e.typeName}) ${emitExpr(e.value)})`
+        case 'RefNullExtern':
+            return `(ref.null extern)`
         case 'ArrayLiteral':
             return emitArrayLiteral(e)
     }
@@ -321,6 +323,8 @@ function isVoidIR(e: IRExpr): boolean {
         case 'ArrayLiteral':
         // C2 GC reference conversions always produce a value (never void).
         case 'ExternConvertAny': case 'AnyConvertExtern': case 'RefCast':
+        // F1 — ref.null extern always produces a value.
+        case 'RefNullExtern':
             return (e as any).wasmType === 'void'
     }
 }

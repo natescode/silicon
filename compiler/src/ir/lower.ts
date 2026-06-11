@@ -28,6 +28,10 @@ import type {
     IRBlock, IRIf, IRLoop, IRBreak, IRContinue, IRNop, IRUnreachable, IRExprStmt,
 } from './nodes'
 import { WasmGcTypeRegistry } from './nodes'
+import {
+    type SpecializedSum, needsHandleSpecialization, mangleSumName,
+    buildSpecializedSum, emitSpecializedConstructors,
+} from './sumMono'
 import { type CompilerAPI, type LowerFns, createCompilerAPI } from '../compiler-api'
 
 /** Built-in modules whose WASM import-module string differs from the Silicon
@@ -123,6 +127,11 @@ interface LowerCtx {
      *  generics monomorphization stratum) look up @fn[T] template defs by
      *  name regardless of declaration order. */
     program?: Program
+    /** F1 — specialized native host-handle-carrying sum instantiations,
+     *  keyed by mangled name (`Result$JSValue_String`).  Populated under
+     *  `--target=wasm-gc`; consulted by constructor-call routing, @match
+     *  lowering, and ref-slot typing. */
+    sumSpecs?: Map<string, import('./sumMono').SpecializedSum>
     /** Phase 9d-7: registry of WasmGC struct/array type declarations
      *  populated as the program is lowered.  Drained into
      *  `IRModule.wasmGcTypes` at the end of `lowerProgram`.  Only
@@ -304,6 +313,7 @@ export function lowerProgram(
         usesCharCodeArray: { v: false },
         wasmGcTypes: new WasmGcTypeRegistry(),
         program,
+        sumSpecs: new Map(),
     }
     // Pass the live ctx (not a snapshot) so $compiler is current when
     // recursively invoked methods (api.lowerExpr → lowerBinaryOp → on::lower
@@ -372,6 +382,18 @@ export function lowerProgram(
         else if (result.kind === 'Global') globals.push(result)
         else if (result.kind === 'Import') imports.push(result)
         else if (result.kind === 'Export') irExports.push(result)
+    }
+
+    // F1 — collect + specialize host-handle-carrying sum instantiations
+    // (`Result[JSValue, String]`) before any body lowering, so constructor-call
+    // routing and @match resolve to the specialized GC struct.  Native ref
+    // fields exist only under wasm-gc; on a linear-mem target a host handle
+    // can't live in a sum payload (externref is not addressable) → fail fast
+    // instead of emitting invalid wasm (the `js::pin` interim is the workaround).
+    if (target === 'wasm-gc') {
+        collectAndSpecializeHandleSums(program, ctx, append)
+    } else {
+        assertNoHandleSumsOnLinearMem(program, ctx)
     }
 
     for (const el of program.elements as any[]) {
@@ -525,6 +547,91 @@ export function lowerProgram(
             ? ctx.wasmGcTypes.snapshot()
             : undefined,
     }
+}
+
+/**
+ * F1 — find every host-handle-carrying sum instantiation reachable in the
+ * typed program, register its specialized flat-union GC struct, and emit its
+ * specialized constructors.  wasm-gc only.
+ *
+ * Instantiations are discovered from two sources that together cover all real
+ * uses: the function signatures (param/result types) and every `inferredType`
+ * the typechecker stamped (constructor-call results, `@match` discriminants,
+ * annotated locals).  The base `@type` def supplies the variant/field layout.
+ */
+function collectAndSpecializeHandleSums(
+    program: Program,
+    ctx: LowerCtx,
+    append: (r: any) => void,
+): void {
+    // Base parametric @type defs, by name (`Result` → its AST).
+    const baseDefs = new Map<string, any>()
+    for (const el of (program.elements ?? []) as any[]) {
+        const def = unwrap(el)
+        if (def?.type === 'Definition' && def.keyword === '@type' &&
+            (def.generics?.params?.length ?? 0) > 0 && def.name?.name) {
+            baseDefs.set(def.name.name, def)
+        }
+    }
+    if (baseDefs.size === 0) return
+
+    const seen = ctx.sumSpecs!
+    const consider = (t: SiliconType | undefined): void => {
+        if (!needsHandleSpecialization(t)) return
+        const sum = t as Extract<SiliconType, { kind: 'Sum' }>
+        const mangled = mangleSumName(sum.name, sum.typeArgs!)
+        if (seen.has(mangled)) return
+        const def = baseDefs.get(sum.name)
+        if (!def) return   // not a user parametric sum we can specialize
+        const spec = buildSpecializedSum(sum.name, sum.typeArgs!, def, ctx.wasmGcTypes)
+        seen.set(mangled, spec)
+        for (const fn of emitSpecializedConstructors(spec)) append(fn)
+    }
+
+    // 1. Function signatures (params + results).
+    for (const sig of ctx.functions.values()) {
+        sig.params.forEach(consider)
+        consider(sig.result)
+    }
+    // 2. Every stamped inferredType in the typed AST.
+    const walk = (n: any): void => {
+        if (!n || typeof n !== 'object') return
+        if (Array.isArray(n)) { for (const x of n) walk(x); return }
+        if (n.inferredType) consider(n.inferredType as SiliconType)
+        for (const k of Object.keys(n)) {
+            if (k === 'inferredType') continue
+            walk(n[k])
+        }
+    }
+    walk(program.elements)
+}
+
+/** F1 — on a non-wasm-gc target, a host handle (JSValue/JSString) cannot be a
+ *  sum payload: externref isn't addressable in linear memory.  Detect any such
+ *  instantiation and fail with a clear, actionable error (rather than emitting
+ *  invalid wasm) — directing to `js::pin` / `--target=wasm-gc`. */
+function assertNoHandleSumsOnLinearMem(program: Program, ctx: LowerCtx): void {
+    const reportFor = (t: SiliconType | undefined): void => {
+        if (!needsHandleSpecialization(t)) return
+        const sum = t as Extract<SiliconType, { kind: 'Sum' }>
+        throw new IRLowerError(
+            `a host handle (JSValue/JSString) can't be a payload of '${sum.name}' on a ` +
+            `linear-memory target — externref isn't addressable in linear memory. ` +
+            `Compile with --target=wasm-gc to carry it natively, or thread it through a ` +
+            `Result[Int, …] via js::pin (an Int handle id).`,
+        )
+    }
+    for (const sig of ctx.functions.values()) {
+        sig.params.forEach(reportFor)
+        reportFor(sig.result)
+    }
+    const walk = (n: any): void => {
+        if (!n || typeof n !== 'object') return
+        if (Array.isArray(n)) { for (const x of n) walk(x); return }
+        if (n.inferredType) reportFor(n.inferredType as SiliconType)
+        for (const k of Object.keys(n)) { if (k !== 'inferredType') walk(n[k]) }
+    }
+    walk(program.elements)
 }
 
 /** Phase 9d-7 fix-4: when target === 'wasm-gc', walk every IRFunction
@@ -782,6 +889,12 @@ function siliconTypeToRefIdx(
     wasmGcTypes: WasmGcTypeRegistry,
 ): number | undefined {
     if (t.kind === 'Sum') {
+        // F1 — a host-handle instantiation (`Result[JSValue, String]`) resolves
+        // to its specialized flat-union struct, not the all-i32 base `$Result`.
+        if (needsHandleSpecialization(t)) {
+            const mangled = wasmGcTypes.lookupByName('$' + mangleSumName(t.name, (t as any).typeArgs))
+            if (mangled !== undefined) return mangled
+        }
         return wasmGcTypes.lookupByName(`$${t.name}`)
     }
     if (t.kind === 'Vec') {
@@ -1502,6 +1615,23 @@ function lowerFunctionCall(n: any, ctx: LowerCtx): IRExpr {
     const sepIdx = name.indexOf('::')
     if (sepIdx !== -1) {
         return lowerModuleCall(name, sepIdx, n, ctx)
+    }
+
+    // F1 — route a variant constructor call (`Ok(h)`) whose result is a
+    // host-handle instantiation (`Result[JSValue, String]`) to its specialized
+    // constructor (`Ok$JSValue_String`), which struct.news the flat-union GC
+    // struct with the handle in a native externref field.
+    if (ctx.sumSpecs && ctx.sumSpecs.size > 0) {
+        const ctorInfer = inferredTypeOf(n, ctx)
+        if (needsHandleSpecialization(ctorInfer)) {
+            const sum = ctorInfer as Extract<SiliconType, { kind: 'Sum' }>
+            const spec = ctx.sumSpecs.get(mangleSumName(sum.name, sum.typeArgs!))
+            const variant = spec?.variants.find(v => v.name === name)
+            if (variant) {
+                const cargs = (n.args || []).map((a: any) => lowerExpr(a, ctx))
+                return { kind: 'Call', wasmType: 'i32', callee: variant.ctorName, callKind: 'user', args: cargs }
+            }
+        }
     }
 
     // User-defined function call.

@@ -76,6 +76,12 @@ function encodeStorageType(buf: WasmBuffer, st: WasmGcStorageType): void {
         buf.u8(st.type === 'i8' ? PACKED_I8 : PACKED_I16)
         return
     }
+    if (st.kind === 'externref') {
+        // Abstract extern heaptype field — a host handle (JSValue/JSString)
+        // stored natively in a GC struct (the F1 host-handle-carrying sum).
+        encodeExternRef(buf, st.nullable)
+        return
+    }
     // ref kind: emit form byte then SLEB-i33 typeidx.
     buf.u8(st.nullable ? REF_NULLABLE : REF_NON_NULL)
     buf.i32(st.typeIdx)
@@ -305,7 +311,11 @@ function emitExpr(e: IRExpr, buf: WasmBuffer, ctx: EmitCtx, isUser: boolean,
         case 'If': {
             emitExpr(e.cond, buf, ctx, isUser, localIdxOf)
             buf.u8(0x04)
-            buf.u8(e.wasmType === 'void' ? BLOCKTYPE_VOID : VALTYPE[e.wasmType as WasmValType])
+            // F1 — an externref-yielding `@if`/match arm uses the abbreviated
+            // `externref` (0x6F) value block type; otherwise the valtype byte
+            // for the result, or the void block type.
+            if ((e as any).externResult) buf.u8(HEAPTYPE_EXTERN)
+            else buf.u8(e.wasmType === 'void' ? BLOCKTYPE_VOID : VALTYPE[e.wasmType as WasmValType])
             ctx.depthStack.push(2)
             emitExprAsBody(e.then, buf, ctx, isUser, localIdxOf, e.then.kind === 'Block' && (e.then as any).wasmType === 'void')
             if (e.else_) {
@@ -438,6 +448,11 @@ function emitExpr(e: IRExpr, buf: WasmBuffer, ctx: EmitCtx, isUser: boolean,
             emitExpr(e.value, buf, ctx, isUser, localIdxOf)
             buf.u8(0xFB); buf.u8(e.nullable ? 0x17 : 0x16)
             buf.i32(ctx.gcTypeIdxBase + e.typeIdx)
+            return
+        }
+        case 'RefNullExtern': {
+            // ref.null extern — 0xD0 then the `extern` heaptype byte (0x6F).
+            buf.u8(0xD0); buf.u8(HEAPTYPE_EXTERN)
             return
         }
     }

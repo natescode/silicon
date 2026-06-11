@@ -1203,6 +1203,26 @@ function checkAssignment(a: any, ctx: Ctx): SiliconType {
     return valueT
 }
 
+/** Re-apply a reconciling substitution to every `inferredType` stamp (and the
+ *  `typeMap` backing store) within an AST subtree.  Used after a definition's
+ *  declared type pins variables its body left open, so a node stamped with a
+ *  schematic `?T` reflects the resolved concrete type.  Identity on already-
+ *  concrete stamps, so it cannot change a well-resolved program's types. */
+function zonkStampedTypes(node: any, subst: Subst, ctx: Ctx): void {
+    if (!node || typeof node !== 'object') return
+    if (Array.isArray(node)) { for (const x of node) zonkStampedTypes(x, subst, ctx); return }
+    const stamped = (node as any).inferredType as SiliconType | undefined
+    if (stamped && stamped.kind !== 'Unknown') {
+        const resolved = applySubst(stamped, subst)
+        ;(node as any).inferredType = resolved
+        ctx.typeMap.set(node, resolved)
+    }
+    for (const k of Object.keys(node)) {
+        if (k === 'inferredType' || k === 'sourceLocation' || k === 'relSpan') continue
+        zonkStampedTypes((node as any)[k], subst, ctx)
+    }
+}
+
 function checkDefinition(d: any, ctx: Ctx): SiliconType {
     const keyword: string = d.keyword ?? ''
 
@@ -1291,7 +1311,14 @@ function checkDefinition(d: any, ctx: Ctx): SiliconType {
     const finalType = annotated ?? bodyType
     if (annotated && d.binding && bodyType.kind !== 'Unknown') {
         try {
-            unify(annotated, bodyType)
+            const reconciled = unify(annotated, bodyType)
+            // Zonk: the annotation pins type variables the body left open (a
+            // no-arg `None()` stamps `Option[?T]`; `-> Option[JSValue]` resolves
+            // `?T = JSValue` HERE).  Re-apply the reconciling subst to every
+            // stamped type in the body so downstream consumers (codegen's F1
+            // host-handle-sum specialization; SemanticModel queries) see the
+            // resolved instantiation, not the schematic variable.
+            zonkStampedTypes(d.binding, reconciled, ctx)
         } catch (e) {
             if (e instanceof UnifyError) {
                 ctx.errors.push(annotationMismatch(d.name.name, annotated, bodyType, d.sourceLocation))

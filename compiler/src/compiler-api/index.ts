@@ -23,6 +23,13 @@ import { normalizeMatchArgs } from '../ast/matchArms'
 import { resolveIntrinsicWasmInstr } from '../intrinsics'
 import { wasmTypeOf } from '../types/types'
 import type { SiliconType } from '../types/types'
+import { type SpecializedSum, needsHandleSpecialization, mangleSumName, isExternrefType } from '../ir/sumMono'
+
+/** A control-flow result that is a host handle (externref) needs the
+ *  `(result externref)` block type rather than the i32 placeholder. */
+function needsExternBlock(t: SiliconType | undefined): boolean {
+    return isExternrefType(t)
+}
 import type { Diagnostic } from '../errors/diagnostic'
 import { spanFromLocation } from '../errors/diagnostic'
 
@@ -1023,6 +1030,14 @@ export function createCompilerAPI(ctx: CtxShape, fns: LowerFns): CompilerAPI {
             const wt: WasmType = (inferredType && inferredType.kind !== 'Unknown')
                 ? (wasmTypeOf(inferredType) as WasmType)
                 : 'i32'
+            // F1 — when the match yields a host handle (externref), its `if`
+            // chain needs the `(result externref)` block type, not i32.
+            const yieldsExtern = needsExternBlock(inferredType)
+            const mkIf = (cond: IRExpr, then_: IRExpr, else_: IRExpr): IRExpr => {
+                const node = ir.makeIf(cond, then_, else_, wt) as any
+                if (yieldsExtern) node.externResult = true
+                return node
+            }
 
             // For VariantDecl patterns we need the discriminant's sum type
             // to map variant name → tag and to construct field-load offsets.
@@ -1064,7 +1079,16 @@ export function createCompilerAPI(ctx: CtxShape, fns: LowerFns): CompilerAPI {
                     // Same observable semantics; different bytecode shape.
                     const tag = variantTag(variant.name)
                     const isWasmGc = ctx.target === 'wasm-gc'
-                    const sumWatName = `$${discType.name}`
+                    // F1 — a host-handle instantiation (`Result[JSValue, String]`)
+                    // matches against its specialized flat-union struct, where the
+                    // handle field is a native externref.  `spec` (when present)
+                    // overrides the struct name, type index, and per-field slot
+                    // indices + read types.
+                    const spec = (isWasmGc && (ctx as any).sumSpecs && needsHandleSpecialization(discType))
+                        ? (ctx as any).sumSpecs.get(mangleSumName(discType.name, discType.typeArgs)) as SpecializedSum | undefined
+                        : undefined
+                    const specVariant = spec?.variants.find((v: any) => v.name === variant.name)
+                    const sumWatName = spec ? spec.mangledName : `$${discType.name}`
                     // typeIdx must match the entry the @type expander registered
                     // (defExpanders.ts:typeRecordExpander).  Order is guaranteed:
                     // @type declarations are processed before any function bodies
@@ -1073,9 +1097,11 @@ export function createCompilerAPI(ctx: CtxShape, fns: LowerFns): CompilerAPI {
                     // will still produce valid WAT (typeName drives the text form),
                     // and any program reaching this fallback already failed at
                     // typecheck for using an unregistered sum.
-                    const sumTypeIdx = isWasmGc
-                        ? (ctx.wasmGcTypes?.lookupByName(sumWatName) ?? 0)
-                        : 0
+                    const sumTypeIdx = spec
+                        ? spec.structTypeIdx
+                        : isWasmGc
+                            ? (ctx.wasmGcTypes?.lookupByName(sumWatName) ?? 0)
+                            : 0
 
                     const loadTag: IRExpr = isWasmGc
                         ? {
@@ -1101,13 +1127,19 @@ export function createCompilerAPI(ctx: CtxShape, fns: LowerFns): CompilerAPI {
                     const stmts: IRStmt[] = []
                     for (let fi = 0; fi < fields.length; fi++) {
                         const fname: string = fields[fi].name
+                        // F1 flat-union: a specialized variant's field lives at its
+                        // own struct slot (not fi+1 overlapped), and a host-handle
+                        // field reads as a native externref local.
+                        const specField = specVariant?.fields[fi]
+                        const fieldIdx = specField ? specField.structFieldIdx : fi + 1
+                        const isExternField = !!specField?.extern
                         const loadField: IRExpr = isWasmGc
                             ? {
                                 kind: 'StructGet',
                                 wasmType: 'i32',
                                 typeIdx: sumTypeIdx,
                                 typeName: sumWatName,
-                                fieldIdx: fi + 1,   // tag occupies index 0
+                                fieldIdx,
                                 target: discExpr,
                             }
                             : {
@@ -1119,8 +1151,11 @@ export function createCompilerAPI(ctx: CtxShape, fns: LowerFns): CompilerAPI {
                                     ir.makeBinOp('i32_add', discExpr, ir.makeConst((fi + 1) * 4, 'i32'), 'i32'),
                                 ],
                             } as any
-                        // Register field as a function-scoped local (hoisted).
-                        ctx.pendingLocals.push({ name: fname, wasmType: 'i32' })
+                        // Register field as a function-scoped local (hoisted).  A
+                        // host-handle field binds an externref local (refType.extern).
+                        const localEntry: any = { name: fname, wasmType: 'i32' }
+                        if (isExternField) localEntry.refType = { localTypeIdx: 0, nullable: true, extern: true }
+                        ctx.pendingLocals.push(localEntry)
                         ctx.locals.set(fname, 'i32')
                         stmts.push(ir.makeLocalSet(fname, loadField))
                     }
@@ -1129,7 +1164,7 @@ export function createCompilerAPI(ctx: CtxShape, fns: LowerFns): CompilerAPI {
                         ? ir.makeBlock(stmts, armBody, wt)
                         : armBody
 
-                    return ir.makeIf(cond, armBlock, buildNested(i + 2), wt)
+                    return mkIf(cond, armBlock, buildNested(i + 2))
                 }
 
                 // Non-variant pattern: original equality-arm logic.
@@ -1137,7 +1172,7 @@ export function createCompilerAPI(ctx: CtxShape, fns: LowerFns): CompilerAPI {
                 const res = fns.lowerExpr(rawArgs[i + 1], ctx)
                 const eqOp: AbstractOp = fns.exprWasmType(discExpr) === 'f32' ? 'f32_eq' : 'i32_eq'
                 const cond = ir.makeBinOp(eqOp, discExpr, pat, 'i32')
-                return ir.makeIf(cond, res, buildNested(i + 2), wt)
+                return mkIf(cond, res, buildNested(i + 2))
             }
             return buildNested(1)
         },

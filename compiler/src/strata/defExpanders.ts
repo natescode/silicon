@@ -75,14 +75,14 @@ const sumTypeExpander: IRDefExpander = {
 // stores tag + supplied fields, and zero-fills unused trailing slots.
 // ---------------------------------------------------------------------------
 
-interface VariantDeclSummary {
+export interface VariantDeclSummary {
     name: string
     fields: { name: string; typeName: string }[]
     tag: number
 }
 
 /** Walk a `|`-chain binding and collect every $VariantDecl found. */
-function extractVariants(def: any): VariantDeclSummary[] {
+export function extractVariants(def: any): VariantDeclSummary[] {
     const binding = Array.isArray(def.binding) ? def.binding[0] : def.binding
     const expr = binding?.expression ?? binding
     const variants: VariantDeclSummary[] = []

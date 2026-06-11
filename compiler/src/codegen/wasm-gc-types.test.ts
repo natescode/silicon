@@ -332,6 +332,30 @@ describe('WasmGC type-section binary encoding', () => {
         expect(section[refFormPos + 2]).toBe(0x00)
     })
 
+    test('struct with an externref field encodes the abstract extern heaptype (0x6F)', () => {
+        // F1 — a host-handle-carrying sum struct: { tag:i32, value:externref }.
+        // The externref field is the abbreviated `externref` valtype byte 0x6F,
+        // emitted directly (no ref-form prefix), then the mutability bit.
+        const mod: IRModule = {
+            ...emptyUserModule(),
+            wasmGcTypes: [
+                {
+                    name: '$Option$JSValue',
+                    spec: { kind: 'struct', fields: [
+                        { storage: { kind: 'val', type: 'i32' }, mutable: true },
+                        { storage: { kind: 'externref', nullable: true }, mutable: true },
+                    ]},
+                },
+            ],
+        }
+        const bin = emitWasmBinary(buildPrelude(1024, false), mod)
+        const section = extractTypeSection(bin)
+        // 0x6F (externref) immediately followed by 0x01 (mutable) — the field decl.
+        const externPos = section.indexOf(0x6F)
+        expect(externPos).toBeGreaterThan(0)
+        expect(section[externPos + 1]).toBe(0x01)
+    })
+
     test('empty wasmGcTypes preserves byte-equal codegen (wasm-mvp regression)', () => {
         // The mvp path must not emit any GC opcodes — every existing
         // determinism test depends on this.
