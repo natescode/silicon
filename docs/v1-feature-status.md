@@ -1,8 +1,10 @@
 # Silicon v1 — feature status
 
-> **As of:** branch `v1-roadmap` (`89d8259` — M0 full monomorphization + F1 native
-> host-handle sums landed). Verified against the roadmap, all 26 ADRs, the CHANGELOG,
-> and the actual code/tests on this branch (code beats memory where they disagree).
+> **As of:** branch `v1-roadmap` (`eb0f995` — M0 full monomorphization, F1 native
+> host-handle sums, and the v0 capability model landed). Statuses **re-verified
+> against the actual code + tests** this revision (a 6-cluster sweep; code beats the
+> doc where they disagreed — `@global`/`@local`/`@struct` retired, code-action API +
+> playground + the incremental front-end found already shipped).
 > **Companion:** [`v1.0-implementation-roadmap.html`](v1.0-implementation-roadmap.html)
 > (critical-path detail), [`ffi-coverage-gaps.md`](ffi-coverage-gaps.md) (FFI),
 > the per-feature ADRs under [`adr/`](adr/).
@@ -15,9 +17,11 @@
 poll-reactor), and full monomorphization (M0 — per-call-site memoization + the
 production `@generic`/`@fn[T]` stratum) are shipped. Native host-handle-carrying
 sums (`Result[JSValue, String]` under `--target=wasm-gc`) ride that
-monomorphization substrate, retiring the `js::pin` interim. The
-capability/borrow-checker model and container monomorphization (M1) are the
-*deliberately* deferred post-gate work.
+monomorphization substrate, retiring the `js::pin` interim. A **minimal
+WASI-aligned object-capability model (K0, ADR 0027)** shipped on top — caps are
+unforgeable values rooted at `@fn main (World)`. The *full* capability/borrow
+track (K1–K8) and container monomorphization (M1) are the *deliberately* deferred
+post-gate work.
 
 ## The planned critical path (FFI gate · async/closures · mono · capability)
 
@@ -41,13 +45,14 @@ capability/borrow-checker model and container monomorphization (M1) are the
 
 | Area | Shipped |
 |---|---|
-| **Language / grammar** | Strata 2.0 (features-as-Silicon-source), Odin grammar (ADR-0020: bare defs, always-parens calls, dropped `&` sigil), conservative ASI, `@global`/`@local` bindings, `@struct`, `@enum`, flat `@match`, `@defer`, `@try`, first-class fn refs + `call_indirect`, `@loop` over iterables (range + indexed-`Vec`, syntactic dispatch) |
+| **Language / grammar** | Strata 2.0 (features-as-Silicon-source), Odin grammar (ADR-0020: bare defs, always-parens calls, dropped `&` sigil), conservative ASI (ADR-0026), bare `name := v` (immutable) / `@mut name := v` (mutable) bindings, `@type P := { x Int, y Int }` records (`@struct`/`@global`/`@local` **retired** by ADR-0020), `@enum`, flat `@match`, `@defer`, `@try`, first-class fn refs + `call_indirect`, `@loop` over iterables (range + indexed-`Vec`, syntactic dispatch) |
 | **Type system** | HM-lite inference, `@fn[T]`/`@type[T]` generics, sum types + parametric `Option[T]`/`Result[T,E]`, `Int`/`Int32`/`Int64` hierarchy, unsigned `u8`–`u64`, `Slice[T]`, `@type_alias`/`@type_distinct` |
 | **Stdlib** | `Option`/`Result`, `Vec[T]` (i32), `HashMap[i32,i32]`, `Rc<T>`, `io`, `future`/`future_async`, `ffi` (host-error→`Result`), string byte-views + `StrBuilder` (ADR-0022). `Result[JSValue,E]`/`Option[JSValue]` carry a host handle **natively** under `--target=wasm-gc` (no `js::pin`) |
 | **FFI / host** | bindgen (3 tiers), `js` module (object/array/handle substrate), `stream` module, generated modules (`path`/`os`/`json`/`bun`/`url`/fetch ecosystem/`event_target`/`crypto`/`fs`/`global`), `promise` concurrency, no fundamental classifier gaps |
 | **Backends** | WAT/WASM (binaryen+wabt), QBE → native (Tier-1: linux/macos x86_64+arm64), `--target=wasm-gc` (engine-GC structs/sums) |
 | **Memory** | arena `with_arena`/parent-escape, clean heap-exhaustion trap + `--max-heap=N`, `heap_used`/`arena_used`, published `allocator.wit` |
-| **Tooling / CaaS** | red-green syntax tree, `SemanticModel`, `Workspace`, symbol API, diagnostics-as-data, `sgl init/build/run/check/fmt` + `--release`, distribution (Releases/Homebrew/apt/winget/installer), docs set + 26 ADRs |
+| **Tooling / CaaS** | red-green syntax tree, `SemanticModel`, `Workspace`, symbol API, **code-action API** (CaaS-11, 1.0-stable), **incremental reparse/elaborate/typecheck** (wired into `Workspace`/LSP), diagnostics-as-data, `sgl init/build/run/check/fmt` + `--release`, a **runnable LSP server** (12 handlers incl. cross-file goto + completion), a **deployable client-side playground** (`playground/dist`), distribution (Releases/Homebrew/apt/winget/installer), docs set + 27 ADRs |
+| **Capabilities** | object-capability model **v0** (ADR 0027): unforgeable `@type_distinct` caps (`World`/`Clock`), rooted at `@fn main (World)` via the entry shim, attenuated by `@cap_derive` (E0017); `cap.si` stdlib + `sgl.toml [build] cap-repr` |
 
 ## Deferred — v1.1 / post-v1.0
 
@@ -56,8 +61,9 @@ capability/borrow-checker model and container monomorphization (M1) are the
 | Container mono (`Vec[Float]`/`Vec[Int64]`, HashMap iteration) — M1 | ⏳ v1.1 | i32-only today |
 | Heterogeneous host-handle sums on **linear-mem** target | 🔜 | native on `--target=wasm-gc` (✅); on a linear-mem target externref isn't addressable → `E` fail-fast directing to `js::pin`/wasm-gc |
 | `IterStep[T,R]` user iteration protocol (ADR-0016) | ⏳ v1.1 | range/`Vec` dispatch ships; structural dispatch waits on reflection + combinators |
-| LSP server | ⏳ v1.1 | CaaS foundation shipped; cross-file goto + completion **already landed on this branch**; full server is v1.1 |
-| Package registry, incremental compilation, code-action API, playground | ⏳ v1.1 | CaaS-7/8/11 stories |
+| LSP server — hardening | 🟡 | a runnable stdio server with 12 handlers (cross-file goto + completion landed) ships; the v1.1 remainder is hardening (one stale mid-typing test) + polish |
+| Incremental compilation — codegen + hardening | 🟡 | incremental reparse + elaborate + typecheck shipped & wired into `Workspace`/LSP (43 tests); incremental **codegen** is the v1.1 remainder |
+| Package registry (registry-backed `sgl add`) | ⏳ v1.1 | `--path` local deps work today; the registry server is pending (story 6b-12) |
 | Silicon-native comptime interpreter | 🔜 | comptime runs on the host today (ADR-0003 pivot) |
 | Full capability/borrow track — fixpoint checker, borrow checker, effect-class optimization (K1–K8) | 🔜 post-v1 | ADR 0011/0012/0013/0015; the minimal ocap **v0** seed shipped (ADR 0027 — see K0) |
 | `Bun.$` tagged-template binding | 🔜 | the one FFI skip; security-driven plan ([`bun-shell-ffi-plan.md`](bun-shell-ffi-plan.md)) |
