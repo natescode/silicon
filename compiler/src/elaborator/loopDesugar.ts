@@ -23,8 +23,18 @@
  *
  * The subject (args[N−2]) selects the desugar by syntactic shape:
  *   - a `a..b` range BinaryOp  → a half-open counter loop (no IterStep built);
- *   - anything else            → i32-element indexed iteration over the
- *                                allow-listed `vec_len` / `vec_get_i32` surface.
+ *   - anything else            → indexed iteration over the allow-listed
+ *                                `vec_len` / `vec_get_i32` surface.
+ *
+ * M1 typed-Vec dispatch: the generated `vec_len` / `vec_get_i32` calls are
+ * tagged `vecIterDispatch: true` and the snapshotted subject local is tagged
+ * `vecIterSubject: true`.  The names are the i32 DEFAULT — when the subject's
+ * inferred type is `Vec[Float]` / `Vec[Int64]`, the typechecker rewrites the
+ * tagged calls to the matching monomorph family (`vec_len_f32`/`vec_get_f32`,
+ * `vec_len_i64`/`vec_get_i64`), so the binder is typed by the element type.
+ * (The desugar itself runs pre-typecheck and cannot see the element type.)
+ * Under `--target=wasm-gc` the subject tag also lets the lowerer ref-type the
+ * synthetic local from its INFERRED type (it has no annotation to read).
  *
  * Synthetic temporaries are gensym'd from a per-program counter (`__loopN_*`)
  * so they cannot collide with user names or across nested loops; the subject /
@@ -150,11 +160,15 @@ function transformLoop(call: any, ctx: Ctx): any {
         )
     }
 
-    // Indexed container form — i32-element Vec surface (vec_len / vec_get_i32).
+    // Indexed container form — Vec surface (vec_len / vec_get_i32 defaults;
+    // the typechecker retargets the tagged calls for Vec[Float]/Vec[Int64]).
     const xsN = `__loop${id}_xs`
     const iN = `__loop${id}_i`
     const nN = `__loop${id}_n`
-    const get = (): any => userCall('vec_get_i32', [ns(xsN), ns(iN)])
+    const tag = (node: any): any => { node.vecIterDispatch = true; return node }
+    const get = (): any => tag(userCall('vec_get_i32', [ns(xsN), ns(iN)]))
+    const len = (): any => tag(userCall('vec_len', [ns(xsN)]))
+    const subjDef = (): any => { const d = localDef(xsN, subject); d.vecIterSubject = true; return d }
 
     if (N === 3) {
         // @loop item, xs, {body}
@@ -164,7 +178,7 @@ function transformLoop(call: any, ctx: Ctx): any {
         if (itemName !== '_') inner.push(localDef(itemName, get()))
         inner.push(...flattenBody(body), incr(iN))
         return block(
-            [localDef(xsN, subject), localDef(iN, intLit(0)), localDef(nN, userCall('vec_len', [ns(xsN)]))],
+            [subjDef(), localDef(iN, intLit(0)), localDef(nN, len())],
             loopCall(binop(ns(iN), '<', ns(nN)), block(inner)),
         )
     }
@@ -177,7 +191,7 @@ function transformLoop(call: any, ctx: Ctx): any {
     if (itemName !== '_') inner.push(localDef(itemName, get()))
     inner.push(...flattenBody(body), incr(iN))
     return block(
-        [localDef(xsN, subject), localDef(iN, intLit(0)), localDef(nN, userCall('vec_len', [ns(xsN)]))],
+        [subjDef(), localDef(iN, intLit(0)), localDef(nN, len())],
         loopCall(binop(ns(iN), '<', ns(nN)), block(inner)),
     )
 }

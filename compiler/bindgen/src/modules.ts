@@ -1,0 +1,219 @@
+// SPDX-License-Identifier: MIT
+/**
+ * ADR 0017 — generated built-in modules (Node / Bun).
+ *
+ * Each entry turns a spec-driven adapter into a shipped Silicon module: a
+ * `compiler/src/strata/modules/<module>.si` file (auto-bundled, callable as
+ * `<module>::<fn>`) plus a marshalling host-shim spliced into `js-host.ts`.
+ * Unlike the Web Math/clock surface (fragments inside existing files), these are
+ * whole generated modules.
+ */
+
+import { dtsToSpecs } from './adapters/dts'
+import { webifaceToSpecs } from './adapters/webiface'
+import { buildIR, emitModuleSi, emitHostModule, type BindingIR, type StringTier } from './generate'
+import type { BindingSpec } from './spec'
+
+export interface ModuleConfig {
+    /** Import-module name → called as `<module>::<fn>`; the `.si` file is `<module>.si`. */
+    readonly module: string
+    /** Provenance string for the generated-file header. */
+    readonly provenance: string
+    /** Run the source adapter to produce the bindings. */
+    readonly specs: () => BindingSpec[]
+    /** String boundary tier (ADR 0017): 'linear' (Tier-0, every target) or
+     *  'jsstring' (Tier-1, externref, web/bun only).  Default 'linear'. */
+    readonly strings?: StringTier
+}
+
+/** The modules generated and shipped today.  Each is spec-driven (Node from
+ *  @types/node, Bun from bun-types, both via the TS compiler API). */
+export const GENERATED_MODULES: readonly ModuleConfig[] = [
+    {
+        // Node path: MIXED tier.  `strings:'linear'` keeps the scalar/string
+        // functions (basename/dirname/normalize/…) Tier-0 and portable to ANY host;
+        // `objects:'jsvalue'` additionally binds the object/variadic surface
+        // (parse → object, format → object param, join/resolve → spread) as Tier-2
+        // JSValue handles (web/bun only).  A program that touches only the string
+        // functions stays portable; one that calls `path::parse` needs a JS host.
+        module: 'path',
+        provenance: '@types/node (node:path)',
+        specs: () => dtsToSpecs({ module: 'node:path', types: ['node'], accessor: "require('node:path')", prefix: '', objects: 'jsvalue' }).specs,
+        strings: 'linear',
+    },
+    {
+        // Node os: MIXED tier (same rationale as `path`).  `strings:'linear'` keeps
+        // the scalar system info (arch/platform/hostname/freemem/…) Tier-0 portable;
+        // `objects:'jsvalue'` binds the structured readers (cpus/loadavg/userInfo/
+        // networkInterfaces → object/array handles) as Tier-2 JSValue (web/bun only).
+        module: 'os',
+        provenance: '@types/node (node:os)',
+        specs: () => dtsToSpecs({ module: 'node:os', types: ['node'], accessor: "require('node:os')", prefix: '', objects: 'jsvalue' }).specs,
+        strings: 'linear',
+    },
+    {
+        // JSON: Tier-2 — object handles.  `parse` returns a `JSValue` (an opaque
+        // externref to the parsed JS object); `stringify` takes one back.  Both
+        // cross as engine-GC'd externrefs with ZERO linear marshalling — the
+        // first shipped surface to round-trip a host object through guest code.
+        // Generated from the real lib.es5 `JSON` interface (objects: 'jsvalue').
+        module: 'json',
+        provenance: 'ECMAScript (lib.es5 JSON)',
+        specs: () => dtsToSpecs({ global: 'JSON', types: [], accessor: 'JSON', prefix: '', objects: 'jsvalue' }).specs,
+        strings: 'jsstring',
+    },
+    {
+        // Bun: Tier-1 JSString (externref) + Tier-2 JSValue handles + ADR 0018
+        // async — `Promise<T>`-returning methods become `@suspending @extern`
+        // (awaited `T`), driven by the F1b reactor.  Bun is a JS host, so strings
+        // cross as native JS strings with zero linear-memory marshalling.
+        module: 'bun',
+        provenance: 'bun-types (global Bun)',
+        specs: () => dtsToSpecs({ global: 'Bun', types: ['bun-types'], accessor: 'Bun', prefix: '', objects: 'jsvalue', async: 'suspending' }).specs,
+        strings: 'jsstring',
+    },
+
+    // ── Constructed Web interfaces (Tier-2, generated from @webref/idl) ──────────
+    // Each is `new`'d (callable as `<mod>::create(…)`) and operated on through
+    // instance methods / getters / setters whose first arg is the JSValue handle.
+    // Strings cross as JSString; object members (URL.searchParams,
+    // TextEncoder.encode → Uint8Array) cross as JSValue handles.  web/bun only.
+    {
+        module: 'url',
+        provenance: '@webref/idl (URL interface)',
+        specs: () => webifaceToSpecs('URL').specs,
+        strings: 'jsstring',
+    },
+    {
+        module: 'url_search_params',
+        provenance: '@webref/idl (URLSearchParams interface)',
+        specs: () => webifaceToSpecs('URLSearchParams').specs,
+        strings: 'jsstring',
+    },
+    {
+        module: 'headers',
+        provenance: '@webref/idl (Headers interface)',
+        specs: () => webifaceToSpecs('Headers').specs,
+        strings: 'jsstring',
+    },
+    {
+        module: 'text_encoder',
+        provenance: '@webref/idl (TextEncoder interface)',
+        specs: () => webifaceToSpecs('TextEncoder').specs,
+        strings: 'jsstring',
+    },
+    {
+        module: 'text_decoder',
+        provenance: '@webref/idl (TextDecoder interface)',
+        specs: () => webifaceToSpecs('TextDecoder').specs,
+        strings: 'jsstring',
+    },
+
+    // ── The fetch ecosystem (Tier-2, generated from @webref/idl) — next FFI #5 ──
+    // Response gains its async body readers (json/text/arrayBuffer/blob) as
+    // `@suspending` (the reactor awaits them).  Compose with js::global('fetch')
+    // + promise::all to drive a real request end-to-end.  web/bun only.
+    {
+        module: 'response',
+        provenance: '@webref/idl (Response interface)',
+        specs: () => webifaceToSpecs('Response').specs,
+        strings: 'jsstring',
+    },
+    {
+        module: 'request',
+        provenance: '@webref/idl (Request interface)',
+        specs: () => webifaceToSpecs('Request').specs,
+        strings: 'jsstring',
+    },
+    {
+        module: 'blob',
+        provenance: '@webref/idl (Blob interface)',
+        specs: () => webifaceToSpecs('Blob').specs,
+        strings: 'jsstring',
+    },
+    {
+        module: 'form_data',
+        provenance: '@webref/idl (FormData interface)',
+        specs: () => webifaceToSpecs('FormData').specs,
+        strings: 'jsstring',
+    },
+    {
+        module: 'abort_controller',
+        provenance: '@webref/idl (AbortController interface)',
+        specs: () => webifaceToSpecs('AbortController').specs,
+        strings: 'jsstring',
+    },
+    {
+        // events:'closure' binds the EventHandler attribute `onabort` as a setter
+        // taking a Callback closure handle (`signal.onabort = handler`).
+        module: 'abort_signal',
+        provenance: '@webref/idl (AbortSignal interface)',
+        specs: () => webifaceToSpecs('AbortSignal', undefined, 'closure').specs,
+        strings: 'jsstring',
+    },
+    {
+        // EventTarget (ADR 0019 C2) — the canonical event API.  events:'closure'
+        // binds add_event_listener / remove_event_listener with a Callback closure
+        // listener; dispatch_event takes an Event handle.  A guest registers a
+        // listener with `event_target::add_event_listener(target, "abort",
+        // @export_callback(@closure(...)))` — `target` is any EventTarget handle
+        // (an AbortSignal handle works too).  web/bun only.
+        //
+        // TWO LIMITATIONS (see docs/ffi-coverage-gaps.md):
+        //   1. A FIRED listener must not consume its Event arg: the closure
+        //      trampoline (`__closure_invoke_<k>`) types every callback arg as i32,
+        //      but a dispatched listener is called with an Event externref → a
+        //      boundary mismatch that traps.  Registration + no-arg/arg-ignoring
+        //      firing is safe; reading the event needs an externref-arg trampoline
+        //      (a future story).
+        //   2. `when()` (the WICG Observable proposal) is bound from observable.idl
+        //      but is unimplemented on Bun's EventTarget → traps at call time.
+        module: 'event_target',
+        provenance: '@webref/idl (EventTarget interface)',
+        specs: () => webifaceToSpecs('EventTarget', undefined, 'closure').specs,
+        strings: 'jsstring',
+    },
+
+    // ── Node crypto (Tier-2, from @types/node) — next FFI #5 ──────────────────
+    // randomUUID / randomBytes / randomInt / createHash / createSign … — useful
+    // sync primitives.  Buffer results cross as JSValue handles → web/bun only.
+    {
+        module: 'crypto',
+        provenance: '@types/node (node:crypto)',
+        specs: () => dtsToSpecs({ module: 'node:crypto', types: ['node'], accessor: "require('node:crypto')", prefix: '', objects: 'jsvalue', numberType: 'Int', events: 'closure' }).specs,
+        strings: 'jsstring',
+    },
+
+    // ── Node fs (Tier-2, from @types/node) — FFI follow-up #3 ─────────────────
+    // The sync filesystem surface — readFileSync/writeFileSync/existsSync/mkdirSync/
+    // readdirSync/statSync/… Unblocked by the dts mixed-union fix (PathOrFileDescriptor
+    // = `string | Buffer | URL | number` now binds as a String path).  String
+    // content + JSValue handles (Stats, dirent arrays) → web/bun only.
+    // `async:'suspending'` lets the one Promise-returning member (openAsBlob →
+    // Promise<Blob>) await to a JSValue handle via the F1b reactor.
+    {
+        module: 'fs',
+        provenance: '@types/node (node:fs)',
+        specs: () => dtsToSpecs({ module: 'node:fs', types: ['node'], accessor: "require('node:fs')", prefix: '', objects: 'jsvalue', numberType: 'Int', async: 'suspending', events: 'closure' }).specs,
+        strings: 'jsstring',
+    },
+
+    // ── Bare global functions (Tier-2) — FFI follow-up #4 ─────────────────────
+    // The top-level globals the namespace adapters can't reach: `fetch` (the
+    // headline — `@suspending`, Promise<Response> → JSValue), atob/btoa, and
+    // queueMicrotask (a closure callback).  Harvested by the dts bare-global mode
+    // (`globals: [...]`, accessor `globalThis`).  Makes `global::fetch(url, init)`
+    // first-class instead of js::global('fetch') + js::apply composition.
+    {
+        module: 'global',
+        provenance: 'bun-types (global functions)',
+        specs: () => dtsToSpecs({ globals: ['fetch', 'structuredClone', 'atob', 'btoa', 'queueMicrotask'], types: ['bun-types'], accessor: 'globalThis', prefix: '', objects: 'jsvalue', async: 'suspending', events: 'closure' }).specs,
+        strings: 'jsstring',
+    },
+]
+
+export function generateModule(cfg: ModuleConfig): { ir: BindingIR; si: string; hostShim: string } {
+    const ir = buildIR(cfg.module, cfg.specs())
+    const strings = cfg.strings ?? 'linear'
+    return { ir, si: emitModuleSi(ir, cfg.provenance, strings), hostShim: emitHostModule(ir, undefined, strings) }
+}

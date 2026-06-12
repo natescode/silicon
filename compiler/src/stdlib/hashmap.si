@@ -1,10 +1,14 @@
 # SPDX-License-Identifier: MIT
-# Phase 5a-6 — stdlib HashMap[i32, i32] open-addressing hash table.
+# Phase 5a-6 / M1 — stdlib HashMap open-addressing hash table,
+# monomorphic per (key, value) pair.
 #
-# Phase 5 ships HashMap specialised for i32 keys → i32 values.  Same
-# logic generalises to other 4-byte primitive pairs by swapping the
-# load/store width.  Full generic-monomorphisation across (K, V) pairs
-# lands later with strata-driven specialisation.
+# Phase 5 shipped HashMap specialised for i32 keys → i32 values (the
+# compact family below).  M1 adds the typed monomorph families — see
+# "M1 — typed (K, V) monomorph families" further down: (i32, f32) on the
+# compact slot layout, (i64, i64) on a wide 24-byte slot layout, and
+# (i32, i64) as wrappers over the wide family.  Like vec.si, dispatch is
+# by suffixed function name (`hashmap_<op>_<k>_<v>`), one family per
+# concrete pair.
 #
 # ## Layout
 #
@@ -215,3 +219,323 @@
     });
     removed
 };
+
+# ── Iteration (M1, ADR 0016 map iteration surface) ─────────────────────
+# A cursor is a slot index.  `iter_start` finds the first occupied slot;
+# `iter_next` advances past the current to the next occupied; `iter_done`
+# is true once the cursor reaches capacity (the done sentinel).  Read the
+# current entry with `iter_key` / `iter_value`.  Drive with a while-@loop:
+#
+#   i := hashmap_iter_start(h);
+#   @loop(hashmap_iter_done(h, i) == 0, {
+#       k := hashmap_iter_key(h, i);
+#       v := hashmap_iter_value(h, i);
+#       ...;
+#       i = hashmap_iter_next(h, i);
+#   });
+#
+# Order is slot order (unspecified to the caller), and is only stable
+# between mutations — insert/remove/resize may rehash and reorder.
+
+# Scan forward from slot `from` (inclusive) for the first occupied slot.
+# Returns its index, or `capacity` (the done sentinel) if none remain.
+# Reads a slot's state only while in bounds (no out-of-range probe).
+\\ hashmap_scan_occupied (Int, Int) -> Int
+@fn hashmap_scan_occupied h, from := {
+    cap := hashmap_capacity(h);
+    @mut i := from;
+    @mut done := 0;
+    @loop(done == 0, {
+        @if(i < cap, {
+            @if(hashmap_slot_state(hashmap_slot_addr(h, i)) == 1, {
+                done = 1;        # found an occupied slot
+            }, {
+                i = i + 1;       # empty / tombstone — keep scanning
+            });
+        }, {
+            done = 1;            # reached capacity — iteration complete
+        });
+    });
+    i
+};
+
+# First occupied slot index (or capacity if the map is empty).
+\\ hashmap_iter_start (Int) -> Int
+@fn hashmap_iter_start h := hashmap_scan_occupied(h, 0);
+
+# Next occupied slot index after `i` (or capacity if none remain).
+\\ hashmap_iter_next (Int, Int) -> Int
+@fn hashmap_iter_next h, i := hashmap_scan_occupied(h, i + 1);
+
+# 1 when the cursor has passed the last slot, else 0.
+\\ hashmap_iter_done (Int, Int) -> Int
+@fn hashmap_iter_done h, i := @if(i < hashmap_capacity(h), { 0 }, { 1 });
+
+# Key at the current cursor.  Caller must ensure not done.
+\\ hashmap_iter_key (Int, Int) -> Int
+@fn hashmap_iter_key h, i := hashmap_slot_key(hashmap_slot_addr(h, i));
+
+# Value at the current cursor.  Caller must ensure not done.
+\\ hashmap_iter_value (Int, Int) -> Int
+@fn hashmap_iter_value h, i := hashmap_slot_value(hashmap_slot_addr(h, i));
+
+# ══ M1 — typed (K, V) monomorph families ═══════════════════════════════
+#
+# Like vec.si's `vec_*_f32` / `vec_*_i64`, HashMap is monomorphic per
+# (key, value) pair with a suffixed surface (`hashmap_<op>_<k>_<v>`).
+#
+#   (i32, i32)  — the compact family above (12-byte slots).
+#   (i32, f32)  — compact: an f32 value is 4 bytes, the SAME slot layout,
+#                 so it shares all key-shaped machinery (new / has /
+#                 remove / resize / iteration cursor); only the value
+#                 load/store width changes.  Resize rehashes values as
+#                 raw i32 bits, which is bit-preserving for f32.
+#   (i64, i64)  — the WIDE family below (24-byte slots).
+#   (i32, i64)  — thin wrappers over the wide family (the i32 key is
+#                 sign-extended once at the boundary).
+#
+# Float KEYS are deliberately unsupported (NaN != NaN breaks probing and
+# +0.0/-0.0 alias under ==) — same stance as Rust's missing Hash for f64.
+
+# ── HashMap[Int, Float] (i32 → f32; compact 12-byte slots) ─────────────
+# Create with hashmap_new; query with hashmap_has_i32; delete with
+# hashmap_remove_i32; iterate with the compact cursor + iter_value_f32.
+
+\\ hashmap_get_i32_f32 (Int, Int) -> Float
+@fn hashmap_get_i32_f32 h, key := {
+    slot := hashmap_find_slot(h, key);
+    WASM::f32_load(slot + 8)
+};
+
+\\ hashmap_set_i32_f32 (Int, Int, Float)
+@fn hashmap_set_i32_f32 h, key, value := {
+    cap := hashmap_capacity(h);
+    occupancy := hashmap_len(h) + hashmap_tombstones(h);
+    @if(occupancy * 4 >= (cap * 3), {
+        hashmap_resize(h)
+    });
+    slot := hashmap_find_slot(h, key);
+    state := hashmap_slot_state(slot);
+    WASM::i32_store(slot + 4, key);
+    WASM::f32_store(slot + 8, value);
+    @if(state == 0, {
+        WASM::i32_store(slot, 1);
+        WASM::i32_store(h, hashmap_len(h) + 1)
+    })
+};
+
+# Float value at the current compact-cursor position.
+\\ hashmap_iter_value_f32 (Int, Int) -> Float
+@fn hashmap_iter_value_f32 h, i := WASM::f32_load(hashmap_slot_addr(h, i) + 8);
+
+# ── HashMap[Int64, Int64] (the wide family; 24-byte slots) ─────────────
+#
+# Slot (24 bytes per entry):
+#     +0:   state : i32   (0 = empty, 1 = occupied, 2 = tombstone)
+#     +8:   key   : i64
+#     +16:  value : i64
+#
+# (+4..+8 is padding so the i64 fields sit on 8-byte offsets.)  The
+# 16-byte header is IDENTICAL to the compact family, so hashmap_len /
+# hashmap_capacity / hashmap_tombstones / hashmap_iter_done are shared.
+
+# Fold the high word into the low, then the i32 bit-mix.
+\\ hashmap_hash_i64 (Int64) -> Int
+@fn hashmap_hash_i64 key := {
+    lo := WASM::i32_wrap_i64(key);
+    hi := WASM::i32_wrap_i64(WASM::i64_shr_u(key, @i64(32)));
+    hashmap_hash(lo ^ hi)
+};
+
+\\ hashmap_slot_addr_i64 (Int, Int) -> Int
+@fn hashmap_slot_addr_i64 h, i := {
+    data := hashmap_data_ptr(h);
+    data + (i * 24)
+};
+
+\\ hashmap_new_i64 (Int) -> Int
+@fn hashmap_new_i64 initial_capacity := {
+    h := alloc(16);
+    cap := initial_capacity;
+    data := alloc(cap * 24);
+    WASM::i32_store(h, 0);
+    WASM::i32_store(h + 4, cap);
+    WASM::i32_store(h + 8, data);
+    WASM::i32_store(h + 12, 0);
+    # Zero-init slot states (alloc doesn't zero memory).
+    @mut i := 0;
+    @loop(i < cap, {
+        WASM::i32_store(data + (i * 24), 0);
+        i = i + 1;
+    });
+    h
+};
+
+# Linear probing over wide slots (same protocol as hashmap_find_slot:
+# returns the slot where `key` resides or would be inserted; probes
+# through tombstones).
+\\ hashmap_find_slot_i64 (Int, Int64) -> Int
+@fn hashmap_find_slot_i64 h, key := {
+    cap := hashmap_capacity(h);
+    mask := cap - 1;
+    @mut i := WASM::i32_and(hashmap_hash_i64(key), mask);
+    @mut result := 0;
+    @mut done := 0;
+    @loop(done == 0, {
+        slot := hashmap_slot_addr_i64(h, i);
+        state := hashmap_slot_state(slot);
+        @if(state == 0, {
+            result = slot;
+            done = 1;
+        });
+        @if(done == 0, {
+            @if(state == 1, {
+                @if(WASM::i64_load(slot + 8) == key, {
+                    result = slot;
+                    done = 1;
+                });
+            });
+        });
+        @if(done == 0, {
+            i = WASM::i32_and(i + 1, mask);
+        });
+    });
+    result
+};
+
+\\ hashmap_has_i64 (Int, Int64) -> Int
+@fn hashmap_has_i64 h, key := {
+    slot := hashmap_find_slot_i64(h, key);
+    hashmap_slot_state(slot) == 1
+};
+
+\\ hashmap_get_i64_i64 (Int, Int64) -> Int64
+@fn hashmap_get_i64_i64 h, key := {
+    slot := hashmap_find_slot_i64(h, key);
+    WASM::i64_load(slot + 16)
+};
+
+# Insert without the resize check — used by hashmap_resize_i64's rehash.
+\\ hashmap_insert_no_resize_i64 (Int, Int64, Int64)
+@fn hashmap_insert_no_resize_i64 h, key, value := {
+    slot := hashmap_find_slot_i64(h, key);
+    state := hashmap_slot_state(slot);
+    WASM::i64_store(slot + 8, key);
+    WASM::i64_store(slot + 16, value);
+    @if(state == 0, {
+        WASM::i32_store(slot, 1);
+        WASM::i32_store(h, hashmap_len(h) + 1)
+    })
+};
+
+\\ hashmap_resize_i64 (Int)
+@fn hashmap_resize_i64 h := {
+    old_cap := hashmap_capacity(h);
+    old_data := hashmap_data_ptr(h);
+    new_cap := old_cap * 2;
+    new_data := alloc(new_cap * 24);
+    @mut z := 0;
+    @loop(z < new_cap, {
+        WASM::i32_store(new_data + (z * 24), 0);
+        z = z + 1;
+    });
+    # Swap data + capacity in the header BEFORE rehashing so
+    # hashmap_find_slot_i64 reads the new table.
+    WASM::i32_store(h + 4, new_cap);
+    WASM::i32_store(h + 8, new_data);
+    WASM::i32_store(h, 0);
+    WASM::i32_store(h + 12, 0);
+    @mut i := 0;
+    @loop(i < old_cap, {
+        old_slot := old_data + (i * 24);
+        old_state := WASM::i32_load(old_slot);
+        @if(old_state == 1, {
+            k := WASM::i64_load(old_slot + 8);
+            v := WASM::i64_load(old_slot + 16);
+            hashmap_insert_no_resize_i64(h, k, v);
+        });
+        i = i + 1;
+    });
+};
+
+\\ hashmap_set_i64_i64 (Int, Int64, Int64)
+@fn hashmap_set_i64_i64 h, key, value := {
+    cap := hashmap_capacity(h);
+    occupancy := hashmap_len(h) + hashmap_tombstones(h);
+    @if(occupancy * 4 >= (cap * 3), {
+        hashmap_resize_i64(h)
+    });
+    slot := hashmap_find_slot_i64(h, key);
+    state := hashmap_slot_state(slot);
+    WASM::i64_store(slot + 8, key);
+    WASM::i64_store(slot + 16, value);
+    @if(state == 0, {
+        WASM::i32_store(slot, 1);
+        WASM::i32_store(h, hashmap_len(h) + 1)
+    })
+};
+
+\\ hashmap_remove_i64 (Int, Int64) -> Int
+@fn hashmap_remove_i64 h, key := {
+    slot := hashmap_find_slot_i64(h, key);
+    state := hashmap_slot_state(slot);
+    @mut removed := 0;
+    @if(state == 1, {
+        WASM::i32_store(slot, 2);
+        WASM::i32_store(h, hashmap_len(h) - 1);
+        WASM::i32_store(h + 12, hashmap_tombstones(h) + 1);
+        removed = 1;
+    });
+    removed
+};
+
+# ── Wide-family iteration cursor ────────────────────────────────────────
+# Same protocol as the compact cursor; `hashmap_iter_done` is shared
+# (the capacity check is layout-agnostic).
+
+\\ hashmap_scan_occupied_i64 (Int, Int) -> Int
+@fn hashmap_scan_occupied_i64 h, from := {
+    cap := hashmap_capacity(h);
+    @mut i := from;
+    @mut done := 0;
+    @loop(done == 0, {
+        @if(i < cap, {
+            @if(hashmap_slot_state(hashmap_slot_addr_i64(h, i)) == 1, {
+                done = 1;
+            }, {
+                i = i + 1;
+            });
+        }, {
+            done = 1;
+        });
+    });
+    i
+};
+
+\\ hashmap_iter_start_i64 (Int) -> Int
+@fn hashmap_iter_start_i64 h := hashmap_scan_occupied_i64(h, 0);
+
+\\ hashmap_iter_next_i64 (Int, Int) -> Int
+@fn hashmap_iter_next_i64 h, i := hashmap_scan_occupied_i64(h, i + 1);
+
+\\ hashmap_iter_key_i64 (Int, Int) -> Int64
+@fn hashmap_iter_key_i64 h, i := WASM::i64_load(hashmap_slot_addr_i64(h, i) + 8);
+
+\\ hashmap_iter_value_i64 (Int, Int) -> Int64
+@fn hashmap_iter_value_i64 h, i := WASM::i64_load(hashmap_slot_addr_i64(h, i) + 16);
+
+# ── HashMap[Int, Int64] (i32 → i64; wrappers over the wide family) ─────
+# Create with hashmap_new_i64.  The i32 key is sign-extended ONCE at this
+# boundary, so set/get/has/remove agree on the widened key.
+
+\\ hashmap_set_i32_i64 (Int, Int, Int64)
+@fn hashmap_set_i32_i64 h, key, value := hashmap_set_i64_i64(h, WASM::i64_extend_i32_s(key), value);
+
+\\ hashmap_get_i32_i64 (Int, Int) -> Int64
+@fn hashmap_get_i32_i64 h, key := hashmap_get_i64_i64(h, WASM::i64_extend_i32_s(key));
+
+\\ hashmap_has_i32_i64 (Int, Int) -> Int
+@fn hashmap_has_i32_i64 h, key := hashmap_has_i64(h, WASM::i64_extend_i32_s(key));
+
+\\ hashmap_remove_i32_i64 (Int, Int) -> Int
+@fn hashmap_remove_i32_i64 h, key := hashmap_remove_i64(h, WASM::i64_extend_i32_s(key));

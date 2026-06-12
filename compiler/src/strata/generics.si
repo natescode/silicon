@@ -1,0 +1,54 @@
+# SPDX-License-Identifier: MIT
+# M0 — production monomorphization of `@fn[T]` generics (ADR 0001).
+#
+# HM-lite typechecks `@fn[T]` polymorphically, but codegen emits ONE
+# type-erased copy whose params/result are the i32 shape.  That erased copy
+# serves every i32-shaped instantiation (Int, Bool, String, struct/sum
+# pointers) — but a Float / Int64 / JSValue instantiation can't ride it:
+# the call site would push an f32/i64/externref at an i32 param and fail
+# WASM validation.
+#
+# This stratum closes that hole ADDITIVELY, per call site, with memoization:
+#   1. wildcard on::call_site probes the callee via generic_template —
+#      0 for every non-generic call (the fast path; declaration order is
+#      irrelevant, the lookup is program-wide).
+#   2. bind_template_args infers each declared type-param's concrete type
+#      from the call's args (literals, typed locals, inferredType).
+#   3. needs_mono answers 1 only when the bindings are complete AND some
+#      binding is non-i32-shaped — i32-shaped calls keep the erased copy.
+#   4. The memo guard (state has 'mono::<name>') emits one specialized
+#      copy per (template, type-args); every same-typed call shares it.
+#   5. patch_types substitutes the type annotations, with_name mangles
+#      (id → id$Float), push_definition emits it through normal lowering —
+#      where ITS body's generic calls fire this same handler (transitive
+#      monomorphization of generic-calling-generic chains).
+#   6. rewrite_call redirects this call site to the monomorph.
+#
+# Authored entirely as a stratum — no compiler special case.  This is the
+# production form of the @generic reference prototype proven in
+# generic-monomorph.test.ts, running on the comptime-compiled engine.
+@stratum Generics := {
+    Compiler::on::call_site(Generics_mono);
+};
+
+\\ Generics_mono (Int)
+@fn Generics_mono node := {
+    @mut callee := Compiler::callee::name(node);
+    @mut tmpl := Compiler::generic_template(callee);
+    @if(tmpl != @nil(), {
+        @mut bindings := Compiler::type::bind_template_args(tmpl::ast, node);
+        @if(Compiler::type::needs_mono(tmpl, bindings), {
+            @mut s := Compiler::state('stratum');
+            @mut suffix := Compiler::type::mangle_suffix(bindings);
+            @mut monoName := callee + '$' + suffix;
+            @mut monoKey := 'mono::' + monoName;
+            @if(@not(s::has(monoKey)), {
+                @mut patched := Compiler::ast::patch_types(tmpl, bindings);
+                @mut renamed := Compiler::ast::with_name(patched, monoName);
+                Compiler::module::push_definition(renamed::ast);
+                s::set(monoKey, 1);
+            });
+            Compiler::ast::rewrite_call(node, monoName);
+        });
+    });
+};

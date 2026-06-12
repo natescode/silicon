@@ -40,7 +40,7 @@ on the first `1.0.0` tag.  Pre-1.0 tags (`0.x.y`, including 0.1) are development
 | Generic functions | `@fn f x := …` with signature `\\ f[T] (T) -> …` — call-site inference, no explicit `[T]` required |
 | Sum types | `@type Foo := $A x Int \| $B;` — variant constructors + `@match` destructure |
 | Parametric types | `@type Opt[T] := $Some v T \| $None;` |
-| `@match` forms | flat form and arm-expression (`$A v => expr`) forms |
+| `@match` form | flat function-call form: `@match(x, $A v, { expr }, $B, { … })` |
 | Namespace paths | `Module::name` |
 | Semicolon rules | trailing semicolons required on definitions; expressions inside blocks are semicolon-separated |
 | Comment syntax | `;;` line comments, `##` doc comments |

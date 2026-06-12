@@ -49,6 +49,11 @@ E0004 [typecheck] main.si:7:5: unbound identifier 'aloc'
 | E0007 | ImmutableAssignment | Assignment to a binding declared immutable (`@global`, `@fn`, `@extern`). |
 | E0008 | MissingReturn       | Function with an explicit non-void return annotation has a body that may not produce a value. |
 | E0009 | ArityMismatch       | Call site passed the wrong number of arguments. |
+| E0012 | MvpOnlyIntrospection| A `wasm-mvp`-only introspection primitive used under `--target=wasm-gc`. |
+| E0013 | MvpOnlyPhysicalByte | A `wasm-mvp`-only raw-memory primitive used under `--target=wasm-gc`. |
+| E0014 | GlobalInFunction    | `@global` used inside a function body (use `@local`). |
+| E0015 | MissingParamType    | A function has parameters but no signature line, and the types could not be inferred from call sites. |
+| E0016 | AwaitOutsideAsync   | `@await` used outside an `@async` function body (ADR 0018 coloring rule — mark the enclosing `@fn` `@async`). |
 
 ### Parse errors (E0100–E0199)
 

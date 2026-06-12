@@ -30,6 +30,7 @@ import {
 } from './registry'
 import { buildStrataRegistry } from './strataLoader'
 import { desugarLoops } from './loopDesugar'
+import { desugarClosures } from './closureDesugar'
 
 export interface ElaborationError {
   keyword: string
@@ -55,13 +56,19 @@ export default function elaborate(
   ast: Program,
   registry?: ElaboratorRegistry,
   extraSources: string[] = [],
+  target?: string,
 ): ElaborateResult {
   const reg = registry ?? buildStrataRegistry(ast, extraSources)
   // ADR 0016 — rewrite iterate/range/infinite `@loop` forms into plain
   // while-shaped loops before operator elaboration and typechecking.
   const { program: desugared, errors: loopErrors } = desugarLoops(ast)
-  const { program, errors } = elaborateAST(desugared, reg)
-  return { program, registry: reg, errors: [...loopErrors, ...errors] }
+  // ADR 0019 C1/C2 — rewrite `@closure` / `@call_closure` into the shipped
+  // `@fnref` / `@call_indirect` + `vec_*` machinery (zero new IR), appending
+  // the synthesized env-unpack wrapper @fns.  Under --target=wasm-gc the env is
+  // a `(ref $Vec_i32)`, so the wrapper's env param is typed `Vec[Int]` (not Int).
+  const { program: declosured, errors: closureErrors } = desugarClosures(desugared, target)
+  const { program, errors } = elaborateAST(declosured, reg)
+  return { program, registry: reg, errors: [...loopErrors, ...closureErrors, ...errors] }
 }
 
 /**

@@ -1,16 +1,15 @@
 // SPDX-License-Identifier: MIT
 /**
- * Tests for the @match arm-expression form normalisation.
+ * Tests for `@match` arm normalization (flat, function-call form).
  *
- * The new form is `@match(disc, pat => body, pat => body, …)` with
- * optional pattern alternation via `pat | pat | pat => body`.
- * normalizeMatchArgs flattens this into the legacy `[disc, pat, body, …]`
- * shape so the existing match-lowering / typechecking machinery works
- * unchanged.
+ * `@match(disc, pat, { body }, pat, { body }, …)` — alternating pattern / body
+ * arguments, each body a `{ … }` block.  normalizeMatchArgs expands `|`
+ * alternation into the `[disc, pat, body, …]` shape the match lowerer consumes;
+ * the old infix `pattern => body` arm form was removed.
  */
 
 import { test, expect, describe } from 'bun:test'
-import { normalizeMatchArgs, isArmExpressionForm } from './matchArms'
+import { normalizeMatchArgs } from './matchArms'
 
 // Tiny AST builders — keeps the tests readable.
 const id = (name: string) => ({ type: 'Namespace', path: [name] })
@@ -18,92 +17,47 @@ const intLit = (v: number) => ({ type: 'IntLiteral', value: String(v) })
 const variant = (name: string, ...fields: string[]) => ({
     type: 'VariantDecl', name, fields: fields.map(f => ({ name: f })),
 })
-const arm = (pat: any, body: any) => ({ type: 'BinaryOp', operator: '=>', left: pat, right: body })
+const block = (body: any) => ({ type: 'Block', statements: [], value: body })
 const alt = (l: any, r: any) => ({ type: 'BinaryOp', operator: '|', left: l, right: r })
+const arrow = (l: any, r: any) => ({ type: 'BinaryOp', operator: '=>', left: l, right: r })
 
-// ---------------------------------------------------------------------------
-// Detection
-// ---------------------------------------------------------------------------
-
-describe('isArmExpressionForm', () => {
-    test('false for an empty arg list', () => {
-        expect(isArmExpressionForm([])).toBe(false)
-    })
-
-    test('false for legacy flat form', () => {
-        expect(isArmExpressionForm([id('disc'), variant('Some', 'v'), id('v')])).toBe(false)
-    })
-
-    test('true if any arg uses `=>`', () => {
-        expect(isArmExpressionForm([id('disc'), arm(variant('Some', 'v'), id('v'))])).toBe(true)
-    })
-
-    test('true even if only the second arg uses arm-expr (mixed)', () => {
-        expect(isArmExpressionForm([
-            id('disc'),
-            variant('Foo'), intLit(1),                  // legacy arm
-            arm(variant('Bar'), intLit(2)),             // arm-expr
-        ])).toBe(true)
-    })
-})
-
-// ---------------------------------------------------------------------------
-// Normalisation
-// ---------------------------------------------------------------------------
-
-describe('normalizeMatchArgs', () => {
-    test('legacy flat form passes through unchanged', () => {
-        const args = [id('disc'), variant('Some', 'v'), id('v'), variant('None'), intLit(0)]
+describe('normalizeMatchArgs — flat form', () => {
+    test('a plain flat form passes through unchanged', () => {
+        const args = [id('disc'), variant('Some', 'v'), block(id('v')), variant('None'), block(intLit(0))]
         expect(normalizeMatchArgs(args)).toEqual(args)
     })
 
-    test('simple arm-expr is expanded to flat form', () => {
-        // disc, $Some v => v, $None => dflt
-        const v = variant('Some', 'v')
-        const n = variant('None')
-        const out = normalizeMatchArgs([id('disc'), arm(v, id('v')), arm(n, id('dflt'))])
-        expect(out).toEqual([id('disc'), v, id('v'), n, id('dflt')])
+    test('a block body containing any expression is one opaque argument', () => {
+        // `{ 0 - 1 }` is a single Block arg — no precedence interaction at all.
+        const body = block({ type: 'BinaryOp', operator: '-', left: intLit(0), right: intLit(1) })
+        const args = [id('disc'), variant('Ok', 'v'), block(id('v')), variant('Err', 'e'), body]
+        expect(normalizeMatchArgs(args)).toEqual(args)
     })
 
-    test('trailing default arg is preserved verbatim', () => {
-        // disc, $Some v => v, defaultValue
-        const v = variant('Some', 'v')
-        const out = normalizeMatchArgs([id('disc'), arm(v, id('v')), intLit(0)])
-        expect(out).toEqual([id('disc'), v, id('v'), intLit(0)])
+    test('a trailing default arg (odd count) is preserved verbatim', () => {
+        const args = [id('disc'), variant('Some', 'v'), block(id('v')), block(intLit(0))]
+        expect(normalizeMatchArgs(args)).toEqual(args)
     })
 
     test('pattern alternation expands to multiple arms sharing the body', () => {
-        // disc, $Red | $Green => 'warm', $Blue => 'cool'
-        const red = variant('Red')
-        const green = variant('Green')
-        const blue = variant('Blue')
-        const out = normalizeMatchArgs([
-            id('disc'),
-            arm(alt(red, green), id('warm')),
-            arm(blue, id('cool')),
-        ])
-        expect(out).toEqual([
-            id('disc'),
-            red, id('warm'),
-            green, id('warm'),
-            blue, id('cool'),
-        ])
+        // disc, $Red | $Green, { 'warm' }, $Blue, { 'cool' }
+        const red = variant('Red'), green = variant('Green'), blue = variant('Blue')
+        const warm = block(id('warm')), cool = block(id('cool'))
+        const out = normalizeMatchArgs([id('disc'), alt(red, green), warm, blue, cool])
+        expect(out).toEqual([id('disc'), red, warm, green, warm, blue, cool])
     })
 
-    test('three-way pattern alternation', () => {
-        // disc, $A | $B | $C => x, $D => y
+    test('three-way alternation', () => {
         const a = variant('A'), b = variant('B'), c = variant('C'), d = variant('D')
-        const out = normalizeMatchArgs([
-            id('disc'),
-            arm(alt(alt(a, b), c), id('x')),
-            arm(d, id('y')),
-        ])
-        expect(out).toEqual([
-            id('disc'),
-            a, id('x'),
-            b, id('x'),
-            c, id('x'),
-            d, id('y'),
-        ])
+        const x = block(id('x')), y = block(id('y'))
+        const out = normalizeMatchArgs([id('disc'), alt(alt(a, b), c), x, d, y])
+        expect(out).toEqual([id('disc'), a, x, b, x, c, x, d, y])
+    })
+
+    test('a leftover `pattern => body` arm throws a clear migration error', () => {
+        // `$Ok v => v` parses to a `=>` BinaryOp in the pattern slot under flat
+        // precedence — must fail loudly, never silently mis-lower.
+        const args = [id('disc'), arrow(variant('Ok', 'v'), id('v'))]
+        expect(() => normalizeMatchArgs(args)).toThrow(/no longer uses the .* => .* arm form|block argument/)
     })
 })

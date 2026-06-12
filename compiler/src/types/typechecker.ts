@@ -52,6 +52,7 @@
 
 import type { Program } from '../ast/astNodes'
 import { astChildren } from '../ast/astChildren'
+import { bindProgram } from '../ast/binder'
 import type { PositionTable } from '../ast/positionTable'
 import { SemanticModel, type Symbol as CaaSSymbol, type SymbolKind, symbolDisplayString } from '../ast/semanticModel'
 import { toDiagnostic, spanFromLocation, type SourceSpan } from '../errors/diagnostic'
@@ -89,6 +90,9 @@ import {
     immutableAssignment,
     globalInFunction,
     missingParamType,
+    awaitOutsideAsync,
+    capDeriveNonRoot,
+    intLiteralOutOfRange,
     arityMismatch,
     missingReturn,
     mvpOnlyIntrospection,
@@ -124,6 +128,26 @@ import {
 import type { Subst, FreshGen } from './unify'
 import { normalizeMatchArgs } from '../ast/matchArms'
 
+/** ADR 0027 — the well-known root capability type name (like `main` is the
+ *  well-known entry).  `@cap_derive` may only attenuate a value of this type;
+ *  the entry shim hands a `World` to a `main` that requests one. */
+export const CAP_ROOT_TYPE = 'World'
+
+/** The BigInt-parseable text of an integer-literal argument (strips `_`
+ *  separators; keeps any 0x/0b/0o prefix, which `BigInt()` accepts; unwraps
+ *  Element/Item/expression wrapper nodes).  Undefined when the arg is not an
+ *  integer literal. */
+function literalIntText(arg: any): string | undefined {
+    let cur = arg
+    for (let i = 0; i < 6 && cur && typeof cur === 'object'; i++) {
+        if (cur.type === 'IntLiteral') return String(cur.value ?? '').replace(/_/g, '')
+        const next = typeof cur.value === 'object' ? cur.value : cur.expression
+        if (!next || typeof next !== 'object') return undefined
+        cur = next
+    }
+    return undefined
+}
+
 /**
  * Mutable checking context. Threaded through the recursive walk so error
  * accumulation and symbol bookkeeping stay in one place.
@@ -150,6 +174,9 @@ interface Ctx {
     // `@global` is a top-level/module-scoped binding, so a `@global` seen with
     // this flag set is an in-function misuse (E0014) — use `@local` there.
     inFunctionBody?: boolean
+    // True while checking the body of an `@async`-colored function (ADR 0018
+    // §2.2).  `@await` is only legal here (E0016 otherwise) — the coloring rule.
+    inAsyncFn?: boolean
     // User-defined type names from @type_alias and @type_distinct declarations.
     // Passed to parseTypeName so annotations like `x: age` resolve correctly.
     typeAliases: Map<string, SiliconType>
@@ -297,6 +324,19 @@ function resolveTypeAnnotation(ann: any, ctx: Ctx): SiliconType | undefined {
         )
         if (!elem) return undefined
         return { kind: 'Vec', element: elem }
+    }
+    // Array[T] — the fixed-length built-in container ($[…] literals).
+    // Same shape as Vec above so `\\ xs Array[Int]` works on params,
+    // returns and locals.
+    if (ann.typename === 'Array') {
+        const typeArgs: any[] = ann.typeArgs ?? []
+        if (typeArgs.length !== 1) return undefined
+        const elem = resolveTypeAnnotation(
+            { typename: typeArgs[0].name, typeArgs: typeArgs[0].args },
+            ctx,
+        )
+        if (!elem) return undefined
+        return { kind: 'Array', element: elem }
     }
     const base = resolveType(ann.typename, ctx)
     if (!base) return undefined
@@ -500,9 +540,9 @@ function inferUntypedParams(
                 if (distinct.size !== 1) continue       // polymorphic — leave for final-pass E0015
                 const ann = siliconTypeToAnnotation([...distinct.values()][0])
                 // Only write an annotation the type resolver can read back.  Some
-                // concrete types (e.g. Array[T] / Vec[T]) have no surface
-                // annotation name, so synthesizing one would make the final pass
-                // fail with a confusing "unknown type 'Array'".  Leaving the param
+                // concrete types (e.g. function types) have no surface annotation
+                // the synthesizer emits, so writing one would make the final pass
+                // fail with a confusing "unknown type" error.  Leaving the param
                 // unresolved instead surfaces the honest E0015 ("could not
                 // monomorphically infer …").
                 if (ann && resolveTypeAnnotation(ann, ctx)) { param.typeAnnotation = ann; changed = true }
@@ -539,7 +579,7 @@ export default function typecheck(
     for (const element of program.elements as any[]) {
         checkNode(element, ctx)
     }
-    const semanticModel = assembleSemanticModel(ctx)
+    const semanticModel = assembleSemanticModel(ctx, program)
     return { program, errors: ctx.errors, functions: ctx.functions, typeAliases: ctx.typeAliases, semanticModel }
 }
 
@@ -604,14 +644,17 @@ export function checkElement(element: any, ctx: Ctx): void {
     checkNode(element, ctx)
 }
 
-/** Assemble the SemanticModel from an accumulated context (pure, O(n)). */
-export function assembleSemanticModel(ctx: Ctx): SemanticModel {
+/** Assemble the SemanticModel from an accumulated context (pure, O(n)).
+ *  Pass the checked `program` to also build the S1 binding-identity index
+ *  (parameters/locals with `containingSymbol`, scope-correct rename). */
+export function assembleSemanticModel(ctx: Ctx, program?: object): SemanticModel {
     return new SemanticModel({
         types: ctx.typeMap,
         nodeToSymbolName: ctx.nodeToSymbolName,
         symbols: buildSymbolTable(ctx),
         symbolToNodes: ctx.symbolToNodes,
         symbolToSpans: ctx.symbolToSpans,
+        bindings: program ? bindProgram(program, ctx.file) : undefined,
         diagnostics: ctx.errors.map(e => toDiagnostic(e)),
     })
 }
@@ -649,6 +692,7 @@ function preRegisterStdFunctions(ctx: Ctx): void {
         { name: 'arr_load_i32',   params: [TypeInt, TypeInt],            result: TypeInt },
         { name: 'arr_load_f32',   params: [TypeInt, TypeInt],            result: TypeFloat },
         { name: 'arr_store_i32',  params: [TypeInt, TypeInt, TypeInt],   result: TypeUnknown },
+        { name: 'arr_store_f32',  params: [TypeInt, TypeInt, TypeFloat], result: TypeUnknown },
         // String views — stdlib uses these to thread String literals through
         // the byte-level WASI surface.  Both are identity at runtime; the
         // typechecker uses them to bridge String ↔ Int safely.
@@ -677,6 +721,11 @@ function preRegisterStdFunctions(ctx: Ctx): void {
     // bodies, which the resolver pulls in via @use.
     if (ctx.target === 'wasm-gc') {
         const vecInt = VecOf(TypeInt)
+        // M1 — Float / Int64 Vec monomorphs.  Each element type T gets its
+        // own `Vec[T]` (nominally distinct, backed by `$Vec_<T>` under GC)
+        // and a suffixed surface (`vec_new_f32`, `vec_get_i64`, …).
+        const vecF = VecOf(TypeFloat)
+        const vecL = VecOf(TypeInt64)
         const vecDefs: Array<{ name: string; params: SiliconType[]; result: SiliconType }> = [
             { name: 'vec_new',       params: [TypeInt],                       result: vecInt },
             { name: 'vec_len',       params: [vecInt],                        result: TypeInt },
@@ -685,6 +734,22 @@ function preRegisterStdFunctions(ctx: Ctx): void {
             { name: 'vec_set_i32',   params: [vecInt, TypeInt, TypeInt],      result: TypeUnknown },
             { name: 'vec_push_i32',  params: [vecInt, TypeInt],               result: TypeUnknown },
             { name: 'vec_pop_i32',   params: [vecInt],                        result: TypeInt },
+            // Vec[Float] (f32)
+            { name: 'vec_new_f32',      params: [TypeInt],                    result: vecF },
+            { name: 'vec_len_f32',      params: [vecF],                       result: TypeInt },
+            { name: 'vec_capacity_f32', params: [vecF],                       result: TypeInt },
+            { name: 'vec_get_f32',      params: [vecF, TypeInt],              result: TypeFloat },
+            { name: 'vec_set_f32',      params: [vecF, TypeInt, TypeFloat],   result: TypeUnknown },
+            { name: 'vec_push_f32',     params: [vecF, TypeFloat],            result: TypeUnknown },
+            { name: 'vec_pop_f32',      params: [vecF],                       result: TypeFloat },
+            // Vec[Int64] (i64)
+            { name: 'vec_new_i64',      params: [TypeInt],                    result: vecL },
+            { name: 'vec_len_i64',      params: [vecL],                       result: TypeInt },
+            { name: 'vec_capacity_i64', params: [vecL],                       result: TypeInt },
+            { name: 'vec_get_i64',      params: [vecL, TypeInt],              result: TypeInt64 },
+            { name: 'vec_set_i64',      params: [vecL, TypeInt, TypeInt64],   result: TypeUnknown },
+            { name: 'vec_push_i64',     params: [vecL, TypeInt64],            result: TypeUnknown },
+            { name: 'vec_pop_i64',      params: [vecL],                       result: TypeInt64 },
         ]
         for (const { name, params, result } of vecDefs) {
             ctx.functions.set(name, { params, result })
@@ -1150,7 +1215,7 @@ function checkNode(node: any, ctx: Ctx): SiliconType {
                 t = TypeUnknown
                 break
             }
-            if (exprT.kind !== 'Unknown') {
+            if (exprT.kind !== 'Unknown' && !vecIntCompatible(annT, exprT, ctx) && !arrayIntCompatible(annT, exprT)) {
                 try { unify(annT, exprT) }
                 catch (e) {
                     if (e instanceof UnifyError) ctx.errors.push(annotationMismatch('ascription', annT, exprT, node.sourceLocation))
@@ -1199,6 +1264,26 @@ function checkAssignment(a: any, ctx: Ctx): SiliconType {
     return valueT
 }
 
+/** Re-apply a reconciling substitution to every `inferredType` stamp (and the
+ *  `typeMap` backing store) within an AST subtree.  Used after a definition's
+ *  declared type pins variables its body left open, so a node stamped with a
+ *  schematic `?T` reflects the resolved concrete type.  Identity on already-
+ *  concrete stamps, so it cannot change a well-resolved program's types. */
+function zonkStampedTypes(node: any, subst: Subst, ctx: Ctx): void {
+    if (!node || typeof node !== 'object') return
+    if (Array.isArray(node)) { for (const x of node) zonkStampedTypes(x, subst, ctx); return }
+    const stamped = (node as any).inferredType as SiliconType | undefined
+    if (stamped && stamped.kind !== 'Unknown') {
+        const resolved = applySubst(stamped, subst)
+        ;(node as any).inferredType = resolved
+        ctx.typeMap.set(node, resolved)
+    }
+    for (const k of Object.keys(node)) {
+        if (k === 'inferredType' || k === 'sourceLocation' || k === 'relSpan') continue
+        zonkStampedTypes((node as any)[k], subst, ctx)
+    }
+}
+
 function checkDefinition(d: any, ctx: Ctx): SiliconType {
     const keyword: string = d.keyword ?? ''
 
@@ -1239,7 +1324,13 @@ function checkDefinition(d: any, ctx: Ctx): SiliconType {
     let bodyType: SiliconType = TypeUnknown
     if (d.binding) {
         const savedInFn = ctx.inFunctionBody
+        const savedInAsync = ctx.inAsyncFn
         ctx.inFunctionBody = true
+        // ADR 0018 — the body of an `@async`-marked function may contain `@await`.
+        // Only a `@fn` defines its own async color; a nested value binding
+        // (`@local`/`@var`/`@mut` inside the body) INHERITS the enclosing color,
+        // so `a := @await(…)` inside an `@async fn` stays colored.
+        ctx.inAsyncFn = d.keyword === '@fn' ? !!d.async : savedInAsync
         bodyType = withScope(ctx, inner => {
             // Inherit the typeVars we just set (withScope clones ctx.typeVars).
             for (const param of d.params || []) {
@@ -1271,6 +1362,7 @@ function checkDefinition(d: any, ctx: Ctx): SiliconType {
             return checkNode(binding.expression ?? binding, inner)
         })
         ctx.inFunctionBody = savedInFn
+        ctx.inAsyncFn = savedInAsync
     }
 
     // Reconcile annotation with body — via unification so polymorphic body
@@ -1278,9 +1370,18 @@ function checkDefinition(d: any, ctx: Ctx): SiliconType {
     // an explicit annotation (`Option[Int]`).  Strict typeEquals here would
     // reject the alignment because `?T1` doesn't equal `Int`.
     const finalType = annotated ?? bodyType
-    if (annotated && d.binding && bodyType.kind !== 'Unknown') {
+    if (annotated && d.binding && bodyType.kind !== 'Unknown'
+        && !vecIntCompatible(annotated, bodyType, ctx)
+        && !arrayIntCompatible(annotated, bodyType)) {
         try {
-            unify(annotated, bodyType)
+            const reconciled = unify(annotated, bodyType)
+            // Zonk: the annotation pins type variables the body left open (a
+            // no-arg `None()` stamps `Option[?T]`; `-> Option[JSValue]` resolves
+            // `?T = JSValue` HERE).  Re-apply the reconciling subst to every
+            // stamped type in the body so downstream consumers (codegen's F1
+            // host-handle-sum specialization; SemanticModel queries) see the
+            // resolved instantiation, not the schematic variable.
+            zonkStampedTypes(d.binding, reconciled, ctx)
         } catch (e) {
             if (e instanceof UnifyError) {
                 ctx.errors.push(annotationMismatch(d.name.name, annotated, bodyType, d.sourceLocation))
@@ -1294,6 +1395,10 @@ function checkDefinition(d: any, ctx: Ctx): SiliconType {
     // and a body, but the body type came out Unknown, the body doesn't produce
     // a value on (at least) the primary path.  Only flag when the annotation is
     // explicit — without an annotation we have no expectation to enforce.
+    // EXEMPT a body whose tail is a `@call_indirect`/`@call_closure`: an indirect
+    // call's result type is dynamic (Unknown), but it DOES produce a value — this
+    // is the synthesized `__closure_invoke_<k>` trampoline (`:= @call_indirect …`),
+    // which would otherwise trip a spurious E0008.
     const hasParams = (d.params ?? []).some((p: any) => !p.isLiteral)
     if (
         d.name?.name &&
@@ -1301,7 +1406,8 @@ function checkDefinition(d: any, ctx: Ctx): SiliconType {
         annotated &&
         annotated.kind !== 'Unknown' &&
         bodyType.kind === 'Unknown' &&
-        hasParams
+        hasParams &&
+        !tailIsDynamicCall(d.binding?.expression)
     ) {
         ctx.errors.push(missingReturn(d.name.name, annotated, d.sourceLocation))
     }
@@ -1502,6 +1608,22 @@ function checkMatchArgs(args: any[], ctx: Ctx): SiliconType[] {
     return out
 }
 
+/** True when a function body's TAIL (value) expression is a `@call_indirect` /
+ *  `@call_closure` — a dynamic call whose result type is statically Unknown but
+ *  which DOES produce a value at runtime.  Descends block trailings + AST
+ *  wrappers.  Used to exempt the closure-dispatch trampoline from E0008. */
+function tailIsDynamicCall(expr: any): boolean {
+    let e = expr
+    for (let i = 0; i < 24 && e && typeof e === 'object'; i++) {
+        if (e.type === 'Block') { e = e.trailing ?? (e.items?.length ? e.items[e.items.length - 1] : undefined); continue }
+        if (e.value && (e.type === 'Element' || e.type === 'Item' || e.type === 'Statement')) { e = e.value; continue }
+        break
+    }
+    if (!e || e.type !== 'FunctionCall') return false
+    const nm = typeof e.name === 'string' ? e.name : (e.name && Array.isArray(e.name.path) ? e.name.path.join('::') : '')
+    return nm === '@call_indirect' || nm === '@call_closure'
+}
+
 function isMatchCall(call: any): boolean {
     if (!call.isBuiltin) return false
     const name = typeof call.name === 'string'
@@ -1534,6 +1656,62 @@ function checkFunctionCall(call: any, ctx: Ctx): SiliconType {
     if (typeof call.name === 'string') name = call.name
     else if (call.name && Array.isArray(call.name.path)) name = call.name.path.join('::')
     else name = ''
+
+    // ADR 0016 / M1 — iterate-`@loop` typed-Vec dispatch.  The loop desugar
+    // runs pre-typecheck, so it emits the i32-default `vec_len` / `vec_get_i32`
+    // (tagged `vecIterDispatch`).  Once the snapshotted subject's type is known
+    // to be `Vec[Float]` / `Vec[Int64]`, retarget the tagged call at the
+    // matching monomorph family so the element binder is typed by the element.
+    // Idempotent across inference rounds (an already-retargeted name maps to
+    // itself); a `Vec[Int]` (or untyped/linear `Int`) subject is left on the
+    // i32 default.
+    if (call.vecIterDispatch && call.name && Array.isArray(call.name.path) && call.name.path.length === 1) {
+        const subj = argTypes[0]
+        if (subj?.kind === 'Vec') {
+            const elem = (subj as any).element?.kind
+            const suffix = elem === 'Float' ? 'f32' : elem === 'Int64' ? 'i64' : undefined
+            if (suffix) {
+                const cur: string = call.name.path[0]
+                const base = cur.startsWith('vec_len') ? 'vec_len' : 'vec_get'
+                const renamed = `${base}_${suffix}`
+                call.name.path[0] = renamed
+                name = renamed
+            }
+        } else if (subj?.kind === 'Array') {
+            // Array[T] subject — retarget at the always-present std.wat
+            // helpers (no @use required, matching `$[…]` literals).  The
+            // element type picks the load family: f32 for Array[Float],
+            // i32 default otherwise.  Idempotent: arr_* names re-map to
+            // themselves on later inference rounds.
+            const cur: string = call.name.path[0]
+            const isLen = cur === 'vec_len' || cur === 'arr_len'
+            const isF32 = (subj as any).element?.kind === 'Float'
+            const renamed = isLen ? 'arr_len' : isF32 ? 'arr_load_f32' : 'arr_load_i32'
+            call.name.path[0] = renamed
+            name = renamed
+        }
+    }
+
+    // `array::get` / `array::set` / `array::len` — the typed accessor surface
+    // over the std.wat `arr_*` helpers.  Always available (a `$[…]` literal
+    // needs no @use, so its accessors must not either).  Retarget BEFORE
+    // signature lookup so the call checks against the helper's registered
+    // sig (Array↔Int compat covers the subject arg) and BEFORE lowering,
+    // which would otherwise route the `::` name at the extern-module path.
+    // The subject's element type picks the f32 family for Array[Float].
+    if (call.name && Array.isArray(call.name.path) && call.name.path.length === 2
+        && call.name.path[0] === 'array') {
+        const op = call.name.path[1]
+        if (op === 'get' || op === 'set' || op === 'len') {
+            const subj = argTypes[0]
+            const isF32 = subj?.kind === 'Array' && (subj as any).element?.kind === 'Float'
+            const renamed = op === 'len' ? 'arr_len'
+                : op === 'get' ? (isF32 ? 'arr_load_f32' : 'arr_load_i32')
+                : (isF32 ? 'arr_store_f32' : 'arr_store_i32')
+            call.name.path = [renamed]
+            name = renamed
+        }
+    }
 
     // CaaS-5: record the call-site namespace node as a reference so that
     // symbolAtPosition / referenceSpans can navigate to it.
@@ -1614,6 +1792,45 @@ function checkFunctionCall(call: any, ctx: Ctx): SiliconType {
             // marker — D-D-* migrations to the new @stratum form drop the
             // intrinsic field, but the typechecker still needs the special
             // typing rules (branch unification for @if/@match, void for @loop).
+            // ADR 0018 — `@await(expr)` yields its argument's type (the awaited
+            // result; the suspension is transparent under the Asyncify mechanism).
+            // Coloring rule (§2.2): `@await` only inside an `@async` body (E0016).
+            if (name === '@await') {
+                if (!ctx.inAsyncFn) ctx.errors.push(awaitOutsideAsync(call.sourceLocation))
+                return argTypes[0] ?? TypeUnknown
+            }
+            // ADR 0027 — `@cap_derive(x)` attenuates the root capability into a
+            // narrower domain cap.  Runtime: identity (both are i32).  Type:
+            // a fresh variable that unifies with the caller's declared cap
+            // result.  CONFINEMENT (the mint-site rule): the argument MUST be
+            // the root `World` — so a cap can't be forged from a literal, nor
+            // one domain cap amplified into another.  Only the root downgrades.
+            if (name === '@cap_derive') {
+                const arg = argTypes[0]
+                const isRoot = arg?.kind === 'Distinct' && arg.name === CAP_ROOT_TYPE
+                if (arg !== undefined && arg.kind !== 'Unknown' && !isRoot) {
+                    ctx.errors.push(capDeriveNonRoot(arg, call.sourceLocation))
+                }
+                return ctx.fresh.next('Cap')
+            }
+            // i64/u64 value casts on a LITERAL argument — range-check it against
+            // the 64-bit target (the lowerer emits a precise i64.const).  Falls
+            // through to the normal cast signature for the result type + the
+            // non-literal (Int-widening) case.
+            if (name === '@i64' || name === '@u64' || name === '@toInt64' || name === '@toU64') {
+                const litRaw = literalIntText(call.args?.[0])
+                if (litRaw !== undefined) {
+                    const signed = name === '@i64' || name === '@toInt64'
+                    let v: bigint | undefined
+                    try { v = BigInt(litRaw) } catch { v = undefined }
+                    if (v !== undefined) {
+                        const lo = signed ? -(2n ** 63n) : 0n
+                        const hi = signed ? (2n ** 63n - 1n) : (2n ** 64n - 1n)
+                        if (v < lo || v > hi) ctx.errors.push(intLiteralOutOfRange(v.toString(), signed, call.sourceLocation))
+                    }
+                }
+                // fall through — migratedCastSig provides Int64/UInt64 result.
+            }
             if (intr === 'WASM::control_if'    || intr === 'IR::control_if'    || name === '@if')    return typeOfIfCall(argTypes, call.sourceLocation, ctx)
             if (intr === 'WASM::control_loop'  || intr === 'IR::control_loop'  || name === '@loop')  return TypeUnknown  // loops are void
             if (intr === 'WASM::control_match' || intr === 'IR::control_match' || name === '@match') return typeOfMatchCall(argTypes, call.sourceLocation, ctx)
@@ -1636,6 +1853,11 @@ function checkFunctionCall(call: any, ctx: Ctx): SiliconType {
                 name === '@toU32' ? { params: [TypeInt],   result: TypeUInt32 } :
                 name === '@toU64' && firstArgKind === 'Int64' ? { params: [TypeInt64], result: TypeUInt64 } :
                 name === '@toU64' ? { params: [TypeInt],   result: TypeUInt64 } :
+                // The readable i64/u64 value casts (clean names for @toInt64 /
+                // @toU64).  A literal argument is lowered to an exact i64.const;
+                // a non-literal Int widens (sign / zero extend).
+                name === '@i64' ? { params: [TypeInt], result: TypeInt64 } :
+                name === '@u64' ? { params: [TypeInt], result: TypeUInt64 } :
                 undefined
             // Prefer the pre-derived TypeSig stored in the registry; fall back to
             // deriving from the intrinsic name for strata loaded before Round 30.
@@ -1754,9 +1976,9 @@ function typeOfMatchCall(argTypes: SiliconType[], loc: any, ctx: Ctx): SiliconTy
 function checkArrayLiteral(arr: any, ctx: Ctx): SiliconType {
     const elements: any[] = arr.elements || []
     if (elements.length === 0) {
-        // Empty array: element type is Unknown. We could support an
-        // annotation-driven path here once `Array[Int]` is a real grammar
-        // production, but for now flagging as Unknown is honest.
+        // Empty array: element type is Unknown.  An `\\ xs Array[Int]`
+        // annotation can pin it via unification (resolveTypeAnnotation
+        // resolves Array[T] like Vec[T]); bare `$[]` stays Unknown.
         return ArrayOf(TypeUnknown)
     }
     const firstT = checkNode(elements[0], ctx)
@@ -1765,6 +1987,16 @@ function checkArrayLiteral(arr: any, ctx: Ctx): SiliconType {
         if (t.kind !== 'Unknown' && !typeEquals(firstT, t)) {
             ctx.errors.push(heterogeneousArray(firstT, t, arr.sourceLocation))
         }
+    }
+    // The literal's layout is 4-byte slots (IRArrayLiteral.elemBytes = 4 in
+    // v1.0) — an 8-byte element would silently emit an invalid store.
+    if (firstT.kind === 'Int64' || firstT.kind === 'UInt64') {
+        ctx.errors.push({
+            kind: 'Mismatch',
+            message: `array literals support 4-byte elements (Int, Float) in v1.0; got ${formatType(firstT)}`,
+            sourceLocation: arr.sourceLocation,
+            hint: 'use Vec[Int64] (vec_new_i64 / vec_push_i64) for 64-bit elements',
+        })
     }
     return ArrayOf(firstT)
 }
@@ -1914,6 +2146,29 @@ function freeTypeVars(t: SiliconType, into: Set<string> = new Set()): Set<string
  * each call instantiates the Variables to fresh `?Ti`, unifies with arg
  * types, and returns the substituted result.
  */
+/** M1 — on the linear-mem targets a `Vec[T]` IS an `Int` (the 12-byte header
+ *  pointer); the element type exists only to drive accessor dispatch (the
+ *  suffixed `vec_*_f32`/`_i64` families and the iterate-`@loop` retarget).
+ *  vec.si's own signatures are written against `Int`, so an annotated
+ *  `\\ v Vec[Float]` flowing into `vec_push_f32 (Int, Float)` is the SAME
+ *  representation — accept it.  Under `--target=wasm-gc` a Vec is a managed
+ *  `(ref $Vec_<elem>)`, never an Int, so the rule is off there (the TS-side
+ *  registrations carry real `Vec[T]` params and strict checking stands). */
+function vecIntCompatible(a: SiliconType, b: SiliconType, ctx: Ctx): boolean {
+    if (ctx.target === 'wasm-gc') return false
+    return (a.kind === 'Vec' && b.kind === 'Int') || (a.kind === 'Int' && b.kind === 'Vec')
+}
+
+/** An `Array[T]` IS an `Int` on every current target — a length-prefixed
+ *  linear-memory pointer (even under `--target=wasm-gc` the `$[…]` literal
+ *  lowers to `alloc_array`, so unlike Vec this rule has no gc gate).  The
+ *  element type exists only to drive accessor dispatch (`array::get` →
+ *  `arr_load_i32`/`arr_load_f32` and the iterate-`@loop` retarget), and the
+ *  std.wat `arr_*` helper sigs are written against `Int`. */
+function arrayIntCompatible(a: SiliconType, b: SiliconType): boolean {
+    return (a.kind === 'Array' && b.kind === 'Int') || (a.kind === 'Int' && b.kind === 'Array')
+}
+
 function checkPolymorphicCall(
     name: string,
     sig: FunctionSig,
@@ -1930,7 +2185,9 @@ function checkPolymorphicCall(
             const actual = argTypes[i]
             // Unknown on either side is a wildcard: a no-type param (already
             // flagged E0015 at its definition) must not also fail every call site.
-            if (actual.kind !== 'Unknown' && expected.kind !== 'Unknown' && !typeEquals(expected, actual)) {
+            if (actual.kind !== 'Unknown' && expected.kind !== 'Unknown' && !typeEquals(expected, actual)
+                && !vecIntCompatible(expected, actual, ctx)
+                && !arrayIntCompatible(expected, actual)) {
                 ctx.errors.push(mismatch(expected, actual, `'${name}' arg ${i}`, call.sourceLocation))
             }
         }

@@ -1,9 +1,14 @@
 \\ @extern path_open_stub (Int64) -> Int64;
 # Phase A i64 fixture: declare an extern with Int64 params + result, then call it
-# with i64 arguments produced via the @toInt64 cast.  Exercises:
+# with an i64 argument widened from a runtime Int via @toInt64.  Exercises:
 #   - parseTypeName recognising Int64
 #   - compiler-api resolveTypeName mapping Int64 → 'i64'
 #   - emitter writing (param i64) / (result i64) on the import
-#   - @toInt64 keyword lowering an i32 literal into (i64.extend_i32_s (i32.const N))
+#   - @toInt64 widening a *runtime* i32 to i64 via i64.extend_i32_s
+#     (a literal arg instead constant-folds to a precise i64.const — that
+#      path is covered by src/types/i64_casts.test.ts)
 
-path_open_stub(@toInt64(0));
+\\ open_at (Int) -> Int64
+@fn open_at fd := {
+    path_open_stub(@toInt64(fd))
+};

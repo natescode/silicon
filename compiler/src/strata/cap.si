@@ -1,0 +1,22 @@
+# SPDX-License-Identifier: MIT
+# Capability model (v0) — the `@cap_derive` relabel primitive.
+# See docs/adr/0027-minimal-wasi-object-capabilities.md and stdlib/cap.si.
+#
+# `@cap_derive(x)` is a representation-preserving relabel used by the cap
+# stdlib to attenuate the root `World` into a narrower domain capability
+# (e.g. `Clock`).  At runtime it is IDENTITY — both sides share the i32
+# representation, so it emits zero instructions (the same shape as the
+# `@toU32` / `@toU64` pure relabels in cast.si).
+#
+# Confinement lives in the typechecker (src/types/typechecker.ts): the
+# argument MUST be the root `World` type, and the result is a fresh type
+# variable that unifies with the caller's declared domain-cap return type.
+# So `@cap_derive` cannot forge a cap from a literal, nor amplify one
+# domain cap into another — only the root may be downgraded.
+
+@stratum CapDerive := {
+    Compiler::register::expression_keyword('@cap_derive');
+    Compiler::on::lower('@cap_derive', CapDerive_lower);
+};
+\\ CapDerive_lower (Int)
+@fn CapDerive_lower node := compiler::compiler_lowerExpr(compiler::compiler_arg(node, 0));

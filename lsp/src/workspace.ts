@@ -39,6 +39,15 @@ export class Workspace {
      *  projects open in one editor window never cross-resolve. */
     readonly #componentProjects = new Map<string, Project>()
 
+    /** Release retained state on server shutdown.  Drops the component scan
+     *  caches + project map so the compiler workspace and its open documents
+     *  become unreferenced.  Best-effort and idempotent — the process exits
+     *  immediately after `onExit`, so this is about prompt cleanup. */
+    dispose(): void {
+        this.#scannedComponents.clear()
+        this.#componentProjects.clear()
+    }
+
     /** Open (or update) a document and return its compiled state.
      *  Opens any `@use` dependencies AND, inside an `sgl.toml` project, every
      *  sibling source file (ADR-0024 directory=module) into the same workspace
@@ -171,6 +180,17 @@ export class Workspace {
     /** The current compiled state for a URI, if open. */
     getDoc(uri: string): Document | undefined {
         return this.compiler.getDocument(uri)
+    }
+
+    /**
+     * Cross-file diagnostic invalidation: after `changedUri` was updated,
+     * re-check every open document whose visible symbol surface changed and
+     * return the recompiled Documents (with fresh `diagnostics`).  The
+     * diagnostics handler republishes these so a signature edit in `lib.si`
+     * immediately surfaces (or clears) errors in an open `main.si`.
+     */
+    refreshDependents(changedUri: string): Document[] {
+        return this.compiler.refreshDependents(changedUri)
     }
 
     /** Drop a document from the workspace (on didClose). */

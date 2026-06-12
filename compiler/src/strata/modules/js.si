@@ -1,0 +1,84 @@
+# SPDX-License-Identifier: MIT
+# HAND-AUTHORED runtime FFI substrate — NOT bindgen-generated.
+#
+# `js` is the generic object/array build-and-read surface for `JSValue` handles
+# (the "next FFI work" #1).  Every other JSValue-returning module (json, url,
+# fetch, …) hands the guest opaque `externref` handles; this module is how the
+# guest *constructs* JS objects/arrays to pass IN (options bags) and *inspects*
+# the ones handed back OUT — closing the two reflection gaps at once.
+#
+# It is hand-authored (like `js-bridge`, `env`, `console`) because the host
+# bodies (`o[k] = v`, `[]`, `Object.keys`, …) are bespoke runtime operations
+# with no machine-readable spec.  The host shim lives in cli/src/host/js-host.ts
+# under the `js:` object (web/bun only — externref needs a JS host).  Call as
+# `js::object()`, `js::set(o, k, v)`, `js::get(o, k)`, etc.
+#
+# Values are universal `JSValue` handles; Silicon scalars cross via the
+# `from_*` (box) / `as_*` (unbox) pairs.  Keys are `JSString`.
+
+# ── Construct ────────────────────────────────────────────────────────────────
+\\ @extern object () -> JSValue;
+\\ @extern array () -> JSValue;
+\\ @extern null () -> JSValue;
+\\ @extern undefined () -> JSValue;
+
+# ── Mutate ───────────────────────────────────────────────────────────────────
+\\ @extern set (JSValue, JSString, JSValue) -> Void;
+\\ @extern set_index (JSValue, Int, JSValue) -> Void;
+\\ @extern push (JSValue, JSValue) -> Void;
+
+# ── Read ─────────────────────────────────────────────────────────────────────
+\\ @extern get (JSValue, JSString) -> JSValue;
+\\ @extern get_index (JSValue, Int) -> JSValue;
+\\ @extern len (JSValue) -> Int;
+\\ @extern has (JSValue, JSString) -> Bool;
+\\ @extern keys (JSValue) -> JSValue;
+\\ @extern typeof (JSValue) -> JSString;
+\\ @extern is_null (JSValue) -> Bool;
+
+# ── Box: Silicon scalar / string → JSValue ───────────────────────────────────
+\\ @extern from_int (Int) -> JSValue;
+\\ @extern from_float (Float) -> JSValue;
+\\ @extern from_bool (Bool) -> JSValue;
+\\ @extern from_str (JSString) -> JSValue;
+
+# ── Unbox: JSValue → Silicon scalar / string ─────────────────────────────────
+\\ @extern as_int (JSValue) -> Int;
+\\ @extern as_float (JSValue) -> Float;
+\\ @extern as_bool (JSValue) -> Bool;
+\\ @extern as_str (JSValue) -> JSString;
+
+# ── Reach a host global by name (globalThis[name]) ───────────────────────────
+\\ @extern global (JSString) -> JSValue;
+
+# ── Fallible invokers (#2): call a host fn/method, catching throws ────────────
+# Run the call; on a thrown host exception, record it in the boundary error slot
+# and return null instead of trapping.  `args` is a JSValue array handle.
+\\ @extern call (JSValue, JSString, JSValue) -> JSValue;
+\\ @extern apply (JSValue, JSValue) -> JSValue;
+\\ @extern construct (JSValue, JSValue) -> JSValue;
+
+# ── Boundary error channel (#2) ──────────────────────────────────────────────
+# Set by a fallible invoker above OR by an awaited Promise rejection (the host
+# reactor captures it).  `error_message` returns a LINEAR String (so it can sit
+# in a `Result[Int, String]`); `had_error` peeks, the readers clear the slot.
+\\ @extern had_error () -> Bool;
+\\ @extern take_error () -> JSValue;
+\\ @extern error_message () -> String;
+\\ @extern clear_error () -> Void;
+
+# ── Pin a handle to thread it through a linear-memory Result by id (#2) ───────
+\\ @extern pin (JSValue) -> Int;
+\\ @extern pinned (Int) -> JSValue;
+\\ @extern unpin (Int) -> Void;
+
+# ── Bulk binary marshalling: guest linear memory ⇄ host typed array ───────────
+# A host API that returns binary (crypto::random_bytes, response::array_buffer,
+# file reads) hands back a Uint8Array/ArrayBuffer handle.  `bytes_out` bulk-copies
+# its bytes INTO guest linear memory; `bytes_in` copies guest bytes OUT into a
+# fresh Uint8Array.  `byte_length` is the size; `u8` coerces an ArrayBuffer or any
+# typed array into a Uint8Array view so its bytes are readable.
+\\ @extern bytes_in (Int, Int) -> JSValue;          # linear [ptr, ptr+len) -> Uint8Array
+\\ @extern bytes_out (JSValue, Int, Int) -> Int;    # typed array -> linear at ptr (≤ len); returns bytes copied
+\\ @extern byte_length (JSValue) -> Int;            # byteLength (ArrayBuffer) / length (typed array)
+\\ @extern u8 (JSValue) -> JSValue;                 # coerce ArrayBuffer / typed array -> Uint8Array

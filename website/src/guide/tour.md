@@ -49,8 +49,8 @@ Conversions are explicit — `@toInt64(x)`, `@toInt(x)` (also handles
 \\ area (Shape) -> Int
 @fn area s := {
     @match(s,
-        $Circle r => r * r * 3,
-        $Rect w h => w * h)
+        $Circle r, { r * r * 3 },
+        $Rect w h, { w * h })
 };
 ```
 

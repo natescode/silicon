@@ -15,18 +15,17 @@ bun test                                # run the full test suite
 bun test src/types                      # run a directory
 bun test src/types/typechecker.test.ts  # run a single file
 
-bun run sgl <subcommand>                # invoke the Silicon CLI (sgl init/build/run/check)
 bun run compile                         # one-shot pipeline driver (src/index.ts)
 
 bun run build:sigilc                    # compile sgl into a native binary at dist/sigilc
 ```
 
-A typical user workflow with the `sgl` CLI:
+The `sgl` CLI lives in the sibling `cli/` workspace package (`cli/src/sigil_cli.ts`). Invoke it from source — a globally installed `~/.sgl/bin/sgl` may shadow workspace edits:
 
 ```sh
-bun run sgl init my-project
+bun run ../cli/src/sigil_cli.ts init my-project
 cd my-project
-bun --cwd .. run sgl run                # compile + execute under wasmtime
+bun run ../../cli/src/sigil_cli.ts run   # compile + execute under wasmtime
 ```
 
 Tooling assumptions: **Bun ≥ 1.0** for running TypeScript and tests; **wasmtime** for executing compiled WASI binaries; **wat2wasm** (from WABT, or `./bin/wat2wasm` via `scripts/install-wat2wasm.{sh,ps1}`) for `.wat → .wasm` assembly when not going through `binaryen`.
@@ -44,7 +43,7 @@ Source → Parser → AST → Strata loader → Elaborator → Typecheck → IR/
 3. **Elaborator** (`src/elaborator/elaborator.ts`) — resolves operators and definition keywords via the strata registry; rich strata bodies execute through the body interpreter.
 4. **Typecheck** (`src/types/typechecker.ts`, `src/types/unify.ts`) — HM-lite inference; pushes structured diagnostics via `src/errors/diagnostic.ts`.
 5. **Codegen** (`src/codegen/`) — lowers the typed AST to WAT. `compileToWasm` further assembles WAT into a `.wasm` binary via the `wabt` / `binaryen` deps. The QBE backend (`src/codegen/qbe/`) lowers the same IR for native targets.
-6. **CLI** (`src/sigil_cli.ts`) — `sgl init/build/run/check` and friends. The public compiler-as-a-service surface lives in `src/caas/`.
+6. **CLI** (`../cli/src/sigil_cli.ts`, separate `@silicon/cli` package) — `sgl init/build/run/check` and friends. The public compiler-as-a-service surface lives in `src/caas/`.
 
 ## Where to Look First
 
@@ -84,14 +83,20 @@ Silicon has three integer surface types, all mapping to WebAssembly value types:
 - **`Int32`** — explicit 32-bit signed integer. Today this is a recognised alias for `Int` (parses to the same `SiliconType`); kept in the surface so code that needs a guaranteed 32-bit type doesn't have to retype when wasm64 lands.
 - **`Int64`** — explicit 64-bit signed integer. Always `i64` regardless of target. Required for WASI surfaces with 64-bit fields (`path_open` rights, `fd_seek` offset).
 
+- **`UInt64` / `u64`** — explicit 64-bit unsigned integer. Same `i64` machine representation as `Int64`; the unsigned-ness only changes which instructions arithmetic/comparison dispatch to. Required for WASI fields that are semantically unsigned.
+
 Conversions are explicit — no implicit coercion between widths:
 
-- `@toInt64(x)` — `Int → Int64` (sign-extend; `i64.extend_i32_s`).
+- `@i64(x)` — `Int → Int64`. The human-readable cast; preferred spelling.
+- `@u64(x)` — `Int → UInt64`. The human-readable cast; preferred spelling.
+- `@toInt64(x)` / `@toU64(x)` — the older WASI-era keyword spellings of the same two casts; still accepted.
 - `@toInt(x)` — `Int64 → Int` (wrap; `i32.wrap_i64`). Typed-dispatch overload; the `Float → Int` variant of `@toInt` still applies for `Float` arguments.
 
-Arithmetic operators (`+`, `-`, `*`, `/`, `%`) and comparisons (`==`, `!=`, `<`, `>`, `<=`, `>=`) dispatch by operand type via the strata registry. When both operands are `Int64`, the operator resolves to the `i64.*` instruction set. No implicit promotion: `5 + @toInt64(1)` is a type error — both sides must be the same width.
+A *literal* argument to any i64/u64 cast is **constant-folded** to a direct 64-bit `i64.const`, so literals above the 32-bit range are exact (`@i64(5000000000)` = 5_000_000_000). A *non-literal* argument takes the sign/zero-extend path (`i64.extend_i32_s` / `i64.extend_i32_u`). A literal that overflows the target's 64-bit window is a typecheck error (E0018, IntLiteralOutOfRange).
 
-No integer-literal suffixes — `42i64` does **not** parse. Use the keyword cast: `@toInt64(42)`.
+Arithmetic operators (`+`, `-`, `*`, `/`, `%`) and comparisons (`==`, `!=`, `<`, `>`, `<=`, `>=`) dispatch by operand type via the strata registry. When both operands are `Int64`, the operator resolves to the `i64.*` instruction set. No implicit promotion: `5 + @i64(1)` is a type error — both sides must be the same width.
+
+No integer-literal suffixes — `42i64` does **not** parse (a name-like suffix is hard to read at a glance). Use the keyword cast: `@i64(42)`. Hex / binary / octal literals (`0xFF`, `0b1010`, `0o17`) and `_` digit separators (`5_000_000`, `123_456.789_012`, `0xFF_FF`) are supported in any integer or float literal; the `_`s are stripped when computing the value.
 
 ## Sum Types Today
 
@@ -111,32 +116,38 @@ on `@fn[T]` and `@type[T]`, no let-generalisation. Roc-style trajectory.
 
 Implementation: `src/types/unify.ts`, `src/types/typechecker.ts`, ~250 lines + 38 unit tests + 33 integration tests. See `docs/hm-lite.md` for the reference.
 
-## `@match` Forms
+## `@match` Form
 
-Both forms are supported and interchangeable:
+`@match` is an ordinary builtin call: the discriminant, then alternating
+pattern / body arguments, each **body a `{ … }` block**. There is no infix arm
+operator — `@match` is a "function with parameters," consistent with Silicon's
+flat (left-to-right, equal) operator precedence, so an arm body can be any
+expression (`{ v * 2 }`, `{ 0 - 1 }`) with zero precedence interaction.
 
 ```silicon
-# Flat form
+# Pattern, then a { } block body — per arm.
 @match(opt, $Some v, { v }, $None, { dflt })
 
-# Arm-expression form (`=>` and `|` are BinaryOp operators)
-@match(opt,
-    $Some v => v,
-    $None => dflt)
+@match(sh,
+    $Circle r, { r },
+    $Square s, { s })
 
-# Per-arm pattern alternation
+# Per-arm pattern alternation (the `|` stays in the pattern argument):
 @match(c,
-    $Red | $Green => 1,
-    $Blue => 0)
+    $Red | $Green, { 1 },
+    $Blue,         { 0 })
+
+# An optional trailing { body } with no pattern is a catch-all default.
 ```
 
-`normalizeMatchArgs` in `src/ast/matchArms.ts` flattens the arm-expression
-form into the flat form so the existing match-lowerer / typechecker handle
-both uniformly. Pattern alternation duplicates the body across alternatives.
+`normalizeMatchArgs` in `src/ast/matchArms.ts` expands `|` alternation into the
+`[disc, pat, body, …]` shape the match lowerer / typechecker consume, and
+throws on a leftover `pattern => body` arm (that infix `=>` form was REMOVED —
+it collided with flat precedence once a body was itself a binary expression).
 
 ## Test Structure
 
 - Tests live alongside the code as `src/**/*.test.ts` and run under Bun: `bun test`.
-- Integration tests for the public CLI are in `src/sigil_cli.test.ts`; end-to-end pipeline tests under `src/e2e/`.
+- Integration tests for the public CLI are in `../cli/src/sigil_cli.test.ts`; end-to-end pipeline tests under `src/e2e/`.
 - Property / fuzz suites live under `tests/`: `bun run test:properties`, `bun run test:fuzz`.
 - Backend-specific suites: `bun run test:qbe`, `bun run test:backends`, `bun run test:selfhost`.

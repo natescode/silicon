@@ -23,6 +23,13 @@ import { normalizeMatchArgs } from '../ast/matchArms'
 import { resolveIntrinsicWasmInstr } from '../intrinsics'
 import { wasmTypeOf } from '../types/types'
 import type { SiliconType } from '../types/types'
+import { type SpecializedSum, needsHandleSpecialization, mangleSumName, isExternrefType } from '../ir/sumMono'
+
+/** A control-flow result that is a host handle (externref) needs the
+ *  `(result externref)` block type rather than the i32 placeholder. */
+function needsExternBlock(t: SiliconType | undefined): boolean {
+    return isExternrefType(t)
+}
 import type { Diagnostic } from '../errors/diagnostic'
 import { spanFromLocation } from '../errors/diagnostic'
 
@@ -111,6 +118,11 @@ export interface LowerFns {
     ) => { init: IRExpr; wasmType: WasmValType }
     lowerExternParams: (node: any) => WasmValType[]
     lowerExternResult: (node: any) => WasmValType | undefined
+    /** ADR 0018 P0/P1 — build the full IRImport for an `@extern` (import-module
+     *  override from a `mod::field` name + JSString/JSValue externref slots).
+     *  LowerCtx-bound (needs `ctx.platform` for the externref web/bun gate), so
+     *  surfaced here for the src/strata/defkinds.si `ExternDef_lower` handler. */
+    lowerExternImport: (node: any, ctx: any) => IRImport
     unwrapNode:  (node: any) => any
     exprWasmType:(expr: IRExpr) => WasmType
     watId:       (name: string) => string
@@ -185,11 +197,9 @@ export interface CompilerCtx {
      *  mutates.  Drained into IRModule.funcrefTable at end of lowerProgram. */
     funcref: {
         /** Slot index for a wat-id'd function name (find-or-append).  Also
-         *  ensures the default i32→i32 (`__fn_i_i`) signature is registered. */
+         *  ensures the default i32→i32 (`__fn_i_i`) signature is registered, so a
+         *  lone `@fnref` still emits a valid (unused) type. */
         index(watName: string): number
-        /** Ensure the default `__fn_i_i` signature is registered (used by
-         *  @call_indirect sites that consume a slot they didn't mint). */
-        ensureDefaultSig(): void
     }
 }
 
@@ -344,6 +354,12 @@ export interface CompilerAPI {
     state(scope: 'stratum' | 'instance'): StateHandle
     /** Inspect a call site's callee (§5 spec — `&Compiler::callee::*`). */
     readonly callee: { name(callNode: any): string }
+
+    /** Look up the `@fn[T]` template Definition named `name` in the program
+     *  being lowered, regardless of declaration order.  Returns null when no
+     *  generic @fn of that name exists.  Backs the generics monomorphization
+     *  stratum's `Compiler::generic_template(callee)` probe. */
+    generic_template(name: string): any | null
     /** Look up a comptime handler registered for an operator/keyword token.
      *  Used by the strata body interpreter to dispatch built-in forms
      *  (`@nil`, `@not`, `+`, `==`, etc.) and any user-defined comptime
@@ -366,6 +382,10 @@ export interface CompilerAPI {
     lowerGlobalInit(node: any, defaultType: WasmValType): { init: IRExpr; wasmType: WasmValType }
     lowerExternParams(node: any): WasmValType[]
     lowerExternResult(node: any): WasmValType | undefined
+    /** ADR 0018 P0/P1 — full IRImport builder for `@extern` (see LowerFns).
+     *  THROWS IRLowerError when an externref handle is used off web/bun; the
+     *  throw must propagate so the CaaS surface reports it as a compile error. */
+    expandExtern(node: any): IRImport
     unwrapNode(node: any): any
 
     watId(name: string): string
@@ -383,6 +403,12 @@ export interface CompilerAPI {
      *  throw propagate so the CaaS surface reports it. */
     expandWithArena(rawArgs: any[]): IRExpr
     expandMoveToParentArena(rawArgs: any[]): IRExpr
+    /** Phase 5 / ADR 0019 C0 — `@call_indirect(cb, …args)`.  Lowers the callback
+     *  + a variadic arg list, derives the call signature from the args' wasm
+     *  types (result from `inferredType`, default i32), registers that sig in the
+     *  funcref table, and builds the CallIndirect node.  Generalizes the former
+     *  fixed `__fn_i_i` / arity-2 form. */
+    expandCallIndirect(rawArgs: any[], inferredType: any): IRExpr
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -396,6 +422,29 @@ export function createCompilerAPI(ctx: CtxShape, fns: LowerFns): CompilerAPI {
         // is the low-level escape hatch mirroring how `i32`/`f32` work.
         if (name === 'Int64' || name === 'i64') return 'i64'
         return 'i32'
+    }
+
+    // ── funcref signatures (ADR 0019 C0 — multi-signature funcref table) ──────
+    // Canonical key for a funcref / call_indirect signature, derived from the
+    // wasm types: i32→'i', i64→'l', f32→'f', void→'v'.  The single i32→i32 case
+    // is `__fn_i_i`, byte-identical to the former hardcode.
+    const wcode = (t: string): string => t === 'i64' ? 'l' : t === 'f32' ? 'f' : t === 'void' ? 'v' : 'i'
+    /** A position's signature code: a ref-typed slot encodes as `r<typeIdx>` so a
+     *  `(ref $Vec_i32)` env param is a DISTINCT call_indirect signature from a
+     *  plain i32 (ADR 0019 C2).  Plain valtypes keep the C0 single-letter code, so
+     *  all-valtype signatures stay byte-identical to the baseline. */
+    const slotCode = (t: string, ref?: { localTypeIdx: number }): string =>
+        ref ? `r${ref.localTypeIdx}` : wcode(t)
+    function funcrefSigKey(params: WasmValType[], result: WasmType, refParams?: Map<number, any>, refResult?: any): string {
+        const p = params.map((t, i) => slotCode(t, refParams?.get(i))).join('')
+        return `__fn_${p}_${slotCode(result, refResult)}`
+    }
+    /** Find-or-append a signature in the funcref table; returns its key. */
+    function ensureFuncrefSig(params: WasmValType[], result: WasmType, refParams?: Map<number, any>, refResult?: any): string {
+        const key = funcrefSigKey(params, result, refParams, refResult)
+        const t = ctx.funcrefTable
+        if (t && !t.signatures.some(s => s.key === key)) t.signatures.push({ key, params, result, refParams, refResult })
+        return key
     }
 
     const compilerCtx: CompilerCtx = {
@@ -455,12 +504,6 @@ export function createCompilerAPI(ctx: CtxShape, fns: LowerFns): CompilerAPI {
                     t.signatures.push({ key: '__fn_i_i', params: ['i32'], result: 'i32' })
                 }
                 return idx
-            },
-            ensureDefaultSig: () => {
-                const t = ctx.funcrefTable
-                if (t && t.signatures.length === 0) {
-                    t.signatures.push({ key: '__fn_i_i', params: ['i32'], result: 'i32' })
-                }
             },
         },
     }
@@ -648,9 +691,16 @@ export function createCompilerAPI(ctx: CtxShape, fns: LowerFns): CompilerAPI {
             const bindings = new Map<string, SiliconType>()
             const params: any[] = tmplDef?.params ?? []
             const args:   any[] = callNode?.args   ?? []
+            // A def with a declared generics list (`@fn id[T] …`) binds ONLY
+            // those names — a non-builtin annotation like `Option[T]` is a
+            // concrete (parametric) type, not a type variable.  Defs without
+            // the list (e.g. a user stratum's `@generic id x T := x`) keep
+            // the every-non-builtin-annotation heuristic.
+            const declared: string[] | undefined = tmplDef?.generics?.params
             for (let i = 0; i < params.length; i++) {
                 const paramType: string | undefined = params[i]?.typeAnnotation?.typename
                 if (!paramType || BUILTIN_TYPE_NAMES.has(paramType)) continue
+                if (declared && declared.length > 0 && !declared.includes(paramType)) continue
                 if (bindings.has(paramType)) continue
                 const argType = inferArgType(args[i])
                 if (argType) bindings.set(paramType, argType)
@@ -863,6 +913,27 @@ export function createCompilerAPI(ctx: CtxShape, fns: LowerFns): CompilerAPI {
             },
         },
 
+        generic_template: (name: string) => {
+            let map = (ctx as any).__genericTemplateDefs as Map<string, any> | undefined
+            if (!map) {
+                map = new Map()
+                const unwrapEl = (n: any): any => {
+                    if (!n) return null
+                    if (n.type === 'Element' || n.type === 'Item' || n.type === 'Statement') return unwrapEl(n.value)
+                    return n
+                }
+                for (const el of ((ctx as any).program?.elements ?? []) as any[]) {
+                    const def = unwrapEl(el)
+                    if (def?.type === 'Definition' && def.keyword === '@fn' &&
+                        (def.generics?.params?.length ?? 0) > 0 && def.name?.name) {
+                        map.set(def.name.name, def)
+                    }
+                }
+                ;(ctx as any).__genericTemplateDefs = map
+            }
+            return map.get(name) ?? null
+        },
+
         lookupComptime: (token) =>
             ctx.registry ? lookupComptimeHandler(ctx.registry, token) : undefined,
 
@@ -897,6 +968,9 @@ export function createCompilerAPI(ctx: CtxShape, fns: LowerFns): CompilerAPI {
         lowerGlobalInit:          (node, defaultType)   => fns.lowerGlobalInit(node, defaultType, ctx),
         lowerExternParams:        (node)                => fns.lowerExternParams(node),
         lowerExternResult:        (node)                => fns.lowerExternResult(node),
+        // ADR 0018 P0/P1 — delegate to the LowerCtx-bound IRImport builder in
+        // lower.ts.  Throws (externref web/bun gate) propagate intentionally.
+        expandExtern:             (node)                => fns.lowerExternImport(node, ctx),
         unwrapNode:   (node)          => fns.unwrapNode(node),
 
         watId:           (name)        => fns.watId(name),
@@ -915,6 +989,36 @@ export function createCompilerAPI(ctx: CtxShape, fns: LowerFns): CompilerAPI {
         // Throws propagate intentionally (the CaaS surface turns them into errors).
         expandWithArena:         (rawArgs) => fns.lowerWithArena(rawArgs, ctx),
         expandMoveToParentArena: (rawArgs) => fns.lowerMoveToParentArena(rawArgs, ctx),
+        expandCallIndirect: (rawArgs, inferredType) => {
+            if (!Array.isArray(rawArgs) || rawArgs.length < 1) {
+                throw new CompilerAPIError('@call_indirect expects at least 1 argument (the callback table index)')
+            }
+            const cb = fns.lowerExpr(rawArgs[0], ctx)
+            const argNodes = rawArgs.slice(1)
+            const argExprs = argNodes.map((a) => fns.lowerExpr(a, ctx))
+            const params = argExprs.map(e => fns.exprWasmType(e) as WasmValType)
+            const result: WasmType = (inferredType && inferredType.kind && inferredType.kind !== 'Unknown')
+                ? (wasmTypeOf(inferredType) as WasmType)
+                : 'i32'
+            // ADR 0019 C2 — under wasm-gc a `Vec[Int]` arg (e.g. the closure env)
+            // is a `(ref $Vec_i32)`, not an i32; record its ref type so the
+            // call_indirect signature matches the ref-typed wrapper.  No-op on
+            // wasm-mvp (refParams stays empty → byte-identical C0 signature).
+            let refParams: Map<number, any> | undefined
+            if (ctx.target === 'wasm-gc') {
+                argNodes.forEach((a, i) => {
+                    // The arg's type comes from the SemanticModel (a Namespace ref to
+                    // a local isn't stamped with `.inferredType` directly).
+                    const t = ctx.semanticModel?.typeOf(a) ?? (a?.inferredType)
+                    if (t?.kind === 'Vec') {
+                        const idx = ctx.wasmGcTypes?.lookupByName('$Vec_i32')
+                        if (idx !== undefined) (refParams ??= new Map()).set(i, { localTypeIdx: idx, nullable: false })
+                    }
+                })
+            }
+            const sigKey = ensureFuncrefSig(params, result, refParams)
+            return { kind: 'CallIndirect', wasmType: result, sigKey, args: argExprs, tableIndex: cb }
+        },
         expandMatchChain: (rawArgs, inferredType) => {
             // Normalise arm-expression form (`pat => body`, with `|`-alternation)
             // into the flat `[disc, pat, body, …]` form the rest of this
@@ -926,6 +1030,14 @@ export function createCompilerAPI(ctx: CtxShape, fns: LowerFns): CompilerAPI {
             const wt: WasmType = (inferredType && inferredType.kind !== 'Unknown')
                 ? (wasmTypeOf(inferredType) as WasmType)
                 : 'i32'
+            // F1 — when the match yields a host handle (externref), its `if`
+            // chain needs the `(result externref)` block type, not i32.
+            const yieldsExtern = needsExternBlock(inferredType)
+            const mkIf = (cond: IRExpr, then_: IRExpr, else_: IRExpr): IRExpr => {
+                const node = ir.makeIf(cond, then_, else_, wt) as any
+                if (yieldsExtern) node.externResult = true
+                return node
+            }
 
             // For VariantDecl patterns we need the discriminant's sum type
             // to map variant name → tag and to construct field-load offsets.
@@ -967,7 +1079,16 @@ export function createCompilerAPI(ctx: CtxShape, fns: LowerFns): CompilerAPI {
                     // Same observable semantics; different bytecode shape.
                     const tag = variantTag(variant.name)
                     const isWasmGc = ctx.target === 'wasm-gc'
-                    const sumWatName = `$${discType.name}`
+                    // F1 — a host-handle instantiation (`Result[JSValue, String]`)
+                    // matches against its specialized flat-union struct, where the
+                    // handle field is a native externref.  `spec` (when present)
+                    // overrides the struct name, type index, and per-field slot
+                    // indices + read types.
+                    const spec = (isWasmGc && (ctx as any).sumSpecs && needsHandleSpecialization(discType))
+                        ? (ctx as any).sumSpecs.get(mangleSumName(discType.name, discType.typeArgs)) as SpecializedSum | undefined
+                        : undefined
+                    const specVariant = spec?.variants.find((v: any) => v.name === variant.name)
+                    const sumWatName = spec ? spec.mangledName : `$${discType.name}`
                     // typeIdx must match the entry the @type expander registered
                     // (defExpanders.ts:typeRecordExpander).  Order is guaranteed:
                     // @type declarations are processed before any function bodies
@@ -976,9 +1097,11 @@ export function createCompilerAPI(ctx: CtxShape, fns: LowerFns): CompilerAPI {
                     // will still produce valid WAT (typeName drives the text form),
                     // and any program reaching this fallback already failed at
                     // typecheck for using an unregistered sum.
-                    const sumTypeIdx = isWasmGc
-                        ? (ctx.wasmGcTypes?.lookupByName(sumWatName) ?? 0)
-                        : 0
+                    const sumTypeIdx = spec
+                        ? spec.structTypeIdx
+                        : isWasmGc
+                            ? (ctx.wasmGcTypes?.lookupByName(sumWatName) ?? 0)
+                            : 0
 
                     const loadTag: IRExpr = isWasmGc
                         ? {
@@ -1004,13 +1127,19 @@ export function createCompilerAPI(ctx: CtxShape, fns: LowerFns): CompilerAPI {
                     const stmts: IRStmt[] = []
                     for (let fi = 0; fi < fields.length; fi++) {
                         const fname: string = fields[fi].name
+                        // F1 flat-union: a specialized variant's field lives at its
+                        // own struct slot (not fi+1 overlapped), and a host-handle
+                        // field reads as a native externref local.
+                        const specField = specVariant?.fields[fi]
+                        const fieldIdx = specField ? specField.structFieldIdx : fi + 1
+                        const isExternField = !!specField?.extern
                         const loadField: IRExpr = isWasmGc
                             ? {
                                 kind: 'StructGet',
                                 wasmType: 'i32',
                                 typeIdx: sumTypeIdx,
                                 typeName: sumWatName,
-                                fieldIdx: fi + 1,   // tag occupies index 0
+                                fieldIdx,
                                 target: discExpr,
                             }
                             : {
@@ -1022,8 +1151,11 @@ export function createCompilerAPI(ctx: CtxShape, fns: LowerFns): CompilerAPI {
                                     ir.makeBinOp('i32_add', discExpr, ir.makeConst((fi + 1) * 4, 'i32'), 'i32'),
                                 ],
                             } as any
-                        // Register field as a function-scoped local (hoisted).
-                        ctx.pendingLocals.push({ name: fname, wasmType: 'i32' })
+                        // Register field as a function-scoped local (hoisted).  A
+                        // host-handle field binds an externref local (refType.extern).
+                        const localEntry: any = { name: fname, wasmType: 'i32' }
+                        if (isExternField) localEntry.refType = { localTypeIdx: 0, nullable: true, extern: true }
+                        ctx.pendingLocals.push(localEntry)
                         ctx.locals.set(fname, 'i32')
                         stmts.push(ir.makeLocalSet(fname, loadField))
                     }
@@ -1032,7 +1164,7 @@ export function createCompilerAPI(ctx: CtxShape, fns: LowerFns): CompilerAPI {
                         ? ir.makeBlock(stmts, armBody, wt)
                         : armBody
 
-                    return ir.makeIf(cond, armBlock, buildNested(i + 2), wt)
+                    return mkIf(cond, armBlock, buildNested(i + 2))
                 }
 
                 // Non-variant pattern: original equality-arm logic.
@@ -1040,7 +1172,7 @@ export function createCompilerAPI(ctx: CtxShape, fns: LowerFns): CompilerAPI {
                 const res = fns.lowerExpr(rawArgs[i + 1], ctx)
                 const eqOp: AbstractOp = fns.exprWasmType(discExpr) === 'f32' ? 'f32_eq' : 'i32_eq'
                 const cond = ir.makeBinOp(eqOp, discExpr, pat, 'i32')
-                return ir.makeIf(cond, res, buildNested(i + 2), wt)
+                return mkIf(cond, res, buildNested(i + 2))
             }
             return buildNested(1)
         },

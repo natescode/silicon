@@ -12,7 +12,7 @@ If you're new, start with [`getting-started.md`](getting-started.md).
 |------|--------------|
 | [getting-started.md](getting-started.md) | 15-minute install-to-running-program walkthrough |
 | [positioning.md](positioning.md) | What Silicon is for, who it's for, and where it's competitive — the elevator pitch (outward-facing companion to ADR 0023) |
-| [overview.md](overview.md) | Language tour (Go-Tour / Odin-overview style) — types, control flow, data, generics, stdlib, platforms, strata |
+| [overview.md](overview.md) | Language tour (Go-Tour / Odin-overview style) — types, control flow, data, generics, closures, async/await, host-API FFI (object handles + generated modules), stdlib, platforms, strata |
 | [stdlib.md](stdlib.md) | Standard library reference — `io` / `num` / `str` / `mem` and the shipped data structures |
 | [targets.md](targets.md) | WASM vs native targets — I/O, string layout, `@extern` patterns |
 | [memory.md](memory.md) | Arenas, `with_arena`, parent-arena escape, `Rc<T>` |
@@ -33,11 +33,14 @@ If you're new, start with [`getting-started.md`](getting-started.md).
 | [compiler-as-a-service.md](compiler-as-a-service.md) | The library-first compiler API (Roslyn-style) |
 | [caas-roslyn-parity.md](caas-roslyn-parity.md) | CaaS gap tracker — what's left to reach Roslyn-level IDE API coverage |
 | [lsp-completion-plan.md](lsp-completion-plan.md) | Plan: LSP autocomplete for stdlib/modules + third-party libs + snippets (`@fn` stub-out) |
+| [lsp-completeness-plan.md](lsp-completeness-plan.md) | What's left for a *full* LSP server — phased, prioritized tracker (correctness spine, missing methods, lifecycle, editor shipping) with file-level entry points |
 | [js-string-builtins.md](js-string-builtins.md) | The `JSString` type, WASM JS String Builtins, and the web/bun platform (`--platform`) |
 | [api-boundaries.md](api-boundaries.md) | Per-subsystem import rules; public vs internal |
 | [struct-design.md](struct-design.md) | `@struct` design and layout rules |
 | [extern-out-pointer.md](extern-out-pointer.md) | `@extern` out-pointer ABI |
 | [struct-ffi.md](struct-ffi.md) | Struct-by-value FFI design proposal (not yet implemented) |
+| [ffi-coverage-gaps.md](ffi-coverage-gaps.md) | The remaining ~7% of host-API bind coverage — per-category root cause + adapter work needed (mostly one classifier seam) |
+| [bun-shell-ffi-plan.md](bun-shell-ffi-plan.md) | Plan: properly support `Bun.$` (the last skip) via a general `js::tagged` primitive + a `shell.si` stdlib — security-driven (preserve the substitution boundary) |
 | [signature-lines.md](signature-lines.md) | Separate `\\ name: type` signature lines; bare params, externs-as-signatures (proposal) |
 | [signature-lines-migration.md](signature-lines-migration.md) | Codemod + phased rollout plan for the signature-lines change (proposal) |
 | [use-includes.md](use-includes.md) | `@use 'path.si';` resolution semantics |
@@ -59,6 +62,7 @@ If you're new, start with [`getting-started.md`](getting-started.md).
 
 | File | What's in it |
 |------|--------------|
+| [v1-feature-status.md](v1-feature-status.md) | Verified v1 feature/shipped-status table (critical path + broader surface + deferred), as of the current branch |
 | [v1.0-implementation-roadmap.html](v1.0-implementation-roadmap.html) | Ordered build plan for the FFI gate, monomorphization, and the capability model — critical-path timeline + per-item subtasks |
 | [v1-user-stories.html](v1-user-stories.html) | v1.0 story tracker — all closed as of 2026-05-28 |
 | [v1.1-user-stories.html](v1.1-user-stories.html) | v1.1 work — LSP, package registry, interpreter, etc. |

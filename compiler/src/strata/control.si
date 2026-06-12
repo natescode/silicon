@@ -51,3 +51,21 @@
 # Phase 9c (ADR 0008) — explicit-arena memory management (`@with_arena` /
 # `@move_to_parent_arena`) are now data-driven strata with on::lower handlers
 # that delegate to the host arena expander — see `src/strata/arena.si`.
+
+# ADR 0018 Phase 1 — blocking `@await` (Asyncify baseline, portable incl. Bun).
+#
+# `@await(expr)` marks a suspension point: `expr` is a call to a suspending host
+# import that (under the Asyncify mechanism) unwinds the wasm stack, lets the
+# host await the underlying Promise, then rewinds and resumes — so the source
+# reads as straight-line synchronous code.  Under the route-A whole-program
+# Asyncify transform the suspension is automatic at the import call, so the
+# keyword lowers TRANSPARENTLY to its argument (it is the surface marker + the
+# anchor for the async effect / function-coloring rule, ADR 0018 §2.2/§3.5).
+# The transform itself runs as a codegen post-pass (codegen/asyncify.ts); the
+# host reactor (js-host.ts) drives the unwind/await/rewind loop.
+@stratum Await := {
+    Compiler::register::expression_keyword('@await');
+    Compiler::on::lower('@await', Await_lower);
+};
+\\ Await_lower (Int)
+@fn Await_lower node := compiler::compiler_lowerExpr(compiler::compiler_arg(node, 0));

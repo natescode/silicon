@@ -1,0 +1,40 @@
+# SPDX-License-Identifier: MIT
+# HAND-AUTHORED runtime FFI substrate — NOT bindgen-generated.
+#
+# `promise` is true concurrency over host I/O (the "next FFI work" #4): the host
+# Promise combinators, exposed as `@suspending` so a guest `@async @fn` joins
+# many in-flight operations with a single `@await`.
+#
+# The concurrency comes from kicking work off WITHOUT awaiting it: a Promise-
+# returning host call invoked through `js::apply` returns the pending Promise as
+# a handle (it does NOT suspend).  Collect those handles into a `js::array`, then
+# `@await(promise::all(handles))` — every operation runs concurrently on the host
+# and the guest resumes once they all settle.
+#
+#   p1 := js::apply(fetch_fn, args1);     ;; kicks off request 1 (pending Promise)
+#   p2 := js::apply(fetch_fn, args2);     ;; kicks off request 2, concurrently
+#   ps := js::array(); js::push(ps, p1); js::push(ps, p2);
+#   results := @await(promise::all(ps));  ;; join both → array of results
+#
+# Results cross as `externref` arrays (read with js::get_index / stream::iter);
+# awaiting an externref needs JSPI, so web/bun only.
+
+\\ @suspending @extern all (JSValue) -> JSValue;           # await Promise.all(handles)
+\\ @suspending @extern race (JSValue) -> JSValue;          # await Promise.race(handles)
+\\ @suspending @extern all_settled (JSValue) -> JSValue;   # await Promise.allSettled(handles)
+\\ @suspending @extern any (JSValue) -> JSValue;           # await Promise.any(handles)
+
+# Await a SINGLE promise handle (e.g. the un-awaited Promise that js::apply
+# returns from a Promise-returning host call) → its resolved value.
+\\ @suspending @extern value (JSValue) -> JSValue;         # await handle
+
+# ── The poll-reactor bridge (F3): a guest Future backed by a real Promise ────
+# `track` starts watching a Promise WITHOUT blocking and returns a token; a
+# poll-future then checks `settled(token)` (non-blocking) and reads `result(token)`
+# once ready.  `tick` is the wake: it yields to the host event loop one macrotask
+# so tracked Promises can settle between poll rounds — this is how the guest-side
+# poll-reactor (future.si) drives real async I/O (see stdlib `future_async.si`).
+\\ @extern track (JSValue) -> Int;                          # watch p; returns a token
+\\ @extern settled (Int) -> Bool;                           # has the tracked promise settled?
+\\ @extern result (Int) -> JSValue;                         # its settled value (or null)
+\\ @suspending @extern tick () -> Int;                      # yield one event-loop turn (the wake)

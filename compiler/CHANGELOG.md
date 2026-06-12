@@ -40,8 +40,13 @@ The first stable Silicon release.
 - HM-lite type inference — Hindley-Milner restricted to declared
   polymorphism on `@fn[T]` and `@type[T]`, no let-generalisation.
   Call sites infer `T` automatically.
-- `@match` — flat form and arm-expression form (`pat => body`) are
-  interchangeable; per-arm pattern alternation (`$Red | $Green => 1`).
+- `@match` — a flat function-call form: the discriminant, then alternating
+  `pattern, { body }` arguments (each body a block); per-arm pattern
+  alternation `$Red | $Green, { 1 }`; an optional trailing `{ body }` default.
+  The infix `pattern => body` arm form was removed — an infix `=>` collided
+  with Silicon's flat (left-to-right) operator precedence once a body was
+  itself a binary expression; a `{ }` block body removes the ambiguity with no
+  precedence rule or AST rewrite.
 - `@defer` — LIFO cleanup at every function exit (return, fall-through,
   break, continue). Replaced the compiler's own arena-cleanup paths.
 - `@try` — Result unwrap shorthand (prefix-keyword, since Silicon bans
@@ -49,7 +54,15 @@ The first stable Silicon release.
 - `u8` / `u16` / `u32` / `u64` unsigned integer types with `*_u` codegen
   variants for unsigned division, shift-right, and comparison.
 - `Int` (target-sized) / `Int32` (alias) / `Int64` (always 64-bit) hierarchy.
-  Explicit `&@toInt64` / `&@toInt` casts — no implicit promotion.
+  Explicit `@i64` / `@u64` casts (`Int → Int64` / `Int → UInt64`; the older
+  `@toInt64` / `@toU64` keyword spellings remain) and `@toInt` (`Int64 → Int`) —
+  no implicit promotion. A literal cast is constant-folded to a direct
+  `i64.const`, so values above the 32-bit range are exact (fixing a bug where
+  `@toInt64(N)` truncated `N` through an intermediate `i32.const`); an
+  out-of-range literal is rejected at typecheck (E0018).
+- Numeric literal forms — hex (`0xFF`), binary (`0b1010`), octal (`0o17`), and
+  `_` digit separators in integers and floats (`5_000_000`, `123_456.789_012`,
+  `0xFF_FF`); separators are stripped when computing the value.
 - First-class function references, indirect call (`call_indirect`),
   function-type as a first-class `SiliconType`.
 - Slices — `Slice[T]` (ptr+len) with bounds-checked indexing; `String`
@@ -64,6 +77,84 @@ The first stable Silicon release.
 - `HashMap[i32, i32]` — open-addressing hash table.
 - `Rc<T>` — single-threaded reference-counted smart pointer.
 - `io.si` — WASI-backed `print` / `println`.
+- `future.si` — the poll-reactor. A future is a poll-closure returning either a
+  negative-sentinel `Int` (`block_on` / `block_all`) or the generic
+  `Poll[T] := $Pending | $Ready value T` (`block_on_poll` / `block_all_poll` —
+  the tag, not the sign, marks readiness, so a future may be `Ready` with any
+  value). `tasks_new` / `spawn` / `poll_once` / `run_tasks` give a dynamic task
+  surface; `block_all` polls every still-pending future each round so independent
+  futures progress interleaved (true concurrency).
+- `future_async.si` — a guest `Future` backed by a real host `Promise`, woken by
+  the reactor: `block_on_async` drives one and `block_all_async` drives many
+  concurrently, yielding to the event loop (`promise::tick`) between poll rounds.
+- `ffi.si` — host-error / Promise-rejection → `Result`: `js_check` / `js_try`
+  lift a caught host throw (a boundary error slot) into `Result[Int, String]`.
+
+### Async & closures
+
+- `@async` / `@await` / `@suspending` — signature-line markers (no grammar
+  change). Coloring rule **E0016**: `@await` only inside an `@async` body.
+- The async reactor (`runWithReactor`) drives a `@suspending`-using program from
+  one vanilla binary, choosing the backend at load time: the **JSPI fast path**
+  (`WebAssembly.Suspending` / `promising`; Bun 1.3.14+, V8/Node/Deno) else the
+  **Asyncify** route-B unwind→await→rewind loop (precise coloring).
+- Closures (ADR 0019): `@closure` / `@call_closure` (non-escaping, all targets,
+  `Vec[i32]` env) and `@export_callback` (escaping, host-callable via a
+  synthesized `__closure_invoke_<k>` trampoline). Under `--target=wasm-gc` the
+  env is a `(ref $Vec_i32)` the engine garbage-collects — leak-free.
+- Host concurrency: the `promise` module — `promise::all` / `race` /
+  `all_settled` / `any` / `value` (all `@suspending`). Kick off N host operations
+  un-awaited, join with one `@await`.
+
+### FFI / host interop (web/bun)
+
+- **Bindgen** (ADR 0017): WebIDL (`@webref/idl`) and Node/Bun `.d.ts` (the TS
+  compiler API) → generated `@extern` modules + host shims, CI-gated byte-for-byte
+  (`bindgen --check`, `bindgen.lock.json`). Three boundary tiers: Tier-0 (linear
+  `String`), Tier-1 (`JSString` externref, zero-copy), Tier-2 (`JSValue` opaque
+  object handle, engine-GC'd). Best-bindable overload selection; `Promise<T>`
+  members → `@suspending`; callback params → closure handles.
+- **The `js` module** — the generic object/array build-and-read substrate for
+  `JSValue` handles: `object` / `array` / `set` / `push` / `get` / `len` / `keys`
+  / `typeof` build options bags and inspect returned handles; `from_*` / `as_*`
+  box/unbox Silicon scalars; `call` / `apply` / `construct` are fallible invokers
+  feeding the boundary error channel (`had_error` / `error_message`); `pin` /
+  `pinned` thread a handle through a `Result`; `bytes_in` / `bytes_out` /
+  `byte_length` / `u8` bulk-copy binary between linear memory and typed arrays.
+- **The `stream` module** — the JS iteration protocol: `iter` / `next` / `value`
+  / `done` over any sync iterable, `aiter` / `anext` (`@suspending`) over async
+  iterables / ReadableStream.
+- **Generated modules**: `path` / `os` / `json` / `bun` / `url` /
+  `url_search_params` / `headers` / `text_encoder` / `text_decoder`; the fetch
+  ecosystem `response` / `request` / `blob` / `form_data` / `abort_controller` /
+  `abort_signal` (Response body readers are awaitable `@suspending`); the event
+  surface `event_target` (`add_event_listener` with a closure listener); Node
+  `crypto` and `fs` (the mixed-union fix unlocked `read_file_sync` etc.); and bare
+  globals `global::fetch` (first-class, `@suspending`) / `atob` / `btoa`. All
+  externref-handle surfaces are web/bun only.
+- **Classifier coverage** — the `.d.ts` and Web-IDL type classifiers now resolve
+  generic params to their constraints, map `bigint` / `unknown` / IDL `any` and
+  dictionaries (options bags) and `sequence<>` / `FrozenArray<>` to `JSValue`
+  handles, and bind a `T | Promise<T>` union through its synchronous arm. Then the
+  Web-IDL adapter gained the `events:'closure'` callback path (ADR 0019 C2): an
+  `EventHandler` attribute → a setter taking a `Callback` closure handle, and a
+  listener argument → a `Callback` param — recovering `abort_signal::set_onabort`
+  and shipping the `event_target` module. (A `Callback` crosses only guest→host,
+  so it is rejected in result/getter/union position; a fired listener can't yet
+  consume its `Event` arg — see the doc.) Finally the last "fundamental" skips
+  were closed: `Intersection`/`Conditional` types → `JSValue` (recovers `Bun.serve`
+  / `Bun.plugin`), a variadic rest param → a spread Impl (`accessor.method(...args)`),
+  a name sanitizer (no invalid `@extern` name can leak), and a static factory that
+  collides with an instance member ships under a `_static` suffix (`Response.json`
+  + `json_static`). `Bun.$` is detected as a tagged-template (a JS syntactic form,
+  not a normal callable) and skipped. **No fundamental bindgen gaps remain.**
+  Finally `path` / `os` flipped to `objects:'jsvalue'` (**mixed tier**): their
+  string/scalar functions stay Tier-0 portable (any host, byte-identical), and
+  their object/variadic members (`path::parse`/`format`/`join`/`resolve`,
+  `os::cpus`/`loadavg`/`user_info`/`network_interfaces`) bind as Tier-2 `JSValue`
+  (web/bun only — gated per call by `E0010`). Aggregate bind rate **90.1 % →
+  99.74 %** (379 bindings, **1 skip** — only the `Bun.$` tagged-template). See
+  [`docs/ffi-coverage-gaps.md`](../docs/ffi-coverage-gaps.md).
 
 ### Compiler-as-a-Service (CaaS)
 
@@ -183,6 +274,19 @@ a v1.x story:
 - **No interactive browser playground.** v1.1 stretch goal.
 - **No multi-version docs site.** At 1.0 there's one version; the URL
   structure supports it landing later.
+- **No container monomorphization.** `Vec`/`HashMap` are i32-element only;
+  `Vec[Float]` / `Vec[Int64]` and HashMap iteration are v1.1 (M1).
+- **No capability / borrow-checker model.** The ocap + effect-class +
+  rcap (`&` / `&mut`) machinery (ADR 0011/0012/0013/0015) is post-v1.0; v1.0
+  closures use by-value/immutable capture, which needs no borrow checker.
+- **A sum type can't carry a host handle natively.** A `JSValue`/`JSString`
+  (externref) can't be a `Result`/`Option` payload (generic sums share one
+  linear/struct layout); thread a handle through a `Result` by `js::pin` id
+  (an `Int`) instead. Native support follows generic-sum monomorphization.
+- **Externref-valued `@suspending` results need JSPI.** Binaryen Asyncify can't
+  carry reference types (binaryen#3739), so an awaited externref requires the
+  JSPI backend — present on Bun 1.3.14+/V8/Node 24+; the Asyncify fallback
+  covers scalar awaits.
 
 ## Migration
 

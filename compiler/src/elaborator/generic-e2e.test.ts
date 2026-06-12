@@ -59,7 +59,7 @@ const GENERIC_STRATUM = `@stratum Generics := {
 };`
 
 describe('@generic — full pipeline E2E', () => {
-    test.skip('a @generic decl alone produces a real $identity function in the WAT', () => {
+    test('a @generic decl alone produces a real $identity function in the WAT', () => {
         const wat = compileToWat(
             `@generic identity x Int := x;`,
             [GENERIC_STRATUM]
@@ -73,7 +73,7 @@ describe('@generic — full pipeline E2E', () => {
         expect(wat).toContain('local.get $x')
     })
 
-    test.skip('a @generic decl followed by a call site lowers the call to the synthesised function', () => {
+    test('a @generic decl followed by a call site lowers the call to the synthesised function', () => {
         const wat = compileToWat(
             `@generic identity x Int := x;
              \\\\ test () -> Int
@@ -98,7 +98,7 @@ describe('@generic — full pipeline E2E', () => {
         ).toThrow()
     })
 
-    test.skip('two @generic declarations both emit their own synthesised functions', () => {
+    test('two @generic declarations both emit their own synthesised functions', () => {
         const wat = compileToWat(
             `@generic id_a x Int := x;
              @generic id_b y Int := y;`,
@@ -109,7 +109,7 @@ describe('@generic — full pipeline E2E', () => {
         expect(wat).toContain('(func $id_b')
     })
 
-    test.skip('the synthesised function actually runs under WebAssembly and returns the expected value', async () => {
+    test('the synthesised function actually runs under WebAssembly and returns the expected value', async () => {
         // Add an export so we can grab the function from JS.
         const stratumWithExport = `@stratum Generics := {
             Compiler::register::keyword('@generic');
@@ -149,7 +149,7 @@ describe('@generic — full pipeline E2E', () => {
         expect(run(0)).toBe(0)
     })
 
-    test.skip('with_name mangles the synthesised function (proves the monomorphization primitive)', () => {
+    test('with_name mangles the synthesised function (proves the monomorphization primitive)', () => {
         // A second stratum that renames the cloned def — what a real
         // monomorphizer would do per (callee, type-args) pair.
         const monoStratum = `@stratum Mono := {

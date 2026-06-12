@@ -230,42 +230,42 @@ describe('@match with parametric sums', () => {
 // Arm-expression form for @match
 // ---------------------------------------------------------------------------
 
-describe('@match arm-expression form', () => {
-    test('simple arm-expression form typechecks', () => {
+describe('@match flat form', () => {
+    test('simple flat form typechecks', () => {
         ok(`@type Option := $Some value Int | $None;
             \\\\ unwrap (Option, Int)
             @fn unwrap opt, dflt := {
-                @match(opt, $Some v => v, $None => dflt)
+                @match(opt, $Some v, { v }, $None, { dflt })
             };`)
     })
 
-    test('arm-expression form with braced bodies', () => {
+    test('flat form with multi-statement block bodies', () => {
         ok(`@type Option := $Some value Int | $None;
             \\\\ unwrap (Option, Int)
             @fn unwrap opt, dflt := {
-                @match(opt, $Some v => {
+                @match(opt, $Some v, {
                     v
-                }, $None => {
+                }, $None, {
                     dflt
                 })
             };`)
     })
 
-    test('arm-expression with generic Option[T] and HM-lite', () => {
+    test('flat form with generic Option[T] and HM-lite', () => {
         ok(`@type Option[T] := $Some value T | $None;
             \\\\ unwrap_or[T] (Option[T], T)
             @fn unwrap_or[T] opt, dflt := {
-                @match(opt, $Some v => v, $None => dflt)
+                @match(opt, $Some v, { v }, $None, { dflt })
             };
             \\\\ use Int
             @fn use := unwrap_or(Some(42), 0);`)
     })
 
-    test('per-arm pattern alternation: $Red | $Green => …', () => {
+    test('per-arm pattern alternation: $Red | $Green, { … }', () => {
         ok(`@type Color := $Red | $Green | $Blue;
             \\\\ warm (Color)
             @fn warm c := {
-                @match(c, $Red | $Green => 1, $Blue => 0)
+                @match(c, $Red | $Green, { 1 }, $Blue, { 0 })
             };`)
     })
 
@@ -273,15 +273,15 @@ describe('@match arm-expression form', () => {
         ok(`@type Shape := $Circle | $Square | $Triangle | $Pentagon;
             \\\\ polygon (Shape)
             @fn polygon s := {
-                @match(s, $Square | $Triangle | $Pentagon => 1, $Circle => 0)
+                @match(s, $Square | $Triangle | $Pentagon, { 1 }, $Circle, { 0 })
             };`)
     })
 
-    test('arm-expression with trailing default', () => {
+    test('flat form with trailing default', () => {
         ok(`@type Color := $Red | $Green | $Blue;
             \\\\ cls (Color)
             @fn cls c := {
-                @match(c, $Red => 1, 0)
+                @match(c, $Red, { 1 }, { 0 })
             };`)
     })
 
@@ -306,7 +306,7 @@ describe('@match arm-expression form', () => {
         ok(`@type Option[T] := $Some value T | $None;
             \\\\ unwrap_or[T] (Option[T], T)
             @fn unwrap_or[T] opt, dflt := {
-                @match(opt, $Some v => v, $None => dflt)
+                @match(opt, $Some v, { v }, $None, { dflt })
             };
             \\\\ use_f Float
             @fn use_f := unwrap_or(Some(3.14), 0.0);`)
@@ -316,7 +316,7 @@ describe('@match arm-expression form', () => {
         errs(`@type Option[T] := $Some value T | $None;
               \\\\ unwrap_or[T] (Option[T], T)
               @fn unwrap_or[T] opt, dflt := {
-                  @match(opt, $Some v => v, $None => dflt)
+                  @match(opt, $Some v, { v }, $None, { dflt })
               };
               \\\\ bad Int
               @fn bad := unwrap_or(Some(3.14), 0.0);`,
@@ -336,11 +336,11 @@ describe('@match arm-expression form', () => {
             };`)
     })
 
-    test('Name::Variant works with arm-expression form + alternation', () => {
+    test('Name::Variant works with flat form + alternation', () => {
         ok(`@type Color := $Red | $Green | $Blue;
             \\\\ warm (Color)
             @fn warm c := {
-                @match(c, Color::Red | Color::Green => 1, Color::Blue => 0)
+                @match(c, Color::Red | Color::Green, { 1 }, Color::Blue, { 0 })
             };`)
     })
 

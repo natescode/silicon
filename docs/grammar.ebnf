@@ -282,7 +282,10 @@ DecLiteral    = digit { digit } { "_" digit { digit } } ;
 HexLiteral    = ("0x" | "0X") hexdigit { hexdigit | "_" hexdigit } ;
 BinLiteral    = ("0b" | "0B") bindigit { bindigit | "_" bindigit } ;
 OctLiteral    = ("0o" | "0O") octdigit { octdigit | "_" octdigit } ;
-FloatLiteral  = digit { digit } "." digit { digit } ;
+FloatLiteral  = DecLiteral "." digit { digit } { "_" digit { digit } } ;
+                (* both the integer and fractional parts accept "_" digit
+                   separators, e.g. 123_456.789_012; they are stripped from
+                   the value. *)
 
 BooleanLiteral = "@true" | "@false" ;
 

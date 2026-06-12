@@ -72,7 +72,7 @@ export function parseModuleDecls(source: string): Map<string, FnSig> {
                 result = siliconTypeToWasm(rtn)
                 siliconResult = rtn
             }
-            functions.set(fnName, { params, result, siliconParams, siliconResult })
+            functions.set(fnName, { params, result, siliconParams, siliconResult, suspending: (node as any).suspending || undefined })
         }
     } catch {
         // Malformed module file — skip

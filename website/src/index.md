@@ -39,8 +39,8 @@ features:
 \\ size (Shape) -> Int
 @fn size sh := {
     @match(sh,
-        $Circle r => r,
-        $Square s => s)
+        $Circle r, { r },
+        $Square s, { s })
 };
 
 @export size;

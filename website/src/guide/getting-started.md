@@ -168,7 +168,7 @@ handling, the standard library, platforms, and strata — read the
 | Immutable binding | `y := 42` |
 | Conditionals | `@if(x == 0, { print('zero') }, { print('nonzero') })` |
 | Loops | `@loop({ @if(done, { @break() }, {}); })` |
-| Pattern matching | `@match(opt, $Some v => v, $None => 0)` |
+| Pattern matching | `@match(opt, $Some v, { v }, $None, { 0 })` |
 | Error handling | `r := ...; @try(r)` |
 | Generic functions | `\\ id[T] T -> T` / `@fn id x := x` |
 | Sum types | `@type Shape := $Circle r Int \| $Rectangle w Int, h Int` |

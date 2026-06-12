@@ -45,7 +45,7 @@ const INLINE = [
         src: `@type Shape := $Circle r Int | $Square s Int;
 \\\\ size (Shape) -> Int
 @fn size sh := {
-    @match(sh, $Circle r => r, $Square s => s)
+    @match(sh, $Circle r, { r }, $Square s, { s })
 };
 @export size;`,
     },

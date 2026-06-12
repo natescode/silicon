@@ -139,6 +139,11 @@ interface SglToml {
          *  Builtins + the externref `JSString` type; `sgl run` executes under
          *  Bun instead of wasmtime).  Default `"native"`. */
         platform?: string
+        /** ADR 0027 — capability representation.  `"i32"` (default) is an
+         *  opaque host-rooted token on every target (WASI-fd-shaped).
+         *  `"externref"` (the safest mode, rides `--target=wasm-gc`) is
+         *  designed for but NOT yet implemented in v0. */
+        'cap-repr'?: string
     }
     /** `[native]` section — default linker inputs for the QBE native backend.
      *  `libs = ["raylib", "m"]` → `-lraylib -lm`; `link-args = [...]` is raw.
@@ -377,7 +382,7 @@ function assertRunnable(entryAbs: string, opts: CompileOptions): void {
 async function compileFile(
     filename: string,
     opts: CompileOptions,
-): Promise<{ wat: string; binary: Uint8Array }> {
+): Promise<{ wat: string; binary: Uint8Array; suspendingImports: readonly string[] }> {
     const entryAbs  = path.resolve(filename)
     const { source, moduleReg } = assembleEntry(entryAbs, opts)
     const extraSources: string[] = await Promise.all(
@@ -391,7 +396,7 @@ async function compileFile(
         compilerVersion: SGL_VERSION,
     })
     if (result.diagnostics.length) emitDiagnostics(result.diagnostics, opts)
-    return { wat: result.wat, binary: result.binary! }
+    return { wat: result.wat, binary: result.binary!, suspendingImports: result.suspendingImports ?? [] }
 }
 
 // ---------------------------------------------------------------------------
@@ -582,8 +587,8 @@ async function cmdRun(positional: string | undefined, opts: CompileOptions): Pro
     // `host` model + the exported `_start` run in-process.
     if (opts.platform === 'bun' || opts.platform === 'web') {
         const { runUnderBun } = await import('./host/js-host')
-        const { binary } = await compileFile(entry, { ...opts, target: 'host' })
-        process.exit(await runUnderBun(binary))
+        const { binary, suspendingImports } = await compileFile(entry, { ...opts, target: 'host' })
+        process.exit(await runUnderBun(binary, { suspendingImports }))
     }
 
     // wasix target so wasmtime can invoke _start directly
@@ -990,6 +995,17 @@ let target: LowerTarget = tomlForTarget?.build.target
 let platform: Platform = tomlForTarget?.build.platform
     ? parsePlatform(tomlForTarget.build.platform, 'sgl.toml [build] platform')
     : 'native'
+// ADR 0027 — capability representation.  v0 ships the i32 token only; the
+// externref opt-in (safest mode) is designed but not yet implemented.
+const capRepr = tomlForTarget?.build['cap-repr'] ?? 'i32'
+if (capRepr !== 'i32') {
+    if (capRepr === 'externref') {
+        console.error(`sgl: sgl.toml [build] cap-repr = "externref" is not yet implemented (v0 ships the i32 capability token). Use "i32", or omit the key.`)
+    } else {
+        console.error(`sgl: sgl.toml [build] cap-repr must be "i32" (got '${capRepr}'). "externref" is reserved for a future wasm-gc opt-in.`)
+    }
+    process.exit(1)
+}
 let pretty = false
 let fmtCheck = false
 let fmtStdout = false

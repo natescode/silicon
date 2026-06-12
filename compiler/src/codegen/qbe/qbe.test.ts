@@ -562,3 +562,56 @@ describe('lowerToQbe — complete function lowering', () => {
         expect(doubleCount).toBe(2)
     })
 })
+
+// ---------------------------------------------------------------------------
+// i64 / u64 casts + numeric literal forms  (native-target parity with WASM)
+// ---------------------------------------------------------------------------
+
+describe('lowerToQbe — @i64 / @u64 casts and literals', () => {
+    test('@i64 of a large literal folds to a full-precision l constant (no extsw)', () => {
+        const out = toQbe(`\\\\ make Int64
+@fn make := @i64(5000000000);`)
+        // extsw would sign-extend the low 32 bits and truncate — the literal
+        // must be emitted whole.
+        expect(out).toContain('=l copy 5000000000')
+        expect(out).not.toContain('extsw')
+    })
+
+    test('@i64 of a non-literal Int sign-extends (extsw)', () => {
+        const out = toQbe(`\\\\ widen (Int) -> Int64
+@fn widen x := @i64(x);`)
+        expect(out).toContain('extsw')
+    })
+
+    test('@u64 of max UInt64 folds to the two\'s-complement l pattern (-1)', () => {
+        const out = toQbe(`\\\\ m u64
+@fn m := @u64(18446744073709551615);`)
+        expect(out).toContain('=l copy -1')
+    })
+
+    test('@u64 of a non-literal Int zero-extends (extuw)', () => {
+        const out = toQbe(`\\\\ z (Int) -> u64
+@fn z x := @u64(x);`)
+        expect(out).toContain('extuw')
+    })
+
+    test('@toInt64 (legacy spelling) folds a large literal too', () => {
+        const out = toQbe(`\\\\ make Int64
+@fn make := @toInt64(5000000000);`)
+        expect(out).toContain('=l copy 5000000000')
+    })
+
+    test('digit separators are stripped in QBE literal emission', () => {
+        const out = toQbe(`\\\\ make Int64
+@fn make := @i64(5_000_000);`)
+        expect(out).toContain('=l copy 5000000')
+        expect(out).not.toContain('5_000_000')
+    })
+
+    test('hex literal folds to decimal in QBE', () => {
+        const out = toQbe(`\\\\ make Int
+@fn make := 0xFF;`)
+        expect(out).toContain('255')
+        expect(out).not.toContain('0xFF')
+    })
+})

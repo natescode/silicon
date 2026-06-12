@@ -41,6 +41,7 @@ import { translateLegacyBlock } from './legacyBlockTranslator'
 // D-E-1: comptime engine for pre-compiling strata handlers @fns at
 // strata-load time.  See `compileStrataHandlers` call in buildStrataRegistry.
 import { compileStrataHandlers, compileHandlerToWasm } from '../comptime/engine'
+import { drainModuleMutations } from '../comptime/imports'
 import parse from '../parser'
 import addToAstSemantics from '../ast/toAst'
 import siliconGrammar from '../grammar/SiliconGrammar'
@@ -122,6 +123,21 @@ export function buildStrataRegistry(
         }
       }
     }
+  }
+
+  // Pre-compile the T0 handlers NOW — before T2/T1 strata register.
+  // A user stratum's inline-block handler is compiled eagerly during
+  // registerStratumDefinition, and its body may use migrated forms
+  // (`!=`, `@if`, `@local`, …) that only lower through their compiled
+  // T0 handlers while __compilingHandler is set (no legacy fallback for
+  // migrated operators).  The final compileStrataHandlers pass below
+  // still picks up T1/T2 named handlers; already-compiled T0 entries
+  // are skipped there.
+  ;(registry as any).__t0Phase = true
+  try {
+    compileStrataHandlers({ type: 'Program', elements: [] } as any, registry)
+  } finally {
+    ;(registry as any).__t0Phase = false
   }
 
   // T2: external strata files supplied by the caller.  Process
@@ -436,6 +452,7 @@ function buildPhaseHandler(
         if (Array.isArray(result)) {
           result = result.map((v) => typeof v === 'number' ? env.irHandles.get(v) : v).filter(Boolean)
         }
+        drainModuleMutations(env, registry)
         env.handles.release(nodeId)
         // Note: do NOT clear env.irHandles — recursive firings share the
         // env and would lose each other's handles mid-flight.  The
@@ -514,6 +531,7 @@ function makeAutoExtractedHandler(
       if (Array.isArray(result)) {
         result = result.map((v) => typeof v === 'number' ? env.irHandles.get(v) : v).filter(Boolean)
       }
+      drainModuleMutations(env, registry)
       env.handles.release(nodeId)
       env.ctx = prevCtx
       env.api = prevApi

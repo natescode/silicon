@@ -34,6 +34,9 @@ export type TypeErrorKind =
     | 'MvpOnlyPhysicalByte'   // Phase 9d-5b (E0013) — &alloc, &str_ptr, …
     | 'GlobalInFunction'      // @global used inside a function body (E0014)
     | 'MissingParamType'      // function has parameters but no signature line (E0015)
+    | 'AwaitOutsideAsync'     // @await used outside an @async function body (E0016)
+    | 'CapDeriveNonRoot'      // @cap_derive on a non-root capability (ADR 0027, E0017)
+    | 'IntLiteralOutOfRange'  // integer literal exceeds its target's 64-bit range (E0018)
 
 export interface TypeError {
     kind: TypeErrorKind
@@ -166,6 +169,41 @@ export function globalInFunction(name: string, sourceLocation?: SourceLocation):
  * a concrete type (genuinely polymorphic). Fixes: annotate the parameter, add a
  * `\\` signature line, or — for a genuinely polymorphic function — make it `[T]`.
  */
+/**
+ * Factory — `@await` used outside an `@async` function (ADR 0018 §2.2 coloring).
+ * `@await` marks a suspension point, which only an `@async`-colored function may
+ * contain; the color propagates up the call graph (and is exactly the set the
+ * Asyncify route-B transform instruments).  Mark the enclosing `@fn` `@async`.
+ */
+export function awaitOutsideAsync(sourceLocation?: SourceLocation): TypeError {
+    return {
+        kind: 'AwaitOutsideAsync',
+        message: `'@await' may only appear inside an '@async' function`,
+        sourceLocation,
+        hint: `mark the enclosing function '@async' on its \\\\ signature line: \\\\ @async name (…) -> …`,
+    }
+}
+
+export function intLiteralOutOfRange(value: string, signed: boolean, sourceLocation?: SourceLocation): TypeError {
+    const ty = signed ? 'Int64' : 'UInt64'
+    const range = signed ? '-9223372036854775808 … 9223372036854775807' : '0 … 18446744073709551615'
+    return {
+        kind: 'IntLiteralOutOfRange',
+        message: `integer literal ${value} is out of range for ${ty} (${range})`,
+        sourceLocation,
+        hint: `${ty} holds 64 bits; for arbitrary precision a BigInt type would be needed (not yet in Silicon)`,
+    }
+}
+
+export function capDeriveNonRoot(got: SiliconType, sourceLocation?: SourceLocation): TypeError {
+    return {
+        kind: 'CapDeriveNonRoot',
+        message: `'@cap_derive' may only attenuate the root capability 'World', not '${formatType(got)}'`,
+        sourceLocation,
+        hint: `derive domain capabilities from the root passed to 'main' (\\\\ @fn main (World) -> Int); a cap can't be forged from a literal or amplified from another domain cap`,
+    }
+}
+
 export function missingParamType(param: string, fn: string, sourceLocation?: SourceLocation): TypeError {
     return {
         kind: 'MissingParamType',

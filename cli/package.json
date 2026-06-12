@@ -1,6 +1,6 @@
 {
   "name": "@silicon/cli",
-  "version": "0.1.5",
+  "version": "1.0.0",
   "type": "module",
   "bin": {
     "sgl": "./src/sigil_cli.ts"

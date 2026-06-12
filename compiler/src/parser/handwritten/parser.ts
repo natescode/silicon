@@ -27,25 +27,20 @@ import { Lexer, computeLineStarts, lineColumnAt, type Token } from './lexer'
 import { astChildren } from '../../ast/astChildren'
 
 /** Internal shape produced by AttachedSig (mirrors toAst's anonymous object). */
-interface SigInfo { name: string; generics?: GenericParams; type: any; extern?: boolean; pub?: boolean; export?: boolean }
+interface SigInfo { name: string; generics?: GenericParams; type: any; extern?: boolean; pub?: boolean; export?: boolean; async?: boolean; suspending?: boolean }
 
 /**
- * Reproduce toAst's decLiteral value reconstruction, including its quirk: ohm's
- * iteration `.sourceString` makes both columns of `("_" digit+)*` span the whole
- * group, so the separator-onward tail is duplicated — `value = text +
- * text.slice(firstUnderscore)`. e.g. `1_000` → `"1_000_000"`, `1_000_000` →
- * `"1_000_000_000_000"`. We match it exactly for byte-identical ASTs.
+ * The literal's value text is the verbatim source (digit separators intact).
+ * Consumers (`parseIntLiteral` / `parseFloat`) strip the `_`s when computing the
+ * numeric value, so `1_000` is one thousand and `123_456.789_012` is exact.
+ *
+ * (Historically these reproduced a buggy quirk of the retired OHM grammar's
+ * `.toAst()` — it duplicated the separator-onward tail, so `1_000` became
+ * `"1_000_000"` and digit separators silently evaluated to the wrong number.
+ * The OHM grammar is no longer the parser, so the verbatim text is used.)
  */
-function ohmDecValue(text: string): string {
-    const first = text.indexOf('_')
-    return first < 0 ? text : text + text.slice(first)
-}
-
-/** Float = INT "." FRAC; only the integer part carries `_` separators. */
-function ohmFloatValue(text: string): string {
-    const dot = text.indexOf('.')
-    return ohmDecValue(text.slice(0, dot)) + '.' + text.slice(dot + 1)
-}
+function ohmDecValue(text: string): string { return text }
+function ohmFloatValue(text: string): string { return text }
 
 const ZERO_LOC: SourceLocation = { startLine: 0, startColumn: 0, endLine: 0, endColumn: 0 }
 
@@ -396,12 +391,17 @@ class Parser {
     // statement); `@extern` = body-less external. They may appear in any order.
     private parseAttachedSig(): SigInfo {
         this.expect('attachedSig')
-        let extern = false, pub = false, exportMod = false
+        let extern = false, pub = false, exportMod = false, async = false, suspending = false
         loop: while (this.at('kw')) {
             switch (this.peek().text) {
                 case '@extern': this.next(); extern = true; break
                 case '@pub':    this.next(); pub = true; break
                 case '@export': this.next(); exportMod = true; break
+                // ADR 0018 §2.2 async coloring markers: `@async` colors a @fn as
+                // permitting suspension points; `@suspending` marks an @extern import
+                // as Promise-returning (the host drives unwind/rewind or JSPI).
+                case '@async':      this.next(); async = true; break
+                case '@suspending': this.next(); suspending = true; break
                 default: break loop
             }
         }
@@ -410,7 +410,7 @@ class Parser {
         const name = this.src.slice(nsStart, nsEnd)     // raw text (keeps '::')
         const generics = this.at('lbrack') ? this.parseGenericParams() : undefined
         const type = this.parseTypeExpr()
-        return { name, generics, type, extern, pub, export: exportMod }
+        return { name, generics, type, extern, pub, export: exportMod, async, suspending }
     }
 
     // Build a body-less `@extern` Definition from one signature (params get the
@@ -428,6 +428,7 @@ class Parser {
         const name = ASTFactory.typedIdentifier(sig.name, ret)
         const node = ASTFactory.definition('@extern', name, params, sig.generics, undefined)
         if (sig.pub) (node as any).pub = true
+        if (sig.suspending) (node as any).suspending = true   // ADR 0018: Promise-returning host import
         return node
     }
 
@@ -447,14 +448,14 @@ class Parser {
                 paramList = paramList.map((p, i) => {
                     const slot = fnType.fnParams[i]
                     return slot
-                        ? ASTFactory.parameter(p.name, slot.typeAnnotation, p.isLiteral, p.value)
+                        ? withParamSpan(ASTFactory.parameter(p.name, slot.typeAnnotation, p.isLiteral, p.value), p)
                         : p
                 })
                 returnAnnotation = fnType.fnReturn?.typeAnnotation
             } else if (fnType && fnType.__domain) {
                 paramList = paramList.map((p, i) => {
                     const t = fnType.types[i]
-                    return t ? ASTFactory.parameter(p.name, t, p.isLiteral, p.value) : p
+                    return t ? withParamSpan(ASTFactory.parameter(p.name, t, p.isLiteral, p.value), p) : p
                 })
                 returnAnnotation = undefined
             } else if (fnType) {
@@ -471,6 +472,10 @@ class Parser {
         // ADR-0024 / ADR-0020 decision-8 signature-line modifiers.
         if (sig?.pub) (node as any).pub = true
         if (sig?.export) (node as any).export = true
+        // ADR 0018 §2.2 — `@async` colors a function; `@suspending` (on a body-less
+        // extern handled above) marks a suspending import.
+        if (sig?.async) (node as any).async = true
+        if (sig?.suspending) (node as any).suspending = true
         node.sourceLocation = this.loc(identTok.start, identTok.end)
         node.relSpan = { start: identTok.start, end: identTok.end }   // absolute now; relativized per element (M3)
         return node
@@ -510,9 +515,16 @@ class Parser {
     // ParamLiteral = identifier TypeExpr? | Literal
     private parseParamLiteral(): Parameter {
         if (this.at('ident')) {
-            const name = this.next().text
+            const tok = this.next()
+            const name = tok.text
             const typeAnnotation = this.startsTypeExpr(this.peek()) ? this.parseTypeExpr() : undefined
-            return ASTFactory.parameter(name, typeAnnotation)
+            const node = ASTFactory.parameter(name, typeAnnotation)
+            // S1 binding identity: a parameter is a definition site — give it
+            // the name token's span so the binder/SemanticModel can navigate
+            // to it (same convention as a Definition's name span).
+            node.sourceLocation = this.loc(tok.start, tok.end)
+            ;(node as any).relSpan = { start: tok.start, end: tok.end }   // absolute now; relativized per element (M3)
+            return node
         }
         const lit = this.parseLiteral()
         return ASTFactory.parameter('_param', undefined, true, lit)
@@ -837,6 +849,15 @@ export function parseToAst(sourceCode: string): Program {
  * elaboration's spread-cloning by reference).  Absolute line/col is reconstructed
  * later by `PositionTable` from `elemBase + relSpan`.
  */
+/** Carry the original parameter's name-token span (S1 binding identity) onto a
+ *  rebuilt Parameter when a signature line distributes its types. */
+function withParamSpan(rebuilt: Parameter, original: Parameter): Parameter {
+    if (original.sourceLocation) rebuilt.sourceLocation = original.sourceLocation
+    const rel = (original as any).relSpan
+    if (rel) (rebuilt as any).relSpan = rel
+    return rebuilt
+}
+
 function relativizeElement(nodes: ASTNode[], base: number): void {
     for (const root of nodes) {
         (root as any).elemBase = base

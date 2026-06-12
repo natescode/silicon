@@ -174,6 +174,28 @@ function unwrap(node: any): any {
     return node
 }
 
+/** Normalise an integer-literal value string for QBE emission: strip `_` digit
+ *  separators and fold any 0x/0b/0o prefix to a decimal value.  Returns the
+ *  two's-complement signed-64-bit form so a `u64` literal ≥ 2^63 emits the bit
+ *  pattern QBE's `l` type expects (e.g. max-u64 → "-1"). */
+function qbeIntText(raw: any): string {
+    const s = String(raw ?? '0').replace(/_/g, '')
+    try { return BigInt.asIntN(64, BigInt(s)).toString() }
+    catch { return s }
+}
+
+/** Strip `_` digit separators from a float-literal value string. */
+function qbeFloatText(raw: any): string {
+    return String(raw ?? 0).replace(/_/g, '')
+}
+
+/** If `arg` unwraps to an integer literal, return its QBE-normalised value
+ *  string (full precision, separators/base folded); else undefined. */
+function qbeIntLiteralValue(arg: any): string | undefined {
+    const n = unwrap(arg)
+    return n && n.type === 'IntLiteral' ? qbeIntText(n.value) : undefined
+}
+
 // ---------------------------------------------------------------------------
 // Module-level entry point  (Story 8-1)
 // ---------------------------------------------------------------------------
@@ -379,8 +401,8 @@ function constInitVal(expr: any, qt: QbeType): string {
     const n = unwrap(expr)
     if (!n) return '0'
     switch (n.type) {
-        case 'IntLiteral':     return String(n.value ?? 0)
-        case 'FloatLiteral':   return qt === 's' ? `s_${n.value ?? 0}` : String(n.value ?? 0)
+        case 'IntLiteral':     return qbeIntText(n.value)
+        case 'FloatLiteral':   return qt === 's' ? `s_${qbeFloatText(n.value)}` : qbeFloatText(n.value)
         case 'BooleanLiteral': return n.value === true ? '1' : '0'
         default:               return '0'
     }
@@ -410,10 +432,10 @@ function lowerExpr(node: any, fn: QbeFnCtx): string {
 
         // -- Literals --------------------------------------------------------
         case 'IntLiteral':
-            return String(n.value ?? 0)
+            return qbeIntText(n.value)
 
         case 'FloatLiteral':
-            return `s_${n.value ?? 0}`
+            return `s_${qbeFloatText(n.value)}`
 
         case 'BooleanLiteral':
             return n.value === true || n.value === 'true' ? '1' : '0'
@@ -501,6 +523,17 @@ function lowerExpr(node: any, fn: QbeFnCtx): string {
             fn.mod.dataDecls.push(`data $${label} = align 1 { b "${escaped}", b 0 }`)
             return `$${label}`
         }
+
+        case 'ArrayLiteral':
+            // `$[…]` needs the length-prefixed heap layout (alloc_array +
+            // arr_load/arr_store), and QBE has no allocator surface yet —
+            // same gap as @with_arena above.  Reject loudly instead of
+            // silently lowering to 0.
+            throw new Error(
+                `[QBE lower] '$[…]' array literals are not yet supported on the native ` +
+                `backend (QBE allocator wiring is a follow-up story; see the @with_arena ` +
+                `note in this file).  Build with the default (WASM) backend.`,
+            )
 
         // -- Stubs for future node types -------------------------------------
         default:
@@ -700,11 +733,33 @@ function lowerBuiltinCall(callee: string, args: any[], fn: QbeFnCtx): string {
             return tmp
         }
 
-        case '@toInt64': {
-            // Int → Int64: sign-extend word to long
-            const arg = args[0] ? lowerExpr(args[0], fn) : '0'
+        case '@toInt64':
+        case '@i64': {
+            // Int → Int64.  A literal folds to a full-precision `l` constant —
+            // `extsw` would truncate it through 32 bits (the original bug); a
+            // runtime word sign-extends.
+            const lit = qbeIntLiteralValue(args[0])
             const tmp = freshTemp(fn)
+            if (lit !== undefined) { emit(fn, `${tmp} =l copy ${lit}`); return tmp }
+            const arg = args[0] ? lowerExpr(args[0], fn) : '0'
             emit(fn, `${tmp} =l extsw ${arg}`)
+            return tmp
+        }
+
+        case '@toU64':
+        case '@u64': {
+            // Int → UInt64.  A literal folds; an already-64-bit value is a pure
+            // relabel; a runtime word zero-extends.
+            const lit = qbeIntLiteralValue(args[0])
+            const tmp = freshTemp(fn)
+            if (lit !== undefined) { emit(fn, `${tmp} =l copy ${lit}`); return tmp }
+            const arg = args[0] ? lowerExpr(args[0], fn) : '0'
+            const argType: SiliconType | undefined = args[0]?.inferredType as any
+            if (argType?.kind === 'Int64') {
+                emit(fn, `${tmp} =l copy ${arg}`)    // already 64-bit: relabel
+            } else {
+                emit(fn, `${tmp} =l extuw ${arg}`)   // word → zero-extend
+            }
             return tmp
         }
 
@@ -772,6 +827,7 @@ function lowerWasmIntrinsic(callee: string, args: any[], fn: QbeFnCtx): string {
         case 'WASM__i64_xor':   { const t = freshTemp(fn); emit(fn, `${t} =l xor ${a[0]}, ${a[1]}`); return t }
         case 'WASM__i64_shl':   { const t = freshTemp(fn); emit(fn, `${t} =l shl ${a[0]}, ${a[1]}`); return t }
         case 'WASM__i64_shr_s': { const t = freshTemp(fn); emit(fn, `${t} =l sar ${a[0]}, ${a[1]}`); return t }
+        case 'WASM__i64_shr_u': { const t = freshTemp(fn); emit(fn, `${t} =l shr ${a[0]}, ${a[1]}`); return t }
 
         // -- f32 arithmetic --------------------------------------------------
         case 'WASM__f32_add':   { const t = freshTemp(fn); emit(fn, `${t} =s add ${a[0]}, ${a[1]}`); return t }

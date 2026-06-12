@@ -184,6 +184,37 @@ Export functions to the host with `@export`, and import host functions with
 puts('from C');
 ```
 
+### First-class functions and closures
+
+A top-level `@fn` can be taken as a value with `@fnref` and called indirectly
+with `@call_indirect`:
+
+```silicon
+\\ apply (Int, Int) -> Int
+@fn apply f, x := { @call_indirect(f, x) };   # f is a function-table index
+apply(@fnref(square), 7);                      # 49
+```
+
+A **closure** captures surrounding values *by value*. `@closure(body_fn, …caps)`
+binds the leading parameters of `body_fn` to the captures; `@call_closure`
+invokes it with the remaining arguments:
+
+```silicon
+\\ scale (Int, Int) -> Int
+@fn scale factor, x := { factor * x };          # leading param `factor` = the capture
+\\ make_scaler (Int) -> Int
+@fn make_scaler factor := {
+    s := @closure(scale, factor);               # capture `factor` by value
+    @call_closure(s, 5)                          # = scale(factor, 5)
+};
+```
+
+Closures can be passed to higher-order Silicon functions, and — wrapped in
+`@export_callback` — handed to the **host as a callback** it stores and invokes
+later, with the captured environment intact (the basis for events like
+`addEventListener`/`setTimeout`). Under `--target=wasm-gc` the closure
+environment is engine-garbage-collected. Capture is by-value/immutable in v1.0.
+
 ---
 
 ## 8. Structs
@@ -210,8 +241,8 @@ A **sum type** has variants, each marked with `$` and an optional payload:
 \\ size (Shape) -> Int
 @fn size sh := {
     @match(sh,
-        $Circle r => r,
-        $Square s => s)
+        $Circle r, { r },
+        $Square s, { s })
 };
 
 size(Circle(10));               # constructors are Circle / Square
@@ -225,13 +256,15 @@ An **enum** is a set of payload-free variants:
 \\ code (Color) -> Int
 @fn code c := {
     @match(c,
-        $Red   => 1,
-        $Green => 2,
-        $Blue  => 3)
+        $Red,   { 1 },
+        $Green, { 2 },
+        $Blue,  { 3 })
 };
 ```
 
-Pattern alternation shares a body across variants: `$Red | $Green => 1`.
+`@match` is an ordinary call: each arm is a pattern argument followed by a
+`{ … }` block body. Pattern alternation shares a body across variants:
+`$Red | $Green, { 1 }`.
 
 ---
 
@@ -346,7 +379,9 @@ or `sgl.toml [build] platform`.
 The pure stdlib modules (`mem`, `num`, `str`) compile on **all** platforms;
 only I/O differs. On the JS host, JavaScript strings are the `JSString` type
 (WASM JS String Builtins) with a `String` ↔ `JSString` bridge — see
-[`js-string-builtins.md`](js-string-builtins.md).
+[`js-string-builtins.md`](js-string-builtins.md). The bun/web platforms also
+reach the host's object, async, and event APIs — see [§16, Calling host
+APIs](#16-calling-host-apis-ffi).
 
 ```silicon
 # bun platform — the portable stdlib + the JS console
@@ -381,6 +416,68 @@ strata under `src/strata/`. See the
 Why this matters: it keeps the core language small and bootstrappable while
 letting the surface syntax grow as a library — the same philosophy as the
 standard library wrapping WASI.
+
+---
+
+## 16. Calling host APIs (FFI)
+
+On the **bun/web** platforms a Silicon program can reach the host's modern API
+surface. `@extern` imports a host function; the import lives in module `env` by
+default, or in a named host module with `mod::field`:
+
+```silicon
+\\ @extern dom::get_element_by_id (JSString) -> JSValue;   # imports "dom"."get_element_by_id"
+```
+
+**Object handles.** Two opaque `externref` handle types let host objects cross
+the boundary without copying:
+
+- **`JSString`** — a JavaScript string (distinct from Silicon's linear-memory
+  UTF-8 `String`), backed by the WASM JS String Builtins.
+- **`JSValue`** — *any* host object (a `Response`, a `Uint8Array`, a DOM node, a
+  parsed-JSON value). It is opaque to the guest and **engine-garbage-collected**.
+
+Handles thread between functions but are never introspected by the guest — they
+go back to the host. (externref needs a JS host, so these are `--platform=web|bun`
+only; a `--native` build rejects them at compile time.)
+
+**Generated built-in modules.** A growing set of host APIs is generated from
+their real specs (Web IDL, `@types/node`, `bun-types`) and ships as built-in
+modules, callable as `module::fn`:
+
+```silicon
+os::platform();                                  # "linux"  (Node node:os, Tier-0)
+u := url::create('https://a.b/p?x=1');           # construct a URL object (handle)
+q := url_search_params::get(url::search_params(u), 'x');   # "1" — handles thread between modules
+obj := json::parse(text);                        # JSValue handle; round-trips back out
+json::stringify(obj);
+```
+
+Tiers: **Tier-0** marshals linear `String` and runs on any host — the `os`/`path`
+string/scalar functions (`platform`/`basename`/…) are Tier-0 portable; **Tier-1**
+(`bun` strings) and **Tier-2** (`json`, the `url`/`headers`/`text_encoder`/
+`text_decoder` constructed interfaces, *and* the `os`/`path` object readers such as
+`path::parse` / `os::cpus`) cross as zero-copy `JSString`/`JSValue` handles (web/bun
+only). `os`/`path` are thus **mixed tier** — a program calling only their string
+functions stays portable; calling an object reader needs a JS host (gated by `E0010`).
+
+**Async (`@async` / `@await` / `@suspending`).** A Promise-returning host import
+is marked `@suspending`; a function that awaits one is `@async`; `@await` is the
+suspension point. The code reads straight-line:
+
+```silicon
+\\ @suspending @extern bun::resolve (JSString, JSString) -> JSString;
+\\ @async resolve_mod (JSString) -> JSString
+@fn resolve_mod id := { @await(bun::resolve(id, id)) };
+```
+
+`@await` is only legal inside an `@async` body (diagnostic **E0016** otherwise).
+At run time `sgl run` drives the suspension through a reactor — using the
+engine's JSPI where available (Bun 1.3+, V8) or a portable Asyncify fallback —
+so the same source runs on every engine.
+
+**Callbacks/events** use closures: pass `@export_callback(@closure(handler, …))`
+to a callback-taking host API (§7); the host calls it back on the event.
 
 ---
 

@@ -5,7 +5,7 @@ mirroring docs/strata-feature-audit.html."""
 import html
 
 OUT = "/home/natescode/repos/silicon/docs/v1.0-implementation-roadmap.html"
-GEN_DATE = "2026-06-09"
+GEN_DATE = "2026-06-10"
 
 # track → (label, css-class, color var)
 TRACKS = {
@@ -24,61 +24,70 @@ VERS = {  # version bucket → (label, css-class)
 # Each subtask: id, track, title, desc(html-ok via inline), adr, files, size, risk, unblocks, ver, crit
 S = [
     # ---- FFI gate ----
-    dict(id="F0a", track="ffi", ver="v1.0", size="L", risk="Med", crit=False,
+    dict(id="F0a", track="ffi", ver="v1.0", size="L", risk="Med", crit=False, status="done",
+         note="First milestone DONE (2026-06-09, ADR 0017 flipped to Accepted). Self-contained: an in-repo hand-authored Tier-0 spec (<code>compiler/bindgen/src/spec.ts</code>) → Binding IR + <code>siToWasm</code> typemap → three emitters (<code>.si</code> @extern block + Bun shim + browser shim). A CLI (<code>bun bindgen/cli.ts --check/--write</code>) splices each fragment between markers in <code>web.si</code> / <code>js-host.ts</code> / <code>web-env.js</code>; generating <b>collapsed the existing drift</b> (js-host ordered <code>math_random</code> last; web.si carried a stray CRLF) into one canonical order/format. <code>bindgen.lock.json</code> pins a content hash; <code>bindgen.test.ts</code> (8 green) enforces byte-for-byte fidelity, cross-site (module,field,arity) key parity, the lock hash, and a round-trip compile of <code>web::math_sqrt</code> (defeats the loader.ts silent-skip). <code>.github/workflows/bindgen.yml</code> gates drift on push/PR + regenerates-via-PR on dispatch. <b>The pipeline then grew to all three boundary tiers + every source</b> (2026-06-10): live <code>@webref/idl</code>+<code>webidl2</code> + Node/Bun <code>.d.ts</code> adapters (TS compiler API); <b>Tier-1</b> <code>JSString</code> strings; <b>Tier-2</b> <code>JSValue</code> object handles (<code>objects:'jsvalue'</code>); shipped modules <code>path</code>/<code>os</code> (Tier-0), <code>bun</code> (Tier-1+2), <code>json</code> (Tier-2 round-trip); <b>constructed Web interfaces</b> via the <code>webiface</code> adapter (<code>url</code>/<code>url_search_params</code>/<code>headers</code>/<code>text_encoder</code>/<code>text_decoder</code> — all 6 IDL shapes constructor/method/getter/setter/static/stringifier, cross-handle threading); and the <b>async</b> (<code>async:'suspending'</code> → <code>@suspending @extern</code>) + <b>event</b> (<code>events:'closure'</code> → <code>Callback</code>) generation modes that feed F1b/C2.",
          title="Bindgen",
          adr="ADR 0017",
          desc="Machine-generate the <code>@extern</code> <code>.si</code> + both host shims from upstream specs (WebIDL for the web — the only source that preserves int-vs-float; <code>.d.ts</code> for Node/Bun), with a <code>bindgen.lock</code> + a CI <code>check-shims</code> test that fails on drift. First slice: regenerate <code>web.si</code> Math/clock byte-for-byte.",
          files="NEW <code>compiler/bindgen/</code>; marker regions in <code>cli/src/host/js-host.ts</code> + <code>playground/playground/web-env.js</code>; <code>compiler/scripts/gen-web-assets.ts</code>; NEW <code>.github/workflows/bindgen.yml</code>",
          unblocks="Anti-drift, on-demand regen. <b>Stays ~10%</b> (doesn't lift the ceiling). Independently buildable."),
-    dict(id="F1a", track="ffi", ver="v1.0", size="M", risk="Med", crit=True,
+    dict(id="F1a", track="ffi", ver="v1.0", size="M", risk="Med", crit=True, status="done",
+         note="Done (2026-06-09). <code>JSValue</code> is a generic <code>externref</code> object handle reusing the <code>JSString</code> ref-slot machinery (no <code>wasm:js-string</code> ops). <code>@extern</code> now builds its full IRImport host-side (<code>compiler_expandExtern</code>): a namespaced <code>mod::field</code> name imports from host module <code>mod</code> (callable, forward-ref'd via a lowerProgram pre-scan), and <code>JSString</code>/<code>JSValue</code> params/results become <code>externref</code> slots gated to <code>--platform=web|bun</code>. Bare scalar externs stay byte-identical to <code>(import \"env\" …)</code>. ~1,500 tests green incl. 9 jsvalue cases; modules instantiate under Bun.",
          title="Object handles / JSValue externref",
          adr="ADR 0018 · P0/P1",
          desc="Generalize the <code>JSString</code>-only externref path to a generic <code>JSValue</code> object handle, so a <code>Response</code>/<code>Uint8Array</code>/DOM node has a type to land in.",
-         files="<code>compiler/src/ir/lower.ts</code> (<code>siliconTypeNameToWasm</code> ~2263, <code>usesExternref</code> ~1426, slot stamping ~1468, new <code>injectExternRefSlots</code> modeled on <code>injectJSStringRefSlots</code> ~457/528, <code>lowerExternParams/Result</code> ~978); <code>strata/defkinds.si</code> <code>ExternDef_lower</code> (import-module override, not hardcoded <code>'env'</code>)",
+         files="<code>compiler/src/ir/lower.ts</code> (<code>siliconTypeNameToWasm</code>, <code>isExternRefKind</code>, <code>injectExternRefSlots</code>, new <code>lowerExternImport</code> + <code>externCalls</code> routing in <code>lowerModuleCall</code>); <code>compiler-api/index.ts</code> + <code>comptime/imports.ts</code> (<code>expandExtern</code>/<code>compiler_expandExtern</code>); <code>strata/defkinds.si</code> <code>ExternDef_lower</code> delegates host-side (import-module override, not hardcoded <code>'env'</code>); <code>types/types.ts</code> + <code>unify.ts</code> (<code>JSValue</code> kind)",
          unblocks="Sync object-returning APIs; lifts bindgen scalar→object tier. <b>~10% → ~35%</b>"),
-    dict(id="F1b", track="ffi", ver="v1.0", size="L", risk="High", crit=True,
+    dict(id="F1b", track="ffi", ver="v1.0", size="L", risk="High", crit=True, status="done",
+         note="DONE (2026-06-10) — blocking <code>@await</code> productized end-to-end, dual-backend. Shipped: (1) the <code>@await(expr)</code> surface stratum (<code>control.si</code>, transparent + typed to its arg) and the <code>@async</code>/<code>@suspending</code> signature-line markers (<b>no grammar change</b>, parsed in the modifier loop). (2) The coloring rule <b>E0016</b> (<code>AwaitOutsideAsync</code>): <code>@await</code> only inside an <code>@async</code> body, inherited by nested <code>@local</code> bindings. (3) The Binaryen Asyncify transform (<code>applyAsyncify</code>) with <b>route-B precise coloring</b> (<code>suspendingImports</code> — instruments only functions reaching a suspending import). (4) The <b>production reactor</b> <code>runWithReactor</code> (<code>codegen/async-reactor.ts</code>) chooses the backend at LOAD time from one vanilla binary: the <b>JSPI fast path</b> (<code>WebAssembly.Suspending</code>/<code>promising</code> — <b>Bun 1.3.14 ships JSPI</b>, <code>bun#20878</code> resolved) else the Asyncify unwind→await→rewind loop. (5) <code>sgl run</code> wiring: <code>compile()</code> reports <code>suspendingImports</code>; <code>runUnderBun</code> drives a <code>@suspending</code>-using program through the reactor. (6) <b>Async host APIs via bindgen</b>: <code>dtsToSpecs({async:'suspending'})</code> turns a <code>Promise&lt;T&gt;</code> method into a <code>@suspending @extern</code> (awaited <code>T</code>); the <code>bun</code> module ships async methods, driven end-to-end (<code>async-production.test.ts</code>, <code>async-modules.test.ts</code>). Known engine constraint (not a gap): Binaryen Asyncify can't carry <code>externref</code> (binaryen#3739), so externref-valued awaits need JSPI; the Asyncify fallback covers scalar awaits. ADR 0018 Accepted.",
          title="Blocking @await (Asyncify) + reactor host + async effect",
          adr="ADR 0018 · P1/P2-host/P3/P5",
          desc="<code>@async</code>/<code>@await</code>/<code>@suspending</code> strata (no grammar change); the Asyncify unwind/rewind transform; the one-shot host → a reactor; an <code>async</code> effect tag. <b>Portable incl. Bun</b> — JSPI is absent in JSC, so Asyncify is the permanent floor.",
          files="NEW strata in <code>strata/control.si</code>; Asyncify pass (Binaryen v117 is already a dep, then an IR pass sibling to <code>loopDesugar</code>); <code>js-host.ts</code> <code>runUnderBun</code> ~100 → reactor; <code>web-env.js</code> <code>startGameLoop</code> → reactor; ADR 0012 lattice <code>+async</code>",
          unblocks="<b>All</b> Promise APIs on Bun today (<code>fetch</code>/<code>.json()</code>/timers/<code>crypto.subtle</code>). <b>~35% → ~80%</b>"),
-    dict(id="C0", track="ffi", ver="v1.0", size="M", risk="Low-Med", crit=True,
+    dict(id="C0", track="ffi", ver="v1.0", size="M", risk="Low-Med", crit=True, status="done",
+         note="Done (2026-06-09, commit 73c6337). <code>@call_indirect(cb, …args)</code> is variadic; a host expander derives the sigKey from the args' wasm types and registers it in the multi-signature table. i32→i32 stays byte-identical; new multi-sig test dispatches a (Int,Int)→Int fn → 42. ~1,545 tests green.",
          title="Generalize the funcref ABI  (closures C0)",
          adr="ADR 0019 · C0",
-         desc="Stop forcing <code>__fn_i_i</code>: derive <code>sigKey</code> from the <code>@fn</code>'s real param/result wasm types; multi-signature funcref table; relax the arity-2 guard. <b>Builds directly on the <code>funcref.si</code> surface just dissolved.</b>",
-         files="<code>compiler/src/ir/lower.ts</code> <code>lowerFnRef</code> ~1584, <code>lowerCallIndirect</code> ~1620, <code>__fn_i_i</code> hardcode ~1608/1625; <code>compiler/src/strata/funcref.si</code>",
-         unblocks="C1; funcref-at-boundary. Pure refactor — must keep byte-equal codegen for non-funcref programs (<code>funcrefTable</code> stays <code>undefined</code>)."),
-    dict(id="C1", track="ffi", ver="v1.0", size="L", risk="Med", crit=True,
+         desc="Stop forcing <code>__fn_i_i</code>: derive <code>sigKey</code> from the <code>@fn</code>'s real param/result wasm types; multi-signature funcref table; relax the arity-2 guard. <b>Built directly on the <code>funcref.si</code> surface dissolved earlier.</b>",
+         files="<code>compiler/src/strata/funcref.si</code>; <code>compiler/src/compiler-api/index.ts</code> (<code>expandCallIndirect</code>); <code>compiler/src/comptime/imports.ts</code> (the funcref/call_indirect path now lives in strata, not the old <code>lower.ts:1584/1620</code>)",
+         unblocks="C1; funcref-at-boundary. Pure refactor — kept byte-equal codegen for non-funcref / i32→i32 programs."),
+    dict(id="C1", track="ffi", ver="v1.0", size="L", risk="Med", crit=True, status="done",
+         note="DONE (2026-06-09). <code>@closure(body_fn, …caps)</code> / <code>@call_closure(clo, …args)</code> as one AST→AST elaborator pass (<code>closureDesugar.ts</code>, loopDesugar model) — <b>zero new IR / codegen / grammar</b>. A closure is an i32 pointer to a <code>Vec[i32]</code> env <code>[fnref, …caps]</code>; each site synthesizes an env-unpack wrapper <code>@fn(env, …args)</code> so every closure shares one uniform <code>(env,…args)→ret</code> <code>call_indirect</code> signature; <code>@call_closure</code> loads the wrapper index from slot 0 and dispatches env-first over the C0 multi-sig table. Runs on EVERY mode. 5 closure.test.ts cases run real WASM (single/double capture, empty-env, coexisting closures, and a closure passed to a combinator — the ADR 0016 gap). Scope shipped = correct call_indirect baseline for i32 captures; the per-concrete-env-type monomorphized DIRECT-call zero-cost form (§2.1) + Float captures are refinements on top.",
          title="Non-escaping closures (all modes, zero-cost)  (closures C1)",
          adr="ADR 0019 · C1",
          desc="<code>&@closure</code>/<code>&@call_closure</code>; lambda-lift in the elaborator; anonymous-struct env in frame/arena; <b>per-concrete-env-type consumer specialization (uses M0)</b> → a direct call; empty-env degenerates to today's <code>@fnref</code>. By-value/<code>&</code>-immutable capture only — <b>does NOT require the borrow checker</b>.",
          files="NEW closure strata alongside <code>control.si</code>; elaborator lambda-lift modeled on <code>elaborator/loopDesugar.ts</code>; <b>reuses M0</b>",
          unblocks="ADR 0016 combinators <code>map</code>/<code>filter</code>/<code>fold</code> (with M1) on every mode. <b>Needs M0 + C0</b>"),
-    dict(id="C2", track="ffi", ver="v1.0", size="L", risk="High", crit=True, gate=True,
+    dict(id="C2", track="ffi", ver="v1.0", size="L", risk="High", crit=True, gate=True, status="done",
+         note="DONE (2026-06-10) — escape gate + host-callable closures end-to-end, INCLUDING the leak-free wasm-gc form. (1) The conservative escape/host-reachability classifier + mode-gate (<code>classifyEscapes</code>): a BARE <code>@closure</code> crossing <code>@extern</code> is rejected, pointing at <code>@export_callback</code>. (2) <b>Host-callable closures</b>: <code>@export_callback(closure)</code> (the sanctioned, gate-exempt escape) hands a closure's handle across <code>@extern</code> to a JS/Bun host, which stores it and calls it back later via a synthesized exported <code>__closure_invoke_&lt;k&gt;</code> trampoline with the captured env intact — <b>verified round-trip under Bun</b> (<code>register(7)</code> → host holds handle → <code>__closure_invoke_1(handle, 5)</code> = 35). (3) <b>Under <code>--target=wasm-gc</code> the env is a <code>(ref $Vec_i32)</code> the engine GCs — leak-free, no bump-heap retention</b> (commit 75f3ac2): the C0 funcref ABI was extended to carry ref-typed (<code>(ref $Vec_i32)</code>) params so <code>@call_indirect</code>'s type matches the ref-typed wrapper; an escaping closure crosses <code>@extern</code> as a real wasm-gc ref (<code>typeof handle === 'object'</code>, not i32), collected when the host drops it. C1 + C2 run under wasm-gc (<code>closure-wasm-gc.test.ts</code>). The 3 GC ref-conversion ops the ADR named absent (<code>ExternConvertAny</code>/<code>AnyConvertExtern</code>/<code>RefCast</code>) are implemented + proven (<code>gc-closure-box.test.ts</code>). (4) <b>Event/callback host APIs via bindgen</b>: <code>dtsToSpecs({events:'closure'})</code> maps a callback param to the <code>Callback</code> closure-handle type; the host invokes it via <code>makeClosureToFn</code> → the trampoline (<code>event-modules.test.ts</code>). The default linear-memory target still retains the env in the bump heap (a bounded, documented cost); wasm-gc removes it. ADR 0019 Accepted.",
          title="Escaping host-callable closures — wasm-gc only  (closures C2 · THE GATE)",
          adr="ADR 0019 · C2 / 0018 · P3",
          desc="<code>(type $Clo (struct (i32 fnIndex)(ref $Env)))</code>; an <code>__invoke_&lt;sig&gt;(externref,…)</code> trampoline; <code>&@on</code>/<code>&@off</code> over the engine-traced externref; <code>@extern</code> externref/funcref slot; the conservative <b>escape/host-reachability classifier</b> (routes any closure reaching <code>@extern</code> to Tier B, rejects on <code>wasm-mvp</code>/<code>--native</code> with a mode-gate E-code). Engine-GC'd — no leak, cycles collected, <code>__closure_release</code> is a no-op. Verified Bun/JSC runs wasm-gc today; v1.0 invocation reuses the existing <code>call_indirect</code> (no JSPI dep).",
          files="<code>lower.ts</code> (wasm-gc struct env + externref trampoline export); NEW escape classifier; <code>@export_callback</code> keyword stratum",
          unblocks="Callbacks/events (<code>addEventListener</code>, <code>setTimeout(cb)</code>, <code>onmessage</code>, <code>EventTarget</code>, <code>.on('data')</code>). <b>~80% → ~97% — THE GATE CLOSES.</b> Needs C1"),
-    dict(id="F3", track="ffi", ver="v1.0", size="L", risk="Med", crit=True,
+    dict(id="F3", track="ffi", ver="v1.0", size="L", risk="Med", crit=True, status="done",
+         note="CORE done (2026-06-09) — the poll-reactor proven end-to-end. <code>stdlib/future.si</code>: a FUTURE is a no-arg C1 closure over a mutable poll-state pointer that returns a PENDING sentinel until ready; <code>block_on</code> drives one to completion, and <code>block_all</code> drives MANY <b>concurrently</b> — each round polls every still-pending future, so independent futures progress interleaved (the true-concurrency model single-in-flight Asyncify can't express). <code>future.test.ts</code>: block_on (single), block_all (3 futures, deadlines 2/4/3 → 60, polled interleaved), and fast+slow independent progress (→107). Reuses the C1/C2 closure keystone as wake continuations — the reason this waited on closures. <b>DONE (2026-06-10) — the native poll-reactor is complete on all three remaining axes.</b> (1) <b>Generic <code>Poll[T] := $Pending | $Ready value T</code></b> in <code>future.si</code> + <code>block_on_poll</code>/<code>block_all_poll</code>: the variant tag (not the sign) marks readiness, so the old negative-sentinel constraint is gone — a future may be <code>Ready</code> with ANY value (a <code>Ready(-9)</code> test proves it). (2) <b>spawn / task-set / drain</b>: <code>tasks_new</code>/<code>spawn</code>/<code>poll_once</code> (the microtask-drain step)/<code>run_tasks</code> — a dynamic task surface over the poll loop. (3) <b>Future ↔ host Promise bridge</b> (<code>stdlib/future_async.si</code>): a guest <code>Future</code> backed by a REAL host Promise, woken by the F1b reactor — <code>promise::track</code>/<code>settled</code>/<code>result</code> watch a Promise non-blockingly and <code>@suspending promise::tick</code> yields one event-loop turn between poll rounds so it settles; <code>block_on_async</code> drives one and <code>block_all_async</code> drives MANY concurrently (a delayed-Promise test proves the wake; a 2-future test proves guest-side concurrency, max-in-flight = 2). The earlier post-gate <code>promise</code> module (host-delegated <code>all</code>/<code>race</code>/…) remains the convenience path; <code>future_async</code> is the native guest-side one. (A closure-desugar bug — wrappers dropped a body's parametric return type, e.g. <code>-> Poll[Int]</code> became bare <code>Poll</code> — was fixed en route.) Single-in-flight Asyncify (<code>@await</code>) still serves simple sequential awaits; the poll-reactor is the many-in-flight path.",
          title="Poll-reactor + tasks  (closures C3)",
          adr="ADR 0018 · P4 / 0019 · C3",
          desc="<code>Future[T]</code> sum (<code>$Pending waker | $Ready value</code>), <code>spawn</code>/<code>block_on</code>, microtask drain, many in-flight awaits. Reuses C1/C2 closures as wake continuations.",
          files="stdlib <code>Future[T]</code>; reactor host generalization",
          unblocks="True concurrency, <code>Promise.all</code>-shaped composition, streaming events. <b>~97% → 100%</b>. Needs C2"),
-    dict(id="F3-opt", track="ffi", ver="v1.0-opt", size="M", risk="Low", crit=False,
+    dict(id="F3-opt", track="ffi", ver="v1.0-opt", size="M", risk="Low", crit=False, status="done",
          title="JSPI fast path",
          adr="ADR 0018 · P2",
+         note="DONE (2026-06-10) — shipped INSIDE the F1b reactor. <code>runWithReactor</code> feature-detects JSPI (<code>hasJSPI()</code> — <code>WebAssembly.Suspending</code> + <code>promising</code>) and on engines that have it (<b>Bun 1.3.14</b> now does, plus V8/Node 24+/Deno) runs the unchanged vanilla binary with a <code>Suspending</code>-wrapped import + a <code>promising</code> entry — no Asyncify transform, no size tax — else falls back to Asyncify route-B. Same <code>@await</code> surface, a load-time backend choice. It is also REQUIRED (not just an optimization) for externref-valued awaited results, which Asyncify can't carry (binaryen#3739).",
          desc="Loader feature-detects <code>WebAssembly.promising</code>; emit a plain <code>call</code> + promising export on V8/Node/Deno (and JSC once it ships). Same <code>@await</code> surface — flip a flag.",
          files="loader glue only",
          unblocks="No new coverage — erases the Asyncify size/perf tax on V8/Node. A detect-and-upgrade, never a hard dep. Slots in any time after F1a."),
     # ---- Monomorphization ----
-    dict(id="M0", track="mono", ver="v1.0", size="M-L", risk="Med", crit=True,
-         title="Comptime monomorphization substrate",
+    dict(id="M0", track="mono", ver="v1.0", size="L", risk="Med", crit=True, status="done",
+         note="<b>FULL monomorphization DONE.</b> The user-facing generics — <code>@fn[T]</code> / <code>@type[T]</code> (Option/Result) — ship via HM-lite (33 e2e + 38 unit tests); THIS row is the comptime-monomorphization machinery closures C1 consume, now fully wired. <b>(1) Full per-call-site memoization</b>: the compiled comptime engine gained comptime conditionals (<code>@if</code>/<code>@not</code>/<code>!=</code>/<code>@nil</code>→0) + string <code>+</code> (<code>compiler::str_concat</code>, with <code>str_of_int</code> for mixed concat) in the legacy-block translator; T0 handlers pre-compile before user strata register, so an inline-block handler fires migrated forms. The four previously-skipped <code>generic-monomorph.test.ts</code> cases (same-type sites share one monomorph; distinct types distinct; the WASM runs) pass. <b>(2) The production <code>@fn[T]</code> stratum</b> (<code>src/strata/generics.si</code>): codegen previously emitted ONE type-erased i32 copy, so a <code>Float</code>/<code>Int64</code>/host-handle instantiation produced <i>invalid wasm</i>. The T0 wildcard <code>on::call_site</code> stratum additively specializes those call sites (probes <code>Compiler::generic_template</code>; <code>type::needs_mono</code> gates on a non-i32-shaped binding; memoized push + rewrite). i32-shaped instantiations keep the erased copy (zero regression); generic-calling-generic chains specialize transitively. <b>Substrate history</b>: the earlier defects (push_definition stranding, @mut field access, per-firing handle tables, <code>state('stratum')</code>→__global__, missing primitives) were fixed in the substrate pass. Native <code>Result[JSValue,E]</code> (F1) rides this same machinery.",
+         title="Comptime monomorphization (full)",
          adr="ADR 0003 · C-1 / 0001 · G-1 core",
-         desc="Audit/wire the comptime API coverage (<code>ast::capture_template</code>/<code>patch_types</code>/<code>with_name</code>/<code>rewrite_call</code>, <code>type::bind_template_args</code>/<code>mangle_suffix</code>); unskip the <code>@generic</code> stratum (9 skipped tests — the stratum is already written); make the <code>on::call_site</code> wildcard fire + state-memoized monomorph-per-(template, type-args). <b>Pulled into v1.0 because closures C1 need it.</b>",
-         files="<code>strata/modules/compiler.si</code>; <code>comptime/imports.ts</code> + body interpreter; <code>wit/comptime.wit</code>; tests <code>elaborator/generic-monomorph.test.ts:103-187</code>, <code>generic-e2e.test.ts:62-174</code>",
-         unblocks="<b>Shared mechanism: closures C1 (env specialization) AND M1 (containers).</b> Design done — mostly wiring + debugging"),
+         desc="Audit/wire the comptime API coverage (<code>ast::capture_template</code>/<code>patch_types</code>/<code>with_name</code>/<code>rewrite_call</code>, <code>type::bind_template_args</code>/<code>mangle_suffix</code>); unskip the <code>@generic</code> stratum (9 skipped tests); make the <code>on::call_site</code> wildcard fire + state-memoized monomorph-per-(template, type-args). <b>Pulled into v1.0 because closures C1 need it.</b>",
+         files="<code>strata/modules/compiler.si</code>; <code>comptime/imports.ts</code> + the strata loader's on::decl/on::call_site registration (<code>elaborator/strataLoader.ts</code>); tests <code>elaborator/generic-monomorph.test.ts:103-187</code>, <code>generic-e2e.test.ts:62-174</code>",
+         unblocks="<b>Shared mechanism: closures C1 (env specialization) AND M1 (containers).</b>"),
     dict(id="M1", track="mono", ver="v1.1", size="L", risk="Med", crit=False,
          title="Container monomorphization — Vec[T] / HashMap[K,V]",
          adr="ADR 0001 · G-1 / 0016",
@@ -152,7 +161,10 @@ def chip(sid):
     cls = TRACKS[s["track"]][1]
     gate = " gate" if s.get("gate") else ""
     crit = " crit" if s.get("crit") else ""
-    return f'<a href="#{s["id"]}" class="chip {cls}{gate}{crit}" title="{html.escape(strip(s["title"]))}"><b>{s["id"]}</b> {html.escape(strip_short(s["title"]))}</a>'
+    status = s.get("status", "todo")
+    stcls = f" chip-{status}" if status in ("done", "blocked", "partial") else ""
+    mark = {"done": "✓ ", "blocked": "⚠ ", "partial": "◐ "}.get(status, "")
+    return f'<a href="#{s["id"]}" class="chip {cls}{gate}{crit}{stcls}" title="{html.escape(strip(s["title"]))}"><b>{mark}{s["id"]}</b> {html.escape(strip_short(s["title"]))}</a>'
 
 def strip(t):
     import re
@@ -174,10 +186,16 @@ def row(s):
     vlabel, vcls = VERS[s["ver"]]
     gate = ' <span class="gatetag">GATE</span>' if s.get("gate") else ""
     crit = ' <span class="crittag">critical path</span>' if s.get("crit") else ""
-    return f"""<tr id="{s['id']}" class="t-{TRACKS[s['track']][1]} v-{vcls}">
+    status = s.get("status", "todo")
+    stbadge = {"done": ' <span class="st st-done">✓ DONE</span>',
+               "blocked": ' <span class="st st-blocked">⚠ BLOCKED</span>',
+               "partial": ' <span class="st st-partial">◐ PARTIAL</span>'}.get(status, "")
+    note = f'<div class="tnote tnote-{status}">{s["note"]}</div>' if s.get("note") else ""
+    return f"""<tr id="{s['id']}" class="t-{TRACKS[s['track']][1]} v-{vcls} status-{status}">
   <td class="cid"><span class="idbadge {TRACKS[s['track']][1]}">{s['id']}</span></td>
-  <td class="ctitle"><div class="tt">{s['title']}{gate}{crit}</div>
+  <td class="ctitle"><div class="tt">{s['title']}{stbadge}{gate}{crit}</div>
       <div class="tdesc">{s['desc']}</div>
+      {note}
       <div class="tfiles"><span class="k">Files</span> {s['files']}</div>
       <div class="tunb"><span class="k">Unblocks</span> {s['unblocks']}</div></td>
   <td class="cadr">{html.escape(s['adr'])}</td>
@@ -200,6 +218,7 @@ def item_table(track_key, heading, blurb, ids):
 n_total = len(S)
 n_crit = sum(1 for s in S if s.get("crit"))
 n_v10 = sum(1 for s in S if s["ver"].startswith("v1.0"))
+n_done = sum(1 for s in S if s.get("status") == "done")
 
 # ---- timeline ladder ----
 ladder = ""
@@ -250,7 +269,7 @@ HTML = f"""<!DOCTYPE html>
   .tile {{ background:var(--panel); border:1px solid var(--border); border-radius:12px; padding:15px 14px; text-align:center; }}
   .tile .num {{ font-size:28px; font-weight:800; letter-spacing:-.02em; }}
   .tile .lbl {{ color:var(--muted); font-size:12px; margin-top:3px; line-height:1.3; }}
-  .tile.gate .num {{ color:var(--crit); }} .tile.v10 .num {{ color:var(--v10); }}
+  .tile.gate .num {{ color:var(--crit); }} .tile.v10 .num {{ color:var(--v10); }} .tile.done .num {{ color:var(--mono); }}
   .legend {{ display:flex; flex-wrap:wrap; gap:16px; color:var(--muted); font-size:13px; margin-top:14px; }}
   .lg {{ display:inline-flex; align-items:center; gap:7px; }}
   .dot {{ width:11px; height:11px; border-radius:50%; display:inline-block; }}
@@ -305,6 +324,20 @@ HTML = f"""<!DOCTYPE html>
   .tt {{ font-weight:650; font-size:15px; margin-bottom:6px; }}
   .gatetag {{ font-size:10px; font-weight:800; color:#0d1117; background:var(--gate); padding:1px 7px; border-radius:6px; letter-spacing:.04em; }}
   .crittag {{ font-size:10px; font-weight:700; color:var(--crit); border:1px solid #4a2f3e; padding:1px 7px; border-radius:6px; }}
+  .st {{ font-size:10px; font-weight:800; padding:1px 7px; border-radius:6px; letter-spacing:.04em; }}
+  .st-done {{ color:#0d1117; background:var(--mono); }}
+  .st-blocked {{ color:#0d1117; background:var(--gate); }}
+  .st-partial {{ color:#0d1117; background:#d6a700; }}
+  .chip-done {{ border-color:var(--mono); }} .chip-blocked {{ border-color:var(--gate); }}
+  .chip-partial {{ border-color:#d6a700; }}
+  tr.status-done td.cid {{ box-shadow:inset 3px 0 0 var(--mono) !important; }}
+  tr.status-blocked td.cid {{ box-shadow:inset 3px 0 0 var(--gate) !important; }}
+  tr.status-partial td.cid {{ box-shadow:inset 3px 0 0 #d6a700 !important; }}
+  .tnote {{ font-size:12.5px; margin:8px 0; padding:9px 12px; border-radius:8px; line-height:1.5; }}
+  .tnote code {{ background:#11161f; }}
+  .tnote-done {{ background:rgba(63,185,80,.08); border:1px solid #1f4427; color:#bfe6c8; }}
+  .tnote-blocked {{ background:rgba(247,185,85,.08); border:1px solid #4a3a1e; color:#f0d9a8; }}
+  .tnote-partial {{ background:rgba(214,167,0,.08); border:1px solid #4a3a1e; color:#f0d9a8; }}
   .tdesc {{ color:#d2dae4; font-size:14px; margin-bottom:8px; }}
   .tfiles, .tunb {{ font-size:12.5px; color:var(--muted); margin-top:5px; }}
   .tfiles .k, .tunb .k {{ display:inline-block; font-size:10px; text-transform:uppercase; letter-spacing:.06em;
@@ -340,10 +373,22 @@ HTML = f"""<!DOCTYPE html>
   key files, size, risk, and what it unblocks.</p>
   <div class="meta">Generated <b>{GEN_DATE}</b> · derived from ADRs 0001/0003/0008/0009/0011/0012/0013/0015/0016/0017/0018/0019 ·
   cross-checked against <code>docs/v1.0-critical-path.md</code></div>
+  <div class="meta">Progress (2026-06-10): <b style="color:var(--mono)">Phases 0–3 ✓ — the v1.0 FFI mechanism gate is CLOSED and the poll-reactor is complete.</b>
+  C0/F0a; F1a object handles; F1b blocking <code>@await</code> productized (dual-backend, JSPI + Asyncify); C1 closures + C2
+  (escape gate AND host-callable closures, leak-free under <code>--target=wasm-gc</code>, Bun round-trip verified); <b>F3 poll-reactor
+  done</b> — generic <code>Poll[T]</code>, spawn/task-drain, and a guest <code>Future</code>↔host <code>Promise</code> bridge woken by the reactor
+  (<code>future_async.si</code>). <b>M0 DONE (full): the production <code>@generic</code>/<code>@fn[T]</code> stratum + per-call-site
+  memoization shipped — Float/Int64/host-handle instantiations specialize, i32-shaped stay erased; user-facing generics also ship via
+  <code>@fn[T]</code> HM-lite. Native host-handle sums (F1) — <code>Result[JSValue,E]</code> under wasm-gc — ride it.</b>
+  <b>Capability model (K1–K8) not started — by design (post-v1.0); M1 container mono is v1.1.</b>
+  <b>Beyond the mechanism gate</b>, the FFI <i>surface</i> was broadened end-to-end (see “Post-gate FFI surface” below) and the bind rate
+  reached <b style="color:var(--mono)">99.74% (379 / 380 members)</b> — the only unbound member is <code>Bun.$</code>, a tagged-template
+  (a JS syntactic form, not a classifier gap). No fundamental bindgen gaps remain.</div>
   <div class="tiles">
     <div class="tile"><div class="num">{n_total}</div><div class="lbl">subtasks</div></div>
     <div class="tile gate"><div class="num">{n_crit}</div><div class="lbl">on the critical path</div></div>
     <div class="tile v10"><div class="num">{n_v10}</div><div class="lbl">v1.0 gate items</div></div>
+    <div class="tile done"><div class="num">{n_done}</div><div class="lbl">shipped (done)</div></div>
     <div class="tile"><div class="num">3</div><div class="lbl">workstreams · 12 ADRs</div></div>
   </div>
   <div class="legend">{legend}</div>
@@ -354,6 +399,7 @@ HTML = f"""<!DOCTYPE html>
   <a href="#item-ffi">FFI gate</a>
   <a href="#item-mono">Monomorphization</a>
   <a href="#item-cap">Capability model</a>
+  <a href="#surface">Post-gate FFI surface</a>
   <a href="#tensions">Sequencing notes</a>
 </div></nav>
 
@@ -366,15 +412,82 @@ HTML = f"""<!DOCTYPE html>
     (<code>M0 → C0 → C1 → C2</code>, →97%) converge at the poll-reactor.</p>
     <div class="ladder">{ladder}</div>
     <div class="critline"><b>Longest chain to the gate:</b>
-      <code>M0</code> → <code>C0</code> → <code>C1</code> → <code>C2</code> (gate, ~97%) → <code>F3</code> (100%).
-      <code>F0a</code> (bindgen) and the capability model (<code>K1…K8</code>) are off the critical path.</div>
+      <code>M0</code> ✓ (full) → <code>C0</code> ✓ → <code>C1</code> ✓ → <code>C2</code> ✓ (mechanism gate, ~97%) → <code>F3</code> ✓ (poll-reactor complete).
+      Surface bind rate then reached <b>99.74%</b> (only <code>Bun.$</code> unbound). <code>F0a</code> (bindgen) and the capability model
+      (<code>K1…K8</code>) are off the critical path.</div>
   </section>
 
   {item_table("ffi", "Item A — FFI gate", "The hard v1.0 product gate: lift web/bun coverage from ~10% to 100%. Bindgen, object handles, and Asyncify <code>@await</code> reach ~80% <i>without</i> monomorphization; the closures keystone (C0→C1→C2) needs it, and C2 closes the gate. ADR 0017 → 0018 → 0019.", ["F0a","F1a","F1b","C0","C1","C2","F3","F3-opt"])}
 
-  {item_table("mono", "Item B — Monomorphization", "<code>@fn[T]</code> and <code>@type[T]</code> (Option/Result) already ship. What remains: the comptime-specialization <b>substrate</b> (pulled into v1.0 because closures C1 consume it) and the <b>container</b> application (Vec[T]/HashMap[K,V], v1.1). ADR 0001 (substrate via ADR 0003 C-1).", ["M0","M1"])}
+  {item_table("mono", "Item B — Monomorphization", "<code>@fn[T]</code> and <code>@type[T]</code> (Option/Result) ship via <b>HM-lite</b> (user-facing generics). The comptime-specialization machinery (M0) is now <b>fully done</b>: the production <code>@generic</code>/<code>@fn[T]</code> stratum + per-call-site memoization specialize Float/Int64/host-handle instantiations (i32-shaped stay erased), and native host-handle sums (F1, <code>Result[JSValue,E]</code> under wasm-gc) ride it. The <b>container</b> application (Vec[T]/HashMap[K,V]) is the remaining v1.1 piece (M1). ADR 0001 (substrate via ADR 0003 C-1).", ["M0","M1"])}
 
   {item_table("cap", "Item C — Capability model", "All zero-code today (the P0 comptime substrate shipped). The <code>on::check</code> + reflection substrate gates everything. <b>Deliberately decoupled from the v1.0 FFI gate</b> — v1.0 closures use by-value/immutable capture, which needs no borrow checker. ADR 0011/0012/0013/0015.", ["K1","K2","K3","K4","K5","K6","K7","K8"])}
+
+  <section id="surface" class="prose">
+    <h2 class="sec"><span class="dot ffi"></span>Post-gate FFI surface — broadening the actual API reach</h2>
+    <p class="blurb">The roadmap above is the <b>mechanism</b> gate (can every host-interaction <i>shape</i> be expressed). Once
+    C2 closed it, the work shifted to the FFI <b>surface</b> — making the bound APIs genuinely callable and shipping
+    more of them. All of the below landed on <code>v1-roadmap</code> (2026-06-10), each tested; not roadmap items, but
+    the payoff of the gate.</p>
+    <table class="rt">
+    <thead><tr><th>#</th><th>Surface work</th><th>What it delivers</th><th>Status</th></tr></thead>
+    <tbody>
+    <tr class="t-ffi status-done"><td class="cid"><span class="idbadge ffi">N1</span></td>
+      <td class="ctitle"><div class="tt">Generic object/array build-and-read</div>
+      <div class="tdesc">The <code>js</code> module: build options-bag objects/arrays in-guest (<code>js::object</code>/<code>array</code>/<code>set</code>/<code>push</code>/<code>from_*</code>) and inspect handles handed back (<code>get</code>/<code>len</code>/<code>keys</code>/<code>typeof</code>/<code>as_*</code>). Closes the options-bag-in + inspection-out gaps that left most <code>JSValue</code>-returning APIs uncallable.</div></td>
+      <td class="cadr">next FFI #1</td><td class="cmeta"><span class="st st-done">✓ DONE</span></td></tr>
+    <tr class="t-ffi status-done"><td class="cid"><span class="idbadge ffi">N2</span></td>
+      <td class="ctitle"><div class="tt">Host-error / Promise-rejection → <code>Result</code></div>
+      <div class="tdesc">The <code>@try</code>-at-the-boundary bridge: <code>js::call</code>/<code>apply</code>/<code>construct</code> catch a host throw into a boundary slot (no trap); the reactor captures a Promise rejection the same way; stdlib <code>ffi.si</code> (<code>js_check</code>/<code>js_try</code>) lifts it into <code>Result[Int, String]</code>.</div></td>
+      <td class="cadr">next FFI #2</td><td class="cmeta"><span class="st st-done">✓ DONE</span></td></tr>
+    <tr class="t-ffi status-done"><td class="cid"><span class="idbadge ffi">N3</span></td>
+      <td class="ctitle"><div class="tt">Async iteration / streaming</div>
+      <div class="tdesc">The <code>stream</code> module: <code>iter</code>/<code>next</code>/<code>value</code>/<code>done</code> over any host iterable (array/Set/Map/generator/string), and <code>aiter</code>/<code>anext</code> (<code>@suspending</code>) over async generators / ReadableStream via the reactor.</div></td>
+      <td class="cadr">next FFI #3</td><td class="cmeta"><span class="st st-done">✓ DONE</span></td></tr>
+    <tr class="t-ffi status-done"><td class="cid"><span class="idbadge ffi">N4</span></td>
+      <td class="ctitle"><div class="tt">True concurrency over host I/O</div>
+      <div class="tdesc">The <code>promise</code> module: <code>all</code>/<code>race</code>/<code>all_settled</code>/<code>any</code>/<code>value</code> (<code>@suspending</code>). Kick off N host ops un-awaited, join with one <code>@await</code>. <b>Folds back into F3</b> as the host-delegated concurrency path.</div></td>
+      <td class="cadr">next FFI #4</td><td class="cmeta"><span class="st st-done">✓ DONE</span></td></tr>
+    <tr class="t-ffi status-done"><td class="cid"><span class="idbadge ffi">N5</span></td>
+      <td class="ctitle"><div class="tt">Generator harvest — overload selection + fetch ecosystem</div>
+      <div class="tdesc">dts best-bindable overload selection (recovered Bun.spawn/write/file); webiface <code>@suspending</code> (Response.json/text awaitable); shipped <code>response</code>/<code>request</code>/<code>blob</code>/<code>form_data</code>/<code>abort_controller</code>/<code>abort_signal</code> + <code>crypto</code> (+92 bindings).</div></td>
+      <td class="cadr">next FFI #5</td><td class="cmeta"><span class="st st-done">✓ DONE</span></td></tr>
+    <tr class="t-mono status-done"><td class="cid"><span class="idbadge mono">F1</span></td>
+      <td class="ctitle"><div class="tt"><code>Result</code> can carry a host handle — <b>natively</b></div>
+      <div class="tdesc"><code>js_try(JSValue) -> Result[Int, String]</code> (pins the handle) shipped first; the NATIVE form now ships too. Under <code>--target=wasm-gc</code>, <code>Result[JSValue, String]</code> / <code>Option[JSValue]</code> carry the externref handle <b>natively (no <code>js::pin</code>)</b>: a per-instantiation <b>flat-union GC struct</b> (<code>src/ir/sumMono.ts</code>) types the host-handle field as <code>externref</code> — and the flat-union layout (every field its own slot) makes the heterogeneous <code>Result</code> (externref <code>Ok</code>, i32 <code>Err</code>) work. Constructors route to <code>Ok$JSValue_String</code>; <code>@match</code> reads the specialized struct with per-field types; a linear-mem target fails fast (externref isn't addressable) directing to <code>js::pin</code>/wasm-gc.</div></td>
+      <td class="cadr">follow-up #1</td><td class="cmeta"><span class="st st-done">✓ DONE</span></td></tr>
+    <tr class="t-ffi status-done"><td class="cid"><span class="idbadge ffi">F2</span></td>
+      <td class="ctitle"><div class="tt">Bulk binary marshalling</div>
+      <div class="tdesc"><code>js::bytes_in</code>/<code>bytes_out</code>/<code>byte_length</code>/<code>u8</code> — bulk-copy between guest linear memory and a host typed array (crypto bytes, <code>response.arrayBuffer</code>, file reads), instead of byte-by-byte.</div></td>
+      <td class="cadr">follow-up #2</td><td class="cmeta"><span class="st st-done">✓ DONE</span></td></tr>
+    <tr class="t-ffi status-done"><td class="cid"><span class="idbadge ffi">F3s</span></td>
+      <td class="ctitle"><div class="tt">dts mixed-union → Node <code>fs</code></div>
+      <div class="tdesc">Fixed the union classifier (mixed <code>string | Buffer | URL</code> → String/JSValue) → unlocked <code>fs</code> (49 bindings) + ~19 crypto primitives; also fixed a latent dropped-optional positional bug.</div></td>
+      <td class="cadr">follow-up #3</td><td class="cmeta"><span class="st st-done">✓ DONE</span></td></tr>
+    <tr class="t-ffi status-done"><td class="cid"><span class="idbadge ffi">F4</span></td>
+      <td class="ctitle"><div class="tt">Bare-global harvest — first-class <code>fetch</code></div>
+      <div class="tdesc">A bare-global dts mode → the <code>global</code> module: <code>global::fetch</code> (<code>@suspending</code>, Promise&lt;Response&gt;), <code>atob</code>/<code>btoa</code>, <code>queue_microtask</code>. <code>fetch</code> is now first-class, not a <code>js::global</code>+<code>apply</code> composition.</div></td>
+      <td class="cadr">follow-up #4</td><td class="cmeta"><span class="st st-done">✓ DONE</span></td></tr>
+    <tr class="t-ffi status-done"><td class="cid"><span class="idbadge ffi">F5</span></td>
+      <td class="ctitle"><div class="tt">Classifier coverage — no fundamental bindgen gaps</div>
+      <div class="tdesc">The <code>.d.ts</code> + Web-IDL classifiers learned the rest: generic params → their constraints, <code>bigint</code>/<code>unknown</code>/IDL <code>any</code>/dictionaries/<code>sequence&lt;&gt;</code> → <code>JSValue</code>, <code>T | Promise&lt;T&gt;</code> via its sync arm, <code>Intersection</code>/<code>Conditional</code> → <code>JSValue</code> (Bun.serve/plugin), variadic → a spread Impl, a name sanitizer, and static-collision → <code>_static</code> (Response.json). Lifted bind rate <b>90.1% → 97.6%</b>.</div></td>
+      <td class="cadr">follow-up #5</td><td class="cmeta"><span class="st st-done">✓ DONE</span></td></tr>
+    <tr class="t-ffi status-done"><td class="cid"><span class="idbadge ffi">F6</span></td>
+      <td class="ctitle"><div class="tt">webiface <code>events:'closure'</code> + <code>event_target</code></div>
+      <div class="tdesc">Ported the closure-callback path to the Web-IDL adapter: an <code>EventHandler</code> attribute → a setter taking a <code>Callback</code> handle (<code>abort_signal::set_onabort</code>), a listener arg → a <code>Callback</code> param, plus a new <code>event_target</code> module (<code>add_event_listener</code>). <code>Callback</code> is rejected in result/getter/union position (it crosses only guest→host).</div></td>
+      <td class="cadr">follow-up #6</td><td class="cmeta"><span class="st st-done">✓ DONE</span></td></tr>
+    <tr class="t-ffi status-done"><td class="cid"><span class="idbadge ffi">F7</span></td>
+      <td class="ctitle"><div class="tt"><code>path</code>/<code>os</code> mixed-tier flip → <b>99.74%</b></div>
+      <div class="tdesc">Flipped <code>path</code>/<code>os</code> to <code>objects:'jsvalue'</code> (recovering parse/format/join/resolve, cpus/loadavg/user_info/network_interfaces) while keeping their string/scalar functions <b>Tier-0 portable</b> — a per-call <code>E0010</code> gate enforces it. Bind rate <b>97.6% → 99.74%</b> (379 / 380).</div></td>
+      <td class="cadr">follow-up #7</td><td class="cmeta"><span class="st st-done">✓ DONE</span></td></tr>
+    <tr class="t-ffi status-partial"><td class="cid"><span class="idbadge ffi">F8</span></td>
+      <td class="ctitle"><div class="tt"><code>Bun.$</code> — the one remaining skip</div>
+      <div class="tdesc">A tagged-template function (<code>$`…`</code>); not a normal callable, so the generator correctly skips it. A security-driven technical plan (<code>docs/bun-shell-ffi-plan.md</code>) proposes a general <code>js::tagged</code> primitive + a <code>shell.si</code> stdlib that preserves the substitution-escaping boundary.</div></td>
+      <td class="cadr">plan</td><td class="cmeta"><span class="st st-partial">◐ PLANNED</span></td></tr>
+    </tbody></table>
+    <p class="blurb">Also this period: <code>@match</code> moved to the flat function-call form (<code>@match(x, $A v, {{ v }}, …)</code>),
+    dropping the infix <code>=&gt;</code> arm operator that collided with flat operator precedence.</p>
+  </section>
 
   <section id="tensions">
     <h2 class="sec">Sequencing notes — the three couplings that set the order</h2>

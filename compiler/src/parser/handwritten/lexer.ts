@@ -260,7 +260,10 @@ export class Lexer {
             || (s.charCodeAt(this.i) === 95 /* _ */ && moreDigits(this.i + 1)))) this.i++
         if (s[this.i] === '.' && moreDigits(this.i + 1)) {
             this.i++ // dot
-            while (this.i < len && DIGIT[s.charCodeAt(this.i)] === 1) this.i++
+            // Fractional digits may also use `_` as a separator (between digits),
+            // matching the integer part: `123_456.789_012`.
+            while (this.i < len && (DIGIT[s.charCodeAt(this.i)] === 1
+                || (s.charCodeAt(this.i) === 95 /* _ */ && moreDigits(this.i + 1)))) this.i++
             return this.tok('float', start)
         }
         return this.tok('int', start, { base: 'decimal' })

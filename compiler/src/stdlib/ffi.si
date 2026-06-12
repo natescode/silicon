@@ -1,0 +1,67 @@
+# SPDX-License-Identifier: MIT
+# Next FFI work #2 — host-error / Promise-rejection → Silicon `Result`.
+#
+# A fallible host call traps the module by default.  The `js` boundary captures
+# a thrown host exception (via the `js::call`/`js::apply`/`js::construct`
+# invokers) or an awaited Promise rejection (via the host reactor) into a
+# boundary error slot instead, and these helpers lift that outcome into a
+# `Result[T, String]` — the `@try`-at-the-boundary bridge.
+#
+#   @use 'ffi';
+#   resp := js::apply(parse_fn, args);          ;; null + boundary error on throw
+#   @match(js_check(0),
+#       $Ok _,  { use(resp) },                   ;; value stays in the local `resp`
+#       $Err m, { recover(m) });                  ;; m : String (the host message)
+#
+# The error is a LINEAR `String` (the host message) so it fits a Result record;
+# externref values can't live in linear memory, so the success value either
+# stays in a guest local (`js_check`) or is threaded by pinned id (`js_try`).
+
+@use 'result';
+
+# Lift the most-recent host-call outcome into a Result, carrying `ok` as the
+# success payload (an Int — a status, a count, or a `js::pin` id).  The success
+# value itself, when it is a JSValue, stays in the caller's local; to thread it
+# THROUGH the Result, pin it and pass the id:  `js_check(js::pin(r))` yields
+# `Ok(pin_id)` (retrieve later with `js::pinned(id)`), or `Err(message)`.
+#
+# The branch values are typed locals so HM-lite pins the mixed
+# `Result[Int, String]` (the Ok and Err arms otherwise infer different free type
+# parameters); the error branch is lazy, so `js::error_message` only runs (and
+# clears the slot) on failure.
+\\ js_check (Int) -> Result[Int, String]
+@fn js_check ok := {
+    @if(js::had_error(), {
+        \\ e Result[Int, String]
+        @mut e := Err(js::error_message());
+        e
+    }, {
+        \\ k Result[Int, String]
+        @mut k := Ok(ok);
+        k
+    })
+};
+
+# Lift a fallible call's result handle into a Result, pinning the success handle
+# so it threads through the Result by id (retrieve with `js::pinned(id)`).
+#
+#   resp := js::call(client, get, args);     ;; null + boundary error on throw
+#   @match(js_try(resp),
+#       $Ok id, { use(js::pinned(id)) },
+#       $Err m, { recover(m) });
+\\ js_try (JSValue) -> Result[Int, String]
+@fn js_try h := {
+    @if(js::had_error(), {
+        \\ e Result[Int, String]
+        @mut e := Err(js::error_message());
+        e
+    }, {
+        \\ k Result[Int, String]
+        @mut k := Ok(js::pin(h));
+        k
+    })
+};
+
+# True when the most recent fallible host call failed (peeks; does not clear).
+\\ js_failed () -> Bool
+@fn js_failed := { js::had_error() };

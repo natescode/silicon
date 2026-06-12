@@ -29,7 +29,7 @@ title: "Grammar (EBNF)"
     - `@type Name := …` defines a type: `$A | $B` is a sum, `{ field Type, … }`
       is a struct, a bare TypeExpr is an alias.
     - Calls are ALWAYS parenthesised: user `f(a, b)` and intrinsics
-      `@if(c, {t}, {e})`, `@loop(cond, {b})`, `@match(x, $A v => v, …)`,
+      `@if(c, {t}, {e})`, `@loop(cond, {b})`, `@match(x, $A v, {v}, …)`,
       `@toInt(x)`, etc.  There is no call sigil.
     - Types are SPACE-separated / positional, never colon-annotated:
       `\\ add (Int, Int) -> Int`, struct field `x Int`, payload `$Some value T`.

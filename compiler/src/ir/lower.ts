@@ -18,6 +18,12 @@ import { type SiliconType } from '../types/types'
 import { type ElaboratorRegistry, lookupTypedOperator, lookupKeyword, lookupTypedKeyword, lookupDefKindEntry, fireModuleFinalizeHandlers, fireHandlers } from '../elaborator/registry'
 import { resolveIntrinsicWasmInstr, resolveIntrinsicAbstractOp } from '../intrinsics'
 import type { FunctionSig } from '../types/typechecker'
+import { CAP_ROOT_TYPE } from '../types/typechecker'
+
+/** ADR 0027 — the root capability token the entry shim passes to `main(World)`.
+ *  The first WASI non-stdio fd (preopens start here): a `Clock` witness, or the
+ *  preopened dir-fd for `Fs`.  The host (wasmtime preopens) is the real grant. */
+const CAP_ROOT_TOKEN = 3
 import type { ModuleRegistry } from '../modules/registry'
 import type { SemanticModel } from '../ast/semanticModel'
 import type {
@@ -28,6 +34,10 @@ import type {
     IRBlock, IRIf, IRLoop, IRBreak, IRContinue, IRNop, IRUnreachable, IRExprStmt,
 } from './nodes'
 import { WasmGcTypeRegistry } from './nodes'
+import {
+    type SpecializedSum, needsHandleSpecialization, mangleSumName,
+    buildSpecializedSum, emitSpecializedConstructors,
+} from './sumMono'
 import { type CompilerAPI, type LowerFns, createCompilerAPI } from '../compiler-api'
 
 /** Built-in modules whose WASM import-module string differs from the Silicon
@@ -74,6 +84,12 @@ interface LowerCtx {
     moduleRegistry?: ModuleRegistry
     /** Auto-generated imports from module calls — keyed by WAT name to deduplicate. */
     pendingImports: Map<string, IRImport>
+    /** ADR 0018 P1 — namespaced `@extern mod::field` host imports keyed by their
+     *  qualified call name (`mod::field`).  Lets a `mod::field(…)` call route to
+     *  the declared host import instead of demanding a registered Silicon module.
+     *  Populated in the lowerProgram pre-scan (so namespaced externs forward-ref
+     *  like bare ones); consulted by `lowerModuleCall`. */
+    externCalls: Map<string, IRImport>
     /** Stack of active loop IDs — for @break / @continue. */
     loopStack: number[]
     /** Monotonically increasing loop counter for unique labels. */
@@ -113,6 +129,15 @@ interface LowerCtx {
     /** Set when the program uses CharCodeArray (the `(array (mut i16))`): drives
      *  the GC-array helper-function injection + ref-slot stamping. */
     usesCharCodeArray: { v: boolean }
+    /** The full program AST being lowered — lets call-site strata (the
+     *  generics monomorphization stratum) look up @fn[T] template defs by
+     *  name regardless of declaration order. */
+    program?: Program
+    /** F1 — specialized native host-handle-carrying sum instantiations,
+     *  keyed by mangled name (`Result$JSValue_String`).  Populated under
+     *  `--target=wasm-gc`; consulted by constructor-call routing, @match
+     *  lowering, and ref-slot typing. */
+    sumSpecs?: Map<string, import('./sumMono').SpecializedSum>
     /** Phase 9d-7: registry of WasmGC struct/array type declarations
      *  populated as the program is lowered.  Drained into
      *  `IRModule.wasmGcTypes` at the end of `lowerProgram`.  Only
@@ -186,6 +211,7 @@ const lowerFns: LowerFns = {
     lowerGlobalInit,
     lowerExternParams,
     lowerExternResult,
+    lowerExternImport,
     unwrapNode: unwrap,
     exprWasmType,
     watId,
@@ -277,6 +303,7 @@ export function lowerProgram(
         registry,
         moduleRegistry,
         pendingImports: new Map(),
+        externCalls: new Map(),
         loopStack: [],
         loopCount: { n: 0 },
         deferStack: [],
@@ -291,12 +318,22 @@ export function lowerProgram(
         platform: options.platform ?? 'native',
         usesCharCodeArray: { v: false },
         wasmGcTypes: new WasmGcTypeRegistry(),
+        program,
+        sumSpecs: new Map(),
     }
     // Pass the live ctx (not a snapshot) so $compiler is current when
     // recursively invoked methods (api.lowerExpr → lowerBinaryOp → on::lower
     // handler dispatch) read ctx.$compiler.  A spread snapshot here would
     // freeze ctx.$compiler at undefined.
     ctx.$compiler = createCompilerAPI(ctx, lowerFns)
+
+    // Pre-register $Array_i32 + $Vec_i32 BEFORE user lowering so a `Vec[Int]` arg
+    // (the wasm-gc closure env, ADR 0019 C2) can resolve $Vec_i32's typeIdx while
+    // `expandCallIndirect` builds the ref-typed call_indirect signature.  Idempotent
+    // with the buildGcVecExtension re-registration below (internNominal is name-keyed).
+    if (target === 'wasm-gc') {
+        require('../codegen/gc-vec').registerGcVecTypes(ctx.wasmGcTypes)
+    }
 
     const imports: IRImport[] = []
     const globals: IRGlobal[] = []
@@ -315,6 +352,15 @@ export function lowerProgram(
             const name = watId(node.name?.name ?? '')
             ctx.globals.set(name, 'i32') // refined below
             ctx.varNames.add(name)
+        }
+        // ADR 0018 P1: pre-register namespaced `@extern mod::field` host imports
+        // so a `mod::field(…)` call (lowerModuleCall) can route to them whether
+        // declared before or after the call site.  Building the import here is
+        // idempotent — ExternDef_lower rebuilds the identical node when it emits
+        // the actual import; the externref web/bun gate (which throws) just
+        // surfaces from whichever runs first.
+        if (node.keyword === '@extern' && (node.name?.name ?? '').includes('::')) {
+            ctx.externCalls.set(node.name.name, lowerExternImport(node, ctx))
         }
         // Def expander pre-scan (handles type_sum and any user-registered kinds).
         ctx.registry.defExpanders.get(hook)?.preScan?.(node, ctx.$compiler!)
@@ -342,6 +388,18 @@ export function lowerProgram(
         else if (result.kind === 'Global') globals.push(result)
         else if (result.kind === 'Import') imports.push(result)
         else if (result.kind === 'Export') irExports.push(result)
+    }
+
+    // F1 — collect + specialize host-handle-carrying sum instantiations
+    // (`Result[JSValue, String]`) before any body lowering, so constructor-call
+    // routing and @match resolve to the specialized GC struct.  Native ref
+    // fields exist only under wasm-gc; on a linear-mem target a host handle
+    // can't live in a sum payload (externref is not addressable) → fail fast
+    // instead of emitting invalid wasm (the `js::pin` interim is the workaround).
+    if (target === 'wasm-gc') {
+        collectAndSpecializeHandleSums(program, ctx, append)
+    } else {
+        assertNoHandleSumsOnLinearMem(program, ctx)
     }
 
     for (const el of program.elements as any[]) {
@@ -403,6 +461,24 @@ export function lowerProgram(
         const stmt = lowerAsStmt(node, startCtx)
         if (stmt) startStmts.push(stmt)
     }
+    // ADR 0027 — capability rooting.  When the program defines `@fn main` whose
+    // first parameter is the root capability `World`, the entry shim itself
+    // calls `main(<root>)` with an inline root token (no user-nameable mint —
+    // that would be ambient authority).  The token is the first WASI non-stdio
+    // fd (3); for a `Clock` cap it's an ignored witness, for `Fs` (later) it is
+    // the preopened dir-fd.  The real grant is host-side (wasmtime preopens).
+    for (const el of program.elements as any[]) {
+        const def = unwrap(el)
+        if (def?.type !== 'Definition' || def.keyword !== '@fn' || def.name?.name !== 'main') continue
+        const firstParam = (def.params ?? []).find((p: any) => !p.isLiteral)
+        if (firstParam?.typeAnnotation?.typename !== CAP_ROOT_TYPE) continue
+        startStmts.push({
+            kind: 'ExprStmt',
+            expr: { kind: 'Call', wasmType: 'i32', callee: watId('main'), callKind: 'user',
+                    args: [{ kind: 'Const', wasmType: 'i32', value: CAP_ROOT_TOKEN }] },
+        })
+        break
+    }
     // WASIX runners (wasmer run) invoke the function exported as `_start`.
     // We always synthesise $__start so the module-init wrapper exists; on the
     // 'wasix' target we additionally export it under the WASIX-mandated name.
@@ -436,7 +512,38 @@ export function lowerProgram(
     // referenced when the user declares them, so giving Vec types stable
     // low indices is safe).  See src/codegen/gc-vec.ts.
     if (target === 'wasm-gc') {
-        const vecFns = require('../codegen/gc-vec').buildGcVecExtension(ctx.wasmGcTypes) as IRFunction[]
+        // M1 — emit the Float/Int64 Vec monomorphs the program ACTUALLY uses
+        // (i32 is always emitted).  Detection scans the user program, NOT the
+        // function-signature table: the typechecker pre-registers `vec_*_f32`/
+        // `_i64` sigs unconditionally under wasm-gc, so scanning `functionSigs`
+        // would always force both element types (the on-demand emission would
+        // be defeated).  Two signals catch every real use: a stamped
+        // `inferredType` of `Vec[Float]`/`Vec[Int64]` (covers calls + their
+        // args/results), and a `Vec[Float]`/`Vec[Int64]` TYPE ANNOTATION
+        // (covers a param/local typed but never element-accessed) — the latter
+        // keeps the detector aligned with `refIdxFromAnnotation`'s ref-typing.
+        const extraElems: Array<'f32' | 'i64'> = []
+        const noteElem = (e: string | undefined): void => {
+            if (e === 'Float' && !extraElems.includes('f32')) extraElems.push('f32')
+            if (e === 'Int64' && !extraElems.includes('i64')) extraElems.push('i64')
+        }
+        const walkVecUse = (n: any): void => {
+            if (!n || typeof n !== 'object') return
+            if (Array.isArray(n)) { for (const x of n) walkVecUse(x); return }
+            const t = n.inferredType
+            if (t && t.kind === 'Vec') noteElem(t.element?.kind)
+            // `Vec[Float]` / `Vec[Int64]` type annotation (typeArgs[0].name).
+            if (n.type === 'TypeAnnotation' && n.typename === 'Vec' &&
+                Array.isArray(n.typeArgs) && n.typeArgs.length === 1) {
+                noteElem(n.typeArgs[0]?.name)
+            }
+            for (const k of Object.keys(n)) {
+                if (k === 'inferredType' || k === 'sourceLocation' || k === 'relSpan') continue
+                walkVecUse(n[k])
+            }
+        }
+        walkVecUse(program.elements)
+        const vecFns = require('../codegen/gc-vec').buildGcVecExtension(ctx.wasmGcTypes, extraElems) as IRFunction[]
         functions.unshift(...vecFns)
     }
 
@@ -463,7 +570,7 @@ export function lowerProgram(
     // JS String Builtins (web/bun): encode JSString-typed user params/results/
     // locals as `externref` so `local.set`/calls from the `(ref extern)`-returning
     // builtins validate.  No-op when the program uses no JSString.
-    injectJSStringRefSlots(program, functions, functionSigs)
+    injectExternRefSlots(program, functions, functionSigs)
 
     // CharCodeArray (web/bun): stamp CharCodeArray-typed params/results/locals as
     // a concrete `(ref null $Array_i16)` so they hold the GC array ref.
@@ -495,6 +602,91 @@ export function lowerProgram(
             ? ctx.wasmGcTypes.snapshot()
             : undefined,
     }
+}
+
+/**
+ * F1 — find every host-handle-carrying sum instantiation reachable in the
+ * typed program, register its specialized flat-union GC struct, and emit its
+ * specialized constructors.  wasm-gc only.
+ *
+ * Instantiations are discovered from two sources that together cover all real
+ * uses: the function signatures (param/result types) and every `inferredType`
+ * the typechecker stamped (constructor-call results, `@match` discriminants,
+ * annotated locals).  The base `@type` def supplies the variant/field layout.
+ */
+function collectAndSpecializeHandleSums(
+    program: Program,
+    ctx: LowerCtx,
+    append: (r: any) => void,
+): void {
+    // Base parametric @type defs, by name (`Result` → its AST).
+    const baseDefs = new Map<string, any>()
+    for (const el of (program.elements ?? []) as any[]) {
+        const def = unwrap(el)
+        if (def?.type === 'Definition' && def.keyword === '@type' &&
+            (def.generics?.params?.length ?? 0) > 0 && def.name?.name) {
+            baseDefs.set(def.name.name, def)
+        }
+    }
+    if (baseDefs.size === 0) return
+
+    const seen = ctx.sumSpecs!
+    const consider = (t: SiliconType | undefined): void => {
+        if (!needsHandleSpecialization(t)) return
+        const sum = t as Extract<SiliconType, { kind: 'Sum' }>
+        const mangled = mangleSumName(sum.name, sum.typeArgs!)
+        if (seen.has(mangled)) return
+        const def = baseDefs.get(sum.name)
+        if (!def) return   // not a user parametric sum we can specialize
+        const spec = buildSpecializedSum(sum.name, sum.typeArgs!, def, ctx.wasmGcTypes)
+        seen.set(mangled, spec)
+        for (const fn of emitSpecializedConstructors(spec)) append(fn)
+    }
+
+    // 1. Function signatures (params + results).
+    for (const sig of ctx.functions.values()) {
+        sig.params.forEach(consider)
+        consider(sig.result)
+    }
+    // 2. Every stamped inferredType in the typed AST.
+    const walk = (n: any): void => {
+        if (!n || typeof n !== 'object') return
+        if (Array.isArray(n)) { for (const x of n) walk(x); return }
+        if (n.inferredType) consider(n.inferredType as SiliconType)
+        for (const k of Object.keys(n)) {
+            if (k === 'inferredType') continue
+            walk(n[k])
+        }
+    }
+    walk(program.elements)
+}
+
+/** F1 — on a non-wasm-gc target, a host handle (JSValue/JSString) cannot be a
+ *  sum payload: externref isn't addressable in linear memory.  Detect any such
+ *  instantiation and fail with a clear, actionable error (rather than emitting
+ *  invalid wasm) — directing to `js::pin` / `--target=wasm-gc`. */
+function assertNoHandleSumsOnLinearMem(program: Program, ctx: LowerCtx): void {
+    const reportFor = (t: SiliconType | undefined): void => {
+        if (!needsHandleSpecialization(t)) return
+        const sum = t as Extract<SiliconType, { kind: 'Sum' }>
+        throw new IRLowerError(
+            `a host handle (JSValue/JSString) can't be a payload of '${sum.name}' on a ` +
+            `linear-memory target — externref isn't addressable in linear memory. ` +
+            `Compile with --target=wasm-gc to carry it natively, or thread it through a ` +
+            `Result[Int, …] via js::pin (an Int handle id).`,
+        )
+    }
+    for (const sig of ctx.functions.values()) {
+        sig.params.forEach(reportFor)
+        reportFor(sig.result)
+    }
+    const walk = (n: any): void => {
+        if (!n || typeof n !== 'object') return
+        if (Array.isArray(n)) { for (const x of n) walk(x); return }
+        if (n.inferredType) reportFor(n.inferredType as SiliconType)
+        for (const k of Object.keys(n)) { if (k !== 'inferredType') walk(n[k]) }
+    }
+    walk(program.elements)
 }
 
 /** Phase 9d-7 fix-4: when target === 'wasm-gc', walk every IRFunction
@@ -536,7 +728,14 @@ function injectRefSlots(
  *  builtins return non-null `(ref extern)`; declaring the holding slots as the
  *  wider nullable `externref` lets `local.set` / calls validate. */
 const EXTERN_SLOT: IRRefSlot = { localTypeIdx: 0, nullable: true, extern: true }
-function injectJSStringRefSlots(
+/** True for the externref-shaped object-handle types (ADR 0018 P0): the
+ *  `wasm:js-string` `JSString` and the generic host-object `JSValue`.  Both lower
+ *  to a nullable `externref` ref slot; only their *operations* differ (JSString
+ *  has the `wasm:js-string` builtins, JSValue is an opaque host handle). */
+function isExternRefKind(t: string | undefined): boolean {
+    return t === 'JSString' || t === 'JSValue'
+}
+function injectExternRefSlots(
     program: any,
     functions: IRFunction[],
     functionSigs: Map<string, FunctionSig>,
@@ -548,16 +747,16 @@ function injectJSStringRefSlots(
     for (const fn of functions) {
         const sig = functionSigs?.get(fn.name)
         if (!sig) continue
-        if (!fn.refResult && sig.result?.kind === 'JSString') fn.refResult = EXTERN_SLOT
+        if (!fn.refResult && isExternRefKind(sig.result?.kind)) fn.refResult = EXTERN_SLOT
         sig.params.forEach((p, i) => {
-            if (p?.kind === 'JSString') {
+            if (isExternRefKind(p?.kind)) {
                 if (!fn.refParams) fn.refParams = new Map()
                 if (!fn.refParams.has(i)) fn.refParams.set(i, EXTERN_SLOT)
             }
         })
     }
 
-    // `@local`/`@var` declarations annotated `\\ name JSString`.
+    // `@local`/`@var` declarations annotated `\\ name JSString|JSValue`.
     const items: any[] = (program?.elements ?? program?.items ?? []) as any[]
     for (const item of items) {
         const def = unwrap(item)
@@ -565,15 +764,15 @@ function injectJSStringRefSlots(
         if (def.keyword !== '@fn' && def.keyword !== '@global') continue
         const fn = fnByName.get(watId(def.name?.name ?? '')) ?? fnByName.get(def.name?.name ?? '')
         if (!fn) continue
-        walkLocalsForJSString(def.binding?.expression ?? def.binding, fn)
+        walkLocalsForExternRef(def.binding?.expression ?? def.binding, fn)
     }
 }
 
-function walkLocalsForJSString(node: any, fn: IRFunction): void {
+function walkLocalsForExternRef(node: any, fn: IRFunction): void {
     if (!node || typeof node !== 'object') return
     if (node.type === 'Definition' && node.keyword === '@local') {
         const localName: string | undefined = node.name?.name
-        if (localName && node.name?.typeAnnotation?.typename === 'JSString') {
+        if (localName && isExternRefKind(node.name?.typeAnnotation?.typename)) {
             const watLocalName = watId(localName)
             for (const l of fn.locals) {
                 if (l.name === watLocalName || l.name === localName) { l.refType = EXTERN_SLOT; break }
@@ -583,14 +782,14 @@ function walkLocalsForJSString(node: any, fn: IRFunction): void {
     for (const key of Object.keys(node)) {
         if (key === 'type' || key === 'sourceLocation') continue
         const val = (node as any)[key]
-        if (Array.isArray(val)) for (const v of val) walkLocalsForJSString(v, fn)
-        else if (val && typeof val === 'object') walkLocalsForJSString(val, fn)
+        if (Array.isArray(val)) for (const v of val) walkLocalsForExternRef(v, fn)
+        else if (val && typeof val === 'object') walkLocalsForExternRef(val, fn)
     }
 }
 
 /** CharCodeArray — stamp CharCodeArray-typed params/results/locals with a concrete
  *  `(ref null $Array_i16)` slot so they hold the GC array ref (mirror of
- *  injectJSStringRefSlots, with a concrete typeidx instead of extern). */
+ *  injectExternRefSlots, with a concrete typeidx instead of extern). */
 function injectCharCodeArrayRefSlots(
     program: any,
     functions: IRFunction[],
@@ -684,15 +883,23 @@ function walkLocalsForRefs(
             const be = node.binding?.expression ?? node.binding
             if (be && be.type === 'Ascription') annot = be.typeAnnotation
         }
-        if (localName && annot) {
-            const refIdx = refIdxFromAnnotation(annot, wasmGcTypes)
-            if (refIdx !== undefined) {
-                const watLocalName = watId(localName)
-                for (const l of fn.locals) {
-                    if (l.name === watLocalName || l.name === localName) {
-                        l.refType = { localTypeIdx: refIdx, nullable: false }
-                        break
-                    }
+        let refIdx = (localName && annot) ? refIdxFromAnnotation(annot, wasmGcTypes) : undefined
+        // ADR 0016 / M1 — the iterate-`@loop` desugar snapshots its subject
+        // into a synthetic local (`__loopN_xs`, tagged `vecIterSubject`).  It
+        // is generated pre-typecheck so it can never carry an annotation; use
+        // the INFERRED type stamped on the binding expression instead, so the
+        // local is declared `(ref $Vec_<elem>)` and validation passes.
+        if (refIdx === undefined && localName && node.vecIterSubject) {
+            const be = node.binding?.expression ?? node.binding
+            const it = be?.inferredType
+            if (it) refIdx = siliconTypeToRefIdx(it, wasmGcTypes)
+        }
+        if (localName && refIdx !== undefined) {
+            const watLocalName = watId(localName)
+            for (const l of fn.locals) {
+                if (l.name === watLocalName || l.name === localName) {
+                    l.refType = { localTypeIdx: refIdx, nullable: false }
+                    break
                 }
             }
         }
@@ -716,9 +923,13 @@ function refIdxFromAnnotation(
 ): number | undefined {
     if (!annot) return undefined
     if (annot.typename === 'Vec'
-        && Array.isArray(annot.typeArgs) && annot.typeArgs.length === 1
-        && annot.typeArgs[0].name === 'Int') {
-        return wasmGcTypes.lookupByName('$Vec_i32')
+        && Array.isArray(annot.typeArgs) && annot.typeArgs.length === 1) {
+        const elem = annot.typeArgs[0].name
+        const vecType = elem === 'Float' ? '$Vec_f32'
+            : elem === 'Int64' ? '$Vec_i64'
+            : elem === 'Int' ? '$Vec_i32'
+            : undefined
+        if (vecType) return wasmGcTypes.lookupByName(vecType)
     }
     // Bare typename — could be a user-defined sum.  The registry
     // already has `$<typename>` from typeRecordExpander; lookup by name.
@@ -745,12 +956,22 @@ function siliconTypeToRefIdx(
     wasmGcTypes: WasmGcTypeRegistry,
 ): number | undefined {
     if (t.kind === 'Sum') {
+        // F1 — a host-handle instantiation (`Result[JSValue, String]`) resolves
+        // to its specialized flat-union struct, not the all-i32 base `$Result`.
+        if (needsHandleSpecialization(t)) {
+            const mangled = wasmGcTypes.lookupByName('$' + mangleSumName(t.name, (t as any).typeArgs))
+            if (mangled !== undefined) return mangled
+        }
         return wasmGcTypes.lookupByName(`$${t.name}`)
     }
     if (t.kind === 'Vec') {
-        if (t.element.kind === 'Int') return wasmGcTypes.lookupByName('$Vec_i32')
-        // f32 / i64 variants are mechanical extensions (v1.1).
-        return undefined
+        // M1 — Vec[Int]/Vec[Float]/Vec[Int64] resolve to their per-element
+        // GC struct ($Vec_i32 / $Vec_f32 / $Vec_i64).
+        const name = t.element.kind === 'Float' ? '$Vec_f32'
+            : t.element.kind === 'Int64' ? '$Vec_i64'
+            : t.element.kind === 'Int' ? '$Vec_i32'
+            : undefined
+        return name ? wasmGcTypes.lookupByName(name) : undefined
     }
     return undefined
 }
@@ -998,6 +1219,62 @@ export function lowerExternResult(node: any): WasmValType | undefined {
     return undefined
 }
 
+/**
+ * Build the full IRImport for an `@extern` declaration (ADR 0018 P0).
+ * Generalizes the former hardcoded `(env, name)` form two ways:
+ *   - a namespaced name `mod::field` imports from module `mod` (with
+ *     IMPORT_ENV_OVERRIDE applied) instead of the hardcoded `env`; and
+ *   - `JSString` / `JSValue` params/results become `externref` ref slots
+ *     (the object-handle boundary) rather than collapsing to i32.
+ * Externref imports require a JS host, so they are gated to web/bun.
+ */
+export function lowerExternImport(node: any, ctx: LowerCtx): IRImport {
+    const rawName: string = node.name?.name ?? ''
+    const sep = rawName.indexOf('::')
+    const moduleName = sep === -1 ? 'env' : rawName.slice(0, sep)
+    const field = sep === -1 ? rawName : rawName.slice(sep + 2)
+    const watName = watId(rawName)
+    const env = IMPORT_ENV_OVERRIDE[moduleName] ?? moduleName
+
+    const params: WasmValType[] = []
+    let refParams: Map<number, IRRefSlot> | undefined
+    let usesExternref = false
+    for (const p of node.params || []) {
+        if (p.isLiteral || !p.typeAnnotation) continue
+        const tn: string = p.typeAnnotation.typename
+        const idx = params.length
+        params.push(siliconTypeNameToWasm(tn))
+        if (isExternRefKind(tn)) { (refParams ??= new Map()).set(idx, EXTERN_SLOT); usesExternref = true }
+        // ADR 0019 C2 — a `Vec[Int]` param under wasm-gc is the closure handle
+        // `(ref $Vec_i32)` crossing the boundary (engine-GC'd); give it a ref slot
+        // so the import type matches (else the ref arg fails validation).
+        else if (ctx.target === 'wasm-gc' && tn === 'Vec') {
+            const vIdx = ctx.wasmGcTypes?.lookupByName('$Vec_i32')
+            if (vIdx !== undefined) (refParams ??= new Map()).set(idx, { localTypeIdx: vIdx, nullable: false })
+        }
+    }
+
+    const resName: string | undefined = node.name?.typeAnnotation?.typename
+    const result = resName && resName !== 'Void' ? siliconTypeNameToWasm(resName) : undefined
+    // An object-handle import (not a `wasm:js-string` builtin) may return null —
+    // its result must be a NULLABLE externref or the host traps on null (e.g. a
+    // DOM `getElement` miss, `Headers.get` of an absent header).  Mirrors the
+    // module-call import path in lowerModuleCall.
+    const refResult: IRRefSlot | undefined = resName && isExternRefKind(resName)
+        ? { localTypeIdx: 0, nullable: moduleName !== 'JSString', extern: true }
+        : undefined
+    if (refResult) usesExternref = true
+
+    if (usesExternref && ctx.platform !== 'web' && ctx.platform !== 'bun') {
+        throw new IRLowerError(
+            `'@extern ${rawName}' uses an externref object handle (JSString / JSValue) — ` +
+            `compile with --platform=web or --platform=bun (sgl.toml: [build] platform = "bun").`,
+        )
+    }
+
+    return { kind: 'Import', env, field, name: watName, params, result, refParams, refResult }
+}
+
 // ---------------------------------------------------------------------------
 // Expression lowering
 // ---------------------------------------------------------------------------
@@ -1014,7 +1291,8 @@ function lowerExpr(node: any, ctx: LowerCtx): IRExpr {
             return { kind: 'Const', wasmType: 'i32', value: parseIntLiteral(n) }
 
         case 'FloatLiteral':
-            return { kind: 'Const', wasmType: 'f32', value: parseFloat(n.value) }
+            // Strip `_` digit separators before parsing (`123_456.789_012`).
+            return { kind: 'Const', wasmType: 'f32', value: parseFloat(String(n.value).replace(/_/g, '')) }
 
         case 'BooleanLiteral':
             return { kind: 'Const', wasmType: 'i32', value: n.value ? 1 : 0 }
@@ -1371,8 +1649,13 @@ function lowerFunctionCall(n: any, ctx: LowerCtx): IRExpr {
     // for every call site (used by monomorphization / instrumentation strata
     // that filter by inspecting the callee themselves).  After handlers run,
     // re-read the call name so a rewrite_call has effect downstream.
-    const hasNameKeyed = ctx.registry.handlers.callSite.has(name)
-    const hasWildcard  = ctx.registry.handlers.callSite.has('*')
+    // Skipped while compiling a strata handler @fn: a handler body is
+    // compiler-internal code, and firing call-site handlers inside it would
+    // deadlock the T0 fixpoint (every body's calls would fire the
+    // not-yet-compiled monomorphization handler).
+    const inHandlerCompile = (ctx.registry as any).__compilingHandler === true
+    const hasNameKeyed = !inHandlerCompile && ctx.registry.handlers.callSite.has(name)
+    const hasWildcard  = !inHandlerCompile && ctx.registry.handlers.callSite.has('*')
     if (hasNameKeyed) {
         fireHandlers(ctx.registry, 'callSite', name, n, ctx.$compiler!, ctx.currentStratumRef)
     }
@@ -1394,7 +1677,7 @@ function lowerFunctionCall(n: any, ctx: LowerCtx): IRExpr {
         // wasmType so downstream emit doesn't try to (drop ...) their non-result.
         const instr = resolvedInstr ?? name
         const isVoidInstr = instr === 'i32.store' || instr === 'i32.store8'
-            || instr === 'f32.store' || instr === 'drop'
+            || instr === 'i64.store' || instr === 'f32.store' || instr === 'drop'
             || instr === 'memory.copy' || instr === 'memory.fill'
         const wt = isVoidInstr ? 'void' : resolveWasmType(inferT, 'i32')
         return { kind: 'Call', wasmType: wt, callee: instr, callKind: 'instr', args }
@@ -1404,6 +1687,23 @@ function lowerFunctionCall(n: any, ctx: LowerCtx): IRExpr {
     const sepIdx = name.indexOf('::')
     if (sepIdx !== -1) {
         return lowerModuleCall(name, sepIdx, n, ctx)
+    }
+
+    // F1 — route a variant constructor call (`Ok(h)`) whose result is a
+    // host-handle instantiation (`Result[JSValue, String]`) to its specialized
+    // constructor (`Ok$JSValue_String`), which struct.news the flat-union GC
+    // struct with the handle in a native externref field.
+    if (ctx.sumSpecs && ctx.sumSpecs.size > 0) {
+        const ctorInfer = inferredTypeOf(n, ctx)
+        if (needsHandleSpecialization(ctorInfer)) {
+            const sum = ctorInfer as Extract<SiliconType, { kind: 'Sum' }>
+            const spec = ctx.sumSpecs.get(mangleSumName(sum.name, sum.typeArgs!))
+            const variant = spec?.variants.find(v => v.name === name)
+            if (variant) {
+                const cargs = (n.args || []).map((a: any) => lowerExpr(a, ctx))
+                return { kind: 'Call', wasmType: 'i32', callee: variant.ctorName, callKind: 'user', args: cargs }
+            }
+        }
     }
 
     // User-defined function call.
@@ -1423,6 +1723,17 @@ function lowerModuleCall(name: string, sepIdx: number, n: any, ctx: LowerCtx): I
     const moduleEntry = ctx.moduleRegistry?.get(moduleName)
 
     if (!moduleEntry) {
+        // ADR 0018 P1 — a declared `@extern mod::field` is a direct host import
+        // (import module = `mod`), not a Silicon module.  Route the call to it.
+        // The import itself is emitted by ExternDef_lower; here we just emit the
+        // call.  The call's wasmType is the base valtype; externref results are
+        // tracked via the import's refResult + injectExternRefSlots, same as the
+        // bare-extern path.
+        const externImp = ctx.externCalls.get(name)
+        if (externImp) {
+            const args = (n.args || []).map((a: any) => lowerExpr(a, ctx))
+            return { kind: 'Call', wasmType: externImp.result ?? 'void', callee: externImp.name, callKind: 'user', args }
+        }
         throw new IRLowerError(
             `Unknown module '${moduleName}' — not found in built-in modules or ./modules/`
         )
@@ -1434,13 +1745,13 @@ function lowerModuleCall(name: string, sepIdx: number, n: any, ctx: LowerCtx): I
         )
     }
 
-    // JS String Builtins need a JS host: gate JSString + any externref-typed
-    // module on `--platform=web|bun` (wasmtime / native can't provide them).
+    // externref needs a JS host: gate JSString / JSValue object handles on
+    // `--platform=web|bun` (wasmtime / native can't provide externref).
     const usesExternref = moduleName === 'JSString'
-        || fnSig.siliconResult === 'JSString' || fnSig.siliconParams.includes('JSString')
+        || isExternRefKind(fnSig.siliconResult) || fnSig.siliconParams.some(isExternRefKind)
     if (usesExternref && ctx.platform !== 'web' && ctx.platform !== 'bun') {
         throw new IRLowerError(
-            `'${moduleName}::${funcName}' uses JSString (JS String Builtins) — ` +
+            `'${moduleName}::${funcName}' uses an externref object handle (JSString / JSValue) — ` +
             `compile with --platform=web or --platform=bun (sgl.toml: [build] platform = "bun").`
         )
     }
@@ -1479,14 +1790,20 @@ function lowerModuleCall(name: string, sepIdx: number, n: any, ctx: LowerCtx): I
         // ref (for fromCharCodeArray / intoCharCodeArray).
         let refParams: Map<number, IRRefSlot> | undefined
         fnSig.siliconParams.forEach((t, i) => {
-            if (t === 'JSString') {
+            if (isExternRefKind(t)) {
                 (refParams ??= new Map()).set(i, { localTypeIdx: 0, nullable: true, extern: true })
             } else if (t === 'CharCodeArray') {
                 (refParams ??= new Map()).set(i, { localTypeIdx: charCodeArrayTypeIdx(ctx), nullable: true })
             }
         })
-        const refResult: IRRefSlot | undefined = fnSig.siliconResult === 'JSString'
-            ? { localTypeIdx: 0, nullable: false, extern: true }
+        // A `wasm:js-string` builtin result is the spec's non-null `(ref extern)`
+        // (the host validates the exact signature).  But a general object-handle
+        // import (`json`/`bun`/`url`/… — our own host shim) can legitimately
+        // return `null` (e.g. `Headers.get` of a missing header, `URL.parse` of an
+        // invalid URL); its result must be a NULLABLE `externref` or the host
+        // traps ("returned null for a nonnullable result").
+        const refResult: IRRefSlot | undefined = isExternRefKind(fnSig.siliconResult)
+            ? { localTypeIdx: 0, nullable: moduleName !== 'JSString', extern: true }
             : fnSig.siliconResult === 'CharCodeArray'
                 ? { localTypeIdx: charCodeArrayTypeIdx(ctx), nullable: true }
                 : undefined
@@ -1509,6 +1826,20 @@ function lowerModuleCall(name: string, sepIdx: number, n: any, ctx: LowerCtx): I
 }
 
 function lowerBuiltinCall(name: string, rawArgs: any[], ctx: LowerCtx, inferredType?: any): IRExpr {
+    // `@i64`/`@u64` (and the legacy `@toInt64`/`@toU64`) on a LITERAL argument
+    // lower to a precision-exact `i64.const` carrying the full 64-bit value —
+    // the only way to write an Int64/UInt64 value outside i32 range, and the
+    // fix for the old `@toInt64` truncation (which routed the literal through
+    // a 32-bit constant).  `asIntN(64, …)` stores the two's-complement bit
+    // pattern so a `u64` value ≥ 2^63 emits correctly (its signed-LEB form).
+    // A non-literal argument falls through to the sign/zero-extend handler.
+    if (name === '@i64' || name === '@toInt64' || name === '@u64' || name === '@toU64') {
+        const lit = intLiteralOf(rawArgs[0])
+        if (lit !== undefined) {
+            return { kind: 'Const', wasmType: 'i64', value: BigInt.asIntN(64, parseIntLiteralBig(lit)) }
+        }
+    }
+
     // Phase 5 Workstream B — `@fnref` / `@call_indirect` are now data-driven
     // strata (src/strata/funcref.si); they fall through to the on::lower
     // handler-firing path below (the funcref-table state they mutate is
@@ -2144,4 +2475,27 @@ function parseIntLiteral(n: any): number {
     if (cleaned.startsWith('0x') || cleaned.startsWith('0X')) return parseInt(cleaned.slice(2), 16)
     if (cleaned.startsWith('0o') || cleaned.startsWith('0O')) return parseInt(cleaned.slice(2), 8)
     return parseInt(cleaned, 10)
+}
+
+/** BigInt-precise parse of an integer literal (decimal / 0x / 0b / 0o, `_`
+ *  separators stripped).  Used for `@i64`/`@u64` literal constants, which must
+ *  survive past the JS safe-integer range. */
+export function parseIntLiteralBig(n: any): bigint {
+    const raw: string = n.value ?? '0'
+    // BigInt() natively reads decimal and the 0x / 0b / 0o prefixes; we only
+    // need to strip the `_` digit separators first.
+    return BigInt(raw.replace(/_/g, ''))
+}
+
+/** If `arg` (possibly wrapped in Element/Item/expression nodes) is an integer
+ *  literal, return that IntLiteral node; else undefined. */
+function intLiteralOf(arg: any): any | undefined {
+    let cur = arg
+    for (let i = 0; i < 6 && cur && typeof cur === 'object'; i++) {
+        if (cur.type === 'IntLiteral') return cur
+        const next = typeof cur.value === 'object' ? cur.value : cur.expression
+        if (!next || typeof next !== 'object') return undefined
+        cur = next
+    }
+    return undefined
 }

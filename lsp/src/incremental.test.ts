@@ -46,6 +46,31 @@ describe('LSP rides the incremental compiler Workspace', () => {
         expect(doc.diagnostics.find(d => d.code === 'E0004')).toBeUndefined()
     })
 
+    test('cross-file diagnostics: editing a dependency re-checks its dependents', () => {
+        const ws = new Workspace()
+        const a = uri('dep-a.si')
+        const b = uri('dep-b.si')
+        ws.compiler.openDocument(a, '@fn helper x := { x + 1 };')
+        expect(ws.update(b, 'f := helper;')!.diagnostics).toHaveLength(0)
+
+        // Rename `helper` in a.si — b.si was not edited, but its diagnostics
+        // are now stale.  refreshDependents recompiles it (E0004 appears)…
+        ws.update(a, '@fn helper2 x := { x + 1 };')
+        let refreshed = ws.refreshDependents(a)
+        const stale = refreshed.find(d => d.uri === b)
+        expect(stale).toBeDefined()
+        expect(stale!.diagnostics.some(d => d.code === 'E0004')).toBe(true)
+
+        // …and restoring the name clears it again.
+        ws.update(a, '@fn helper x := { x + 1 };')
+        refreshed = ws.refreshDependents(a)
+        expect(refreshed.find(d => d.uri === b)!.diagnostics).toHaveLength(0)
+
+        // A body-only edit leaves the exported surface unchanged → no refresh.
+        ws.update(a, '@fn helper x := { x + 2 };')
+        expect(ws.refreshDependents(a)).toHaveLength(0)
+    })
+
     test('definition + references + hover resolve through the model', () => {
         const ws = new Workspace()
         const u = uri('nav.si')
@@ -148,11 +173,13 @@ describe('LSP rides the incremental compiler Workspace', () => {
         ws.update(u, `@fn greet x := { x };\ng := 1;`)
         expect([...ws.getDoc(u)!.model.allSymbols].map(s => s.name)).toContain('greet')
 
-        // edit: start a new, incomplete line (a parse error)
-        const doc = ws.update(u, `@fn greet x := { x };\ng := 1;\nh := gr`)!
+        // edit: a genuinely incomplete trailing line (`h := gr +` — a dangling
+        // binary operator is a parse error, unlike `h := gr` which parses as a
+        // complete binding with an unbound RHS).
+        const doc = ws.update(u, `@fn greet x := { x };\ng := 1;\nh := gr +`)!
         expect(doc.diagnostics.some(d => d.code === 'E0000')).toBe(true)      // error surfaced
         expect([...doc.model.allSymbols].map(s => s.name)).toContain('greet') // …but model alive
-        expect(ws.compiler.getCompletions(u, 3, 14, 'gr').some(i => i.label === 'greet')).toBe(true)
+        expect(ws.compiler.getCompletions(u, 3, 8, 'gr').some(i => i.label === 'greet')).toBe(true)
     })
 
     test('formatting returns edits or a no-op array', () => {

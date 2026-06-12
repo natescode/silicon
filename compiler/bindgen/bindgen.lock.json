@@ -1,0 +1,29 @@
+{
+  "$comment": "ADR 0017 — bindgen lockfile. Pins the provenance + content hash of the generated FFI surface so CI (bindgen.yml / bindgen.test.ts) fails on any drift between the spec and the three emitted sites. Performance.now() is now generated from real Web IDL via the webidl2 adapter; Math.*/Date.now() are ECMAScript built-ins from the hand-authored table.",
+  "generator": "compiler/bindgen",
+  "specVersion": 1,
+  "toolchain": {
+    "runtime": "bun",
+    "webidl2": "^24.5.0",
+    "@webref/idl": "^3.80.0",
+    "typescript": "^5.0.0",
+    "@types/node": "^25.0.0",
+    "bun-types": "^1.3.14",
+    "note": "All source adapters are spec-driven: Web from @webref/idl via webidl2 (adapters/webref.ts + webidl.ts); Node from @types/node and Bun from bun-types via the TypeScript compiler API (adapters/dts.ts). Math.*/Date.now() are ECMAScript built-ins with no machine-readable spec and stay hand-authored. The sha256 below pins the SHIPPED web Math/clock surface; per-source corpus pinning (@webref snapshot hash) arrives with the multi-module generation."
+  },
+  "surfaces": [
+    {
+      "module": "web",
+      "group": "math+clock",
+      "spec": "compiler/bindgen/src/spec.ts",
+      "tier": 0,
+      "bindings": 17,
+      "sha256": "d2625ff364eef00467519344b5002e736be4a2dd06b0a70a99e7fac1570ab5f4",
+      "sites": [
+        "compiler/src/strata/modules/web.si",
+        "cli/src/host/js-host.ts",
+        "playground/playground/web-env.js"
+      ]
+    }
+  ]
+}

@@ -30,6 +30,9 @@
 
         var wasmMemory = null
         var wasmAlloc  = null
+        // `js` boundary error slot + pin table (next FFI work #2).
+        var jsLastError = null
+        var jsPins = [null]
 
         // Silicon strings are UTF-8 with a 4-byte little-endian byte-length
         // header (see compiler std.wat / docs).  Read and write them as UTF-8.
@@ -74,6 +77,7 @@
             console_warn:    function (v)       { console.warn(v);  onPrint('[warn] '  + String(v), 'warn') },
             console_info:    function (v)       { console.info(v);  onPrint('[info] '  + String(v), 'info') },
 
+            // === bindgen:web math+clock (generated — edit compiler/bindgen/src/spec.ts, run `bun bindgen/cli.ts --write`) ===
             math_random:     function ()        { return Math.random() },
             math_sin:        function (x)       { return Math.sin(x) },
             math_cos:        function (x)       { return Math.cos(x) },
@@ -92,6 +96,7 @@
 
             performance_now: function ()        { return performance.now() },
             date_now:        function ()        { return Date.now() },
+            // === /bindgen:web math+clock ===
         }
 
         // ── Canvas feature ────────────────────────────────────────────────────
@@ -148,6 +153,71 @@
             console: {
                 log:   function (s) { onPrint(String(s == null ? '' : s), 'print') },
                 error: function (s) { onPrint(String(s == null ? '' : s), 'error') },
+            },
+            // `js` — generic object/array build-and-read substrate (JSValue
+            // handles).  Mirrors cli/src/host/js-host.ts; see strata/modules/js.si.
+            js: {
+                object:    function ()        { return {} },
+                array:     function ()        { return [] },
+                null:      function ()        { return null },
+                undefined: function ()        { return undefined },
+                set:       function (o, k, v) { o[k] = v },
+                set_index: function (a, i, v) { a[i] = v },
+                push:      function (a, v)    { a.push(v) },
+                get:       function (o, k)    { return o == null ? null : (o[k] == null ? null : o[k]) },
+                get_index: function (a, i)    { return a == null ? null : (a[i] == null ? null : a[i]) },
+                len:       function (v)        { return v == null ? 0 : (v.length | 0) },
+                has:       function (o, k)    { return (o != null && (k in Object(o))) ? 1 : 0 },
+                keys:      function (o)        { return o == null ? [] : Object.keys(o) },
+                typeof:    function (v)        { return Array.isArray(v) ? 'array' : (v === null ? 'null' : typeof v) },
+                is_null:   function (v)        { return (v == null) ? 1 : 0 },
+                from_int:   function (n) { return n },
+                from_float: function (n) { return n },
+                from_bool:  function (b) { return b !== 0 },
+                from_str:   function (s) { return s },
+                as_int:   function (v) { return v | 0 },
+                as_float: function (v) { return +v },
+                as_bool:  function (v) { return v ? 1 : 0 },
+                as_str:   function (v) { return String(v) },
+                global:   function (name) { return (typeof globalThis !== 'undefined' ? globalThis : window)[name] },
+                // Fallible invokers + boundary error channel + pinning (#2).
+                call:      function (rc, m, a) { jsLastError = null; try { return rc[m].apply(rc, a || []) } catch (e) { jsLastError = e; return null } },
+                apply:     function (fn, a)    { jsLastError = null; try { return fn.apply(null, a || []) } catch (e) { jsLastError = e; return null } },
+                construct: function (c, a)     { jsLastError = null; try { return new (Function.prototype.bind.apply(c, [null].concat(a || []))) } catch (e) { jsLastError = e; return null } },
+                had_error:     function () { return jsLastError != null ? 1 : 0 },
+                take_error:    function () { var e = jsLastError; jsLastError = null; return e == null ? null : e },
+                error_message: function () { var e = jsLastError; jsLastError = null; return allocLenString(e == null ? '' : String((e && e.message) != null ? e.message : e)) },
+                clear_error:   function () { jsLastError = null },
+                pin:    function (v) { jsPins.push(v); return jsPins.length - 1 },
+                pinned: function (i) { return jsPins[i] == null ? null : jsPins[i] },
+                unpin:  function (i) { if (i > 0 && i < jsPins.length) jsPins[i] = null },
+                // Bulk binary marshalling (#2).
+                byte_length: function (h) { return h == null ? 0 : ((h.byteLength == null ? (h.length == null ? 0 : h.length) : h.byteLength) | 0) },
+                u8: function (h) { return h instanceof Uint8Array ? h : (h instanceof ArrayBuffer ? new Uint8Array(h) : new Uint8Array(h.buffer, h.byteOffset, h.byteLength)) },
+                bytes_in: function (ptr, len) { return wasmMemory ? new Uint8Array(wasmMemory.buffer.slice(ptr, ptr + len)) : new Uint8Array(0) },
+                bytes_out: function (h, ptr, len) {
+                    if (!wasmMemory || h == null) return 0
+                    var src = h instanceof Uint8Array ? h : (h instanceof ArrayBuffer ? new Uint8Array(h) : new Uint8Array(h.buffer, h.byteOffset, h.byteLength))
+                    var n = Math.min(len, src.length)
+                    new Uint8Array(wasmMemory.buffer, ptr, n).set(src.subarray(0, n))
+                    return n
+                },
+            },
+            // `stream` — JS iteration protocol (#3).  See strata/modules/stream.si.
+            stream: {
+                iter:  function (it)   { return it[Symbol.iterator]() },
+                next:  function (it)   { return it.next() },
+                value: function (step) { return step == null ? null : (step.value == null ? null : step.value) },
+                done:  function (step) { return (step != null && step.done) ? 1 : 0 },
+                aiter: function (it)   { return it[Symbol.asyncIterator]() },
+                anext: function (it)   { return it.next() },
+            },
+            // `promise` — host Promise combinators for concurrency (#4).
+            promise: {
+                all:         function (ps) { return Promise.all(ps) },
+                race:        function (ps) { return Promise.race(ps) },
+                all_settled: function (ps) { return Promise.allSettled(ps) },
+                any:         function (ps) { return Promise.any(ps) },
             },
         }
 

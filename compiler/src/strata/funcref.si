@@ -11,9 +11,10 @@
 #
 # These used to be hardcoded in `lower.ts` (lowerFnRef / lowerCallIndirect)
 # because they mutate module-level funcref-table state — a LowerCtx field the
-# handler ctx didn't expose.  That state is now reachable via the CompilerAPI
-# `funcref` surface (compiler_ctx_funcref_index / _ensure_default_sig), and the
-# CallIndirect node via ir_makeCallIndirect, so the lowering lives in Silicon.
+# handler ctx didn't expose.  `@fnref` now reaches it via the CompilerAPI
+# `funcref` surface (compiler_ctx_funcref_index); `@call_indirect` delegates to
+# the host expander `compiler_expandCallIndirect`, which (ADR 0019 C0) derives
+# the call signature from the operand wasm types for a multi-signature table.
 
 @stratum FnRef := {
     Compiler::register::expression_keyword('@fnref');
@@ -37,13 +38,9 @@
     Compiler::on::lower('@call_indirect', CallIndirect_lower);
 };
 
+# `@call_indirect(cb, …args)` — invoke the table slot `cb` with a variadic arg
+# list.  The host expander lowers cb + args, derives the call signature from the
+# args' wasm types (ADR 0019 C0 — multi-signature funcref table; the i32→i32 case
+# stays `__fn_i_i`), registers it, and builds the CallIndirect node.
 \\ CallIndirect_lower (Int)
-@fn CallIndirect_lower node := {
-    compiler::compiler_require_argc(node, 2, compiler::compiler_str_intern('@call_indirect expects exactly 2 arguments (cb, arg)', 0));
-    compiler::compiler_ctx_funcref_ensure_default_sig();
-    cb := compiler::compiler_lowerExpr(compiler::compiler_arg(node, 0));
-    a := compiler::compiler_lowerExpr(compiler::compiler_arg(node, 1));
-    args := compiler::compiler_arr_new();
-    compiler::compiler_arr_push(args, a);
-    compiler::ir_makeCallIndirect(cb, args, compiler::compiler_str_intern('__fn_i_i', 0), compiler::compiler_str_intern('i32', 0))
-};
+@fn CallIndirect_lower node := compiler::compiler_expandCallIndirect(compiler::compiler_ast_node_field(node, compiler::compiler_str_intern('args', 0)), compiler::compiler_ast_node_field(node, compiler::compiler_str_intern('inferredType', 0)));

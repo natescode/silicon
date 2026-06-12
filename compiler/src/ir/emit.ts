@@ -220,6 +220,15 @@ export function emitExpr(e: IRExpr): string {
             return `(array.len ${emitExpr(e.target)})`
         case 'ArrayCopy':
             return `(array.copy ${e.dstTypeName} ${e.srcTypeName} ${emitExpr(e.dstRef)} ${emitExpr(e.dstIdx)} ${emitExpr(e.srcRef)} ${emitExpr(e.srcIdx)} ${emitExpr(e.count)})`
+        // C2 (ADR 0019 §2.2) — GC reference conversions (closure ⇄ externref).
+        case 'ExternConvertAny':
+            return `(extern.convert_any ${emitExpr(e.value)})`
+        case 'AnyConvertExtern':
+            return `(any.convert_extern ${emitExpr(e.value)})`
+        case 'RefCast':
+            return `(ref.cast (ref ${e.nullable ? 'null ' : ''}${e.typeName}) ${emitExpr(e.value)})`
+        case 'RefNullExtern':
+            return `(ref.null extern)`
         case 'ArrayLiteral':
             return emitArrayLiteral(e)
     }
@@ -271,8 +280,11 @@ function emitLoop(e: IRExpr & { kind: 'Loop' }): string {
 }
 
 function emitArrayLiteral(e: IRArrayLiteral): string {
+    // The store width is 4 bytes either way (elemBytes = 4 in v1.0); the
+    // instruction follows the element's wasm type so `$[1.5, 2.5]` stores
+    // f32 bits instead of feeding an f32 value to i32.store (invalid wasm).
     const stores = e.elements.map((el, i) =>
-        `(i32.store offset=${4 + i * e.elemBytes} (local.get $addr) ${emitExpr(el)})`
+        `(${el.wasmType === 'f32' ? 'f32.store' : 'i32.store'} offset=${4 + i * e.elemBytes} (local.get $addr) ${emitExpr(el)})`
     )
     return [
         `(block (result i32)`,
@@ -312,6 +324,10 @@ function isVoidIR(e: IRExpr): boolean {
         case 'ArrayNew': case 'ArrayNewDefault': case 'ArrayGet':
         case 'ArraySet': case 'ArrayLen': case 'ArrayCopy':
         case 'ArrayLiteral':
+        // C2 GC reference conversions always produce a value (never void).
+        case 'ExternConvertAny': case 'AnyConvertExtern': case 'RefCast':
+        // F1 — ref.null extern always produces a value.
+        case 'RefNullExtern':
             return (e as any).wasmType === 'void'
     }
 }

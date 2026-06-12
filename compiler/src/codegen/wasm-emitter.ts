@@ -76,6 +76,12 @@ function encodeStorageType(buf: WasmBuffer, st: WasmGcStorageType): void {
         buf.u8(st.type === 'i8' ? PACKED_I8 : PACKED_I16)
         return
     }
+    if (st.kind === 'externref') {
+        // Abstract extern heaptype field — a host handle (JSValue/JSString)
+        // stored natively in a GC struct (the F1 host-handle-carrying sum).
+        encodeExternRef(buf, st.nullable)
+        return
+    }
     // ref kind: emit form byte then SLEB-i33 typeidx.
     buf.u8(st.nullable ? REF_NULLABLE : REF_NON_NULL)
     buf.i32(st.typeIdx)
@@ -241,11 +247,13 @@ function emitExpr(e: IRExpr, buf: WasmBuffer, ctx: EmitCtx, isUser: boolean,
     switch (e.kind) {
         case 'Const': {
             if (e.wasmType === 'i32') {
-                buf.u8(0x41); buf.i32(e.value)
+                buf.u8(0x41); buf.i32(Number(e.value))
             } else if (e.wasmType === 'f32') {
-                buf.u8(0x43); buf.f32(e.value)
+                buf.u8(0x43); buf.f32(Number(e.value))
             } else {
-                buf.u8(0x42); buf.i64(BigInt(e.value))
+                // i64 — keep full precision when `value` is already a bigint
+                // (a >2^53 literal from @i64/@u64); BigInt(number) otherwise.
+                buf.u8(0x42); buf.i64(typeof e.value === 'bigint' ? e.value : BigInt(e.value))
             }
             return
         }
@@ -305,7 +313,11 @@ function emitExpr(e: IRExpr, buf: WasmBuffer, ctx: EmitCtx, isUser: boolean,
         case 'If': {
             emitExpr(e.cond, buf, ctx, isUser, localIdxOf)
             buf.u8(0x04)
-            buf.u8(e.wasmType === 'void' ? BLOCKTYPE_VOID : VALTYPE[e.wasmType as WasmValType])
+            // F1 — an externref-yielding `@if`/match arm uses the abbreviated
+            // `externref` (0x6F) value block type; otherwise the valtype byte
+            // for the result, or the void block type.
+            if ((e as any).externResult) buf.u8(HEAPTYPE_EXTERN)
+            else buf.u8(e.wasmType === 'void' ? BLOCKTYPE_VOID : VALTYPE[e.wasmType as WasmValType])
             ctx.depthStack.push(2)
             emitExprAsBody(e.then, buf, ctx, isUser, localIdxOf, e.then.kind === 'Block' && (e.then as any).wasmType === 'void')
             if (e.else_) {
@@ -418,6 +430,33 @@ function emitExpr(e: IRExpr, buf: WasmBuffer, ctx: EmitCtx, isUser: boolean,
             buf.u32(ctx.gcTypeIdxBase + e.srcTypeIdx)
             return
         }
+        // ── C2 (ADR 0019 §2.2) — GC reference conversions (closure ⇄ externref) ──
+        case 'ExternConvertAny': {
+            // box an internal GC ref as a host externref (no immediate).
+            emitExpr(e.value, buf, ctx, isUser, localIdxOf)
+            buf.u8(0xFB); buf.u8(0x1B)
+            return
+        }
+        case 'AnyConvertExtern': {
+            // unbox a host externref back to anyref (no immediate).
+            emitExpr(e.value, buf, ctx, isUser, localIdxOf)
+            buf.u8(0xFB); buf.u8(0x1A)
+            return
+        }
+        case 'RefCast': {
+            // narrow anyref → (ref $T); the heaptype immediate is an SLEB-i33
+            // module type index (gcTypeIdxBase + the wasmGcTypes-local index),
+            // matching encodeStorageType's ref form.  0x16 non-null / 0x17 nullable.
+            emitExpr(e.value, buf, ctx, isUser, localIdxOf)
+            buf.u8(0xFB); buf.u8(e.nullable ? 0x17 : 0x16)
+            buf.i32(ctx.gcTypeIdxBase + e.typeIdx)
+            return
+        }
+        case 'RefNullExtern': {
+            // ref.null extern — 0xD0 then the `extern` heaptype byte (0x6F).
+            buf.u8(0xD0); buf.u8(HEAPTYPE_EXTERN)
+            return
+        }
     }
 }
 
@@ -491,7 +530,8 @@ function emitArrayLiteral(
     for (let i = 0; i < e.elements.length; i++) {
         buf.u8(0x20); buf.u32(localIdxOf('addr')) // local.get $addr
         emitExpr(e.elements[i], buf, ctx, isUser, localIdxOf)
-        buf.u8(0x36); buf.u8(2); buf.u32(4 + i * e.elemBytes) // i32.store align=2 offset
+        // i32.store (0x36) or f32.store (0x38) by element type, align=2 offset
+        buf.u8(e.elements[i].wasmType === 'f32' ? 0x38 : 0x36); buf.u8(2); buf.u32(4 + i * e.elemBytes)
     }
 
     buf.u8(0x20); buf.u32(localIdxOf('addr')) // local.get $addr (result)
@@ -951,7 +991,13 @@ export function emitWasmBinary(
     const funcrefTypeIdxLocal = new Map<string, number>()
     if (userMod.funcrefTable) {
         for (const s of userMod.funcrefTable.signatures) {
-            const fsig: FuncSig = { params: s.params.map(valSlot), result: valSlot(s.result) }
+            // A position with a refParams/refResult entry encodes as a `(ref $T)`
+            // slot (ADR 0019 C2 — the closure env), matching the ref-typed wrapper;
+            // all others keep the C0 valtype slot (byte-identical baseline).
+            const fsig: FuncSig = {
+                params: s.params.map((p, i) => s.refParams?.has(i) ? refSlot(s.refParams.get(i)!) : valSlot(p)),
+                result: s.refResult ? refSlot(s.refResult) : valSlot(s.result),
+            }
             funcrefTypeIdxLocal.set(s.key, internSig(fsig))
         }
     }

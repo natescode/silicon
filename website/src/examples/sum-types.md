@@ -29,15 +29,15 @@ r := Rect(4, 7);
 \\ longest_side (Shape) -> Int
 @fn longest_side s := {
     @match(s,
-        $Circle r   => r,
-        $Rect w, h  => w)
+        $Circle r,  { r },
+        $Rect w, h, { w })
 };
 
 \\ tag (Shape) -> Int
 @fn tag s := {
     @match(s,
-        $Circle r   => 1,
-        $Rect w, h  => 2)
+        $Circle r,  { 1 },
+        $Rect w, h, { 2 })
 };
 
 @fn main := {

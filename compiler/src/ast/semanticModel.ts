@@ -14,6 +14,7 @@ import type { SiliconType } from '../types/types'
 import type { Diagnostic, SourceSpan } from '../errors/diagnostic'
 import { spanFromLocation } from '../errors/diagnostic'
 import type { SourceLocation } from './astNodes'
+import type { BindingIndex, BindingInfo } from './binder'
 
 // ---------------------------------------------------------------------------
 // Type display
@@ -125,6 +126,9 @@ export class SemanticModel {
     readonly #symbols: ReadonlyMap<string, Symbol>
     readonly #symbolToNodes: ReadonlyMap<string, readonly object[]>
     readonly #symbolToSpans: ReadonlyMap<string, readonly SourceSpan[]>
+    readonly #bindings: BindingIndex | undefined
+    /** Stable Symbol per local binding (S1) — built lazily on first query. */
+    readonly #bindingSymbols = new Map<BindingInfo, Symbol>()
     readonly allDiagnostics: readonly Diagnostic[]
 
     constructor(opts: SemanticModelOpts) {
@@ -133,6 +137,7 @@ export class SemanticModel {
         this.#symbols = opts.symbols ?? new Map()
         this.#symbolToNodes = opts.symbolToNodes ?? new Map()
         this.#symbolToSpans = opts.symbolToSpans ?? new Map()
+        this.#bindings = opts.bindings
         this.allDiagnostics = opts.diagnostics ?? []
     }
 
@@ -210,6 +215,11 @@ export class SemanticModel {
      * info was not recorded (pre-Ohm ASTs in unit tests).
      */
     symbolAtPosition(line: number, col: number): Symbol | undefined {
+        // S1 — local bindings FIRST: a position on a parameter / local /
+        // pattern field must resolve to that binding, not to a same-named
+        // top-level symbol via the name-keyed reference spans below.
+        const binding = this.#bindings?.bindingAtPosition(line, col)
+        if (binding) return this.#symbolForBinding(binding)
         // Check definition sites.
         for (const sym of this.#symbols.values()) {
             if (sym.definitionSpan && spanContainsPos(sym.definitionSpan, line, col)) {
@@ -225,6 +235,75 @@ export class SemanticModel {
             }
         }
         return undefined
+    }
+
+    // ── binding identity (S1) ────────────────────────────────────────────────
+
+    /**
+     * When `symbol` is a *local binding* (parameter, local, or `@match`
+     * pattern field — i.e. it came from `symbolAtPosition` over a binding
+     * occurrence), return the spans of every USE of that binding, all within
+     * this document (mirrors {@link referenceSpans} semantics: the definition
+     * span is on `symbol.definitionSpan`, not in the list).  Returns
+     * `undefined` for top-level symbols — callers fall back to the
+     * cross-document name-keyed aggregation for those.
+     */
+    localBindingSpans(symbol: Symbol): readonly SourceSpan[] | undefined {
+        for (const [binding, sym] of this.#bindingSymbols) {
+            if (sym === symbol) return binding.referenceSpans
+        }
+        return undefined
+    }
+
+    /**
+     * True when the occurrence of `name` at `span` resolved to a local
+     * binding (S1) — an AST-level name scan must not attribute it to a
+     * top-level symbol of the same name.
+     */
+    isLocalOccurrence(name: string, span: SourceSpan): boolean {
+        return this.#bindings?.isLocalOccurrence(name, span) ?? false
+    }
+
+    /**
+     * Like {@link referenceSpansForName}, minus the occurrences that resolved
+     * to a LOCAL binding of the same name (S1).  This is the span set a
+     * top-level rename/find-references must use, so a shadowing parameter or
+     * local `x` is never rewritten by a rename of top-level `x`.
+     */
+    unshadowedReferenceSpansForName(name: string): readonly SourceSpan[] {
+        const spans = this.#symbolToSpans.get(name) ?? []
+        const idx = this.#bindings
+        if (!idx) return spans
+        return spans.filter(s => !idx.isLocalOccurrence(name, s))
+    }
+
+    /** Build (once) the Symbol surface over a local binding. */
+    #symbolForBinding(b: BindingInfo): Symbol {
+        const cached = this.#bindingSymbols.get(b)
+        if (cached) return cached
+        const containing = b.container ? this.#symbols.get(b.container) : undefined
+        // A parameter's type lives on the containing function's signature; a
+        // local's was stamped on its Definition node by the typechecker.
+        let type: SiliconType | undefined
+        if (b.kind === 'parameter' && b.paramIndex !== undefined
+            && containing?.type?.kind === 'Function') {
+            type = containing.type.params[b.paramIndex]
+        } else {
+            type = this.#types.get(b.node)
+        }
+        const partial = {
+            name: b.name,
+            kind: b.kind,
+            definitionNode: b.node,
+            type,
+            definitionSpan: b.definitionSpan,
+            locations: b.definitionSpan ? [b.definitionSpan] : [],
+            containingSymbol: containing,
+            isImplicitlyDeclared: false,
+        }
+        const sym: Symbol = { ...partial, displayString: symbolDisplayString(partial as Symbol) }
+        this.#bindingSymbols.set(b, sym)
+        return sym
     }
 
     // ── diagnostic queries ────────────────────────────────────────────────────
@@ -283,6 +362,8 @@ export interface SemanticModelOpts {
     symbolToNodes?: ReadonlyMap<string, readonly object[]>
     /** Symbol name → source spans of all references (for referenceSpans, symbolAtPosition). */
     symbolToSpans?: ReadonlyMap<string, readonly SourceSpan[]>
+    /** Lexical binding identity for locals/params (S1) — see `ast/binder.ts`. */
+    bindings?: BindingIndex
     /** All type-phase diagnostics. */
     diagnostics?: readonly Diagnostic[]
 }

@@ -58,7 +58,10 @@ export type AbstractOp =
 export interface IRConst {
     kind: 'Const'
     wasmType: WasmValType
-    value: number
+    /** The constant value.  A `bigint` is used for `i64` constants that exceed
+     *  the JS safe-integer range (precise 64-bit literals from `@i64`/`@u64`);
+     *  `i32`/`f32` constants are always plain numbers. */
+    value: number | bigint
 }
 
 /** Read a function parameter or @local variable. */
@@ -109,6 +112,10 @@ export interface IRBlock {
     wasmType: WasmType
     stmts: IRStmt[]
     trailing?: IRExpr
+    /** F1 — the block yields a host handle (externref).  `wasmType` carries
+     *  the i32 placeholder, so this flag drives the `(result externref)` block
+     *  type at emit (the abbreviated `0x6F` valtype block type). */
+    externResult?: boolean
 }
 
 /**
@@ -121,6 +128,9 @@ export interface IRIf {
     cond: IRExpr
     then: IRExpr
     else_?: IRExpr
+    /** F1 — both branches yield a host handle (externref); drives the
+     *  `(if (result externref) …)` block type at emit. */
+    externResult?: boolean
 }
 
 /**
@@ -271,6 +281,48 @@ export interface IRArrayCopy {
     count: IRExpr
 }
 
+// Phase F1b/C2 — WasmGC reference conversions (ADR 0019 §2.2: the host-callable
+// closure boxes a `(ref $Clo)` as `externref` to cross `@extern`, and the
+// trampoline casts it back).  All three are `0xFB`-prefixed GC opcodes.
+
+/** `extern.convert_any` (0xFB 0x1B): box a GC ref (any internal ref) as a host
+ *  `externref` — the engine then traces it, so a host-held closure handle keeps
+ *  its `$Clo`/`$Env` alive (and is collected when the host drops it: no leak). */
+export interface IRExternConvertAny {
+    kind: 'ExternConvertAny'
+    wasmType: WasmValType   // i32 at the IR level (ref-as-pointer); externref in wasm
+    value: IRExpr           // the internal GC ref to box
+}
+
+/** `any.convert_extern` (0xFB 0x1A): unbox a host `externref` back to `anyref`
+ *  (the inverse of ExternConvertAny), ready for a `ref.cast` to the concrete type. */
+export interface IRAnyConvertExtern {
+    kind: 'AnyConvertExtern'
+    wasmType: WasmValType
+    value: IRExpr           // the externref handle
+}
+
+/** `ref.cast (ref $T)` (0xFB 0x16 non-null / 0x17 nullable): narrow an `anyref`
+ *  to the concrete struct/array type, trapping on mismatch.  Used by the
+ *  trampoline to recover `(ref $Clo)`/`(ref $Vec_i32)` from the host handle. */
+export interface IRRefCast {
+    kind: 'RefCast'
+    wasmType: WasmValType
+    typeIdx: number         // index into the wasmGcTypes registry (+ gcTypeIdxBase at emit)
+    typeName: string
+    nullable: boolean       // (ref null $T) vs (ref $T)
+    value: IRExpr           // the anyref to narrow
+}
+
+/** `ref.null extern` — a null abstract-extern reference.  Used as the
+ *  default value for a host-handle (externref) struct field that a given
+ *  variant of a native host-handle-carrying sum doesn't populate (the F1
+ *  flat-union layout). */
+export interface IRRefNullExtern {
+    kind: 'RefNullExtern'
+    wasmType: WasmValType    // 'i32' placeholder on the IR stack model; emits externref
+}
+
 /** A linear-memory array literal `$[a, b, …]`.  Lowers to
  *  `alloc_array(count, elemBytes)` into the implicit `$addr` local, then a
  *  store per element at `4 + i*elemBytes`, evaluating to the base pointer.
@@ -301,6 +353,10 @@ export type IRExpr =
     // Phase 9d-3 — WasmGC instructions.
     | IRStructNew | IRStructGet | IRStructSet
     | IRArrayNew | IRArrayNewDefault | IRArrayGet | IRArraySet | IRArrayLen | IRArrayCopy
+    // C2 (ADR 0019 §2.2) — GC reference conversions (closure ⇄ externref).
+    | IRExternConvertAny | IRAnyConvertExtern | IRRefCast
+    // F1 — null host handle (externref) for an unused flat-union sum slot.
+    | IRRefNullExtern
     // Linear-memory array literal `$[…]`.
     | IRArrayLiteral
 
@@ -416,8 +472,20 @@ export interface FuncrefTable {
      *  by `sigKey` (e.g. '__fn_i_i').  The order is the type-section
      *  index — `signatures[0]` is type index 0 in the (type) section.
      *  This is module-level state shared by every call_indirect site
-     *  in the module. */
-    signatures: Array<{ key: string; params: WasmValType[]; result: WasmType }>
+     *  in the module.
+     *
+     *  `refParams`/`refResult` (ADR 0019 C2) carry a wasm-gc REF type for a
+     *  position whose `params`/`result` valtype is `i32` at the IR level but is
+     *  actually a `(ref $T)` — e.g. a closure env param `(ref $Vec_i32)`.  The
+     *  call_indirect type then matches the ref-typed wrapper under --target=wasm-gc.
+     *  Undefined ⇒ the all-valtype signature (byte-identical to the C0 baseline). */
+    signatures: Array<{
+        key: string
+        params: WasmValType[]
+        result: WasmType
+        refParams?: Map<number, IRRefSlot>
+        refResult?: IRRefSlot
+    }>
 }
 
 export interface IRModule {
@@ -453,6 +521,7 @@ export type WasmGcStorageType =
     | { kind: 'val';    type: WasmValType }       // i32 | i64 | f32
     | { kind: 'packed'; type: 'i8' | 'i16' }      // struct/array only
     | { kind: 'ref';    typeIdx: number; nullable: boolean }  // (ref $T) / (ref null $T)
+    | { kind: 'externref'; nullable: boolean }    // abstract extern heaptype — host handle (JSValue/JSString) field
 
 /** A struct or array field declaration: storage type + mutability bit. */
 export interface WasmGcField {

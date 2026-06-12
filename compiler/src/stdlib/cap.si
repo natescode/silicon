@@ -1,0 +1,61 @@
+# SPDX-License-Identifier: MIT
+# Silicon capabilities — minimal WASI-aligned object-capability model (v0).
+# See docs/adr/0027-minimal-wasi-object-capabilities.md.
+#
+# A capability is an opaque, host-rooted token (a `@type_distinct` over Int,
+# WASI-fd-shaped).  It is UNFORGEABLE by representation: `@type_distinct`
+# registers no constructor, so ordinary code cannot mint a `World` or `Clock`
+# — the only producer is a function whose declared result is the cap type.
+#
+# Authority is ROOTED at `main`: write `\\ main (World) -> Int` and the
+# compiler's entry shim hands `main` the host's root `World`.  There is no
+# ambient way to obtain a `World` (no `cap::root()` import — a callable mint
+# would BE ambient authority).
+#
+# Attenuation: `world_clock` derives a narrower `Clock` from the root.  The
+# `@cap_derive` primitive (strata/cap.si) is a representation-preserving
+# relabel confined by the typechecker to downgrades FROM the root `World`
+# (you cannot forge a cap from a literal, nor amplify one domain cap into
+# another) — see the ADR for the threat model and the residual in-module seam.
+#
+# Usage:
+#   @use 'cap';
+#   \\ main (World) -> Int
+#   @fn main w := {
+#       c := world_clock(w);          ;; attenuate root -> Clock
+#       now := clock_now(c);          ;; needs a Clock — enforced at the call site
+#       0
+#   };
+
+@use 'heap';
+
+# ── Capability types ───────────────────────────────────────────────────
+# Both lower to i32 (the v0 representation); nominally distinct so a `Clock`
+# is never accepted where a `World` is required, and vice versa.
+@type_distinct World := Int;
+@type_distinct Clock := Int;
+
+# ── Attenuation (root -> domain) ───────────────────────────────────────
+# Derive a Clock capability from the root World.  `@cap_derive` is identity
+# at runtime; the typechecker requires its argument to be `World`.
+\\ world_clock (World) -> Clock
+@fn world_clock w := @cap_derive(w);
+
+# ── Cap-gated clock reads ──────────────────────────────────────────────
+# The Clock token is the permission witness; the wasi clock-id is fixed by
+# the operation (0 = realtime, 1 = monotonic).  Returns nanoseconds.
+\\ clock_now (Clock) -> Int64
+@fn clock_now c := {
+    heap_align();
+    out := scratch_alloc(8);
+    wasi_snapshot_preview1::clock_time_get(0, @toInt64(0), out);
+    WASM::i64_load(out)
+};
+
+\\ monotonic_now (Clock) -> Int64
+@fn monotonic_now c := {
+    heap_align();
+    out := scratch_alloc(8);
+    wasi_snapshot_preview1::clock_time_get(1, @toInt64(0), out);
+    WASM::i64_load(out)
+};

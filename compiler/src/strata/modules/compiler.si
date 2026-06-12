@@ -98,6 +98,12 @@
 \\ @extern type_format (Int) -> Int;
 \\ @extern type_substitute (Int, Int) -> Int;
 \\ @extern type_mangle_suffix (Int) -> Int;
+\\ @extern type_bind_template_args (Int, Int) -> Int;
+\\ @extern callee_name (Int) -> Int;
+\\ @extern str_concat (Int, Int) -> Int;
+\\ @extern str_of_int (Int) -> Int;
+\\ @extern generic_template (Int) -> Int;
+\\ @extern type_needs_mono (Int, Int) -> Int;
 
 # ── Diagnostics (T-5 accumulator model) ────────────────────────────────
 \\ @extern diag_error (Int, Int, Int, Int) -> Void;
@@ -126,7 +132,6 @@
 \\ @extern compiler_ctx_varNames_has (Int) -> Int;
 \\ @extern compiler_ctx_pendingLocals_push (Int) -> Void;
 \\ @extern compiler_ctx_funcref_index (Int) -> Int;
-\\ @extern compiler_ctx_funcref_ensure_default_sig () -> Void;
 \\ @extern compiler_ctx_loopStack_push (Int) -> Void;
 \\ @extern compiler_ctx_loopStack_pop () -> Int;
 \\ @extern compiler_ctx_loopStack_peek () -> Int;
@@ -153,11 +158,13 @@
 \\ @extern compiler_globalInit_wasmType (Int) -> Int;
 \\ @extern compiler_lowerExternParams (Int) -> Int;
 \\ @extern compiler_lowerExternResult (Int) -> Int;
+\\ @extern compiler_expandExtern (Int) -> Int;
 \\ @extern compiler_expandSumType (Int) -> Int;
 \\ @extern compiler_expandTypeRecord (Int) -> Int;
 \\ @extern compiler_expandStruct (Int) -> Int;
 \\ @extern compiler_expandWithArena (Int) -> Int;
 \\ @extern compiler_expandMoveToParentArena (Int) -> Int;
+\\ @extern compiler_expandCallIndirect (Int, Int) -> Int;
 
 # ── Test-only ───────────────────────────────────────────────────────────
 \\ @extern test_observe (Int) -> Void;

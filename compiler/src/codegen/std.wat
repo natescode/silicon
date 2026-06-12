@@ -284,6 +284,17 @@
       (i32.add (i32.const 4) (i32.mul (local.get $index) (i32.const 4))))))
 
 ;; ------------------------------------------------------------------
+;; $arr_store_f32 — write an f32 value to the Nth element of a prefixed f32 array.
+;;   offset = ptr + 4 + (index * 4)
+;; ------------------------------------------------------------------
+(func $arr_store_f32 (param $ptr i32) (param $index i32) (param $value f32)
+  (f32.store
+    (i32.add
+      (local.get $ptr)
+      (i32.add (i32.const 4) (i32.mul (local.get $index) (i32.const 4))))
+    (local.get $value)))
+
+;; ------------------------------------------------------------------
 ;; Print helpers — thin wrappers around the host `print(i32)` import.
 ;; Floats are converted via truncation for this POC; a richer host
 ;; print interface can replace these once we expose one.

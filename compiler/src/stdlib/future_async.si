@@ -1,0 +1,76 @@
+# SPDX-License-Identifier: MIT
+# F3 — the async bridge: a guest Future backed by a REAL host Promise, woken by
+# the F1b reactor.  This connects the guest-side poll-reactor (future.si) to real
+# async I/O: a Promise-backed future reports Pending until its Promise settles,
+# and `block_on_async` yields to the host event loop (@await promise::tick)
+# between poll rounds so the Promise can actually settle.  web/bun only (uses the
+# promise + js modules' externref handles).
+@use 'vec';
+@use 'future';
+
+# poll_promise(tok_state) — a Poll-future over a tracked Promise.  Non-blocking:
+# Ready once the Promise has settled, Pending otherwise.  Resolves a
+# Promise<number> to its Int via js::as_int.
+\\ poll_promise (Int) -> Poll[Int]
+@fn poll_promise tok_state := {
+    tok := vec_get_i32(tok_state, 0);
+    @if(promise::settled(tok), {
+        \\ r Poll[Int]
+        @mut r := Ready(js::as_int(promise::result(tok)));
+        r
+    }, {
+        \\ pp Poll[Int]
+        @mut pp := Pending();
+        pp
+    })
+};
+
+# promise_future(p) — wrap a host Promise<number> as a guest future closure.
+\\ promise_future (JSValue) -> Int
+@fn promise_future p := {
+    tok := promise::track(p);
+    state := vec_new(1);
+    vec_push_i32(state, tok);
+    @closure(poll_promise, state)
+};
+
+# block_on_async(future) — drive a future to completion, yielding to the host
+# event loop (@await promise::tick) between poll rounds so tracked Promises can
+# settle.  Runs under the F1b reactor (JSPI or Asyncify — tick returns a scalar).
+\\ @async block_on_async (Int) -> Int
+@fn block_on_async future := {
+    @mut done := 0;
+    @mut result := 0;
+    @loop(done == 0, {
+        \\ p Poll[Int]
+        @mut p := @call_closure(future);
+        @match(p, $Ready v, { result = v; done = 1; 0 }, $Pending, { @await(promise::tick()); 0 });
+    });
+    result
+};
+
+# block_all_async(futures) — drive a Vec of (possibly Promise-backed) futures
+# CONCURRENTLY: each round polls every still-pending future, then yields ONCE to
+# the host event loop, so all their Promises settle together (genuine guest-side
+# Promise.all-shaped concurrency over real async I/O).  Returns the sum.
+\\ @async block_all_async (Int) -> Int
+@fn block_all_async futures := {
+    n := vec_len(futures);
+    @mut sum := 0;
+    @mut all_done := 0;
+    @loop(all_done == 0, {
+        all_done = 1;
+        @mut j := 0;
+        @loop(j < n, {
+            f := vec_get_i32(futures, j);
+            @if(f != 0, {
+                \\ p Poll[Int]
+                @mut p := @call_closure(f);
+                @match(p, $Ready v, { sum = sum + v; vec_set_i32(futures, j, 0); 0 }, $Pending, { all_done = 0; 0 });
+            });
+            j = j + 1;
+        });
+        @if(all_done == 0, { @await(promise::tick()); 0 }, { 0 });
+    });
+    sum
+};
