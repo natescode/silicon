@@ -1,10 +1,11 @@
 # Silicon v1 — feature status
 
-> **As of:** branch `v1-roadmap` (`eb0f995` — M0 full monomorphization, F1 native
-> host-handle sums, and the v0 capability model landed). Statuses **re-verified
-> against the actual code + tests** this revision (a 6-cluster sweep; code beats the
-> doc where they disagreed — `@global`/`@local`/`@struct` retired, code-action API +
-> playground + the incremental front-end found already shipped).
+> **As of:** branch `v1-roadmap` (M1 container monomorphization **completed**:
+> typed-Vec `@loop` dispatch + the typed HashMap (K, V) families landed on top
+> of `96a7307`). Statuses **re-verified against the actual code + tests** the
+> prior revision (a 6-cluster sweep; code beats the doc where they disagreed —
+> `@global`/`@local`/`@struct` retired, code-action API + playground + the
+> incremental front-end found already shipped).
 > **Companion:** [`v1.0-implementation-roadmap.html`](v1.0-implementation-roadmap.html)
 > (critical-path detail), [`ffi-coverage-gaps.md`](ffi-coverage-gaps.md) (FFI),
 > the per-feature ADRs under [`adr/`](adr/).
@@ -19,9 +20,11 @@ production `@generic`/`@fn[T]` stratum) are shipped. Native host-handle-carrying
 sums (`Result[JSValue, String]` under `--target=wasm-gc`) ride that
 monomorphization substrate, retiring the `js::pin` interim. A **minimal
 WASI-aligned object-capability model (K0, ADR 0027)** shipped on top — caps are
-unforgeable values rooted at `@fn main (World)`. The *full* capability/borrow
-track (K1–K8) and container monomorphization (M1) are the *deliberately* deferred
-post-gate work.
+unforgeable values rooted at `@fn main (World)`. **Container monomorphization
+(M1) is now complete** — typed Vecs (`Float`/`Int64`, both targets) with
+`@loop` element-typed iteration, plus typed HashMap (K, V) families with an
+iteration-cursor surface. The *full* capability/borrow track (K1–K8) is the
+*deliberately* deferred post-gate work.
 
 ## The planned critical path (FFI gate · async/closures · mono · capability)
 
@@ -37,7 +40,7 @@ post-gate work.
 | **C2** | Escaping host-callable closures — **THE GATE** | ✅ | leak-free under `--target=wasm-gc`; linear-mem retains env in bump heap |
 | **FFI 100% gate** | every host member binds | 🟡 | **99.74%** (379/380) — only `Bun.$` (a tagged-template) unbound; plan committed |
 | **M0** | Comptime monomorphization (full) | ✅ | per-call-site memoization + the production `@generic` stratum shipped; the all-i32 erased copy serves i32-shaped calls, Float/Int64/host-handle calls get a specialized monomorph. User-facing generics: `@fn[T]`/`@type[T]` HM-lite. Native `Result[JSValue,E]` rides this (see FFI F1) |
-| **M1** | Container mono `Vec[T]` / `HashMap[K,V]` | 🟡 | **`Vec[Float]`/`Vec[Int64]` ship on BOTH targets** (linear-mem `vec_*_f32`/`_i64`; wasm-gc per-element `$Array_f32`/`$Array_i64` from the parameterized `gc-vec.ts`) + a **HashMap iteration** cursor surface. The remaining tail: `HashMap[K,V]` for non-i32 keys/values, and `@loop` sugar over typed Vecs (ADR-0016-deferred) |
+| **M1** | Container mono `Vec[T]` / `HashMap[K,V]` | ✅ | **`Vec[Float]`/`Vec[Int64]` ship on BOTH targets** (linear-mem `vec_*_f32`/`_i64`; wasm-gc per-element `$Array_f32`/`$Array_i64` from the parameterized `gc-vec.ts`). **`@loop` over typed Vecs**: the desugared `vec_len`/`vec_get_i32` calls are tagged and retargeted by the typechecker at the subject's monomorph family, so the binder is element-typed (both targets; on linear-mem a `Vec[T]` annotation is representation-compatible with `Int`). **Typed HashMap (K, V) families** (linear-mem, like the i32 base): `(i32,f32)` on the compact 12-byte slots, `(i64,i64)` on wide 24-byte slots, `(i32,i64)` wrappers — each with set/get/has/remove/resize + an **iteration cursor** (`hashmap_iter_*`, compact + `_i64` wide + `_f32` value reads). Float *keys* deliberately unsupported (NaN); struct-element Vecs and ref-typed elements are the v1.1 runway (ADR 0009 §3) |
 | **K0** | Object-capability model **v0** (minimal, WASI-aligned) | ✅ | ADR 0027: unforgeable `@type_distinct` caps, rooted at `@fn main (World)` via the entry shim, attenuated by `@cap_derive` (E0017 "downgrade-from-root"); `World`+`Clock` proven e2e under wasmtime. Zero new analysis pass — a strict subset of ADR 0015 / K1–K8 |
 | **K1–K8** | Full capability/borrow track (`on::check`, reflection, fixpoint checker, `@capability` seal, rcaps) | 🔜 | post-v1.0; K0 (above) is the seed it builds on without rework |
 
@@ -45,9 +48,9 @@ post-gate work.
 
 | Area | Shipped |
 |---|---|
-| **Language / grammar** | Strata 2.0 (features-as-Silicon-source), Odin grammar (ADR-0020: bare defs, always-parens calls, dropped `&` sigil), conservative ASI (ADR-0026), bare `name := v` (immutable) / `@mut name := v` (mutable) bindings, `@type P := { x Int, y Int }` records (`@struct`/`@global`/`@local` **retired** by ADR-0020), `@enum`, flat `@match`, `@defer`, `@try`, first-class fn refs + `call_indirect`, `@loop` over iterables (range + indexed-`Vec`, syntactic dispatch) |
+| **Language / grammar** | Strata 2.0 (features-as-Silicon-source), Odin grammar (ADR-0020: bare defs, always-parens calls, dropped `&` sigil), conservative ASI (ADR-0026), bare `name := v` (immutable) / `@mut name := v` (mutable) bindings, `@type P := { x Int, y Int }` records (`@struct`/`@global`/`@local` **retired** by ADR-0020), `@enum`, flat `@match`, `@defer`, `@try`, first-class fn refs + `call_indirect`, `@loop` over iterables (range + indexed-`Vec` — incl. element-typed `Vec[Float]`/`Vec[Int64]` via the M1 typecheck retarget — and indexed-`Array[T]` subjects via the same retarget at the prelude `arr_*` helpers), `$[…]` array accessors `array::get`/`array::set`/`array::len` (always available, element-typed `Int`/`Float` dispatch, no `@use`) + `Array[T]` param/return annotations |
 | **Type system** | HM-lite inference, `@fn[T]`/`@type[T]` generics, sum types + parametric `Option[T]`/`Result[T,E]`, `Int`/`Int32`/`Int64` hierarchy, unsigned `u8`–`u64`, `Slice[T]`, `@type_alias`/`@type_distinct` |
-| **Stdlib** | `Option`/`Result`, `Vec[T]` (`Int`/`Float`/`Int64`, both targets — M1), `HashMap[i32,i32]` + **iteration cursor**, `Rc<T>`, `io`, `future`/`future_async`, `ffi` (host-error→`Result`), string byte-views + `StrBuilder` (ADR-0022). `Result[JSValue,E]`/`Option[JSValue]` carry a host handle **natively** under `--target=wasm-gc` (no `js::pin`) |
+| **Stdlib** | `Option`/`Result`, `Vec[T]` (`Int`/`Float`/`Int64`, both targets — M1), `HashMap[K,V]` monomorph families (`(i32,i32)`, `(i32,f32)`, `(i32,i64)`, `(i64,i64)`) + **iteration cursors** (compact + wide — M1), `Rc<T>`, `io`, `future`/`future_async`, `ffi` (host-error→`Result`), string byte-views + `StrBuilder` (ADR-0022). `Result[JSValue,E]`/`Option[JSValue]` carry a host handle **natively** under `--target=wasm-gc` (no `js::pin`) |
 | **FFI / host** | bindgen (3 tiers), `js` module (object/array/handle substrate), `stream` module, generated modules (`path`/`os`/`json`/`bun`/`url`/fetch ecosystem/`event_target`/`crypto`/`fs`/`global`), `promise` concurrency, no fundamental classifier gaps |
 | **Backends** | WAT/WASM (binaryen+wabt), QBE → native (Tier-1: linux/macos x86_64+arm64), `--target=wasm-gc` (engine-GC structs/sums) |
 | **Memory** | arena `with_arena`/parent-escape, clean heap-exhaustion trap + `--max-heap=N`, `heap_used`/`arena_used`, published `allocator.wit` |
@@ -58,7 +61,7 @@ post-gate work.
 
 | Feature | When | Note |
 |---|:--:|---|
-| `HashMap[K,V]` for non-i32 keys/values — M1 tail | ⏳ v1.1 | `Vec[Float]`/`Vec[Int64]` + HashMap iteration **shipped** (M1); non-i32 (K,V) mono + `@loop` over typed Vecs remain |
+| Ref-/struct-typed container elements; HashMap on wasm-gc | ⏳ v1.1 | **M1 is complete** (typed Vecs + `@loop` dispatch + typed HashMap families). The runway beyond it: `Vec[T]` over by-value structs / managed refs (ADR 0009 §3), a managed-substrate HashMap for wasm-gc (today's is linear-mem `alloc`, E0013 there), and float keys (deliberately unsupported — NaN) |
 | Heterogeneous host-handle sums on **linear-mem** target | 🔜 | native on `--target=wasm-gc` (✅); on a linear-mem target externref isn't addressable → `E` fail-fast directing to `js::pin`/wasm-gc |
 | `IterStep[T,R]` user iteration protocol (ADR-0016) | ⏳ v1.1 | range/`Vec` dispatch ships; structural dispatch waits on reflection + combinators |
 | LSP server | 🟡 | a runnable stdio server, now **18 capabilities** — added declaration, typeDefinition, documentHighlight, rangeFormatting, workspace/symbol, prepareRename + lifecycle (shutdown/exit, positionEncoding, process-level error isolation). Remaining tail: cross-file **diagnostic** invalidation (needs Workspace open-doc dep resolution + incremental dependency tracking) and binding-identity (S1, `containingSymbol`) for scope-correct rename/references |
@@ -92,3 +95,30 @@ i32 `Err` — works because the flat-union layout gives every field its own slot
 On a linear-mem target it's a clean fail-fast error (externref isn't addressable
 in linear memory) directing to `js::pin`/wasm-gc. This retires the `js::pin`
 interim for the wasm-gc path.
+
+## Note — M1 completed (container monomorphization)
+
+The two documented tails landed, closing M1:
+
+1. **`@loop` over typed Vecs.** The iterate-`@loop` desugar runs pre-typecheck,
+   so it emits the i32-default `vec_len`/`vec_get_i32` — now *tagged*. When the
+   subject's inferred type is `Vec[Float]`/`Vec[Int64]`, the typechecker
+   retargets the tagged calls at the matching monomorph family
+   (`vec_get_f32`/`_i64`, …), typing the element binder by the element. Works
+   on **both targets**: under wasm-gc the tagged synthetic subject local is
+   ref-typed from its *inferred* type (`lower.ts` previously needed an
+   annotation), and on linear-mem a `Vec[T]` annotation is now
+   representation-compatible with `Int` (a Vec *is* its header pointer there) —
+   which also made the pre-existing `vec-typed.test.ts` annotations typecheck
+   *clean* on host instead of relying on unchecked diagnostics.
+2. **Typed HashMap (K, V) families** (`hashmap.si`, linear-mem like the i32
+   base): `(i32, f32)` rides the compact 12-byte slots (f32 is 4 bytes — shares
+   new/has/remove/resize/cursor; rehash copies value bits raw), `(i64, i64)` is
+   a wide 24-byte-slot family (i64 probing/hash, resize, remove, own
+   `hashmap_iter_*_i64` cursor), `(i32, i64)` wraps the wide family with a
+   single sign-extension at the boundary. Float *keys* are deliberately
+   unsupported (NaN ≠ NaN breaks probing) — the same stance Rust takes.
+
+Coverage: `src/e2e/loop-iterables.test.ts` (typed-Vec loops, both targets) +
+`src/stdlib/hashmap-typed.test.ts` (all three families end-to-end, including a
+forced i64 hash collision, tombstone re-probing, and resize bit-preservation).

@@ -31,6 +31,10 @@ async function runBoth(src: string): Promise<Record<'host' | 'wasm-gc', any>> {
         const registry = buildStrataRegistry(ast)
         const { program: elab } = elaborate(ast, registry)
         const tc = typecheck(elab, registry, undefined, target as any)
+        // The `\\ v Vec[T]` annotations must be CLEAN on both targets: under
+        // wasm-gc against the TS-registered Vec[T] signatures, on the linear
+        // host via the Vec≈Int representation rule (a Vec IS its header ptr).
+        if (tc.errors.length) throw new Error(`typecheck [${target}]: ${tc.errors.map((e: any) => e.message ?? e.kind).join('; ')}`)
         const bin = compileToWasm(tc.program, registry, tc.functions, undefined, { target } as any)
         const mod = await WebAssembly.instantiate(bin, { env: { print: () => {}, read: () => 0 } } as any)
         out[target] = mod.instance.exports

@@ -244,7 +244,7 @@ own sources and tests):
 |--------|------|
 | `option` | `Option[T]` sum type + `option_unwrap_or`, `option_is_some/none` |
 | `result` | `Result[T, E]` sum type + `result_unwrap_or`, `result_is_ok/err` |
-| `vec` | `Vec[T]` — the growable, general-purpose collection (`vec_new`, `vec_push_i32`, `vec_get_i32`, …). Prefer it over `$[…]` array literals, which aren't first-class yet (no in-language indexing/iteration/params). |
+| `vec` | `Vec[T]` — the growable, general-purpose collection (`vec_new`, `vec_push_i32`, `vec_get_i32`, …). Prefer it when you need growth; for fixed-size data, `$[…]` array literals carry `array::get` / `array::set` / `array::len` (always available — no `@use`, like the literal itself), `Array[T]` param/return annotations, and iterate-`@loop` over an array subject. Elements are 4-byte (`Int` / `Float`) in v1.0. |
 | `slice` | bounds-checked views (`Slice[T]` = `{ptr, len}`); also `str_bytes` / `string_as_slice` for a string's byte view |
 | `strbuilder` | `StrBuilder` — build a `String` without pointer math (`sb_new`/`sb_push_*`/`sb_finish`) |
 | `hashmap` | hash map |

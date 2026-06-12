@@ -234,11 +234,18 @@ test('@fn no-signature used at two concrete types stays uninferred (E0015)', () 
     expect(errors.some(e => e.kind === 'MissingParamType')).toBe(true)
 })
 
-test('@fn called with a non-annotatable arg type (Array) is uninferable (E0015, not UnknownType)', () => {
-    // Array[T] has no surface annotation name, so inference must NOT synthesize an
-    // `Array[Int]` annotation (which the resolver would reject as "unknown type
-    // 'Array'"). It leaves the param unresolved → honest E0015.
+test('@fn called with an Array arg infers Array[Int] (annotatable since the array promotion)', () => {
+    // `Array[Int]` resolves as a surface annotation (same path as Vec[T]), so
+    // use-site inference synthesizes it and the param resolves — no E0015, and
+    // never a confusing "unknown type 'Array'".
     const { errors } = check('@fn f a := { a };\nr := f($[1, 2, 3]);')
+    expect(errors).toHaveLength(0)
+})
+
+test('@fn called with a non-annotatable arg type (Function) is uninferable (E0015, not UnknownType)', () => {
+    // A function type still has no surface annotation the synthesizer emits, so
+    // inference leaves the param unresolved → honest E0015.
+    const { errors } = check('@fn f a := { a };\n@fn g x Int := x;\nr := f(g);')
     expect(errors.some(e => e.kind === 'MissingParamType')).toBe(true)
     expect(errors.every(e => e.kind !== 'UnknownType')).toBe(true)
 })

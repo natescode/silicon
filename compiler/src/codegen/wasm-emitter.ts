@@ -530,7 +530,8 @@ function emitArrayLiteral(
     for (let i = 0; i < e.elements.length; i++) {
         buf.u8(0x20); buf.u32(localIdxOf('addr')) // local.get $addr
         emitExpr(e.elements[i], buf, ctx, isUser, localIdxOf)
-        buf.u8(0x36); buf.u8(2); buf.u32(4 + i * e.elemBytes) // i32.store align=2 offset
+        // i32.store (0x36) or f32.store (0x38) by element type, align=2 offset
+        buf.u8(e.elements[i].wasmType === 'f32' ? 0x38 : 0x36); buf.u8(2); buf.u32(4 + i * e.elemBytes)
     }
 
     buf.u8(0x20); buf.u32(localIdxOf('addr')) // local.get $addr (result)

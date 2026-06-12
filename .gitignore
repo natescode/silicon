@@ -13,3 +13,4 @@ dist/
 
 # Compiler debug artifact
 ast.json
+.aider*

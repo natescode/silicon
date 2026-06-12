@@ -15,18 +15,17 @@ bun test                                # run the full test suite
 bun test src/types                      # run a directory
 bun test src/types/typechecker.test.ts  # run a single file
 
-bun run sgl <subcommand>                # invoke the Silicon CLI (sgl init/build/run/check)
 bun run compile                         # one-shot pipeline driver (src/index.ts)
 
 bun run build:sigilc                    # compile sgl into a native binary at dist/sigilc
 ```
 
-A typical user workflow with the `sgl` CLI:
+The `sgl` CLI lives in the sibling `cli/` workspace package (`cli/src/sigil_cli.ts`). Invoke it from source — a globally installed `~/.sgl/bin/sgl` may shadow workspace edits:
 
 ```sh
-bun run sgl init my-project
+bun run ../cli/src/sigil_cli.ts init my-project
 cd my-project
-bun --cwd .. run sgl run                # compile + execute under wasmtime
+bun run ../../cli/src/sigil_cli.ts run   # compile + execute under wasmtime
 ```
 
 Tooling assumptions: **Bun ≥ 1.0** for running TypeScript and tests; **wasmtime** for executing compiled WASI binaries; **wat2wasm** (from WABT, or `./bin/wat2wasm` via `scripts/install-wat2wasm.{sh,ps1}`) for `.wat → .wasm` assembly when not going through `binaryen`.
@@ -44,7 +43,7 @@ Source → Parser → AST → Strata loader → Elaborator → Typecheck → IR/
 3. **Elaborator** (`src/elaborator/elaborator.ts`) — resolves operators and definition keywords via the strata registry; rich strata bodies execute through the body interpreter.
 4. **Typecheck** (`src/types/typechecker.ts`, `src/types/unify.ts`) — HM-lite inference; pushes structured diagnostics via `src/errors/diagnostic.ts`.
 5. **Codegen** (`src/codegen/`) — lowers the typed AST to WAT. `compileToWasm` further assembles WAT into a `.wasm` binary via the `wabt` / `binaryen` deps. The QBE backend (`src/codegen/qbe/`) lowers the same IR for native targets.
-6. **CLI** (`src/sigil_cli.ts`) — `sgl init/build/run/check` and friends. The public compiler-as-a-service surface lives in `src/caas/`.
+6. **CLI** (`../cli/src/sigil_cli.ts`, separate `@silicon/cli` package) — `sgl init/build/run/check` and friends. The public compiler-as-a-service surface lives in `src/caas/`.
 
 ## Where to Look First
 
@@ -149,6 +148,6 @@ it collided with flat precedence once a body was itself a binary expression).
 ## Test Structure
 
 - Tests live alongside the code as `src/**/*.test.ts` and run under Bun: `bun test`.
-- Integration tests for the public CLI are in `src/sigil_cli.test.ts`; end-to-end pipeline tests under `src/e2e/`.
+- Integration tests for the public CLI are in `../cli/src/sigil_cli.test.ts`; end-to-end pipeline tests under `src/e2e/`.
 - Property / fuzz suites live under `tests/`: `bun run test:properties`, `bun run test:fuzz`.
 - Backend-specific suites: `bun run test:qbe`, `bun run test:backends`, `bun run test:selfhost`.

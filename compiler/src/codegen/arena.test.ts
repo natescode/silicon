@@ -313,8 +313,8 @@ describe('Phase 9c: @with_arena + @move_to_parent_arena', () => {
     test('@move_to_parent_arena promotes an Array[Int]', async () => {
         // [count=3][1][2][3] = 4 + 3*4 = 16 bytes laid out contiguously.
         // Promotion memcpys those 16 bytes to the saved boundary.
-        // Array element type is inferred — surface annotations for
-        // Array[T] aren't part of the v1.0 grammar.
+        // Array element type is inferred here; `\\ arr Array[Int]`
+        // annotations also resolve (same path as Vec[T]).
         const r = await compileAndRun(`
             \\\\ build Int
             @fn build := @with_arena({

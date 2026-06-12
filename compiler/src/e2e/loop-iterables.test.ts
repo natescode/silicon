@@ -3,13 +3,14 @@
  * ADR 0016 — `@loop` over iterables.
  *
  * Exercises the v1 surface end-to-end (source → wasm → run): the 0-operand
- * infinite sugar, `a..b` half-open ranges with arity-1/-2 binds, i32-element
- * indexed `Vec` iteration with arity-2/-3 binds, the `_` discard binder, and the
- * `IterStep[T,R]` convention.  Range / infinite / discard forms are asserted for
- * parity across both backends (they touch no Vec); the indexed-Vec forms run on
- * the host (wasm-mvp) target only, like `src/stdlib/vec.test.ts`, because
- * cross-target Vec source parity needs `:Vec[Int]` annotations vec.si doesn't
- * carry yet (see cross-target.test.ts header).
+ * infinite sugar, `a..b` half-open ranges with arity-1/-2 binds, indexed `Vec`
+ * iteration with arity-2/-3 binds (i32 default + the M1 typed-Vec dispatch for
+ * `Vec[Float]`/`Vec[Int64]`), the `_` discard binder, and the `IterStep[T,R]`
+ * convention.  Range / infinite / discard forms are asserted for parity across
+ * both backends; the UNANNOTATED indexed-Vec forms run on the host (wasm-mvp)
+ * target only (under wasm-gc an unannotated `@mut v := vec_new …` local has no
+ * ref type), while the `\\ v Vec[T]`-annotated typed-Vec forms assert parity
+ * on both targets.
  *
  * Also asserts the elaboration-time rejections: arity ≥ 4 operands and a `..`
  * range used outside an iterate `@loop`.
@@ -252,6 +253,86 @@ describe('ADR 0016: indexed Vec @loop', () => {
                 hits
             };
             @export run;`, 'run', 0)
+    })
+})
+
+// ─────────────────────────────────────────────────────────────────────────
+// Typed-Vec form (M1) — Vec[Float] / Vec[Int64] subjects retarget the
+// desugared vec_len/vec_get_i32 at the matching monomorph family, so the
+// element binder is element-typed.  Runs on BOTH targets (the `\\ v Vec[T]`
+// annotation gives both the typechecker and the wasm-gc ref-typing the
+// element type).
+// ─────────────────────────────────────────────────────────────────────────
+
+describe('ADR 0016 / M1: typed-Vec @loop', () => {
+    test('Vec[Float] elements bind as Float (both targets)', async () => {
+        await assertParity(`
+            @use 'vec';
+            \\\\ run () -> Float
+            @fn run := {
+                \\\\ v Vec[Float]
+                @mut v := vec_new_f32(2);
+                vec_push_f32(v, 1.5);
+                vec_push_f32(v, 2.5);
+                vec_push_f32(v, 3.5);
+                @mut sum := 0.5;
+                @loop(x, v, { sum = sum + x });
+                sum
+            };
+            @export run;`, 'run', 8)   // 0.5 + 1.5 + 2.5 + 3.5
+    })
+
+    test('arity-3 over Vec[Float] binds position then element (both targets)', async () => {
+        await assertParity(`
+            @use 'vec';
+            \\\\ run () -> Float
+            @fn run := {
+                \\\\ v Vec[Float]
+                @mut v := vec_new_f32(2);
+                vec_push_f32(v, 1.5);
+                vec_push_f32(v, 2.5);
+                vec_push_f32(v, 3.5);
+                @mut w := 0.0;
+                @loop(i, x, v, { w = w + (@toFloat(i) * x) });
+                w
+            };
+            @export run;`, 'run', 9.5)   // 0*1.5 + 1*2.5 + 2*3.5
+    })
+
+    test('Vec[Int64] elements bind as Int64 — sums past 2^32 (both targets)', async () => {
+        const src = `
+            @use 'vec';
+            \\\\ run () -> Int64
+            @fn run := {
+                \\\\ v Vec[Int64]
+                @mut v := vec_new_i64(2);
+                vec_push_i64(v, @i64(3000000000));
+                vec_push_i64(v, @i64(2000000000));
+                vec_push_i64(v, @i64(123));
+                @mut sum := @i64(0);
+                @loop(x, v, { sum = sum + x });
+                sum
+            };
+            @export run;`
+        expect((await compileRun(src, 'host')).run()).toBe(5000000123n)
+        expect((await compileRun(src, 'wasm-gc')).run()).toBe(5000000123n)
+    })
+
+    test('annotated Vec[Int] iterates under wasm-gc too (both targets)', async () => {
+        await assertParity(`
+            @use 'vec';
+            \\\\ run () -> Int
+            @fn run := {
+                \\\\ v Vec[Int]
+                @mut v := vec_new(4);
+                vec_push_i32(v, 10);
+                vec_push_i32(v, 20);
+                vec_push_i32(v, 30);
+                @mut sum := 0;
+                @loop(x, v, { sum = sum + x });
+                sum
+            };
+            @export run;`, 'run', 60)
     })
 })
 

@@ -524,6 +524,17 @@ function lowerExpr(node: any, fn: QbeFnCtx): string {
             return `$${label}`
         }
 
+        case 'ArrayLiteral':
+            // `$[…]` needs the length-prefixed heap layout (alloc_array +
+            // arr_load/arr_store), and QBE has no allocator surface yet —
+            // same gap as @with_arena above.  Reject loudly instead of
+            // silently lowering to 0.
+            throw new Error(
+                `[QBE lower] '$[…]' array literals are not yet supported on the native ` +
+                `backend (QBE allocator wiring is a follow-up story; see the @with_arena ` +
+                `note in this file).  Build with the default (WASM) backend.`,
+            )
+
         // -- Stubs for future node types -------------------------------------
         default:
             return '0'
@@ -816,6 +827,7 @@ function lowerWasmIntrinsic(callee: string, args: any[], fn: QbeFnCtx): string {
         case 'WASM__i64_xor':   { const t = freshTemp(fn); emit(fn, `${t} =l xor ${a[0]}, ${a[1]}`); return t }
         case 'WASM__i64_shl':   { const t = freshTemp(fn); emit(fn, `${t} =l shl ${a[0]}, ${a[1]}`); return t }
         case 'WASM__i64_shr_s': { const t = freshTemp(fn); emit(fn, `${t} =l sar ${a[0]}, ${a[1]}`); return t }
+        case 'WASM__i64_shr_u': { const t = freshTemp(fn); emit(fn, `${t} =l shr ${a[0]}, ${a[1]}`); return t }
 
         // -- f32 arithmetic --------------------------------------------------
         case 'WASM__f32_add':   { const t = freshTemp(fn); emit(fn, `${t} =s add ${a[0]}, ${a[1]}`); return t }

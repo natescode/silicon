@@ -144,7 +144,7 @@
   (<code>future_async.si</code>). <b>M0 DONE (full): the production <code>@generic</code>/<code>@fn[T]</code> stratum + per-call-site
   memoization shipped — Float/Int64/host-handle instantiations specialize, i32-shaped stay erased; user-facing generics also ship via
   <code>@fn[T]</code> HM-lite. Native host-handle sums (F1) — <code>Result[JSValue,E]</code> under wasm-gc — ride it.</b>
-  <b>Capability model (K1–K8) not started — by design (post-v1.0); M1 container mono is v1.1.</b>
+  <b>Capability model (K1–K8) not started — by design (post-v1.0); M1 container mono is ✓ done (typed Vecs + @loop dispatch + typed HashMap families).</b>
   <b>Beyond the mechanism gate</b>, the FFI <i>surface</i> was broadened end-to-end (see “Post-gate FFI surface” below) and the bind rate
   reached <b style="color:var(--mono)">99.74% (379 / 380 members)</b> — the only unbound member is <code>Bun.$</code>, a tagged-template
   (a JS syntactic form, not a classifier gap). No fundamental bindgen gaps remain.</div>
@@ -179,7 +179,7 @@
   <div class="pchips"><a href="#F0a" class="chip ffi chip-done" title="Bindgen"><b>✓ F0a</b> Bindgen</a><a href="#M0" class="chip mono crit chip-done" title="Comptime monomorphization (full)"><b>✓ M0</b> Comptime monomorphization</a><a href="#C0" class="chip ffi crit chip-done" title="Generalize the funcref ABI  (closures C0)"><b>✓ C0</b> Generalize the funcref ABI</a></div>
 </div><div class="phase">
   <div class="phead"><span class="pnum">Phase 1</span><span class="pnote">FFI to ~80% (async) + container mono — parallel</span></div>
-  <div class="pchips"><a href="#F1a" class="chip ffi crit chip-done" title="Object handles / JSValue externref"><b>✓ F1a</b> Object handles / JSValue exter…</a><a href="#F1b" class="chip ffi crit chip-done" title="Blocking @await (Asyncify) + reactor host + async effect"><b>✓ F1b</b> Blocking @await</a><a href="#M1" class="chip mono" title="Container monomorphization — Vec[T] / HashMap[K,V]"><b>M1</b> Container monomorphization</a></div>
+  <div class="pchips"><a href="#F1a" class="chip ffi crit chip-done" title="Object handles / JSValue externref"><b>✓ F1a</b> Object handles / JSValue exter…</a><a href="#F1b" class="chip ffi crit chip-done" title="Blocking @await (Asyncify) + reactor host + async effect"><b>✓ F1b</b> Blocking @await</a><a href="#M1" class="chip mono chip-done" title="Container monomorphization — Vec[T] / HashMap[K,V]"><b>✓ M1</b> Container monomorphization</a></div>
 </div><div class="phase">
   <div class="phead"><span class="pnum">Phase 2</span><span class="pnote">The keystone — closures (the FFI↔mono join)</span></div>
   <div class="pchips"><a href="#C1" class="chip ffi crit chip-done" title="Non-escaping closures (all modes, zero-cost)  (closures C1)"><b>✓ C1</b> Non-escaping closures</a><a href="#C2" class="chip ffi gate crit chip-done" title="Escaping host-callable closures — wasm-gc only  (closures C2 · THE GATE)"><b>✓ C2</b> Escaping host-callable closures</a></div>
@@ -287,7 +287,7 @@
 
   <section class="prose">
 <h2 class="sec" id="item-mono"><span class="dot mono"></span>Item B — Monomorphization</h2>
-<p class="blurb"><code>@fn[T]</code> and <code>@type[T]</code> (Option/Result) ship via <b>HM-lite</b> (user-facing generics). The comptime-specialization machinery (M0) is now <b>fully done</b>: the production <code>@generic</code>/<code>@fn[T]</code> stratum + per-call-site memoization specialize Float/Int64/host-handle instantiations (i32-shaped stay erased), and native host-handle sums (F1, <code>Result[JSValue,E]</code> under wasm-gc) ride it. The <b>container</b> application (Vec[T]/HashMap[K,V]) is the remaining v1.1 piece (M1). ADR 0001 (substrate via ADR 0003 C-1).</p>
+<p class="blurb"><code>@fn[T]</code> and <code>@type[T]</code> (Option/Result) ship via <b>HM-lite</b> (user-facing generics). The comptime-specialization machinery (M0) is now <b>fully done</b>: the production <code>@generic</code>/<code>@fn[T]</code> stratum + per-call-site memoization specialize Float/Int64/host-handle instantiations (i32-shaped stay erased), and native host-handle sums (F1, <code>Result[JSValue,E]</code> under wasm-gc) ride it. The <b>container</b> application (M1 — Vec[Float]/Vec[Int64] both targets, element-typed <code>@loop</code>, typed HashMap (K,V) families + iteration cursors) is now <b>done</b>. ADR 0001 (substrate via ADR 0003 C-1).</p>
 <table class="rt">
 <thead><tr><th>#</th><th>Subtask</th><th>ADR · phase</th><th>Size · risk · version</th></tr></thead>
 <tbody>
@@ -301,15 +301,15 @@
   <td class="cadr">ADR 0003 · C-1 / 0001 · G-1 core</td>
   <td class="cmeta"><span class="sz sz-l">L</span><span class="rk rk-md">Med</span><span class="ver ver-v10">v1.0 — the gate</span></td>
 </tr>
-<tr id="M1" class="t-mono v-v11 status-todo">
+<tr id="M1" class="t-mono v-v11 status-done">
   <td class="cid"><span class="idbadge mono">M1</span></td>
   <td class="ctitle"><div class="tt">Container monomorphization — Vec[T] / HashMap[K,V]</div>
       <div class="tdesc">Structural constraint protocol (comptime <code>sizeof[T]</code>/hashable check at <i>instantiation</i>, Zig-style — not at definition); emit monomorphic Vec/HashMap variants per element/(K,V) type; a HashMap iteration surface (<code>IterStep</code>).</div>
       
-      <div class="tfiles"><span class="k">Files</span> <code>stdlib/vec.si</code> (i32-only; <code>vec_map_i32_i32</code> is the template), <code>stdlib/hashmap.si</code> (i32→i32, no iteration), <code>slice.si</code>; <code>codegen/gc-vec.ts</code> (Vec[Int] only; Float/Int64 stubbed)</div>
+      <div class="tfiles"><span class="k">Files</span> <code>stdlib/vec.si</code> (<code>vec_*_f32</code>/<code>_i64</code> families), <code>stdlib/hashmap.si</code> (typed (K,V) families + <code>hashmap_iter_*</code> cursors), <code>codegen/gc-vec.ts</code> (parameterized $Array_f32/$Array_i64), <code>elaborator/loopDesugar.ts</code> + typechecker retarget (element-typed <code>@loop</code>)</div>
       <div class="tunb"><span class="k">Unblocks</span> <code>Vec[Float]</code>/<code>Vec[Int64]</code>; HashMap iteration; ADR 0016 <code>IterStep</code> dispatch; combinators (with C1). The “dominant speed lever.” <b>Needs M0</b></div></td>
   <td class="cadr">ADR 0001 · G-1 / 0016</td>
-  <td class="cmeta"><span class="sz sz-l">L</span><span class="rk rk-md">Med</span><span class="ver ver-v11">v1.1</span></td>
+  <td class="cmeta"><span class="sz sz-l">L</span><span class="rk rk-md">Med</span><span class="ver ver-v11">done</span></td>
 </tr>
 </tbody></table>
 </section>
@@ -475,7 +475,7 @@
       <h4>1 · Monomorphization ↔ closures (the join)</h4>
       <ul><li><b>M0 is a v1.0 item, not v1.1.</b> Closures C1 specialize the captured-env type per concrete shape using
       <i>exactly</i> the ADR-0001 comptime monomorphization machinery. So the substrate (M0) must land before C1 — even though
-      the container payoff (M1: Vec[T]/HashMap) is v1.1. The ADR-0016 combinators (<code>vec_map[T,U](v, cb)</code>) are the
+      the container payoff (M1: Vec[T]/HashMap) landed after the gate (now done). The ADR-0016 combinators (<code>vec_map[T,U](v, cb)</code>) are the
       join of M1 + C1: they need container mono <i>and</i> closures.</li></ul>
     </div>
     <div class="callout">

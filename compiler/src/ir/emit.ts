@@ -280,8 +280,11 @@ function emitLoop(e: IRExpr & { kind: 'Loop' }): string {
 }
 
 function emitArrayLiteral(e: IRArrayLiteral): string {
+    // The store width is 4 bytes either way (elemBytes = 4 in v1.0); the
+    // instruction follows the element's wasm type so `$[1.5, 2.5]` stores
+    // f32 bits instead of feeding an f32 value to i32.store (invalid wasm).
     const stores = e.elements.map((el, i) =>
-        `(i32.store offset=${4 + i * e.elemBytes} (local.get $addr) ${emitExpr(el)})`
+        `(${el.wasmType === 'f32' ? 'f32.store' : 'i32.store'} offset=${4 + i * e.elemBytes} (local.get $addr) ${emitExpr(el)})`
     )
     return [
         `(block (result i32)`,

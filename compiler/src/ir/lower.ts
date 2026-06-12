@@ -883,15 +883,23 @@ function walkLocalsForRefs(
             const be = node.binding?.expression ?? node.binding
             if (be && be.type === 'Ascription') annot = be.typeAnnotation
         }
-        if (localName && annot) {
-            const refIdx = refIdxFromAnnotation(annot, wasmGcTypes)
-            if (refIdx !== undefined) {
-                const watLocalName = watId(localName)
-                for (const l of fn.locals) {
-                    if (l.name === watLocalName || l.name === localName) {
-                        l.refType = { localTypeIdx: refIdx, nullable: false }
-                        break
-                    }
+        let refIdx = (localName && annot) ? refIdxFromAnnotation(annot, wasmGcTypes) : undefined
+        // ADR 0016 / M1 — the iterate-`@loop` desugar snapshots its subject
+        // into a synthetic local (`__loopN_xs`, tagged `vecIterSubject`).  It
+        // is generated pre-typecheck so it can never carry an annotation; use
+        // the INFERRED type stamped on the binding expression instead, so the
+        // local is declared `(ref $Vec_<elem>)` and validation passes.
+        if (refIdx === undefined && localName && node.vecIterSubject) {
+            const be = node.binding?.expression ?? node.binding
+            const it = be?.inferredType
+            if (it) refIdx = siliconTypeToRefIdx(it, wasmGcTypes)
+        }
+        if (localName && refIdx !== undefined) {
+            const watLocalName = watId(localName)
+            for (const l of fn.locals) {
+                if (l.name === watLocalName || l.name === localName) {
+                    l.refType = { localTypeIdx: refIdx, nullable: false }
+                    break
                 }
             }
         }

@@ -201,17 +201,23 @@ Arity-2 over a range binds **position** then **element** (they diverge once
 };
 ```
 
-**Indexable container form** — i32-element containers only (Sharp edges); uses
-the real `vec_*_i32` surface, *not* a nonexistent `arr_*`:
+**Indexable container form** — uses the real `vec_*` surface, *not* a
+nonexistent `arr_*`.  The desugar emits the i32-default names below; since M1
+container monomorphization, the generated `vec_len` / `vec_get_i32` calls are
+*tagged*, and when the subject's inferred type is `Vec[Float]` / `Vec[Int64]`
+the typechecker retargets them at the matching monomorph family
+(`vec_len_f32`/`vec_get_f32`, `vec_len_i64`/`vec_get_i64`) so the element
+binder is element-typed — on both targets (annotate the subject
+`\\ v Vec[Float]` so the element type is known):
 
 ```silicon
-&@loop idx, item, xs, { … };          \\ xs : Vec (i32 elements)
+&@loop idx, item, xs, { … };          \\ xs : Vec
 \\ ⇒
 @local _i := 0;
-@local _n := &vec_len xs;
+@local _n := &vec_len xs;             \\ → vec_len_f32 / _i64 when xs : Vec[Float] / Vec[Int64]
 &@loop _i < _n, {
     @local idx  := _i;
-    @local item := &vec_get_i32 xs, _i;   \\ item : i32 (Int / Bool / a pointer)
+    @local item := &vec_get_i32 xs, _i;   \\ → vec_get_f32 / _i64; binder typed by element
     … ;
     _i = _i + 1
 };
@@ -350,7 +356,9 @@ need no operator and `Range` is more legible. **Superseded by A.**
   5. ADR 0013 tie-in: detect "is iterable" by `on::check` shape, with point 6's
      precedence, to give arbitrary `next`-bearing types the for-each surface.
   6. `Vec[T]` monomorphization + a `HashMap` iteration surface so indexed
-     iteration covers non-i32 elements and maps.
+     iteration covers non-i32 elements and maps.  **(Shipped — M1:** typed-Vec
+     `@loop` dispatch via the typechecker retarget; `hashmap_iter_*` cursor
+     families, compact + wide, driven by a while-`@loop`.**)**
 
 ## What v1 actually delivers
 
@@ -361,7 +369,10 @@ is deliberately minimal:
   `a..b` half-open ranges with arity-1/-2 binds (counter loops, `Unit`-valued);
   i32-element indexed iteration over the allow-listed container surface
   (`vec_len`/`vec_get_i32`) — element values are i32 (`Int`, `Bool`, or a
-  pointer).
+  pointer); **`Array[T]` subjects** (the `$[…]` literal type) via the same
+  typechecker retarget, at the always-present prelude helpers (`arr_len` /
+  `arr_load_i32`, `arr_load_f32` for `Array[Float]`) — no `@use` required,
+  matching the literal.
 - **Specified but NOT surfaced/dispatched in v1** (each gated on real machinery):
   - arity-binding for-each over an arbitrary `next`-bearing type — needs ADR 0013
     P2 structural reflection;
@@ -410,12 +421,15 @@ Grounded in the current compiler.
   (`cross-target.test.ts:293`). The generated desugars emit **block** arm bodies,
   so they are immune; hand-written `next` consumers must mind it.
 
-- **Indexed iteration is i32-element only.** `vec_get_i32` yields an i32, so the
-  binder is typed i32 (an `Int`, `Bool`, or a *pointer* — iterating a Vec of
-  String pointers works at the pointer level). By-value struct, `Float`, and
-  `Int64` elements are **not** expressible until `Vec[T]` monomorphizes
-  (`vec.si:1-9`); `HashMap` has no iteration surface at all
-  (`hashmap.si` exposes only slot internals). Both are deferred.
+- **Indexed iteration dispatches on the subject's element type** *(updated —
+  M1)*. The i32 default covers `Int`, `Bool`, and pointers (iterating a Vec of
+  String pointers works at the pointer level); a subject inferred as
+  `Vec[Float]` / `Vec[Int64]` retargets the desugared calls at the `_f32` /
+  `_i64` monomorph family, typing the binder by the element. By-value
+  **struct** elements remain inexpressible (no `Vec[StructT]` monomorph).
+  `HashMap` iterates via the `hashmap_iter_*` cursor surface driven by a
+  while-`@loop` (compact i32 cursor + `_i64` wide cursor + `_f32` value
+  reads) — there is no direct `@loop h` map sugar.
 
 - **Heap-typed step payloads are rejected.** Sum payloads that are themselves
   heap values are conservatively rejected at lower-time
@@ -495,8 +509,9 @@ Grounded in the current compiler.
   rcap model (ADR 0011), and whether an iterator hands out `&mut` elements.
   Specified there.
 - **General `next` over heap element types** — blocked by heap-in-sum until v1.1.
-- **Non-i32 / map iteration** — needs `Vec[T]` monomorphization + a `HashMap`
-  iteration surface.
+- **Non-i32 / map iteration** — needed `Vec[T]` monomorphization + a `HashMap`
+  iteration surface; **shipped with M1** (typed-Vec `@loop` dispatch +
+  `hashmap_iter_*` cursors).  Struct-element Vecs remain out.
 - **`Range` as a first-class storable value** — needs a `valueTypeByteSize`
   entry; v1 keeps `..` syntactic inside `@loop`.
 - **C-style 4-arg `@loop`** — declined for `Range` (Option D).

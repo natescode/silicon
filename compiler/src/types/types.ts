@@ -312,9 +312,10 @@ export function formatType(t: SiliconType): string {
  * recognise so the caller can decide how to handle it (e.g. emit a helpful
  * error).
  *
- * Accepted names: `Int`, `Float`, `String`, `Bool`. Generic `Array[T]` is not
- * yet representable in the grammar (grammar stores `typename` as a single
- * identifier), so arrays must be inferred from array-literal context for now.
+ * Accepted names: `Int`, `Float`, `String`, `Bool`, … — single identifiers
+ * only. Parametric annotations (`Vec[T]`, `Array[T]`, `Option[T]`) are handled
+ * one level up by the typechecker's `resolveTypeAnnotation`, which sees the
+ * annotation's typeArgs; this pass never does.
  *
  * Pass `aliases` (populated by the type checker from `@type_alias` and
  * `@type_distinct` declarations) to resolve user-defined type names.

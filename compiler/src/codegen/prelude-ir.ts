@@ -346,6 +346,13 @@ function buildArrLoadF32(): IRFunction {
         [], instr1('f32.load', f32, addr))
 }
 
+function buildArrStoreF32(): IRFunction {
+    const addr = binop('i32_add', lg('ptr'),
+        binop('i32_add', c(4), binop('i32_mul', lg('index'), c(4))))
+    const body = vblock(stmtExpr(instr2('f32.store', void_, addr, lg('value'))))
+    return fn('arr_store_f32', [['ptr', i32], ['index', i32], ['value', f32]], void_, [], body)
+}
+
 function buildPrintInt(): IRFunction {
     return fn('print_int', [['v', i32]], void_, [],
         vblock(stmtExpr(ucall(ENV_PRINT, void_, lg('v')))))
@@ -498,6 +505,7 @@ export function buildPrelude(heapBase: number, includeHostIO: boolean, maxPages?
         buildArrLoadI32(),
         buildArrStoreI32(),
         buildArrLoadF32(),
+        buildArrStoreF32(),
     ]
     if (includeHostIO) {
         functions.push(
