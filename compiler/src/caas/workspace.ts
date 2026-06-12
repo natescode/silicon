@@ -267,6 +267,17 @@ export class Workspace {
     /** @internal Last compile's incremental type-check reuse stats (for tests). */
     _lastTypecheckReuse?: { reused: number; total: number }
 
+    /**
+     * The `externalSymbolsSignature` each document was last compiled against
+     * (cross-file diagnostics).  A document's diagnostics depend on outside
+     * state ONLY through its external-symbol surface, so this signature is a
+     * precise invalidation oracle: {@link refreshDocument} re-checks a document
+     * exactly when the symbols it can see have changed since its last compile —
+     * no separate `@use`/project dependency graph to maintain, and a body-only
+     * edit elsewhere (same exported surface) invalidates nothing.
+     */
+    readonly #lastExternalSig = new Map<string, string>()
+
     constructor(options: WorkspaceOptions = {}) {
         this.#registry = options.registry
     }
@@ -431,6 +442,64 @@ export class Workspace {
     }
 
     /**
+     * Re-check an open document **without a source edit** when the external
+     * symbols it can see have changed (cross-file diagnostic invalidation).
+     *
+     * Compares the document's current visible-symbol signature against the one
+     * it was last compiled with; on a match this is a no-op returning
+     * `undefined`.  On a mismatch the document is recompiled (incrementally —
+     * the parse and elaboration fully reuse; only the type check reruns against
+     * the fresh `externalSymbols`), a `'changed'` event fires, and the updated
+     * Document (with fresh `diagnostics`) is returned.
+     *
+     * @public — Silicon 1.0 stable.
+     */
+    refreshDocument(uri: string): Document | undefined {
+        const existing = this.#docs.get(uri)
+        if (!existing) return undefined
+        const sig = externalSymbolsSignature(this.#buildExternalSymbols(uri))
+        if (this.#lastExternalSig.get(uri) === sig) return undefined
+        const doc = this.#compile(uri, existing.source, existing.version + 1, existing.tree)
+        this.#docs.set(uri, doc)
+        this.#updateSymbolIndex(uri, doc)
+        this.#emit({ kind: 'changed', uri, document: doc })
+        return doc
+    }
+
+    /**
+     * After `changedUri` was edited, re-check every open document whose
+     * diagnostics may have gone stale, and return the documents that actually
+     * recompiled (each with fresh `diagnostics` — an LSP republishes these).
+     *
+     * Invalidation is signature-driven, not graph-driven: a document is
+     * re-checked exactly when its visible external-symbol surface differs from
+     * the one it last compiled against (see {@link refreshDocument}).  Project
+     * scoping is already folded in — an unrelated project's documents see an
+     * unchanged surface and are skipped.  Runs to a fixpoint (a refresh can
+     * change THIS document's exported symbols and invalidate further
+     * documents), bounded by the open-document count; a body-only edit
+     * converges in one no-op round.
+     *
+     * @public — Silicon 1.0 stable.
+     */
+    refreshDependents(changedUri: string): Document[] {
+        const refreshed = new Map<string, Document>()
+        for (let round = 0; round < this.#docs.size; round++) {
+            let changed = false
+            for (const uri of [...this.#docs.keys()]) {
+                if (uri === changedUri) continue
+                const doc = this.refreshDocument(uri)
+                if (doc) {
+                    refreshed.set(uri, doc)
+                    changed = true
+                }
+            }
+            if (!changed) break
+        }
+        return [...refreshed.values()]
+    }
+
+    /**
      * Close a document and remove it from the workspace.
      * Fires a `'closed'` change event.
      */
@@ -438,6 +507,7 @@ export class Workspace {
         if (!this.#docs.has(uri)) return
         this.#docs.delete(uri)
         this.#elabState.delete(uri)
+        this.#lastExternalSig.delete(uri)
         const project = this.#docToProject.get(uri)
         if (project) {
             project._untrackUri(uri)
@@ -561,6 +631,16 @@ export class Workspace {
 
         // Resolve the symbol name at the given position.
         const localSym = doc.model.symbolAtPosition(line, col)
+
+        // S1 binding identity — a parameter / local / pattern-field binding's
+        // references are exactly its own occurrences, all in THIS document.
+        // No name-keyed aggregation: a same-named local elsewhere (or a
+        // same-named top-level symbol) is a different binding.
+        if (localSym) {
+            const bindingRefs = doc.model.localBindingSpans(localSym)
+            if (bindingRefs) return bindingRefs
+        }
+
         const name = localSym?.name ?? namespaceNameAtPosition(doc, line, col)
         if (!name) return []
 
@@ -579,11 +659,17 @@ export class Workspace {
             options.cancel?.throwIfAborted()
             if (!this.#isEntryVisible(docUri, uri)) continue   // scope to the active project
             // Typechecker-resolved references (accurate for same-doc, and for
-            // any doc compiled with the symbol in scope).
-            for (const span of d.model.referenceSpansForName(name)) add(span)
+            // any doc compiled with the symbol in scope).  S1: occurrences
+            // that resolved to a shadowing LOCAL binding are excluded — they
+            // are references to a different binding that merely shares the name.
+            for (const span of d.model.unshadowedReferenceSpansForName(name)) add(span)
 
             // AST-based scan — catches cross-file calls the typechecker missed.
-            for (const span of namespaceScanForName(d, name)) add(span)
+            // Same S1 filter: skip name hits the binder attributed to a local.
+            for (const span of namespaceScanForName(d, name)) {
+                if (d.model.isLocalOccurrence(name, span)) continue
+                add(span)
+            }
         }
 
         return spans
@@ -911,6 +997,9 @@ export class Workspace {
         const externalSymbols = this.#buildExternalSymbols(uri)
         const externalSig = externalSymbolsSignature(externalSymbols)
         const target = project?.target
+        // Cross-file diagnostics: remember what this document was checked
+        // against, so refreshDocument() can tell when it has gone stale.
+        this.#lastExternalSig.set(uri, externalSig)
 
         // Parameter-type inference (ADR-0020: signatures are optional) is a
         // WHOLE-PROGRAM analysis — an unannotated @fn param's type is read off

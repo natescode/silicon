@@ -448,14 +448,14 @@ class Parser {
                 paramList = paramList.map((p, i) => {
                     const slot = fnType.fnParams[i]
                     return slot
-                        ? ASTFactory.parameter(p.name, slot.typeAnnotation, p.isLiteral, p.value)
+                        ? withParamSpan(ASTFactory.parameter(p.name, slot.typeAnnotation, p.isLiteral, p.value), p)
                         : p
                 })
                 returnAnnotation = fnType.fnReturn?.typeAnnotation
             } else if (fnType && fnType.__domain) {
                 paramList = paramList.map((p, i) => {
                     const t = fnType.types[i]
-                    return t ? ASTFactory.parameter(p.name, t, p.isLiteral, p.value) : p
+                    return t ? withParamSpan(ASTFactory.parameter(p.name, t, p.isLiteral, p.value), p) : p
                 })
                 returnAnnotation = undefined
             } else if (fnType) {
@@ -515,9 +515,16 @@ class Parser {
     // ParamLiteral = identifier TypeExpr? | Literal
     private parseParamLiteral(): Parameter {
         if (this.at('ident')) {
-            const name = this.next().text
+            const tok = this.next()
+            const name = tok.text
             const typeAnnotation = this.startsTypeExpr(this.peek()) ? this.parseTypeExpr() : undefined
-            return ASTFactory.parameter(name, typeAnnotation)
+            const node = ASTFactory.parameter(name, typeAnnotation)
+            // S1 binding identity: a parameter is a definition site — give it
+            // the name token's span so the binder/SemanticModel can navigate
+            // to it (same convention as a Definition's name span).
+            node.sourceLocation = this.loc(tok.start, tok.end)
+            ;(node as any).relSpan = { start: tok.start, end: tok.end }   // absolute now; relativized per element (M3)
+            return node
         }
         const lit = this.parseLiteral()
         return ASTFactory.parameter('_param', undefined, true, lit)
@@ -842,6 +849,15 @@ export function parseToAst(sourceCode: string): Program {
  * elaboration's spread-cloning by reference).  Absolute line/col is reconstructed
  * later by `PositionTable` from `elemBase + relSpan`.
  */
+/** Carry the original parameter's name-token span (S1 binding identity) onto a
+ *  rebuilt Parameter when a signature line distributes its types. */
+function withParamSpan(rebuilt: Parameter, original: Parameter): Parameter {
+    if (original.sourceLocation) rebuilt.sourceLocation = original.sourceLocation
+    const rel = (original as any).relSpan
+    if (rel) (rebuilt as any).relSpan = rel
+    return rebuilt
+}
+
 function relativizeElement(nodes: ASTNode[], base: number): void {
     for (const root of nodes) {
         (root as any).elemBase = base

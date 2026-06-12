@@ -1,11 +1,13 @@
 # Technical plan — properly supporting `Bun.$` (shell) over the FFI
 
-> **Status:** proposal (not yet implemented).
-> **Context:** `Bun.$` is the single remaining unbound member in the FFI surface
-> (99.74%, 379 bound / 1 skip — see [`ffi-coverage-gaps.md`](ffi-coverage-gaps.md)).
-> It is **correctly skipped** by the bindgen as a tagged-template function. This
-> plan adds the capability via a hand-authored runtime path, without changing the
-> generator.
+> **Status:** proposal — optional **post-v1.0** work, not on any gate.
+> **Context:** `Bun.$` is **officially excluded from the v1.0 FFI coverage
+> gate**: the gate reads **100%\*** (379/379 bindable members bound), and the
+> asterisk is exactly this exclusion (see
+> [`ffi-coverage-gaps.md`](ffi-coverage-gaps.md)).  It is **correctly skipped**
+> by the bindgen as a tagged-template function — a JS syntactic form, not a
+> callable member. This plan adds the capability via a hand-authored runtime
+> path, without changing the generator, if/when the shell surface is wanted.
 
 ## TL;DR
 

@@ -147,7 +147,11 @@ describe('bindgen adapters — generated from real spec sources', () => {
         const bun = dtsToSpecs({ global: 'Bun', types: ['bun-types'], accessor: 'Bun', prefix: '', objects: 'jsvalue', async: 'suspending' })
         expect(bun.specs.find(s => s.name === 'serve')).toMatchObject({ params: [{ type: 'JSValue' }] })
         expect(bun.specs.find(s => s.name === 'plugin')).toMatchObject({ result: 'JSValue' })
-        // The ONLY remaining bun skip is the tagged-template `$` (no classifier gap).
+        // THE OFFICIAL v1.0 EXCLUSION LIST — the FFI gate is "100%* of the
+        // bindable surface" and this assertion is the asterisk: exactly the
+        // tagged-template `Bun.$` (a JS syntactic form; see
+        // docs/bun-shell-ffi-plan.md), nothing else.  A new skip appearing
+        // here is a coverage regression and must fail CI.
         expect(bun.skipped.map(s => s.member)).toEqual(['Bun.$'])
     })
 

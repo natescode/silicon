@@ -27,7 +27,9 @@ export function registerSemanticTokens(
         for (const sym of doc.model.allSymbols) {
             const type = semanticTokenTypeId(sym.kind)
             push(sym.definitionSpan, type)
-            for (const ref of doc.model.referenceSpans(sym)) push(ref, type)
+            // S1: skip occurrences a shadowing local/param claimed — they are
+            // a different binding and must not be colored as this symbol.
+            for (const ref of doc.model.unshadowedReferenceSpansForName(sym.name)) push(ref, type)
         }
 
         // LSP requires tokens emitted in (line, char) order, deduplicated.

@@ -27,7 +27,7 @@ Fixing these unlocks many items at once — they are the real leverage:
 
 | # | Constraint | Where | Caps that depend on it |
 |---|---|---|---|
-| **S1** | **Symbols are name-keyed, no binding identity** — flat `Map<string,Symbol>`; `Symbol.containingSymbol` declared but never populated | `ast/semanticModel.ts:98`; `caas/workspace.ts:557` matches `path.at(-1)===name` across all docs | accurate **references**, accurate **rename**, scope-aware **completion**, **call hierarchy** |
+| **S1** | ✅ **RESOLVED — binding identity shipped.** A lexical binder (`ast/binder.ts`) assigns every local occurrence (param / local / `@match` pattern field) to its concrete binding; the SemanticModel surfaces those as Symbols with `containingSymbol` **populated**, and `findReferences`/`rename` consume them (a top-level rename skips occurrences a shadowing local claimed). Coverage: `caas/binding-identity.test.ts`. Remaining S1-adjacent niceties: scope-aware completion ranking, call hierarchy | `ast/binder.ts`, `ast/semanticModel.ts`, `caas/workspace.ts` | accurate **references** ✅, accurate **rename** ✅, scope-aware **completion** (ranking still open), **call hierarchy** (open) |
 | **S2** | **`SourceSpan` is single-line** (multi-line collapses to length 0) | `errors/diagnostic.ts:24-30` | **foldingRange**, **selectionRange**, multi-line anchoring (must use `SyntaxNode` `_extents`/`PositionTable`) |
 | **S3** | **Handwritten parser records no `FunctionCall` source spans** | `caas/workspace.ts:~1400` (signature-help uses a text scan) | **signature-help** robustness, **inlay** parameter hints, **call hierarchy** quality |
 | **S4** | **Parser emits no `DocComment` trivia node** | `caas/workspace.ts:1386` (`docCommentForName` is a permanent stub) | documentation in **hover / completion / signature-help**, style-preserving **formatter** |
@@ -39,15 +39,15 @@ Fixing these unlocks many items at once — they are the real leverage:
 These are the only *deep* blockers — without them, shipped features are subtly
 wrong (rename can corrupt code; multi-file diagnostics go stale).
 
-- [ ] **Cross-file diagnostic invalidation** — editing A must re-check/re-publish
-      B. Today the diagnostics handler publishes only the changed doc; subscribe
-      to `compiler.onDidChange` and recompute+republish dependents (the
-      incremental Workspace already tracks the edges). *(must · M · `lsp/src/handlers/diagnostics.ts:30`, `caas/workspace.ts:421-431`)*
-- [ ] **Binding-identity for references & rename (S1)** — give each symbol a
-      per-scope binding identity (populate `Symbol.containingSymbol`) so
-      `findReferences`/`rename` stop matching by bare name across all open docs.
-      Without this, renaming a local `x` rewrites unrelated `x` bindings in other
-      scopes/files. *(must · L · `ast/semanticModel.ts:98`, `caas/workspace.ts:557-590,732-751`)*
+- [x] **Cross-file diagnostic invalidation** — DONE. `Workspace.refreshDocument`
+      / `refreshDependents` re-check a document when its visible external-symbol
+      surface changed (signature-driven — each compile stores its
+      `externalSymbolsSignature`; no dependency graph to maintain); the
+      diagnostics handler republishes every refreshed doc. Coverage:
+      `caas/crossfile-diagnostics.test.ts` + `lsp/src/incremental.test.ts`.
+- [x] **Binding-identity for references & rename (S1)** — DONE; see the S1 row
+      above (`ast/binder.ts` + SemanticModel binding Symbols +
+      scope-correct `findReferences`/`rename`).
 - [ ] **`prepareRename`** — advertise `renameProvider:{prepareProvider:true}`;
       return the editable identifier range or `null` for non-user symbols
       (keywords, strata, implicit sum-variant ctors). Makes rename safe to

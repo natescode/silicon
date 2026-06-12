@@ -361,6 +361,14 @@ class Workspace {
     closeDocument(uri: string): void
     getDocument(uri: string): Document | undefined
 
+    // Cross-file diagnostic invalidation — re-check WITHOUT a source edit when
+    // the external symbols a document sees changed.  Signature-driven (each
+    // compile stores its externalSymbolsSignature), so a body-only edit
+    // elsewhere refreshes nothing.  refreshDependents runs to a fixpoint and
+    // returns the documents that actually recompiled (fresh `diagnostics`).
+    refreshDocument(uri: string): Document | undefined
+    refreshDependents(changedUri: string): Document[]
+
     // Projects (tracker 3a) — named, dependency-scoped document groups
     addProject(name: string, options?: ProjectOptions): Project   // { target? }
     getProject(name: string): Project | undefined

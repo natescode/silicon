@@ -1,13 +1,20 @@
-# FFI coverage gaps — closed (100% bound except one tagged-template)
+# FFI coverage gaps — closed (100%\* of the bindable surface)
 
-> **Status:** **DONE — every host-API member binds except the `Bun.$` tagged
-> template.** Categories 2–4 + webiface `events:'closure'` implemented; the 4
+> **Status:** **DONE — 100%\* coverage: every bindable host-API member binds
+> (379/379).** The asterisk is `Bun.$`, **officially excluded from the v1.0
+> coverage gate by policy**: a tagged template is a JS *syntactic form*, not a
+> callable member — emitting a normal `@extern` for it would be dishonest AND
+> would destroy its per-substitution shell-escaping guarantee. The honest path
+> (a `js::tagged` host primitive + a bun-only `shell.si`) is specified in
+> [`bun-shell-ffi-plan.md`](bun-shell-ffi-plan.md) as optional post-v1.0 work.
+> The exclusion is CI-enforced: `compiler/bindgen/adapters.test.ts` pins the
+> skip list to exactly `['Bun.$']`, so any new skip fails the gate.
+> History: categories 2–4 + webiface `events:'closure'` implemented; the 4
 > "fundamental" skips resolved (intersection/conditional → `JSValue`, variadic →
 > spread, name-sanitize, static-collision → `_static`); `path`/`os` flipped to
 > `objects:'jsvalue'` (mixed tier) to bind their object/variadic surface. Aggregate
-> bind rate **90.1% → 99.74%** (338→379 bindings, 37→1 skip). **The one remaining
-> skip is `Bun.$` — a tagged template (a JS syntactic form), not a bindgen
-> classifier/architecture limit.**
+> bind rate **90.1% → 99.74%** (338→379 bindings, 37→1 skip) **→ 100%\*** with the
+> `Bun.$` exclusion made official.
 > **Scope:** the host-API surface the bindgen adapters could not bind.
 > **Companion docs:** [`js-string-builtins.md`](js-string-builtins.md) (tier model),
 > the FFI sections of [`overview.md`](overview.md), and the bindgen source under

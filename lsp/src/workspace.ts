@@ -182,6 +182,17 @@ export class Workspace {
         return this.compiler.getDocument(uri)
     }
 
+    /**
+     * Cross-file diagnostic invalidation: after `changedUri` was updated,
+     * re-check every open document whose visible symbol surface changed and
+     * return the recompiled Documents (with fresh `diagnostics`).  The
+     * diagnostics handler republishes these so a signature edit in `lib.si`
+     * immediately surfaces (or clears) errors in an open `main.si`.
+     */
+    refreshDependents(changedUri: string): Document[] {
+        return this.compiler.refreshDependents(changedUri)
+    }
+
     /** Drop a document from the workspace (on didClose). */
     close(uri: string): void {
         this.compiler.closeDocument(uri)

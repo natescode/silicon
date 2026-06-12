@@ -30,6 +30,19 @@ export function registerDiagnostics(
         const compiled = workspace.update(doc.uri, doc.getText())
         const diagnostics = (compiled?.diagnostics ?? []).map(toLspDiagnostic)
         connection.sendDiagnostics({ uri: doc.uri, diagnostics })
+
+        // Cross-file invalidation: an edit that changed this document's
+        // exported symbol surface can stale the diagnostics of any open
+        // document that sees it (signature change, removed @pub fn, …).
+        // refreshDependents re-checks exactly those documents (a body-only
+        // edit refreshes nothing); republish each one the editor has open.
+        for (const dep of workspace.refreshDependents(doc.uri)) {
+            if (dep.uri === doc.uri || !documents.get(dep.uri)) continue
+            connection.sendDiagnostics({
+                uri: dep.uri,
+                diagnostics: dep.diagnostics.map(toLspDiagnostic),
+            })
+        }
     }
 
     documents.onDidOpen(({ document }) => publish(document))

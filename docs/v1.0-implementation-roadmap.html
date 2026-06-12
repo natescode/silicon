@@ -146,8 +146,9 @@
   <code>@fn[T]</code> HM-lite. Native host-handle sums (F1) — <code>Result[JSValue,E]</code> under wasm-gc — ride it.</b>
   <b>Capability model (K1–K8) not started — by design (post-v1.0); M1 container mono is ✓ done (typed Vecs + @loop dispatch + typed HashMap families).</b>
   <b>Beyond the mechanism gate</b>, the FFI <i>surface</i> was broadened end-to-end (see “Post-gate FFI surface” below) and the bind rate
-  reached <b style="color:var(--mono)">99.74% (379 / 380 members)</b> — the only unbound member is <code>Bun.$</code>, a tagged-template
-  (a JS syntactic form, not a classifier gap). No fundamental bindgen gaps remain.</div>
+  reached <b style="color:var(--mono)">100%* (379 / 379 bindable members)</b> — the asterisk is <code>Bun.$</code>, a tagged-template
+  (a JS syntactic form, not a callable member) <b>officially excluded by policy</b>, with the skip list CI-pinned to exactly that one entry.
+  No fundamental bindgen gaps remain.</div>
   <div class="tiles">
     <div class="tile"><div class="num">18</div><div class="lbl">subtasks</div></div>
     <div class="tile gate"><div class="num">7</div><div class="lbl">on the critical path</div></div>
@@ -192,7 +193,7 @@
 </div></div>
     <div class="critline"><b>Longest chain to the gate:</b>
       <code>M0</code> ✓ (full) → <code>C0</code> ✓ → <code>C1</code> ✓ → <code>C2</code> ✓ (mechanism gate, ~97%) → <code>F3</code> ✓ (poll-reactor complete).
-      Surface bind rate then reached <b>99.74%</b> (only <code>Bun.$</code> unbound). <code>F0a</code> (bindgen) and the capability model
+      Surface bind rate then reached <b>100%*</b> (<code>Bun.$</code> officially excluded — the asterisk). <code>F0a</code> (bindgen) and the capability model
       (<code>K1…K8</code>) are off the critical path.</div>
   </section>
 

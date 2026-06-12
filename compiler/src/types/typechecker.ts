@@ -52,6 +52,7 @@
 
 import type { Program } from '../ast/astNodes'
 import { astChildren } from '../ast/astChildren'
+import { bindProgram } from '../ast/binder'
 import type { PositionTable } from '../ast/positionTable'
 import { SemanticModel, type Symbol as CaaSSymbol, type SymbolKind, symbolDisplayString } from '../ast/semanticModel'
 import { toDiagnostic, spanFromLocation, type SourceSpan } from '../errors/diagnostic'
@@ -578,7 +579,7 @@ export default function typecheck(
     for (const element of program.elements as any[]) {
         checkNode(element, ctx)
     }
-    const semanticModel = assembleSemanticModel(ctx)
+    const semanticModel = assembleSemanticModel(ctx, program)
     return { program, errors: ctx.errors, functions: ctx.functions, typeAliases: ctx.typeAliases, semanticModel }
 }
 
@@ -643,14 +644,17 @@ export function checkElement(element: any, ctx: Ctx): void {
     checkNode(element, ctx)
 }
 
-/** Assemble the SemanticModel from an accumulated context (pure, O(n)). */
-export function assembleSemanticModel(ctx: Ctx): SemanticModel {
+/** Assemble the SemanticModel from an accumulated context (pure, O(n)).
+ *  Pass the checked `program` to also build the S1 binding-identity index
+ *  (parameters/locals with `containingSymbol`, scope-correct rename). */
+export function assembleSemanticModel(ctx: Ctx, program?: object): SemanticModel {
     return new SemanticModel({
         types: ctx.typeMap,
         nodeToSymbolName: ctx.nodeToSymbolName,
         symbols: buildSymbolTable(ctx),
         symbolToNodes: ctx.symbolToNodes,
         symbolToSpans: ctx.symbolToSpans,
+        bindings: program ? bindProgram(program, ctx.file) : undefined,
         diagnostics: ctx.errors.map(e => toDiagnostic(e)),
     })
 }

@@ -316,7 +316,7 @@ export function incrementalTypecheck(
         })
     }
 
-    const model = assembleSemanticModel(ctx)
+    const model = assembleSemanticModel(ctx, program)
     return {
         model,
         diagnostics: ctx.errors.map(e => toDiagnostic(e)),

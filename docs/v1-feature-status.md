@@ -1,11 +1,12 @@
 # Silicon v1 — feature status
 
-> **As of:** branch `v1-roadmap` (M1 container monomorphization **completed**:
-> typed-Vec `@loop` dispatch + the typed HashMap (K, V) families landed on top
-> of `96a7307`). Statuses **re-verified against the actual code + tests** the
-> prior revision (a 6-cluster sweep; code beats the doc where they disagreed —
-> `@global`/`@local`/`@struct` retired, code-action API + playground + the
-> incremental front-end found already shipped).
+> **As of:** branch `v1-roadmap` (LSP tail **closed** — cross-file diagnostic
+> invalidation + S1 binding identity — and the FFI gate declared **100%\***
+> with `Bun.$` officially excluded; previously M1 container monomorphization
+> completed on top of `96a7307`). Statuses **re-verified against the actual
+> code + tests** two revisions back (a 6-cluster sweep; code beats the doc
+> where they disagreed — `@global`/`@local`/`@struct` retired, code-action API
+> + playground + the incremental front-end found already shipped).
 > **Companion:** [`v1.0-implementation-roadmap.html`](v1.0-implementation-roadmap.html)
 > (critical-path detail), [`ffi-coverage-gaps.md`](ffi-coverage-gaps.md) (FFI),
 > the per-feature ADRs under [`adr/`](adr/).
@@ -14,9 +15,11 @@
 
 ## Headline
 
-**The v1.0 gate is closed.** FFI coverage, closures (C0–C2), async (F1b + the F3
-poll-reactor), and full monomorphization (M0 — per-call-site memoization + the
-production `@generic`/`@fn[T]` stratum) are shipped. Native host-handle-carrying
+**The v1.0 gate is closed.** FFI coverage (**100%\*** — every bindable host
+member binds; `Bun.$` officially excluded as a JS syntactic form), closures
+(C0–C2), async (F1b + the F3 poll-reactor), and full monomorphization (M0 —
+per-call-site memoization + the production `@generic`/`@fn[T]` stratum) are
+shipped. Native host-handle-carrying
 sums (`Result[JSValue, String]` under `--target=wasm-gc`) ride that
 monomorphization substrate, retiring the `js::pin` interim. A **minimal
 WASI-aligned object-capability model (K0, ADR 0027)** shipped on top — caps are
@@ -38,7 +41,7 @@ iteration-cursor surface. The *full* capability/borrow track (K1–K8) is the
 | **C0** | Generalized funcref ABI (multi-signature table) | ✅ | byte-equal codegen for the i32→i32 case |
 | **C1** | Non-escaping closures (all modes) | ✅ | by-value / i32 capture; Float captures + zero-cost direct-call form are refinements on top |
 | **C2** | Escaping host-callable closures — **THE GATE** | ✅ | leak-free under `--target=wasm-gc`; linear-mem retains env in bump heap |
-| **FFI 100% gate** | every host member binds | 🟡 | **99.74%** (379/380) — only `Bun.$` (a tagged-template) unbound; plan committed |
+| **FFI 100% gate** | every host member binds | ✅ | **100%\*** (379/379 bindable members). The asterisk: `Bun.$` is **officially excluded by policy** — a tagged template is a JS *syntactic form*, not a callable member; binding it as a normal fn would destroy its per-substitution shell-escaping guarantee. CI-enforced skip list of exactly `['Bun.$']` (`bindgen/adapters.test.ts`); the honest `js::tagged`+`shell.si` path stays optional post-v1.0 ([`bun-shell-ffi-plan.md`](bun-shell-ffi-plan.md)) |
 | **M0** | Comptime monomorphization (full) | ✅ | per-call-site memoization + the production `@generic` stratum shipped; the all-i32 erased copy serves i32-shaped calls, Float/Int64/host-handle calls get a specialized monomorph. User-facing generics: `@fn[T]`/`@type[T]` HM-lite. Native `Result[JSValue,E]` rides this (see FFI F1) |
 | **M1** | Container mono `Vec[T]` / `HashMap[K,V]` | ✅ | **`Vec[Float]`/`Vec[Int64]` ship on BOTH targets** (linear-mem `vec_*_f32`/`_i64`; wasm-gc per-element `$Array_f32`/`$Array_i64` from the parameterized `gc-vec.ts`). **`@loop` over typed Vecs**: the desugared `vec_len`/`vec_get_i32` calls are tagged and retargeted by the typechecker at the subject's monomorph family, so the binder is element-typed (both targets; on linear-mem a `Vec[T]` annotation is representation-compatible with `Int`). **Typed HashMap (K, V) families** (linear-mem, like the i32 base): `(i32,f32)` on the compact 12-byte slots, `(i64,i64)` on wide 24-byte slots, `(i32,i64)` wrappers — each with set/get/has/remove/resize + an **iteration cursor** (`hashmap_iter_*`, compact + `_i64` wide + `_f32` value reads). Float *keys* deliberately unsupported (NaN); struct-element Vecs and ref-typed elements are the v1.1 runway (ADR 0009 §3) |
 | **K0** | Object-capability model **v0** (minimal, WASI-aligned) | ✅ | ADR 0027: unforgeable `@type_distinct` caps, rooted at `@fn main (World)` via the entry shim, attenuated by `@cap_derive` (E0017 "downgrade-from-root"); `World`+`Clock` proven e2e under wasmtime. Zero new analysis pass — a strict subset of ADR 0015 / K1–K8 |
@@ -64,12 +67,12 @@ iteration-cursor surface. The *full* capability/borrow track (K1–K8) is the
 | Ref-/struct-typed container elements; HashMap on wasm-gc | ⏳ v1.1 | **M1 is complete** (typed Vecs + `@loop` dispatch + typed HashMap families). The runway beyond it: `Vec[T]` over by-value structs / managed refs (ADR 0009 §3), a managed-substrate HashMap for wasm-gc (today's is linear-mem `alloc`, E0013 there), and float keys (deliberately unsupported — NaN) |
 | Heterogeneous host-handle sums on **linear-mem** target | 🔜 | native on `--target=wasm-gc` (✅); on a linear-mem target externref isn't addressable → `E` fail-fast directing to `js::pin`/wasm-gc |
 | `IterStep[T,R]` user iteration protocol (ADR-0016) | ⏳ v1.1 | range/`Vec` dispatch ships; structural dispatch waits on reflection + combinators |
-| LSP server | 🟡 | a runnable stdio server, now **18 capabilities** — added declaration, typeDefinition, documentHighlight, rangeFormatting, workspace/symbol, prepareRename + lifecycle (shutdown/exit, positionEncoding, process-level error isolation). Remaining tail: cross-file **diagnostic** invalidation (needs Workspace open-doc dep resolution + incremental dependency tracking) and binding-identity (S1, `containingSymbol`) for scope-correct rename/references |
+| LSP server | ✅ | a runnable stdio server, **18 capabilities** + lifecycle (shutdown/exit, positionEncoding, process-level error isolation). The two former tail items are **done**: **cross-file diagnostic invalidation** (`Workspace.refreshDependents` — signature-driven, no dep graph: a doc re-checks exactly when its visible external-symbol surface changed; the LSP republishes the refreshed docs) and **binding identity** (S1 — `ast/binder.ts` assigns every local occurrence to its concrete binding; `containingSymbol` populated for params/locals/pattern fields; rename/references are scope-correct: a param `x` never renames another `x`, a top-level rename skips shadowed locals) |
 | Incremental compilation — codegen + hardening | 🟡 | incremental reparse + elaborate + typecheck shipped & wired into `Workspace`/LSP (43 tests); incremental **codegen** is the v1.1 remainder |
 | Package registry (registry-backed `sgl add`) | ⏳ v1.1 | `--path` local deps work today; the registry server is pending (story 6b-12) |
 | Silicon-native comptime interpreter | 🔜 | comptime runs on the host today (ADR-0003 pivot) |
 | Full capability/borrow track — fixpoint checker, borrow checker, effect-class optimization (K1–K8) | 🔜 post-v1 | ADR 0011/0012/0013/0015; the minimal ocap **v0** seed shipped (ADR 0027 — see K0) |
-| `Bun.$` tagged-template binding | 🔜 | the one FFI skip; security-driven plan ([`bun-shell-ffi-plan.md`](bun-shell-ffi-plan.md)) |
+| `Bun.$` tagged-template binding | 🔜 | **officially excluded from the v1.0 gate** (the `100%*` asterisk — a JS syntactic form, not a callable member); the optional security-driven plan is [`bun-shell-ffi-plan.md`](bun-shell-ffi-plan.md) |
 
 ## Note — M0 completed + F1 (native host-handle sums) landed
 
@@ -122,3 +125,42 @@ The two documented tails landed, closing M1:
 Coverage: `src/e2e/loop-iterables.test.ts` (typed-Vec loops, both targets) +
 `src/stdlib/hashmap-typed.test.ts` (all three families end-to-end, including a
 forced i64 hash collision, tombstone re-probing, and resize bit-preservation).
+
+## Note — LSP tail closed (cross-file diagnostics + S1) and FFI declared 100%\*
+
+The last two LSP tail items landed, and the FFI gate's one skip became an
+official policy exclusion:
+
+1. **Cross-file diagnostic invalidation.** `Workspace.refreshDocument` /
+   `refreshDependents` (CaaS) re-check an open document **without an edit**
+   when the external symbols it sees changed.  Invalidation is
+   *signature-driven*, not graph-driven: each compile stores the
+   `externalSymbolsSignature` it ran against, and a document re-checks exactly
+   when its visible surface differs — project scoping folds in for free, a
+   body-only edit elsewhere invalidates nothing, and there is no `@use`
+   dependency graph to keep correct.  Runs to a fixpoint (a refresh can change
+   the refreshed doc's own exports).  The LSP diagnostics handler republishes
+   every refreshed document, so renaming `@fn add` in `lib.si` immediately
+   surfaces E0004 in an open `main.si` — and restoring it clears the squiggle.
+   Coverage: `src/caas/crossfile-diagnostics.test.ts`, `lsp/src/incremental.test.ts`.
+
+2. **S1 binding identity.** A new lexical binder (`src/ast/binder.ts`) runs in
+   `assembleSemanticModel` (both the full and incremental paths) and assigns
+   every local name occurrence to its concrete binding — parameter, local
+   definition, or `@match` pattern field — mirroring the typechecker's scope
+   rules (one scope per body; locals bind from their definition onward;
+   initializers see the outer binding).  The SemanticModel surfaces bindings
+   as Symbols with **`containingSymbol` populated** (param type read off the
+   containing fn's signature); `findReferences`/`rename` consume them: a
+   parameter's references are exactly its own occurrences (never another
+   function's same-named param), and a top-level rename **skips occurrences a
+   shadowing local claimed**.  Parameters now carry their name-token span
+   (parser change), so go-to-definition/hover work on params too.
+   Coverage: `src/caas/binding-identity.test.ts` (12 tests).
+
+3. **FFI 100%\*.** `Bun.$` — the single remaining skip — is now *officially*
+   excluded from the gate (a tagged template is a JS syntactic form, not a
+   callable member; a normal binding would break its escaping guarantee).  The
+   exclusion list is CI-pinned to exactly `['Bun.$']` in
+   `bindgen/adapters.test.ts`; the optional honest path remains
+   [`bun-shell-ffi-plan.md`](bun-shell-ffi-plan.md).
