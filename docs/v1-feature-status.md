@@ -1,7 +1,10 @@
 # Silicon v1 — feature status
 
-> **Released:** this surface shipped as **v1.0.0** (2026-06-12, `v1-roadmap`
-> merged to `main`). The post-v1 direction is the bootstrap — see
+> **Released:** this surface shipped as **v0.2.0** (2026-06-12, `v1-roadmap`
+> merged to `main`). The **1.0 version number is deliberately reserved** for
+> the post-bootstrap fixpoint (self-hosted compiler, QBE backend at WASM
+> parity, eternal grammar locked only after self-hosting stress-tests the
+> language). Next: the bootstrap — see
 > [`bootstrap-blockers-and-order.md`](bootstrap-blockers-and-order.md) and
 > [`bootstrap-foundation-audit.md`](bootstrap-foundation-audit.md).
 >

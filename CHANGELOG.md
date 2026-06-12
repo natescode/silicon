@@ -5,9 +5,11 @@ This project aims for [Semantic Versioning](https://semver.org/).
 
 ## Unreleased
 
-## 1.0.0
+## 0.2.0
 
-**Silicon v1.0 — the v1.0 gate is closed.** This release lands the full planned v1 surface (see [`docs/v1-feature-status.md`](docs/v1-feature-status.md)): the **FFI-coverage gate at 100%\*** (every bindable host member binds; `Bun.$` officially excluded by policy), the dependency chain `binding generator → object handles → async/await → closures → callbacks`, the **module/component system** (ADR-0024), full **monomorphization** (M0 + the M1 container tier), a minimal **object-capability model** (K0, ADR 0027), and a **runnable LSP server** (18 capabilities). Headline capabilities:
+**The planned v1 surface is complete.** This release lands the full v1-roadmap scope (see [`docs/v1-feature-status.md`](docs/v1-feature-status.md)): the **FFI-coverage gate at 100%\*** (every bindable host member binds; `Bun.$` officially excluded by policy), the dependency chain `binding generator → object handles → async/await → closures → callbacks`, the **module/component system** (ADR-0024), full **monomorphization** (M0 + the M1 container tier), a minimal **object-capability model** (K0, ADR 0027), and a **runnable LSP server** (18 capabilities).
+
+Versioned **0.2.0**, not 1.0.0, deliberately: **the 1.0 number is reserved for the post-bootstrap fixpoint** — a self-hosted compiler (`stage1 == stage2`), the native (QBE) backend at WASM parity, and the eternal-grammar promise activated only after self-hosting has stress-tested the language (see [`docs/bootstrap-blockers-and-order.md`](docs/bootstrap-blockers-and-order.md)). Headline capabilities:
 
 - **First-class closures** (ADR 0019): `@closure`/`@call_closure` (non-escaping, all modes) and `@export_callback` (escaping host-callable). Under `--target=wasm-gc` the closure env is **engine-GC'd (leak-free)**.
 - **Async/await** (ADR 0018): `@async`/`@await`/`@suspending` markers + a production reactor that picks **JSPI** (Bun 1.3 / V8) or **Asyncify** at load time, wired into `sgl run`.
