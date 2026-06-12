@@ -5,15 +5,47 @@ This project aims for [Semantic Versioning](https://semver.org/).
 
 ## Unreleased
 
-This cycle lands the **v1.0 FFI-coverage gate** — the dependency chain `binding generator → object handles → async/await → closures → callbacks` that lets a Silicon program reach the modern web/Bun platform — plus the **module/component system** (ADR-0024). Headline capabilities now supported:
+## 1.0.0
+
+**Silicon v1.0 — the v1.0 gate is closed.** This release lands the full planned v1 surface (see [`docs/v1-feature-status.md`](docs/v1-feature-status.md)): the **FFI-coverage gate at 100%\*** (every bindable host member binds; `Bun.$` officially excluded by policy), the dependency chain `binding generator → object handles → async/await → closures → callbacks`, the **module/component system** (ADR-0024), full **monomorphization** (M0 + the M1 container tier), a minimal **object-capability model** (K0, ADR 0027), and a **runnable LSP server** (18 capabilities). Headline capabilities:
 
 - **First-class closures** (ADR 0019): `@closure`/`@call_closure` (non-escaping, all modes) and `@export_callback` (escaping host-callable). Under `--target=wasm-gc` the closure env is **engine-GC'd (leak-free)**.
 - **Async/await** (ADR 0018): `@async`/`@await`/`@suspending` markers + a production reactor that picks **JSPI** (Bun 1.3 / V8) or **Asyncify** at load time, wired into `sgl run`.
 - **Object handles** (ADR 0018): `JSValue`/`JSString` externref types — any host object crosses `@extern` as an opaque, engine-GC'd handle.
 - **A spec-driven FFI binding generator** (ADR 0017) shipping built-in modules across every tier: `os`/`path` (Tier-0), `bun`/`json` (Tier-1 `JSString` + Tier-2 `JSValue`), and constructed Web interfaces `url`/`url_search_params`/`headers`/`text_encoder`/`text_decoder` — with `async:'suspending'` (Promise→`@suspending`) and `events:'closure'` (callback→closure) generation modes.
 - **Full comptime monomorphization** (M0, ADR 0001/0003): per-call-site memoization + the production `@fn[T]`/`@generic` stratum (Float/Int64/host-handle instantiations specialize; i32-shaped stay erased). **Native host-handle sums** (F1) ride it — `Result[JSValue,E]`/`Option[JSValue]` under `--target=wasm-gc`, no `js::pin`. Plus a **poll-reactor** for true concurrency (`block_on`/`block_all`).
+- **Container monomorphization complete** (M1): `Vec[Float]`/`Vec[Int64]` on both targets with element-typed `@loop`, typed `HashMap[K,V]` families with iteration cursors, and first-class `Array[T]` accessors.
+- **Object-capability model v0** (K0, ADR 0027): unforgeable caps rooted at `@fn main (World)`, attenuated by `@cap_derive`.
 
 See the per-ADR entries below for detail, and `docs/v1.0-implementation-roadmap.html` for subtask status.
+
+### Added — LSP tail closed (cross-file diagnostics + binding identity); FFI gate declared 100%\*
+
+**Cross-file diagnostic invalidation** (CaaS `Workspace.refreshDocument`/`refreshDependents`): an open document re-checks **without an edit** when the external symbols it sees changed. Invalidation is *signature-driven*, not graph-driven — each compile stores the `externalSymbolsSignature` it ran against, so a body-only edit elsewhere invalidates nothing and there is no `@use` dependency graph to keep correct; runs to a fixpoint. The LSP republishes refreshed documents: renaming `@fn add` in `lib.si` immediately surfaces E0004 in an open `main.si`, and restoring it clears the squiggle.
+
+**S1 binding identity.** A new lexical binder (`src/ast/binder.ts`) assigns every local name occurrence (parameter, local, `@match` pattern field) to its concrete binding, mirroring the typechecker's scope rules. Symbols surface with `containingSymbol` populated; `findReferences`/`rename` are scope-correct — a param `x` never renames another fn's `x`, and a top-level rename skips occurrences a shadowing local claimed. Parameters carry their name-token span, so go-to-definition/hover work on params.
+
+**FFI gate: 100%\*** (379/379 bindable members). The single remaining skip, `Bun.$`, is now **officially excluded by policy** — a tagged template is a JS *syntactic form*, not a callable member; binding it as a normal fn would destroy its per-substitution shell-escaping guarantee. The exclusion list is CI-pinned to exactly `['Bun.$']` (`bindgen/adapters.test.ts`); the optional honest path remains [`docs/bun-shell-ffi-plan.md`](docs/bun-shell-ffi-plan.md).
+
+### Added — M1 completed: `@loop` over typed Vecs + typed HashMap families; first-class array accessors
+
+**`@loop` over typed Vecs (both targets).** The iterate-`@loop` desugar runs pre-typecheck and emits i32-default `vec_len`/`vec_get_i32` calls — now *tagged*: when the subject's inferred type is `Vec[Float]`/`Vec[Int64]`, the typechecker retargets the tagged calls at the matching monomorph family, typing the element binder by the element. On linear-mem a `Vec[T]` annotation is representation-compatible with `Int` (a Vec *is* its header pointer there).
+
+**Typed `HashMap (K, V)` families** (`hashmap.si`, linear-mem): `(i32, f32)` on the compact 12-byte slots, `(i64, i64)` on wide 24-byte slots (own probing/hash/resize/cursor), `(i32, i64)` wrapping the wide family with one sign-extension at the boundary — each with set/get/has/remove/resize + an iteration cursor. Float *keys* are deliberately unsupported (NaN ≠ NaN breaks probing — the same stance Rust takes). Coverage includes a forced i64 hash collision, tombstone re-probing, and resize bit-preservation (`hashmap-typed.test.ts`).
+
+**First-class array accessors.** `$[…]` arrays get always-available `array::get`/`array::set`/`array::len` (no `@use`; element-typed `Int`/`Float` dispatch via typechecker retarget at the prelude `arr_*` helpers) plus `Array[T]` param/return annotations and `@loop` over `Array[T]` subjects. WASM targets only (the native backend still rejects array literals — see the QBE parity plan).
+
+### Added — `@i64`/`@u64` casts + numeric digit separators
+
+`@i64(x)` / `@u64(x)` cast forms close the gap flagged in the M1 entry below — `@toInt64(literal > 2³¹)` no longer truncates through `i32.const`; a 64-bit constant can now be expressed directly. Numeric literals accept `_` digit separators (`1_000_000`), grammar-neutral (lexer-level, ADR-0020 unchanged).
+
+### Added — LSP hardened into a fuller server (18 capabilities + lifecycle)
+
+Six new capabilities on top of the original twelve, plus protocol lifecycle: shutdown/exit, `positionEncoding` negotiation, and process-level error isolation (a handler throw answers that request with an error instead of killing the server). Also fixed M1 on-demand vec generation surfaced by LSP-driven compiles.
+
+### Added — object-capability model v0 (K0, [ADR 0027](docs/adr/0027-capability-model-v0.md))
+
+A minimal, WASI-aligned ocap seed — a strict subset of the deferred K1–K8 track, requiring **zero new analysis passes**: capabilities are unforgeable `@type_distinct` values rooted at `@fn main (World)` via the entry shim, attenuated by `@cap_derive` (E0017 rejects derivation from a non-root), with `World`+`Clock` proven end-to-end under wasmtime. Ships `cap.si` stdlib + `sgl.toml [build] cap-repr`.
 
 ### Added — v1.0 roadmap: closures under wasm-gc + async/event bindgen ([ADR 0018](docs/adr/0018-async-promise-ffi.md) / [ADR 0019](docs/adr/0019-first-class-closures-and-capture.md))
 

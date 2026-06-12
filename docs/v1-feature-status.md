@@ -1,5 +1,10 @@
 # Silicon v1 — feature status
 
+> **Released:** this surface shipped as **v1.0.0** (2026-06-12, `v1-roadmap`
+> merged to `main`). The post-v1 direction is the bootstrap — see
+> [`bootstrap-blockers-and-order.md`](bootstrap-blockers-and-order.md) and
+> [`bootstrap-foundation-audit.md`](bootstrap-foundation-audit.md).
+>
 > **As of:** branch `v1-roadmap` (LSP tail **closed** — cross-file diagnostic
 > invalidation + S1 binding identity — and the FFI gate declared **100%\***
 > with `Bun.$` officially excluded; previously M1 container monomorphization
