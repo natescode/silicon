@@ -430,18 +430,18 @@ functions and logs results to the console. No new APIs needed.</p>
 <pre>
 <span class="cm"># Entry point example — call helpers from main and print results.</span>
 
-<span class="kw">@fn</span> <span class="fn">add</span> a<span class="op">:</span><span class="ty">Int</span>, b<span class="op">:</span><span class="ty">Int</span> <span class="op">:=</span> { a <span class="op">+</span> b };
+<span class="kw">@fn</span> <span class="fn">add</span> a, b <span class="op">:=</span> { a <span class="op">+</span> b };
 
-<span class="kw">@fn</span> <span class="fn">factorial</span> n<span class="op">:</span><span class="ty">Int</span> <span class="op">:=</span> {
-    <span class="op">&</span><span class="fn">@if</span> n <span class="op">&lt;=</span> <span class="num">1</span>, { <span class="op">&</span><span class="fn">@return</span> <span class="num">1</span> };
-    n <span class="op">*</span> (<span class="op">&</span><span class="fn">factorial</span> (n <span class="op">-</span> <span class="num">1</span>))
+<span class="kw">@fn</span> <span class="fn">factorial</span> n <span class="op">:=</span> {
+    <span class="fn">@if</span>(n <span class="op">&lt;=</span> <span class="num">1</span>, { <span class="fn">@return</span>(<span class="num">1</span>) });
+    n <span class="op">*</span> <span class="fn">factorial</span>((n <span class="op">-</span> <span class="num">1</span>))
 };
 
 <span class="kw">@fn</span> <span class="fn">main</span> <span class="op">:=</span> {
-    <span class="kw">@local</span> sum     <span class="op">:=</span> (<span class="op">&</span><span class="fn">add</span> <span class="num">10</span>, <span class="num">32</span>);
-    <span class="kw">@local</span> fac10   <span class="op">:=</span> (<span class="op">&</span><span class="fn">factorial</span> <span class="num">10</span>);
-    <span class="op">&</span><span class="fn">web::console_log</span> sum;
-    <span class="op">&</span><span class="fn">web::console_log</span> fac10
+    sum     <span class="op">:=</span> <span class="fn">add</span>(<span class="num">10</span>, <span class="num">32</span>);
+    fac10   <span class="op">:=</span> <span class="fn">factorial</span>(<span class="num">10</span>);
+    <span class="fn">web::console_log</span>(sum);
+    <span class="fn">web::console_log</span>(fac10)
 };
 
 <span class="kw">@export</span> main;
@@ -463,27 +463,27 @@ building and the HTML output API. The program builds a static list at startup in
 <span class="cm"># TODO list rendered into the HTML panel via web::set_html.</span>
 <span class="cm"># Check "run main" and click ▶ Compile.</span>
 
-<span class="kw">@fn</span> <span class="fn">item</span> label<span class="op">:</span><span class="ty">String</span>, done<span class="op">:</span><span class="ty">Int</span> <span class="op">:=</span> {
-    <span class="kw">@local</span> cls <span class="op">:=</span> (<span class="op">&</span><span class="fn">@if</span> done, { <span class="str">'done'</span> }, { <span class="str">'todo'</span> });
+<span class="kw">@fn</span> <span class="fn">item</span> label, done <span class="op">:=</span> {
+    cls <span class="op">:=</span> <span class="fn">@if</span>(done <span class="op">==</span> <span class="num">1</span>, { <span class="str">'done'</span> }, { <span class="str">'todo'</span> });
     <span class="str">'&lt;li class="'</span> <span class="op">++</span> cls <span class="op">++</span> <span class="str">'"&gt;'</span> <span class="op">++</span> label <span class="op">++</span> <span class="str">'&lt;/li&gt;'</span>
 };
 
 <span class="kw">@fn</span> <span class="fn">main</span> <span class="op">:=</span> {
-    <span class="kw">@local</span> html <span class="op">:=</span> (
+    html <span class="op">:=</span> (
         <span class="str">'&lt;style&gt;'</span>
         <span class="op">++</span> <span class="str">'body{font:16px system-ui;padding:20px;}'</span>
         <span class="op">++</span> <span class="str">'ul{list-style:none;padding:0}'</span>
         <span class="op">++</span> <span class="str">'li{padding:8px 12px;margin:4px 0;border-radius:6px;background:#21262d;color:#e6edf3}'</span>
         <span class="op">++</span> <span class="str">'li.done{opacity:0.5;text-decoration:line-through}'</span>
         <span class="op">++</span> <span class="str">'&lt;/style&gt;&lt;ul&gt;'</span>
-        <span class="op">++</span> (<span class="op">&</span><span class="fn">item</span> <span class="str">'Add @fn keyword'</span>,          <span class="num">1</span>)
-        <span class="op">++</span> (<span class="op">&</span><span class="fn">item</span> <span class="str">'Module system (web::)'</span>,    <span class="num">1</span>)
-        <span class="op">++</span> (<span class="op">&</span><span class="fn">item</span> <span class="str">'Syntax highlighting'</span>,      <span class="num">1</span>)
-        <span class="op">++</span> (<span class="op">&</span><span class="fn">item</span> <span class="str">'HTML render panel'</span>,        <span class="num">0</span>)
-        <span class="op">++</span> (<span class="op">&</span><span class="fn">item</span> <span class="str">'Snake in Silicon'</span>,          <span class="num">0</span>)
+        <span class="op">++</span> <span class="fn">item</span>(<span class="str">'Add @fn keyword'</span>,          <span class="num">1</span>)
+        <span class="op">++</span> <span class="fn">item</span>(<span class="str">'Module system (web::)'</span>,    <span class="num">1</span>)
+        <span class="op">++</span> <span class="fn">item</span>(<span class="str">'Syntax highlighting'</span>,      <span class="num">1</span>)
+        <span class="op">++</span> <span class="fn">item</span>(<span class="str">'HTML render panel'</span>,        <span class="num">0</span>)
+        <span class="op">++</span> <span class="fn">item</span>(<span class="str">'Snake in Silicon'</span>,          <span class="num">0</span>)
         <span class="op">++</span> <span class="str">'&lt;/ul&gt;'</span>
     );
-    <span class="op">&</span><span class="fn">web::set_html</span> html
+    <span class="fn">web::set_html</span>(html)
 };
 
 <span class="kw">@export</span> main;
@@ -517,67 +517,68 @@ automatically when <em>run main</em> is checked.</p>
 <span class="cm"># Snake — uses the tick + handle_key export convention.</span>
 <span class="cm"># Enable "run main" and compile.</span>
 
-<span class="kw">@let</span> GRID   <span class="op">:=</span> <span class="num">20</span>;    <span class="cm"># cells per side</span>
-<span class="kw">@let</span> CELL   <span class="op">:=</span> <span class="num">16</span>;    <span class="cm"># px per cell</span>
+GRID   <span class="op">:=</span> <span class="num">20</span>;    <span class="cm"># cells per side</span>
+CELL   <span class="op">:=</span> <span class="num">16</span>;    <span class="cm"># px per cell</span>
 
-<span class="kw">@var</span> head_x <span class="op">:=</span> <span class="num">10</span>;
-<span class="kw">@var</span> head_y <span class="op">:=</span> <span class="num">10</span>;
-<span class="kw">@var</span> dir    <span class="op">:=</span> <span class="num">0</span>;    <span class="cm"># 0=right 1=down 2=left 3=up</span>
-<span class="kw">@var</span> food_x <span class="op">:=</span> <span class="num">5</span>;
-<span class="kw">@var</span> food_y <span class="op">:=</span> <span class="num">15</span>;
-<span class="kw">@var</span> alive  <span class="op">:=</span> <span class="num">1</span>;
-<span class="kw">@var</span> length <span class="op">:=</span> <span class="num">3</span>;
+<span class="kw">@mut</span> head_x <span class="op">:=</span> <span class="num">10</span>;
+<span class="kw">@mut</span> head_y <span class="op">:=</span> <span class="num">10</span>;
+<span class="kw">@mut</span> dir    <span class="op">:=</span> <span class="num">0</span>;    <span class="cm"># 0=right 1=down 2=left 3=up</span>
+<span class="kw">@mut</span> food_x <span class="op">:=</span> <span class="num">5</span>;
+<span class="kw">@mut</span> food_y <span class="op">:=</span> <span class="num">15</span>;
+<span class="kw">@mut</span> alive  <span class="op">:=</span> <span class="num">1</span>;
+<span class="kw">@mut</span> length <span class="op">:=</span> <span class="num">3</span>;
 
-<span class="kw">@fn</span> <span class="fn">cell</span> x<span class="op">:</span><span class="ty">Int</span>, y<span class="op">:</span><span class="ty">Int</span>, r<span class="op">:</span><span class="ty">Int</span>, g<span class="op">:</span><span class="ty">Int</span>, b<span class="op">:</span><span class="ty">Int</span> <span class="op">:=</span> {
-    <span class="op">&</span><span class="fn">web::canvas_set_fill</span> r, g, b;
-    <span class="op">&</span><span class="fn">web::canvas_fill_rect</span>
-        (<span class="op">&</span><span class="fn">@toFloat</span> (x <span class="op">*</span> CELL)),
-        (<span class="op">&</span><span class="fn">@toFloat</span> (y <span class="op">*</span> CELL)),
-        <span class="num">15.0</span>, <span class="num">15.0</span>
+<span class="kw">@fn</span> <span class="fn">cell</span> x, y, r, g, b <span class="op">:=</span> {
+    <span class="fn">web::canvas_set_fill</span>(r, g, b);
+    <span class="fn">web::canvas_fill_rect</span>(
+        <span class="fn">@toFloat</span>((x <span class="op">*</span> CELL)),
+        <span class="fn">@toFloat</span>((y <span class="op">*</span> CELL)),
+        <span class="num">15.0</span>, <span class="num">15.0</span>)
 };
 
 <span class="kw">@fn</span> <span class="fn">draw</span> <span class="op">:=</span> {
     <span class="cm"># Background</span>
-    <span class="op">&</span><span class="fn">web::canvas_set_fill</span> <span class="num">13</span>, <span class="num">17</span>, <span class="num">23</span>;
-    <span class="op">&</span><span class="fn">web::canvas_fill_rect</span> <span class="num">0.0</span>, <span class="num">0.0</span>,
-        (<span class="op">&</span><span class="fn">@toFloat</span> (GRID <span class="op">*</span> CELL)),
-        (<span class="op">&</span><span class="fn">@toFloat</span> (GRID <span class="op">*</span> CELL));
+    <span class="fn">web::canvas_set_fill</span>(<span class="num">13</span>, <span class="num">17</span>, <span class="num">23</span>);
+    <span class="fn">web::canvas_fill_rect</span>(<span class="num">0.0</span>, <span class="num">0.0</span>,
+        <span class="fn">@toFloat</span>((GRID <span class="op">*</span> CELL)),
+        <span class="fn">@toFloat</span>((GRID <span class="op">*</span> CELL)));
     <span class="cm"># Snake head</span>
-    <span class="op">&</span><span class="fn">cell</span> head_x, head_y, <span class="num">63</span>, <span class="num">185</span>, <span class="num">80</span>;
+    <span class="fn">cell</span>(head_x, head_y, <span class="num">63</span>, <span class="num">185</span>, <span class="num">80</span>);
     <span class="cm"># Food</span>
-    <span class="op">&</span><span class="fn">cell</span> food_x, food_y, <span class="num">248</span>, <span class="num">81</span>, <span class="num">73</span>
+    <span class="fn">cell</span>(food_x, food_y, <span class="num">248</span>, <span class="num">81</span>, <span class="num">73</span>)
 };
 
 <span class="kw">@fn</span> <span class="fn">main</span> <span class="op">:=</span> {
     head_x <span class="op">=</span> <span class="num">10</span>; head_y <span class="op">=</span> <span class="num">10</span>;
     dir <span class="op">=</span> <span class="num">0</span>; alive <span class="op">=</span> <span class="num">1</span>; length <span class="op">=</span> <span class="num">3</span>;
-    <span class="op">&</span><span class="fn">draw</span>
+    <span class="fn">draw</span>()
 };
 
 <span class="kw">@fn</span> <span class="fn">tick</span> <span class="op">:=</span> {
-    <span class="op">&</span><span class="fn">@if</span> alive <span class="op">==</span> <span class="num">0</span>, { <span class="op">&</span><span class="fn">@return</span> };
+    <span class="fn">@if</span>(alive <span class="op">==</span> <span class="num">0</span>, { <span class="fn">@return</span>() });
     <span class="cm"># Move head</span>
-    <span class="op">&</span><span class="fn">@if</span> dir <span class="op">==</span> <span class="num">0</span>, { head_x <span class="op">=</span> head_x <span class="op">+</span> <span class="num">1</span> };
-    <span class="op">&</span><span class="fn">@if</span> dir <span class="op">==</span> <span class="num">1</span>, { head_y <span class="op">=</span> head_y <span class="op">+</span> <span class="num">1</span> };
-    <span class="op">&</span><span class="fn">@if</span> dir <span class="op">==</span> <span class="num">2</span>, { head_x <span class="op">=</span> head_x <span class="op">-</span> <span class="num">1</span> };
-    <span class="op">&</span><span class="fn">@if</span> dir <span class="op">==</span> <span class="num">3</span>, { head_y <span class="op">=</span> head_y <span class="op">-</span> <span class="num">1</span> };
+    <span class="fn">@if</span>(dir <span class="op">==</span> <span class="num">0</span>, { head_x <span class="op">=</span> head_x <span class="op">+</span> <span class="num">1</span> });
+    <span class="fn">@if</span>(dir <span class="op">==</span> <span class="num">1</span>, { head_y <span class="op">=</span> head_y <span class="op">+</span> <span class="num">1</span> });
+    <span class="fn">@if</span>(dir <span class="op">==</span> <span class="num">2</span>, { head_x <span class="op">=</span> head_x <span class="op">-</span> <span class="num">1</span> });
+    <span class="fn">@if</span>(dir <span class="op">==</span> <span class="num">3</span>, { head_y <span class="op">=</span> head_y <span class="op">-</span> <span class="num">1</span> });
     <span class="cm"># Wall collision</span>
-    <span class="op">&</span><span class="fn">@if</span> (head_x <span class="op">&lt;</span> <span class="num">0</span>) <span class="op">||</span> (head_x <span class="op">&gt;=</span> GRID), { alive <span class="op">=</span> <span class="num">0</span>; <span class="op">&</span><span class="fn">@return</span> };
-    <span class="op">&</span><span class="fn">@if</span> (head_y <span class="op">&lt;</span> <span class="num">0</span>) <span class="op">||</span> (head_y <span class="op">&gt;=</span> GRID), { alive <span class="op">=</span> <span class="num">0</span>; <span class="op">&</span><span class="fn">@return</span> };
-    <span class="cm"># Food pickup</span>
-    <span class="op">&</span><span class="fn">@if</span> (head_x <span class="op">==</span> food_x) <span class="op">&amp;&amp;</span> (head_y <span class="op">==</span> food_y), {
+    <span class="fn">@if</span>((head_x <span class="op">&lt;</span> <span class="num">0</span>) <span class="op">||</span> (head_x <span class="op">&gt;=</span> GRID), { alive <span class="op">=</span> <span class="num">0</span>; <span class="fn">@return</span>() });
+    <span class="fn">@if</span>((head_y <span class="op">&lt;</span> <span class="num">0</span>) <span class="op">||</span> (head_y <span class="op">&gt;=</span> GRID), { alive <span class="op">=</span> <span class="num">0</span>; <span class="fn">@return</span>() });
+    <span class="cm"># Food pickup (nested @if — there is no && operator)</span>
+    <span class="fn">@if</span>(head_x <span class="op">==</span> food_x, { <span class="fn">@if</span>(head_y <span class="op">==</span> food_y, {
         length <span class="op">=</span> length <span class="op">+</span> <span class="num">1</span>;
         food_x <span class="op">=</span> (food_x <span class="op">+</span> <span class="num">7</span>) <span class="op">%</span> GRID;
         food_y <span class="op">=</span> (food_y <span class="op">+</span> <span class="num">13</span>) <span class="op">%</span> GRID
-    };
-    <span class="op">&</span><span class="fn">draw</span>
+    }) });
+    <span class="fn">draw</span>()
 };
 
-<span class="kw">@fn</span> <span class="fn">handle_key</span> key<span class="op">:</span><span class="ty">Int</span> <span class="op">:=</span> {
-    <span class="op">&</span><span class="fn">@if</span> key <span class="op">==</span> <span class="num">37</span>, { dir <span class="op">=</span> <span class="num">2</span> };  <span class="cm"># ←</span>
-    <span class="op">&</span><span class="fn">@if</span> key <span class="op">==</span> <span class="num">38</span>, { dir <span class="op">=</span> <span class="num">3</span> };  <span class="cm"># ↑</span>
-    <span class="op">&</span><span class="fn">@if</span> key <span class="op">==</span> <span class="num">39</span>, { dir <span class="op">=</span> <span class="num">0</span> };  <span class="cm"># →</span>
-    <span class="op">&</span><span class="fn">@if</span> key <span class="op">==</span> <span class="num">40</span>, { dir <span class="op">=</span> <span class="num">1</span> }   <span class="cm"># ↓</span>
+<span class="op">\\</span> <span class="fn">handle_key</span> (<span class="ty">Int</span>)
+<span class="kw">@fn</span> <span class="fn">handle_key</span> key <span class="op">:=</span> {
+    <span class="fn">@if</span>(key <span class="op">==</span> <span class="num">37</span>, { dir <span class="op">=</span> <span class="num">2</span> });  <span class="cm"># ←</span>
+    <span class="fn">@if</span>(key <span class="op">==</span> <span class="num">38</span>, { dir <span class="op">=</span> <span class="num">3</span> });  <span class="cm"># ↑</span>
+    <span class="fn">@if</span>(key <span class="op">==</span> <span class="num">39</span>, { dir <span class="op">=</span> <span class="num">0</span> });  <span class="cm"># →</span>
+    <span class="fn">@if</span>(key <span class="op">==</span> <span class="num">40</span>, { dir <span class="op">=</span> <span class="num">1</span> })   <span class="cm"># ↓</span>
 };
 
 <span class="kw">@export</span> main;

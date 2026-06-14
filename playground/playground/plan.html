@@ -439,14 +439,14 @@ bindInstance: <span class="kw">function</span>(instance) {
           is an <em>echo</em> — the function receives a String pointer and returns it unchanged.
           This proves the round-trip without requiring string manipulation in Silicon.
         </p>
-        <pre><span class="diff-rem">-@let greet n:Int := {</span>
-<span class="diff-rem">-    &amp;web_console_log_str 'Hello, World!';</span>
-<span class="diff-rem">-    n</span>
-<span class="diff-rem">-};</span>
-<span class="diff-add">+@let greet msg:String := {</span>
-<span class="diff-add">+    &amp;web_console_log_str msg;</span>
-<span class="diff-add">+    msg</span>
-<span class="diff-add">+};</span></pre>
+        <pre><span class="diff-rem">@fn greet n := {</span>
+<span class="diff-rem">    web_console_log_str('Hello, World!');</span>
+<span class="diff-rem">    n</span>
+<span class="diff-rem">};</span>
+<span class="diff-add">@fn greet msg := {</span>
+<span class="diff-add">    web_console_log_str(msg);</span>
+<span class="diff-add">    msg</span>
+<span class="diff-add">};</span></pre>
         <p>
           The WASM signature becomes <code>(param i32) (result i32)</code> — the pointer goes in
           and back out. JS writes the string before the call and reads the string after.
@@ -629,8 +629,10 @@ bindInstance: <span class="kw">function</span>(instance) {
         <pre><span class="cmt"># src/strata/strings.si</span>
 <span class="cmt"># String operator strata for Silicon.</span>
 
-@stratum_operator Concat (<span class="str">'++'</span>, Node) :=
-    &amp;str_concat a, b;
+@stratum Concat := {
+    Compiler::register::operator(<span class="str">'++'</span>);
+    str_concat(a, b)
+};
 <span class="cmt"># `a` and `b` are the left- and right-hand operands injected by the elaborator.</span>
 <span class="cmt"># str_concat is resolved to $str_concat in std.wat at link time.</span></pre>
         <p>
@@ -658,7 +660,7 @@ bindInstance: <span class="kw">function</span>(instance) {
       <div class="step-body">
         <p>
           The current strata loader recognises <code>WASM::opcode</code> and <code>IR::kind</code>
-          tokens in stratum bodies. To support calls like <code>&amp;str_concat a, b</code>, the
+          tokens in stratum bodies. To support calls like <code>str_concat(a, b)</code>, the
           loader must also handle plain Silicon function-call syntax and emit the appropriate IR
           <code>Call</code> node (or WAT <code>call $str_concat</code>) during expansion.
         </p>
@@ -686,7 +688,7 @@ bindInstance: <span class="kw">function</span>(instance) {
         <p>
           This change is additive — existing WASM intrinsic strata continue to work unchanged.
           The parser for <code>.si</code> stratum files just needs to recognise
-          <code>&amp;fnName args…</code> as a <code>FunctionCall</code> node alongside the
+          <code>fnName(args…)</code> as a <code>FunctionCall</code> node alongside the
           existing <code>WASM::opcode</code> and <code>IR::kind</code> forms.
         </p>
       </div>
@@ -705,18 +707,18 @@ bindInstance: <span class="kw">function</span>(instance) {
           Once steps 7–9 are complete, the playground example can produce a real greeting by
           concatenating the literal prefix <code>'Hello, '</code> with the caller-supplied name.
         </p>
-        <pre><span class="diff-rem">-@let greet msg:String := {</span>
-<span class="diff-rem">-    &amp;web_console_log_str msg;</span>
-<span class="diff-rem">-    msg</span>
-<span class="diff-rem">-};</span>
-<span class="diff-add">+@let greet msg:String := {</span>
-<span class="diff-add">+    <span class="kw">let</span> result := (<span class="str">'Hello, '</span> ++ msg);</span>
-<span class="diff-add">+    &amp;web_console_log_str result;</span>
-<span class="diff-add">+    result</span>
-<span class="diff-add">+};</span></pre>
+        <pre><span class="diff-rem">@fn greet msg := {</span>
+<span class="diff-rem">    web_console_log_str(msg);</span>
+<span class="diff-rem">    msg</span>
+<span class="diff-rem">};</span>
+<span class="diff-add">@fn greet msg := {</span>
+<span class="diff-add">    result := (<span class="str">'Hello, '</span> ++ msg);</span>
+<span class="diff-add">    web_console_log_str(result);</span>
+<span class="diff-add">    result</span>
+<span class="diff-add">};</span></pre>
         <p>
           The elaborator rewrites <code>'Hello, ' ++ msg</code> into
-          <code>&amp;str_concat 'Hello, ', msg</code>, which lowers to
+          <code>str_concat('Hello, ', msg)</code>, which lowers to
           <code>(call $str_concat (i32.const &lt;literal_ptr&gt;) (local.get $msg))</code> in WAT.
           The JS exports panel then reads the returned pointer with
           <code>webEnv.readString(result)</code> and displays <code>"Hello, Alice!"</code>.
@@ -773,7 +775,7 @@ bindInstance: <span class="kw">function</span>(instance) {
       </tr>
       <tr>
         <td>src/strata/strings.si</td>
-        <td><strong>Define ++ as @stratum_operator Concat</strong> — body calls &amp;str_concat; no new WASM intrinsic needed (intrinsics map 1-to-1 to WASM ops only)</td>
+        <td><strong>Define ++ as @stratum_operator Concat</strong> — body calls str_concat; no new WASM intrinsic needed (intrinsics map 1-to-1 to WASM ops only)</td>
         <td>8</td>
       </tr>
       <tr>
