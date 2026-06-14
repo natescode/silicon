@@ -29,28 +29,50 @@ const browserSwap: BunPlugin = {
     },
 }
 
-// ── extract the EXAMPLES object literal from index.html ─────────────────────
+// ── extract object literals from index.html ─────────────────────────────────
 const html = readFileSync(join(WEB, '..', 'playground', 'index.html'), 'utf8')
-const start = html.indexOf('const EXAMPLES = {')
-if (start < 0) throw new Error('EXAMPLES object not found in index.html')
-// find the matching closing brace of the object literal
-let i = html.indexOf('{', start), depth = 0, end = -1, inStr = '', esc = false
-for (; i < html.length; i++) {
-    const c = html[i]
-    if (inStr) {
-        if (esc) { esc = false; continue }
-        if (c === '\\') { esc = true; continue }
-        if (c === inStr) inStr = ''
-        continue
+
+/** Balance-match the `{ … }` object literal that follows `marker` and eval it. */
+function extractObject<T>(marker: string, required = true): T {
+    const start = html.indexOf(marker)
+    if (start < 0) { if (required) throw new Error(`${marker} not found in index.html`); return {} as T }
+    let i = html.indexOf('{', start), depth = 0, end = -1, inStr = '', esc = false
+    for (; i < html.length; i++) {
+        const c = html[i]
+        if (inStr) {
+            if (esc) { esc = false; continue }
+            if (c === '\\') { esc = true; continue }
+            if (c === inStr) inStr = ''
+            continue
+        }
+        if (c === '"' || c === "'" || c === '`') { inStr = c; continue }
+        if (c === '{') depth++
+        else if (c === '}') { depth--; if (depth === 0) { end = i; break } }
     }
-    if (c === '"' || c === "'" || c === '`') { inStr = c; continue }
-    if (c === '{') depth++
-    else if (c === '}') { depth--; if (depth === 0) { end = i; break } }
+    if (end < 0) throw new Error(`could not balance ${marker} braces`)
+    // eslint-disable-next-line no-eval
+    return eval('(' + html.slice(html.indexOf('{', start), end + 1) + ')')
 }
-if (end < 0) throw new Error('could not balance EXAMPLES object braces')
-const objText = html.slice(html.indexOf('{', start), end + 1)
-// eslint-disable-next-line no-eval
-const EXAMPLES: Record<string, string> = eval('(' + objText + ')')
+
+const EXAMPLES = extractObject<Record<string, string>>('const EXAMPLES = {')
+const EXAMPLE_FEATURES = extractObject<Record<string, string[]>>('const EXAMPLE_FEATURES = {')
+const EXAMPLE_TARGETS = extractObject<Record<string, string>>('const EXAMPLE_TARGETS = {')
+
+// Mirror index.html's example-picker: resolve the exact features + target each
+// example is compiled with in the UI, so this check matches real playground use.
+const VALID_FEATURES = new Set(['canvas', 'game', 'dom'])
+function featuresFor(key: string, src: string): string[] {
+    let feats: string[]
+    if (key in EXAMPLE_FEATURES) feats = EXAMPLE_FEATURES[key]
+    else if (key === 'empty') feats = []
+    else {
+        feats = []
+        if (src.includes('canvas_')) feats.push('canvas')
+        if (src.includes('@export tick')) feats.push('game')
+        if (src.includes('set_html')) feats.push('dom')
+    }
+    return feats.filter(f => VALID_FEATURES.has(f))
+}
 
 // ── bundle entry.ts (browser target) exactly like verify.ts ─────────────────
 const outdir = join(tmpdir(), 'silicon-playground-verify-examples')
@@ -61,21 +83,24 @@ const result = await Bun.build({
 if (!result.success) { for (const log of result.logs) console.error(log); process.exit(1) }
 await import(result.outputs[0].path)
 const SiliconCompiler = (globalThis as any).SiliconCompiler as {
-    compile(req: { source: string; platform?: string; features?: string[] }): Promise<any>
+    compile(req: { source: string; platform?: string; features?: string[]; target?: string }): Promise<any>
 }
 if (!SiliconCompiler) throw new Error('globalThis.SiliconCompiler was not set by the bundle')
 
-// ── compile every non-empty example ─────────────────────────────────────────
+// ── compile every non-empty example with its real features + target ──────────
 let failed = 0, ok = 0
 for (const [name, source] of Object.entries(EXAMPLES)) {
     if (!source.trim()) continue
-    const data = await SiliconCompiler.compile({ source, platform: 'web', features: [] })
+    const features = featuresFor(name, source)
+    const target = EXAMPLE_TARGETS[name] ?? 'host'
+    const data = await SiliconCompiler.compile({ source, platform: 'web', features, target })
+    const tag = `[${features.join(',') || 'core'}${target !== 'host' ? ` · ${target}` : ''}]`
     if (data.success) {
         ok++
-        console.log(`✓ ${name} — ${data.exports.length} export(s)`)
+        console.log(`✓ ${name} ${tag} — ${data.exports.length} export(s)`)
     } else {
         failed++
-        console.error(`✗ ${name} FAILED:\n${(data.error || '').split('\n').map((l: string) => '    ' + l).join('\n')}`)
+        console.error(`✗ ${name} ${tag} FAILED:\n${(data.error || '').split('\n').map((l: string) => '    ' + l).join('\n')}`)
     }
 }
 console.log(`\nEXAMPLES: ${ok} compiled, ${failed} failed`)

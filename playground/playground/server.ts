@@ -17,7 +17,7 @@ import {
     compileToWasm,
     elaborate, buildStrataRegistry,
     typecheck, formatTypeError, formatType, wasmTypeOf, type FunctionSig,
-    loadModules,
+    loadModules, inlineStdlibUses,
     loadPlatform, getRequiredExports, type PlatformConfig,
 } from '@silicon/compiler/pipeline'
 
@@ -109,6 +109,9 @@ async function compileSilicon(source: string, platformConfig?: PlatformConfig, t
         : fallbackModuleRegistry
     const options = target && target !== 'host' ? { target: target as any } : undefined
 
+    // Inline bare-name stdlib `@use` directives before parsing — the raw parser
+    // doesn't understand `@use` (mirrors the browser build in web/entry.ts).
+    source = inlineStdlibUses(source)
     const ast = parse(source)
     const registry = buildStrataRegistry(ast as Program)
     const { program: elaborated, errors: elabErrors } = elaborate(ast as Program, registry)
