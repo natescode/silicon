@@ -340,13 +340,13 @@ code { font-family: var(--mono); font-size: 0.85em; color: var(--blue); }
   <div class="goal-box">
     <div class="goal-item old">
       <span class="goal-label">Before (Round 45)</span>
-      @extern web_console_log_str ptr:String;<br>
-      &amp;web_console_log_str result;
+      \\ @extern web_console_log_str (String) -> Void;<br>
+      web_console_log_str(result);
     </div>
     <div class="goal-item arrow">→</div>
     <div class="goal-item new">
       <span class="goal-label">After (Round 46)</span>
-      &amp;web::console_log result;
+      web::console_log(result);
     </div>
   </div>
 
@@ -389,7 +389,7 @@ code { font-family: var(--mono); font-size: 0.85em; color: var(--blue); }
     <div class="decision-body">
       <p>
         No <code>@use</code> declaration required. The namespace in the call site
-        <strong>is</strong> the import — <code>&amp;web::console_log</code> auto-resolves
+        <strong>is</strong> the import — <code>web::console_log</code> auto-resolves
         the <code>web</code> module. Namespaces must always be written in full;
         there is no aliasing (<code>use Draw as D</code> is a non-goal for this round).
         Compiler error if the namespace does not match any registered module.
@@ -468,35 +468,35 @@ Parse → AST → buildStrataRegistry → <span class="diff-add">loadModules →
     the module name. Inside, functions are declared without the module prefix:
   </p>
 
-  <pre><span class="cmt">; src/strata/modules/web.si  — the built-in web:: environment module</span>
-<span class="cmt">; Functions here become (import "web" "name" …) in WAT.</span>
+  <pre><span class="cmt"># src/strata/modules/web.si  — the built-in web:: environment module</span>
+<span class="cmt"># Functions here become (import "web" "name" …) in WAT.</span>
 
-<span class="kw">@extern</span> <span class="fn">console_log</span>     v:<span class="type">Int</span>;
-<span class="kw">@extern</span> <span class="fn">console_log_f</span>   v:<span class="type">Float</span>;
-<span class="kw">@extern</span> <span class="fn">console_log_str</span> ptr:<span class="type">String</span>;
-<span class="kw">@extern</span> <span class="fn">console_error</span>   v:<span class="type">Int</span>;
-<span class="kw">@extern</span> <span class="fn">console_warn</span>    v:<span class="type">Int</span>;</pre>
+<span class="op">\\</span> <span class="kw">@extern</span> <span class="fn">console_log</span>     (<span class="type">Int</span>) -> <span class="type">Void</span>;
+<span class="op">\\</span> <span class="kw">@extern</span> <span class="fn">console_log_f</span>   (<span class="type">Float</span>) -> <span class="type">Void</span>;
+<span class="op">\\</span> <span class="kw">@extern</span> <span class="fn">console_log_str</span> (<span class="type">String</span>) -> <span class="type">Void</span>;
+<span class="op">\\</span> <span class="kw">@extern</span> <span class="fn">console_error</span>   (<span class="type">Int</span>) -> <span class="type">Void</span>;
+<span class="op">\\</span> <span class="kw">@extern</span> <span class="fn">console_warn</span>    (<span class="type">Int</span>) -> <span class="type">Void</span>;</pre>
 
-  <pre><span class="cmt">; modules/Draw.si  — a hypothetical third-party drawing module</span>
-<span class="cmt">; Host must provide { Draw: { clear, fill_rect, … } } in the WASM import object.</span>
+  <pre><span class="cmt"># modules/Draw.si  — a hypothetical third-party drawing module</span>
+<span class="cmt"># Host must provide { Draw: { clear, fill_rect, … } } in the WASM import object.</span>
 
-<span class="kw">@extern</span> <span class="fn">clear</span>      () -> <span class="type">Void</span>;
-<span class="kw">@extern</span> <span class="fn">fill_rect</span>  (x:<span class="type">Int</span>, y:<span class="type">Int</span>, w:<span class="type">Int</span>, h:<span class="type">Int</span>) -> <span class="type">Void</span>;
-<span class="kw">@extern</span> <span class="fn">set_color</span>  (r:<span class="type">Int</span>, g:<span class="type">Int</span>, b:<span class="type">Int</span>) -> <span class="type">Void</span>;</pre>
+<span class="op">\\</span> <span class="kw">@extern</span> <span class="fn">clear</span>      () -> <span class="type">Void</span>;
+<span class="op">\\</span> <span class="kw">@extern</span> <span class="fn">fill_rect</span>  (<span class="type">Int</span>, <span class="type">Int</span>, <span class="type">Int</span>, <span class="type">Int</span>) -> <span class="type">Void</span>;
+<span class="op">\\</span> <span class="kw">@extern</span> <span class="fn">set_color</span>  (<span class="type">Int</span>, <span class="type">Int</span>, <span class="type">Int</span>) -> <span class="type">Void</span>;</pre>
 
   <h3 style="margin-top:20px">Calling a module function</h3>
   <p>In user Silicon code, no extern declaration is needed — just use the namespaced call:</p>
-  <pre><span class="kw">@let</span> <span class="fn">greet</span> msg:<span class="type">String</span> := {
-    <span class="kw">@local</span> result := (<span class="str">'Hello, '</span> ++ msg);
-    &amp;<span class="ns">web</span>::<span class="fn">console_log_str</span> result;   <span class="cmt">; no @extern needed — compiler reads web.si</span>
+  <pre><span class="kw">@fn</span> <span class="fn">greet</span> msg := {
+    result := (<span class="str">'Hello, '</span> ++ msg);
+    <span class="ns">web</span>::<span class="fn">console_log_str</span>(result);   <span class="cmt"># no @extern needed — compiler reads web.si</span>
     result
 };</pre>
 
   <div class="callout info">
     <strong>Grammar note:</strong> The Silicon grammar's <code>namespace</code> rule already
     handles <code>web::console_log_str</code> via the <code>("::" | ".") identifier</code>
-    repetition. And <code>FunctionCall = "&amp;" FunctionCallBody</code> already accepts a
-    namespace as the callee. <strong>No grammar changes are needed.</strong>
+    repetition. And the always-parenthesised call form <code>ExprEnd = Primary { CallSuffix }</code>
+    already accepts a namespace as the callee. <strong>No grammar changes are needed.</strong>
   </div>
 </section>
 
@@ -554,12 +554,12 @@ Parse → AST → buildStrataRegistry → <span class="diff-add">loadModules →
           collect <code>@extern</code> nodes and extract their name and type signature via the
           same <code>siliconTypeNameToWasm</code> helper already used in <code>lower.ts</code>.
         </p>
-        <pre><span class="cmt">; src/strata/modules/web.si</span>
-<span class="kw">@extern</span> <span class="fn">console_log</span>     v:<span class="type">Int</span>;
-<span class="kw">@extern</span> <span class="fn">console_log_f</span>   v:<span class="type">Float</span>;
-<span class="kw">@extern</span> <span class="fn">console_log_str</span> ptr:<span class="type">String</span>;
-<span class="kw">@extern</span> <span class="fn">console_error</span>   v:<span class="type">Int</span>;
-<span class="kw">@extern</span> <span class="fn">console_warn</span>    v:<span class="type">Int</span>;</pre>
+        <pre><span class="cmt"># src/strata/modules/web.si</span>
+<span class="op">\\</span> <span class="kw">@extern</span> <span class="fn">console_log</span>     (<span class="type">Int</span>) -> <span class="type">Void</span>;
+<span class="op">\\</span> <span class="kw">@extern</span> <span class="fn">console_log_f</span>   (<span class="type">Float</span>) -> <span class="type">Void</span>;
+<span class="op">\\</span> <span class="kw">@extern</span> <span class="fn">console_log_str</span> (<span class="type">String</span>) -> <span class="type">Void</span>;
+<span class="op">\\</span> <span class="kw">@extern</span> <span class="fn">console_error</span>   (<span class="type">Int</span>) -> <span class="type">Void</span>;
+<span class="op">\\</span> <span class="kw">@extern</span> <span class="fn">console_warn</span>    (<span class="type">Int</span>) -> <span class="type">Void</span>;</pre>
       </div>
       <div class="dep-note">depends on step 1 (ModuleRegistry type)</div>
     </div>
@@ -629,7 +629,7 @@ Parse → AST → buildStrataRegistry → <span class="diff-add">loadModules →
       </div>
       <div class="step-body">
         <p>
-          When codegen sees <code>&amp;web::console_log_str msg</code>, the callee namespace
+          When codegen sees <code>web::console_log_str(msg)</code>, the callee namespace
           path is <code>['web', 'console_log_str']</code>. Look up <code>web</code> in the
           module registry → found as an env module → look up <code>console_log_str</code> →
           get its signature → emit <code>(import "web" "console_log_str" (func $web__console_log_str (param i32)))</code>.
@@ -639,7 +639,7 @@ Parse → AST → buildStrataRegistry → <span class="diff-add">loadModules →
           (double underscore avoids collision with user-defined functions). The call site
           emits <code>(call $web__console_log_str …)</code>.
         </p>
-        <pre><span class="cmt">; emitted WAT for &amp;web::console_log_str result</span>
+        <pre><span class="cmt">; emitted WAT for web::console_log_str(result)</span>
 (import <span class="str">"web"</span> <span class="str">"console_log_str"</span> (func $web__console_log_str (param i32)))
 …
 (call $web__console_log_str (local.get $result))</pre>
@@ -661,15 +661,15 @@ Parse → AST → buildStrataRegistry → <span class="diff-add">loadModules →
           web externs inline. After this step those go away — the compiler reads <code>web.si</code>
           automatically.
         </p>
-        <pre><span class="diff-rem">- @extern web_console_log_str ptr:String;</span>
-<span class="diff-rem">- @extern web_console_log_f   v:Float;</span>
+        <pre><span class="diff-rem">\\ @extern web_console_log_str (String) -> Void;</span>
+<span class="diff-rem">\\ @extern web_console_log_f   (Float) -> Void;</span>
 <span class="diff-ctx">
-</span><span class="diff-ctx">  @let greet msg:String := {</span>
-<span class="diff-ctx">      @local result := ('Hello, ' ++ msg);</span>
-<span class="diff-rem">-     &amp;web_console_log_str result;</span>
-<span class="diff-add">+     &amp;web::console_log_str result;</span>
-<span class="diff-ctx">      result</span>
-<span class="diff-ctx">  };</span></pre>
+</span><span class="diff-ctx">@fn greet msg := {</span>
+<span class="diff-ctx">    result := ('Hello, ' ++ msg);</span>
+<span class="diff-rem">    web_console_log_str(result);</span>
+<span class="diff-add">    web::console_log_str(result);</span>
+<span class="diff-ctx">    result</span>
+<span class="diff-ctx">};</span></pre>
         <p>
           Any e2e or integration tests that use <code>web_*</code> extern declarations need the
           same treatment.
@@ -714,15 +714,15 @@ Parse → AST → buildStrataRegistry → <span class="diff-add">loadModules →
           Demonstrate the module system with a hypothetical <code>Draw</code> module.
           This is documentation / test fixture only — no compiler changes.
         </p>
-        <pre><span class="cmt">; modules/Draw.si  — dropped in by the user, no install step needed</span>
-<span class="kw">@extern</span> <span class="fn">clear</span>      () -> <span class="type">Void</span>;
-<span class="kw">@extern</span> <span class="fn">fill_rect</span>  (x:<span class="type">Int</span>, y:<span class="type">Int</span>, w:<span class="type">Int</span>, h:<span class="type">Int</span>) -> <span class="type">Void</span>;
-<span class="kw">@extern</span> <span class="fn">set_color</span>  (r:<span class="type">Int</span>, g:<span class="type">Int</span>, b:<span class="type">Int</span>) -> <span class="type">Void</span>;</pre>
-        <pre><span class="cmt">; main.si — user code using the Draw module</span>
-<span class="kw">@let</span> <span class="fn">render</span> _ := {
-    &amp;<span class="ns">Draw</span>::<span class="fn">clear</span>;
-    &amp;<span class="ns">Draw</span>::<span class="fn">set_color</span> 255, 128, 0;
-    &amp;<span class="ns">Draw</span>::<span class="fn">fill_rect</span> 10, 10, 200, 100;
+        <pre><span class="cmt"># modules/Draw.si  — dropped in by the user, no install step needed</span>
+<span class="op">\\</span> <span class="kw">@extern</span> <span class="fn">clear</span>      () -> <span class="type">Void</span>;
+<span class="op">\\</span> <span class="kw">@extern</span> <span class="fn">fill_rect</span>  (<span class="type">Int</span>, <span class="type">Int</span>, <span class="type">Int</span>, <span class="type">Int</span>) -> <span class="type">Void</span>;
+<span class="op">\\</span> <span class="kw">@extern</span> <span class="fn">set_color</span>  (<span class="type">Int</span>, <span class="type">Int</span>, <span class="type">Int</span>) -> <span class="type">Void</span>;</pre>
+        <pre><span class="cmt"># main.si — user code using the Draw module</span>
+<span class="kw">@fn</span> <span class="fn">render</span> _ := {
+    <span class="ns">Draw</span>::<span class="fn">clear</span>();
+    <span class="ns">Draw</span>::<span class="fn">set_color</span>(255, 128, 0);
+    <span class="ns">Draw</span>::<span class="fn">fill_rect</span>(10, 10, 200, 100);
 };</pre>
         <p>
           The JS host provides <code>{ Draw: { clear: …, fill_rect: …, set_color: … } }</code>
@@ -790,7 +790,7 @@ Parse → AST → buildStrataRegistry → <span class="diff-add">loadModules →
       <tr>
         <td>playground/index.html</td>
         <td><span class="tag rename">rename</span></td>
-        <td>Remove inline <code>@extern web_*</code>; change call sites to <code>&amp;web::*</code></td>
+        <td>Remove inline <code>@extern web_*</code>; change call sites to <code>web::*</code></td>
       </tr>
       <tr>
         <td>e2e / test fixtures</td>

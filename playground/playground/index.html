@@ -390,7 +390,7 @@ button:disabled { opacity: 0.4; cursor: not-allowed; }
       <option value="math_sampler">Math sampler</option>
     </optgroup>
     <optgroup label="Collections">
-      <option value="gc_vec">Vec[Int] (wasm-gc)</option>
+      <option value="gc_vec">Vec[Int]</option>
     </optgroup>
     <optgroup label="Platform / graphics">
       <option value="html_todo">HTML render</option>
@@ -461,7 +461,7 @@ count = count + 1;  <i># reassign (@mut only)</i></pre></details>
 @loop(x, xs, { … });        <i># Vec elements</i>
 @loop({ … @break() });      <i># forever</i>
 @return(v);
-@match(s, $A v =&gt; v, $B =&gt; 0)</pre></details>
+@match(s, $A v, { v }, $B, { 0 })</pre></details>
 
       <details class="cheat-section"><summary>Functions</summary><pre>\\ add (Int, Int) -&gt; Int
 @fn add a, b := { a + b };
@@ -733,8 +733,8 @@ const INITIAL_SOURCE = `# Concatenate a greeting string and print it to the cons
 
 \\\\ greet (String)
 @fn greet msg := {
-    @local result := ('Hello, ' ++ msg);
-    &web::console_log_str result;
+    result := ('Hello, ' ++ msg);
+    web::console_log_str(result);
     result
 };
 
@@ -1011,74 +1011,190 @@ const EXAMPLES = {
 @export main;`,
 
     html_todo:
-`# String-building TODO list — console output via web::console_log_str.
-# Enable "run main" and compile.
+`# HTML list — build an HTML string and render it into the panel via set_html.
+# Enable "run main" + compile; the list appears in the Render panel (right).
 
-\\\\ done_item (String) -> String
-@fn done_item label := { '[x] ' ++ label };
-
-\\\\ todo_item (String) -> String
-@fn todo_item label := { '[ ] ' ++ label };
+\\\\ item (String, Int) -> String
+@fn item label, done := {
+    @if(done == 1,
+        { (('<li style="color:#3fb950">&#10003; ' ++ label) ++ '</li>') },
+        { (('<li style="color:#8b949e">&#9675; ' ++ label) ++ '</li>') })
+};
 
 @fn main := {
-    web::console_log_str('Sigil Milestones');
-    web::console_log_str(done_item('@fn keyword'));
-    web::console_log_str(done_item('web:: module system'));
-    web::console_log_str(done_item('Syntax highlighting'));
-    web::console_log_str(todo_item('HTML render panel'));
-    web::console_log_str(todo_item('Snake in Silicon'))
+    @mut html := '<h3 style="margin:0 0 8px;font:600 14px sans-serif">Silicon Milestones</h3>';
+    html = (html ++ '<ul style="list-style:none;padding:0;font:13px sans-serif;line-height:1.9">');
+    html = (html ++ item('@fn keyword + flat precedence', 1));
+    html = (html ++ item('web:: module system', 1));
+    html = (html ++ item('Syntax highlighting', 1));
+    html = (html ++ item('HTML render panel', 1));
+    html = (html ++ item('Snake in Silicon', 1));
+    html = (html ++ item('Self-hosted compiler', 0));
+    html = (html ++ '</ul>');
+    web::set_html(html);
+    0
 };
 
 @export main;`,
 
     snake:
-`# Snake counter — mutable globals, tick/handle_key export convention.
-# Enable "run main" and compile. Call tick() repeatedly to advance.
+`# Snake — a real, playable snake. Enable "run main", compile, then steer with
+# the arrow keys. Eat the red food to grow; you die on a wall or yourself.
+# Press Space to restart. The body lives in raw linear memory (WASM:: intrinsics).
 
-GRID := 20;
+GRID := 16;        # 16x16 board
+CELL := 20;        # pixels per cell  (board = 320px)
+BODY := 16384;     # snake body: BODY[i] = the i-th segment's cell (y*GRID + x)
 
-@mut head_x := 10;
-@mut head_y := 10;
-@mut dir    := 0;   # 0=right 1=down 2=left 3=up
-@mut alive  := 1;
-@mut length := 3;
-@mut score  := 0;
-@mut food_x := 5;
-@mut food_y := 15;
+@mut dir   := 0;   # 0=right 1=down 2=left 3=up
+@mut pend  := 0;   # queued turn — applied once per tick (input can't 180°)
+@mut len   := 3;
+@mut alive := 1;
+@mut score := 0;
+@mut food  := 0;   # food cell = y*GRID + x
 
-@fn main := {
-    head_x = 10; head_y = 10;
-    dir = 0; alive = 1; length = 3; score = 0;
-    food_x = 5; food_y = 15;
-    web::console_log_str('Snake started')
+# Draw one grid cell as a rect (1px gap → grid look). Fill colour set by caller.
+\\\\ cell_rect (Int, Int)
+@fn cell_rect cx, cy := {
+    px := @toFloat(((cx * CELL) + 1));
+    py := @toFloat(((cy * CELL) + 1));
+    web::canvas_fill_rect(px, py, @toFloat((CELL - 2)), @toFloat((CELL - 2)));
+    0
+};
+
+# Pick a new food cell that isn't on the snake (bounded retries).
+@fn place_food := {
+    @mut placed := 0;
+    @mut tries := 0;
+    @loop({
+        @if(placed == 1, { @break() });
+        @if(tries >= 30, { @break() });
+        fx := @toInt((web::math_random() * @toFloat(GRID)));
+        fy := @toInt((web::math_random() * @toFloat(GRID)));
+        cand := ((fy * GRID) + fx);
+        @mut on := 0;
+        @mut m := 0;
+        @loop(m < len, {
+            @if(WASM::i32_load((BODY + (m * 4))) == cand, { on = 1; });
+            m = m + 1;
+        });
+        @if(on == 0, { food = cand; placed = 1; });
+        tries = tries + 1;
+    });
+    0
+};
+
+# Render the board: background, food, body (head brighter), death bar.
+@fn draw := {
+    web::canvas_set_fill(24, 28, 36);
+    web::canvas_fill_rect(0.0, 0.0, @toFloat((GRID * CELL)), @toFloat((GRID * CELL)));
+
+    fx := food % GRID;
+    fy := food / GRID;
+    web::canvas_set_fill(220, 70, 60);
+    cell_rect(fx, fy);
+
+    @mut i := (len - 1);
+    @loop(i >= 0, {
+        @if(i == 0, { web::canvas_set_fill(120, 230, 120); }, { web::canvas_set_fill(40, 170, 80); });
+        c := WASM::i32_load((BODY + (i * 4)));
+        cell_rect((c % GRID), (c / GRID));
+        i = i - 1;
+    });
+
+    @if(alive == 0, {
+        web::canvas_set_fill(210, 50, 50);
+        web::canvas_fill_rect(0.0, 0.0, @toFloat((GRID * CELL)), 10.0);
+    });
+    0
+};
+
+# Reset state: length-3 snake laid horizontally near the middle, fresh food.
+@fn reset := {
+    dir = 0; pend = 0; len = 3; alive = 1; score = 0;
+    @mut i := 0;
+    @loop(i < len, {
+        WASM::i32_store((BODY + (i * 4)), (((8 * GRID) + 8) - i));
+        i = i + 1;
+    });
+    food = ((5 * GRID) + 11);
+    draw();
+    0
 };
 
 @fn tick := {
     @if(alive == 0, { @return(0) });
-    @if(dir == 0, { head_x = head_x + 1; });
-    @if(dir == 1, { head_y = head_y + 1; });
-    @if(dir == 2, { head_x = head_x - 1; });
-    @if(dir == 3, { head_y = head_y - 1; });
-    @if((head_x < 0) || (head_x >= GRID), { alive = 0; });
-    @if((head_y < 0) || (head_y >= GRID), { alive = 0; });
-    @if(alive == 0, { @return(0) });
-    @if(head_x == food_x, {
-        @if(head_y == food_y, {
-            length = length + 1;
-            score = score + 10;
-            food_x = (food_x + 7) % GRID;
-            food_y = (food_y + 13) % GRID;
-        })
+
+    # apply the queued turn once per tick — reject only a direct 180° reversal,
+    # so two fast key presses can never fold the head back into the neck.
+    @if(pend == 0, { @if(dir != 2, { dir = 0; }); });
+    @if(pend == 1, { @if(dir != 3, { dir = 1; }); });
+    @if(pend == 2, { @if(dir != 0, { dir = 2; }); });
+    @if(pend == 3, { @if(dir != 1, { dir = 3; }); });
+
+    head := WASM::i32_load(BODY);
+    hx := head % GRID;
+    hy := head / GRID;
+
+    @mut nx := hx;
+    @mut ny := hy;
+    @if(dir == 0, { nx = hx + 1; });
+    @if(dir == 1, { ny = hy + 1; });
+    @if(dir == 2, { nx = hx - 1; });
+    @if(dir == 3, { ny = hy - 1; });
+
+    @if(nx < 0,      { alive = 0; });
+    @if(nx >= GRID,  { alive = 0; });
+    @if(ny < 0,      { alive = 0; });
+    @if(ny >= GRID,  { alive = 0; });
+    @if(alive == 0, { draw(); @return(0) });
+
+    nhead := ((ny * GRID) + nx);
+
+    @mut hit := 0;
+    @mut j := 0;
+    @loop(j < (len - 1), {
+        @if(WASM::i32_load((BODY + (j * 4))) == nhead, { hit = 1; });
+        j = j + 1;
     });
+    @if(hit == 1, { alive = 0; draw(); @return(0) });
+
+    @mut ate := 0;
+    @if(nhead == food, {
+        score = score + 10;
+        len = len + 1;
+        ate = 1;
+    });
+
+    # advance the body (len already grown if we ate), then write the new head
+    @mut k := (len - 1);
+    @loop(k > 0, {
+        WASM::i32_store((BODY + (k * 4)), WASM::i32_load((BODY + ((k - 1) * 4))));
+        k = k - 1;
+    });
+    WASM::i32_store(BODY, nhead);
+
+    # place food only AFTER the body is fully updated, so it never lands on the
+    # snake (including the new head) and never reads an unwritten segment slot.
+    @if(ate == 1, { place_food(); });
+
+    draw();
     score
+};
+
+@fn main := {
+    reset();
+    web::console_log_str('Snake — arrow keys to steer, Space to restart');
+    0
 };
 
 \\\\ handle_key (Int)
 @fn handle_key key := {
-    @if(key == 37, { dir = 2; });
-    @if(key == 38, { dir = 3; });
-    @if(key == 39, { dir = 0; });
-    @if(key == 40, { dir = 1; });
+    @if(key == 37, { pend = 2; });   # left
+    @if(key == 38, { pend = 3; });   # up
+    @if(key == 39, { pend = 0; });   # right
+    @if(key == 40, { pend = 1; });   # down
+    @if(key == 32, { reset(); });
     0
 };
 
@@ -1111,7 +1227,7 @@ GRID := 20;
 @type Opt := $Some v Int | $None;
 
 \\\\ unwrap_or (Opt, Int)
-@fn unwrap_or o, dflt := @match(o, $Some v => v, $None => dflt);
+@fn unwrap_or o, dflt := @match(o, $Some v, { v }, $None, { dflt });
 
 \\\\ demo () -> Int
 @fn demo := unwrap_or(Some(42), 0);
@@ -1127,7 +1243,7 @@ GRID := 20;
 @fn sum_squares := {
     v := vec_new(4);
 
-    # Push 1², 2², … 5² into the GC-managed vector.
+    # Push 1², 2², … 5² into the growable vector.
     @mut i := 1;
     @loop(i <= 5, {
         vec_push_i32(v, (i * i));
@@ -1157,7 +1273,6 @@ const EXAMPLE_FEATURES = {
 // Examples that compile with a non-default target (--target=wasm-gc, etc.).
 const EXAMPLE_TARGETS = {
     wasm_gc: 'wasm-gc',
-    gc_vec:  'wasm-gc',
 }
 
 // Cheatsheet side panel — collapse / expand.
